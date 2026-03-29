@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cp \"D:/Github/SpareFlow/spare-flow-ui/docs/design-guide.md\" \"D:/Github/PusulaHub/docs/\")",
+      "Bash(cp \"D:/Github/SpareFlow/spare-flow-ui/docs/custom-components.md\" \"D:/Github/PusulaHub/docs/\")",
+      "Bash(npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbopack --use-pnpm)",
+      "Bash(rm -rf D:/Github/PusulaHub/apps/web/* D:/Github/PusulaHub/apps/web/.[!.]*)",
+      "Bash(printf nonnon:*)",
+      "Bash(npx --yes create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias \"@/*\" --no-turbopack --use-pnpm)",
+      "Bash(pnpm install:*)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest add button card badge separator scroll-area tooltip dropdown-menu dialog input label tabs avatar --yes)",
+      "Bash(npx next:*)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(find D:/Github/SpareFlow/spare-flow-ui/src -type f \\\\\\(-name *.tsx -o -name *.ts -o -name *.jsx -o -name *.js \\\\\\))",
+      "Bash(find \"D:/Github/SpareFlow/spare-flow-ui/app/\\(dashboard\\)/api-connections\" -type f)",
+      "Bash(ls -laR \"D:/Github/SpareFlow/spare-flow-ui/app/\\(dashboard\\)/api-connections\")",
+      "Bash(pnpm build:*)",
+      "Bash(npx shadcn@latest add sidebar-07 --overwrite)"
+    ]
+  }
+}
