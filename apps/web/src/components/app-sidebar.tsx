@@ -17,6 +17,7 @@ import {
   Shield,
   Users,
   Wrench,
+  Bell,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -110,6 +111,11 @@ const data = {
       title: "API Bağlantıları",
       url: "/api-connections",
       icon: Plug,
+    },
+    {
+      title: "Bildirim Önizleme",
+      url: "/preview",
+      icon: Bell,
     },
   ],
   navSecondary: [
