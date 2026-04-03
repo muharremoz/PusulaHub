@@ -6,6 +6,7 @@ export interface Server {
   id: string;
   name: string;
   ip: string;
+  dns?: string;
   os: ServerOS;
   status: ServerStatus;
   roles: ServerRole[];

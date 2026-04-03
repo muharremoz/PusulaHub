@@ -2,29 +2,27 @@
 
 import * as React from "react"
 import {
-  LayoutDashboard,
-  Server,
   Activity,
-  Users,
-  Database,
-  Globe,
-  FolderOpen,
-  FileText,
-  UserCog,
-  BarChart3,
-  Settings,
-  Compass,
-  Briefcase,
-  MessageSquare,
   Building2,
-  Cable,
-  Monitor,
-  Wrench,
+  Database,
+  FileText,
+  FolderOpen,
+  Globe,
+  LayoutDashboard,
+  MessageSquare,
+  Network,
+  Plug,
+  Server,
+  Settings,
   Shield,
+  Users,
+  Wrench,
 } from "lucide-react"
 
 import { NavMain } from "@/components/nav-main"
+import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { RainbowButton } from "@/components/ui/rainbow-button"
 import {
   Sidebar,
   SidebarContent,
@@ -33,73 +31,110 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarRail,
 } from "@/components/ui/sidebar"
 
 const data = {
   user: {
     name: "Admin",
-    email: "admin@pusulahub.local",
+    email: "admin@pusula.com",
     avatar: "",
   },
-  navGroups: [
+  navMain: [
     {
-      label: "Genel",
-      icon: Monitor,
-      defaultOpen: true,
-      items: [
-        { title: "Kontrol Paneli", url: "/", icon: LayoutDashboard },
-        { title: "Sunucular", url: "/servers", icon: Server },
-        { title: "Monitoring", url: "/monitoring", icon: Activity },
-      ],
+      title: "Dashboard",
+      url: "/dashboard",
+      icon: LayoutDashboard,
+      isActive: true,
     },
     {
-      label: "Yonetim",
+      title: "Sunucular",
+      url: "/servers",
+      icon: Server,
+    },
+    {
+      title: "İzleme",
+      url: "/monitoring",
+      icon: Activity,
+    },
+    {
+      title: "Servisler",
+      url: "/services",
       icon: Wrench,
-      items: [
-        { title: "Active Directory", url: "/ad", icon: Users },
-        { title: "SQL Server", url: "/sql", icon: Database },
-        { title: "IIS Yonetimi", url: "/iis", icon: Globe },
-        { title: "Dosya Yonetimi", url: "/files", icon: FolderOpen },
-      ],
     },
     {
-      label: "Sistem",
+      title: "IIS",
+      url: "/iis",
+      icon: Globe,
+    },
+    {
+      title: "Active Directory",
+      url: "/ad",
       icon: Shield,
-      items: [
-        { title: "Loglar", url: "/logs", icon: FileText },
-        { title: "Mesajlar", url: "/messages", icon: MessageSquare },
-        { title: "Kullanici Yonetimi", url: "/users", icon: UserCog },
-        { title: "Raporlar", url: "/reports", icon: BarChart3 },
-        { title: "Ayarlar", url: "/settings", icon: Settings },
-      ],
     },
     {
-      label: "Pusula",
-      icon: Compass,
-      items: [
-        { title: "Hizmetler", url: "/services", icon: Briefcase },
-        { title: "Firma Yonetimi", url: "/companies", icon: Building2 },
-        { title: "API Baglantilari", url: "/api-connections", icon: Cable },
-      ],
+      title: "SQL",
+      url: "/sql",
+      icon: Database,
+    },
+    {
+      title: "Dosyalar",
+      url: "/files",
+      icon: FolderOpen,
+    },
+    {
+      title: "Loglar",
+      url: "/logs",
+      icon: FileText,
+    },
+    {
+      title: "Raporlar",
+      url: "/reports",
+      icon: Network,
+    },
+    {
+      title: "Mesajlar",
+      url: "/messages",
+      icon: MessageSquare,
+    },
+    {
+      title: "Kullanıcılar",
+      url: "/users",
+      icon: Users,
+    },
+    {
+      title: "Firmalar",
+      url: "/companies",
+      icon: Building2,
+    },
+    {
+      title: "API Bağlantıları",
+      url: "/api-connections",
+      icon: Plug,
+    },
+  ],
+  navSecondary: [
+    {
+      title: "Ayarlar",
+      url: "/settings",
+      icon: Settings,
     },
   ],
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
-    <Sidebar collapsible="icon" {...props}>
+    <Sidebar variant="inset" {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/">
+              <a href="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
-                  <Compass className="size-4" />
+                  <Server className="size-4" />
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">PusulaHub</span>
-                  <span className="truncate text-xs">Sunucu Yonetim Paneli</span>
+                  <span className="truncate font-medium">PusulaHub</span>
+                  <span className="truncate text-xs">Sunucu Yönetim Paneli</span>
                 </div>
               </a>
             </SidebarMenuButton>
@@ -107,20 +142,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        {data.navGroups.map((group) => (
-          <NavMain
-            key={group.label}
-            label={group.label}
-            icon={group.icon}
-            items={group.items}
-            defaultOpen={group.defaultOpen}
-          />
-        ))}
+        <div className="px-3 pt-3">
+          <a href="/companies/setup">
+            <RainbowButton className="w-full text-xs font-semibold h-9">
+              + Firma Kurulum Sihirbazı
+            </RainbowButton>
+          </a>
+        </div>
+        <NavMain items={data.navMain} />
+        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={data.user} />
       </SidebarFooter>
-      <SidebarRail />
     </Sidebar>
   )
 }
