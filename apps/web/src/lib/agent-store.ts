@@ -3,7 +3,7 @@
    Next.js hot-reload'a karşı global değişken pattern
 ══════════════════════════════════════════════════════════ */
 
-import { StoredAgent, AgentReport } from "./agent-types"
+import { StoredAgent, AgentReport, AgentMessage } from "./agent-types"
 import { randomUUID } from "crypto"
 
 /* Global singleton — Next.js dev modunda hot-reload'dan korunur */
@@ -19,11 +19,12 @@ const store = g._pusulaAgentStore
 const OFFLINE_THRESHOLD_MS = 3 * 60 * 1000
 
 function isOnline(agent: StoredAgent): boolean {
-  const diff = Date.now() - new Date(agent.lastSeen).getTime()
-  return diff < OFFLINE_THRESHOLD_MS
+  return Date.now() - new Date(agent.lastSeen).getTime() < OFFLINE_THRESHOLD_MS
 }
 
-/* ── CRUD ── */
+/* ══════════════════════════════════════════════
+   AGENT CRUD
+══════════════════════════════════════════════ */
 
 export function registerAgent(data: {
   hostname:  string
@@ -32,7 +33,6 @@ export function registerAgent(data: {
   version:   string
   localPort: number
 }): StoredAgent {
-  // Aynı hostname varsa güncelle (yeniden başlatma durumu)
   const existing = [...store.values()].find((a) => a.hostname === data.hostname)
   const agentId  = existing?.agentId ?? randomUUID()
   const token    = randomUUID()
@@ -41,15 +41,16 @@ export function registerAgent(data: {
   const agent: StoredAgent = {
     agentId,
     token,
-    hostname:      data.hostname,
-    ip:            data.ip,
-    os:            data.os,
-    version:       data.version,
-    localPort:     data.localPort,
-    registeredAt:  existing?.registeredAt ?? now,
-    lastSeen:      now,
-    status:        "online",
-    lastReport:    existing?.lastReport ?? null,
+    hostname:        data.hostname,
+    ip:              data.ip,
+    os:              data.os,
+    version:         data.version,
+    localPort:       data.localPort,
+    registeredAt:    existing?.registeredAt ?? now,
+    lastSeen:        now,
+    status:          "online",
+    lastReport:      existing?.lastReport ?? null,
+    pendingMessages: existing?.pendingMessages ?? [],
   }
 
   store.set(agentId, agent)
@@ -60,15 +61,18 @@ export function getAgentByToken(token: string): StoredAgent | undefined {
   return [...store.values()].find((a) => a.token === token)
 }
 
+export function getAgentById(agentId: string): StoredAgent | undefined {
+  const a = store.get(agentId)
+  if (!a) return undefined
+  return { ...a, status: isOnline(a) ? "online" : "offline" }
+}
+
 export function updateReport(agentId: string, report: AgentReport): boolean {
   const agent = store.get(agentId)
   if (!agent) return false
-
   agent.lastSeen   = new Date().toISOString()
   agent.status     = "online"
   agent.lastReport = report
-  agent.ip         = report.metrics ? agent.ip : agent.ip  // IP sabittir
-
   store.set(agentId, agent)
   return true
 }
@@ -80,48 +84,76 @@ export function getAllAgents(): StoredAgent[] {
   }))
 }
 
-export function getAgent(agentId: string): StoredAgent | undefined {
-  const a = store.get(agentId)
-  if (!a) return undefined
-  return { ...a, status: isOnline(a) ? "online" : "offline" }
+/* ══════════════════════════════════════════════
+   MESAJLAŞMA
+══════════════════════════════════════════════ */
+
+export function queueMessage(
+  agentId: string,
+  msg: Omit<AgentMessage, "id" | "sentAt" | "delivered">
+): AgentMessage | null {
+  const agent = store.get(agentId)
+  if (!agent) return null
+
+  const message: AgentMessage = {
+    ...msg,
+    id:        randomUUID(),
+    sentAt:    new Date().toISOString(),
+    delivered: false,
+  }
+
+  agent.pendingMessages.push(message)
+  store.set(agentId, agent)
+  return message
 }
 
-/* ── UI'a sunulacak format dönüşümü ── */
+/** Agent pending mesajlarını çeker, delivered olarak işaretler */
+export function popPendingMessages(agentId: string): AgentMessage[] {
+  const agent = store.get(agentId)
+  if (!agent) return []
+
+  const pending = agent.pendingMessages.filter((m) => !m.delivered)
+  pending.forEach((m) => (m.delivered = true))
+  store.set(agentId, agent)
+  return pending
+}
+
+/** Tüm gönderilmiş mesaj geçmişi (UI için) */
+export function getAllMessages(): (AgentMessage & { hostname: string; agentId: string })[] {
+  const result: (AgentMessage & { hostname: string; agentId: string })[] = []
+  for (const agent of store.values()) {
+    for (const msg of agent.pendingMessages) {
+      result.push({ ...msg, hostname: agent.hostname, agentId: agent.agentId })
+    }
+  }
+  return result.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+}
+
+/* ══════════════════════════════════════════════
+   UI FORMAT DÖNÜŞÜMLERİ
+══════════════════════════════════════════════ */
 
 export function agentsToServerList() {
   return getAllAgents().map((agent) => {
-    const r = agent.lastReport
+    const r       = agent.lastReport
     const metrics = r?.metrics
-
     return {
-      id:          agent.agentId,
-      name:        agent.hostname,
-      ip:          agent.ip,
-      os:          agent.os === "windows" ? "Windows Server" : "Ubuntu Linux",
-      status:      agent.status,
-      cpu:         metrics?.cpu ?? 0,
-      ram:         metrics
-        ? Math.round((metrics.ram.usedMB / metrics.ram.totalMB) * 100)
-        : 0,
-      disk:        metrics?.disks?.[0]?.percent ?? 0,
-      uptime:      metrics ? formatUptime(metrics.uptimeSeconds) : "—",
-      lastChecked: agent.lastSeen,
-      roles:       r?.roles ?? [],
-      localPort:   agent.localPort,
+      id:               agent.agentId,
+      name:             agent.hostname,
+      ip:               agent.ip,
+      os:               agent.os === "windows" ? "Windows Server" : "Ubuntu Linux",
+      status:           agent.status,
+      cpu:              metrics?.cpu ?? 0,
+      ram:              metrics ? Math.round((metrics.ram.usedMB / metrics.ram.totalMB) * 100) : 0,
+      disk:             metrics?.disks?.[0]?.percent ?? 0,
+      uptime:           metrics ? formatUptime(metrics.uptimeSeconds) : "—",
+      lastChecked:      agent.lastSeen,
+      roles:            r?.roles ?? [],
+      localPort:        agent.localPort,
+      pendingMessages:  agent.pendingMessages.filter((m) => !m.delivered).length,
     }
   })
 }
-
-function formatUptime(seconds: number): string {
-  const d = Math.floor(seconds / 86400)
-  const h = Math.floor((seconds % 86400) / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (d > 0) return `${d}g ${h}s`
-  if (h > 0) return `${h}s ${m}d`
-  return `${m}d`
-}
-
-/* ── Dashboard özeti ── */
 
 export function getDashboardStats() {
   const agents = getAllAgents()
@@ -133,11 +165,18 @@ export function getDashboardStats() {
       if (!r) return false
       const disk = r.metrics?.disks?.[0]?.percent ?? 0
       const cpu  = r.metrics?.cpu ?? 0
-      const ram  = r.metrics
-        ? (r.metrics.ram.usedMB / r.metrics.ram.totalMB) * 100
-        : 0
+      const ram  = r.metrics ? (r.metrics.ram.usedMB / r.metrics.ram.totalMB) * 100 : 0
       return cpu > 85 || ram > 85 || disk > 80
     }).length,
     offlineServers: agents.filter((a) => a.status === "offline").length,
   }
+}
+
+function formatUptime(seconds: number): string {
+  const d = Math.floor(seconds / 86400)
+  const h = Math.floor((seconds % 86400) / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (d > 0) return `${d}g ${h}s`
+  if (h > 0) return `${h}s ${m}d`
+  return `${m}d`
 }

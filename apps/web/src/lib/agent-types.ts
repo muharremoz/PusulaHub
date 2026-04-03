@@ -117,17 +117,29 @@ export interface AgentReport {
   roles?: string[]            // Tespit edilen roller: ["IIS","SQL","AD","DNS","DHCP"]
 }
 
+/* ── Hub → Agent: Mesaj ── */
+export interface AgentMessage {
+  id:        string
+  title:     string
+  body:      string
+  type:      "info" | "warning" | "urgent"
+  from:      string          // Gönderen kullanıcı adı
+  sentAt:    string          // ISO 8601
+  delivered: boolean
+}
+
 /* ── Hub'ın dahili olarak sakladığı agent kaydı ── */
 export interface StoredAgent {
-  agentId:      string
-  token:        string
-  hostname:     string
-  ip:           string
-  os:           "windows" | "linux"
-  version:      string
-  localPort:    number
-  registeredAt: string
-  lastSeen:     string
-  status:       "online" | "offline"
-  lastReport:   AgentReport | null
+  agentId:         string
+  token:           string
+  hostname:        string
+  ip:              string
+  os:              "windows" | "linux"
+  version:         string
+  localPort:       number
+  registeredAt:    string
+  lastSeen:        string
+  status:          "online" | "offline"
+  lastReport:      AgentReport | null
+  pendingMessages: AgentMessage[]
 }

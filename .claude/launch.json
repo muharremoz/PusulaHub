@@ -4,9 +4,9 @@
     {
       "name": "web",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev"],
-      "port": 3000,
-      "autoPort": true,
+      "runtimeArgs": ["next", "dev", "--port", "4242"],
+      "port": 4242,
+      "autoPort": false,
       "cwd": "apps/web"
     }
   ]

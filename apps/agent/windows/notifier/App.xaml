@@ -1,0 +1,86 @@
+<Application x:Class="PusulaNotifier.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+  <Application.Resources>
+
+    <!-- Renkler -->
+    <Color x:Key="ColorInfo"    >#3B82F6</Color>
+    <Color x:Key="ColorWarning">#F59E0B</Color>
+    <Color x:Key="ColorUrgent" >#EF4444</Color>
+    <Color x:Key="ColorBg"     >#FFFFFF</Color>
+    <Color x:Key="ColorFg"     >#111111</Color>
+    <Color x:Key="ColorMuted"  >#6B7280</Color>
+    <Color x:Key="ColorBorder" >#E5E7EB</Color>
+
+    <SolidColorBrush x:Key="BrushInfo"    Color="{StaticResource ColorInfo}"   />
+    <SolidColorBrush x:Key="BrushWarning" Color="{StaticResource ColorWarning}"/>
+    <SolidColorBrush x:Key="BrushUrgent"  Color="{StaticResource ColorUrgent}" />
+    <SolidColorBrush x:Key="BrushBg"      Color="{StaticResource ColorBg}"     />
+    <SolidColorBrush x:Key="BrushFg"      Color="{StaticResource ColorFg}"     />
+    <SolidColorBrush x:Key="BrushMuted"   Color="{StaticResource ColorMuted}"  />
+    <SolidColorBrush x:Key="BrushBorder"  Color="{StaticResource ColorBorder}" />
+
+    <!-- Buton stili -->
+    <Style x:Key="BtnPrimary" TargetType="Button">
+      <Setter Property="Background"   Value="#111111"/>
+      <Setter Property="Foreground"   Value="White"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding"      Value="16,0"/>
+      <Setter Property="Height"       Value="32"/>
+      <Setter Property="FontSize"     Value="11"/>
+      <Setter Property="FontWeight"   Value="SemiBold"/>
+      <Setter Property="Cursor"       Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}"
+                    CornerRadius="5"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#333333"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter Property="Background" Value="#000000"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style x:Key="BtnOutline" TargetType="Button">
+      <Setter Property="Background"      Value="Transparent"/>
+      <Setter Property="Foreground"      Value="#374151"/>
+      <Setter Property="BorderBrush"     Value="#D1D5DB"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding"         Value="12,0"/>
+      <Setter Property="Height"          Value="32"/>
+      <Setter Property="FontSize"        Value="11"/>
+      <Setter Property="FontWeight"      Value="Medium"/>
+      <Setter Property="Cursor"          Value="Hand"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="5"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#F9FAFB"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+  </Application.Resources>
+</Application>
