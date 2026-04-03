@@ -2,27 +2,7 @@
 
 import { useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { NestedCard } from "@/components/shared/nested-card";
-import { StatsCard } from "@/components/shared/stats-card";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { services, servers } from "@/lib/mock-data";
-import type { ServiceCategory, ServiceStatus } from "@/types";
-import {
-  Briefcase,
-  Plus,
-  Search,
-  MoreVertical,
-  Server,
-  Shield,
-  Database,
-  Globe,
-  HardDrive,
-  Activity,
-  Network,
-  ExternalLink,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { mockServices, type PusulaService, type ServiceCategory, type ServiceStatus } from "@/lib/mock-services";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,336 +10,284 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import {
+  MoreVertical,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  Layers,
+  Plug,
+  Code2,
+  Building2,
+  Package,
+  Plus,
+} from "lucide-react";
+import { ServiceSheet } from "@/components/services/service-sheet";
 
-const categoryIcons: Record<ServiceCategory, React.ElementType> = {
-  Altyapi: Network,
-  Veritabani: Database,
-  Web: Globe,
-  Guvenlik: Shield,
-  Yedekleme: HardDrive,
-  Izleme: Activity,
+/* ── Tipler ── */
+type SortKey = "name" | "category" | "status" | "firmCount" | "updatedAt";
+type SortDir = "asc" | "desc";
+type FilterCat = "all" | ServiceCategory;
+
+/* ── Yardımcılar ── */
+const STATUS_LABEL: Record<ServiceStatus, string> = {
+  active:      "Aktif",
+  maintenance: "Bakımda",
+  inactive:    "Pasif",
 };
 
-const categoryColors: Record<ServiceCategory, string> = {
-  Altyapi: "bg-blue-50 text-blue-600 border-blue-200/60",
-  Veritabani: "bg-purple-50 text-purple-600 border-purple-200/60",
-  Web: "bg-emerald-50 text-emerald-600 border-emerald-200/60",
-  Guvenlik: "bg-red-50 text-red-600 border-red-200/60",
-  Yedekleme: "bg-amber-50 text-amber-600 border-amber-200/60",
-  Izleme: "bg-cyan-50 text-cyan-600 border-cyan-200/60",
+const STATUS_BADGE: Record<ServiceStatus, string> = {
+  active:      "bg-emerald-50 text-emerald-700 border-emerald-200",
+  maintenance: "bg-amber-50 text-amber-700 border-amber-200",
+  inactive:    "bg-muted text-muted-foreground border-border",
 };
 
-const statusConfig: Record<ServiceStatus, { label: string; variant: "online" | "warning" | "offline" }> = {
-  active: { label: "Aktif", variant: "online" },
-  maintenance: { label: "Bakimda", variant: "warning" },
-  inactive: { label: "Pasif", variant: "offline" },
+const STATUS_DOT: Record<ServiceStatus, string> = {
+  active:      "bg-emerald-500",
+  maintenance: "bg-amber-400",
+  inactive:    "bg-slate-300",
 };
 
+const CAT_BADGE: Record<ServiceCategory, string> = {
+  "Yazılım":     "bg-blue-50 text-blue-700 border-blue-200",
+  "Entegrasyon": "bg-purple-50 text-purple-700 border-purple-200",
+  "API":         "bg-orange-50 text-orange-700 border-orange-200",
+};
+
+const CAT_ICON: Record<ServiceCategory, React.ElementType> = {
+  "Yazılım":     Package,
+  "Entegrasyon": Plug,
+  "API":         Code2,
+};
+
+/* ── SortHeader ── */
+function SortHeader({ label, sortKey, active, dir, onSort }: {
+  label: string;
+  sortKey: SortKey;
+  active: SortKey;
+  dir: SortDir;
+  onSort: (k: SortKey) => void;
+}) {
+  const isActive = active === sortKey;
+  return (
+    <button
+      onClick={() => onSort(sortKey)}
+      className={cn(
+        "flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase transition-colors select-none",
+        isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {label}
+      <span className="shrink-0">
+        {isActive
+          ? dir === "asc" ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />
+          : <ChevronsUpDown className="size-3 opacity-40" />}
+      </span>
+    </button>
+  );
+}
+
+/* ── Stat Kutusu ── */
+function StatCard({ label, value, sub, icon: Icon }: {
+  label: string; value: number | string; sub?: string; icon: React.ElementType;
+}) {
+  return (
+    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div
+        className="rounded-[4px] px-4 py-3"
+        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+      >
+        <div className="flex items-center gap-2 mb-1">
+          <Icon className="size-3 text-muted-foreground" />
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{label}</p>
+        </div>
+        <span className="text-2xl font-bold tabular-nums">{value}</span>
+        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      </div>
+      <div className="h-2" />
+    </div>
+  );
+}
+
+/* ── Ana Bileşen ── */
 export default function ServicesPage() {
-  const [categoryFilter, setCategoryFilter] = useState<"all" | ServiceCategory>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | ServiceStatus>("all");
-  const [search, setSearch] = useState("");
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [sortKey, setSortKey]   = useState<SortKey>("category");
+  const [sortDir, setSortDir]   = useState<SortDir>("asc");
+  const [filter, setFilter]     = useState<FilterCat>("all");
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const filtered = services.filter((svc) => {
-    if (categoryFilter !== "all" && svc.category !== categoryFilter) return false;
-    if (statusFilter !== "all" && svc.status !== statusFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return svc.name.toLowerCase().includes(q) || svc.description.toLowerCase().includes(q);
-    }
-    return true;
-  });
+  const handleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+  };
 
-  const activeCount = services.filter((s) => s.status === "active").length;
-  const maintenanceCount = services.filter((s) => s.status === "maintenance").length;
-  const categories = [...new Set(services.map((s) => s.category))];
-  const totalServerLinks = services.reduce((a, s) => a + s.servers.length, 0);
+  const filtered = mockServices
+    .filter((s) => filter === "all" || s.category === filter)
+    .sort((a, b) => {
+      const mul = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "firmCount") return (a.firmCount - b.firmCount) * mul;
+      return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
+    });
 
-  const selected = selectedService ? services.find((s) => s.id === selectedService) : null;
+  const counts = {
+    total:       mockServices.length,
+    active:      mockServices.filter((s) => s.status === "active").length,
+    yazilim:     mockServices.filter((s) => s.category === "Yazılım").length,
+    entegrasyon: mockServices.filter((s) => s.category === "Entegrasyon").length,
+    api:         mockServices.filter((s) => s.category === "API").length,
+    totalFirms:  [...new Set(mockServices.flatMap((s) => s.firmCount))].reduce((a, b) => a + b, 0),
+  };
 
   return (
-    <PageContainer title="Hizmetler" description="Pusula firmasinin sunucularda verdigi hizmetler">
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6 items-stretch">
-        <StatsCard
-          title="TOPLAM HIZMET"
-          value={services.length}
-          icon={<Briefcase className="h-4 w-4" />}
-          subtitle={`${categories.length} kategori`}
-        />
-        <StatsCard
-          title="AKTIF HIZMET"
-          value={activeCount}
-          icon={<Activity className="h-4 w-4" />}
-          trend={{ value: "Tumu calisiyor", positive: true }}
-          subtitle="Sorunsuz"
-        />
-        <StatsCard
-          title="BAKIMDA"
-          value={maintenanceCount}
-          icon={<Shield className="h-4 w-4" />}
-          trend={maintenanceCount > 0 ? { value: "Dikkat gerektiriyor", positive: false } : undefined}
-          subtitle="Bakim surecinde"
-        />
-        <StatsCard
-          title="SUNUCU BAGLANTISI"
-          value={totalServerLinks}
-          icon={<Server className="h-4 w-4" />}
-          subtitle="Hizmet-sunucu eslesmesi"
-        />
+    <PageContainer title="Hizmetler" description="Pusula Yazılım ürün ve entegrasyon kataloğu">
+
+      {/* ── İstatistikler ── */}
+      <div className="grid grid-cols-4 gap-3 mb-6">
+        <StatCard label="Toplam Hizmet" value={counts.total}       sub={`${counts.active} aktif`}             icon={Layers}    />
+        <StatCard label="Yazılım"       value={counts.yazilim}     sub="uygulama"                              icon={Package}   />
+        <StatCard label="Entegrasyon"   value={counts.entegrasyon} sub="bağlantı"                              icon={Plug}      />
+        <StatCard label="API"           value={counts.api}         sub="servis"                                icon={Code2}     />
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-4">
-        <div
-          className="flex items-center rounded-[8px] p-1"
-          style={{ backgroundColor: "#F4F2F0" }}
-        >
-          <button
-            onClick={() => setCategoryFilter("all")}
-            className={`rounded-[6px] text-xs px-3 py-1.5 font-medium transition-colors ${
-              categoryFilter === "all"
-                ? "bg-foreground text-background"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Tumu
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`rounded-[6px] text-xs px-3 py-1.5 font-medium transition-colors ${
-                categoryFilter === cat
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-        <div
-          className="flex items-center rounded-[8px] p-1"
-          style={{ backgroundColor: "#F4F2F0" }}
-        >
-          {(["all", "active", "maintenance", "inactive"] as const).map((f) => (
+      {/* ── Toolbar ── */}
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+          {(["all", "Yazılım", "Entegrasyon", "API"] as FilterCat[]).map((f) => (
             <button
               key={f}
-              onClick={() => setStatusFilter(f)}
-              className={`rounded-[6px] text-xs px-3 py-1.5 font-medium transition-colors ${
-                statusFilter === f
-                  ? "bg-foreground text-background"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+              onClick={() => setFilter(f)}
+              className={cn(
+                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
+                filter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+              )}
             >
-              {f === "all" ? "Tumu" : statusConfig[f].label}
+              {f === "all" ? "Tümü" : f}
             </button>
           ))}
         </div>
-        <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Hizmet ara..."
-            className="h-8 text-xs rounded-[5px] bg-white pl-8 w-56"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setSheetOpen(true)}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+          >
+            <Plus className="size-3.5" />
+            Yeni Hizmet
+          </button>
         </div>
-        <Button size="sm" className="rounded-[5px] text-xs gap-1 h-8">
-          <Plus className="h-3.5 w-3.5" />
-          Yeni Hizmet
-        </Button>
       </div>
 
-      <div className="grid grid-cols-[1fr_320px] gap-3">
-        {/* Service Table */}
-        <NestedCard
-          footer={
-            <>
-              <Briefcase className="h-3 w-3" />
-              <span>{filtered.length} hizmet listeleniyor</span>
-            </>
-          }
+      {/* ── Liste ── */}
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div
+          className="rounded-[4px] overflow-hidden"
+          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
         >
           {/* Header */}
-          <div className="grid grid-cols-[1.8fr_0.8fr_0.6fr_1.2fr_0.8fr_0.3fr] gap-2 px-1 py-1.5 bg-muted/30 rounded-[4px] border-b">
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide">HIZMET ADI</span>
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide">KATEGORI</span>
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide">DURUM</span>
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide">SUNUCULAR</span>
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide">GUNCELLEME</span>
-            <span className="text-[11px] font-medium text-muted-foreground tracking-wide"></span>
+          <div className="grid grid-cols-[16px_2fr_3fr_100px_80px_60px_80px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+            <span />
+            <SortHeader label="Hizmet Adı"  sortKey="name"      active={sortKey} dir={sortDir} onSort={handleSort} />
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Açıklama</span>
+            <SortHeader label="Kategori"    sortKey="category"  active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Durum"       sortKey="status"    active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Firma"       sortKey="firmCount" active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Güncelleme"  sortKey="updatedAt" active={sortKey} dir={sortDir} onSort={handleSort} />
+            <span />
           </div>
-          {/* Rows */}
-          {filtered.map((svc) => {
-            const CatIcon = categoryIcons[svc.category];
-            const st = statusConfig[svc.status];
-            return (
-              <div
-                key={svc.id}
-                onClick={() => setSelectedService(svc.id)}
-                className={`grid grid-cols-[1.8fr_0.8fr_0.6fr_1.2fr_0.8fr_0.3fr] gap-2 px-1 py-2 border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer items-center ${
-                  selectedService === svc.id ? "bg-muted/30" : ""
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <div className={`flex items-center justify-center h-7 w-7 rounded-[5px] shrink-0 ${categoryColors[svc.category]}`}>
-                    <CatIcon className="h-3.5 w-3.5" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{svc.name}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{svc.description}</p>
-                  </div>
-                </div>
-                <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium w-fit ${categoryColors[svc.category]}`}>
-                  {svc.category}
-                </span>
-                <StatusBadge status={st.variant} label={st.label} />
-                <div className="flex flex-wrap gap-1">
-                  {svc.servers.map((srv) => (
-                    <span key={srv} className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium">
-                      {srv}
+
+          {/* Satırlar */}
+          <div className="divide-y divide-border/40">
+            {filtered.map((svc) => {
+              const CatIcon = CAT_ICON[svc.category];
+              return (
+                <div
+                  key={svc.id}
+                  className="grid grid-cols-[16px_2fr_3fr_100px_80px_60px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                >
+                  {/* Durum noktası */}
+                  <span className="flex items-center justify-center">
+                    <span className="relative flex size-1.5">
+                      {svc.status === "active" && (
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                      )}
+                      <span className={cn("relative inline-flex size-1.5 rounded-full", STATUS_DOT[svc.status])} />
                     </span>
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground">{svc.updatedAt}</span>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      className="flex items-center justify-center h-7 w-7 rounded-[4px] hover:bg-muted/60 transition-colors"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-[6px]">
-                    <DropdownMenuItem className="text-xs">Duzenle</DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs">Kopyala</DropdownMenuItem>
-                    <DropdownMenuItem className="text-xs">Devre Disi Birak</DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-xs text-destructive">Sil</DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            );
-          })}
-        </NestedCard>
-
-        {/* Detail Panel */}
-        <NestedCard>
-          {selected ? (
-            <div className="space-y-4">
-              {/* Header */}
-              <div className="flex items-start gap-3">
-                <div className={`flex items-center justify-center h-10 w-10 rounded-[6px] shrink-0 ${categoryColors[selected.category]}`}>
-                  {(() => {
-                    const CatIcon = categoryIcons[selected.category];
-                    return <CatIcon className="h-5 w-5" />;
-                  })()}
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold">{selected.name}</h3>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">{selected.description}</p>
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="space-y-3 pt-3 border-t border-border/40">
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Kategori</p>
-                  <span className={`inline-flex items-center gap-1 rounded-[5px] border px-2.5 py-0.5 text-[10px] font-medium ${categoryColors[selected.category]}`}>
-                    {(() => {
-                      const CatIcon = categoryIcons[selected.category];
-                      return <CatIcon className="h-3 w-3" />;
-                    })()}
-                    {selected.category}
                   </span>
+
+                  {/* Hizmet adı + versiyon + etiketler */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium truncate">{svc.name}</span>
+                      <span className="text-[9px] text-muted-foreground/60 tabular-nums shrink-0">{svc.version}</span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                      {svc.tags.map((t) => (
+                        <span key={t} className="text-[9px] bg-muted px-1 py-0 rounded-[3px] text-muted-foreground">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Açıklama */}
+                  <span className="text-[11px] text-muted-foreground truncate">{svc.description}</span>
+
+                  {/* Kategori */}
+                  <span className={cn(
+                    "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit flex items-center gap-1",
+                    CAT_BADGE[svc.category]
+                  )}>
+                    <CatIcon className="size-2.5" />
+                    {svc.category}
+                  </span>
+
+                  {/* Durum */}
+                  <span className={cn(
+                    "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
+                    STATUS_BADGE[svc.status]
+                  )}>
+                    {STATUS_LABEL[svc.status]}
+                  </span>
+
+                  {/* Firma sayısı */}
+                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Building2 className="size-3 shrink-0" />
+                    <span className="tabular-nums">{svc.firmCount}</span>
+                  </div>
+
+                  {/* Güncelleme */}
+                  <span className="text-[10px] text-muted-foreground tabular-nums">{svc.updatedAt}</span>
+
+                  {/* Aksiyon */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="rounded-[6px]">
+                      <DropdownMenuItem className="text-xs cursor-pointer">Düzenle</DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer">Firma Listesi</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive">Pasife Al</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
+              );
+            })}
+          </div>
+        </div>
 
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1">Durum</p>
-                  <StatusBadge
-                    status={statusConfig[selected.status].variant}
-                    label={statusConfig[selected.status].label}
-                  />
-                </div>
-
-                {(selected.port || selected.protocol) && (
-                  <div className="grid grid-cols-2 gap-3">
-                    {selected.port && (
-                      <div>
-                        <p className="text-[11px] text-muted-foreground mb-1">Port</p>
-                        <p className="text-xs font-mono font-medium">{selected.port}</p>
-                      </div>
-                    )}
-                    {selected.protocol && (
-                      <div>
-                        <p className="text-[11px] text-muted-foreground mb-1">Protokol</p>
-                        <p className="text-xs font-medium">{selected.protocol}</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <p className="text-[11px] text-muted-foreground mb-1.5">Bagli Sunucular</p>
-                  <div className="space-y-1">
-                    {selected.servers.map((srvName) => {
-                      const srv = servers.find((s) => s.name === srvName);
-                      return (
-                        <div key={srvName} className="flex items-center justify-between px-2 py-1.5 rounded-[4px] bg-muted/30">
-                          <div className="flex items-center gap-1.5">
-                            <div className={`h-1.5 w-1.5 rounded-full ${srv?.status === "online" ? "bg-emerald-500" : srv?.status === "warning" ? "bg-amber-500" : "bg-red-500"}`} />
-                            <span className="text-[11px] font-medium">{srvName}</span>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground">{srv?.ip}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-[11px] text-muted-foreground mb-1">Olusturulma</p>
-                    <p className="text-xs">{selected.createdAt}</p>
-                  </div>
-                  <div>
-                    <p className="text-[11px] text-muted-foreground mb-1">Son Guncelleme</p>
-                    <p className="text-xs">{selected.updatedAt}</p>
-                  </div>
-                </div>
-
-                {selected.notes && (
-                  <div>
-                    <p className="text-[11px] text-muted-foreground mb-1">Notlar</p>
-                    <p className="text-[11px] bg-muted/30 rounded-[4px] px-2.5 py-2 leading-relaxed">
-                      {selected.notes}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div className="pt-3 border-t border-border/40 flex gap-2">
-                <Button variant="outline" size="sm" className="rounded-[5px] text-xs flex-1 gap-1">
-                  Duzenle
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-[5px] text-xs gap-1">
-                  <ExternalLink className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <Briefcase className="h-10 w-10 text-muted-foreground/40 mb-3" />
-              <p className="text-xs text-muted-foreground">Detaylarini gormek icin bir hizmet secin</p>
-            </div>
-          )}
-        </NestedCard>
+        {/* Footer */}
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
+          <Layers className="size-3" />
+          <span>{filtered.length} hizmet listeleniyor</span>
+        </div>
       </div>
+
+      <ServiceSheet open={sheetOpen} onOpenChange={setSheetOpen} />
+
     </PageContainer>
   );
 }
