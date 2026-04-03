@@ -1,148 +1,116 @@
 using System;
+using System.Globalization;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using System.Windows.Threading;
 
 namespace PusulaNotifier
 {
     public partial class NotificationWindow : Window
     {
         private readonly NotificationData _data;
-        private readonly DispatcherTimer _timer;
-        private int _remaining;                 // saniye
-        private const int AUTO_CLOSE_SECONDS = 30;
-        private const int URGENT_CLOSE_SECONDS = 60;
 
-        // Tüm açık bildirimleri alt alta yığmak için statik offset
-        private static int _stackOffset = 0;
-        private static readonly object _stackLock = new();
+        // ── tip → (headerBg, iconBg, badgeBg, badgeFg, glyph, label, okBg) ──
+        private static (string hdr, string iconBg, string badgeBg, string badgeFg, string glyph, string label, string okBg)
+            StyleFor(string? type) => type?.ToLower() switch
+            {
+                "warning" => ("#FFFBEB", "#FEF3C7", "#FDE68A", "#92400E", "⚡", "UYARI",  "#D97706"),
+                "urgent"  => ("#FEF2F2", "#FEE2E2", "#FECACA", "#991B1B", "⚠",  "ACİL",   "#DC2626"),
+                _         => ("#EFF6FF", "#DBEAFE", "#BFDBFE", "#1D4ED8", "ℹ",  "BİLGİ",  "#2563EB"),
+            };
 
         public NotificationWindow(NotificationData data)
         {
             InitializeComponent();
             _data = data;
-            _remaining = data.Type == "urgent" ? URGENT_CLOSE_SECONDS : AUTO_CLOSE_SECONDS;
 
-            ApplyStyle();
-            PositionWindow();
+            // Pencerenin başlık çubuğu olmadığı için elle sürükle desteği
+            MouseLeftButtonDown += (_, e) =>
+            {
+                if (e.ButtonState == MouseButtonState.Pressed)
+                    DragMove();
+            };
 
-            // Otomatik kapanma zamanlayıcısı
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
-            _timer.Tick += OnTick;
+            Loaded += OnLoaded;
         }
 
-        private void ApplyStyle()
+        // ════════════════════════════════════════════════════════════════
+        //  Yükleme — alanları doldur, renkleri uygula, animasyonu başlat
+        // ════════════════════════════════════════════════════════════════
+        private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            TitleText.Text = _data.Title;
-            BodyText.Text  = _data.Body;
-            FromText.Text  = $"Gönderen: {_data.From}";
+            // Başlık ve mesaj gövdesi
+            TitleText.Text = _data.Title ?? "(Başlıksız)";
+            BodyText.Text  = _data.Body  ?? string.Empty;
 
-            if (DateTime.TryParse(_data.SentAt, out var dt))
+            // Alıcı — mevcut Windows oturum kullanıcısı
+            var userName      = Environment.UserName;          // "ahmet.yilmaz" (domain olmadan)
+            FromText.Text     = $"Sayın {userName}";
+            AvatarLetter.Text = FirstLetter(userName);
+
+            // Alıcının firması
+            ToCompanyText.Text = string.IsNullOrWhiteSpace(_data.ToCompany)
+                ? ""
+                : _data.ToCompany;
+
+            // Gönderim zamanı
+            if (DateTime.TryParse(_data.SentAt, null, DateTimeStyles.RoundtripKind, out var dt))
                 SentAtText.Text = dt.ToLocalTime().ToString("HH:mm");
+            else
+                SentAtText.Text = DateTime.Now.ToString("HH:mm");
 
-            // Tip bazlı stil
-            var (accent, iconBg, iconFg, icon) = _data.Type switch
-            {
-                "urgent"  => ("#EF4444", "#FEF2F2", "#991B1B", "⚠"),
-                "warning" => ("#F59E0B", "#FFFBEB", "#92400E", "⚡"),
-                _         => ("#3B82F6", "#EFF6FF", "#1D4ED8", "ℹ"),
-            };
+            // Tip'e göre renk
+            ApplyTypeStyle();
 
-            AccentBar.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(accent));
-            IconBg.Background    = new SolidColorBrush((Color)ColorConverter.ConvertFromString(iconBg));
-            IconText.Text        = icon;
-            IconText.Foreground  = new SolidColorBrush((Color)ColorConverter.ConvertFromString(iconFg));
-
-            // Urgent'ta ertele gizle
-            if (_data.Type == "urgent") SnoozeBtn.Visibility = Visibility.Collapsed;
-
-            UpdateProgress();
+            // Giriş animasyonu
+            ((Storyboard)Resources["FadeIn"]).Begin(this);
         }
 
-        private void PositionWindow()
+        // ════════════════════════════════════════════════════════════════
+        //  Tip'e göre renk uygula
+        // ════════════════════════════════════════════════════════════════
+        private void ApplyTypeStyle()
         {
-            var wa = SystemParameters.WorkArea;
-            Left = wa.Right - Width - 16;
+            var s = StyleFor(_data.Type);
 
-            lock (_stackLock)
-            {
-                Top = wa.Bottom - Height - 16 - _stackOffset;
-                _stackOffset += (int)Height + 8;
-            }
+            HeaderBand.Background    = Brush(s.hdr);
+            IconContainer.Background = Brush(s.iconBg);
+            TypeBadge.Background     = Brush(s.badgeBg);
+            TypeLabel.Foreground     = Brush(s.badgeFg);
+            TypeLabel.Text           = s.label;
+            IconGlyph.Text           = s.glyph;
+            IconGlyph.Foreground     = Brush(s.badgeFg);
+
+            // Okundu butonu rengi (BtnPrimary stil arka planını override et)
+            OkBtn.Background = Brush(s.okBg);
         }
 
-        protected override void OnContentRendered(EventArgs e)
+        // ════════════════════════════════════════════════════════════════
+        //  Buton tıklama olayları
+        // ════════════════════════════════════════════════════════════════
+
+        /// "Okudum, Anladım" — pencereyi kapat
+        private void OkBtn_Click(object sender, RoutedEventArgs e)
+            => CloseWithFade();
+
+        // ════════════════════════════════════════════════════════════════
+        //  FadeOut → kapat
+        // ════════════════════════════════════════════════════════════════
+        private void CloseWithFade()
         {
-            base.OnContentRendered(e);
-
-            // Gerçek yüksekliği öğrenince konumu güncelle
-            PositionWindow();
-
-            // Slide-in animasyonu
-            var sb = (Storyboard)Resources["SlideIn"];
-            sb.Begin();
-
-            _timer.Start();
+            var sb = (Storyboard)Resources["FadeOut"];
+            sb.Completed += (_, __) => Close();
+            sb.Begin(this);
         }
 
-        private void OnTick(object? s, EventArgs e)
-        {
-            _remaining--;
-            UpdateProgress();
+        // ════════════════════════════════════════════════════════════════
+        //  Yardımcılar
+        // ════════════════════════════════════════════════════════════════
+        private static SolidColorBrush Brush(string hex)
+            => new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
 
-            if (_remaining <= 0)
-                AnimateClose();
-        }
-
-        private void UpdateProgress()
-        {
-            int total = _data.Type == "urgent" ? URGENT_CLOSE_SECONDS : AUTO_CLOSE_SECONDS;
-            double pct = Math.Max(0, (double)_remaining / total);
-
-            // Progress bar genişliği — parent track genişliğine göre
-            var trackWidth = ((System.Windows.Controls.Grid)ProgressBar.Parent).ActualWidth;
-            if (trackWidth > 0)
-            {
-                ProgressBar.Width = trackWidth * pct;
-                var color = pct > 0.5 ? "#10B981" : pct > 0.2 ? "#F59E0B" : "#EF4444";
-                ProgressBar.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-            }
-
-            TimerText.Text = $"{_remaining}s";
-        }
-
-        private void AnimateClose()
-        {
-            _timer.Stop();
-            var sb = (Storyboard)Resources["SlideOut"];
-            sb.Completed += (_, __) =>
-            {
-                lock (_stackLock) { _stackOffset = Math.Max(0, _stackOffset - (int)ActualHeight - 8); }
-                Close();
-            };
-            sb.Begin();
-        }
-
-        private void CloseBtn_Click(object sender, RoutedEventArgs e)  => AnimateClose();
-        private void OkBtn_Click(object sender, RoutedEventArgs e)     => AnimateClose();
-
-        private void SnoozeBtn_Click(object sender, RoutedEventArgs e)
-        {
-            // 10 dakika sonra tekrar göster
-            _timer.Stop();
-            _remaining = 600;  // 10 dk
-
-            var snoozeTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(10) };
-            snoozeTimer.Tick += (_, __) =>
-            {
-                snoozeTimer.Stop();
-                var win = new NotificationWindow(_data);
-                win.Show();
-            };
-            snoozeTimer.Start();
-
-            AnimateClose();
-        }
+        private static string FirstLetter(string s)
+            => string.IsNullOrWhiteSpace(s) ? "?" : s.Trim()[0].ToString().ToUpper();
     }
 }

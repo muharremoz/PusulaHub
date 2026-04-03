@@ -123,7 +123,8 @@ export interface AgentMessage {
   title:     string
   body:      string
   type:      "info" | "warning" | "urgent"
-  from:      string          // Gönderen kullanıcı adı
+  from:      string          // Gönderen kullanıcı adı (hub tarafı)
+  toCompany: string          // Alıcının bağlı olduğu firma adı
   sentAt:    string          // ISO 8601
   delivered: boolean
 }

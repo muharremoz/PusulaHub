@@ -63,6 +63,23 @@ namespace PusulaNotifier
             });
         }
 
+        /// <summary>
+        /// "Daha Sonra Hatırlat" — belirtilen dakika sonra aynı mesajı tekrar göster.
+        /// </summary>
+        internal void SnoozeNotification(NotificationData data, int minutes = 10)
+        {
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(minutes)
+            };
+            timer.Tick += (_, __) =>
+            {
+                timer.Stop();
+                ShowNotification(data);
+            };
+            timer.Start();
+        }
+
         private void ShowSettings()
         {
             var win = new SettingsWindow();

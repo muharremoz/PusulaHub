@@ -77,11 +77,12 @@ namespace PusulaNotifier
 
     public class NotificationData
     {
-        public string Id      { get; set; } = "";
-        public string Title   { get; set; } = "";
-        public string Body    { get; set; } = "";
-        public string Type    { get; set; } = "info";   // info | warning | urgent
-        public string From    { get; set; } = "PusulaHub";
-        public string SentAt  { get; set; } = "";
+        public string Id        { get; set; } = "";
+        public string Title     { get; set; } = "";
+        public string Body      { get; set; } = "";
+        public string Type      { get; set; } = "info";   // info | warning | urgent
+        public string From      { get; set; } = "PusulaHub";
+        public string ToCompany { get; set; } = "";       // Alıcının bağlı olduğu firma
+        public string SentAt    { get; set; } = "";
     }
 }

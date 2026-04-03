@@ -113,7 +113,7 @@ const data = {
       icon: Plug,
     },
     {
-      title: "Bildirim Önizleme",
+      title: "Mesaj Önizleme",
       url: "/preview",
       icon: Bell,
     },
