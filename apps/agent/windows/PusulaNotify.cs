@@ -92,7 +92,6 @@ class NotifyForm : Form
         ShowInTaskbar   = true;
         StartPosition   = FormStartPosition.Manual;
         var wa = Screen.PrimaryScreen.WorkingArea;
-        Left = wa.Right - Width - 20;
 
         int y = 0;
 
@@ -212,7 +211,8 @@ class NotifyForm : Form
 
         y += 52;
         Height = y;
-        Top = wa.Bottom - Height - 20;
+        Left = wa.Left + (wa.Width  - Width)  / 2;
+        Top  = wa.Top  + (wa.Height - Height) / 2;
 
         // Rounded corners
         var gp = new GraphicsPath();
