@@ -171,6 +171,26 @@ const filtered = search.trim()
 
 ---
 
+## Windows Agent Deploy
+
+Agent kodu `apps/agent/windows/` altındadır. İki ana dosya:
+- **`PusulaAgent.cs`** — tüm agent mantığı burada (C#)
+- **`KUR.bat`** — derleme + servis kurulum scripti
+
+### Agent Güncelleme Adımları
+`PusulaAgent.cs`'de değişiklik yapıldığında sunucuya şu iki dosya kopyalanır:
+1. `PusulaAgent.cs`
+2. `KUR.bat`
+
+Ardından sunucuda admin olarak `KUR.bat` çalıştırılır. Script:
+- C# kodunu `csc.exe` ile derler → `PusulaAgent.exe` üretir
+- Eski process'i kapatır
+- Yeni `PusulaAgent.exe --install` ile servisi yeniden başlatır
+
+> **Not:** `PusulaAgent.ps1` artık kullanılmıyor. Asıl agent `PusulaAgent.cs`'dir.
+
+---
+
 ## Teknoloji Stack
 
 - **Framework**: Next.js 15 (App Router)
