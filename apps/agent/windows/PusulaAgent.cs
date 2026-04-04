@@ -1027,6 +1027,17 @@ class ApiServer
             {
                 var report = Metrics.GetLast();
                 if (report == null) report = Metrics.Collect();
+
+                // Bekleyen ACK'leri rapora ekle ve listeyi temizle
+                var acks = PopPendingAcks();
+                if (acks.Count > 0)
+                {
+                    var ackList = new List<object>();
+                    foreach (var ack in acks)
+                        ackList.Add(ack);
+                    report["pendingAcks"] = ackList;
+                }
+
                 Respond(ctx, 200, Json.Serialize(report));
             }
             else if (path == "/api/services" && method == "GET")
@@ -1040,6 +1051,10 @@ class ApiServer
             else if (path == "/api/notify" && method == "POST")
             {
                 HandleNotify(ctx);
+            }
+            else if (path == "/api/ack" && method == "POST")
+            {
+                HandleAck(ctx);
             }
             else
             {
@@ -1113,77 +1128,53 @@ class ApiServer
         }
     }
 
-    private static readonly string ACK_DIR = @"C:\ProgramData\PusulaAgent\Acks";
+    // PusulaNotify.exe localhost'tan /api/ack POST eder; buraya gelir.
+    // Hub bir sonraki /api/report cagrisinda bu listeyi alir ve temizler.
+    private static readonly List<Dictionary<string,string>> _pendingAcks =
+        new List<Dictionary<string,string>>();
+    private static readonly object _ackLock = new object();
 
-    // ACK dizinini olustur ve herkesin yazabilecegi sekilde ayarla.
-    // SYSTEM yetkisiyle calistigimizdan icacls ile izin veriyoruz.
-    internal static void InitAckDir()
+    internal static void AddPendingAck(string msgId, string username)
     {
-        try
-        {
-            if (!Directory.Exists(ACK_DIR))
-                Directory.CreateDirectory(ACK_DIR);
-            // Tüm kullanıcıların dosya yazabilmesi için izin ver
-            var pi = new ProcessStartInfo("icacls",
-                "\"" + ACK_DIR + "\" /grant *S-1-1-0:(OI)(CI)F /T /Q");
-            pi.CreateNoWindow  = true;
-            pi.UseShellExecute = false;
-            var p = Process.Start(pi);
-            if (p != null) p.WaitForExit(5000);
-        }
-        catch { }
+        var ack = new Dictionary<string,string>();
+        ack["msgId"]    = msgId;
+        ack["username"] = username;
+        lock (_ackLock) { _pendingAcks.Add(ack); }
     }
 
-    // ACK dosyalarini oku, hub'a POST et, sil.
-    internal static void ProcessAckFiles()
+    internal static List<Dictionary<string,string>> PopPendingAcks()
     {
-        try
+        lock (_ackLock)
         {
-            if (!Directory.Exists(ACK_DIR)) return;
-            string[] files = Directory.GetFiles(ACK_DIR, "*.ack");
-            foreach (string file in files)
-            {
-                try
-                {
-                    string json = File.ReadAllText(file, Encoding.UTF8);
-
-                    string msgId    = ExtractJson(json, "msgId");
-                    string username = ExtractJson(json, "username");
-                    string hubUrl   = ExtractJson(json, "hubUrl");
-
-                    if (string.IsNullOrEmpty(msgId) || string.IsNullOrEmpty(username) ||
-                        string.IsNullOrEmpty(hubUrl))
-                    {
-                        File.Delete(file);
-                        continue;
-                    }
-
-                    string payload = "{\"msgId\":\"" + msgId.Replace("\"","'") +
-                                     "\",\"username\":\"" + username.Replace("\"","'") + "\"}";
-                    byte[] data = Encoding.UTF8.GetBytes(payload);
-
-                    var req = (HttpWebRequest)WebRequest.Create(
-                        hubUrl.TrimEnd('/') + "/api/agent/message-ack");
-                    req.Method      = "POST";
-                    req.ContentType = "application/json; charset=utf-8";
-                    req.ContentLength = data.Length;
-                    req.Timeout     = 8000;
-                    using (var stream = req.GetRequestStream())
-                        stream.Write(data, 0, data.Length);
-                    using (var resp = (HttpWebResponse)req.GetResponse())
-                    {
-                        // Başarılı ise dosyayı sil
-                        if ((int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300)
-                            File.Delete(file);
-                    }
-                }
-                catch
-                {
-                    // Geçici hata; bir sonraki döngüde tekrar denenecek
-                }
-            }
+            var copy = new List<Dictionary<string,string>>(_pendingAcks);
+            _pendingAcks.Clear();
+            return copy;
         }
-        catch { }
+    }
+
+    private void HandleAck(HttpListenerContext ctx)
+    {
+        // Sadece localhost'tan kabul et — API key gerekmez
+        string remoteIp = ctx.Request.RemoteEndPoint != null
+            ? ctx.Request.RemoteEndPoint.Address.ToString()
+            : "";
+        if (remoteIp != "127.0.0.1" && remoteIp != "::1")
+        {
+            Respond(ctx, 403, "{\"error\":\"forbidden\"}");
+            return;
+        }
+
+        string body;
+        using (var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8))
+            body = reader.ReadToEnd();
+
+        string msgId    = ExtractJson(body, "msgId");
+        string username = ExtractJson(body, "username");
+
+        if (!string.IsNullOrEmpty(msgId) && !string.IsNullOrEmpty(username))
+            AddPendingAck(msgId, username);
+
+        Respond(ctx, 200, "{\"ok\":true}");
     }
 
     private static string ExtractJson(string json, string key)
@@ -1210,7 +1201,13 @@ class ApiServer
             return;
         }
 
-        string base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(body));
+        // agentPort'u payload'a ekle; PusulaNotify localhost'a ACK gonderecek
+        string payload = body.TrimEnd();
+        if (payload.EndsWith("}"))
+            payload = payload.Substring(0, payload.Length - 1) +
+                      ",\"agentPort\":" + _config.Port + "}";
+
+        string base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payload));
         int injected = 0;
         try { injected = SessionInjector.Inject(notifyExe, base64); }
         catch (Exception ex)
@@ -1411,19 +1408,12 @@ class TrayApp : ApplicationContext
         _server = new ApiServer(config);
         _server.Start();
 
-        // ACK dizinini hazırla
-        ApiServer.InitAckDir();
-
         // Metric collection timer (every 15 sec)
         _metricTimer = new System.Windows.Forms.Timer();
         _metricTimer.Interval = 15000;
         _metricTimer.Tick += (s, e) =>
         {
-            ThreadPool.QueueUserWorkItem((_2) =>
-            {
-                try { Metrics.Collect(); }          catch { }
-                try { ApiServer.ProcessAckFiles(); } catch { }
-            });
+            ThreadPool.QueueUserWorkItem((_2) => { try { Metrics.Collect(); } catch { } });
         };
         _metricTimer.Start();
 
@@ -1745,15 +1735,10 @@ class AgentService : ServiceBase
     {
         Metrics.Init();
         Metrics.Collect();
-        ApiServer.InitAckDir();
         _server = new ApiServer(_config);
         _server.Start();
         _metricTimer = new System.Threading.Timer(
-            _ =>
-            {
-                try { Metrics.Collect(); }     catch { }
-                try { ApiServer.ProcessAckFiles(); } catch { }
-            },
+            _ => { try { Metrics.Collect(); } catch { } },
             null, 15000, 15000);
     }
 

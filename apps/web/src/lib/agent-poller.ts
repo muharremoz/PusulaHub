@@ -6,7 +6,7 @@
 ══════════════════════════════════════════════════════════ */
 
 import sql from "mssql"
-import { upsertAgentFromPoll, getAllAgents } from "./agent-store"
+import { upsertAgentFromPoll, getAllAgents, markMessageRead } from "./agent-store"
 import type { AgentReport } from "./agent-types"
 
 /* ── Poller'a özel DB pool (lazy init) ── */
@@ -97,6 +97,14 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
       port:      port,
       report,
     })
+
+    // Bekleyen okundu bilgilerini işle
+    const pendingAcks: { msgId: string; username: string }[] = data.pendingAcks ?? []
+    for (const ack of pendingAcks) {
+      if (ack.msgId && ack.username) {
+        markMessageRead(ack.msgId, ack.username)
+      }
+    }
 
     return true
   } catch (err: unknown) {

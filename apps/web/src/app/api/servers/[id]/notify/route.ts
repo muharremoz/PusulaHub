@@ -17,22 +17,8 @@ export async function POST(
   const { id } = await params
   const { title, body: msgBody, type = "info", from = "Pusula Yazılım" } = await req.json()
 
-  // hubUrl: önce env, sonra request host header'ından türet (localhost'tan kaçın)
-  const envHub = process.env.HUB_URL?.trim()
-  const reqHost = req.headers.get("host") ?? ""
-  const proto = req.headers.get("x-forwarded-proto") ?? "http"
-  const derivedHub = `${proto}://${reqHost}`
-  const hubUrl = envHub || (reqHost.startsWith("localhost") || reqHost.startsWith("127.") ? "" : derivedHub)
-
   if (!title?.trim() || !msgBody?.trim()) {
     return NextResponse.json({ error: "Başlık ve mesaj zorunlu" }, { status: 400 })
-  }
-
-  if (!hubUrl) {
-    return NextResponse.json(
-      { error: "Hub URL belirlenemiyor. .env.local dosyasına HUB_URL=http://SUNUCU_IP:PORT ekleyin." },
-      { status: 400 }
-    )
   }
 
   const rows = await query<ServerRow[]>`

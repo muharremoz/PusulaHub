@@ -13,7 +13,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.IO;
+using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -32,17 +32,20 @@ static class PusulaNotifyProgram
         try { json = Encoding.UTF8.GetString(Convert.FromBase64String(args[0])); }
         catch { return; }
 
-        string msgId  = Extract(json, "msgId")  ?? "";
-        string hubUrl = Extract(json, "hubUrl") ?? "";
-        string title  = Extract(json, "title")  ?? "(Başlıksız)";
-        string body   = Extract(json, "body")   ?? "";
-        string type   = Extract(json, "type")   ?? "info";
-        string sentAt = Extract(json, "sentAt") ?? "";
-        string from   = Extract(json, "from")   ?? "Pusula Yazılım";
+        string msgId     = Extract(json, "msgId")      ?? "";
+        string title     = Extract(json, "title")      ?? "(Başlıksız)";
+        string body      = Extract(json, "body")       ?? "";
+        string type      = Extract(json, "type")       ?? "info";
+        string sentAt    = Extract(json, "sentAt")     ?? "";
+        string from      = Extract(json, "from")       ?? "Pusula Yazılım";
+        string agentPortStr = Extract(json, "agentPort") ?? "8585";
+
+        int agentPort = 8585;
+        int.TryParse(agentPortStr, out agentPort);
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        Application.Run(new NotifyForm(msgId, hubUrl, title, body, type, sentAt, from));
+        Application.Run(new NotifyForm(msgId, agentPort, title, body, type, sentAt, from));
     }
 
     static string Extract(string json, string key)
@@ -57,7 +60,8 @@ static class PusulaNotifyProgram
 
 class NotifyForm : Form
 {
-    readonly string _msgId, _hubUrl;
+    readonly string _msgId;
+    readonly int    _agentPort;
 
     // type index: 0=info, 1=warning, 2=urgent
     static int TypeIdx(string t)
@@ -75,10 +79,10 @@ class NotifyForm : Form
     static readonly string[] BadgeTxt = { "BİLGİ", "UYARI", "ACİL" };
     static readonly string[] Glyph    = { "i", "!", "!" };
 
-    public NotifyForm(string msgId, string hubUrl, string title, string body, string type, string sentAt, string from)
+    public NotifyForm(string msgId, int agentPort, string title, string body, string type, string sentAt, string from)
     {
-        _msgId  = msgId;
-        _hubUrl = hubUrl;
+        _msgId      = msgId;
+        _agentPort  = agentPort;
         int ti  = TypeIdx(type);
 
         FormBorderStyle = FormBorderStyle.None;
@@ -232,23 +236,21 @@ class NotifyForm : Form
         {
             try
             {
-                // ACK dosyasını yaz; PusulaAgent (SYSTEM) okuyup hub'a iletecek.
-                // Kullanıcı prosesi GPO kısıtlaması nedeniyle dışarıya HTTP açamayabilir.
-                string ackDir = @"C:\ProgramData\PusulaAgent\Acks";
-                if (!Directory.Exists(ackDir))
-                    Directory.CreateDirectory(ackDir);
-
-                string readAt  = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
-                string safeUser = Regex.Replace(Environment.UserName, "[\\\\/:*?\"<>|]", "_");
-                string fileName = _msgId + "_" + safeUser + "_" + DateTime.Now.Ticks + ".ack";
-                string filePath = Path.Combine(ackDir, fileName);
-
+                // localhost'taki PusulaAgent API'sine POST et.
+                // Localhost bağlantısı GPO tarafından engellenmez.
                 string json = "{\"msgId\":\"" + _msgId.Replace("\"","\\\"") +
-                              "\",\"username\":\"" + Environment.UserName.Replace("\"","\\\"") +
-                              "\",\"hubUrl\":\"" + _hubUrl.Replace("\"","\\\"").TrimEnd('/') +
-                              "\",\"readAt\":\"" + readAt + "\"}";
+                              "\",\"username\":\"" + Environment.UserName.Replace("\"","\\\"") + "\"}";
+                byte[] data = Encoding.UTF8.GetBytes(json);
 
-                File.WriteAllText(filePath, json, Encoding.UTF8);
+                var req = (HttpWebRequest)WebRequest.Create(
+                    "http://127.0.0.1:" + _agentPort + "/api/ack");
+                req.Method        = "POST";
+                req.ContentType   = "application/json; charset=utf-8";
+                req.ContentLength = data.Length;
+                req.Timeout       = 5000;
+                using (var s = req.GetRequestStream())
+                    s.Write(data, 0, data.Length);
+                using (req.GetResponse()) { }
             }
             catch { }
         }
