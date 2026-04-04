@@ -1662,8 +1662,8 @@ class AgentService : ServiceBase
 
     protected override void OnStop()
     {
-        try { _metricTimer?.Dispose(); } catch { }
-        try { _server?.Stop(); } catch { }
+        try { if (_metricTimer != null) _metricTimer.Dispose(); } catch { }
+        try { if (_server != null) _server.Stop(); } catch { }
     }
 }
 
