@@ -998,6 +998,13 @@ class ApiServer
             ctx.Response.Headers.Add("Access-Control-Allow-Headers", "X-Api-Key, Content-Type");
             if (method == "OPTIONS") { Respond(ctx, 200, "{}"); return; }
 
+            // Browser UI — no auth
+            if (path == "/" || path == "/ui")
+            {
+                HandleUi(ctx);
+                return;
+            }
+
             // Health - no auth
             if (path == "/health" || path == "")
             {
@@ -1217,6 +1224,44 @@ class ApiServer
         }
 
         Respond(ctx, 200, "{\"ok\":true,\"sessions\":" + injected + "}");
+    }
+
+    private void HandleUi(HttpListenerContext ctx)
+    {
+        var report = Metrics.GetLast();
+        string hostname = report != null && report.ContainsKey("hostname") ? report["hostname"].ToString() : Environment.MachineName;
+        string cpu      = report != null && report.ContainsKey("metrics") ? "" : "";
+        string version  = "2.0.0";
+
+        string html = "<!DOCTYPE html><html><head><meta charset='utf-8'>" +
+            "<title>PusulaAgent</title>" +
+            "<style>body{font-family:Segoe UI,sans-serif;background:#f4f2f0;margin:0;padding:24px;color:#111}" +
+            ".card{background:#fff;border-radius:8px;padding:20px 24px;margin-bottom:16px;box-shadow:0 2px 4px rgba(0,0,0,.06)}" +
+            "h1{font-size:18px;margin:0 0 4px}h2{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#888;margin:0 0 12px}" +
+            ".row{display:flex;gap:12px;margin-bottom:8px}.label{color:#888;font-size:12px;min-width:90px}.val{font-size:12px;font-weight:600;font-family:monospace}" +
+            ".ok{color:#16a34a}.badge{display:inline-block;padding:2px 10px;border-radius:4px;font-size:11px;font-weight:700;background:#dcfce7;color:#166534}" +
+            "</style></head><body>" +
+            "<div class='card'><h2>Sunucu</h2>" +
+            "<div class='row'><span class='label'>Hostname</span><span class='val'>" + hostname + "</span></div>" +
+            "<div class='row'><span class='label'>Port</span><span class='val'>" + _config.Port + "</span></div>" +
+            "<div class='row'><span class='label'>Versiyon</span><span class='val'>" + version + "</span></div>" +
+            "<div class='row'><span class='label'>Durum</span><span class='badge ok'>ÇALIŞIYOR</span></div>" +
+            "</div>" +
+            "<div class='card'><h2>Bağlantı Bilgileri</h2>" +
+            "<div class='row'><span class='label'>API Key</span><span class='val'>" + _config.ApiKey + "</span></div>" +
+            "<div class='row'><span class='label'>Port</span><span class='val'>" + _config.Port + "</span></div>" +
+            "</div>" +
+            "<div class='card'><h2>PusulaHub</h2>" +
+            "<p style='font-size:12px;color:#555;margin:0'>Bu bilgileri PusulaHub'daki sunucu kaydına girin.</p>" +
+            "</div>" +
+            "</body></html>";
+
+        byte[] buf = Encoding.UTF8.GetBytes(html);
+        ctx.Response.StatusCode = 200;
+        ctx.Response.ContentType = "text/html; charset=utf-8";
+        ctx.Response.ContentLength64 = buf.Length;
+        ctx.Response.OutputStream.Write(buf, 0, buf.Length);
+        ctx.Response.Close();
     }
 
     private static void Respond(HttpListenerContext ctx, int status, string body)
@@ -1750,6 +1795,72 @@ class AgentService : ServiceBase
 }
 
 /* ================================================================
+   TRAY MONITOR — --tray modunda calısır, servis zaten var, HTTP acmaz
+================================================================ */
+class TrayMonitor : ApplicationContext
+{
+    private NotifyIcon _tray;
+    private AgentConfig _config;
+
+    public TrayMonitor(AgentConfig config)
+    {
+        _config = config;
+
+        _tray = new NotifyIcon();
+        _tray.Icon = TrayApp.CreateAppIcon(Color.FromArgb(34, 139, 34));
+        _tray.Text = string.Format("PusulaAgent - Port {0}", config.Port);
+        _tray.Visible = true;
+
+        var menu = new ContextMenuStrip();
+
+        var lblTitle = new ToolStripMenuItem(string.Format("PusulaAgent — Port {0}", config.Port));
+        lblTitle.Enabled = false;
+        menu.Items.Add(lblTitle);
+        menu.Items.Add(new ToolStripSeparator());
+
+        var mnuKey = new ToolStripMenuItem("API Anahtarini Kopyala");
+        mnuKey.Click += (s, e) =>
+        {
+            try { Clipboard.SetText(config.ApiKey); }
+            catch { }
+            _tray.ShowBalloonTip(2000, "Kopyalandi", config.ApiKey, ToolTipIcon.Info);
+        };
+        menu.Items.Add(mnuKey);
+
+        var mnuBrowser = new ToolStripMenuItem("Tarayicida Ac");
+        mnuBrowser.Click += (s, e) =>
+        {
+            try
+            {
+                Process.Start(string.Format("http://localhost:{0}/ui", config.Port));
+            }
+            catch { }
+        };
+        menu.Items.Add(mnuBrowser);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var mnuExit = new ToolStripMenuItem("Cikis");
+        mnuExit.Click += (s, e) =>
+        {
+            _tray.Visible = false;
+            Application.Exit();
+        };
+        menu.Items.Add(mnuExit);
+
+        _tray.ContextMenuStrip = menu;
+        _tray.DoubleClick += (s, e) =>
+        {
+            try { Process.Start(string.Format("http://localhost:{0}/ui", config.Port)); }
+            catch { }
+        };
+
+        _tray.ShowBalloonTip(3000, "PusulaAgent",
+            string.Format("Servis calisiyor. Port: {0}", config.Port), ToolTipIcon.Info);
+    }
+}
+
+/* ================================================================
    ENTRY POINT
 ================================================================ */
 static class Program
@@ -1770,6 +1881,26 @@ static class Program
             }
             Metrics.Init();
             ServiceBase.Run(new AgentService(svcConfig));
+            return;
+        }
+
+        // Sadece tray modu — servis zaten calısıyor, HTTP sunucu acma
+        if (args.Any(a => a == "--tray"))
+        {
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            var trayCfg = AgentConfig.Load(appDir);
+            if (trayCfg == null)
+            {
+                MessageBox.Show("config.json bulunamadi. Once servisi kurun (KUR.bat).",
+                    "PusulaAgent", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+            bool trayCreated;
+            var trayMutex = new Mutex(true, "Global\\PusulaAgentTray_Mutex", out trayCreated);
+            if (!trayCreated) return; // zaten acik
+            Application.Run(new TrayMonitor(trayCfg));
+            GC.KeepAlive(trayMutex);
             return;
         }
 

@@ -88,6 +88,12 @@ timeout /t 3 /nobreak >nul
 sc query PusulaAgent | findstr STATE
 
 echo.
+echo  [+] Tray uygulamasi kullanici girisi icin ayarlaniyor...
+reg add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v PusulaAgentTray /t REG_SZ /d "\"%~dp0PusulaAgent.exe\" --tray" /f >nul 2>&1
+:: Simdi de baslat (oturum aciksa)
+start "" "%~dp0PusulaAgent.exe" --tray
+
+echo.
 echo  ========================================
 echo    Kurulum tamamlandi!
 echo  ========================================
