@@ -60,7 +60,12 @@ class NotifyForm : Form
     readonly string _msgId, _hubUrl;
 
     // type index: 0=info, 1=warning, 2=urgent
-    static int TypeIdx(string t) => t == "warning" ? 1 : t == "urgent" ? 2 : 0;
+    static int TypeIdx(string t)
+    {
+        if (t == "warning") return 1;
+        if (t == "urgent")  return 2;
+        return 0;
+    }
 
     static readonly Color[] ColHeader = { Color.FromArgb(239,246,255), Color.FromArgb(255,251,235), Color.FromArgb(254,242,242) };
     static readonly Color[] ColIcon   = { Color.FromArgb(219,234,254), Color.FromArgb(254,243,199), Color.FromArgb(254,226,226) };
