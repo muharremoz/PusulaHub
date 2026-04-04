@@ -290,7 +290,7 @@ export default function ServerDetailPage({
           <TabOverview server={server} sessionCount={sessionCount} onRefresh={handleRefresh} refreshing={refreshing} />
         )}
         {activeTab === "sessions" && (
-          <TabSessions sessions={detail.sessions} />
+          <TabSessions sessions={detail.sessions} serverId={server.id} />
         )}
         {activeTab === "companies" && (
           <TabCompanies companies={[]} />
