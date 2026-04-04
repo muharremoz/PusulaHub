@@ -81,9 +81,10 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
       sessions: data.sessions ?? undefined,
       iis:      data.iis ?? undefined,
       sql:      data.mssql ?? undefined,
-      ad:       data.ad ?? undefined,
-      security: data.security ?? undefined,
-      logs:     data.logs ?? undefined,
+      ad:         data.ad ?? undefined,
+      localUsers: data.localUsers ?? undefined,
+      security:   data.security ?? undefined,
+      logs:       data.logs ?? undefined,
     }
 
     // agent-store'a kaydet
