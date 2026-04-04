@@ -1113,6 +1113,87 @@ class ApiServer
         }
     }
 
+    private static readonly string ACK_DIR = @"C:\ProgramData\PusulaAgent\Acks";
+
+    // ACK dizinini olustur ve herkesin yazabilecegi sekilde ayarla.
+    // SYSTEM yetkisiyle calistigimizdan icacls ile izin veriyoruz.
+    internal static void InitAckDir()
+    {
+        try
+        {
+            if (!Directory.Exists(ACK_DIR))
+                Directory.CreateDirectory(ACK_DIR);
+            // Tüm kullanıcıların dosya yazabilmesi için izin ver
+            var pi = new ProcessStartInfo("icacls",
+                "\"" + ACK_DIR + "\" /grant *S-1-1-0:(OI)(CI)F /T /Q");
+            pi.CreateNoWindow  = true;
+            pi.UseShellExecute = false;
+            var p = Process.Start(pi);
+            if (p != null) p.WaitForExit(5000);
+        }
+        catch { }
+    }
+
+    // ACK dosyalarini oku, hub'a POST et, sil.
+    internal static void ProcessAckFiles()
+    {
+        try
+        {
+            if (!Directory.Exists(ACK_DIR)) return;
+            string[] files = Directory.GetFiles(ACK_DIR, "*.ack");
+            foreach (string file in files)
+            {
+                try
+                {
+                    string json = File.ReadAllText(file, Encoding.UTF8);
+
+                    string msgId    = ExtractJson(json, "msgId");
+                    string username = ExtractJson(json, "username");
+                    string hubUrl   = ExtractJson(json, "hubUrl");
+
+                    if (string.IsNullOrEmpty(msgId) || string.IsNullOrEmpty(username) ||
+                        string.IsNullOrEmpty(hubUrl))
+                    {
+                        File.Delete(file);
+                        continue;
+                    }
+
+                    string payload = "{\"msgId\":\"" + msgId.Replace("\"","'") +
+                                     "\",\"username\":\"" + username.Replace("\"","'") + "\"}";
+                    byte[] data = Encoding.UTF8.GetBytes(payload);
+
+                    var req = (HttpWebRequest)WebRequest.Create(
+                        hubUrl.TrimEnd('/') + "/api/agent/message-ack");
+                    req.Method      = "POST";
+                    req.ContentType = "application/json; charset=utf-8";
+                    req.ContentLength = data.Length;
+                    req.Timeout     = 8000;
+                    using (var stream = req.GetRequestStream())
+                        stream.Write(data, 0, data.Length);
+                    using (var resp = (HttpWebResponse)req.GetResponse())
+                    {
+                        // Başarılı ise dosyayı sil
+                        if ((int)resp.StatusCode >= 200 && (int)resp.StatusCode < 300)
+                            File.Delete(file);
+                    }
+                }
+                catch
+                {
+                    // Geçici hata; bir sonraki döngüde tekrar denenecek
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static string ExtractJson(string json, string key)
+    {
+        var m = Regex.Match(json,
+            "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+        if (!m.Success) return null;
+        return m.Groups[1].Value;
+    }
+
     private void HandleNotify(HttpListenerContext ctx)
     {
         string body;
@@ -1330,10 +1411,20 @@ class TrayApp : ApplicationContext
         _server = new ApiServer(config);
         _server.Start();
 
+        // ACK dizinini hazırla
+        ApiServer.InitAckDir();
+
         // Metric collection timer (every 15 sec)
         _metricTimer = new System.Windows.Forms.Timer();
         _metricTimer.Interval = 15000;
-        _metricTimer.Tick += (s, e) => { ThreadPool.QueueUserWorkItem((_2) => Metrics.Collect()); };
+        _metricTimer.Tick += (s, e) =>
+        {
+            ThreadPool.QueueUserWorkItem((_2) =>
+            {
+                try { Metrics.Collect(); }          catch { }
+                try { ApiServer.ProcessAckFiles(); } catch { }
+            });
+        };
         _metricTimer.Start();
 
         // Setup tray
@@ -1654,10 +1745,16 @@ class AgentService : ServiceBase
     {
         Metrics.Init();
         Metrics.Collect();
+        ApiServer.InitAckDir();
         _server = new ApiServer(_config);
         _server.Start();
         _metricTimer = new System.Threading.Timer(
-            _ => { try { Metrics.Collect(); } catch { } }, null, 15000, 15000);
+            _ =>
+            {
+                try { Metrics.Collect(); }     catch { }
+                try { ApiServer.ProcessAckFiles(); } catch { }
+            },
+            null, 15000, 15000);
     }
 
     protected override void OnStop()

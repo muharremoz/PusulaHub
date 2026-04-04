@@ -13,7 +13,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
-using System.Net;
+using System.IO;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -228,17 +228,27 @@ class NotifyForm : Form
 
     void AckAndClose()
     {
-        if (!string.IsNullOrEmpty(_msgId) && !string.IsNullOrEmpty(_hubUrl))
+        if (!string.IsNullOrEmpty(_msgId))
         {
             try
             {
+                // ACK dosyasını yaz; PusulaAgent (SYSTEM) okuyup hub'a iletecek.
+                // Kullanıcı prosesi GPO kısıtlaması nedeniyle dışarıya HTTP açamayabilir.
+                string ackDir = @"C:\ProgramData\PusulaAgent\Acks";
+                if (!Directory.Exists(ackDir))
+                    Directory.CreateDirectory(ackDir);
+
+                string readAt  = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+                string safeUser = Regex.Replace(Environment.UserName, "[\\\\/:*?\"<>|]", "_");
+                string fileName = _msgId + "_" + safeUser + "_" + DateTime.Now.Ticks + ".ack";
+                string filePath = Path.Combine(ackDir, fileName);
+
                 string json = "{\"msgId\":\"" + _msgId.Replace("\"","\\\"") +
-                              "\",\"username\":\"" + Environment.UserName.Replace("\"","\\\"") + "\"}";
-                using (var wc = new WebClient())
-                {
-                    wc.Headers[HttpRequestHeader.ContentType] = "application/json";
-                    wc.UploadString(_hubUrl.TrimEnd('/') + "/api/agent/message-ack", "POST", json);
-                }
+                              "\",\"username\":\"" + Environment.UserName.Replace("\"","\\\"") +
+                              "\",\"hubUrl\":\"" + _hubUrl.Replace("\"","\\\"").TrimEnd('/') +
+                              "\",\"readAt\":\"" + readAt + "\"}";
+
+                File.WriteAllText(filePath, json, Encoding.UTF8);
             }
             catch { }
         }

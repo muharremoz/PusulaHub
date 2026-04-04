@@ -53,7 +53,6 @@ echo  [2/5] PusulaNotify.exe derleniyor...
 "%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu /out:PusulaNotify.exe ^
   /r:System.Windows.Forms.dll ^
   /r:System.Drawing.dll ^
-  /r:System.Net.dll ^
   PusulaNotify.cs
 
 if %errorlevel% neq 0 (
