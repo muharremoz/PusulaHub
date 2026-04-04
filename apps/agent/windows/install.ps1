@@ -57,6 +57,7 @@ public class PusulaAgentService : ServiceBase
     private Process _process;
     private readonly string _scriptPath;
     private readonly string _workDir;
+    private volatile bool _running;
 
     public PusulaAgentService(string scriptPath)
     {
@@ -70,6 +71,7 @@ public class PusulaAgentService : ServiceBase
 
     protected override void OnStart(string[] args)
     {
+        _running = true;
         StartAgent();
     }
 
@@ -92,10 +94,10 @@ public class PusulaAgentService : ServiceBase
             EnableRaisingEvents = true,
         };
 
-        // Servis duruyorsa agent'ı yeniden başlat
+        // Servis duruyorsa agent'i yeniden baslat
         _process.Exited += (s, e) =>
         {
-            if (this.Status == ServiceControllerStatus.Running)
+            if (_running)
             {
                 Thread.Sleep(5000);
                 StartAgent();
@@ -107,6 +109,7 @@ public class PusulaAgentService : ServiceBase
 
     protected override void OnStop()
     {
+        _running = false;
         try
         {
             if (_process != null && !_process.HasExited)

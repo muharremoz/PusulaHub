@@ -6,6 +6,41 @@
 import { StoredAgent, AgentReport, AgentMessage, AgentExecRequest, AgentExecResult } from "./agent-types"
 import { randomUUID } from "crypto"
 
+/* ══════════════════════════════════════════════
+   PULL MODEL — Poller'dan gelen veriyi kaydet
+══════════════════════════════════════════════ */
+
+export function upsertAgentFromPoll(data: {
+  serverId: string
+  hostname: string
+  ip:       string
+  os:       "windows" | "linux"
+  version:  string
+  port:     number
+  report:   AgentReport
+}): void {
+  const existing = store.get(data.serverId)
+  const now = new Date().toISOString()
+
+  const agent: StoredAgent = {
+    agentId:         data.serverId,
+    token:           existing?.token ?? "",
+    hostname:        data.hostname,
+    ip:              data.ip,
+    os:              data.os,
+    version:         data.version,
+    localPort:       data.port,
+    registeredAt:    existing?.registeredAt ?? now,
+    lastSeen:        now,
+    status:          "online",
+    lastReport:      data.report,
+    pendingMessages: existing?.pendingMessages ?? [],
+    pendingExecs:    existing?.pendingExecs ?? [],
+  }
+
+  store.set(data.serverId, agent)
+}
+
 /* Global singleton — Next.js dev modunda hot-reload'dan korunur */
 const g = global as typeof global & {
   _pusulaAgentStore?: Map<string, StoredAgent>

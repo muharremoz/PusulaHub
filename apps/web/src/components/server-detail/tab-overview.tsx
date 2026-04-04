@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
-import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
-import { Bar, BarChart, Cell, XAxis } from "recharts";
 import type { Server } from "@/types";
-import type { ServerDetail } from "@/lib/mock-server-detail";
-
 interface Props {
   server: Server;
-  detail: ServerDetail;
+  sessionCount: number;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 function gaugeColor(value: number) {
@@ -35,10 +34,6 @@ function AnimatedGauge({ value, className }: { value: number; className?: string
     />
   );
 }
-
-const chartConfig = {
-  cpu: { label: "CPU" },
-} satisfies ChartConfig;
 
 function loadScore(cpu: number, ram: number, disk: number) {
   const raw = Math.round(cpu * 0.4 + ram * 0.4 + disk * 0.2);
@@ -90,7 +85,7 @@ function LoadScoreCard({ cpu, ram, disk }: { cpu: number; ram: number; disk: num
   );
 }
 
-export function TabOverview({ server, detail }: Props) {
+export function TabOverview({ server, sessionCount, onRefresh, refreshing }: Props) {
 
   return (
     <div className="space-y-3">
@@ -116,7 +111,13 @@ export function TabOverview({ server, detail }: Props) {
                   { label: "DNS Adresi", value: server.dns ?? "—", mono: true },
                   { label: "İşletim Sistemi", value: server.os },
                   { label: "Çalışma Süresi", value: server.uptime },
-                  { label: "Son Kontrol", value: server.lastChecked },
+                  { label: "Son Kontrol", value: (() => {
+                    try {
+                      const d = new Date(server.lastChecked);
+                      if (isNaN(d.getTime())) return server.lastChecked;
+                      return d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+                    } catch { return server.lastChecked; }
+                  })() },
                 ].map(({ label, value, mono }) => (
                   <div key={label} className="px-3 py-2.5 flex items-center justify-between gap-4">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase shrink-0">
@@ -140,10 +141,20 @@ export function TabOverview({ server, detail }: Props) {
                 className="rounded-[4px] flex-1 flex flex-col"
                 style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
               >
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
                   <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
                     Anlık Durum
                   </span>
+                  {onRefresh && (
+                    <button
+                      onClick={onRefresh}
+                      disabled={refreshing}
+                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw className={cn("size-3", refreshing && "animate-spin")} />
+                      Yenile
+                    </button>
+                  )}
                 </div>
                 <div className="grid grid-cols-4 divide-x divide-border/40 flex-1">
                   {[
@@ -161,7 +172,7 @@ export function TabOverview({ server, detail }: Props) {
                   ))}
                   <div className="flex flex-col items-center justify-center py-3 gap-1.5">
                     <div className="size-14 flex items-center justify-center">
-                      <span className="text-3xl font-bold tabular-nums">{detail.sessions.length}</span>
+                      <span className="text-3xl font-bold tabular-nums">{sessionCount}</span>
                     </div>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
                       Oturum
@@ -189,30 +200,9 @@ export function TabOverview({ server, detail }: Props) {
                 Haftalık Ortalama (CPU)
               </span>
             </div>
-            <ChartContainer config={chartConfig} className="flex-1 w-full px-2 pt-2 min-h-0 aspect-auto">
-              <BarChart data={detail.weeklyStats} barCategoryGap="30%">
-                <XAxis
-                  dataKey="day"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                />
-                <ChartTooltip
-                  cursor={{ fill: "var(--muted)", opacity: 0.4, radius: 4 }}
-                  content={
-                    <ChartTooltipContent
-                      hideLabel={false}
-                      formatter={(value) => [`%${value}`, "CPU"]}
-                    />
-                  }
-                />
-                <Bar dataKey="cpu" radius={[4, 4, 0, 0]} maxBarSize={48}>
-                  {detail.weeklyStats.map((s) => (
-                    <Cell key={s.day} fill={gaugeColor(s.cpu).primary} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
+            <div className="flex-1 flex items-center justify-center px-4 py-8">
+              <span className="text-[11px] text-muted-foreground">Veri toplanıyor...</span>
+            </div>
           </div>
           <div className="h-2" />
         </div>

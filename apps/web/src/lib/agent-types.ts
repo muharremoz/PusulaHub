@@ -100,6 +100,37 @@ export interface AgentReport {
     }[]
   }
 
+  security?: {
+    firewall: {
+      enabled:    boolean
+      rulesCount: number
+    }
+    adapters: {
+      name:   string
+      ip:     string
+      mac:    string
+      speed:  string
+      status: string
+    }[]
+    ports: {
+      port:     number
+      protocol: string
+      process:  string
+      pid:      number
+    }[]
+    shares: {
+      name:   string
+      path:   string
+      access: string
+    }[]
+    firewallRules: {
+      name:      string
+      direction: "In" | "Out"
+      action:    "Allow" | "Block"
+      enabled:   boolean
+    }[]
+  }
+
   logs?: {
     events: {
       timestamp: string

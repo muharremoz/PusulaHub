@@ -107,7 +107,7 @@ function ServerCard({ srv }: { srv: typeof UPTIME_DATA[0] }) {
               <span className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-[4px] border", cfg.badge)}>
                 {cfg.label}
               </span>
-              <a href={`/servers/${srv.id}`}>
+              <a href={`/servers/${srv.slug ?? srv.id}`}>
                 <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
                   <ArrowUpRight className="size-3.5" />
                 </Button>

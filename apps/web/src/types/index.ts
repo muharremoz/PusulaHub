@@ -4,6 +4,7 @@ export type ServerRole = "AD" | "SQL" | "IIS" | "File" | "DNS" | "DHCP" | "Gener
 
 export interface Server {
   id: string;
+  slug?: string;
   name: string;
   ip: string;
   dns?: string;

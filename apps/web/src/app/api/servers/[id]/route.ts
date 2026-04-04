@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
              STRING_AGG(r.Role, ',') AS Roles
       FROM Servers s
       LEFT JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${id}
+      WHERE s.Id = ${id} OR LOWER(s.Name) = ${id.toLowerCase()}
       GROUP BY s.Id, s.Name, s.IP, s.DNS, s.OS, s.ApiKey, s.AgentPort, s.Username, s.Password
     `
     if (!rows.length) return NextResponse.json({ error: "Bulunamadı" }, { status: 404 })
