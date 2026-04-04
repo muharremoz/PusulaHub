@@ -135,7 +135,6 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
 
     setSending(true);
     try {
-      const hubUrl = typeof window !== "undefined" ? window.location.origin : "";
       const res = await fetch(`/api/servers/${serverId}/notify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -144,7 +143,6 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
           body: message.trim(),
           type: msgType,
           from: "Pusula Yazılım",
-          hubUrl,
         }),
       });
       const data = await res.json();
