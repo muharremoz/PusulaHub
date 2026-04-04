@@ -40,7 +40,6 @@ export async function POST(
 
   const payload = {
     msgId,
-    hubUrl,
     title: title.trim(),
     body: msgBody.trim(),
     type,
