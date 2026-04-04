@@ -6,7 +6,7 @@
     Sunucu metriklerini toplar ve PusulaHub'a gönderir.
     Aynı zamanda yerel web arayüzü sunar (varsayılan port: 8585).
 .NOTES
-    Versiyon : 1.0.0
+    Versiyon : 1.1.0
     Çalıştır : powershell -ExecutionPolicy Bypass -File PusulaAgent.ps1
 #>
 
@@ -16,7 +16,7 @@ $ErrorActionPreference = "Continue"
 # ══════════════════════════════════════════════
 #   YAPILANDIRMA
 # ══════════════════════════════════════════════
-$VERSION    = "1.0.0"
+$VERSION    = "1.1.0"
 $ConfigFile = Join-Path $PSScriptRoot "config.json"
 
 $DefaultConfig = [ordered]@{
@@ -322,7 +322,7 @@ function Invoke-AgentExec($cfg, $exec) {
 
     $duration = [math]::Round((New-TimeSpan -Start $startTime -End (Get-Date)).TotalMilliseconds)
 
-    $result = @{
+    $resultPayload = @{
         execId   = $execId
         agentId  = $cfg["agent_id"]
         token    = $cfg["token"]
@@ -330,14 +330,122 @@ function Invoke-AgentExec($cfg, $exec) {
         stderr   = $stderr
         exitCode = $exitCode
         duration = $duration
-    } | ConvertTo-Json -Compress
+    }
 
+    # WebSocket varsa önce onu dene
+    if ($SharedState.WsConnected -and $SharedState.WsSocket) {
+        $wsPayload = $resultPayload.Clone()
+        $wsPayload["type"] = "exec-result"
+        $sent = Send-WsMessage $SharedState.WsSocket $wsPayload
+        if ($sent) {
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ⚡ Exec tamamlandı (WS): $execId (exit:$exitCode)" -ForegroundColor Cyan
+            return
+        }
+    }
+
+    # HTTP fallback
     try {
+        $body = $resultPayload | ConvertTo-Json -Compress
         Invoke-RestMethod -Uri "$($cfg['hub_url'])/api/agent/exec-result" `
-            -Method POST -Body $result -ContentType "application/json" -TimeoutSec 10
+            -Method POST -Body $body -ContentType "application/json" -TimeoutSec 10
         Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ⚡ Exec tamamlandı: $execId (exit:$exitCode)" -ForegroundColor Cyan
     } catch {
         Write-Host "[PusulaAgent] Exec sonucu gönderilemedi: $_" -ForegroundColor Red
+    }
+}
+
+# ══════════════════════════════════════════════
+#   WEBSOCKET İLETİŞİM
+# ══════════════════════════════════════════════
+
+function Connect-WebSocket($cfg) {
+    try {
+        $wsUrl = $cfg["hub_url"] -replace "^http", "ws"
+        $uri   = "$wsUrl/ws/agent?agentId=$($cfg['agent_id'])&token=$($cfg['token'])"
+
+        $ws  = New-Object System.Net.WebSockets.ClientWebSocket
+        $ws.Options.KeepAliveInterval = [TimeSpan]::FromSeconds(30)
+        $cts = New-Object System.Threading.CancellationTokenSource
+        $cts.CancelAfter(10000)
+
+        $ws.ConnectAsync([Uri]$uri, $cts.Token).GetAwaiter().GetResult()
+
+        if ($ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+            Write-Host "[PusulaAgent] WebSocket bağlantısı kuruldu" -ForegroundColor Green
+            return $ws
+        }
+    } catch {
+        Write-Host "[PusulaAgent] WebSocket bağlantısı başarısız: $_" -ForegroundColor Yellow
+    }
+    return $null
+}
+
+function Send-WsMessage($ws, $message) {
+    if ($ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) { return $false }
+    try {
+        $json    = $message | ConvertTo-Json -Depth 10 -Compress
+        $bytes   = [System.Text.Encoding]::UTF8.GetBytes($json)
+        $segment = New-Object System.ArraySegment[byte] -ArgumentList @(,$bytes)
+        $ws.SendAsync($segment, [System.Net.WebSockets.WebSocketMessageType]::Text, $true,
+            [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+function Receive-WsMessage($ws, $timeoutMs = 1000) {
+    if ($ws.State -ne [System.Net.WebSockets.WebSocketState]::Open) { return $null }
+    try {
+        $buffer  = New-Object byte[] 65536
+        $segment = New-Object System.ArraySegment[byte] -ArgumentList @(,$buffer)
+        $cts     = New-Object System.Threading.CancellationTokenSource
+        $cts.CancelAfter($timeoutMs)
+
+        $result = $ws.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
+
+        if ($result.MessageType -eq [System.Net.WebSockets.WebSocketMessageType]::Close) {
+            return $null
+        }
+
+        $json = [System.Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count)
+        return $json | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+}
+
+function Process-WsMessages($ws, $cfg) {
+    while ($ws.State -eq [System.Net.WebSockets.WebSocketState]::Open) {
+        $msg = Receive-WsMessage $ws 500
+        if (-not $msg) { break }
+
+        switch ($msg.type) {
+            "exec" {
+                Invoke-AgentExec $cfg $msg
+            }
+            "ping" {
+                Send-WsMessage $ws @{ type = "pong" } | Out-Null
+            }
+            "message" {
+                $logEntry = @{ time = (Get-Date -Format "HH:mm:ss"); ok = $true; msg = "Bildirim: $($msg.title)" }
+                $SharedState.ActivityLog.Insert(0, $logEntry)
+                if ($SharedState.ActivityLog.Count -gt 20) { $SharedState.ActivityLog.RemoveAt(20) }
+                Write-Host "[$(Get-Date -Format 'HH:mm:ss')] 📨 Bildirim: $($msg.title)" -ForegroundColor Magenta
+            }
+            "reregister" {
+                try {
+                    $ws.CloseAsync([System.Net.WebSockets.WebSocketCloseStatus]::NormalClosure,
+                        "reregister", [System.Threading.CancellationToken]::None).GetAwaiter().GetResult()
+                } catch { }
+                $cfg["token"]    = $null
+                $cfg["agent_id"] = $null
+                $SharedState.WsConnected = $false
+                $SharedState.WsSocket    = $null
+                Register-WithHub $cfg
+                $SharedState.Config = $cfg
+            }
+        }
     }
 }
 
@@ -633,6 +741,8 @@ $SharedState = [System.Collections.Hashtable]::Synchronized(@{
     Roles        = @()
     ActivityLog  = [System.Collections.ArrayList]::new()
     TriggerPush  = $false
+    WsSocket     = $null
+    WsConnected  = $false
 })
 
 function Start-LocalWebServer($port, $html, $state) {
@@ -752,6 +862,15 @@ function Main {
 
     while ($true) {
         try {
+            # WebSocket bağlantısı kur (yoksa)
+            if ($cfg["token"] -and -not $SharedState.WsConnected) {
+                $ws = Connect-WebSocket $cfg
+                if ($ws) {
+                    $SharedState.WsSocket    = $ws
+                    $SharedState.WsConnected = $true
+                }
+            }
+
             # Metrikleri topla
             $metrics = Get-Metrics
             $SharedState.Metrics   = $metrics
@@ -784,26 +903,57 @@ function Main {
 
             # Hub'a gönder
             if ($cfg["token"]) {
-                $result = Send-Report $cfg $report
-                $now    = Get-Date -Format "HH:mm:ss"
-                $logEntry = @{ time = $now; ok = $result.ok; msg = if ($result.ok) { "Veri gönderildi" } else { $result.error ?? "Hata" } }
-                $SharedState.ActivityLog.Insert(0, $logEntry)
-                if ($SharedState.ActivityLog.Count -gt 20) { $SharedState.ActivityLog.RemoveAt(20) }
+                $sentViaWs = $false
 
-                if ($result.ok) {
-                    $SharedState.HubConnected = $true
-                    $SharedState.LastPush     = $now
-                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✓ Gönderildi" -ForegroundColor Green
-                    Poll-Messages $cfg
-                } elseif ($result.reregister) {
-                    Write-Host "[PusulaAgent] Token geçersiz, yeniden kayıt..." -ForegroundColor Yellow
-                    $cfg["token"]    = $null
-                    $cfg["agent_id"] = $null
-                    Register-WithHub $cfg
-                    $SharedState.Config = $cfg
-                } else {
-                    $SharedState.HubConnected = $false
-                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✗ $($result.error)" -ForegroundColor Red
+                # WebSocket varsa önce onu dene
+                if ($SharedState.WsConnected -and $SharedState.WsSocket) {
+                    $wsReport = $report.Clone()
+                    $wsReport["type"] = "report"
+                    $sentViaWs = Send-WsMessage $SharedState.WsSocket $wsReport
+
+                    if ($sentViaWs) {
+                        $now = Get-Date -Format "HH:mm:ss"
+                        $SharedState.HubConnected = $true
+                        $SharedState.LastPush     = $now
+                        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✓ Gönderildi (WS)" -ForegroundColor Green
+                        $logEntry = @{ time = $now; ok = $true; msg = "Veri gönderildi (WS)" }
+                        $SharedState.ActivityLog.Insert(0, $logEntry)
+                        if ($SharedState.ActivityLog.Count -gt 20) { $SharedState.ActivityLog.RemoveAt(20) }
+
+                        # WS üzerinden gelen mesajları işle
+                        Process-WsMessages $SharedState.WsSocket $cfg
+                    } else {
+                        # WS gönderim başarısız — bağlantıyı kapat
+                        $SharedState.WsConnected = $false
+                        $SharedState.WsSocket    = $null
+                    }
+                }
+
+                # HTTP fallback
+                if (-not $sentViaWs) {
+                    $result = Send-Report $cfg $report
+                    $now    = Get-Date -Format "HH:mm:ss"
+                    $logEntry = @{ time = $now; ok = $result.ok; msg = if ($result.ok) { "Veri gönderildi" } else { $result.error ?? "Hata" } }
+                    $SharedState.ActivityLog.Insert(0, $logEntry)
+                    if ($SharedState.ActivityLog.Count -gt 20) { $SharedState.ActivityLog.RemoveAt(20) }
+
+                    if ($result.ok) {
+                        $SharedState.HubConnected = $true
+                        $SharedState.LastPush     = $now
+                        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✓ Gönderildi" -ForegroundColor Green
+                        Poll-Messages $cfg
+                    } elseif ($result.reregister) {
+                        Write-Host "[PusulaAgent] Token geçersiz, yeniden kayıt..." -ForegroundColor Yellow
+                        $cfg["token"]    = $null
+                        $cfg["agent_id"] = $null
+                        $SharedState.WsConnected = $false
+                        $SharedState.WsSocket    = $null
+                        Register-WithHub $cfg
+                        $SharedState.Config = $cfg
+                    } else {
+                        $SharedState.HubConnected = $false
+                        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✗ $($result.error)" -ForegroundColor Red
+                    }
                 }
             } else {
                 Register-WithHub $cfg

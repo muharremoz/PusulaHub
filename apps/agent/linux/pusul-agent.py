@@ -8,14 +8,14 @@ Versiyon  : 1.0.0
 Python    : 3.6+  (ekstra paket gerekmez)
 """
 
-import json, os, sys, time, threading, socket, subprocess
+import json, os, sys, time, threading, socket, subprocess, struct, hashlib, base64
 import urllib.request, urllib.error
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from datetime import datetime
 from collections import deque
 import uuid, platform
 
-VERSION     = "1.0.0"
+VERSION     = "1.1.0"
 SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(SCRIPT_DIR, "config.json")
 
@@ -40,6 +40,8 @@ state = {
     "uptime_sec":    0,
     "activity_log":  deque(maxlen=20),
     "trigger_push":  threading.Event(),
+    "ws_socket":     None,
+    "ws_connected":  False,
 }
 state_lock = threading.Lock()
 
@@ -298,6 +300,245 @@ def poll_messages(cfg):
     except Exception:
         pass  # poll hatası kritik değil
 
+# ══════════════════════════════════════════════
+#   WEBSOCKET İSTEMCİ (stdlib only)
+# ══════════════════════════════════════════════
+
+class SimpleWebSocket:
+    """Minimal RFC 6455 WebSocket istemcisi. Sadece text frame destekler."""
+
+    def __init__(self, url, timeout=10):
+        self._sock = None
+        self._closed = False
+        self._lock = threading.Lock()
+        self._connect(url, timeout)
+
+    def _connect(self, url, timeout):
+        scheme = "ws"
+        if url.startswith("wss://"):
+            scheme = "wss"
+            url_rest = url[6:]
+            default_port = 443
+        elif url.startswith("ws://"):
+            url_rest = url[5:]
+            default_port = 80
+        else:
+            raise ValueError("URL ws:// veya wss:// ile başlamalı")
+
+        if "/" in url_rest:
+            host_port, path = url_rest.split("/", 1)
+            path = "/" + path
+        else:
+            host_port = url_rest
+            path = "/"
+
+        if ":" in host_port:
+            host, port = host_port.rsplit(":", 1)
+            port = int(port)
+        else:
+            host = host_port
+            port = default_port
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((host, port))
+
+        if scheme == "wss":
+            import ssl
+            ctx = ssl.create_default_context()
+            sock = ctx.wrap_socket(sock, server_hostname=host)
+
+        # HTTP Upgrade handshake
+        key = base64.b64encode(os.urandom(16)).decode()
+        handshake = (
+            f"GET {path} HTTP/1.1\r\n"
+            f"Host: {host}:{port}\r\n"
+            f"Upgrade: websocket\r\n"
+            f"Connection: Upgrade\r\n"
+            f"Sec-WebSocket-Key: {key}\r\n"
+            f"Sec-WebSocket-Version: 13\r\n"
+            f"\r\n"
+        )
+        sock.sendall(handshake.encode())
+
+        response = b""
+        while b"\r\n\r\n" not in response:
+            chunk = sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("Handshake sırasında bağlantı kesildi")
+            response += chunk
+
+        if b"101" not in response.split(b"\r\n")[0]:
+            raise ConnectionError(f"Handshake başarısız: {response.split(b'\\r\\n')[0]}")
+
+        self._sock = sock
+
+    def send(self, text):
+        with self._lock:
+            if self._closed or not self._sock:
+                raise ConnectionError("Bağlı değil")
+            data = text.encode("utf-8")
+            mask = os.urandom(4)
+            masked = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+
+            frame = bytearray()
+            frame.append(0x81)  # FIN + text
+            length = len(data)
+            if length < 126:
+                frame.append(0x80 | length)
+            elif length < 65536:
+                frame.append(0x80 | 126)
+                frame.extend(struct.pack(">H", length))
+            else:
+                frame.append(0x80 | 127)
+                frame.extend(struct.pack(">Q", length))
+            frame.extend(mask)
+            frame.extend(masked)
+            self._sock.sendall(frame)
+
+    def recv(self):
+        if self._closed or not self._sock:
+            raise ConnectionError("Bağlı değil")
+
+        header = self._recv_exact(2)
+        opcode = header[0] & 0x0F
+        is_masked = header[1] & 0x80
+        length = header[1] & 0x7F
+
+        if length == 126:
+            length = struct.unpack(">H", self._recv_exact(2))[0]
+        elif length == 127:
+            length = struct.unpack(">Q", self._recv_exact(8))[0]
+
+        if is_masked:
+            mask_key = self._recv_exact(4)
+            data = self._recv_exact(length)
+            data = bytes(b ^ mask_key[i % 4] for i, b in enumerate(data))
+        else:
+            data = self._recv_exact(length)
+
+        if opcode == 0x8:  # Close
+            self._closed = True
+            raise ConnectionError("Sunucu bağlantıyı kapattı")
+
+        if opcode == 0x9:  # Ping → pong
+            self._send_pong(data)
+            return self.recv()
+
+        if opcode == 0xA:  # Pong → yoksay
+            return self.recv()
+
+        return data.decode("utf-8")
+
+    def _send_pong(self, data):
+        frame = bytearray()
+        frame.append(0x8A)  # FIN + pong
+        mask = os.urandom(4)
+        masked = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+        frame.append(0x80 | len(data))
+        frame.extend(mask)
+        frame.extend(masked)
+        try:
+            with self._lock:
+                self._sock.sendall(frame)
+        except Exception:
+            pass
+
+    def _recv_exact(self, n):
+        buf = b""
+        while len(buf) < n:
+            chunk = self._sock.recv(n - len(buf))
+            if not chunk:
+                raise ConnectionError("Bağlantı kesildi")
+            buf += chunk
+        return buf
+
+    def close(self):
+        self._closed = True
+        if self._sock:
+            try:
+                self._sock.sendall(b"\x88\x80" + os.urandom(4))
+                self._sock.close()
+            except Exception:
+                pass
+        self._sock = None
+
+    @property
+    def connected(self):
+        return not self._closed and self._sock is not None
+
+
+def ws_connect(cfg):
+    """Hub'a WebSocket bağlantısı kur. Başarısız olursa None döner."""
+    try:
+        hub = cfg["hub_url"]
+        ws_url = hub.replace("http://", "ws://").replace("https://", "wss://")
+        ws_url += f"/ws/agent?agentId={cfg['agent_id']}&token={cfg['token']}"
+        ws = SimpleWebSocket(ws_url, timeout=10)
+        print("[PusulaAgent] WebSocket bağlantısı kuruldu")
+        return ws
+    except Exception as e:
+        print(f"[PusulaAgent] WebSocket bağlantısı başarısız: {e}")
+        return None
+
+
+def ws_receive_loop(cfg):
+    """Arka plan thread'i: WS'den gelen mesajları dinle ve işle."""
+    ws = state.get("ws_socket")
+    while ws and ws.connected:
+        try:
+            raw = ws.recv()
+            msg = json.loads(raw)
+            msg_type = msg.get("type")
+
+            if msg_type == "exec":
+                threading.Thread(target=invoke_exec, args=(cfg, msg), daemon=True).start()
+
+            elif msg_type == "message":
+                now_str = datetime.now().strftime("%H:%M:%S")
+                log_entry = {"time": now_str, "ok": True, "msg": f"Bildirim: {msg.get('title', '')}"}
+                with state_lock:
+                    state["activity_log"].appendleft(log_entry)
+                print(f"[{now_str}] 📨 Bildirim: {msg.get('title', '')}")
+
+            elif msg_type == "ping":
+                ws.send(json.dumps({"type": "pong"}))
+
+            elif msg_type == "reregister":
+                ws.close()
+                with state_lock:
+                    state["ws_connected"] = False
+                    state["ws_socket"] = None
+                cfg["token"] = None
+                cfg["agent_id"] = None
+                register_with_hub(cfg)
+                return
+
+        except Exception:
+            break
+
+    with state_lock:
+        state["ws_connected"] = False
+        state["ws_socket"] = None
+
+
+def ws_send_report(cfg, report):
+    """Raporu WebSocket üzerinden gönder. Başarısızsa False döner."""
+    ws = state.get("ws_socket")
+    if not ws or not ws.connected:
+        return False
+    try:
+        ws_report = dict(report)
+        ws_report["type"] = "report"
+        ws.send(json.dumps(ws_report))
+        return True
+    except Exception:
+        with state_lock:
+            state["ws_connected"] = False
+            state["ws_socket"] = None
+        return False
+
+
 def invoke_exec(cfg, exec_req):
     exec_id  = exec_req.get("execId", "")
     command  = exec_req.get("command", "")
@@ -324,16 +565,32 @@ def invoke_exec(cfg, exec_req):
 
     duration_ms = round((time.time() - start) * 1000)
 
+    result_payload = {
+        "execId":   exec_id,
+        "agentId":  cfg["agent_id"],
+        "token":    cfg["token"],
+        "stdout":   stdout_val,
+        "stderr":   stderr_val,
+        "exitCode": exit_code,
+        "duration": duration_ms,
+    }
+
+    # WebSocket varsa önce onu dene
+    ws = state.get("ws_socket")
+    if ws and ws.connected:
+        try:
+            ws_result = dict(result_payload)
+            ws_result["type"] = "exec-result"
+            ws.send(json.dumps(ws_result))
+            now_str = datetime.now().strftime("%H:%M:%S")
+            print(f"[{now_str}] ⚡ Exec tamamlandı (WS): {exec_id} (exit:{exit_code})")
+            return
+        except Exception:
+            pass
+
+    # HTTP fallback
     try:
-        hub_post(f"{cfg['hub_url']}/api/agent/exec-result", {
-            "execId":   exec_id,
-            "agentId":  cfg["agent_id"],
-            "token":    cfg["token"],
-            "stdout":   stdout_val,
-            "stderr":   stderr_val,
-            "exitCode": exit_code,
-            "duration": duration_ms,
-        }, timeout=10)
+        hub_post(f"{cfg['hub_url']}/api/agent/exec-result", result_payload, timeout=10)
         now_str = datetime.now().strftime("%H:%M:%S")
         print(f"[{now_str}] ⚡ Exec tamamlandı: {exec_id} (exit:{exit_code})")
     except Exception as e:
@@ -610,6 +867,15 @@ def main():
 
     while True:
         try:
+            # WebSocket bağlantısı kur (yoksa)
+            if cfg.get("token") and not state.get("ws_connected"):
+                ws = ws_connect(cfg)
+                if ws:
+                    with state_lock:
+                        state["ws_socket"]    = ws
+                        state["ws_connected"] = True
+                    threading.Thread(target=ws_receive_loop, args=(cfg,), daemon=True).start()
+
             # Metrikleri topla
             metrics = collect_metrics()
             with state_lock:
@@ -629,33 +895,51 @@ def main():
 
             # Hub'a gönder
             if cfg.get("token"):
-                result  = send_report(cfg, report)
-                now_str = datetime.now().strftime("%H:%M:%S")
-                log_entry = {
-                    "time": now_str,
-                    "ok":   result["ok"],
-                    "msg":  "Veri gönderildi" if result["ok"] else result.get("error", "Hata"),
-                }
-                with state_lock:
-                    state["activity_log"].appendleft(log_entry)
-                    if result["ok"]:
-                        state["hub_connected"] = True
-                        state["last_push"]     = now_str
-                    elif result.get("reregister"):
-                        cfg["token"]    = None
-                        cfg["agent_id"] = None
-                        state["hub_connected"] = False
-                    else:
-                        state["hub_connected"] = False
+                sent_via_ws = False
 
-                if result["ok"]:
-                    print(f"[{now_str}] ✓ Gönderildi")
-                    poll_messages(cfg)
-                elif result.get("reregister"):
-                    print("[PusulaAgent] Token geçersiz, yeniden kayıt...")
-                    register_with_hub(cfg)
-                else:
-                    print(f"[{now_str}] ✗ {result.get('error','Hata')}")
+                # WebSocket varsa önce onu dene
+                if state.get("ws_connected"):
+                    sent_via_ws = ws_send_report(cfg, report)
+                    if sent_via_ws:
+                        now_str = datetime.now().strftime("%H:%M:%S")
+                        log_entry = {"time": now_str, "ok": True, "msg": "Veri gönderildi (WS)"}
+                        with state_lock:
+                            state["activity_log"].appendleft(log_entry)
+                            state["hub_connected"] = True
+                            state["last_push"]     = now_str
+                        print(f"[{now_str}] ✓ Gönderildi (WS)")
+
+                # HTTP fallback
+                if not sent_via_ws:
+                    result  = send_report(cfg, report)
+                    now_str = datetime.now().strftime("%H:%M:%S")
+                    log_entry = {
+                        "time": now_str,
+                        "ok":   result["ok"],
+                        "msg":  "Veri gönderildi" if result["ok"] else result.get("error", "Hata"),
+                    }
+                    with state_lock:
+                        state["activity_log"].appendleft(log_entry)
+                        if result["ok"]:
+                            state["hub_connected"] = True
+                            state["last_push"]     = now_str
+                        elif result.get("reregister"):
+                            cfg["token"]    = None
+                            cfg["agent_id"] = None
+                            state["hub_connected"] = False
+                            state["ws_connected"]  = False
+                            state["ws_socket"]     = None
+                        else:
+                            state["hub_connected"] = False
+
+                    if result["ok"]:
+                        print(f"[{now_str}] ✓ Gönderildi")
+                        poll_messages(cfg)
+                    elif result.get("reregister"):
+                        print("[PusulaAgent] Token geçersiz, yeniden kayıt...")
+                        register_with_hub(cfg)
+                    else:
+                        print(f"[{now_str}] ✗ {result.get('error','Hata')}")
             else:
                 register_with_hub(cfg)
 

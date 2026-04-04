@@ -3,8 +3,9 @@
    Next.js hot-reload'a karşı global değişken pattern
 ══════════════════════════════════════════════════════════ */
 
-import { StoredAgent, AgentReport, AgentMessage, AgentExecRequest, AgentExecResult } from "./agent-types"
+import { StoredAgent, AgentReport, AgentMessage, AgentExecRequest, AgentExecResult, WsMessage } from "./agent-types"
 import { randomUUID } from "crypto"
+import { sendToAgent, hasConnection } from "./ws-connections"
 
 /* Global singleton — Next.js dev modunda hot-reload'dan korunur */
 const g = global as typeof global & {
@@ -106,6 +107,14 @@ export function queueMessage(
   }
 
   agent.pendingMessages.push(message)
+
+  // Dual-path: WebSocket varsa anında gönder
+  if (hasConnection(agentId)) {
+    const wsMsg: WsMessage = { ...message, type: "message" }
+    const sent = sendToAgent(agentId, wsMsg)
+    if (sent) message.delivered = true
+  }
+
   store.set(agentId, agent)
   return message
 }
@@ -143,7 +152,16 @@ export function queueExec(agentId: string, command: string, timeout = 30): strin
 
   const execId = randomUUID()
   const req: AgentExecRequest = { execId, command, timeout }
-  agent.pendingExecs.push(req)
+
+  // Dual-path: WebSocket varsa anında gönder, yoksa kuyruğa ekle
+  if (hasConnection(agentId)) {
+    const wsMsg: WsMessage = { ...req, type: "exec" }
+    const sent = sendToAgent(agentId, wsMsg)
+    if (!sent) agent.pendingExecs.push(req)
+  } else {
+    agent.pendingExecs.push(req)
+  }
+
   store.set(agentId, agent)
   return execId
 }

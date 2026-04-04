@@ -147,6 +147,21 @@ export interface AgentExecResult {
   duration: number   // ms
 }
 
+/* ── WebSocket mesaj çerçevesi ── */
+export type WsMessageType =
+  | "report"        // Agent → Hub: metrik raporu
+  | "exec-result"   // Agent → Hub: komut sonucu
+  | "pong"          // Agent → Hub: keepalive yanıtı
+  | "message"       // Hub → Agent: bildirim
+  | "exec"          // Hub → Agent: komut çalıştır
+  | "ping"          // Hub → Agent: keepalive
+  | "reregister"    // Hub → Agent: tekrar kayıt ol
+
+export interface WsMessage {
+  type: WsMessageType
+  [key: string]: unknown
+}
+
 /* ── Hub'ın dahili olarak sakladığı agent kaydı ── */
 export interface StoredAgent {
   agentId:         string
