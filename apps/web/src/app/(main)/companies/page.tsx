@@ -12,8 +12,29 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Skeleton } from "@/components/ui/skeleton";
 import { companies, messageRecipients, servers, iisSites } from "@/lib/mock-data";
 import type { Company } from "@/types";
+
+interface FirmaCompany {
+  id: string
+  firkod: string
+  firma: string
+  email: string
+  phone: string
+  userCount: number
+  lisansBitis: string
+}
+
+function firmaIsActive(f: FirmaCompany): boolean {
+  if (!f.lisansBitis) return true
+  const parts = f.lisansBitis.split(".")
+  if (parts.length === 3) {
+    const d = new Date(+parts[2], +parts[1] - 1, +parts[0])
+    return d >= new Date()
+  }
+  return new Date(f.lisansBitis) >= new Date()
+}
 import {
   Building2,
   Users,
@@ -217,8 +238,32 @@ const top5 = [...companies].sort((a, b) => calcYogunluk(b) - calcYogunluk(a)).sl
 
 export default function CompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [selectedFirma, setSelectedFirma] = useState<FirmaCompany | null>(null);
+  const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
+  const [apiLoading, setApiLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    fetch("/api/firma/companies")
+      .then((r) => r.ok ? r.json() : Promise.reject(r))
+      .then((data: FirmaCompany[]) => setApiCompanies(data))
+      .catch(() => setApiCompanies([]))
+      .finally(() => setApiLoading(false))
+  }, [])
+
+  function selectFirma(f: FirmaCompany) {
+    setSelectedFirma(f)
+    const mockMatch = companies.find((c) => c.name.toLowerCase() === f.firma.toLowerCase())
+    setSelectedCompany(mockMatch?.id ?? companies[0]?.id ?? null)
+    setSearchOpen(false)
+    setSearchQuery("")
+  }
+
+  function clearSelection() {
+    setSelectedFirma(null)
+    setSelectedCompany(null)
+  }
 
   const selected: Company | undefined = selectedCompany
     ? companies.find((c) => c.id === selectedCompany)
@@ -232,45 +277,65 @@ export default function CompaniesPage() {
     ? servers.filter((s) => selected.servers.includes(s.name))
     : [];
 
-  const searchFiltered = searchQuery.trim()
-    ? companies.filter((c) => c.name.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
-    : companies.slice(0, 50);
+  const apiFiltered = searchQuery.trim()
+    ? apiCompanies.filter((c) => c.firma.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
+    : apiCompanies.slice(0, 50);
 
   return (
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
       {/* Company Selector / Header Bar */}
       <div className="mb-6">
-        {selected ? (
+        {(selectedFirma || selected) ? (
           /* Seçili firma: kompakt header bar */
           <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
             <div className="rounded-[4px] px-4 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setSelectedCompany(null)}
+                  onClick={clearSelection}
                   className="flex items-center gap-1 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 text-muted-foreground transition-colors shrink-0"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
                   Geri
                 </button>
 
-                <span className={`h-2 w-2 rounded-full shrink-0 ${
-                  selected.status === "active" ? "bg-emerald-500" :
-                  selected.status === "trial"  ? "bg-amber-500"  : "bg-red-500"
-                }`} />
-
-                <h2 className="text-sm font-semibold tracking-tight">{selected.name}</h2>
-
-                <div className="flex items-center gap-1.5 text-muted-foreground">
-                  <span className="text-[11px]">{selected.sector}</span>
-                  <span className="text-[10px]">·</span>
-                  <span className="text-[11px]">{selected.contactPerson}</span>
-                  <span className="text-[10px]">·</span>
-                  <span className="text-[11px]">{selected.contactEmail}</span>
-                </div>
-
-                <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${statusConfig[selected.status].color}`}>
-                  {statusConfig[selected.status].label}
-                </span>
+                {selectedFirma ? (
+                  <>
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <h2 className="text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      {selectedFirma.email && <span className="text-[11px]">{selectedFirma.email}</span>}
+                      {selectedFirma.email && selectedFirma.phone && <span className="text-[10px]">·</span>}
+                      {selectedFirma.phone && <span className="text-[11px] font-mono">{selectedFirma.phone}</span>}
+                      {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && <span className="text-[10px]">·</span>}
+                      {selectedFirma.lisansBitis && <span className="text-[11px]">Lisans: {selectedFirma.lisansBitis}</span>}
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${
+                      firmaIsActive(selectedFirma)
+                        ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+                        : "text-red-700 border-red-200 bg-red-50"
+                    }`}>
+                      {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
+                    </span>
+                  </>
+                ) : selected ? (
+                  <>
+                    <span className={`h-2 w-2 rounded-full shrink-0 ${
+                      selected.status === "active" ? "bg-emerald-500" :
+                      selected.status === "trial"  ? "bg-amber-500"  : "bg-red-500"
+                    }`} />
+                    <h2 className="text-sm font-semibold tracking-tight">{selected.name}</h2>
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      <span className="text-[11px]">{selected.sector}</span>
+                      <span className="text-[10px]">·</span>
+                      <span className="text-[11px]">{selected.contactPerson}</span>
+                      <span className="text-[10px]">·</span>
+                      <span className="text-[11px]">{selected.contactEmail}</span>
+                    </div>
+                    <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${statusConfig[selected.status].color}`}>
+                      {statusConfig[selected.status].label}
+                    </span>
+                  </>
+                ) : null}
 
                 <div className="flex-1" />
 
@@ -285,24 +350,28 @@ export default function CompaniesPage() {
                     <Command shouldFilter={false}>
                       <CommandInput placeholder="Firma ara..." className="text-[11px] h-8" value={searchQuery} onValueChange={setSearchQuery} />
                       <CommandList className="max-h-56 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                        <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
-                        <CommandGroup>
-                          {searchFiltered.map((comp) => {
-                            const y = calcYogunluk(comp);
-                            const yColor = y >= 80 ? "text-red-600" : y >= 60 ? "text-amber-600" : "text-emerald-600";
-                            return (
-                              <CommandItem
-                                key={comp.id}
-                                value={comp.id}
-                                onSelect={() => { setSelectedCompany(comp.id); setSearchOpen(false); setSearchQuery(""); }}
-                                className="text-[11px] flex items-center justify-between"
-                              >
-                                <span>{comp.name}</span>
-                                <span className={`text-[10px] font-semibold tabular-nums ${yColor}`}>%{y}</span>
-                              </CommandItem>
-                            );
-                          })}
-                        </CommandGroup>
+                        {apiLoading ? (
+                          <div className="p-2 space-y-1">
+                            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[4px]" />)}
+                          </div>
+                        ) : (
+                          <>
+                            <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
+                            <CommandGroup>
+                              {apiFiltered.map((comp) => (
+                                <CommandItem
+                                  key={comp.id}
+                                  value={comp.id}
+                                  onSelect={() => selectFirma(comp)}
+                                  className="text-[11px] flex items-center justify-between"
+                                >
+                                  <span>{comp.firma}</span>
+                                  <span className="text-[10px] text-muted-foreground tabular-nums font-mono">{comp.firkod}</span>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>
@@ -323,7 +392,11 @@ export default function CompaniesPage() {
                 return (
                   <button
                     key={comp.id}
-                    onClick={() => setSelectedCompany(comp.id)}
+                    onClick={() => {
+                      setSelectedCompany(comp.id)
+                      const apiMatch = apiCompanies.find((a) => a.firma.toLowerCase() === comp.name.toLowerCase())
+                      setSelectedFirma(apiMatch ?? null)
+                    }}
                     className="rounded-[8px] p-2 pb-0 text-left transition-all flex flex-col hover:brightness-[0.97]"
                     style={{ backgroundColor: "#F4F2F0" }}
                   >
@@ -684,24 +757,28 @@ export default function CompaniesPage() {
                 <Command shouldFilter={false}>
                   <CommandInput placeholder="Firma ara..." className="text-[11px] h-8" value={searchQuery} onValueChange={setSearchQuery} />
                   <CommandList className="max-h-56 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                    <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
-                    <CommandGroup>
-                      {searchFiltered.map((comp) => {
-                        const y = calcYogunluk(comp);
-                        const yColor = y >= 80 ? "text-red-600" : y >= 60 ? "text-amber-600" : "text-emerald-600";
-                        return (
-                          <CommandItem
-                            key={comp.id}
-                            value={comp.id}
-                            onSelect={() => { setSelectedCompany(comp.id); setSearchOpen(false); setSearchQuery(""); }}
-                            className="text-[11px] flex items-center justify-between"
-                          >
-                            <span>{comp.name}</span>
-                            <span className={`text-[10px] font-semibold tabular-nums ${yColor}`}>%{y}</span>
-                          </CommandItem>
-                        );
-                      })}
-                    </CommandGroup>
+                    {apiLoading ? (
+                      <div className="p-2 space-y-1">
+                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[4px]" />)}
+                      </div>
+                    ) : (
+                      <>
+                        <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
+                        <CommandGroup>
+                          {apiFiltered.map((comp) => (
+                            <CommandItem
+                              key={comp.id}
+                              value={comp.id}
+                              onSelect={() => selectFirma(comp)}
+                              className="text-[11px] flex items-center justify-between"
+                            >
+                              <span>{comp.firma}</span>
+                              <span className="text-[10px] text-muted-foreground tabular-nums font-mono">{comp.firkod}</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </>
+                    )}
                   </CommandList>
                 </Command>
               </PopoverContent>
