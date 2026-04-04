@@ -24,6 +24,7 @@ import {
   Plus,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
+import { StatsCard } from "@/components/shared/stats-card";
 
 /* ── Tipler ── */
 type SortKey = "name" | "category" | "status" | "firmCount" | "updatedAt";
@@ -88,28 +89,6 @@ function SortHeader({ label, sortKey, active, dir, onSort }: {
   );
 }
 
-/* ── Stat Kutusu ── */
-function StatCard({ label, value, sub, icon: Icon }: {
-  label: string; value: number | string; sub?: string; icon: React.ElementType;
-}) {
-  return (
-    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
-      <div
-        className="rounded-[4px] px-4 py-3"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-      >
-        <div className="flex items-center gap-2 mb-1">
-          <Icon className="size-3 text-muted-foreground" />
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{label}</p>
-        </div>
-        <span className="text-2xl font-bold tabular-nums">{value}</span>
-        {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
-      </div>
-      <div className="h-2" />
-    </div>
-  );
-}
-
 /* ── Ana Bileşen ── */
 export default function ServicesPage() {
   const [sortKey, setSortKey]   = useState<SortKey>("category");
@@ -144,10 +123,10 @@ export default function ServicesPage() {
 
       {/* ── İstatistikler ── */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatCard label="Toplam Hizmet" value={counts.total}       sub={`${counts.active} aktif`}             icon={Layers}    />
-        <StatCard label="Yazılım"       value={counts.yazilim}     sub="uygulama"                              icon={Package}   />
-        <StatCard label="Entegrasyon"   value={counts.entegrasyon} sub="bağlantı"                              icon={Plug}      />
-        <StatCard label="API"           value={counts.api}         sub="servis"                                icon={Code2}     />
+        <StatsCard title="TOPLAM HİZMET" value={counts.total}       icon={<Layers className="h-4 w-4" />}   trend={{ value: `${counts.active} aktif hizmet`, positive: true }}  subtitle="Tüm kategoriler" />
+        <StatsCard title="YAZILIM"       value={counts.yazilim}     icon={<Package className="h-4 w-4" />}  trend={{ value: "Uygulama grubu", positive: true }}                  subtitle="Pusula ürünleri" />
+        <StatsCard title="ENTEGRASYON"   value={counts.entegrasyon} icon={<Plug className="h-4 w-4" />}     trend={{ value: "Dış sistem bağlantısı", positive: true }}           subtitle="Aktif entegrasyonlar" />
+        <StatsCard title="API"           value={counts.api}         icon={<Code2 className="h-4 w-4" />}   trend={{ value: "Servis katmanı", positive: true }}                  subtitle="REST / Webhook" />
       </div>
 
       {/* ── Toolbar ── */}

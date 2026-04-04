@@ -15,6 +15,8 @@ interface Props {
   onRemove: (id: number) => void
   onUpdateUsername: (id: number, val: string) => void
   onUpdateDisplayName: (id: number, val: string) => void
+  onUpdateEmail: (id: number, val: string) => void
+  onUpdatePhone: (id: number, val: string) => void
   onUpdatePassword: (id: number, val: string) => void
   onTogglePassword: (id: number) => void
   onGeneratePassword: (id: number) => void
@@ -40,8 +42,8 @@ function getStrength(p: string) {
 export function StepUsers({
   users, firmaId, userLimit, existingUsers,
   onAdd, onRemove,
-  onUpdateUsername, onUpdateDisplayName, onUpdatePassword,
-  onTogglePassword, onGeneratePassword,
+  onUpdateUsername, onUpdateDisplayName, onUpdateEmail, onUpdatePhone,
+  onUpdatePassword, onTogglePassword, onGeneratePassword,
 }: Props) {
   const [showExisting, setShowExisting] = useState(false)
   const activeExisting = existingUsers.filter((u) => !u.isDisabled).length
@@ -183,6 +185,30 @@ export function StepUsers({
                 >
                   <RefreshCw className="size-3.5" />
                 </button>
+              </div>
+
+              {/* E-posta ve Telefon */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-[11px] font-medium text-foreground mb-1.5">E-posta</p>
+                  <input
+                    type="email"
+                    value={user.email}
+                    onChange={(e) => onUpdateEmail(user.id, e.target.value)}
+                    placeholder="kullanici@sirket.com"
+                    className="w-full px-2.5 py-2 text-xs rounded-[5px] border-2 border-border bg-background outline-none focus:border-foreground/60 transition-colors"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-foreground mb-1.5">Telefon</p>
+                  <input
+                    type="tel"
+                    value={user.phone}
+                    onChange={(e) => onUpdatePhone(user.id, e.target.value)}
+                    placeholder="05xx xxx xx xx"
+                    className="w-full px-2.5 py-2 text-xs rounded-[5px] border-2 border-border bg-background outline-none focus:border-foreground/60 transition-colors"
+                  />
+                </div>
               </div>
 
               {/* Şifre güç barı */}

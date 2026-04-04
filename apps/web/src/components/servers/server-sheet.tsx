@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   Sheet,
   SheetContent,
@@ -33,7 +33,8 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import { Eye, EyeOff, Check, ChevronsUpDown } from "lucide-react"
+import { Eye, EyeOff, Check, ChevronsUpDown, Copy, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 
 const OS_OPTIONS = [
   "Windows Server 2022",
@@ -48,6 +49,7 @@ const ROLES = [
   { value: "DHCP",    label: "DHCP" },
   { value: "SQL",     label: "SQL Server" },
   { value: "IIS",     label: "IIS" },
+  { value: "RDP",     label: "RDP" },
   { value: "File",    label: "File Server" },
   { value: "General", label: "General" },
 ]
@@ -77,9 +79,13 @@ function Field({ label, children, className }: { label: string; children: React.
 interface ServerSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onSaved?: () => void
+  editServerId?: string | null
 }
 
-export function ServerSheet({ open, onOpenChange }: ServerSheetProps) {
+export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: ServerSheetProps) {
+  const isEdit = !!editServerId
+
   const [name, setName]           = useState("")
   const [ip, setIp]               = useState("")
   const [dns, setDns]             = useState("")
@@ -91,6 +97,28 @@ export function ServerSheet({ open, onOpenChange }: ServerSheetProps) {
   const [username, setUsername]   = useState("")
   const [password, setPassword]   = useState("")
   const [showPw, setShowPw]       = useState(false)
+  const [saving, setSaving]       = useState(false)
+
+  // Düzenleme modunda mevcut veriyi yükle
+  useEffect(() => {
+    if (!open) return
+    if (!editServerId) { handleReset(); return }
+    fetch(`/api/servers/${editServerId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setName(data.name ?? "")
+        setIp(data.ip ?? "")
+        setDns(data.dns ?? "")
+        setOs(data.os ?? "")
+        setRole(data.roles?.[0] ?? "")
+        setApiKey(data.apiKey ?? "")
+        setAgentPort(String(data.agentPort ?? 5000))
+        setUsername(data.username ?? "")
+        setPassword(data.password ?? "")
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editServerId])
 
   const selectedRole = ROLES.find((r) => r.value === role)
 
@@ -107,15 +135,54 @@ export function ServerSheet({ open, onOpenChange }: ServerSheetProps) {
 
   const canSave = name.trim() && ip.trim() && os && role && apiKey.trim()
 
+  const handleSave = async () => {
+    if (!canSave || saving) return
+    setSaving(true)
+    try {
+      const payload = {
+        name:      name.trim(),
+        ip:        ip.trim(),
+        dns:       dns.trim() || null,
+        os,
+        roles:     [role],
+        apiKey:    apiKey.trim(),
+        agentPort: parseInt(agentPort) || 5000,
+        username:  username.trim() || null,
+        password:  password || null,
+      }
+
+      const res = await fetch(
+        isEdit ? `/api/servers/${editServerId}` : "/api/servers",
+        {
+          method:  isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
+        }
+      )
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        toast.error(isEdit ? "Güncellenemedi" : "Sunucu eklenemedi", { description: err.error ?? "Bir hata oluştu" })
+        return
+      }
+      toast.success(isEdit ? "Sunucu güncellendi" : "Sunucu eklendi", { description: name.trim() })
+      handleClose()
+      onSaved?.()
+    } catch {
+      toast.error("Bağlantı hatası")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
 
         {/* Başlık */}
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
-          <SheetTitle className="text-sm font-semibold">Yeni Sunucu Ekle</SheetTitle>
+          <SheetTitle className="text-sm font-semibold">{isEdit ? "Sunucuyu Düzenle" : "Yeni Sunucu Ekle"}</SheetTitle>
           <SheetDescription className="text-[11px] text-muted-foreground">
-            Sunucu bilgilerini ve agent bağlantı ayarlarını girin.
+            {isEdit ? "Sunucu bilgilerini güncelleyin." : "Sunucu bilgilerini ve agent bağlantı ayarlarını girin."}
           </SheetDescription>
         </SheetHeader>
 
@@ -244,20 +311,49 @@ export function ServerSheet({ open, onOpenChange }: ServerSheetProps) {
                 />
               </Field>
               <Field label="Şifre">
-                <div className="relative">
-                  <Input
-                    type={showPw ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 pr-9"
-                  />
+                <div className="flex items-center gap-1.5">
+                  <div className="relative flex-1">
+                    <Input
+                      type={showPw ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="rounded-[5px] text-[11px] h-8 pr-9"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((v) => !v)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {showPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setShowPw((v) => !v)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => {
+                      if (!password) return
+                      navigator.clipboard.writeText(password)
+                      toast.success("Şifre kopyalandı")
+                    }}
+                    title="Kopyala"
+                    className="flex items-center justify-center h-8 w-8 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground shrink-0"
                   >
-                    {showPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                    <Copy className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%&*"
+                      const pw = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+                        .map((b) => chars[b % chars.length])
+                        .join("")
+                      setPassword(pw)
+                      setShowPw(true)
+                    }}
+                    title="Şifre üret"
+                    className="flex items-center justify-center h-8 w-8 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground shrink-0"
+                  >
+                    <RefreshCw className="size-3.5" />
                   </button>
                 </div>
               </Field>
@@ -278,10 +374,11 @@ export function ServerSheet({ open, onOpenChange }: ServerSheetProps) {
             </button>
             <button
               type="button"
-              disabled={!canSave}
+              onClick={handleSave}
+              disabled={!canSave || saving}
               className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
-              Sunucu Ekle
+              {saving ? (isEdit ? "Kaydediliyor..." : "Ekleniyor...") : (isEdit ? "Kaydet" : "Sunucu Ekle")}
             </button>
           </div>
         </SheetFooter>

@@ -53,6 +53,8 @@ export interface IISSite {
   binding: string;
   appPool: string;
   physicalPath: string;
+  firma?: string;
+  hizmet?: string;
 }
 
 export interface IISAppPool {
@@ -119,6 +121,7 @@ export interface Company {
   contactEmail: string;
   contactPhone: string;
   userCount: number;
+  userCapacity: number;
   servers: string[];
   services: CompanyService[];
   status: CompanyStatus;
@@ -126,6 +129,9 @@ export interface Company {
   contractEnd: string;
   monthlyQuota: { cpu: number; ram: number; disk: number };
   currentUsage: { cpu: number; ram: number; disk: number };
+  weeklyUsage: Array<{ day: string; cpu: number; ram: number; disk: number }>;
+  dbQuota: number;
+  databases?: Array<{ name: string; type: "MSSQL" | "MySQL" | "PostgreSQL"; size: number; status: "online" | "offline" }>;
   notes?: string;
 }
 
@@ -136,6 +142,8 @@ export interface MessageRecipient {
   company: string;
   server: string;
   online: boolean;
+  lastLogin?: string;
+  sessionDuration?: string;
 }
 
 export type MessagePriority = "normal" | "high" | "urgent";

@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import {
-  adServers, windowsServers, companies, serviceItems,
+  adServers, windowsServers, serviceItems,
   sqlServers, mockBackupFiles, demoDatabases, existingAdUsers,
   WizardUser, BackupFile, Company,
 } from "@/lib/setup-mock-data"
@@ -34,17 +34,37 @@ function generatePassword() {
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
 }
 function mkUser(): WizardUser {
-  return { id: _uid++, username: "", displayName: "", password: "", showPassword: false }
+  return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }
 }
 
 export function WizardShell() {
   const [step, setStep] = useState(0)
   const [dir, setDir] = useState<"right" | "left">("right")
 
+  // Firma API
+  const [apiCompanies, setApiCompanies]         = useState<Company[]>([])
+  const [companiesLoading, setCompaniesLoading] = useState(false)
+  const [companiesError, setCompaniesError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    if (step !== 1) return
+    if (apiCompanies.length > 0) return
+    setCompaniesLoading(true)
+    setCompaniesError(null)
+    fetch("/api/firma/companies")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setApiCompanies(data as Company[])
+        else setCompaniesError(data.error ?? "Firmalar alınamadı")
+      })
+      .catch(() => setCompaniesError("Firma API bağlantı hatası"))
+      .finally(() => setCompaniesLoading(false))
+  }, [step])
+
   const [selectedServerId, setSelectedServerId] = useState<number | null>(null)
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [selectedWindowsServerId, setSelectedWindowsServerId] = useState<number | null>(null)
-  const [users, setUsers] = useState<WizardUser[]>([{ id: 1, username: "", displayName: "", password: "", showPassword: false }])
+  const [users, setUsers] = useState<WizardUser[]>([{ id: 1, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }])
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([])
   const [selectedSqlServerId, setSelectedSqlServerId] = useState<number | null>(null)
   const [sqlMode, setSqlMode] = useState<0 | 1>(0)
@@ -64,7 +84,7 @@ export function WizardShell() {
 
   const canProceed =
     step === 0 ? selectedServerId !== null :
-    step === 1 ? selectedCompany !== null :
+    step === 1 ? selectedCompany !== null && (selectedCompany.userCount ?? 0) > 0 :
     step === 2 ? users.every((u) => u.username.trim() && u.password.trim()) :
     true
 
@@ -98,7 +118,7 @@ export function WizardShell() {
   const reset = () => {
     setStep(0); setSelectedServerId(null); setSelectedCompany(null)
     setSelectedWindowsServerId(null); setSelectedSqlServerId(null)
-    setUsers([{ id: 1, username: "", displayName: "", password: "", showPassword: false }])
+    setUsers([{ id: 1, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }])
     setSelectedServiceIds([]); setSelectedDemoDbIds([]); setSetupDone(false)
     setBackupFiles(mockBackupFiles)
   }
@@ -170,9 +190,14 @@ export function WizardShell() {
               {step === 0 && <StepServer servers={adServers} selectedId={selectedServerId} onSelect={setSelectedServerId} />}
               {step === 1 && (
                 <StepFirma
-                  companies={companies} windowsServers={windowsServers}
-                  selectedCompany={selectedCompany} selectedWindowsServerId={selectedWindowsServerId}
-                  onSelectCompany={setSelectedCompany} onClearCompany={() => setSelectedCompany(null)}
+                  companies={apiCompanies}
+                  companiesLoading={companiesLoading}
+                  companiesError={companiesError}
+                  windowsServers={windowsServers}
+                  selectedCompany={selectedCompany}
+                  selectedWindowsServerId={selectedWindowsServerId}
+                  onSelectCompany={setSelectedCompany}
+                  onClearCompany={() => setSelectedCompany(null)}
                   onSelectWindowsServer={setSelectedWindowsServerId}
                 />
               )}
@@ -184,6 +209,8 @@ export function WizardShell() {
                   onAdd={addUser} onRemove={removeUser}
                   onUpdateUsername={(id, v) => updateUser(id, "username", v)}
                   onUpdateDisplayName={(id, v) => updateUser(id, "displayName", v)}
+                  onUpdateEmail={(id, v) => updateUser(id, "email", v)}
+                  onUpdatePhone={(id, v) => updateUser(id, "phone", v)}
                   onUpdatePassword={(id, v) => updateUser(id, "password", v)}
                   onTogglePassword={(id) => updateUser(id, "showPassword", !users.find((u) => u.id === id)?.showPassword)}
                   onGeneratePassword={(id) => updateUser(id, "password", generatePassword())}

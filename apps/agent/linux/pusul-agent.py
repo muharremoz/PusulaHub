@@ -274,6 +274,71 @@ def send_report(cfg, report):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+def poll_messages(cfg):
+    if not cfg.get("token") or not cfg.get("agent_id"):
+        return
+    try:
+        url = (f"{cfg['hub_url']}/api/agent/messages"
+               f"?agentId={cfg['agent_id']}&token={cfg['token']}")
+        req  = urllib.request.Request(url)
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+
+        if data.get("reregister"):
+            cfg["token"]    = None
+            cfg["agent_id"] = None
+            register_with_hub(cfg)
+            return
+
+        for exec_req in data.get("execs") or []:
+            threading.Thread(
+                target=invoke_exec, args=(cfg, exec_req), daemon=True
+            ).start()
+
+    except Exception:
+        pass  # poll hatası kritik değil
+
+def invoke_exec(cfg, exec_req):
+    exec_id  = exec_req.get("execId", "")
+    command  = exec_req.get("command", "")
+    timeout  = int(exec_req.get("timeout") or 30)
+
+    start = time.time()
+    stdout_val = ""
+    stderr_val = ""
+    exit_code  = -1
+
+    try:
+        proc = subprocess.run(
+            command, shell=True, capture_output=True, text=True, timeout=timeout
+        )
+        stdout_val = proc.stdout
+        stderr_val = proc.stderr
+        exit_code  = proc.returncode
+    except subprocess.TimeoutExpired:
+        stderr_val = f"Komut zaman aşımına uğradı ({timeout} sn)"
+        exit_code  = -2
+    except Exception as e:
+        stderr_val = str(e)
+        exit_code  = -1
+
+    duration_ms = round((time.time() - start) * 1000)
+
+    try:
+        hub_post(f"{cfg['hub_url']}/api/agent/exec-result", {
+            "execId":   exec_id,
+            "agentId":  cfg["agent_id"],
+            "token":    cfg["token"],
+            "stdout":   stdout_val,
+            "stderr":   stderr_val,
+            "exitCode": exit_code,
+            "duration": duration_ms,
+        }, timeout=10)
+        now_str = datetime.now().strftime("%H:%M:%S")
+        print(f"[{now_str}] ⚡ Exec tamamlandı: {exec_id} (exit:{exit_code})")
+    except Exception as e:
+        print(f"[PusulaAgent] Exec sonucu gönderilemedi: {e}")
+
 # ══════════════════════════════════════════════
 #   YEREL WEB ARAYÜZÜ
 # ══════════════════════════════════════════════
@@ -585,6 +650,7 @@ def main():
 
                 if result["ok"]:
                     print(f"[{now_str}] ✓ Gönderildi")
+                    poll_messages(cfg)
                 elif result.get("reregister"):
                     print("[PusulaAgent] Token geçersiz, yeniden kayıt...")
                     register_with_hub(cfg)

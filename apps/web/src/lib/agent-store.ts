@@ -3,17 +3,19 @@
    Next.js hot-reload'a karşı global değişken pattern
 ══════════════════════════════════════════════════════════ */
 
-import { StoredAgent, AgentReport, AgentMessage } from "./agent-types"
+import { StoredAgent, AgentReport, AgentMessage, AgentExecRequest, AgentExecResult } from "./agent-types"
 import { randomUUID } from "crypto"
 
 /* Global singleton — Next.js dev modunda hot-reload'dan korunur */
 const g = global as typeof global & {
   _pusulaAgentStore?: Map<string, StoredAgent>
+  _pusulaExecResults?: Map<string, AgentExecResult>
 }
-if (!g._pusulaAgentStore) {
-  g._pusulaAgentStore = new Map<string, StoredAgent>()
-}
-const store = g._pusulaAgentStore
+if (!g._pusulaAgentStore) g._pusulaAgentStore = new Map<string, StoredAgent>()
+if (!g._pusulaExecResults) g._pusulaExecResults = new Map<string, AgentExecResult>()
+
+const store      = g._pusulaAgentStore
+const execResults = g._pusulaExecResults
 
 /* Agent çevrimdışı sayılacağı süre: son rapordan bu yana 3 dakika */
 const OFFLINE_THRESHOLD_MS = 3 * 60 * 1000
@@ -51,6 +53,7 @@ export function registerAgent(data: {
     status:          "online",
     lastReport:      existing?.lastReport ?? null,
     pendingMessages: existing?.pendingMessages ?? [],
+    pendingExecs:    existing?.pendingExecs ?? [],
   }
 
   store.set(agentId, agent)
@@ -127,6 +130,44 @@ export function getAllMessages(): (AgentMessage & { hostname: string; agentId: s
     }
   }
   return result.sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+}
+
+/* ══════════════════════════════════════════════
+   KOMUT ÇALIŞTIRMA (EXEC)
+══════════════════════════════════════════════ */
+
+/** Agent'a komut kuyruğuna ekle, execId döner */
+export function queueExec(agentId: string, command: string, timeout = 30): string | null {
+  const agent = store.get(agentId)
+  if (!agent) return null
+
+  const execId = randomUUID()
+  const req: AgentExecRequest = { execId, command, timeout }
+  agent.pendingExecs.push(req)
+  store.set(agentId, agent)
+  return execId
+}
+
+/** Agent mesaj poll'unda bekleyen exec'leri çeker ve temizler */
+export function popPendingExecs(agentId: string): AgentExecRequest[] {
+  const agent = store.get(agentId)
+  if (!agent) return []
+  const pending = [...agent.pendingExecs]
+  agent.pendingExecs = []
+  store.set(agentId, agent)
+  return pending
+}
+
+/** Agent exec sonucunu kaydeder */
+export function storeExecResult(result: AgentExecResult): void {
+  execResults.set(result.execId, result)
+  // 10 dakika sonra temizle
+  setTimeout(() => execResults.delete(result.execId), 10 * 60 * 1000)
+}
+
+/** UI'ın sonucu poll etmesi için */
+export function getExecResult(execId: string): AgentExecResult | undefined {
+  return execResults.get(execId)
 }
 
 /* ══════════════════════════════════════════════

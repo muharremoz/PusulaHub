@@ -261,6 +261,86 @@ function Send-Report($cfg, $reportData) {
     }
 }
 
+function Poll-Messages($cfg) {
+    if (-not $cfg["token"] -or -not $cfg["agent_id"]) { return }
+    try {
+        $url  = "$($cfg['hub_url'])/api/agent/messages?agentId=$($cfg['agent_id'])&token=$($cfg['token'])"
+        $resp = Invoke-RestMethod -Uri $url -Method GET -TimeoutSec 10
+        if ($resp.reregister) {
+            $cfg["token"]    = $null
+            $cfg["agent_id"] = $null
+            Register-WithHub $cfg
+            return
+        }
+
+        # Exec isteklerini işle
+        if ($resp.execs -and $resp.execs.Count -gt 0) {
+            foreach ($exec in $resp.execs) {
+                Invoke-AgentExec $cfg $exec
+            }
+        }
+    } catch {
+        # Poll hatası kritik değil, sessizce geç
+    }
+}
+
+function Invoke-AgentExec($cfg, $exec) {
+    $execId  = $exec.execId
+    $command = $exec.command
+    $timeout = if ($exec.timeout) { [int]$exec.timeout } else { 30 }
+
+    $startTime = Get-Date
+    $stdout    = ""
+    $stderr    = ""
+    $exitCode  = -1
+
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName               = "cmd.exe"
+        $psi.Arguments              = "/c $command"
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError  = $true
+        $psi.UseShellExecute        = $false
+        $psi.CreateNoWindow         = $true
+
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $finished = $proc.WaitForExit($timeout * 1000)
+
+        if (-not $finished) {
+            $proc.Kill()
+            $stderr   = "Komut zaman aşımına uğradı ($timeout sn)"
+            $exitCode = -2
+        } else {
+            $stdout   = $proc.StandardOutput.ReadToEnd()
+            $stderr   = $proc.StandardError.ReadToEnd()
+            $exitCode = $proc.ExitCode
+        }
+    } catch {
+        $stderr   = $_.ToString()
+        $exitCode = -1
+    }
+
+    $duration = [math]::Round((New-TimeSpan -Start $startTime -End (Get-Date)).TotalMilliseconds)
+
+    $result = @{
+        execId   = $execId
+        agentId  = $cfg["agent_id"]
+        token    = $cfg["token"]
+        stdout   = $stdout
+        stderr   = $stderr
+        exitCode = $exitCode
+        duration = $duration
+    } | ConvertTo-Json -Compress
+
+    try {
+        Invoke-RestMethod -Uri "$($cfg['hub_url'])/api/agent/exec-result" `
+            -Method POST -Body $result -ContentType "application/json" -TimeoutSec 10
+        Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ⚡ Exec tamamlandı: $execId (exit:$exitCode)" -ForegroundColor Cyan
+    } catch {
+        Write-Host "[PusulaAgent] Exec sonucu gönderilemedi: $_" -ForegroundColor Red
+    }
+}
+
 # ══════════════════════════════════════════════
 #   YEREL WEB ARAYÜZÜ
 # ══════════════════════════════════════════════
@@ -714,6 +794,7 @@ function Main {
                     $SharedState.HubConnected = $true
                     $SharedState.LastPush     = $now
                     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ✓ Gönderildi" -ForegroundColor Green
+                    Poll-Messages $cfg
                 } elseif ($result.reregister) {
                     Write-Host "[PusulaAgent] Token geçersiz, yeniden kayıt..." -ForegroundColor Yellow
                     $cfg["token"]    = $null

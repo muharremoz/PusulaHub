@@ -129,6 +129,24 @@ export interface AgentMessage {
   delivered: boolean
 }
 
+/* ── Hub → Agent: Komut çalıştırma isteği ── */
+export interface AgentExecRequest {
+  execId:  string    // UUID — sonuç eşleştirmek için
+  command: string    // Çalıştırılacak komut
+  timeout: number    // Saniye cinsinden max süre
+}
+
+/* ── Agent → Hub: Komut sonucu ── */
+export interface AgentExecResult {
+  execId:   string
+  agentId:  string
+  token:    string
+  stdout:   string
+  stderr:   string
+  exitCode: number
+  duration: number   // ms
+}
+
 /* ── Hub'ın dahili olarak sakladığı agent kaydı ── */
 export interface StoredAgent {
   agentId:         string
@@ -143,4 +161,5 @@ export interface StoredAgent {
   status:          "online" | "offline"
   lastReport:      AgentReport | null
   pendingMessages: AgentMessage[]
+  pendingExecs:    AgentExecRequest[]
 }

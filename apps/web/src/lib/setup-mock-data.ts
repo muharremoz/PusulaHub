@@ -88,6 +88,8 @@ export interface WizardUser {
   id: number
   username: string
   displayName: string
+  email: string
+  phone: string
   password: string
   showPassword: boolean
 }

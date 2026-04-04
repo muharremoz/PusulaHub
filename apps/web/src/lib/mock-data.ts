@@ -251,11 +251,11 @@ export const sqlDatabases: SQLDatabase[] = [
 ];
 
 export const iisSites: IISSite[] = [
-  { id: "iis-1", name: "Kurumsal Web", server: "WEB-IIS-01", status: "Started", binding: "https://www.sirket.com:443", appPool: "KurumsalPool", physicalPath: "C:\\inetpub\\wwwroot\\kurumsal" },
-  { id: "iis-2", name: "Intranet Portal", server: "WEB-IIS-01", status: "Started", binding: "http://intranet.sirket.local:80", appPool: "IntranetPool", physicalPath: "C:\\inetpub\\wwwroot\\intranet" },
-  { id: "iis-3", name: "API Gateway", server: "WEB-IIS-02", status: "Started", binding: "https://api.sirket.com:443", appPool: "ApiPool", physicalPath: "C:\\inetpub\\wwwroot\\api" },
-  { id: "iis-4", name: "CRM Web", server: "WEB-IIS-02", status: "Stopped", binding: "https://crm.sirket.com:443", appPool: "CrmPool", physicalPath: "C:\\inetpub\\wwwroot\\crm" },
-  { id: "iis-5", name: "Dokuman Yonetimi", server: "WEB-IIS-01", status: "Started", binding: "http://docs.sirket.local:80", appPool: "DocsPool", physicalPath: "C:\\inetpub\\wwwroot\\docs" },
+  { id: "iis-1", name: "Kurumsal Web",    server: "WEB-IIS-01", status: "Started", binding: "https://www.sirket.com:443",      appPool: "KurumsalPool", physicalPath: "C:\\inetpub\\wwwroot\\kurumsal", firma: "Pusula Teknoloji", hizmet: "PusulaERP Web" },
+  { id: "iis-2", name: "Intranet Portal", server: "WEB-IIS-01", status: "Started", binding: "http://intranet.sirket.local:80", appPool: "IntranetPool", physicalPath: "C:\\inetpub\\wwwroot\\intranet", firma: "Yildiz Holding",   hizmet: "İntranet Portalı" },
+  { id: "iis-3", name: "API Gateway",     server: "WEB-IIS-02", status: "Started", binding: "https://api.sirket.com:443",      appPool: "ApiPool",      physicalPath: "C:\\inetpub\\wwwroot\\api",      firma: "Atlas Lojistik",  hizmet: "REST API Entegrasyonu" },
+  { id: "iis-4", name: "CRM Web",         server: "WEB-IIS-02", status: "Stopped", binding: "https://crm.sirket.com:443",      appPool: "CrmPool",      physicalPath: "C:\\inetpub\\wwwroot\\crm",      firma: "Yildiz Holding",  hizmet: "CRM Modülü" },
+  { id: "iis-5", name: "Dokuman Yonetimi",server: "WEB-IIS-01", status: "Started", binding: "http://docs.sirket.local:80",     appPool: "DocsPool",     physicalPath: "C:\\inetpub\\wwwroot\\docs",     firma: "Pusula Teknoloji", hizmet: "Doküman Yönetimi" },
 ];
 
 export const iisAppPools: IISAppPool[] = [
@@ -439,6 +439,7 @@ export const companies: Company[] = [
     contactEmail: "ahmet@pusula.com",
     contactPhone: "0212 555 01 01",
     userCount: 12,
+    userCapacity: 20,
     servers: ["DC-PRIMARY", "SQL-PROD", "WEB-IIS-01", "FILE-SRV"],
     services: [
       { name: "Active Directory", status: "active" },
@@ -452,6 +453,21 @@ export const companies: Company[] = [
     contractEnd: "2025-12-31",
     monthlyQuota: { cpu: 40, ram: 32, disk: 500 },
     currentUsage: { cpu: 28, ram: 24, disk: 320 },
+    weeklyUsage: [
+      { day: "Pzt", cpu: 62, ram: 68, disk: 60 },
+      { day: "Sal", cpu: 70, ram: 72, disk: 62 },
+      { day: "Çar", cpu: 65, ram: 74, disk: 63 },
+      { day: "Per", cpu: 75, ram: 75, disk: 64 },
+      { day: "Cum", cpu: 80, ram: 78, disk: 65 },
+      { day: "Cmt", cpu: 55, ram: 65, disk: 63 },
+      { day: "Paz", cpu: 45, ram: 60, disk: 64 },
+    ],
+    dbQuota: 100,
+    databases: [
+      { name: "PusulaProd", type: "MSSQL", size: 42, status: "online" },
+      { name: "PusulaArchive", type: "MSSQL", size: 18, status: "online" },
+      { name: "PusulaTest", type: "MSSQL", size: 4, status: "offline" },
+    ],
     notes: "Premium musteri - 7/24 destek",
   },
   {
@@ -462,6 +478,7 @@ export const companies: Company[] = [
     contactEmail: "hasan@yildiz.com",
     contactPhone: "0212 555 02 02",
     userCount: 8,
+    userCapacity: 15,
     servers: ["DC-PRIMARY", "SQL-PROD", "WEB-IIS-02"],
     services: [
       { name: "Active Directory", status: "active" },
@@ -474,6 +491,20 @@ export const companies: Company[] = [
     contractEnd: "2025-05-31",
     monthlyQuota: { cpu: 30, ram: 24, disk: 300 },
     currentUsage: { cpu: 22, ram: 20, disk: 185 },
+    weeklyUsage: [
+      { day: "Pzt", cpu: 68, ram: 80, disk: 58 },
+      { day: "Sal", cpu: 72, ram: 82, disk: 59 },
+      { day: "Çar", cpu: 74, ram: 83, disk: 60 },
+      { day: "Per", cpu: 78, ram: 85, disk: 61 },
+      { day: "Cum", cpu: 76, ram: 84, disk: 62 },
+      { day: "Cmt", cpu: 50, ram: 70, disk: 61 },
+      { day: "Paz", cpu: 40, ram: 65, disk: 61 },
+    ],
+    dbQuota: 60,
+    databases: [
+      { name: "YildizFinans", type: "MSSQL", size: 28, status: "online" },
+      { name: "YildizRapor", type: "MySQL", size: 6, status: "online" },
+    ],
   },
   {
     id: "comp-3",
@@ -483,6 +514,7 @@ export const companies: Company[] = [
     contactEmail: "elif@atlas.com",
     contactPhone: "0216 555 03 03",
     userCount: 5,
+    userCapacity: 10,
     servers: ["DC-PRIMARY", "UBUNTU-APP-01"],
     services: [
       { name: "Active Directory", status: "active" },
@@ -493,6 +525,19 @@ export const companies: Company[] = [
     contractEnd: "2025-12-31",
     monthlyQuota: { cpu: 20, ram: 16, disk: 200 },
     currentUsage: { cpu: 12, ram: 10, disk: 85 },
+    weeklyUsage: [
+      { day: "Pzt", cpu: 55, ram: 58, disk: 40 },
+      { day: "Sal", cpu: 58, ram: 60, disk: 41 },
+      { day: "Çar", cpu: 52, ram: 62, disk: 42 },
+      { day: "Per", cpu: 60, ram: 64, disk: 42 },
+      { day: "Cum", cpu: 62, ram: 63, disk: 43 },
+      { day: "Cmt", cpu: 35, ram: 48, disk: 42 },
+      { day: "Paz", cpu: 28, ram: 42, disk: 43 },
+    ],
+    dbQuota: 30,
+    databases: [
+      { name: "AtlasLojistik", type: "PostgreSQL", size: 11, status: "online" },
+    ],
   },
   {
     id: "comp-4",
@@ -502,6 +547,7 @@ export const companies: Company[] = [
     contactEmail: "selin@deniz.com",
     contactPhone: "0212 555 04 04",
     userCount: 6,
+    userCapacity: 10,
     servers: ["DC-PRIMARY", "SQL-PROD", "WEB-IIS-01"],
     services: [
       { name: "Active Directory", status: "active" },
@@ -514,6 +560,20 @@ export const companies: Company[] = [
     contractEnd: "2025-08-31",
     monthlyQuota: { cpu: 25, ram: 20, disk: 250 },
     currentUsage: { cpu: 18, ram: 16, disk: 190 },
+    weeklyUsage: [
+      { day: "Pzt", cpu: 70, ram: 78, disk: 74 },
+      { day: "Sal", cpu: 74, ram: 80, disk: 75 },
+      { day: "Çar", cpu: 72, ram: 79, disk: 75 },
+      { day: "Per", cpu: 76, ram: 82, disk: 76 },
+      { day: "Cum", cpu: 78, ram: 83, disk: 76 },
+      { day: "Cmt", cpu: 48, ram: 65, disk: 75 },
+      { day: "Paz", cpu: 38, ram: 58, disk: 76 },
+    ],
+    dbQuota: 80,
+    databases: [
+      { name: "DenizSigorta", type: "MSSQL", size: 35, status: "online" },
+      { name: "DenizArsiv", type: "MSSQL", size: 14, status: "online" },
+    ],
     notes: "Yedekleme hizmeti talep edildi, aktivasyon bekleniyor",
   },
   {
@@ -524,6 +584,7 @@ export const companies: Company[] = [
     contactEmail: "murat@kale.com",
     contactPhone: "0216 555 05 05",
     userCount: 4,
+    userCapacity: 8,
     servers: ["DC-PRIMARY", "FILE-SRV"],
     services: [
       { name: "Active Directory", status: "active" },
@@ -534,24 +595,37 @@ export const companies: Company[] = [
     contractEnd: "2024-06-01",
     monthlyQuota: { cpu: 10, ram: 8, disk: 100 },
     currentUsage: { cpu: 4, ram: 3, disk: 42 },
+    weeklyUsage: [
+      { day: "Pzt", cpu: 38, ram: 35, disk: 40 },
+      { day: "Sal", cpu: 42, ram: 38, disk: 41 },
+      { day: "Çar", cpu: 40, ram: 36, disk: 41 },
+      { day: "Per", cpu: 45, ram: 40, disk: 42 },
+      { day: "Cum", cpu: 44, ram: 39, disk: 42 },
+      { day: "Cmt", cpu: 22, ram: 28, disk: 42 },
+      { day: "Paz", cpu: 18, ram: 25, disk: 42 },
+    ],
+    dbQuota: 15,
+    databases: [
+      { name: "KaleInsaat", type: "MySQL", size: 5, status: "online" },
+    ],
     notes: "Deneme sureci - 3 aylik",
   },
 ];
 
 export const messageRecipients: MessageRecipient[] = [
-  { id: "rcpt-1", name: "Ahmet Yilmaz", email: "ahmet@pusula.com", company: "Pusula Teknoloji", server: "DC-PRIMARY", online: true },
-  { id: "rcpt-2", name: "Mehmet Kaya", email: "mehmet@pusula.com", company: "Pusula Teknoloji", server: "DC-PRIMARY", online: true },
-  { id: "rcpt-3", name: "Ayse Demir", email: "ayse@pusula.com", company: "Pusula Teknoloji", server: "SQL-PROD", online: false },
-  { id: "rcpt-4", name: "Fatma Ozturk", email: "fatma@pusula.com", company: "Pusula Teknoloji", server: "WEB-IIS-01", online: true },
-  { id: "rcpt-5", name: "Hasan Yildiz", email: "hasan@yildiz.com", company: "Yildiz Holding", server: "DC-PRIMARY", online: true },
-  { id: "rcpt-6", name: "Zeynep Arslan", email: "zeynep@yildiz.com", company: "Yildiz Holding", server: "SQL-PROD", online: false },
-  { id: "rcpt-7", name: "Ali Celik", email: "ali@yildiz.com", company: "Yildiz Holding", server: "WEB-IIS-02", online: true },
-  { id: "rcpt-8", name: "Elif Sahin", email: "elif@atlas.com", company: "Atlas Lojistik", server: "UBUNTU-APP-01", online: true },
-  { id: "rcpt-9", name: "Burak Demir", email: "burak@atlas.com", company: "Atlas Lojistik", server: "DC-PRIMARY", online: false },
-  { id: "rcpt-10", name: "Selin Koc", email: "selin@deniz.com", company: "Deniz Sigorta", server: "DC-PRIMARY", online: true },
-  { id: "rcpt-11", name: "Emre Yildirim", email: "emre@deniz.com", company: "Deniz Sigorta", server: "SQL-PROD", online: true },
-  { id: "rcpt-12", name: "Canan Ozdemir", email: "canan@kale.com", company: "Kale Insaat", server: "FILE-SRV", online: false },
-  { id: "rcpt-13", name: "Murat Aksoy", email: "murat@kale.com", company: "Kale Insaat", server: "DC-PRIMARY", online: true },
+  { id: "rcpt-1",  name: "Ahmet Yilmaz",   email: "ahmet@pusula.com",   company: "Pusula Teknoloji", server: "DC-PRIMARY",    online: true,  lastLogin: "2026-04-04 09:12", sessionDuration: "2 sa 48 dk" },
+  { id: "rcpt-2",  name: "Mehmet Kaya",     email: "mehmet@pusula.com",  company: "Pusula Teknoloji", server: "DC-PRIMARY",    online: true,  lastLogin: "2026-04-04 08:45", sessionDuration: "3 sa 15 dk" },
+  { id: "rcpt-3",  name: "Ayse Demir",      email: "ayse@pusula.com",    company: "Pusula Teknoloji", server: "SQL-PROD",      online: false, lastLogin: "2026-04-03 17:30" },
+  { id: "rcpt-4",  name: "Fatma Ozturk",    email: "fatma@pusula.com",   company: "Pusula Teknoloji", server: "WEB-IIS-01",    online: true,  lastLogin: "2026-04-04 10:02", sessionDuration: "1 sa 58 dk" },
+  { id: "rcpt-5",  name: "Hasan Yildiz",    email: "hasan@yildiz.com",   company: "Yildiz Holding",   server: "DC-PRIMARY",    online: true,  lastLogin: "2026-04-04 09:55", sessionDuration: "2 sa 5 dk" },
+  { id: "rcpt-6",  name: "Zeynep Arslan",   email: "zeynep@yildiz.com",  company: "Yildiz Holding",   server: "SQL-PROD",      online: false, lastLogin: "2026-04-02 14:20" },
+  { id: "rcpt-7",  name: "Ali Celik",       email: "ali@yildiz.com",     company: "Yildiz Holding",   server: "WEB-IIS-02",    online: true,  lastLogin: "2026-04-04 11:10", sessionDuration: "50 dk" },
+  { id: "rcpt-8",  name: "Elif Sahin",      email: "elif@atlas.com",     company: "Atlas Lojistik",   server: "UBUNTU-APP-01", online: true,  lastLogin: "2026-04-04 08:30", sessionDuration: "3 sa 30 dk" },
+  { id: "rcpt-9",  name: "Burak Demir",     email: "burak@atlas.com",    company: "Atlas Lojistik",   server: "DC-PRIMARY",    online: false, lastLogin: "2026-04-01 16:00" },
+  { id: "rcpt-10", name: "Selin Koc",       email: "selin@deniz.com",    company: "Deniz Sigorta",    server: "DC-PRIMARY",    online: true,  lastLogin: "2026-04-04 09:40", sessionDuration: "2 sa 20 dk" },
+  { id: "rcpt-11", name: "Emre Yildirim",   email: "emre@deniz.com",     company: "Deniz Sigorta",    server: "SQL-PROD",      online: true,  lastLogin: "2026-04-04 10:25", sessionDuration: "1 sa 35 dk" },
+  { id: "rcpt-12", name: "Canan Ozdemir",   email: "canan@kale.com",     company: "Kale Insaat",      server: "FILE-SRV",      online: false, lastLogin: "2026-03-28 11:00" },
+  { id: "rcpt-13", name: "Murat Aksoy",     email: "murat@kale.com",     company: "Kale Insaat",      server: "DC-PRIMARY",    online: true,  lastLogin: "2026-04-04 07:55", sessionDuration: "4 sa 5 dk" },
 ];
 
 export const messages: Message[] = [

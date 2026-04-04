@@ -34,7 +34,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import { Check, ChevronsUpDown } from "lucide-react"
+import { Check, ChevronsUpDown, FolderOpen } from "lucide-react"
 
 const CATEGORIES = [
   { value: "Yazılım",     label: "Yazılım" },
@@ -100,7 +100,7 @@ export function ServiceSheet({ open, onOpenChange }: ServiceSheetProps) {
   const [description, setDesc]    = useState("")
   const [category, setCategory]   = useState("")
   const [status, setStatus]       = useState("active")
-  const [version, setVersion]     = useState("")
+  const [folder, setFolder]       = useState("")
   const [tag, setTag]             = useState("")
   const [tagOpen, setTagOpen]     = useState(false)
 
@@ -108,7 +108,7 @@ export function ServiceSheet({ open, onOpenChange }: ServiceSheetProps) {
 
   const handleReset = () => {
     setName(""); setDesc(""); setCategory(""); setStatus("active")
-    setVersion(""); setTag("")
+    setFolder(""); setTag("")
   }
 
   const handleClose = () => {
@@ -154,29 +154,30 @@ export function ServiceSheet({ open, onOpenChange }: ServiceSheetProps) {
                 />
               </Field>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <Field label="Kategori">
-                  <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                      <SelectValue placeholder="Seçiniz…" />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-[5px]">
-                      {CATEGORIES.map((c) => (
-                        <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Field>
+              <Field label="Kategori">
+                <Select value={category} onValueChange={setCategory}>
+                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                    <SelectValue placeholder="Seçiniz…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-[5px]">
+                    {CATEGORIES.map((c) => (
+                      <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
 
-                <Field label="Versiyon">
+              <Field label="Hizmet Klasörü">
+                <div className="relative">
+                  <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
                   <Input
-                    placeholder="1.0.0"
-                    value={version}
-                    onChange={(e) => setVersion(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    placeholder="C:\Program Files\PusulaERP"
+                    value={folder}
+                    onChange={(e) => setFolder(e.target.value)}
+                    className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
                   />
-                </Field>
-              </div>
+                </div>
+              </Field>
 
               <Field label="Etiket">
                 <Popover open={tagOpen} onOpenChange={setTagOpen}>

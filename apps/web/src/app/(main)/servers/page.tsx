@@ -6,7 +6,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
-import { servers } from "@/lib/mock-data";
+import type { Server as ServerType } from "@/types";
 import { Server, MoreVertical, RefreshCw, LayoutList, LayoutGrid, Clock, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -15,8 +15,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { ServerSheet } from "@/components/servers/server-sheet";
+import { TerminalSheet } from "@/components/servers/terminal-sheet";
 
 type ViewMode = "list" | "card";
 type SortKey = "name" | "ip" | "dns" | "status" | "cpu" | "ram" | "disk" | "role";
@@ -80,28 +93,94 @@ function SortHeader({
   );
 }
 
-function ActionMenu({ serverId }: { serverId: string }) {
+type DialogAction = "remove" | "restart" | null;
+
+function ActionMenu({ serverId, serverName, onRemoved, onTerminal, onEdit }: { serverId: string; serverName: string; onRemoved: (id: string) => void; onTerminal: () => void; onEdit: () => void }) {
   const router = useRouter();
+  const [action, setAction] = useState<DialogAction>(null);
+  const [dialogAction, setDialogAction] = useState<"remove" | "restart">("remove");
+  const [loading, setLoading] = useState(false);
+
+  function openAction(a: "remove" | "restart") {
+    setDialogAction(a);
+    setAction(a);
+  }
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    try {
+      if (action === "remove") {
+        await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
+        toast.success("Sunucu kaldırıldı", { description: serverName });
+        onRemoved(serverId);
+      } else if (action === "restart") {
+        // TODO: restart API
+        toast.success("Yeniden başlatma isteği gönderildi", { description: serverName });
+      }
+      setAction(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="rounded-[6px]">
-        <DropdownMenuItem
-          className="text-xs cursor-pointer"
-          onClick={() => router.push(`/servers/${serverId}`)}
-        >
-          Detaylar
-        </DropdownMenuItem>
-        <DropdownMenuItem className="text-xs">Yeniden Başlat</DropdownMenuItem>
-        <DropdownMenuItem className="text-xs">Terminal</DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="text-xs text-destructive">Kaldır</DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="rounded-[6px]">
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => router.push(`/servers/${serverId}`)}>
+            Detaylar
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={onEdit}>
+            Düzenle
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openAction("restart")}>
+            Yeniden Başlat
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={onTerminal}>
+            Terminal
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="text-xs text-destructive cursor-pointer" onClick={() => openAction("remove")}>
+            Kaldır
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={action !== null} onOpenChange={(o) => { if (!o && !loading) setAction(null); }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {dialogAction === "remove" ? "Sunucuyu kaldır" : "Sunucuyu yeniden başlat"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-medium text-foreground">{serverName}</span>{" "}
+              {dialogAction === "remove"
+                ? "sunucusu listeden kalıcı olarak kaldırılacak. Bu işlem geri alınamaz."
+                : "sunucusu yeniden başlatılacak. Aktif bağlantılar kesilecek."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading} className="text-xs">İptal</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); handleConfirm(); }}
+              disabled={loading}
+              className={dialogAction === "remove"
+                ? "text-xs bg-destructive text-white hover:bg-destructive/90"
+                : "text-xs"}
+            >
+              {loading
+                ? dialogAction === "remove" ? "Kaldırılıyor..." : "Başlatılıyor..."
+                : dialogAction === "remove" ? "Kaldır" : "Yeniden Başlat"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 
@@ -122,12 +201,44 @@ function ResourceBar({ label, value }: { label: string; value: number }) {
 }
 
 export default function ServersPage() {
+  const [servers, setServers] = useState<ServerType[]>([]);
+  const [loading, setLoading] = useState(true);
   const [osFilter, setOsFilter] = useState<"all" | "windows" | "ubuntu">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "warning" | "offline">("all");
   const [view, setView] = useState<ViewMode>("list");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalServer, setTerminalServer] = useState<{ id: string; name: string } | null>(null);
+  const [editServerId, setEditServerId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function openTerminal(id: string, name: string) {
+    setTerminalServer({ id, name });
+    setTerminalOpen(true);
+  }
+
+  const fetchServers = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/servers");
+      const data = await res.json();
+      setServers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoved = (id: string) => {
+    setServers((prev) => prev.filter((s) => s.id !== id));
+    fetch("/api/servers").then((r) => r.json()).then((data) => {
+      if (Array.isArray(data)) setServers(data);
+    }).catch(() => {});
+  };
+
+  useEffect(() => { fetchServers(); }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -158,7 +269,13 @@ export default function ServersPage() {
 
   return (
     <PageContainer title="Sunucular" description="Tüm sunucuların listesi ve yönetimi">
-      <ServerSheet open={sheetOpen} onOpenChange={setSheetOpen} />
+      <ServerSheet open={sheetOpen} onOpenChange={(o) => { setSheetOpen(o); if (!o) setEditServerId(null); }} onSaved={fetchServers} editServerId={editServerId} />
+      <TerminalSheet
+        open={terminalOpen}
+        onOpenChange={setTerminalOpen}
+        serverId={terminalServer?.id ?? ""}
+        serverName={terminalServer?.name ?? ""}
+      />
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* OS filter */}
@@ -217,8 +334,11 @@ export default function ServersPage() {
           </div>
 
           {/* Refresh */}
-          <button className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground">
-            <RefreshCw className="size-3.5" />
+          <button
+            onClick={fetchServers}
+            className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             Yenile
           </button>
 
@@ -233,12 +353,67 @@ export default function ServersPage() {
         </div>
       </div>
 
-      {/* ── LIST VIEW ── */}
-      {view === "list" && (
+      {/* ── SKELETON ── */}
+      {loading && (
         <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
           <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_52px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+              {Array.from({ length: 10 }).map((_, i) => (
+                <Skeleton key={i} className="h-3 rounded-[3px]" />
+              ))}
+            </div>
+            {/* Rows */}
+            <div className="divide-y divide-border/40">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-3 items-center">
+                  <Skeleton className="size-2 rounded-full" />
+                  <Skeleton className="h-3 rounded-[3px] w-3/4" />
+                  <Skeleton className="h-3 rounded-[3px]" />
+                  <Skeleton className="h-3 rounded-[3px] w-2/3" />
+                  <Skeleton className="h-5 rounded-[4px] w-14" />
+                  <Skeleton className="h-2 rounded-full" />
+                  <Skeleton className="h-2 rounded-full" />
+                  <Skeleton className="h-2 rounded-full" />
+                  <Skeleton className="h-5 rounded-[4px] w-10" />
+                  <Skeleton className="size-5 rounded-[4px]" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="h-2" />
+        </div>
+      )}
+
+      {/* ── BOŞ DURUM ── */}
+      {!loading && servers.length === 0 && (
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+          <div
+            className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
+            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          >
+            <Server className="size-8 text-muted-foreground/30" />
+            <div className="text-center space-y-1">
+              <p className="text-[13px] font-medium text-foreground">Henüz sunucu eklenmedi</p>
+              <p className="text-[11px] text-muted-foreground">Yönetmek istediğiniz sunucuları buradan ekleyin.</p>
+            </div>
+            <button
+              onClick={() => setSheetOpen(true)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors mt-1"
+            >
+              <Plus className="size-3.5" />
+              Yeni Sunucu Ekle
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── LIST VIEW ── */}
+      {view === "list" && servers.length > 0 && (
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+            {/* Header */}
+            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
               <span />
               <SortHeader label="Sunucu Adı" sortKey="name"   active={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader label="IP Adresi"  sortKey="ip"     active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -256,7 +431,7 @@ export default function ServersPage() {
               {filtered.map((srv) => (
                 <div
                   key={srv.id}
-                  className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_52px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
                 >
                   {/* Status dot */}
                   <span className="flex items-center justify-center">
@@ -299,12 +474,12 @@ export default function ServersPage() {
                   </div>
 
                   {/* Rol — sadece ilk badge */}
-                  <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium whitespace-nowrap">
+                  <span className="inline-block text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium whitespace-nowrap w-fit">
                     {srv.roles[0]}
                   </span>
 
                   {/* Actions */}
-                  <ActionMenu serverId={srv.id} />
+                  <ActionMenu serverId={srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
                 </div>
               ))}
             </div>
@@ -319,7 +494,7 @@ export default function ServersPage() {
       )}
 
       {/* ── CARD VIEW ── */}
-      {view === "card" && (
+      {view === "card" && servers.length > 0 && (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filtered.map((srv) => (
@@ -355,7 +530,7 @@ export default function ServersPage() {
                             {role}
                           </span>
                         ))}
-                        <ActionMenu serverId={srv.id} />
+                        <ActionMenu serverId={srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
                       </div>
                     </div>
                   </div>

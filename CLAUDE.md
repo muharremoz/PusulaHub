@@ -110,6 +110,67 @@ Silme, devre dışı bırakma gibi destructive işlemlerde mutlaka `AlertDialog`
 
 ---
 
+## Proje Prensipleri
+
+### 1. Hız
+- API response süreleri minimize edilmeli
+- Gereksiz re-render, büyük bundle, ağır kütüphane eklenmemeli
+- DB sorgularında sadece gerekli kolonlar seçilmeli, `SELECT *` kullanılmaz
+- Sayfalama (pagination) büyük listelerde zorunludur
+- **Tüm veri yüklemeleri `Skeleton` ile gösterilir** — `loading` state'i olan her sayfa/bileşen, veri gelene kadar shadcn `Skeleton` komponenti kullanır. Spinner veya düz boş alan kullanılmaz.
+
+### 2. Kaynak Tasarrufu
+- Bağlı sunucularda ağır işlem yapılmaz (yoğun polling, büyük veri transferi yasak)
+- Agent'lar minimum CPU/RAM kullanacak şekilde tasarlanır
+- Monitoring aralıkları makul tutulur (örn. 30-60 sn), saniyede çoklu istek atılmaz
+
+### 3. Güvenlik
+- Tüm DB sorguları parametreli yazılır, string concatenation ile sorgu oluşturulmaz
+- API endpoint'leri authentication kontrolü gerektirir
+- Hassas bilgiler (şifre, token) loglara yazılmaz, response'a dahil edilmez
+- `.env.local` asla commit edilmez
+
+### 4. Boş Veri Durumu
+- Bir sayfada gösterilecek veri yoksa boş alan + açıklayıcı mesaj + yönlendirme butonu gösterilir
+- "Henüz kayıt yok" tarzı mesajlar yerine kullanıcıyı bir sonraki adıma yönlendiren UI kullanılır
+- Örnek: "Henüz sunucu eklenmedi → Sunucu Ekle butonu" veya "Firma kurulum sihirbazına git"
+
+---
+
+## Bilinen Sorunlar ve Çözümler
+
+### Command (cmdk) Combobox — Büyük Listede Yavaş Açılma
+`Popover + Command` kombinasyonunda çok sayıda item (100+) varsa dropdown açılışı 3-4 saniye sürebilir. `cmdk` varsayılan olarak tüm item'ları iç filtreyle işler.
+
+**Çözüm:** `shouldFilter={false}` + harici filtre + `.slice(0, 50)` ile max 50 item render et.
+
+```tsx
+const [search, setSearch] = useState("")
+
+const filtered = search.trim()
+  ? items.filter((c) => c.name.toLowerCase().includes(search.toLowerCase())).slice(0, 50)
+  : items.slice(0, 50)
+
+// JSX:
+<Command shouldFilter={false}>
+  <CommandInput value={search} onValueChange={setSearch} />
+  <CommandList className="max-h-52 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
+    <CommandGroup>
+      {filtered.map((c) => (
+        <CommandItem key={c.id} value={c.id} onSelect={() => { setSearch("") }}>
+          {c.name}
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  </CommandList>
+</Command>
+```
+
+- `onWheel={(e) => e.stopPropagation()}` → Popover içinde mouse wheel scroll'u çalıştırır.
+- Seçim sonrası `setSearch("")` ile arama temizlenir.
+
+---
+
 ## Teknoloji Stack
 
 - **Framework**: Next.js 15 (App Router)

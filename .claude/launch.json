@@ -1,13 +1,1 @@
-{
-  "version": "0.0.1",
-  "configurations": [
-    {
-      "name": "web",
-      "runtimeExecutable": "npx",
-      "runtimeArgs": ["next", "dev", "--port", "4242"],
-      "port": 4242,
-      "autoPort": false,
-      "cwd": "apps/web"
-    }
-  ]
-}
+{"version":"0.0.1","configurations":[{"name":"pusulaHub","runtimeExecutable":"pnpm","runtimeArgs":["--filter","web","dev"],"port":3000}]}

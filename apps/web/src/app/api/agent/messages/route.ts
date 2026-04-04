@@ -6,7 +6,7 @@
 ══════════════════════════════════════════════════════════ */
 
 import { NextRequest, NextResponse } from "next/server"
-import { getAgentByToken, popPendingMessages } from "@/lib/agent-store"
+import { getAgentByToken, popPendingMessages, popPendingExecs } from "@/lib/agent-store"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
@@ -29,11 +29,12 @@ export async function GET(req: NextRequest) {
     )
   }
 
-  /* Bekleyen mesajları çek ve teslim edildi olarak işaretle */
   const messages = popPendingMessages(agentId)
+  const execs    = popPendingExecs(agentId)
 
   return NextResponse.json({
     messages,
+    execs,
     serverTime: new Date().toISOString(),
   })
 }
