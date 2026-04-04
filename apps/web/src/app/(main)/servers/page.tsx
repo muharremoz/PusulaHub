@@ -7,6 +7,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import type { Server as ServerType } from "@/types";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Server, MoreVertical, RefreshCw, LayoutList, LayoutGrid, Clock, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import {
   DropdownMenu,
@@ -95,7 +96,7 @@ function SortHeader({
 
 type DialogAction = "remove" | "restart" | null;
 
-function ActionMenu({ serverId, serverName, onRemoved, onTerminal, onEdit }: { serverId: string; serverName: string; onRemoved: (id: string) => void; onTerminal: () => void; onEdit: () => void }) {
+function ActionMenu({ serverId, serverSlug, serverName, onRemoved, onTerminal, onEdit }: { serverId: string; serverSlug: string; serverName: string; onRemoved: (id: string) => void; onTerminal: () => void; onEdit: () => void }) {
   const router = useRouter();
   const [action, setAction] = useState<DialogAction>(null);
   const [dialogAction, setDialogAction] = useState<"remove" | "restart">("remove");
@@ -132,7 +133,7 @@ function ActionMenu({ serverId, serverName, onRemoved, onTerminal, onEdit }: { s
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="rounded-[6px]">
-          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => router.push(`/servers/${serverId}`)}>
+          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => router.push(`/servers/${serverSlug}`)}>
             Detaylar
           </DropdownMenuItem>
           <DropdownMenuItem className="text-xs cursor-pointer" onClick={onEdit}>
@@ -203,6 +204,7 @@ function ResourceBar({ label, value }: { label: string; value: number }) {
 export default function ServersPage() {
   const [servers, setServers] = useState<ServerType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [osFilter, setOsFilter] = useState<"all" | "windows" | "ubuntu">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "warning" | "offline">("all");
   const [view, setView] = useState<ViewMode>("list");
@@ -218,16 +220,17 @@ export default function ServersPage() {
     setTerminalOpen(true);
   }
 
-  const fetchServers = async () => {
-    setLoading(true);
+  const fetchServers = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await fetch("/api/servers");
       const data = await res.json();
       setServers(Array.isArray(data) ? data : []);
+      setLastUpdate(new Date());
     } catch (err) {
       console.error(err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -238,7 +241,11 @@ export default function ServersPage() {
     }).catch(() => {});
   };
 
-  useEffect(() => { fetchServers(); }, []);
+  useEffect(() => {
+    fetchServers();
+    const interval = setInterval(() => fetchServers(true), 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
@@ -333,14 +340,30 @@ export default function ServersPage() {
             </button>
           </div>
 
-          {/* Refresh */}
-          <button
-            onClick={fetchServers}
-            className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
-            Yenile
-          </button>
+          {/* Refresh + Last Update */}
+          <div className="flex items-center gap-2">
+            {lastUpdate && (
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-[10px] text-muted-foreground tabular-nums cursor-default">
+                      {lastUpdate.toLocaleTimeString("tr-TR")}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-[11px]">
+                    Her 5 saniyede otomatik yenilenir
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            <button
+              onClick={() => fetchServers()}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              Yenile
+            </button>
+          </div>
 
           {/* New server */}
           <button
@@ -358,15 +381,15 @@ export default function ServersPage() {
         <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
           <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-              {Array.from({ length: 10 }).map((_, i) => (
+            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+              {Array.from({ length: 11 }).map((_, i) => (
                 <Skeleton key={i} className="h-3 rounded-[3px]" />
               ))}
             </div>
             {/* Rows */}
             <div className="divide-y divide-border/40">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-3 items-center">
+                <div key={i} className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-3 items-center">
                   <Skeleton className="size-2 rounded-full" />
                   <Skeleton className="h-3 rounded-[3px] w-3/4" />
                   <Skeleton className="h-3 rounded-[3px]" />
@@ -413,7 +436,7 @@ export default function ServersPage() {
         <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
           <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
               <span />
               <SortHeader label="Sunucu Adı" sortKey="name"   active={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader label="IP Adresi"  sortKey="ip"     active={sortKey} dir={sortDir} onSort={handleSort} />
@@ -422,6 +445,7 @@ export default function ServersPage() {
               <SortHeader label="CPU"        sortKey="cpu"    active={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader label="RAM"        sortKey="ram"    active={sortKey} dir={sortDir} onSort={handleSort} />
               <SortHeader label="Disk"       sortKey="disk"   active={sortKey} dir={sortDir} onSort={handleSort} />
+              <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Uptime</span>
               <SortHeader label="Rol"        sortKey="role"   active={sortKey} dir={sortDir} onSort={handleSort} />
               <span />
             </div>
@@ -431,7 +455,7 @@ export default function ServersPage() {
               {filtered.map((srv) => (
                 <div
                   key={srv.id}
-                  className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_72px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
                 >
                   {/* Status dot */}
                   <span className="flex items-center justify-center">
@@ -473,13 +497,18 @@ export default function ServersPage() {
                     <span className="text-[10px] tabular-nums text-muted-foreground w-6 text-right">%{srv.disk}</span>
                   </div>
 
+                  {/* Uptime */}
+                  <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
+                    {srv.uptime}
+                  </span>
+
                   {/* Rol — sadece ilk badge */}
                   <span className="inline-block text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium whitespace-nowrap w-fit">
                     {srv.roles[0]}
                   </span>
 
                   {/* Actions */}
-                  <ActionMenu serverId={srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
+                  <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
                 </div>
               ))}
             </div>
@@ -530,7 +559,7 @@ export default function ServersPage() {
                             {role}
                           </span>
                         ))}
-                        <ActionMenu serverId={srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
+                        <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
                       </div>
                     </div>
                   </div>

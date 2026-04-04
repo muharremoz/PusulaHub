@@ -8,10 +8,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { DetailSession } from "@/lib/mock-server-detail";
+import type { AgentReport } from "@/lib/agent-types";
+
+type AgentSession = NonNullable<AgentReport["sessions"]>[number];
 
 interface Props {
-  sessions: DetailSession[];
+  sessions: AgentSession[];
 }
 
 export function TabSessions({ sessions }: Props) {
@@ -22,11 +24,12 @@ export function TabSessions({ sessions }: Props) {
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
       >
         {/* Header */}
-        <div className="grid grid-cols-[1fr_160px_120px_80px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+        <div className="grid grid-cols-[1fr_120px_160px_100px_100px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
           <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı Adı</span>
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Giriş Saati</span>
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Süre</span>
           <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tür</span>
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Giriş Saati</span>
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">İstemci IP</span>
           <span />
         </div>
 
@@ -37,17 +40,20 @@ export function TabSessions({ sessions }: Props) {
           </div>
         ) : (
           <div className="divide-y divide-border/40">
-            {sessions.map((ses) => (
+            {sessions.map((ses, idx) => (
               <div
-                key={ses.id}
-                className="grid grid-cols-[1fr_160px_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                key={`${ses.username}-${idx}`}
+                className="grid grid-cols-[1fr_120px_160px_100px_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
               >
                 <span className="text-[11px] font-mono font-medium truncate">{ses.username}</span>
-                <span className="text-[11px] tabular-nums">{ses.logonTime}</span>
-                <span className="text-[11px] tabular-nums text-muted-foreground">{ses.duration}</span>
                 <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium w-fit">
-                  {ses.type}
+                  {ses.sessionType}
                 </span>
+                <span className="text-[11px] tabular-nums">{ses.logonTime}</span>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-[4px] font-medium w-fit ${ses.state === "Active" ? "bg-emerald-100 text-emerald-700" : "bg-orange-100 text-orange-700"}`}>
+                  {ses.state === "Active" ? "Aktif" : ses.state === "Disconnected" ? "Bağlantı Kesildi" : ses.state}
+                </span>
+                <span className="text-[11px] font-mono text-muted-foreground truncate">{ses.clientIp}</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">

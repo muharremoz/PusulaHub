@@ -1,25 +1,46 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import type { DetailLogs } from "@/lib/mock-server-detail";
+import type { AgentReport } from "@/lib/agent-types";
 
 interface Props {
-  logs: DetailLogs;
+  logs: AgentReport["logs"] | null;
 }
 
 const LEVEL_CLASS: Record<string, string> = {
-  Info: "bg-blue-50 text-blue-700 border-blue-200/60 border",
-  Warning: "bg-amber-50 text-amber-700 border-amber-200/60 border",
-  Error: "bg-red-50 text-red-700 border-red-200/60 border",
+  info: "bg-blue-50 text-blue-700 border-blue-200/60 border",
+  warning: "bg-amber-50 text-amber-700 border-amber-200/60 border",
+  error: "bg-red-50 text-red-700 border-red-200/60 border",
+  critical: "bg-red-50 text-red-900 border-red-300/60 border font-bold",
 };
 
 const LEVEL_LABEL: Record<string, string> = {
-  Info: "Bilgi",
-  Warning: "Uyarı",
-  Error: "Hata",
+  info: "Bilgi",
+  warning: "Uyarı",
+  error: "Hata",
+  critical: "Kritik",
 };
 
+function formatTimestamp(ts: string): string {
+  return new Date(ts).toLocaleString("tr-TR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
 export function TabLogs({ logs }: Props) {
+  if (!logs) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <p className="text-sm text-muted-foreground">Log verisi henüz alınamadı</p>
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-2 gap-3">
       {/* Event Log */}
@@ -34,8 +55,8 @@ export function TabLogs({ logs }: Props) {
             </span>
           </div>
           <div className="divide-y divide-border/40">
-            {logs.events.map((event) => (
-              <div key={event.id} className="px-3 py-2.5 hover:bg-muted/20 transition-colors">
+            {logs.events.map((event, i) => (
+              <div key={i} className="px-3 py-2.5 hover:bg-muted/20 transition-colors">
                 <div className="flex items-center gap-2 mb-1">
                   <span
                     className={cn(
@@ -46,7 +67,7 @@ export function TabLogs({ logs }: Props) {
                     {LEVEL_LABEL[event.level]}
                   </span>
                   <span className="text-[10px] text-muted-foreground font-mono tabular-nums">
-                    {event.time}
+                    {formatTimestamp(event.timestamp)}
                   </span>
                   <span className="text-[10px] text-muted-foreground truncate">{event.source}</span>
                 </div>
@@ -69,8 +90,8 @@ export function TabLogs({ logs }: Props) {
               Başarısız Giriş Denemeleri
             </span>
           </div>
-          <div className="grid grid-cols-[90px_1fr_110px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
-            {["Saat", "Kullanıcı", "IP Adresi"].map((h) => (
+          <div className="grid grid-cols-[140px_1fr_110px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
+            {["Tarih", "Kullanıcı", "IP Adresi"].map((h) => (
               <span
                 key={h}
                 className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
@@ -80,18 +101,24 @@ export function TabLogs({ logs }: Props) {
             ))}
           </div>
           <div className="divide-y divide-border/40">
-            {logs.failedLogins.map((fl, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[90px_1fr_110px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-              >
-                <span className="text-[11px] font-mono tabular-nums text-muted-foreground">
-                  {fl.time}
-                </span>
-                <span className="text-[11px] font-mono truncate">{fl.username}</span>
-                <span className="text-[11px] font-mono text-muted-foreground">{fl.ip}</span>
+            {logs.failedLogins && logs.failedLogins.length > 0 ? (
+              logs.failedLogins.map((fl, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-[140px_1fr_110px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                >
+                  <span className="text-[11px] font-mono tabular-nums text-muted-foreground">
+                    {formatTimestamp(fl.timestamp)}
+                  </span>
+                  <span className="text-[11px] font-mono truncate">{fl.username}</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{fl.clientIp}</span>
+                </div>
+              ))
+            ) : (
+              <div className="px-3 py-4 text-center">
+                <span className="text-[11px] text-muted-foreground">Kayıt bulunamadı</span>
               </div>
-            ))}
+            )}
           </div>
         </div>
         <div className="h-2" />

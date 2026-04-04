@@ -3,6 +3,15 @@ import { query, execute } from "@/lib/db"
 import { getAllAgents } from "@/lib/agent-store"
 import type { Server } from "@/types"
 
+function slugify(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i")
+    .replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+}
+
 interface ServerRow {
   Id: string
   Name: string
@@ -44,14 +53,15 @@ export async function GET() {
     const agents = getAllAgents()
 
     const servers: Server[] = rows.map((r) => {
-      // DB kaydıyla eşleşen canlı agent varsa metriklerini kullan
+      // Pull modelde agentId = serverId, fallback: hostname/IP eşleştirme
       const agent = agents.find(
-        (a) => a.hostname === r.Name || a.ip === r.IP
+        (a) => a.agentId === r.Id || a.hostname === r.Name || a.ip === r.IP
       )
       const m = agent?.lastReport?.metrics
 
       return {
         id:          r.Id,
+        slug:        slugify(r.Name),
         name:        r.Name,
         ip:          r.IP,
         dns:         r.DNS ?? undefined,

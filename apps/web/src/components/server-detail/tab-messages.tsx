@@ -23,15 +23,13 @@ const TEMPLATES = [
   },
 ];
 
-const MOCK_SESSIONS = [
-  "K001.ahmet",
-  "K002.mehmet",
-  "K003.ayse",
-  "K004.fatma",
-  "K005.ali",
-];
+interface TabMessagesProps {
+  sessions: { username: string; sessionType: string; state: string }[];
+  serverId: string;
+}
 
-export function TabMessages() {
+export function TabMessages({ sessions, serverId }: TabMessagesProps) {
+  const sessionUsernames = sessions.map((s) => s.username);
   const [activeTemplate, setActiveTemplate] = useState<string>("maintenance");
   const [message, setMessage] = useState(TEMPLATES[0].text);
   const [sendAll, setSendAll] = useState(true);
@@ -51,6 +49,23 @@ export function TabMessages() {
       return next;
     });
   };
+
+  if (sessionUsernames.length === 0) {
+    return (
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div
+          className="rounded-[4px] px-4 py-8 text-center"
+          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        >
+          <MessageSquare className="size-5 mx-auto mb-2 text-muted-foreground/60" />
+          <p className="text-[11px] text-muted-foreground">
+            Aktif oturum bulunmuyor — mesaj göndermek için en az bir oturum gerekli
+          </p>
+        </div>
+        <div className="h-2" />
+      </div>
+    );
+  }
 
   return (
     <div className="grid grid-cols-[1fr_280px] gap-3">
@@ -143,7 +158,7 @@ export function TabMessages() {
               <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase block">
                 Bireysel Seçim
               </span>
-              {MOCK_SESSIONS.map((username) => (
+              {sessionUsernames.map((username) => (
                 <div key={username} className="flex items-center gap-2">
                   <Checkbox
                     id={`ses-${username}`}
