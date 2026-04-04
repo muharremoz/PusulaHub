@@ -113,9 +113,9 @@ export function TabCompanies({ companies }: Props) {
   };
 
   const totalUsers = companies.reduce((acc, c) => acc + c.userCount, 0);
-  const busiestCompany = companies.reduce((prev, curr) =>
+  const busiestCompany = companies.length > 0 ? companies.reduce((prev, curr) =>
     curr.userCount > prev.userCount ? curr : prev
-  );
+  ) : null;
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -135,7 +135,7 @@ export function TabCompanies({ companies }: Props) {
         {[
           { label: "Toplam Firma", value: companies.length, icon: Building2 },
           { label: "Toplam Kullanıcı", value: totalUsers, icon: Users },
-          { label: "En Yoğun Firma", value: busiestCompany.firmaName, sub: `${busiestCompany.userCount} kullanıcı`, icon: Building2, small: true },
+          { label: "En Yoğun Firma", value: busiestCompany?.firmaName ?? "—", sub: busiestCompany ? `${busiestCompany.userCount} kullanıcı` : undefined, icon: Building2, small: true },
         ].map(({ label, value, sub, icon: Icon, small }) => (
           <div
             key={label}
