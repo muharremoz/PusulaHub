@@ -57,6 +57,81 @@ const TYPE_LABELS: Record<MsgType, { label: string; cls: string; badgeCls: strin
   urgent:  { label: "Acil",   cls: "bg-red-50 text-red-700 border-red-200",        badgeCls: "bg-red-100 text-red-700 border-0" },
 };
 
+const TYPE_THEME = {
+  info: {
+    header:  "bg-blue-50",
+    icon:    "bg-blue-100 text-blue-700",
+    badge:   "bg-blue-200 text-blue-800",
+    label:   "BİLGİ",
+    glyph:   "i",
+    btn:     "bg-blue-600 hover:bg-blue-700",
+  },
+  warning: {
+    header:  "bg-amber-50",
+    icon:    "bg-amber-100 text-amber-700",
+    badge:   "bg-amber-200 text-amber-800",
+    label:   "UYARI",
+    glyph:   "!",
+    btn:     "bg-amber-600 hover:bg-amber-700",
+  },
+  urgent: {
+    header:  "bg-red-50",
+    icon:    "bg-red-100 text-red-700",
+    badge:   "bg-red-200 text-red-800",
+    label:   "ACİL",
+    glyph:   "!",
+    btn:     "bg-red-600 hover:bg-red-700",
+  },
+};
+
+function NotifyPreview({ title, body, type }: { title: string; body: string; type: MsgType }) {
+  const t = TYPE_THEME[type];
+  const now = new Date().toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="w-full rounded-[10px] overflow-hidden shadow-lg border border-border/30 text-[11px] select-none">
+      {/* Header */}
+      <div className={cn("px-3 py-2.5 flex items-center gap-2.5", t.header)}>
+        <div className={cn("w-7 h-7 rounded-full flex items-center justify-center font-bold text-[13px] shrink-0", t.icon)}>
+          {t.glyph}
+        </div>
+        <div className="flex flex-col gap-0.5">
+          <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded self-start", t.badge)}>
+            {t.label}
+          </span>
+          <span className="font-semibold text-[12px] text-gray-900 leading-tight">
+            {title || "Mesaj başlığı..."}
+          </span>
+        </div>
+      </div>
+
+      {/* User row */}
+      <div className="px-3 py-2 flex items-center gap-2 border-y border-border/20 bg-gray-50/60">
+        <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600 shrink-0">
+          K
+        </div>
+        <span className="font-semibold text-gray-800 flex-1">Sayın Kullanıcı</span>
+        <span className="text-gray-400 text-[10px]">{now}</span>
+      </div>
+
+      {/* Body */}
+      <div className="px-3 py-2.5 bg-white min-h-[48px]">
+        <p className="text-gray-700 leading-relaxed whitespace-pre-line">
+          {body || <span className="text-muted-foreground italic">Mesaj içeriği...</span>}
+        </p>
+      </div>
+
+      {/* Footer */}
+      <div className="px-3 py-2 flex items-center justify-between bg-gray-50/60 border-t border-border/20">
+        <span className="text-gray-500 font-medium">Pusula Yazılım</span>
+        <button className={cn("text-white text-[10px] font-bold px-3 py-1.5 rounded-[4px] cursor-default", t.btn)}>
+          Okudum, Anladım
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function formatTime(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -184,7 +259,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
           <div className="h-2" />
         </div>
       ) : (
-        <div className="grid grid-cols-[1fr_280px] gap-3">
+        <div className="grid grid-cols-[1fr_260px_220px] gap-3">
           {/* Compose area */}
           <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
             <div
@@ -325,6 +400,24 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                     Mesajlar WTS inject yöntemiyle kullanıcı oturumuna doğrudan iletilir.
                   </p>
                 </div>
+              </div>
+            </div>
+            <div className="h-2" />
+          </div>
+
+          {/* Popup Önizleme */}
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+            <div
+              className="rounded-[4px]"
+              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            >
+              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                  Önizleme
+                </span>
+              </div>
+              <div className="px-3 py-3">
+                <NotifyPreview title={title} body={message} type={msgType} />
               </div>
             </div>
             <div className="h-2" />
