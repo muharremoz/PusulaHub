@@ -97,11 +97,13 @@ class NotifyForm : Form
 
         // ── Header ──────────────────────────────────────────────
         var pHeader = MakePanel(0, y, 480, 72, ColHeader[ti]);
-        // icon circle (drawn via Paint)
-        var pIcon = new Panel { Left = 16, Top = 18, Width = 36, Height = 36, BackColor = ColIcon[ti] };
+        // icon circle — arka planı parent rengine boya, üstüne daire + harf çiz
+        var pIcon = new Panel { Left = 16, Top = 18, Width = 36, Height = 36, BackColor = ColHeader[ti] };
         pIcon.Paint += (s, e) =>
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var bgBr = new SolidBrush(ColIcon[ti]))
+                e.Graphics.FillEllipse(bgBr, 0, 0, 35, 35);
             using (var br = new SolidBrush(ColFg[ti]))
             using (var font = new Font("Segoe UI", 13f, FontStyle.Bold))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
@@ -137,11 +139,13 @@ class NotifyForm : Form
             }
         };
         string uname = Environment.UserName;
-        // avatar circle
-        var pAv = new Panel { Left = 16, Top = 10, Width = 28, Height = 28, BackColor = Color.FromArgb(229, 231, 235) };
+        // avatar circle — parent bg + daire + baş harf
+        var pAv = new Panel { Left = 16, Top = 10, Width = 28, Height = 28, BackColor = Color.FromArgb(250, 250, 250) };
         pAv.Paint += (s, e) =>
         {
             e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (var bgBr = new SolidBrush(Color.FromArgb(209, 213, 219)))
+                e.Graphics.FillEllipse(bgBr, 0, 0, 27, 27);
             using (var br = new SolidBrush(Color.FromArgb(55, 65, 81)))
             using (var font = new Font("Segoe UI", 10f, FontStyle.Bold))
             using (var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
@@ -206,6 +210,15 @@ class NotifyForm : Form
             Cursor = Cursors.Hand,
         };
         btn.FlatAppearance.BorderSize = 0;
+        // Yuvarlak köşe (radius = 6px)
+        var btnPath = new GraphicsPath();
+        int br2 = 6;
+        btnPath.AddArc(0,              0,               br2*2, br2*2, 180, 90);
+        btnPath.AddArc(180-br2*2,      0,               br2*2, br2*2, 270, 90);
+        btnPath.AddArc(180-br2*2,      32-br2*2,        br2*2, br2*2, 0,   90);
+        btnPath.AddArc(0,              32-br2*2,        br2*2, br2*2, 90,  90);
+        btnPath.CloseAllFigures();
+        btn.Region = new Region(btnPath);
         btn.Click += (s, e) => AckAndClose();
         pFoot.Controls.Add(btn);
 
