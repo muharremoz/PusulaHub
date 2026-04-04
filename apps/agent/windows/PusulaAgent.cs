@@ -1762,7 +1762,12 @@ static class Program
         // Servis modunda çalıştır (SYSTEM yetkisi ile, tray yok)
         if (args.Any(a => a == "--service"))
         {
-            var svcConfig = AgentConfig.Load(appDir) ?? new AgentConfig { Port = 8585, ApiKey = AgentConfig.GenerateApiKey() };
+            var svcConfig = AgentConfig.Load(appDir);
+            if (svcConfig == null)
+            {
+                svcConfig = new AgentConfig { Port = 8585, ApiKey = AgentConfig.GenerateApiKey() };
+                svcConfig.Save(appDir);
+            }
             Metrics.Init();
             ServiceBase.Run(new AgentService(svcConfig));
             return;
