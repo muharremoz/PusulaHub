@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -24,8 +24,9 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
-import { servers } from "@/lib/mock-data";
-import { getServerDetail } from "@/lib/mock-server-detail";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { Server } from "@/types";
+import type { AgentReport } from "@/lib/agent-types";
 import { TabOverview } from "@/components/server-detail/tab-overview";
 import { TabSessions } from "@/components/server-detail/tab-sessions";
 import { TabCompanies } from "@/components/server-detail/tab-companies";
@@ -33,6 +34,17 @@ import { TabUsers } from "@/components/server-detail/tab-users";
 import { TabSecurity } from "@/components/server-detail/tab-security";
 import { TabLogs } from "@/components/server-detail/tab-logs";
 import { TabMessages } from "@/components/server-detail/tab-messages";
+
+/** API /detail endpoint'inden dönen veri yapısı */
+interface ServerDetailData {
+  sessions: NonNullable<AgentReport["sessions"]>;
+  security: AgentReport["security"] | null;
+  logs: AgentReport["logs"] | null;
+  ad: AgentReport["ad"] | null;
+  sql: AgentReport["sql"] | null;
+  iis: AgentReport["iis"] | null;
+  roles: string[];
+}
 
 type TabId =
   | "overview"
@@ -49,6 +61,16 @@ const STATUS_DOT: Record<string, string> = {
   offline: "bg-red-400",
 };
 
+const EMPTY_DETAIL: ServerDetailData = {
+  sessions: [],
+  security: null,
+  logs: null,
+  ad: null,
+  sql: null,
+  iis: null,
+  roles: [],
+};
+
 export default function ServerDetailPage({
   params,
 }: {
@@ -57,9 +79,57 @@ export default function ServerDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [server, setServer] = useState<Server | null>(null);
+  const [detail, setDetail] = useState<ServerDetailData>(EMPTY_DETAIL);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const server = servers.find((s) => s.id === id);
-  const detail = getServerDetail(id);
+  const fetchServerSilent = useCallback(async () => {
+    try {
+      const [serversRes, detailRes] = await Promise.all([
+        fetch("/api/servers"),
+        fetch(`/api/servers/${id}/detail`),
+      ]);
+      const serversData = await serversRes.json();
+      if (Array.isArray(serversData)) {
+        const found = serversData.find((s: Server) => s.id === id || s.slug === id);
+        if (found) setServer(found);
+      }
+      if (detailRes.ok) {
+        const detailData = await detailRes.json();
+        if (!detailData.error) setDetail(detailData);
+      }
+    } catch { }
+  }, [id]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchServerSilent();
+    setRefreshing(false);
+  };
+
+  useEffect(() => {
+    const fetchServer = async () => {
+      await fetchServerSilent();
+      setLoading(false);
+    };
+    fetchServer();
+    const interval = setInterval(fetchServerSilent, 5000);
+    return () => clearInterval(interval);
+  }, [fetchServerSilent]);
+
+  if (loading) {
+    return (
+      <div className="p-4 md:p-6 space-y-3">
+        <div className="rounded-[8px] p-3" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+            <Skeleton className="h-6 w-48 rounded-[4px]" />
+            <Skeleton className="h-4 w-32 rounded-[4px]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!server) {
     return (
@@ -69,6 +139,9 @@ export default function ServerDetailPage({
     );
   }
 
+  const sessionCount = detail.sessions?.length ?? 0;
+  const userCount = detail.ad?.users?.length ?? 0;
+
   const tabs: {
     id: TabId;
     label: string;
@@ -76,9 +149,9 @@ export default function ServerDetailPage({
     count?: number;
   }[] = [
     { id: "overview", label: "Genel Durum", icon: LayoutDashboard },
-    { id: "sessions", label: "Oturumlar", icon: Monitor, count: detail.sessions.length },
-    { id: "companies", label: "Firmalar", icon: Building2, count: detail.companies.length },
-    { id: "users", label: "Kullanıcılar", icon: Users, count: detail.users.length },
+    { id: "sessions", label: "Oturumlar", icon: Monitor, count: sessionCount },
+    { id: "companies", label: "Firmalar", icon: Building2 },
+    { id: "users", label: "Kullanıcılar", icon: Users, count: userCount },
     { id: "security", label: "Güvenlik", icon: Shield },
     { id: "logs", label: "Kayıtlar", icon: FileText },
     { id: "messages", label: "Mesaj", icon: MessageSquare },
@@ -214,25 +287,25 @@ export default function ServerDetailPage({
       {/* Tab Content */}
       <div>
         {activeTab === "overview" && (
-          <TabOverview server={server} detail={detail} />
+          <TabOverview server={server} sessionCount={sessionCount} onRefresh={handleRefresh} refreshing={refreshing} />
         )}
         {activeTab === "sessions" && (
           <TabSessions sessions={detail.sessions} />
         )}
         {activeTab === "companies" && (
-          <TabCompanies companies={detail.companies} />
+          <TabCompanies companies={[]} />
         )}
         {activeTab === "users" && (
-          <TabUsers users={detail.users} />
+          <TabUsers users={detail.ad?.users ?? []} />
         )}
         {activeTab === "security" && (
-          <TabSecurity security={detail.security} />
+          <TabSecurity security={detail.security} roles={detail.roles} />
         )}
         {activeTab === "logs" && (
           <TabLogs logs={detail.logs} />
         )}
         {activeTab === "messages" && (
-          <TabMessages />
+          <TabMessages sessions={detail.sessions} serverId={server.id} />
         )}
       </div>
     </div>

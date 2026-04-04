@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
-import { getAllAgents, queueExec, getExecResult } from "@/lib/agent-store"
+import { execOnAgent } from "@/lib/agent-poller"
 
-interface ServerRow { Name: string; IP: string }
+interface ServerRow {
+  Name: string
+  IP: string
+  ApiKey: string | null
+  AgentPort: number | null
+}
 
-/* POST — Komut kuyruğa ekle */
+/* POST — Komut doğrudan agent'a gönder */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  const { command } = await req.json()
+  const { command, timeout } = await req.json()
 
   if (!command?.trim()) {
     return NextResponse.json({ error: "Komut boş olamaz" }, { status: 400 })
@@ -18,49 +23,35 @@ export async function POST(
 
   // DB'den sunucu bilgisini al
   const rows = await query<ServerRow[]>`
-    SELECT Name, IP FROM Servers WHERE Id = ${id}
+    SELECT Name, IP, ApiKey, AgentPort FROM Servers WHERE Id = ${id} OR LOWER(Name) = ${id.toLowerCase()}
   `
   if (!rows.length) {
     return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
   }
 
-  const { Name, IP } = rows[0]
-
-  // Agent'ı eşleştir
-  const agents = getAllAgents()
-  const agent  = agents.find((a) => a.hostname === Name || a.ip === IP)
-
-  if (!agent) {
-    return NextResponse.json({ error: "Bu sunucuda aktif agent yok" }, { status: 503 })
+  const server = rows[0]
+  if (!server.ApiKey || !server.AgentPort) {
+    return NextResponse.json({ error: "Agent bağlantı bilgileri eksik" }, { status: 400 })
   }
 
-  if (agent.status === "offline") {
-    return NextResponse.json({ error: "Agent çevrimdışı" }, { status: 503 })
-  }
+  // Agent'a doğrudan HTTP çağrısı
+  const result = await execOnAgent(
+    server.IP,
+    server.AgentPort,
+    server.ApiKey,
+    command.trim(),
+    timeout ?? 30,
+  )
 
-  const execId = queueExec(agent.agentId, command.trim())
-  if (!execId) {
-    return NextResponse.json({ error: "Komut kuyruğa eklenemedi" }, { status: 500 })
-  }
-
-  return NextResponse.json({ execId })
+  return NextResponse.json({ ready: true, result })
 }
 
-/* GET — Sonucu poll et */
+/* GET — Artık gerekli değil ama uyumluluk için bırakıyoruz */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   await params
-  const execId = new URL(req.url).searchParams.get("execId")
-  if (!execId) {
-    return NextResponse.json({ error: "execId gerekli" }, { status: 400 })
-  }
-
-  const result = getExecResult(execId)
-  if (!result) {
-    return NextResponse.json({ ready: false })
-  }
-
-  return NextResponse.json({ ready: true, result })
+  // Pull modelde exec sonucu anında döner, polling'e gerek yok
+  return NextResponse.json({ ready: false, result: null })
 }

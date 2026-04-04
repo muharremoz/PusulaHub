@@ -1,90 +1,104 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { ShieldCheck, ShieldOff } from "lucide-react";
-import type { DetailSecurity } from "@/lib/mock-server-detail";
+import { ShieldCheck, ShieldOff, ShieldAlert, ServerCog } from "lucide-react";
+import type { AgentReport } from "@/lib/agent-types";
 
 interface Props {
-  security: DetailSecurity;
+  security: AgentReport["security"] | null;
+  roles: string[];
 }
 
-export function TabSecurity({ security }: Props) {
-  return (
-    <div className="space-y-3">
-      {/* Firewall — full width */}
+export function TabSecurity({ security, roles }: Props) {
+  if (!security) {
+    return (
       <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
         <div
-          className="rounded-[4px]"
+          className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
         >
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center gap-3">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">
-              Güvenlik Duvarı
-            </span>
-            <div className="flex items-center gap-1.5">
-              {security.firewall.enabled ? (
-                <ShieldCheck className="size-3.5 text-emerald-500" />
-              ) : (
-                <ShieldOff className="size-3.5 text-red-400" />
-              )}
-              <span
-                className={cn(
-                  "text-[10px] font-medium",
-                  security.firewall.enabled ? "text-emerald-600" : "text-red-500"
-                )}
-              >
-                {security.firewall.enabled ? "Etkin" : "Devre Dışı"}
-              </span>
-              <span className="text-[10px] text-muted-foreground ml-2">
-                {security.firewall.rulesCount} kural
-              </span>
-            </div>
-          </div>
-
-          {/* Firewall rules header */}
-          <div className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
-            {["Kural Adı", "Yön", "Eylem", "Durum"].map((h) => (
-              <span
-                key={h}
-                className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
-              >
-                {h}
-              </span>
-            ))}
-          </div>
-
-          <div className="divide-y divide-border/40">
-            {security.firewallRules.map((rule, i) => (
-              <div
-                key={i}
-                className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-              >
-                <span className="text-[11px] truncate">{rule.name}</span>
-                <span className="text-[10px] text-muted-foreground">{rule.direction}</span>
-                <span
-                  className={cn(
-                    "text-[10px] font-medium",
-                    rule.action === "Allow" ? "text-emerald-600" : "text-red-500"
-                  )}
-                >
-                  {rule.action === "Allow" ? "İzin Ver" : "Engelle"}
-                </span>
-                <span className="flex items-center gap-1">
-                  <span
-                    className={cn(
-                      "size-1.5 rounded-full",
-                      rule.enabled ? "bg-emerald-500" : "bg-muted-foreground"
-                    )}
-                  />
-                  <span className="text-[10px] text-muted-foreground">
-                    {rule.enabled ? "Aktif" : "Pasif"}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
+          <ShieldAlert className="size-8 text-muted-foreground/50" />
+          <p className="text-[11px] text-muted-foreground">
+            Güvenlik verisi henüz alınamadı
+          </p>
         </div>
         <div className="h-2" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Firewall status + Roles — 2 column */}
+      <div className="grid grid-cols-2 gap-3">
+        {/* Firewall Status */}
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div
+            className="rounded-[4px]"
+            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          >
+            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                Güvenlik Duvarı
+              </span>
+            </div>
+            <div className="px-3 py-4 flex items-center gap-3">
+              {security.firewall.enabled ? (
+                <ShieldCheck className="size-6 text-emerald-500" />
+              ) : (
+                <ShieldOff className="size-6 text-red-400" />
+              )}
+              <div className="flex flex-col gap-0.5">
+                <span
+                  className={cn(
+                    "text-[12px] font-semibold",
+                    security.firewall.enabled ? "text-emerald-600" : "text-red-500"
+                  )}
+                >
+                  {security.firewall.enabled ? "Etkin" : "Devre Dışı"}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {security.firewall.rulesCount} kural tanımlı
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="h-2" />
+        </div>
+
+        {/* Server Roles */}
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div
+            className="rounded-[4px]"
+            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          >
+            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                Sunucu Rolleri
+              </span>
+            </div>
+            <div className="px-3 py-3">
+              {roles.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {roles.map((role) => (
+                    <span
+                      key={role}
+                      className="inline-flex items-center gap-1 text-[10px] font-medium bg-muted/50 text-muted-foreground px-2 py-1 rounded-[4px]"
+                    >
+                      <ServerCog className="size-3" />
+                      {role}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-[10px] text-muted-foreground">
+                  Rol tespit edilemedi
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="h-2" />
+        </div>
       </div>
 
       {/* Adapters + Ports — 2 column */}
@@ -203,6 +217,64 @@ export function TabSecurity({ security }: Props) {
                   {share.path}
                 </span>
                 <span className="text-[11px] text-muted-foreground">{share.access}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="h-2" />
+      </div>
+
+      {/* Firewall Rules — full width */}
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div
+          className="rounded-[4px]"
+          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        >
+          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              Güvenlik Duvarı Kuralları
+            </span>
+          </div>
+
+          {/* Firewall rules header */}
+          <div className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
+            {["Kural Adı", "Yön", "Eylem", "Durum"].map((h) => (
+              <span
+                key={h}
+                className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          <div className="divide-y divide-border/40">
+            {security.firewallRules.map((rule, i) => (
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+              >
+                <span className="text-[11px] truncate">{rule.name}</span>
+                <span className="text-[10px] text-muted-foreground">{rule.direction}</span>
+                <span
+                  className={cn(
+                    "text-[10px] font-medium",
+                    rule.action === "Allow" ? "text-emerald-600" : "text-red-500"
+                  )}
+                >
+                  {rule.action === "Allow" ? "İzin Ver" : "Engelle"}
+                </span>
+                <span className="flex items-center gap-1">
+                  <span
+                    className={cn(
+                      "size-1.5 rounded-full",
+                      rule.enabled ? "bg-emerald-500" : "bg-muted-foreground"
+                    )}
+                  />
+                  <span className="text-[10px] text-muted-foreground">
+                    {rule.enabled ? "Aktif" : "Pasif"}
+                  </span>
+                </span>
               </div>
             ))}
           </div>
