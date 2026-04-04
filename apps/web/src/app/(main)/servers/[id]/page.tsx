@@ -41,6 +41,7 @@ interface ServerDetailData {
   security: AgentReport["security"] | null;
   logs: AgentReport["logs"] | null;
   ad: AgentReport["ad"] | null;
+  localUsers: AgentReport["localUsers"] | null;
   sql: AgentReport["sql"] | null;
   iis: AgentReport["iis"] | null;
   roles: string[];
@@ -66,6 +67,7 @@ const EMPTY_DETAIL: ServerDetailData = {
   security: null,
   logs: null,
   ad: null,
+  localUsers: null,
   sql: null,
   iis: null,
   roles: [],
@@ -296,7 +298,7 @@ export default function ServerDetailPage({
           <TabCompanies companies={[]} />
         )}
         {activeTab === "users" && (
-          <TabUsers users={detail.ad?.users ?? []} />
+          <TabUsers users={detail.ad?.users ?? []} localUsers={detail.localUsers ?? null} />
         )}
         {activeTab === "security" && (
           <TabSecurity security={detail.security} roles={detail.roles} />

@@ -100,6 +100,14 @@ export interface AgentReport {
     }[]
   }
 
+  localUsers?: {
+    username:    string
+    displayName: string
+    enabled:     boolean
+    lastLogin:   string
+    description: string
+  }[]
+
   security?: {
     firewall: {
       enabled:    boolean

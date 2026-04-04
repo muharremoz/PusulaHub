@@ -41,12 +41,13 @@ export async function GET(
 
   const r = agent.lastReport
   return NextResponse.json({
-    sessions:  r.sessions ?? [],
-    security:  r.security ?? null,
-    logs:      r.logs ?? null,
-    ad:        r.ad ?? null,
-    sql:       r.sql ?? null,
-    iis:       r.iis ?? null,
-    roles:     r.roles ?? [],
+    sessions:   r.sessions ?? [],
+    security:   r.security ?? null,
+    logs:       r.logs ?? null,
+    ad:         r.ad ?? null,
+    localUsers: r.localUsers ?? null,
+    sql:        r.sql ?? null,
+    iis:        r.iis ?? null,
+    roles:      r.roles ?? [],
   })
 }

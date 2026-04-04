@@ -309,6 +309,10 @@ static class Metrics
         {
             try { report["ad"] = CollectAD(); } catch { }
         }
+        else
+        {
+            try { report["localUsers"] = CollectLocalUsers(); } catch { }
+        }
 
         // --- MSSQL ---
         if (roles.Contains("MSSQL"))
@@ -781,6 +785,50 @@ static class Metrics
         result["users"] = users;
         result["ouTree"] = new List<object>();
         return result;
+    }
+
+    private static List<Dictionary<string, object>> CollectLocalUsers()
+    {
+        var users = new List<Dictionary<string, object>>();
+        try
+        {
+            var psi = new ProcessStartInfo("powershell",
+                "-NoProfile -Command \"Get-LocalUser | Select-Object Name,FullName,Enabled,LastLogon,Description | ConvertTo-Csv -NoTypeInformation\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                StandardOutputEncoding = Encoding.UTF8
+            };
+            var proc = Process.Start(psi);
+            string csvOut = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(10000);
+
+            var csvLines = csvOut.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            // CSV: "Name","FullName","Enabled","LastLogon","Description"
+            for (int i = 1; i < csvLines.Length; i++)
+            {
+                var parts = new List<string>();
+                var m = Regex.Matches(csvLines[i], "\"([^\"]*)\"");
+                foreach (Match match in m) parts.Add(match.Groups[1].Value);
+                if (parts.Count < 5) continue;
+
+                DateTime dt;
+                string lastLogin = DateTime.TryParse(parts[3], out dt)
+                    ? dt.ToString("dd.MM.yyyy HH:mm")
+                    : "Hiç";
+
+                var ud = new Dictionary<string, object>();
+                ud["username"]    = parts[0];
+                ud["displayName"] = string.IsNullOrEmpty(parts[1]) ? parts[0] : parts[1];
+                ud["enabled"]     = parts[2].ToLower() == "true";
+                ud["lastLogin"]   = lastLogin;
+                ud["description"] = parts[4];
+                users.Add(ud);
+            }
+        }
+        catch { }
+        return users;
     }
 
     /* --- MSSQL databases --- */

@@ -172,6 +172,21 @@ FROM sys.databases d WHERE name NOT IN ('master','tempdb','model','msdb')
     } catch { return $null }
 }
 
+function Get-LocalUsersData {
+    try {
+        $users = Get-LocalUser | ForEach-Object {
+            @{
+                username    = $_.Name
+                displayName = if ($_.FullName) { $_.FullName } else { $_.Name }
+                enabled     = [bool]$_.Enabled
+                lastLogin   = if ($_.LastLogon) { $_.LastLogon.ToString("dd.MM.yyyy HH:mm") } else { "Hiç" }
+                description = if ($_.Description) { $_.Description } else { "" }
+            }
+        }
+        return @($users)
+    } catch { return @() }
+}
+
 function Get-ADData {
     try {
         Import-Module ActiveDirectory -ErrorAction Stop
@@ -899,6 +914,8 @@ function Main {
             if ($SharedState.Roles -contains "Active Directory") {
                 $ad = Get-ADData
                 if ($ad) { $report["ad"] = $ad }
+            } else {
+                $report["localUsers"] = Get-LocalUsersData
             }
 
             # Hub'a gönder
