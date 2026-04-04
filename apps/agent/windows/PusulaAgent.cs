@@ -26,6 +26,7 @@ using System.ServiceProcess;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace PusulaAgent
@@ -1036,6 +1037,10 @@ class ApiServer
             {
                 HandleExec(ctx);
             }
+            else if (path == "/api/notify" && method == "POST")
+            {
+                HandleNotify(ctx);
+            }
             else
             {
                 Respond(ctx, 404, "{\"error\":\"Not found\"}");
@@ -1106,6 +1111,34 @@ class ApiServer
             err["timedOut"] = false;
             Respond(ctx, 200, Json.Serialize(err));
         }
+    }
+
+    private void HandleNotify(HttpListenerContext ctx)
+    {
+        string body;
+        using (var reader = new StreamReader(ctx.Request.InputStream, Encoding.UTF8))
+            body = reader.ReadToEnd();
+
+        string notifyExe = Path.Combine(
+            Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? "",
+            "PusulaNotify.exe");
+
+        if (!File.Exists(notifyExe))
+        {
+            Respond(ctx, 500, "{\"error\":\"PusulaNotify.exe bulunamadi\"}");
+            return;
+        }
+
+        string base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(body));
+        int injected = 0;
+        try { injected = SessionInjector.Inject(notifyExe, base64); }
+        catch (Exception ex)
+        {
+            Respond(ctx, 500, "{\"error\":\"" + ex.Message.Replace("\"","'") + "\"}");
+            return;
+        }
+
+        Respond(ctx, 200, "{\"ok\":true,\"sessions\":" + injected + "}");
     }
 
     private static void Respond(HttpListenerContext ctx, int status, string body)
@@ -1510,6 +1543,131 @@ class TrayApp : ApplicationContext
 }
 
 /* ================================================================
+   SESSION INJECTOR — WTS API ile kullanıcı oturumuna process inject
+================================================================ */
+static class SessionInjector
+{
+    const uint CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSEnumerateSessions(IntPtr hServer, uint Reserved, uint Version,
+        out IntPtr ppSessionInfo, out uint pCount);
+
+    [DllImport("wtsapi32.dll")]
+    static extern void WTSFreeMemory(IntPtr pMemory);
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSQueryUserToken(uint SessionId, out IntPtr phToken);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool CreateProcessAsUser(IntPtr hToken, string lpApp, string lpCmd,
+        IntPtr lpProcAttr, IntPtr lpThreadAttr, bool bInherit, uint dwFlags,
+        IntPtr lpEnv, string lpDir, ref STARTUPINFOEX si, out PROCESS_INFORMATION pi);
+
+    [DllImport("userenv.dll", SetLastError = true)]
+    static extern bool CreateEnvironmentBlock(out IntPtr lpEnvironment, IntPtr hToken, bool bInherit);
+
+    [DllImport("userenv.dll", SetLastError = true)]
+    static extern bool DestroyEnvironmentBlock(IntPtr lpEnvironment);
+
+    [DllImport("kernel32.dll")]
+    static extern bool CloseHandle(IntPtr h);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WTS_SESSION_INFO { public int SessionID; public IntPtr pWinStationName; public int State; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct STARTUPINFOEX
+    {
+        public int cb;
+        public string lpReserved, lpDesktop, lpTitle;
+        public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+        public short wShowWindow, cbReserved2;
+        public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PROCESS_INFORMATION { public IntPtr hProcess, hThread; public int dwProcessId, dwThreadId; }
+
+    public static int Inject(string exePath, string base64Data)
+    {
+        int count = 0;
+        IntPtr pSessions;
+        uint sessionCount;
+        if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessions, out sessionCount)) return 0;
+        try
+        {
+            int sz = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+            for (int i = 0; i < (int)sessionCount; i++)
+            {
+                var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
+                    new IntPtr(pSessions.ToInt64() + i * sz), typeof(WTS_SESSION_INFO));
+                if (info.State != 0) continue; // WTSActive only
+
+                IntPtr hToken;
+                if (!WTSQueryUserToken((uint)info.SessionID, out hToken)) continue;
+                try
+                {
+                    IntPtr envBlock;
+                    CreateEnvironmentBlock(out envBlock, hToken, false);
+                    var si = new STARTUPINFOEX();
+                    si.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+                    si.lpDesktop = "winsta0\\default";
+                    PROCESS_INFORMATION pi;
+                    string cmd = "\"" + exePath + "\" \"" + base64Data + "\"";
+                    bool ok = CreateProcessAsUser(hToken, null, cmd,
+                        IntPtr.Zero, IntPtr.Zero, false,
+                        CREATE_UNICODE_ENVIRONMENT, envBlock, null, ref si, out pi);
+                    if (envBlock != IntPtr.Zero) DestroyEnvironmentBlock(envBlock);
+                    if (ok)
+                    {
+                        if (pi.hProcess != IntPtr.Zero) CloseHandle(pi.hProcess);
+                        if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
+                        count++;
+                    }
+                }
+                finally { CloseHandle(hToken); }
+            }
+        }
+        finally { WTSFreeMemory(pSessions); }
+        return count;
+    }
+}
+
+/* ================================================================
+   WINDOWS SERVICE — --service modunda calisiyor (SYSTEM yetkisi)
+================================================================ */
+class AgentService : ServiceBase
+{
+    ApiServer _server;
+    System.Threading.Timer _metricTimer;
+    AgentConfig _config;
+
+    public AgentService(AgentConfig config)
+    {
+        ServiceName = "PusulaAgent";
+        CanStop = true;
+        _config = config;
+    }
+
+    protected override void OnStart(string[] args)
+    {
+        Metrics.Init();
+        Metrics.Collect();
+        _server = new ApiServer(_config);
+        _server.Start();
+        _metricTimer = new System.Threading.Timer(
+            _ => { try { Metrics.Collect(); } catch { } }, null, 15000, 15000);
+    }
+
+    protected override void OnStop()
+    {
+        try { _metricTimer?.Dispose(); } catch { }
+        try { _server?.Stop(); } catch { }
+    }
+}
+
+/* ================================================================
    ENTRY POINT
 ================================================================ */
 static class Program
@@ -1518,6 +1676,16 @@ static class Program
     static void Main(string[] args)
     {
         string appDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+
+        // Servis modunda çalıştır (SYSTEM yetkisi ile, tray yok)
+        if (args.Any(a => a == "--service"))
+        {
+            var svcConfig = AgentConfig.Load(appDir) ?? new AgentConfig { Port = 8585, ApiKey = AgentConfig.GenerateApiKey() };
+            Metrics.Init();
+            ServiceBase.Run(new AgentService(svcConfig));
+            return;
+        }
+
         bool isInstall = args.Any(a => a == "--install");
         bool isUninstall = args.Any(a => a == "--uninstall");
 

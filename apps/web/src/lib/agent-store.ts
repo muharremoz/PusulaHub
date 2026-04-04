@@ -7,6 +7,11 @@ import { StoredAgent, AgentReport, AgentMessage, AgentExecRequest, AgentExecResu
 import { randomUUID } from "crypto"
 import { sendToAgent, hasConnection } from "./ws-connections"
 
+/* ── Gönderilen mesajların izleme kaydı (in-memory) ── */
+const g2 = global as typeof global & { _pusulaMessageLog?: Map<string, import("./agent-types").SentMessage> }
+if (!g2._pusulaMessageLog) g2._pusulaMessageLog = new Map()
+const messageLog = g2._pusulaMessageLog
+
 /* ══════════════════════════════════════════════
    PULL MODEL — Poller'dan gelen veriyi kaydet
 ══════════════════════════════════════════════ */
@@ -273,4 +278,28 @@ function formatUptime(seconds: number): string {
   if (d > 0) return `${d}g ${h}s`
   if (h > 0) return `${h}s ${m}d`
   return `${m}d`
+}
+
+/* ══════════════════════════════════════════════
+   MESAJ LOG (WTS injection ile gönderilen mesajlar)
+══════════════════════════════════════════════ */
+
+export function logSentMessage(msg: Omit<import("./agent-types").SentMessage, "readBy">): void {
+  messageLog.set(msg.id, { ...msg, readBy: [] })
+}
+
+export function markMessageRead(msgId: string, username: string): void {
+  const msg = messageLog.get(msgId)
+  if (!msg) return
+  if (!msg.readBy.some(r => r.username === username)) {
+    msg.readBy.push({ username, readAt: new Date().toISOString() })
+  }
+  messageLog.set(msgId, msg)
+}
+
+export function getSentMessages(agentId: string): import("./agent-types").SentMessage[] {
+  return [...messageLog.values()]
+    .filter(m => m.agentId === agentId)
+    .sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+    .slice(0, 50)
 }

@@ -166,6 +166,20 @@ export interface AgentMessage {
   toCompany: string          // Alıcının bağlı olduğu firma adı
   sentAt:    string          // ISO 8601
   delivered: boolean
+  readBy?:   { username: string; readAt: string }[]
+}
+
+/* ── Gönderilen mesaj kaydı (hub tarafı izleme) ── */
+export interface SentMessage {
+  id:        string
+  agentId:   string
+  title:     string
+  body:      string
+  type:      "info" | "warning" | "urgent"
+  from:      string
+  sentAt:    string
+  sessions:  number
+  readBy:    { username: string; readAt: string }[]
 }
 
 /* ── Hub → Agent: Komut çalıştırma isteği ── */

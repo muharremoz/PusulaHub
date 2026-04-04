@@ -82,16 +82,26 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
 
     setSending(true);
     try {
-      const res = await fetch(`/api/servers/${serverId}/message`, {
+      const hubUrl = typeof window !== "undefined" ? window.location.origin : "";
+      const res = await fetch(`/api/servers/${serverId}/notify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: title.trim(), body: message.trim(), type: msgType }),
+        body: JSON.stringify({
+          title: title.trim(),
+          body: message.trim(),
+          type: msgType,
+          from: "Pusula Yazılım",
+          hubUrl,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "İstek başarısız");
 
-      toast.success("Mesaj gönderildi", {
-        description: "Notifier uygulamasına iletildi.",
+      const sessions: number = data.sessions ?? 0;
+      toast.success("Mesaj iletildi", {
+        description: sessions > 0
+          ? `${sessions} aktif oturuma popup olarak gösterildi.`
+          : "Aktif oturum bulunamadı, mesaj kuyruğa alındı.",
       });
     } catch (err) {
       toast.error("Mesaj gönderilemedi", {
