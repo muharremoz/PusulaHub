@@ -173,21 +173,33 @@ const filtered = search.trim()
 
 ## Windows Agent Deploy
 
-Agent kodu `apps/agent/windows/` altındadır. İki ana dosya:
-- **`PusulaAgent.cs`** — tüm agent mantığı burada (C#)
-- **`KUR.bat`** — derleme + servis kurulum scripti
+Agent kodu `apps/agent/windows/` altındadır. Üç ana dosya:
+- **`PusulaAgent.cs`** — tüm agent mantığı (C#, Windows Service)
+- **`PusulaNotify.cs`** — kullanıcı oturumuna inject edilen popup uygulaması
+- **`KUR.bat`** — her ikisini derler + Windows Service olarak kurar
 
 ### Agent Güncelleme Adımları
-`PusulaAgent.cs`'de değişiklik yapıldığında sunucuya şu iki dosya kopyalanır:
-1. `PusulaAgent.cs`
-2. `KUR.bat`
+
+| Değişiklik | Kopyalanacak Dosyalar |
+|---|---|
+| Sadece agent mantığı | `PusulaAgent.cs` + `KUR.bat` |
+| Sadece popup | `PusulaNotify.cs` + `KUR.bat` |
+| İkisi de | `PusulaAgent.cs` + `PusulaNotify.cs` + `KUR.bat` |
 
 Ardından sunucuda admin olarak `KUR.bat` çalıştırılır. Script:
-- C# kodunu `csc.exe` ile derler → `PusulaAgent.exe` üretir
-- Eski process'i kapatır
-- Yeni `PusulaAgent.exe --install` ile servisi yeniden başlatır
+- Her iki C# dosyasını `csc.exe` ile derler
+- Eski servisi durdurur ve siler
+- `sc create PusulaAgent ... --service start= auto` ile Windows Service olarak kurar
+- Servisi başlatır → sunucu yeniden başlasa da otomatik çalışır
+
+> **Önemli — eski `csc.exe` uyumluluğu:** Sunucularda .NET Framework 2.0/3.5 `csc.exe` olabilir.
+> C# 6.0+ özellikleri **kullanılmaz**: `?.` operatörü, `=>` method body, `$""` string interpolation.
 
 > **Not:** `PusulaAgent.ps1` artık kullanılmıyor. Asıl agent `PusulaAgent.cs`'dir.
+
+### Kullanıcı Mesajlaşma Sistemi
+WTS session injection ile kullanıcılara anlık popup gönderme ve okundu takibi için:
+→ **[docs/messaging-system.md](docs/messaging-system.md)**
 
 ---
 
