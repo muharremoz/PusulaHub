@@ -4,6 +4,7 @@ import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 const TEMPLATES = [
   {
@@ -34,6 +35,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
   const [message, setMessage] = useState(TEMPLATES[0].text);
   const [sendAll, setSendAll] = useState(true);
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
+  const [sending, setSending] = useState(false);
 
   const handleTemplate = (key: string) => {
     setActiveTemplate(key);
@@ -48,6 +50,54 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
       else next.add(username);
       return next;
     });
+  };
+
+  const handleSend = async () => {
+    if (!message.trim()) return;
+
+    const targets = sendAll
+      ? sessionUsernames
+      : sessionUsernames.filter((u) => selectedSessions.has(u));
+
+    if (targets.length === 0) {
+      toast.error("Hedef seçilmedi", { description: "En az bir oturum seçin." });
+      return;
+    }
+
+    setSending(true);
+    try {
+      // msg.exe için mesajı tek satıra indir (msg.exe newline desteklemez)
+      const singleLine = message.trim().replace(/\r?\n/g, " ");
+      const escaped = singleLine.replace(/"/g, '\\"');
+
+      // Tüm hedefler için tek komut oluştur
+      const command = targets.map((u) => `msg ${u} "${escaped}"`).join("; ");
+
+      const res = await fetch(`/api/servers/${serverId}/exec`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ command, timeout: 15 }),
+      });
+
+      const data = await res.json();
+      const result = data.result as { exitCode: number; stderr: string; timedOut: boolean } | null;
+
+      if (!res.ok) throw new Error(data.error ?? "İstek başarısız");
+      if (result?.timedOut) throw new Error("Zaman aşımı");
+      if (result && result.exitCode !== 0 && result.stderr?.trim()) {
+        throw new Error(result.stderr.trim());
+      }
+
+      toast.success("Mesaj gönderildi", {
+        description: `${targets.length} oturuma iletildi.`,
+      });
+    } catch (err) {
+      toast.error("Mesaj gönderilemedi", {
+        description: err instanceof Error ? err.message : "Bilinmeyen hata",
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   if (sessionUsernames.length === 0) {
@@ -114,11 +164,12 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
 
             {/* Send button */}
             <button
-              disabled={!message.trim()}
+              onClick={handleSend}
+              disabled={!message.trim() || sending}
               className="w-full flex items-center justify-center gap-2 bg-foreground text-background hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <MessageSquare className="size-3.5" />
-              Mesajı Gönder
+              {sending ? "Gönderiliyor..." : "Mesajı Gönder"}
             </button>
           </div>
         </div>
