@@ -1010,8 +1010,8 @@ class ApiServer
                 return;
             }
 
-            // Auth check for /api/*
-            if (path.StartsWith("/api"))
+            // Auth check for /api/* — /api/ack muaf (localhost-only, PusulaNotify kullanir)
+            if (path.StartsWith("/api") && path != "/api/ack")
             {
                 string key = ctx.Request.Headers["X-Api-Key"];
                 if (key != _config.ApiKey)
