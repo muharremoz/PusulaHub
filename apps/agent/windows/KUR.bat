@@ -76,7 +76,19 @@ reg delete "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v PusulaAgent /
 reg delete "HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" /v PusulaAgent /f >nul 2>&1
 
 echo.
-echo  [4/5] Windows Service olarak kuruluyor...
+echo  [4/5] Firewall ve URL ACL ayarlaniyor...
+:: Portu config.json'dan oku, yoksa 8585 kullan
+set "PORT=8585"
+for /f "tokens=2 delims=:, " %%A in ('findstr /i "port" "%~dp0config.json" 2^>nul') do set "PORT=%%A"
+
+netsh advfirewall firewall delete rule name=PusulaAgent >nul 2>&1
+netsh advfirewall firewall add rule name=PusulaAgent dir=in action=allow protocol=TCP localport=%PORT% profile=any >nul 2>&1
+netsh http delete urlacl url=http://+:%PORT%/ >nul 2>&1
+netsh http add urlacl url=http://+:%PORT%/ user=Everyone >nul 2>&1
+echo  Port %PORT% icin firewall ve URL ACL ayarlandi.
+
+echo.
+echo  [5/5] Windows Service olarak kuruluyor...
 sc create PusulaAgent binPath= "\"%~dp0PusulaAgent.exe\" --service" start= auto DisplayName= "PusulaAgent"
 sc description PusulaAgent "PusulaHub Windows Agent - sunucu metriklerini toplar ve bildirimleri iletir"
 sc failure PusulaAgent reset= 86400 actions= restart/5000/restart/5000/restart/5000
