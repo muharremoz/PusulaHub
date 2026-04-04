@@ -3,26 +3,41 @@
 import { useState } from "react";
 import { MessageSquare } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+type MsgType = "info" | "warning" | "urgent";
 
 const TEMPLATES = [
   {
     key: "maintenance",
     label: "Bakım Bildirimi",
+    title: "Planlanmış Bakım",
+    type: "info" as MsgType,
     text: "Sayın kullanıcı,\n\nSunucumuzda planlı bakım çalışması yapılacaktır. Bu süreçte hizmetlerimiz geçici olarak kesintiye uğrayabilir. Anlayışınız için teşekkür ederiz.",
   },
   {
     key: "restart",
-    label: "Sistem Yeniden Başlatılacak",
+    label: "Yeniden Başlatma",
+    title: "Sistem Yeniden Başlatılacak",
+    type: "warning" as MsgType,
     text: "Sayın kullanıcı,\n\nSunucu 15 dakika içinde yeniden başlatılacaktır. Lütfen çalışmalarınızı kaydediniz ve oturumunuzu kapatınız. Anlayışınız için teşekkür ederiz.",
   },
   {
     key: "custom",
     label: "Özel Mesaj",
+    title: "",
+    type: "info" as MsgType,
     text: "",
   },
 ];
+
+const TYPE_LABELS: Record<MsgType, { label: string; cls: string }> = {
+  info:    { label: "Bilgi",   cls: "bg-blue-50 text-blue-700 border-blue-200" },
+  warning: { label: "Uyarı",  cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  urgent:  { label: "Acil",   cls: "bg-red-50 text-red-700 border-red-200" },
+};
 
 interface TabMessagesProps {
   sessions: { username: string; sessionType: string; state: string }[];
@@ -32,7 +47,9 @@ interface TabMessagesProps {
 export function TabMessages({ sessions, serverId }: TabMessagesProps) {
   const sessionUsernames = sessions.map((s) => s.username);
   const [activeTemplate, setActiveTemplate] = useState<string>("maintenance");
+  const [title, setTitle] = useState(TEMPLATES[0].title);
   const [message, setMessage] = useState(TEMPLATES[0].text);
+  const [msgType, setMsgType] = useState<MsgType>(TEMPLATES[0].type);
   const [sendAll, setSendAll] = useState(true);
   const [selectedSessions, setSelectedSessions] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
@@ -40,7 +57,11 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
   const handleTemplate = (key: string) => {
     setActiveTemplate(key);
     const tpl = TEMPLATES.find((t) => t.key === key);
-    if (tpl) setMessage(tpl.text);
+    if (tpl) {
+      setTitle(tpl.title);
+      setMessage(tpl.text);
+      setMsgType(tpl.type);
+    }
   };
 
   const toggleSession = (username: string) => {
@@ -53,43 +74,24 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
   };
 
   const handleSend = async () => {
-    if (!message.trim()) return;
-
-    const targets = sendAll
-      ? sessionUsernames
-      : sessionUsernames.filter((u) => selectedSessions.has(u));
-
-    if (targets.length === 0) {
+    if (!title.trim() || !message.trim()) return;
+    if (!sendAll && selectedSessions.size === 0) {
       toast.error("Hedef seçilmedi", { description: "En az bir oturum seçin." });
       return;
     }
 
     setSending(true);
     try {
-      // msg.exe için mesajı tek satıra indir (msg.exe newline desteklemez)
-      const singleLine = message.trim().replace(/\r?\n/g, " ");
-      const escaped = singleLine.replace(/"/g, '\\"');
-
-      // Tüm hedefler için tek komut oluştur
-      const command = targets.map((u) => `msg ${u} "${escaped}"`).join("; ");
-
-      const res = await fetch(`/api/servers/${serverId}/exec`, {
+      const res = await fetch(`/api/servers/${serverId}/message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ command, timeout: 15 }),
+        body: JSON.stringify({ title: title.trim(), body: message.trim(), type: msgType }),
       });
-
       const data = await res.json();
-      const result = data.result as { exitCode: number; stderr: string; timedOut: boolean } | null;
-
       if (!res.ok) throw new Error(data.error ?? "İstek başarısız");
-      if (result?.timedOut) throw new Error("Zaman aşımı");
-      if (result && result.exitCode !== 0 && result.stderr?.trim()) {
-        throw new Error(result.stderr.trim());
-      }
 
       toast.success("Mesaj gönderildi", {
-        description: `${targets.length} oturuma iletildi.`,
+        description: "Notifier uygulamasına iletildi.",
       });
     } catch (err) {
       toast.error("Mesaj gönderilemedi", {
@@ -149,12 +151,37 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
               ))}
             </div>
 
-            {/* Textarea */}
+            {/* Tip seçimi */}
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-muted-foreground shrink-0">Tip:</span>
+              {(["info", "warning", "urgent"] as MsgType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setMsgType(t)}
+                  className={cn(
+                    "text-[10px] font-medium px-2 py-0.5 rounded-[4px] border transition-colors",
+                    msgType === t ? TYPE_LABELS[t].cls : "border-border/40 text-muted-foreground hover:bg-muted/30"
+                  )}
+                >
+                  {TYPE_LABELS[t].label}
+                </button>
+              ))}
+            </div>
+
+            {/* Başlık */}
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Mesaj başlığı..."
+              className="h-8 text-[11px] rounded-[5px] border-border/50"
+            />
+
+            {/* Mesaj gövdesi */}
             <div className="space-y-1">
               <textarea
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
-                className="w-full rounded-[5px] text-[11px] min-h-[120px] p-2.5 border border-border/50 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-foreground/30"
+                className="w-full rounded-[5px] text-[11px] min-h-[100px] p-2.5 border border-border/50 bg-background resize-none focus:outline-none focus:ring-1 focus:ring-foreground/30"
                 placeholder="Mesajınızı buraya yazın..."
               />
               <div className="flex items-center justify-end">
@@ -165,7 +192,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
             {/* Send button */}
             <button
               onClick={handleSend}
-              disabled={!message.trim() || sending}
+              disabled={!title.trim() || !message.trim() || sending}
               className="w-full flex items-center justify-center gap-2 bg-foreground text-background hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <MessageSquare className="size-3.5" />
@@ -188,7 +215,6 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
             </span>
           </div>
           <div className="px-3 py-3 space-y-2.5">
-            {/* Send all */}
             <div className="flex items-center gap-2 pb-2 border-b border-border/40">
               <Checkbox
                 id="send-all"
@@ -203,8 +229,6 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                 Tüm Oturumlar
               </label>
             </div>
-
-            {/* Individual sessions */}
             <div className="space-y-2">
               <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase block">
                 Bireysel Seçim
@@ -229,6 +253,13 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                   </label>
                 </div>
               ))}
+            </div>
+
+            {/* Notifier notu */}
+            <div className="pt-2 border-t border-border/40">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                Mesajlar sunucudaki <span className="font-medium">PusulaNotifier</span> uygulaması üzerinden kullanıcıya iletilir.
+              </p>
             </div>
           </div>
         </div>
