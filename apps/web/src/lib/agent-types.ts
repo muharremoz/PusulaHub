@@ -91,12 +91,26 @@ export interface AgentReport {
       ou:          string
       enabled:     boolean
       lastLogin:   string
+      groups?:     string[]
     }[]
     ouTree: {
       name:      string
       path:      string
       userCount: number
       children:  unknown[]
+    }[]
+    companies?: {
+      firmaNo:   string
+      userCount: number
+      users: {
+        username:    string
+        displayName: string
+        email:       string
+        ou:          string
+        enabled:     boolean
+        lastLogin:   string
+        groups:      string[]
+      }[]
     }[]
   }
 

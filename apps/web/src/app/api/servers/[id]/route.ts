@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       os:        r.OS,
       roles:     r.Roles ? r.Roles.split(",") : [],
       apiKey:    r.ApiKey ?? "",
-      agentPort: r.AgentPort ?? 5000,
+      agentPort: r.AgentPort ?? 8585,
       username:  r.Username ?? "",
       password:  r.Password ?? "",
     })
@@ -51,7 +51,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           DNS       = ${dns ?? null},
           OS        = ${os},
           ApiKey    = ${apiKey ?? null},
-          AgentPort = ${agentPort ?? 5000},
+          AgentPort = ${agentPort ?? 8585},
           Username  = ${username ?? null},
           Password  = ${password ?? null}
       WHERE Id = ${id}

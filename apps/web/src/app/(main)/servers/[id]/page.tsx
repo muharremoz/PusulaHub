@@ -34,6 +34,7 @@ import { TabUsers } from "@/components/server-detail/tab-users";
 import { TabSecurity } from "@/components/server-detail/tab-security";
 import { TabLogs } from "@/components/server-detail/tab-logs";
 import { TabMessages } from "@/components/server-detail/tab-messages";
+import type { FirmaCompany } from "@/app/api/firma/companies/route";
 
 /** API /detail endpoint'inden dönen veri yapısı */
 interface ServerDetailData {
@@ -83,44 +84,61 @@ export default function ServerDetailPage({
   const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [server, setServer] = useState<Server | null>(null);
   const [detail, setDetail] = useState<ServerDetailData>(EMPTY_DETAIL);
-  const [loading, setLoading] = useState(true);
+  const [firmaMap, setFirmaMap] = useState<Record<string, string>>({});
+  const [serverLoading, setServerLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchServerSilent = useCallback(async () => {
+  const fetchDetail = useCallback(async () => {
     try {
-      const [serversRes, detailRes] = await Promise.all([
-        fetch("/api/servers"),
-        fetch(`/api/servers/${id}/detail`),
-      ]);
-      const serversData = await serversRes.json();
-      if (Array.isArray(serversData)) {
-        const found = serversData.find((s: Server) => s.id === id || s.slug === id);
-        if (found) setServer(found);
+      const res = await fetch(`/api/servers/${id}/detail`);
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.error) setDetail(data);
       }
-      if (detailRes.ok) {
-        const detailData = await detailRes.json();
-        if (!detailData.error) setDetail(detailData);
+    } catch { }
+  }, [id]);
+
+  const fetchServer = useCallback(async () => {
+    try {
+      const res = await fetch("/api/servers");
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const found = data.find((s: Server) => s.id === id || s.slug === id);
+        if (found) setServer(found);
       }
     } catch { }
   }, [id]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchServerSilent();
+    await Promise.all([fetchServer(), fetchDetail()]);
     setRefreshing(false);
   };
 
   useEffect(() => {
-    const fetchServer = async () => {
-      await fetchServerSilent();
-      setLoading(false);
-    };
-    fetchServer();
-    const interval = setInterval(fetchServerSilent, 5000);
+    fetchServer().finally(() => setServerLoading(false));
+    fetchDetail().finally(() => setDetailLoading(false));
+    const interval = setInterval(() => {
+      fetchServer();
+      fetchDetail();
+    }, 5000);
     return () => clearInterval(interval);
-  }, [fetchServerSilent]);
+  }, [fetchServer, fetchDetail]);
 
-  if (loading) {
+  useEffect(() => {
+    fetch("/api/firma/companies")
+      .then((r) => r.ok ? r.json() : [])
+      .then((data: FirmaCompany[]) => {
+        if (!Array.isArray(data)) return;
+        const map: Record<string, string> = {};
+        data.forEach((f) => { map[f.firkod] = f.firma; });
+        setFirmaMap(map);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (serverLoading) {
     return (
       <div className="p-4 md:p-6 space-y-3">
         <div className="rounded-[8px] p-3" style={{ backgroundColor: "#F4F2F0" }}>
@@ -288,26 +306,44 @@ export default function ServerDetailPage({
 
       {/* Tab Content */}
       <div>
-        {activeTab === "overview" && (
-          <TabOverview server={server} sessionCount={sessionCount} onRefresh={handleRefresh} refreshing={refreshing} />
-        )}
-        {activeTab === "sessions" && (
-          <TabSessions sessions={detail.sessions} serverId={server.id} />
-        )}
-        {activeTab === "companies" && (
-          <TabCompanies companies={[]} />
-        )}
-        {activeTab === "users" && (
-          <TabUsers users={detail.ad?.users ?? []} localUsers={detail.localUsers ?? null} />
-        )}
-        {activeTab === "security" && (
-          <TabSecurity security={detail.security} roles={detail.roles} />
-        )}
-        {activeTab === "logs" && (
-          <TabLogs logs={detail.logs} />
-        )}
-        {activeTab === "messages" && (
-          <TabMessages sessions={detail.sessions} serverId={server.id} />
+        {detailLoading && activeTab !== "overview" ? (
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="rounded-[4px] overflow-hidden space-y-px" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-3">
+                  <Skeleton className="size-2 rounded-full shrink-0" />
+                  <Skeleton className="h-3 rounded-[3px] flex-1" />
+                  <Skeleton className="h-3 rounded-[3px] w-24" />
+                  <Skeleton className="h-3 rounded-[3px] w-16" />
+                </div>
+              ))}
+            </div>
+            <div className="h-2" />
+          </div>
+        ) : (
+          <>
+            {activeTab === "overview" && (
+              <TabOverview server={server} sessionCount={sessionCount} onRefresh={handleRefresh} refreshing={refreshing} />
+            )}
+            {activeTab === "sessions" && (
+              <TabSessions sessions={detail.sessions} serverId={server.id} />
+            )}
+            {activeTab === "companies" && (
+              <TabCompanies companies={detail.ad?.companies ?? []} firmaMap={firmaMap} />
+            )}
+            {activeTab === "users" && (
+              <TabUsers users={detail.ad?.users ?? []} localUsers={detail.localUsers ?? null} firmaMap={firmaMap} />
+            )}
+            {activeTab === "security" && (
+              <TabSecurity security={detail.security} roles={detail.roles} />
+            )}
+            {activeTab === "logs" && (
+              <TabLogs logs={detail.logs} />
+            )}
+            {activeTab === "messages" && (
+              <TabMessages sessions={detail.sessions} serverId={server.id} />
+            )}
+          </>
         )}
       </div>
     </div>

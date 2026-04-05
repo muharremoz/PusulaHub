@@ -45,6 +45,7 @@ CREATE TABLE ServerRoles (
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='Companies' AND xtype='U')
 CREATE TABLE Companies (
     Id            NVARCHAR(50)  NOT NULL PRIMARY KEY,
+    CompanyId     NVARCHAR(20)  NULL,
     Name          NVARCHAR(200) NOT NULL,
     Sector        NVARCHAR(100) NOT NULL,
     ContactPerson NVARCHAR(200) NOT NULL,
@@ -65,6 +66,9 @@ CREATE TABLE Companies (
     Notes         NVARCHAR(MAX) NULL,
     CreatedAt     DATETIME2     NOT NULL DEFAULT GETDATE()
 );
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE name='UQ_Companies_CompanyId' AND object_id = OBJECT_ID('Companies'))
+    ALTER TABLE Companies ADD CONSTRAINT UQ_Companies_CompanyId UNIQUE (CompanyId);
 
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='CompanyServers' AND xtype='U')
 CREATE TABLE CompanyServers (
@@ -269,6 +273,7 @@ CREATE TABLE MessageRecipientMap (
     RecipientId NVARCHAR(50) NOT NULL REFERENCES MessageRecipients(Id),
     PRIMARY KEY (MessageId, RecipientId)
 );
+
 
 PRINT 'PusulaHub veritabani basariyla olusturuldu.';
 GO

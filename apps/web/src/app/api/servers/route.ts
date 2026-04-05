@@ -96,7 +96,7 @@ export async function POST(req: Request) {
         ${id}, ${name}, ${ip}, ${dns ?? null}, ${os},
         ${status ?? "offline"}, ${cpu ?? 0}, ${ram ?? 0}, ${disk ?? 0},
         ${uptime ?? null}, ${lastChecked ?? null},
-        ${apiKey ?? null}, ${agentPort ?? 5000}, ${username ?? null}, ${password ?? null}
+        ${apiKey ?? null}, ${agentPort ?? 8585}, ${username ?? null}, ${password ?? null}
       )
     `
 

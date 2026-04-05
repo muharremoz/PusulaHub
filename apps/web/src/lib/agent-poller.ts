@@ -6,7 +6,7 @@
 ══════════════════════════════════════════════════════════ */
 
 import sql from "mssql"
-import { upsertAgentFromPoll, getAllAgents, markMessageRead } from "./agent-store"
+import { upsertAgentFromPoll, getAllAgents, markMessageRead, markAgentOffline } from "./agent-store"
 import type { AgentReport } from "./agent-types"
 
 /* ── Poller'a özel DB pool (lazy init) ── */
@@ -60,6 +60,7 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
 
     if (!resp.ok) {
       console.log(`[Poller] ${server.Name} (${server.IP}:${port}) — HTTP ${resp.status}`)
+      markAgentOffline(server.Id)
       return false
     }
 
@@ -109,10 +110,10 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
     return true
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    // Abort hatası normal — timeout
     if (!msg.includes("abort")) {
       console.log(`[Poller] ${server.Name} (${server.IP}:${port}) — ${msg}`)
     }
+    markAgentOffline(server.Id)
     return false
   }
 }

@@ -14,6 +14,7 @@ import { createServer } from "http"
 import { parse } from "url"
 import next from "next"
 import { startPolling } from "./src/lib/agent-poller"
+import { startFirmaSync } from "./src/lib/firma-sync"
 
 const dev  = process.env.NODE_ENV !== "production"
 const port = parseInt(process.env.PORT ?? "4242", 10)
@@ -31,5 +32,7 @@ app.prepare().then(() => {
 
     // Agent polling başlat
     startPolling()
+    // Firma cache sync başlat
+    startFirmaSync()
   })
 })

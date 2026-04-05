@@ -214,14 +214,15 @@ export default function ServersPage() {
   const [editServerId, setEditServerId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [refreshing, setRefreshing] = useState(false);
 
   function openTerminal(id: string, name: string) {
     setTerminalServer({ id, name });
     setTerminalOpen(true);
   }
 
-  const fetchServers = async (silent = false) => {
-    if (!silent) setLoading(true);
+  const fetchServers = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await fetch("/api/servers");
       const data = await res.json();
@@ -230,20 +231,24 @@ export default function ServersPage() {
     } catch (err) {
       console.error(err);
     } finally {
-      if (!silent) setLoading(false);
+      if (showLoading) setLoading(false);
     }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await fetchServers();
+    setRefreshing(false);
   };
 
   const handleRemoved = (id: string) => {
     setServers((prev) => prev.filter((s) => s.id !== id));
-    fetch("/api/servers").then((r) => r.json()).then((data) => {
-      if (Array.isArray(data)) setServers(data);
-    }).catch(() => {});
+    fetchServers();
   };
 
   useEffect(() => {
-    fetchServers();
-    const interval = setInterval(() => fetchServers(true), 5000);
+    fetchServers(true);
+    const interval = setInterval(() => fetchServers(), 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -357,10 +362,10 @@ export default function ServersPage() {
               </TooltipProvider>
             )}
             <button
-              onClick={() => fetchServers()}
+              onClick={handleRefresh}
               className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
             >
-              <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+              <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
               Yenile
             </button>
           </div>

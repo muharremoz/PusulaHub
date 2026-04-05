@@ -139,6 +139,15 @@ Silme, devre dışı bırakma gibi destructive işlemlerde mutlaka `AlertDialog`
 
 ## Bilinen Sorunlar ve Çözümler
 
+### Sunucu Slug Routing — 404 Sorunu
+Sunucu adında boşluk veya özel karakter varsa (örn. "Active Directory", "Terminal 1"), URL slug `active-directory` olur ama `LOWER(Name) = 'active directory'` ≠ `'active-directory'` → 404.
+
+**Çözüm:** API route'larında önce `WHERE Id = ${id}` ile dene, bulunamazsa tüm sunucuları çekip JS'de `slugify(s.Name) === id` ile eşleştir. Detail route bu şekilde düzeltilmiştir: `apps/web/src/app/api/servers/[id]/detail/route.ts`
+
+> Sunucu adını kullanan her yeni route'da (detail, notify, messages, exec) bu pattern uygulanmalıdır.
+
+---
+
 ### Command (cmdk) Combobox — Büyük Listede Yavaş Açılma
 `Popover + Command` kombinasyonunda çok sayıda item (100+) varsa dropdown açılışı 3-4 saniye sürebilir. `cmdk` varsayılan olarak tüm item'ları iç filtreyle işler.
 

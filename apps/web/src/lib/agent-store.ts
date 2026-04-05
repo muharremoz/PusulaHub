@@ -121,6 +121,13 @@ export function updateReport(agentId: string, report: AgentReport): boolean {
   return true
 }
 
+export function markAgentOffline(serverId: string): void {
+  const agent = store.get(serverId)
+  if (!agent) return
+  agent.status = "offline"
+  store.set(serverId, agent)
+}
+
 export function getAllAgents(): StoredAgent[] {
   return [...store.values()].map((a) => ({
     ...a,

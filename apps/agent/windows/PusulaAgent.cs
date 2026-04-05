@@ -28,6 +28,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using System.DirectoryServices;
 
 namespace PusulaAgent
 {
@@ -135,6 +136,11 @@ static class Metrics
     private static PerformanceCounter _cpuCounter;
     private static readonly object _lock = new object();
     private static Dictionary<string, object> _lastSnapshot;
+
+    // Agir koleksiyonlar icin cache — her 5 dakikada bir guncellenir
+    private static Dictionary<string, object> _heavyCache = new Dictionary<string, object>();
+    private static DateTime _heavyLastCollected = DateTime.MinValue;
+    private static readonly TimeSpan HEAVY_INTERVAL = TimeSpan.FromMinutes(5);
 
     public static void Init()
     {
@@ -290,36 +296,36 @@ static class Metrics
         catch { }
         report["roles"] = roles;
 
-        // --- IIS SITES ---
-        if (roles.Contains("IIS"))
-        {
-            try { report["iis"] = CollectIis(); } catch { }
-        }
-
-        // --- SESSIONS (quser) ---
+        // --- SESSIONS (hafif, her 15 saniyede) ---
         try { report["sessions"] = CollectSessions(); } catch { }
 
-        // --- SECURITY (adapters, ports, shares, firewall) ---
-        try { report["security"] = CollectSecurity(); } catch { }
-
-        // --- LOGS (Event Log + Failed Logins) ---
-        try { report["logs"] = CollectLogs(); } catch { }
-
-        // --- AD USERS ---
-        if (roles.Contains("AD"))
+        // --- AGIR KOLEKSIYONLAR (5 dakikada bir) ---
+        bool heavyDue = (DateTime.UtcNow - _heavyLastCollected) >= HEAVY_INTERVAL;
+        if (heavyDue)
         {
-            try { report["ad"] = CollectAD(); } catch { }
-        }
-        else
-        {
-            try { report["localUsers"] = CollectLocalUsers(); } catch { }
+            var heavy = new Dictionary<string, object>();
+
+            if (roles.Contains("IIS"))
+                try { heavy["iis"] = CollectIis(); } catch { }
+
+            try { heavy["security"] = CollectSecurity(); } catch { }
+            try { heavy["logs"] = CollectLogs(); } catch { }
+
+            if (roles.Contains("AD"))
+                try { heavy["ad"] = CollectAD(); } catch { }
+            else
+                try { heavy["localUsers"] = CollectLocalUsers(); } catch { }
+
+            if (roles.Contains("MSSQL"))
+                try { heavy["mssql"] = CollectMssql(); } catch { }
+
+            _heavyCache = heavy;
+            _heavyLastCollected = DateTime.UtcNow;
         }
 
-        // --- MSSQL ---
-        if (roles.Contains("MSSQL"))
-        {
-            try { report["mssql"] = CollectMssql(); } catch { }
-        }
+        // Cache'deki agir verileri rapora ekle
+        foreach (var kvp in _heavyCache)
+            report[kvp.Key] = kvp.Value;
 
         lock (_lock) { _lastSnapshot = report; }
         return report;
@@ -744,47 +750,121 @@ static class Metrics
         return result;
     }
 
-    /* --- Active Directory users --- */
+    /* --- Active Directory users + firma OU yapisi ---
+       System.DirectoryServices ile direkt LDAP sorgusu yapar.
+       PowerShell process baslatmaz — cok daha hafif. */
     private static Dictionary<string, object> CollectAD()
     {
         var result = new Dictionary<string, object>();
         var users = new List<Dictionary<string, object>>();
         try
         {
-            // Use PowerShell to get AD users (requires RSAT/AD module)
-            var psi = new ProcessStartInfo("powershell", "-NoProfile -Command \"Import-Module ActiveDirectory; Get-ADUser -Filter * -Properties LastLogonDate,EmailAddress,DisplayName -ResultSetSize 200 | Select-Object SamAccountName,DisplayName,EmailAddress,Enabled,@{N='OU';E={($_.DistinguishedName -split ',OU=' | Select-Object -Index 1)}},@{N='LastLogin';E={if($_.LastLogonDate){$_.LastLogonDate.ToString('dd.MM.yyyy HH:mm')}else{'Hic'}}} | ConvertTo-Csv -NoTypeInformation\"")
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                StandardOutputEncoding = Encoding.UTF8
-            };
-            var proc = Process.Start(psi);
-            string csvOut = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(30000);
+            // Domain root DN'ini al
+            string domainDn = "";
+            using (var root = new DirectoryEntry("LDAP://RootDSE"))
+                domainDn = root.Properties["defaultNamingContext"].Value.ToString();
 
-            var csvLines = csvOut.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 1; i < csvLines.Length; i++)
-            {
-                // CSV: "SamAccountName","DisplayName","EmailAddress","Enabled","OU","LastLogin"
-                var parts = new List<string>();
-                var m = Regex.Matches(csvLines[i], "\"([^\"]*)\"");
-                foreach (Match match in m) parts.Add(match.Groups[1].Value);
-                if (parts.Count < 6) continue;
+            string firmaBase = "OU=Firmalar," + domainDn;
 
-                var ud = new Dictionary<string, object>();
-                ud["username"] = parts[0];
-                ud["displayName"] = parts[1];
-                ud["email"] = parts[2];
-                ud["enabled"] = parts[3].ToLower() == "true";
-                ud["ou"] = parts[4];
-                ud["lastLogin"] = parts[5];
-                users.Add(ud);
+            using (var searchRoot = new DirectoryEntry("LDAP://" + firmaBase))
+            using (var searcher = new DirectorySearcher(searchRoot))
+            {
+                searcher.Filter = "(&(objectClass=user)(objectCategory=person))";
+                searcher.SearchScope = SearchScope.Subtree;
+                searcher.PageSize = 500;
+                searcher.PropertiesToLoad.Add("sAMAccountName");
+                searcher.PropertiesToLoad.Add("displayName");
+                searcher.PropertiesToLoad.Add("mail");
+                searcher.PropertiesToLoad.Add("userAccountControl");
+                searcher.PropertiesToLoad.Add("lastLogon");
+                searcher.PropertiesToLoad.Add("memberOf");
+                searcher.PropertiesToLoad.Add("distinguishedName");
+
+                var results = searcher.FindAll();
+                foreach (SearchResult sr in results)
+                {
+                    string dn = sr.Properties["distinguishedName"].Count > 0
+                        ? sr.Properties["distinguishedName"][0].ToString() : "";
+
+                    // DN'den firma OU'sunu cikart: OU=6754,OU=Firmalar,...
+                    var m = Regex.Match(dn, "OU=([^,]+),OU=Firmalar", RegexOptions.IgnoreCase);
+                    if (!m.Success) continue;
+                    string firmaNo = m.Groups[1].Value;
+
+                    string username    = sr.Properties["sAMAccountName"].Count > 0 ? sr.Properties["sAMAccountName"][0].ToString() : "";
+                    string displayName = sr.Properties["displayName"].Count > 0 ? sr.Properties["displayName"][0].ToString() : username;
+                    string email       = sr.Properties["mail"].Count > 0 ? sr.Properties["mail"][0].ToString() : "";
+
+                    // userAccountControl bit 2 = disabled
+                    int uac = sr.Properties["userAccountControl"].Count > 0
+                        ? Convert.ToInt32(sr.Properties["userAccountControl"][0]) : 0;
+                    bool enabled = (uac & 2) == 0;
+
+                    // lastLogon (100-nanosecond intervals since 1601)
+                    string lastLogin = "Hic";
+                    if (sr.Properties["lastLogon"].Count > 0)
+                    {
+                        long ticks = Convert.ToInt64(sr.Properties["lastLogon"][0]);
+                        if (ticks > 0)
+                        {
+                            DateTime dt = DateTime.FromFileTime(ticks);
+                            lastLogin = dt.ToString("dd.MM.yyyy HH:mm");
+                        }
+                    }
+
+                    // Guvenlik gruplari
+                    var groupList = new List<string>();
+                    for (int gi = 0; gi < sr.Properties["memberOf"].Count; gi++)
+                    {
+                        string groupDn = sr.Properties["memberOf"][gi].ToString();
+                        var gm = Regex.Match(groupDn, "^CN=([^,]+)");
+                        if (gm.Success) groupList.Add(gm.Groups[1].Value);
+                    }
+
+                    var ud = new Dictionary<string, object>();
+                    ud["username"]    = username;
+                    ud["displayName"] = displayName;
+                    ud["email"]       = email;
+                    ud["enabled"]     = enabled;
+                    ud["ou"]          = firmaNo;
+                    ud["lastLogin"]   = lastLogin;
+                    ud["groups"]      = groupList.ToArray();
+                    users.Add(ud);
+                }
+                results.Dispose();
             }
         }
         catch { }
+
         result["users"] = users;
-        result["ouTree"] = new List<object>();
+
+        // Kullanicilari firma OU'suna gore grupla (companies)
+        var companiesMap = new Dictionary<string, List<Dictionary<string, object>>>();
+        foreach (var u in users)
+        {
+            string firmaNo = u["ou"].ToString();
+            if (string.IsNullOrEmpty(firmaNo)) continue;
+            if (!companiesMap.ContainsKey(firmaNo))
+                companiesMap[firmaNo] = new List<Dictionary<string, object>>();
+            companiesMap[firmaNo].Add(u);
+        }
+
+        var companies = new List<Dictionary<string, object>>();
+        foreach (var kvp in companiesMap)
+        {
+            var company = new Dictionary<string, object>();
+            company["firmaNo"]   = kvp.Key;
+            company["userCount"] = kvp.Value.Count;
+            company["users"]     = kvp.Value;
+            companies.Add(company);
+        }
+        companies.Sort(delegate(Dictionary<string, object> a, Dictionary<string, object> b)
+        {
+            return string.Compare(a["firmaNo"].ToString(), b["firmaNo"].ToString(), StringComparison.OrdinalIgnoreCase);
+        });
+
+        result["companies"] = companies;
+        result["ouTree"]    = new List<object>();
         return result;
     }
 
