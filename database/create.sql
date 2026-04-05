@@ -165,6 +165,7 @@ CREATE TABLE SQLDatabases (
     Id         NVARCHAR(50)  NOT NULL PRIMARY KEY,
     Name       NVARCHAR(200) NOT NULL,
     Server     NVARCHAR(100) NOT NULL,
+    FirmaNo    NVARCHAR(20)  NULL,
     SizeMB     INT           NOT NULL DEFAULT 0,
     Status     NVARCHAR(20)  NOT NULL CHECK (Status IN ('Online', 'Offline', 'Restoring')),
     LastBackup DATETIME2     NULL,
@@ -178,6 +179,7 @@ CREATE TABLE SQLDatabases (
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ADUsers' AND xtype='U')
 CREATE TABLE ADUsers (
     Id          NVARCHAR(50)  NOT NULL PRIMARY KEY,
+    Server      NVARCHAR(100) NULL,
     Username    NVARCHAR(200) NOT NULL,
     DisplayName NVARCHAR(200) NOT NULL,
     Email       NVARCHAR(200) NOT NULL,

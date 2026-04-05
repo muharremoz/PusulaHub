@@ -43,6 +43,114 @@ interface ServerRow {
 
 const POLL_INTERVAL_MS = 10_000  // 10 saniye
 
+/* ── IIS ve SQL verilerini DB'ye yaz ── */
+async function persistHeavyData(serverName: string, report: AgentReport): Promise<void> {
+  try {
+    const pool = await getPollerPool()
+
+    // AD Users — sunucuya ait tüm kullanıcıları sil, yeniden yaz
+    if (report.ad?.companies?.length) {
+      await pool.request()
+        .input("server", sql.NVarChar(100), serverName)
+        .query("DELETE FROM ADUsers WHERE Server = @server")
+
+      for (const company of report.ad.companies) {
+        for (const user of company.users) {
+          const lastLogin = user.lastLogin && user.lastLogin !== "Hiç" && user.lastLogin !== ""
+            ? new Date(user.lastLogin)
+            : null
+
+          await pool.request()
+            .input("id",          sql.NVarChar(50),  `${serverName}_${user.username}`.replace(/\s/g, "_"))
+            .input("server",      sql.NVarChar(100), serverName)
+            .input("username",    sql.NVarChar(200), user.username)
+            .input("displayName", sql.NVarChar(200), user.displayName ?? "")
+            .input("email",       sql.NVarChar(200), user.email ?? "")
+            .input("ou",          sql.NVarChar(200), company.firmaNo)
+            .input("enabled",     sql.Bit,           user.enabled ? 1 : 0)
+            .input("lastLogin",   sql.DateTime2,     lastLogin)
+            .query(`
+              IF NOT EXISTS (SELECT 1 FROM ADUsers WHERE Id = @id)
+                INSERT INTO ADUsers (Id, Server, Username, DisplayName, Email, OU, Enabled, LastLogin, CreatedAt)
+                VALUES (@id, @server, @username, @displayName, @email, @ou, @enabled, @lastLogin, CAST(GETDATE() AS DATE))
+              ELSE
+                UPDATE ADUsers SET Server=@server, Username=@username, DisplayName=@displayName,
+                  Email=@email, OU=@ou, Enabled=@enabled, LastLogin=@lastLogin
+                WHERE Id=@id
+            `)
+        }
+      }
+    }
+
+    // IIS Sites — sunucuya ait tüm satırları sil, yeniden yaz
+    if (report.iis?.sites?.length) {
+      await pool.request()
+        .input("server", sql.NVarChar(100), serverName)
+        .query("DELETE FROM IISSites WHERE Server = @server")
+
+      for (const site of report.iis.sites) {
+        await pool.request()
+          .input("id",          sql.NVarChar(50),  `${serverName}_${site.name}`.replace(/\s/g, "_"))
+          .input("name",        sql.NVarChar(200), site.name)
+          .input("server",      sql.NVarChar(100), serverName)
+          .input("status",      sql.NVarChar(20),  site.status ?? "Unknown")
+          .input("binding",     sql.NVarChar(500), site.binding ?? "")
+          .input("appPool",     sql.NVarChar(200), site.appPool ?? "")
+          .input("physicalPath",sql.NVarChar(500), site.physicalPath ?? "")
+          .query(`
+            IF NOT EXISTS (SELECT 1 FROM IISSites WHERE Id = @id)
+              INSERT INTO IISSites (Id, Name, Server, Status, Binding, AppPool, PhysicalPath)
+              VALUES (@id, @name, @server, @status, @binding, @appPool, @physicalPath)
+            ELSE
+              UPDATE IISSites SET Name=@name, Status=@status, Binding=@binding, AppPool=@appPool, PhysicalPath=@physicalPath
+              WHERE Id=@id
+          `)
+      }
+    }
+
+    // SQL Databases — sunucuya ait tüm satırları sil, yeniden yaz
+    if (report.sql?.databases?.length) {
+      await pool.request()
+        .input("server", sql.NVarChar(100), serverName)
+        .query("DELETE FROM SQLDatabases WHERE Server = @server")
+
+      const SKIP_DBS = new Set(["master", "tempdb", "model", "msdb"])
+
+      for (const db of report.sql.databases) {
+        if (SKIP_DBS.has(db.name.toLowerCase())) continue
+
+        // Firma no: başındaki sayısal prefix, örn. "6754_Muhasebe" → "6754"
+        const firmaNoMatch = db.name.match(/^(\d+)/)
+        const firmaNo = firmaNoMatch ? firmaNoMatch[1] : null
+
+        const lastBackup = db.lastBackup && db.lastBackup !== "Hiç" && db.lastBackup !== ""
+          ? new Date(db.lastBackup)
+          : null
+
+        await pool.request()
+          .input("id",         sql.NVarChar(50),   `${serverName}_${db.name}`.replace(/\s/g, "_"))
+          .input("name",       sql.NVarChar(200),  db.name)
+          .input("server",     sql.NVarChar(100),  serverName)
+          .input("firmaNo",    sql.NVarChar(20),   firmaNo)
+          .input("sizeMB",     sql.Int,            db.sizeMB ?? 0)
+          .input("status",     sql.NVarChar(20),   db.status ?? "Online")
+          .input("lastBackup", sql.DateTime2,      lastBackup)
+          .input("tables",     sql.Int,            db.tables ?? 0)
+          .query(`
+            IF NOT EXISTS (SELECT 1 FROM SQLDatabases WHERE Id = @id)
+              INSERT INTO SQLDatabases (Id, Name, Server, FirmaNo, SizeMB, Status, LastBackup, Tables)
+              VALUES (@id, @name, @server, @firmaNo, @sizeMB, @status, @lastBackup, @tables)
+            ELSE
+              UPDATE SQLDatabases SET Name=@name, FirmaNo=@firmaNo, SizeMB=@sizeMB, Status=@status, LastBackup=@lastBackup, Tables=@tables
+              WHERE Id=@id
+          `)
+      }
+    }
+  } catch (err) {
+    console.log(`[Poller] persistHeavyData hatası (${serverName}):`, err instanceof Error ? err.message : err)
+  }
+}
+
 /* ── Tek bir agent'ı poll et ── */
 async function pollAgent(server: ServerRow): Promise<boolean> {
   const port = server.AgentPort ?? 8585
@@ -98,6 +206,11 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
       port:      port,
       report,
     })
+
+    // Ağır veri: AD / IIS / SQL — agent 5 dk'da bir gönderir, DB'ye yaz
+    if (report.ad?.companies || report.iis || report.sql) {
+      persistHeavyData(server.Name, report)
+    }
 
     // Bekleyen okundu bilgilerini işle
     const pendingAcks: { msgId: string; username: string }[] = data.pendingAcks ?? []

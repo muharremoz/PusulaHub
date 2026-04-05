@@ -26,6 +26,38 @@ interface FirmaCompany {
   lisansBitis: string
 }
 
+interface TabUser {
+  username:    string
+  displayName: string
+  email:       string
+  ou:          string
+  enabled:     boolean
+  lastLogin:   string
+  groups:      string[]
+}
+
+interface TabIISSite {
+  Id:           string
+  Name:         string
+  Server:       string
+  Status:       string
+  Binding:      string
+  AppPool:      string
+  PhysicalPath: string
+  Hizmet:       string | null
+}
+
+interface TabSQLDatabase {
+  Id:         string
+  Name:       string
+  Server:     string
+  FirmaNo:    string | null
+  SizeMB:     number
+  Status:     string
+  LastBackup: string | null
+  Tables:     number
+}
+
 function firmaIsActive(f: FirmaCompany): boolean {
   if (!f.lisansBitis) return true
   const parts = f.lisansBitis.split(".")
@@ -244,6 +276,11 @@ export default function CompaniesPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
+  const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
+  const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
+  const [tabLoading, setTabLoading] = useState(false);
+
   useEffect(() => {
     fetch("/api/firma/companies")
       .then((r) => r.ok ? r.json() : Promise.reject(r))
@@ -251,6 +288,22 @@ export default function CompaniesPage() {
       .catch(() => setApiCompanies([]))
       .finally(() => setApiLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (!selectedFirma) return
+    const firkod = selectedFirma.firkod
+    setTabUsers([]); setTabIIS([]); setTabSQL([])
+    setTabLoading(true)
+    Promise.all([
+      fetch(`/api/companies/${firkod}/users`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/companies/${firkod}/iis`).then(r => r.ok ? r.json() : []),
+      fetch(`/api/companies/${firkod}/sql`).then(r => r.ok ? r.json() : []),
+    ]).then(([users, iis, sql]) => {
+      setTabUsers(Array.isArray(users) ? users : [])
+      setTabIIS(Array.isArray(iis) ? iis : [])
+      setTabSQL(Array.isArray(sql) ? sql : [])
+    }).catch(() => {}).finally(() => setTabLoading(false))
+  }, [selectedFirma?.firkod])
 
   function selectFirma(f: FirmaCompany) {
     setSelectedFirma(f)
@@ -263,15 +316,12 @@ export default function CompaniesPage() {
   function clearSelection() {
     setSelectedFirma(null)
     setSelectedCompany(null)
+    setTabUsers([]); setTabIIS([]); setTabSQL([])
   }
 
   const selected: Company | undefined = selectedCompany
     ? companies.find((c) => c.id === selectedCompany)
     : undefined;
-
-  const companyUsers = selected
-    ? messageRecipients.filter((r) => r.company === selected.name)
-    : [];
 
   const companyServers = selected
     ? servers.filter((s) => selected.servers.includes(s.name))
@@ -498,50 +548,57 @@ export default function CompaniesPage() {
                 <TabsTrigger value="users" className="text-[11px] h-7 gap-1.5">
                   <Users className="h-3.5 w-3.5" />
                   Kullanıcılar
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{companyUsers.length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabUsers.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="services" className="text-[11px] h-7 gap-1.5">
                   <Briefcase className="h-3.5 w-3.5" />
                   Hizmetler
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{selected.services.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="iis" className="text-[11px] h-7 gap-1.5">
                   <Globe className="h-3.5 w-3.5" />
                   IIS Siteler
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{iisSites.filter(s => s.firma === selected.name).length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabIIS.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="databases" className="text-[11px] h-7 gap-1.5">
                   <Database className="h-3.5 w-3.5" />
                   Veritabanları
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{selected.databases?.length ?? 0}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabSQL.length}</span>
                 </TabsTrigger>
               </TabsList>
 
               {/* Kullanıcılar */}
               <TabsContent value="users" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_100px_140px_110px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">AD / E-POSTA</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">SUNUCU</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">SON GİRİŞ</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">AKTİF SÜRE</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">DURUM</span>
+                  <div className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Ad Soyad</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Giriş</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
-                    {companyUsers.map((usr) => (
-                      <div key={usr.id} className="grid grid-cols-[1fr_100px_140px_110px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center">
-                        <div>
-                          <p className="text-xs font-medium">{usr.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{usr.email}</p>
+                    {tabLoading ? (
+                      Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-2.5 items-center gap-3">
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-3/4" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-12" />
                         </div>
-                        <span className="text-[11px] font-mono text-muted-foreground">{usr.server}</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{usr.lastLogin ?? "—"}</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{usr.sessionDuration ?? "—"}</span>
+                      ))
+                    ) : tabUsers.length === 0 ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
+                      </div>
+                    ) : tabUsers.map((usr) => (
+                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                        <span className="text-[11px] font-mono truncate">{usr.username}</span>
+                        <span className="text-[11px] truncate">{usr.displayName}</span>
+                        <span className="text-[10px] tabular-nums text-muted-foreground">{usr.lastLogin || "—"}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className={`h-1.5 w-1.5 rounded-full ${usr.online ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${usr.online ? "text-emerald-600" : "text-muted-foreground"}`}>
-                            {usr.online ? "Online" : "Offline"}
+                          <div className={`h-1.5 w-1.5 rounded-full ${usr.enabled ? "bg-emerald-500" : "bg-gray-300"}`} />
+                          <span className={`text-[10px] ${usr.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>
+                            {usr.enabled ? "Aktif" : "Pasif"}
                           </span>
                         </div>
                         <DropdownMenu>
@@ -552,7 +609,6 @@ export default function CompaniesPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44 text-[11px]">
                             <DropdownMenuItem className="text-[11px] gap-2"><KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla</DropdownMenuItem>
-                            <DropdownMenuItem className="text-[11px] gap-2"><LogOut className="h-3.5 w-3.5" /> Oturumu Kapat</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
                               <Ban className="h-3.5 w-3.5" /> Hesabı Askıya Al
@@ -561,11 +617,6 @@ export default function CompaniesPage() {
                         </DropdownMenu>
                       </div>
                     ))}
-                    {companyUsers.length === 0 && (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </TabsContent>
@@ -573,46 +624,8 @@ export default function CompaniesPage() {
               {/* Hizmetler */}
               <TabsContent value="services" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_80px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">HİZMET ADI</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide text-right">DURUM</span>
-                    <span />
-                  </div>
-                  <div className="divide-y divide-border/40">
-                    {selected.services.map((svc) => (
-                      <div key={svc.name} className="grid grid-cols-[1fr_80px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center">
-                        <div className="flex items-center gap-2">
-                          {svc.status === "active"
-                            ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                            : <XCircle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
-                          }
-                          <span className={`text-xs ${svc.status === "active" ? "font-medium" : "text-muted-foreground"}`}>{svc.name}</span>
-                        </div>
-                        <span className={`text-[10px] text-right ${svc.status === "active" ? "text-emerald-600" : "text-muted-foreground"}`}>
-                          {svc.status === "active" ? "Aktif" : "Pasif"}
-                        </span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="text-[11px] gap-2">
-                              {svc.status === "active"
-                                ? <><ToggleLeft className="h-3.5 w-3.5" /> Pasife Al</>
-                                : <><ToggleRight className="h-3.5 w-3.5" /> Aktife Al</>
-                              }
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-[11px] gap-2"><Settings2 className="h-3.5 w-3.5" /> Ayarlar</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" /> Hizmeti Kaldır
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-center py-10">
+                    <p className="text-xs text-muted-foreground">Hizmet tanımları henüz eklenmedi</p>
                   </div>
                 </div>
               </TabsContent>
@@ -620,26 +633,42 @@ export default function CompaniesPage() {
               {/* Veritabanları */}
               <TabsContent value="databases" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_90px_70px_80px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">VERİTABANI</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">TÜR</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">BOYUT</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide">DURUM</span>
+                  <div className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veritabanı</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Boyut</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
-                    {(selected.databases ?? []).map((db) => (
-                      <div key={db.name} className="grid grid-cols-[1fr_90px_70px_80px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center">
+                    {tabLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-2.5 items-center gap-3">
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-12" />
+                        </div>
+                      ))
+                    ) : tabSQL.length === 0 ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-xs text-muted-foreground">Veritabanı bulunamadı</p>
+                      </div>
+                    ) : tabSQL.map((db) => (
+                      <div key={db.Id} className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
                         <div className="flex items-center gap-2">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-xs font-medium">{db.name}</span>
+                          <span className="text-[11px] font-medium truncate">{db.Name}</span>
                         </div>
-                        <span className="text-[11px] font-mono text-muted-foreground">{db.type}</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{db.size} GB</span>
+                        <span className="text-[11px] font-mono text-muted-foreground truncate">{db.Server}</span>
+                        <span className="text-[11px] tabular-nums text-muted-foreground">{(db.SizeMB / 1024).toFixed(1)} GB</span>
+                        <span className="text-[10px] tabular-nums text-muted-foreground">{db.LastBackup ?? "—"}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className={`h-1.5 w-1.5 rounded-full ${db.status === "online" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${db.status === "online" ? "text-emerald-600" : "text-muted-foreground"}`}>
-                            {db.status === "online" ? "Çevrimiçi" : "Çevrimdışı"}
+                          <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
+                          <span className={`text-[10px] ${db.Status === "Online" ? "text-emerald-600" : "text-muted-foreground"}`}>
+                            {db.Status === "Online" ? "Çevrimiçi" : "Çevrimdışı"}
                           </span>
                         </div>
                         <DropdownMenu>
@@ -650,7 +679,6 @@ export default function CompaniesPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem className="text-[11px] gap-2"><Download className="h-3.5 w-3.5" /> Yedekle</DropdownMenuItem>
-                            <DropdownMenuItem className="text-[11px] gap-2"><Settings2 className="h-3.5 w-3.5" /> Ayarlar</DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
                               <Trash2 className="h-3.5 w-3.5" /> Veritabanını Kaldır
@@ -659,83 +687,76 @@ export default function CompaniesPage() {
                         </DropdownMenu>
                       </div>
                     ))}
-                    {(selected.databases ?? []).length === 0 && (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">Veritabanı tanımlanmamış</p>
-                      </div>
-                    )}
                   </div>
                 </div>
               </TabsContent>
 
               {/* IIS Siteler */}
               <TabsContent value="iis" className="mt-0">
-                {(() => {
-                  const companySites = iisSites.filter(s => s.firma === selected.name);
-                  return (
-                    <div className="rounded-[4px] overflow-hidden border border-border/40">
-                      <div className="grid grid-cols-[180px_120px_1fr_55px_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">SİTE ADI</span>
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">SUNUCU</span>
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">HOST</span>
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">PORT</span>
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">HİZMET</span>
-                        <span className="text-[10px] font-medium text-muted-foreground tracking-wide">DURUM</span>
-                        <span />
+                <div className="rounded-[4px] overflow-hidden border border-border/40">
+                  <div className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Binding</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Port</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">App Pool</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                    <span />
+                  </div>
+                  <div className="divide-y divide-border/40">
+                    {tabLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-2.5 items-center gap-3">
+                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-12" />
+                        </div>
+                      ))
+                    ) : tabIIS.length === 0 ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-xs text-muted-foreground">IIS sitesi bulunamadı</p>
                       </div>
-                      <div className="divide-y divide-border/40">
-                        {companySites.map((site) => {
-                          const portMatch = site.binding.match(/:(\d+)$/);
-                          const port = portMatch ? portMatch[1] : "—";
-                          const host = site.binding.replace(/:\d+$/, "").replace(/^https?:\/\//, "");
-                          return (
-                            <div key={site.id} className="grid grid-cols-[180px_120px_1fr_55px_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center">
-                              <div className="flex items-center gap-2">
-                                <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="text-xs font-medium">{site.name}</span>
-                              </div>
-                              <span className="text-[11px] font-mono text-muted-foreground">{site.server}</span>
-                              <span className="text-[11px] font-mono text-muted-foreground truncate">{host}</span>
-                              <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{port}</span>
-                              <span className="text-[11px] text-muted-foreground truncate">{site.hizmet ?? "—"}</span>
-                              <div className="flex items-center gap-1.5">
-                                <div className={`h-1.5 w-1.5 rounded-full ${site.status === "Started" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                                <span className={`text-[10px] ${site.status === "Started" ? "text-emerald-600" : "text-muted-foreground"}`}>
-                                  {site.status === "Started" ? "Aktif" : "Durduruldu"}
-                                </span>
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
-                                    <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                                  </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-44">
-                                  <DropdownMenuItem className="text-[11px] gap-2">
-                                    {site.status === "Started"
-                                      ? <><Square className="h-3.5 w-3.5" /> Durdur</>
-                                      : <><Play className="h-3.5 w-3.5" /> Başlat</>
-                                    }
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-[11px] gap-2"><Settings2 className="h-3.5 w-3.5" /> Ayarlar</DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
-                                    <Trash2 className="h-3.5 w-3.5" /> Siteyi Kaldır
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          );
-                        })}
-                        {companySites.length === 0 && (
-                          <div className="flex items-center justify-center py-8">
-                            <p className="text-xs text-muted-foreground">IIS sitesi tanımlanmamış</p>
+                    ) : tabIIS.map((site) => {
+                      const portMatch = site.Binding.match(/:(\d+)$/)
+                      const port = portMatch ? portMatch[1] : "—"
+                      const host = site.Binding.replace(/:\d+$/, "").replace(/^https?:\/\//, "")
+                      return (
+                        <div key={site.Id} className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                          <span className="text-[11px] font-mono text-muted-foreground truncate">{site.Server}</span>
+                          <span className="text-[11px] font-mono text-muted-foreground truncate">{host || site.Binding}</span>
+                          <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{port}</span>
+                          <span className="text-[11px] text-muted-foreground truncate">{site.AppPool}</span>
+                          <div className="flex items-center gap-1.5">
+                            <div className={`h-1.5 w-1.5 rounded-full ${site.Status === "Started" ? "bg-emerald-500" : "bg-gray-300"}`} />
+                            <span className={`text-[10px] ${site.Status === "Started" ? "text-emerald-600" : "text-muted-foreground"}`}>
+                              {site.Status === "Started" ? "Aktif" : "Durduruldu"}
+                            </span>
                           </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44">
+                              <DropdownMenuItem className="text-[11px] gap-2">
+                                {site.Status === "Started"
+                                  ? <><Square className="h-3.5 w-3.5" /> Durdur</>
+                                  : <><Play className="h-3.5 w-3.5" /> Başlat</>
+                                }
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
+                                <Trash2 className="h-3.5 w-3.5" /> Siteyi Kaldır
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
               </TabsContent>
             </Tabs>
           </NestedCard>
