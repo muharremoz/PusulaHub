@@ -63,7 +63,7 @@ export async function GET(
   }
 
   const r = agent.lastReport
-  return NextResponse.json({
+  const resp = NextResponse.json({
     sessions:   r.sessions ?? [],
     security:   r.security ?? null,
     logs:       r.logs ?? null,
@@ -73,4 +73,6 @@ export async function GET(
     iis:        r.iis ?? null,
     roles:      r.roles ?? [],
   })
+  resp.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=10")
+  return resp
 }

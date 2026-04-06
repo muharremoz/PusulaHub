@@ -39,7 +39,9 @@ export async function GET() {
       lisansBitis: r.ContractEnd ?? "",
     }))
 
-    return NextResponse.json(companies)
+    const resp = NextResponse.json(companies)
+    resp.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60")
+    return resp
   } catch (err) {
     console.error("[GET /api/firma/companies]", err)
     return NextResponse.json({ error: "Firma verileri alınamadı" }, { status: 500 })

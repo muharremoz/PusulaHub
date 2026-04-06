@@ -76,7 +76,9 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json(servers)
+    const resp = NextResponse.json(servers)
+    resp.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=10")
+    return resp
   } catch (err) {
     console.error("[GET /api/servers]", err)
     return NextResponse.json({ error: "Sunucular alınamadı" }, { status: 500 })

@@ -21,7 +21,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     `
     if (!rows.length) return NextResponse.json({ error: "Bulunamadı" }, { status: 404 })
     const r = rows[0]
-    return NextResponse.json({
+    const resp = NextResponse.json({
       id:        r.Id,
       name:      r.Name,
       ip:        r.IP,
@@ -33,6 +33,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       username:  r.Username ?? "",
       password:  r.Password ?? "",
     })
+    resp.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=10")
+    return resp
   } catch (err) {
     console.error("[GET /api/servers/[id]]", err)
     return NextResponse.json({ error: "Sunucu alınamadı" }, { status: 500 })
