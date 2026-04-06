@@ -968,7 +968,7 @@ static class Metrics
         var userCpu   = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
 
         using (var searcher = new ManagementObjectSearcher(
-            "SELECT Handle, WorkingSetSize, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
+            "SELECT Handle, PrivatePageCount, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
         {
             foreach (ManagementObject proc in searcher.Get())
             {
@@ -984,7 +984,9 @@ static class Metrics
                     if (uname == "system" || uname == "local service" || uname == "network service") continue;
                     if (uname.StartsWith("dwm-") || uname.StartsWith("umfd-")) continue;
 
-                    long ram = proc["WorkingSetSize"] != null ? Convert.ToInt64(proc["WorkingSetSize"]) : 0;
+                    // PrivatePageCount: sadece bu processe ait private sayfa sayisi (paylasilan DLL sayfasi dahil degil)
+                    // 1 page = 4096 byte; byte -> MB: * 4096 / 1048576 = / 256
+                    long ram = proc["PrivatePageCount"] != null ? Convert.ToInt64(proc["PrivatePageCount"]) * 4096L : 0;
                     long cpu = (proc["UserModeTime"]   != null ? Convert.ToInt64(proc["UserModeTime"])   : 0)
                              + (proc["KernelModeTime"] != null ? Convert.ToInt64(proc["KernelModeTime"]) : 0);
 
