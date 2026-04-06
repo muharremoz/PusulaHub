@@ -960,13 +960,16 @@ static class Metrics
     }
 
     /* --- KULLANICI PROCESS KULLANIMI (5 dk heavy cycle) ---
-       Win32_Process WHERE SessionId > 0 ile sistem process'leri atlar.
-       Her kullanici icin RAM toplami ve CPU delta hesaplar. */
+       Win32_Process: PID -> owner eslestirmesi + CPU ticks
+       Win32_PerfFormattedData_PerfProc_Process: WorkingSetPrivate (Task Manager Memory ile ayni)
+       Fallback: perf counter yoksa WorkingSetSize kullanilir. */
     private static List<Dictionary<string, object>> CollectUserProcesses()
     {
-        var userRam   = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
-        var userCpu   = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var userCpu        = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var userRamFallback = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var pidOwner       = new Dictionary<int, string>();
 
+        // 1) Win32_Process: PID -> owner, CPU ticks, WorkingSetSize (fallback RAM)
         using (var searcher = new ManagementObjectSearcher(
             "SELECT Handle, WorkingSetSize, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
         {
@@ -984,19 +987,54 @@ static class Metrics
                     if (uname == "system" || uname == "local service" || uname == "network service") continue;
                     if (uname.StartsWith("dwm-") || uname.StartsWith("umfd-")) continue;
 
-                    // WorkingSetSize: fiziksel RAM kullanimi (paylasilan DLL sayfalari dahil, byte cinsinden)
-                    // Terminal server ortaminda paylasilan sayfalar tum kullanicilara esit dagilir
-                    long ram = proc["WorkingSetSize"] != null ? Convert.ToInt64(proc["WorkingSetSize"]) : 0;
+                    int pid = Convert.ToInt32(proc["Handle"]);
+                    pidOwner[pid] = uname;
+
                     long cpu = (proc["UserModeTime"]   != null ? Convert.ToInt64(proc["UserModeTime"])   : 0)
                              + (proc["KernelModeTime"] != null ? Convert.ToInt64(proc["KernelModeTime"]) : 0);
-
-                    if (!userRam.ContainsKey(uname)) userRam[uname] = 0;
                     if (!userCpu.ContainsKey(uname)) userCpu[uname] = 0;
-                    userRam[uname] += ram;
                     userCpu[uname] += cpu;
+
+                    // WorkingSetSize fallback (paylasilan DLL dahil)
+                    long wsRam = proc["WorkingSetSize"] != null ? Convert.ToInt64(proc["WorkingSetSize"]) : 0;
+                    if (!userRamFallback.ContainsKey(uname)) userRamFallback[uname] = 0;
+                    userRamFallback[uname] += wsRam;
                 }
                 catch { }
             }
+        }
+
+        // 2) Perf counter: WorkingSetPrivate = Task Manager "Memory" (private fiziksel RAM)
+        var userRam = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        bool perfOk = false;
+        try
+        {
+            using (var searcher = new ManagementObjectSearcher(
+                "SELECT IDProcess, WorkingSetPrivate FROM Win32_PerfFormattedData_PerfProc_Process"))
+            {
+                foreach (ManagementObject perf in searcher.Get())
+                {
+                    try
+                    {
+                        int pid = Convert.ToInt32(perf["IDProcess"]);
+                        string uname;
+                        if (!pidOwner.TryGetValue(pid, out uname)) continue;
+
+                        long privateWS = Convert.ToInt64(perf["WorkingSetPrivate"]);
+                        if (!userRam.ContainsKey(uname)) userRam[uname] = 0;
+                        userRam[uname] += privateWS;
+                        perfOk = true;
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        // Perf counter basarisizsa WorkingSetSize fallback
+        if (!perfOk || userRam.Count == 0)
+        {
+            userRam = userRamFallback;
         }
 
         var now = DateTime.UtcNow;
@@ -1007,18 +1045,24 @@ static class Metrics
         double ticksPerInterval = 10000000.0 * cores * elapsedSec;
 
         var result = new List<Dictionary<string, object>>();
-        foreach (var kvp in userRam)
+        // userCpu key'lerini kullan (pidOwner'dan gelen tum kullanicilar)
+        var allUsers = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (string u in userCpu.Keys) allUsers[u] = true;
+        foreach (string u in userRam.Keys) allUsers[u] = true;
+
+        foreach (string uname in allUsers.Keys)
         {
-            string uname = kvp.Key;
-            long curTicks  = userCpu.ContainsKey(uname)      ? userCpu[uname]          : 0;
+            long curTicks  = userCpu.ContainsKey(uname)          ? userCpu[uname]          : 0;
             long prevTicks = _prevUserCpuTicks.ContainsKey(uname) ? _prevUserCpuTicks[uname] : 0;
             long delta     = Math.Max(0, curTicks - prevTicks);
             double cpuPct  = ticksPerInterval > 0 ? Math.Round(delta / ticksPerInterval * 100.0, 1) : 0;
             cpuPct = Math.Min(100.0, cpuPct);
 
+            long ramBytes = userRam.ContainsKey(uname) ? userRam[uname] : 0;
+
             var entry = new Dictionary<string, object>();
             entry["username"]  = uname;
-            entry["ramMB"]     = (long)(kvp.Value / (1024 * 1024));
+            entry["ramMB"]     = (long)(ramBytes / (1024 * 1024));
             entry["cpuPercent"] = cpuPct;
             result.Add(entry);
         }
