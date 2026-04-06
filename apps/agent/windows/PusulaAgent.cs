@@ -980,6 +980,10 @@ static class Metrics
                     if (string.IsNullOrEmpty(uname)) continue;
                     uname = uname.ToLower();
 
+                    // Sistem hesaplarini atla
+                    if (uname == "system" || uname == "local service" || uname == "network service") continue;
+                    if (uname.StartsWith("dwm-") || uname.StartsWith("umfd-")) continue;
+
                     long ram = proc["WorkingSetSize"] != null ? Convert.ToInt64(proc["WorkingSetSize"]) : 0;
                     long cpu = (proc["UserModeTime"]   != null ? Convert.ToInt64(proc["UserModeTime"])   : 0)
                              + (proc["KernelModeTime"] != null ? Convert.ToInt64(proc["KernelModeTime"]) : 0);

@@ -71,8 +71,8 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
             USING (SELECT @date AS Date, @username AS Username, @server AS Server) AS src
               ON target.Date = src.Date AND target.Username = src.Username AND target.Server = src.Server
             WHEN MATCHED THEN UPDATE SET
-              AvgCpu      = (target.AvgCpu * target.SampleCount + @cpu) / (target.SampleCount + 1),
-              AvgRamMB    = (target.AvgRamMB * target.SampleCount + @ram) / (target.SampleCount + 1),
+              AvgCpu      = ROUND((target.AvgCpu * target.SampleCount + @cpu) / (target.SampleCount + 1), 2),
+              AvgRamMB    = ROUND((target.AvgRamMB * target.SampleCount + @ram) / (target.SampleCount + 1), 1),
               SessionMinutes = target.SessionMinutes + 5,
               SampleCount = target.SampleCount + 1,
               FirmaNo     = COALESCE(target.FirmaNo, @firmaNo)
