@@ -52,7 +52,15 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
     if (report.userProcesses?.length) {
       const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
+      // Sistem hesaplarını filtrele (dwm-*, umfd-*, system vb.)
+      const SKIP_ACCOUNTS = new Set(["system", "local service", "network service"])
+      const isSystemAccount = (u: string) => {
+        const l = u.toLowerCase()
+        return SKIP_ACCOUNTS.has(l) || l.startsWith("dwm-") || l.startsWith("umfd-")
+      }
+
       for (const up of report.userProcesses) {
+        if (isSystemAccount(up.username)) continue
         // ADUsers tablosundan FirmaNo'yu bul (OU = firmaNo)
         const firmaResult = await pool.request()
           .input("username", sql.NVarChar(200), up.username)
