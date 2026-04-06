@@ -277,5 +277,23 @@ CREATE TABLE MessageRecipientMap (
 );
 
 
+-- ============================================================
+-- KULLANICI GÜNLÜK KAYNAK KULLANIMI
+-- ============================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='UserDailyUsage' AND xtype='U')
+CREATE TABLE UserDailyUsage (
+    Id             INT           IDENTITY(1,1) PRIMARY KEY,
+    Date           DATE          NOT NULL,
+    Username       NVARCHAR(200) NOT NULL,
+    FirmaNo        NVARCHAR(20)  NULL,
+    Server         NVARCHAR(100) NOT NULL,
+    AvgCpu         FLOAT         NOT NULL DEFAULT 0,
+    AvgRamMB       FLOAT         NOT NULL DEFAULT 0,
+    SessionMinutes INT           NOT NULL DEFAULT 0,
+    SampleCount    INT           NOT NULL DEFAULT 0,
+    CONSTRAINT UQ_UserDailyUsage UNIQUE (Date, Username, Server)
+);
+
 PRINT 'PusulaHub veritabani basariyla olusturuldu.';
 GO

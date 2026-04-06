@@ -167,6 +167,12 @@ export interface AgentReport {
     }[]
   }
 
+  userProcesses?: {
+    username:   string
+    ramMB:      number
+    cpuPercent: number
+  }[]
+
   roles?: string[]            // Tespit edilen roller: ["IIS","SQL","AD","DNS","DHCP"]
 }
 

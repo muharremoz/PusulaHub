@@ -142,6 +142,10 @@ static class Metrics
     private static DateTime _heavyLastCollected = DateTime.MinValue;
     private static readonly TimeSpan HEAVY_INTERVAL = TimeSpan.FromMinutes(5);
 
+    // Kullanici process CPU delta hesabi icin onceki degerler
+    private static Dictionary<string, long> _prevUserCpuTicks = new Dictionary<string, long>();
+    private static DateTime _prevCpuCollectTime = DateTime.MinValue;
+
     public static void Init()
     {
         try
@@ -318,6 +322,8 @@ static class Metrics
 
             if (roles.Contains("MSSQL"))
                 try { heavy["mssql"] = CollectMssql(); } catch { }
+
+            try { heavy["userProcesses"] = CollectUserProcesses(); } catch { }
 
             _heavyCache = heavy;
             _heavyLastCollected = DateTime.UtcNow;
@@ -950,6 +956,70 @@ static class Metrics
         }
         catch { }
         result["databases"] = databases;
+        return result;
+    }
+
+    /* --- KULLANICI PROCESS KULLANIMI (5 dk heavy cycle) ---
+       Win32_Process WHERE SessionId > 0 ile sistem process'leri atlar.
+       Her kullanici icin RAM toplami ve CPU delta hesaplar. */
+    private static List<Dictionary<string, object>> CollectUserProcesses()
+    {
+        var userRam   = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+        var userCpu   = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
+
+        using (var searcher = new ManagementObjectSearcher(
+            "SELECT Handle, WorkingSetSize, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
+        {
+            foreach (ManagementObject proc in searcher.Get())
+            {
+                try
+                {
+                    var ownerArgs = new string[2];
+                    proc.InvokeMethod("GetOwner", ownerArgs);
+                    string uname = ownerArgs[0];
+                    if (string.IsNullOrEmpty(uname)) continue;
+                    uname = uname.ToLower();
+
+                    long ram = proc["WorkingSetSize"] != null ? Convert.ToInt64(proc["WorkingSetSize"]) : 0;
+                    long cpu = (proc["UserModeTime"]   != null ? Convert.ToInt64(proc["UserModeTime"])   : 0)
+                             + (proc["KernelModeTime"] != null ? Convert.ToInt64(proc["KernelModeTime"]) : 0);
+
+                    if (!userRam.ContainsKey(uname)) userRam[uname] = 0;
+                    if (!userCpu.ContainsKey(uname)) userCpu[uname] = 0;
+                    userRam[uname] += ram;
+                    userCpu[uname] += cpu;
+                }
+                catch { }
+            }
+        }
+
+        var now = DateTime.UtcNow;
+        double elapsedSec = _prevCpuCollectTime == DateTime.MinValue
+            ? 300.0
+            : Math.Max(1.0, (now - _prevCpuCollectTime).TotalSeconds);
+        int cores = Environment.ProcessorCount;
+        double ticksPerInterval = 10000000.0 * cores * elapsedSec;
+
+        var result = new List<Dictionary<string, object>>();
+        foreach (var kvp in userRam)
+        {
+            string uname = kvp.Key;
+            long curTicks  = userCpu.ContainsKey(uname)      ? userCpu[uname]          : 0;
+            long prevTicks = _prevUserCpuTicks.ContainsKey(uname) ? _prevUserCpuTicks[uname] : 0;
+            long delta     = Math.Max(0, curTicks - prevTicks);
+            double cpuPct  = ticksPerInterval > 0 ? Math.Round(delta / ticksPerInterval * 100.0, 1) : 0;
+            cpuPct = Math.Min(100.0, cpuPct);
+
+            var entry = new Dictionary<string, object>();
+            entry["username"]  = uname;
+            entry["ramMB"]     = (long)(kvp.Value / (1024 * 1024));
+            entry["cpuPercent"] = cpuPct;
+            result.Add(entry);
+        }
+
+        _prevUserCpuTicks   = userCpu;
+        _prevCpuCollectTime = now;
+
         return result;
     }
 

@@ -48,6 +48,41 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
   try {
     const pool = await getPollerPool()
 
+    // UserDailyUsage — günlük kümülatif ortalama (running average)
+    if (report.userProcesses?.length) {
+      const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+      for (const up of report.userProcesses) {
+        // ADUsers tablosundan FirmaNo'yu bul (OU = firmaNo)
+        const firmaResult = await pool.request()
+          .input("username", sql.NVarChar(200), up.username)
+          .query("SELECT TOP 1 OU FROM ADUsers WHERE Username = @username")
+        const firmaNo: string | null = firmaResult.recordset[0]?.OU ?? null
+
+        await pool.request()
+          .input("date",     sql.Date,         new Date(today))
+          .input("username", sql.NVarChar(200), up.username)
+          .input("server",   sql.NVarChar(100), serverName)
+          .input("firmaNo",  sql.NVarChar(20),  firmaNo)
+          .input("cpu",      sql.Float,         up.cpuPercent)
+          .input("ram",      sql.Float,         up.ramMB)
+          .query(`
+            MERGE UserDailyUsage AS target
+            USING (SELECT @date AS Date, @username AS Username, @server AS Server) AS src
+              ON target.Date = src.Date AND target.Username = src.Username AND target.Server = src.Server
+            WHEN MATCHED THEN UPDATE SET
+              AvgCpu      = (target.AvgCpu * target.SampleCount + @cpu) / (target.SampleCount + 1),
+              AvgRamMB    = (target.AvgRamMB * target.SampleCount + @ram) / (target.SampleCount + 1),
+              SessionMinutes = target.SessionMinutes + 5,
+              SampleCount = target.SampleCount + 1,
+              FirmaNo     = COALESCE(target.FirmaNo, @firmaNo)
+            WHEN NOT MATCHED THEN INSERT
+              (Date, Username, FirmaNo, Server, AvgCpu, AvgRamMB, SessionMinutes, SampleCount)
+              VALUES (@date, @username, @firmaNo, @server, @cpu, @ram, 5, 1);
+          `)
+      }
+    }
+
     // AD Users — sunucuya ait tüm kullanıcıları sil, yeniden yaz
     if (report.ad?.companies?.length) {
       await pool.request()
@@ -190,10 +225,11 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
       sessions: data.sessions ?? undefined,
       iis:      data.iis ?? undefined,
       sql:      data.mssql ?? undefined,
-      ad:         data.ad ?? undefined,
-      localUsers: data.localUsers ?? undefined,
-      security:   data.security ?? undefined,
-      logs:       data.logs ?? undefined,
+      ad:            data.ad ?? undefined,
+      localUsers:    data.localUsers ?? undefined,
+      security:      data.security ?? undefined,
+      logs:          data.logs ?? undefined,
+      userProcesses: data.userProcesses ?? undefined,
     }
 
     // agent-store'a kaydet
@@ -207,8 +243,8 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
       report,
     })
 
-    // Ağır veri: AD / IIS / SQL — agent 5 dk'da bir gönderir, DB'ye yaz
-    if (report.ad?.companies || report.iis || report.sql) {
+    // Ağır veri: AD / IIS / SQL / UserProcesses — agent 5 dk'da bir gönderir, DB'ye yaz
+    if (report.ad?.companies || report.iis || report.sql || report.userProcesses) {
       persistHeavyData(server.Name, report)
     }
 
