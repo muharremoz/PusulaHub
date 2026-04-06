@@ -984,9 +984,9 @@ static class Metrics
                     if (uname == "system" || uname == "local service" || uname == "network service") continue;
                     if (uname.StartsWith("dwm-") || uname.StartsWith("umfd-")) continue;
 
-                    // PrivatePageCount: sadece bu processe ait private sayfa sayisi (paylasilan DLL sayfasi dahil degil)
-                    // 1 page = 4096 byte; byte -> MB: * 4096 / 1048576 = / 256
-                    long ram = proc["PrivatePageCount"] != null ? Convert.ToInt64(proc["PrivatePageCount"]) * 4096L : 0;
+                    // PrivatePageCount: WMI bu degeri byte cinsinden donduruyor (ismine ragmen)
+                    // Paylasilan DLL sayfalarini icermez, Task Manager Memory kolonuyla uyumlu
+                    long ram = proc["PrivatePageCount"] != null ? Convert.ToInt64(proc["PrivatePageCount"]) : 0;
                     long cpu = (proc["UserModeTime"]   != null ? Convert.ToInt64(proc["UserModeTime"])   : 0)
                              + (proc["KernelModeTime"] != null ? Convert.ToInt64(proc["KernelModeTime"]) : 0);
 
