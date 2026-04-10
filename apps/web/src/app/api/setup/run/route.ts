@@ -864,6 +864,16 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // Sunucu atamasını Companies tablosuna kaydet
+        try {
+          await execute`
+            UPDATE Companies
+            SET WindowsServerId = ${payload.windowsServerId ?? null},
+                AdServerId      = ${payload.serverId ?? null}
+            WHERE CompanyId = ${payload.firmaId}
+          `
+        } catch { /* Companies tablosunda kayıt yoksa sessizce geç */ }
+
         send("done", {
           ok: true,
           summary: {

@@ -78,6 +78,8 @@ CREATE TABLE Companies (
     UsageRam      FLOAT         NOT NULL DEFAULT 0,
     UsageDisk     FLOAT         NOT NULL DEFAULT 0,
     DbQuota       INT           NOT NULL DEFAULT 0,
+    WindowsServerId NVARCHAR(50) NULL REFERENCES Servers(Id),
+    AdServerId    NVARCHAR(50) NULL REFERENCES Servers(Id),
     Notes         NVARCHAR(MAX) NULL,
     CreatedAt     DATETIME2     NOT NULL DEFAULT GETDATE()
 );
