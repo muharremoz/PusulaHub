@@ -17,7 +17,7 @@ import { startPolling } from "./src/lib/agent-poller"
 import { startFirmaSync } from "./src/lib/firma-sync"
 
 const dev  = process.env.NODE_ENV !== "production"
-const port = parseInt(process.env.PORT ?? "4242", 10)
+const port = 4242
 const app  = next({ dev })
 const handle = app.getRequestHandler()
 

@@ -34,7 +34,9 @@ import {
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
 import { FolderOpen, Globe, Loader2, ChevronsUpDown, Check } from "lucide-react"
-import { mockServices } from "@/lib/mock-services"
+import type { WizardServiceDto } from "@/app/api/services/route"
+import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
+import { loadServices, getCachedServices } from "@/lib/services-cache"
 
 interface FirmaItem { id: string; firkod: string; firma: string }
 
@@ -54,8 +56,6 @@ function loadFirmalar(): Promise<FirmaItem[]> {
     .catch(() => { _firmaCache = []; return [] })
   return _firmaPromise
 }
-
-const SERVERS = ["WEB-IIS-01", "WEB-IIS-02", "WEB-IIS-03", "APP-SRV-01", "APP-SRV-02"]
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -78,21 +78,43 @@ function Field({ label, children, className }: { label: string; children: React.
 }
 
 interface IISSiteSheetProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open:          boolean
+  onOpenChange:  (open: boolean) => void
+  onSaved?:      () => void
 }
 
-export function IISSiteSheet({ open, onOpenChange }: IISSiteSheetProps) {
+export function IISSiteSheet({ open, onOpenChange, onSaved }: IISSiteSheetProps) {
   const [firmalar,        setFirmalar]        = useState<FirmaItem[]>(_firmaCache ?? [])
   const [firmalarLoading, setFirmalarLoading] = useState(!_firmaCache)
   const [firmaOpen,       setFirmaOpen]       = useState(false)
   const [firmaSearch,     setFirmaSearch]     = useState("")
+
+  const [services,    setServices]    = useState<WizardServiceDto[]>(getCachedServices() ?? [])
+  const [iisServers,  setIisServers]  = useState<IisServerItem[]>([])
+  const [iisLoading,  setIisLoading]  = useState(false)
 
   useEffect(() => {
     if (_firmaCache) { setFirmalar(_firmaCache); setFirmalarLoading(false); return }
     setFirmalarLoading(true)
     loadFirmalar().then((data) => { setFirmalar(data); setFirmalarLoading(false) })
   }, [])
+
+  useEffect(() => {
+    const cached = getCachedServices()
+    if (cached) { setServices(cached); return }
+    loadServices().then(setServices)
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    if (iisServers.length > 0) return
+    setIisLoading(true)
+    fetch("/api/setup/iis-servers")
+      .then((r) => r.json())
+      .then((data) => { if (Array.isArray(data)) setIisServers(data as IisServerItem[]) })
+      .catch(() => { /* sessiz — liste boş kalır */ })
+      .finally(() => setIisLoading(false))
+  }, [open, iisServers.length])
 
   const [siteName, setSiteName] = useState("")
   const [server,   setServer]   = useState("")
@@ -196,7 +218,7 @@ export function IISSiteSheet({ open, onOpenChange }: IISSiteSheetProps) {
                     <SelectValue placeholder={firma ? "Hizmet seçin…" : "Önce firma seçin"} />
                   </SelectTrigger>
                   <SelectContent className="rounded-[5px]">
-                    {mockServices.map((s) => (
+                    {services.map((s) => (
                       <SelectItem key={s.id} value={s.name} className="text-[11px]">
                         {s.name}
                         <span className="ml-2 text-muted-foreground text-[10px]">{s.category}</span>
@@ -212,13 +234,21 @@ export function IISSiteSheet({ open, onOpenChange }: IISSiteSheetProps) {
                 <Input placeholder="Kurumsal Web" value={siteName} onChange={(e) => setSiteName(e.target.value)} className="rounded-[5px] text-[11px] h-8" />
               </Field>
               <Field label="Sunucu">
-                <Select value={server} onValueChange={setServer}>
+                <Select value={server} onValueChange={setServer} disabled={iisLoading}>
                   <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                    <SelectValue placeholder="Sunucu seçin…" />
+                    <SelectValue placeholder={iisLoading ? "Yükleniyor…" : iisServers.length === 0 ? "IIS sunucusu yok" : "Sunucu seçin…"} />
                   </SelectTrigger>
                   <SelectContent className="rounded-[5px]">
-                    {SERVERS.map((s) => (
-                      <SelectItem key={s} value={s} className="text-[11px] font-mono">{s}</SelectItem>
+                    {iisServers.map((s) => (
+                      <SelectItem key={s.id} value={s.name} className="text-[11px] font-mono">
+                        <span className="flex items-center gap-2">
+                          <span className={cn(
+                            "inline-flex size-1.5 rounded-full shrink-0",
+                            s.isOnline ? "bg-emerald-500" : "bg-slate-300",
+                          )} />
+                          {s.name}
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

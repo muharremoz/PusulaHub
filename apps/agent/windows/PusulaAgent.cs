@@ -346,30 +346,156 @@ static class Metrics
     {
         var sites = new List<Dictionary<string, object>>();
         var pools = new List<Dictionary<string, object>>();
+
+        // AppPool adı: root application (Path="/") üzerinden site adına göre eşleştir
+        var siteAppPool  = new Dictionary<string, string>();
+        var sitePhysPath = new Dictionary<string, string>();
+
+        try
+        {
+            using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM Application"))
+            {
+                foreach (ManagementObject mo in mos.Get())
+                {
+                    string path = (mo["Path"] ?? "").ToString();
+                    if (path != "/") continue;
+                    string sn = (mo["SiteName"] ?? "").ToString();
+                    string ap = (mo["ApplicationPool"] ?? "").ToString();
+                    if (sn.Length > 0) siteAppPool[sn] = ap;
+                }
+            }
+        }
+        catch { }
+
+        try
+        {
+            using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM VirtualDirectory"))
+            {
+                foreach (ManagementObject mo in mos.Get())
+                {
+                    string appPath = (mo["AppPath"] ?? "").ToString();
+                    string path    = (mo["Path"] ?? "").ToString();
+                    if (appPath != "/" || path != "/") continue;
+                    string sn = (mo["SiteName"] ?? "").ToString();
+                    string ph = (mo["PhysicalPath"] ?? "").ToString();
+                    if (sn.Length > 0) sitePhysPath[sn] = ph;
+                }
+            }
+        }
+        catch { }
+
+        // AppPool listesi
+        try
+        {
+            using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM ApplicationPool"))
+            {
+                foreach (ManagementObject mo in mos.Get())
+                {
+                    var pd = new Dictionary<string, object>();
+                    pd["name"] = (mo["Name"] ?? "").ToString();
+                    pools.Add(pd);
+                }
+            }
+        }
+        catch { }
+
+        // Siteler
         try
         {
             using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM Site"))
             {
                 foreach (ManagementObject mo in mos.Get())
                 {
+                    string name = (mo["Name"] ?? "").ToString();
                     var sd = new Dictionary<string, object>();
-                    sd["name"] = (mo["Name"] ?? "").ToString();
-                    sd["id"] = Convert.ToInt32(mo["Id"]);
+                    sd["name"] = name;
+                    sd["id"]   = Convert.ToInt32(mo["Id"]);
+
+                    // ServerState: 2=Started, 4=Stopped, diğer=Unknown
+                    int serverState = 0;
+                    try { serverState = Convert.ToInt32(mo["ServerState"]); } catch { }
+                    if (serverState == 2) sd["status"] = "Started";
+                    else                  sd["status"] = "Stopped";
+
+                    // Bindings: protocol + bindingInformation (ip:port:hostname)
+                    var bindingParts = new List<string>();
+                    try
+                    {
+                        ManagementBaseObject[] bindings = mo["Bindings"] as ManagementBaseObject[];
+                        if (bindings != null)
+                        {
+                            foreach (ManagementBaseObject b in bindings)
+                            {
+                                string proto = (b["Protocol"] ?? "").ToString();
+                                string info  = (b["BindingInformation"] ?? "").ToString();
+                                // info format: "ipAddress:port:hostHeader"
+                                // Güzel gösterim: http://hostname:port
+                                string[] parts = info.Split(':');
+                                string host = (parts.Length >= 3 && parts[2].Length > 0)
+                                    ? parts[2]
+                                    : (parts.Length >= 2 ? parts[0] : "*");
+                                string port = (parts.Length >= 2) ? parts[1] : "80";
+                                bindingParts.Add(proto + "://" + host + ":" + port);
+                            }
+                        }
+                    }
+                    catch { }
+                    sd["binding"] = string.Join(", ", bindingParts.ToArray());
+
+                    // AppPool
+                    string poolName = "";
+                    if (siteAppPool.ContainsKey(name)) poolName = siteAppPool[name];
+                    sd["appPool"] = poolName;
+
+                    // PhysicalPath
+                    string physPath = "";
+                    if (sitePhysPath.ContainsKey(name)) physPath = sitePhysPath[name];
+                    sd["physicalPath"] = physPath;
+
                     sites.Add(sd);
                 }
             }
         }
         catch { }
+
         var result = new Dictionary<string, object>();
         result["sites"] = sites;
         result["pools"] = pools;
         return result;
     }
 
-    /* --- SESSIONS via quser --- */
+    /* --- SESSIONS via quser + WTS API (client IP) --- */
+    private static bool IsAllDigits(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        for (int i = 0; i < s.Length; i++)
+            if (s[i] < '0' || s[i] > '9') return false;
+        return true;
+    }
+
+    private static string NormalizeState(string raw)
+    {
+        string s = raw.Trim().ToLower();
+        if (s == "active" || s == "actv") return "Active";
+        if (s == "disc" || s == "disconnected") return "Disconnected";
+        if (s == "conn" || s == "connected") return "Connected";
+        if (s == "listen") return "Listen";
+        if (s == "idle") return "Idle";
+        return raw.Trim();
+    }
+
     private static List<Dictionary<string, object>> CollectSessions()
     {
         var list = new List<Dictionary<string, object>>();
+
+        // 1) WTS API ile session -> client IP haritası
+        var sidToIp = new Dictionary<int, string>();
+        try
+        {
+            sidToIp = SessionList.GetClientIpMap();
+        }
+        catch { }
+
         try
         {
             var psi = new ProcessStartInfo("quser")
@@ -388,32 +514,45 @@ static class Metrics
             for (int i = 1; i < lines.Length; i++) // skip header
             {
                 string line = lines[i];
-                // quser format:  USERNAME  SESSIONNAME  ID  STATE  IDLE TIME  LOGON TIME
-                // May have > prefix for current user
+                // quser format:
+                //  >USERNAME  SESSIONNAME  ID  STATE  IDLE TIME  LOGON TIME
+                // Disconnected oturumlarda SESSIONNAME bos olur → kolonlar kayar:
+                //  alusup                         3  Disc   3+12:15   3/23/2026 15:10
                 string trimmed = line.TrimStart('>').TrimStart();
-                // Parse by fixed column positions (quser uses fixed-width columns)
-                // Alternative: split by 2+ spaces
                 var parts = Regex.Split(trimmed, "\\s{2,}");
                 if (parts.Length < 4) continue;
 
                 var d = new Dictionary<string, object>();
                 d["username"] = parts[0].Trim();
 
-                // Detect if session name is present (RDP-Tcp#N or console)
                 string sessionName = "";
                 string state = "";
                 string logonTime = "";
+                int sessionId = -1;
 
-                if (parts.Length >= 6)
+                // parts[1] rakamsa → SESSIONNAME bos (disconnected), kolonlari kaydir
+                bool noSessionName = IsAllDigits(parts[1].Trim());
+
+                if (noSessionName)
                 {
+                    // [user, id, state, idle, logonTime]
+                    int.TryParse(parts[1].Trim(), out sessionId);
+                    state = parts.Length > 2 ? parts[2].Trim() : "";
+                    logonTime = parts.Length > 4 ? parts[4].Trim() : (parts.Length > 3 ? parts[3].Trim() : "");
+                }
+                else if (parts.Length >= 6)
+                {
+                    // [user, sessionName, id, state, idle, logonTime]
                     sessionName = parts[1].Trim();
-                    // parts[2] = ID, parts[3] = STATE, parts[4] = IDLE, parts[5] = LOGON TIME
+                    int.TryParse(parts[2].Trim(), out sessionId);
                     state = parts[3].Trim();
                     logonTime = parts[5].Trim();
                 }
                 else if (parts.Length >= 5)
                 {
+                    // [user, sessionName, id, state, logonTime] — idle yok
                     sessionName = parts[1].Trim();
+                    int.TryParse(parts[2].Trim(), out sessionId);
                     state = parts[3].Trim();
                     logonTime = parts[4].Trim();
                 }
@@ -423,28 +562,18 @@ static class Metrics
                     logonTime = parts.Length > 3 ? parts[3].Trim() : "";
                 }
 
-                d["sessionType"] = sessionName.ToLower().Contains("rdp") ? "RDP"
-                                 : sessionName.ToLower().Contains("console") ? "Console"
-                                 : "RDP";
-                d["state"] = state;
+                string lowerName = sessionName.ToLower();
+                d["sessionType"] = lowerName.Contains("console") ? "Console" : "RDP";
+                d["state"] = NormalizeState(state);
                 d["logonTime"] = logonTime;
-                d["clientIp"] = "";
+
+                string clientIp = "";
+                if (sessionId >= 0 && sidToIp.ContainsKey(sessionId))
+                    clientIp = sidToIp[sessionId];
+                d["clientIp"] = clientIp;
+
                 list.Add(d);
             }
-
-            // Try to get client IPs from qwinsta /mode
-            try
-            {
-                var psi2 = new ProcessStartInfo("query", "session")
-                {
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    StandardOutputEncoding = Encoding.GetEncoding(850)
-                };
-                // We'll use WMI Win32_LogonSession + Win32_NetworkLoginProfile for client IPs
-            }
-            catch { }
         }
         catch { }
         return list;
@@ -1865,6 +1994,87 @@ class TrayApp : ApplicationContext
         };
         var p = Process.Start(psi);
         p.WaitForExit(10000);
+    }
+}
+
+/* ================================================================
+   SESSION LIST — WTS API ile session -> client IP haritasi
+================================================================ */
+static class SessionList
+{
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSEnumerateSessions(IntPtr hServer, uint Reserved, uint Version,
+        out IntPtr ppSessionInfo, out uint pCount);
+
+    [DllImport("wtsapi32.dll")]
+    static extern void WTSFreeMemory(IntPtr pMemory);
+
+    [DllImport("wtsapi32.dll", SetLastError = true)]
+    static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId,
+        int wtsInfoClass, out IntPtr ppBuffer, out int pBytesReturned);
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct WTS_SESSION_INFO
+    {
+        public int SessionID;
+        public IntPtr pWinStationName;
+        public int State;
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    struct WTS_CLIENT_ADDRESS
+    {
+        public int AddressFamily;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 20)]
+        public byte[] Address;
+    }
+
+    const int WTSClientAddress = 14;
+
+    public static Dictionary<int, string> GetClientIpMap()
+    {
+        var map = new Dictionary<int, string>();
+        IntPtr pSessions = IntPtr.Zero;
+        uint sessionCount = 0;
+        if (!WTSEnumerateSessions(IntPtr.Zero, 0, 1, out pSessions, out sessionCount))
+            return map;
+        try
+        {
+            int sz = Marshal.SizeOf(typeof(WTS_SESSION_INFO));
+            for (int i = 0; i < (int)sessionCount; i++)
+            {
+                var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
+                    new IntPtr(pSessions.ToInt64() + i * sz), typeof(WTS_SESSION_INFO));
+                if (info.SessionID == 0) continue; // Services session atla
+
+                IntPtr buffer = IntPtr.Zero;
+                int bytes = 0;
+                try
+                {
+                    if (!WTSQuerySessionInformation(IntPtr.Zero, info.SessionID,
+                        WTSClientAddress, out buffer, out bytes)) continue;
+                    if (buffer == IntPtr.Zero) continue;
+                    var addr = (WTS_CLIENT_ADDRESS)Marshal.PtrToStructure(buffer, typeof(WTS_CLIENT_ADDRESS));
+                    // AF_INET = 2 → Address[2..5] = IPv4 bytes
+                    if (addr.AddressFamily == 2 && addr.Address != null && addr.Address.Length >= 6)
+                    {
+                        byte b0 = addr.Address[2];
+                        byte b1 = addr.Address[3];
+                        byte b2 = addr.Address[4];
+                        byte b3 = addr.Address[5];
+                        if (b0 != 0 || b1 != 0 || b2 != 0 || b3 != 0)
+                        {
+                            map[info.SessionID] = b0 + "." + b1 + "." + b2 + "." + b3;
+                        }
+                    }
+                    // AF_INET6 = 23 → Address[2..17] ama quser zaten nadir
+                }
+                catch { }
+                finally { if (buffer != IntPtr.Zero) WTSFreeMemory(buffer); }
+            }
+        }
+        finally { WTSFreeMemory(pSessions); }
+        return map;
     }
 }
 

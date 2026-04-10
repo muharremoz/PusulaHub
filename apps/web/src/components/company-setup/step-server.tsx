@@ -1,7 +1,6 @@
 "use client"
 
-import { AdServer } from "@/lib/setup-mock-data"
-import { Check, WifiOff } from "lucide-react"
+import { Check, WifiOff, ServerOff } from "lucide-react"
 import {
   Table,
   TableBody,
@@ -10,16 +9,31 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+
+export interface AdServerItem {
+  id:           string
+  name:         string
+  ip:           string
+  domain:       string
+  isOnline:     boolean
+  userCount:    number
+  companyCount: number
+}
 
 export function StepServer({
   servers,
   selectedId,
   onSelect,
+  loading,
+  error,
 }: {
-  servers: AdServer[]
-  selectedId: number | null
-  onSelect: (id: number) => void
+  servers: AdServerItem[]
+  selectedId: string | null
+  onSelect: (id: string) => void
+  loading?: boolean
+  error?: string | null
 }) {
   return (
     <div className="space-y-2">
@@ -27,6 +41,46 @@ export function StepServer({
         Active Directory Sunucusu
       </p>
 
+      {/* Yüklenme */}
+      {loading && (
+        <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-3">
+              <Skeleton className="h-3 w-32 rounded-[4px]" />
+              <Skeleton className="h-3 w-24 rounded-[4px]" />
+              <Skeleton className="h-3 w-28 rounded-[4px]" />
+              <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hata */}
+      {!loading && error && (
+        <div className="rounded-[4px] border border-destructive/30 bg-destructive/5 px-3 py-4 text-[11px] text-destructive">
+          {error}
+        </div>
+      )}
+
+      {/* Boş durum */}
+      {!loading && !error && servers.length === 0 && (
+        <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+          <ServerOff className="size-6 text-muted-foreground" />
+          <p className="text-[12px] font-medium">Henüz AD sunucusu tanımlı değil</p>
+          <p className="text-[10px] text-muted-foreground max-w-xs">
+            Firma kurulumu yapabilmek için önce sisteme AD rolünde bir sunucu eklemelisin.
+          </p>
+          <a
+            href="/servers"
+            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+          >
+            Sunucu Ekle
+          </a>
+        </div>
+      )}
+
+      {/* Tablo */}
+      {!loading && !error && servers.length > 0 && (
       <div className="rounded-[4px] border border-border/50 overflow-hidden">
         <Table>
           <TableHeader>
@@ -79,7 +133,7 @@ export function StepServer({
 
                   {/* Domain */}
                   <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                    {srv.domain}
+                    {srv.domain || "—"}
                   </TableCell>
 
                   {/* Firma sayısı */}
@@ -114,10 +168,13 @@ export function StepServer({
           </TableBody>
         </Table>
       </div>
+      )}
 
-      <p className="text-[10px] text-muted-foreground px-1">
-        {servers.length} sunucu listeleniyor
-      </p>
+      {!loading && !error && servers.length > 0 && (
+        <p className="text-[10px] text-muted-foreground px-1">
+          {servers.length} sunucu listeleniyor
+        </p>
+      )}
     </div>
   )
 }

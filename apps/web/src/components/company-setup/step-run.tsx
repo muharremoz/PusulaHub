@@ -1,13 +1,12 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { createPortal } from "react-dom"
-import { getSetupSteps, SetupStepDef, WizardUser } from "@/lib/setup-mock-data"
-import { Check, Loader2, RotateCcw, XCircle, Shield, MessageSquare, Copy, CheckCheck, X } from "lucide-react"
+import { WizardUser, BackupFile } from "@/lib/setup-mock-data"
+import type { WizardServiceDto } from "@/app/api/services/route"
+import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X } from "lucide-react"
 import { cn } from "@/lib/utils"
-
-type Status = "pending" | "running" | "done" | "error"
-interface RunStep { def: SetupStepDef; status: Status }
+import { AdProvisionRunner } from "./ad-provision-runner"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 
@@ -37,59 +36,41 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
+interface Props {
+  serverId:        string
+  windowsServerId: string
+  iisServerId:     string
+  firmaId:         string
+  firmaName:       string
+  serverName:      string
+  users:           WizardUser[]
+  services:        WizardServiceDto[]
+  /* 4. adım: SQL */
+  sqlServerId?:        string | null
+  sqlMode?:            0 | 1
+  backupFolderPath?:   string
+  backupFiles?:        BackupFile[]
+  selectedDemoDbIds?:  number[]
+  addFirmaPrefix?:     boolean
+  addToSirketDb?:      boolean
+  onComplete:      () => void
+  onReset:         () => void
+  onConfetti:      () => void
+}
+
 export function StepRun({
-  hasSql, firmaId, users, serverName,
+  serverId, windowsServerId, iisServerId, firmaId, firmaName, serverName, users, services,
+  sqlServerId, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, addFirmaPrefix, addToSirketDb,
   onComplete, onReset, onConfetti,
-}: {
-  hasSql: boolean
-  firmaId: string
-  users: WizardUser[]
-  serverName: string
-  onComplete: () => void
-  onReset: () => void
-  onConfetti: () => void
-}) {
-  const stepDefs = getSetupSteps(hasSql)
-  const [steps, setSteps] = useState<RunStep[]>(stepDefs.map((def) => ({ def, status: "pending" })))
+}: Props) {
   const [completed, setCompleted] = useState(false)
-  const [elapsedMs, setElapsedMs] = useState(0)
-  const [fwItems, setFwItems] = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
-  const [showFw, setShowFw] = useState(false)
-  const [showMsg, setShowMsg] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const started = useRef(false)
+  const [hasError, setHasError]   = useState(false)
+  const [fwItems, setFwItems]     = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
+  const [showFw, setShowFw]       = useState(false)
+  const [showMsg, setShowMsg]     = useState(false)
+  const [copied, setCopied]       = useState(false)
 
-  const doneCount = steps.filter((s) => s.status === "done").length
-  const progress = Math.round((doneCount / steps.length) * 100)
   const fwDone = fwItems.filter((i) => i.checked).length
-
-  useEffect(() => {
-    if (completed) return
-    const t = setInterval(() => setElapsedMs((p) => p + 100), 100)
-    return () => clearInterval(t)
-  }, [completed])
-
-  useEffect(() => {
-    if (started.current) return
-    started.current = true
-    const run = async () => {
-      for (let i = 0; i < stepDefs.length; i++) {
-        setSteps((prev) => prev.map((s, idx) => idx === i ? { ...s, status: "running" } : s))
-        await new Promise((r) => setTimeout(r, stepDefs[i].durationMs))
-        setSteps((prev) => prev.map((s, idx) => idx === i ? { ...s, status: "done" } : s))
-      }
-      setCompleted(true)
-      onConfetti()
-      onComplete()
-    }
-    run()
-  }, [])
-
-  const formatElapsed = () => {
-    const s = Math.floor(elapsedMs / 1000)
-    const ms = String(elapsedMs % 1000).padStart(3, "0").slice(0, 2)
-    return `${s}.${ms}s`
-  }
 
   const customerMessage = [
     "Merhaba,",
@@ -110,79 +91,51 @@ export function StepRun({
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const groups = stepDefs.reduce<Record<string, RunStep[]>>((acc, def) => {
-    const step = steps.find((s) => s.def.id === def.id)
-    if (step) (acc[def.group] ??= []).push(step)
-    return acc
-  }, {})
-
   return (
     <div className="space-y-3">
 
-      {/* Progress bar */}
-      <div className="rounded-[5px] border border-border/50 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
-          <div className="flex items-center gap-2">
-            {completed ? (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
-                <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Check className="size-2.5 text-emerald-700" strokeWidth={3} />
-                </span>
-                Tamamlandı
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                Çalışıyor…
-              </span>
-            )}
-            <span className="text-[10px] text-muted-foreground">{doneCount} / {steps.length} adım</span>
-          </div>
-          <span className="text-[10px] font-mono text-muted-foreground">{formatElapsed()}</span>
-        </div>
-        <div className="h-1 w-full bg-muted">
-          <div
-            className={cn("h-full transition-all duration-300", completed ? "bg-emerald-500" : "bg-foreground")}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Grup listesi */}
-      {Object.entries(groups).map(([groupName, groupSteps]) => {
-        const allDone = groupSteps.every((s) => s.status === "done")
-        const isRunning = groupSteps.some((s) => s.status === "running")
-        return (
-          <div key={groupName} className="rounded-[5px] border border-border/50 overflow-hidden">
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">{groupName}</span>
-              {allDone && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
-              {isRunning && <Loader2 className="size-3.5 text-foreground animate-spin" />}
-            </div>
-            <div className="divide-y divide-border/40">
-              {groupSteps.map((step) => (
-                <div key={step.def.id} className={cn("flex items-center gap-2.5 px-3 py-2 transition-colors", step.status === "running" && "bg-muted/20")}>
-                  <span className="shrink-0">
-                    {step.status === "done" && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
-                    {step.status === "running" && <Loader2 className="size-4 animate-spin text-foreground" />}
-                    {step.status === "error" && <XCircle className="size-4 text-red-500" />}
-                    {step.status === "pending" && <span className="size-4 rounded-full border-2 border-border/60 block" />}
-                  </span>
-                  <span className={cn("text-[11px] font-mono flex-1",
-                    step.status === "done" && "text-muted-foreground line-through",
-                    step.status === "running" && "text-foreground font-semibold",
-                    step.status === "pending" && "text-muted-foreground/50",
-                    step.status === "error" && "text-red-500",
-                  )}>
-                    {step.def.label.replace("{firma}", firmaId)}
-                  </span>
-                  {step.status === "running" && <span className="text-[10px] text-muted-foreground animate-pulse">işleniyor…</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
+      {/* Asıl runner */}
+      <AdProvisionRunner
+        payload={{
+          serverId,
+          windowsServerId,
+          iisServerId,
+          firmaId,
+          firmaName,
+          users: users.map((u) => ({
+            username:    u.username,
+            displayName: u.displayName,
+            email:       u.email,
+            phone:       u.phone,
+            password:    u.password,
+          })),
+          services: services.map((s) => ({
+            id:     s.id,
+            name:   s.name,
+            type:   s.type,
+            config: s.config,
+          })),
+          /* 4. adım: SQL (boşsa backend atlar) */
+          sqlServerId:       sqlServerId ?? undefined,
+          sqlMode,
+          backupFolderPath,
+          backupFiles: (backupFiles ?? [])
+            .filter((f) => f.selected)
+            .map((f) => ({
+              fileName:     f.fileName,
+              databaseName: f.databaseName,
+            })),
+          selectedDemoDbIds,
+          addFirmaPrefix,
+          addToSirketDb,
+        }}
+        onComplete={() => {
+          setCompleted(true)
+          onConfetti()
+          onComplete()
+        }}
+        onError={() => setHasError(true)}
+      />
 
       {/* Tamamlama banner */}
       {completed && (
@@ -190,7 +143,7 @@ export function StepRun({
           <div className="flex items-center justify-between px-3 py-2.5 border-b border-emerald-200/60">
             <div>
               <p className="text-[11px] font-semibold text-emerald-800">{firmaId} kurulumu başarıyla tamamlandı</p>
-              <p className="text-[10px] text-emerald-600 mt-0.5">{steps.length} adım · {formatElapsed()}</p>
+              <p className="text-[10px] text-emerald-600 mt-0.5">{users.length} kullanıcı oluşturuldu</p>
             </div>
             <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors">
               <RotateCcw className="size-3.5" />
@@ -198,7 +151,6 @@ export function StepRun({
             </button>
           </div>
 
-          {/* Aksiyon butonları */}
           <div className="flex items-center gap-2 px-3 py-2.5">
             <button
               onClick={() => setShowFw(true)}
@@ -216,6 +168,19 @@ export function StepRun({
             >
               <MessageSquare className="size-3.5" />
               Kullanıcı Mesajı
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Hata banner */}
+      {hasError && !completed && (
+        <div className="rounded-[5px] border border-red-200 bg-red-50 px-3 py-2.5">
+          <div className="flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-red-800">Kurulum tamamlanamadı</p>
+            <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-red-300 text-red-700 hover:bg-red-100 transition-colors">
+              <RotateCcw className="size-3.5" />
+              Baştan Başla
             </button>
           </div>
         </div>

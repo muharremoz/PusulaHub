@@ -2,15 +2,20 @@
 
 import { useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
-import { Plus, Trash2, Eye, EyeOff, RefreshCw, X } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { AdProvisionRunner } from "./ad-provision-runner"
 
 interface Props {
   users: WizardUser[]
   firmaId: string
+  firmaName: string
+  serverId: string
   userLimit: number
   existingUsers: ExistingAdUser[]
+  existingUsersLoading?: boolean
+  existingUsersError?: string | null
   onAdd: () => void
   onRemove: (id: number) => void
   onUpdateUsername: (id: number, val: string) => void
@@ -40,14 +45,27 @@ function getStrength(p: string) {
 }
 
 export function StepUsers({
-  users, firmaId, userLimit, existingUsers,
+  users, firmaId, firmaName, serverId, userLimit, existingUsers,
+  existingUsersLoading, existingUsersError,
   onAdd, onRemove,
   onUpdateUsername, onUpdateDisplayName, onUpdateEmail, onUpdatePhone,
   onUpdatePassword, onTogglePassword, onGeneratePassword,
 }: Props) {
   const [showExisting, setShowExisting] = useState(false)
+  const [testRunning, setTestRunning]   = useState(false)
+  // Test'i her açışta runner'ı remount etmek için artan key
+  const [testKey, setTestKey]           = useState(0)
   const activeExisting = existingUsers.filter((u) => !u.isDisabled).length
   const limitReached = userLimit > 0 && activeExisting + users.length >= userLimit
+
+  const allUsersValid = users.length > 0 &&
+    users.every((u) => u.username.trim() && u.password.trim())
+  const canTest = allUsersValid && !!serverId && !!firmaId
+
+  const startTest = () => {
+    setTestKey((k) => k + 1)
+    setTestRunning(true)
+  }
 
   return (
     <div className="space-y-4">
@@ -66,11 +84,27 @@ export function StepUsers({
         </div>
         <button
           onClick={() => setShowExisting(!showExisting)}
-          className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground"
+          disabled={existingUsersLoading}
+          className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground disabled:opacity-50"
         >
-          Mevcut Kullanıcılar ({existingUsers.length})
+          {existingUsersLoading ? (
+            <>
+              <Loader2 className="size-3 animate-spin" />
+              Yükleniyor
+            </>
+          ) : (
+            <>Mevcut Kullanıcılar ({existingUsers.length})</>
+          )}
         </button>
       </div>
+
+      {/* Mevcut kullanıcılar — hata */}
+      {existingUsersError && (
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {existingUsersError}
+        </div>
+      )}
 
       {/* Mevcut kullanıcılar listesi */}
       {showExisting && (
@@ -82,8 +116,18 @@ export function StepUsers({
             </button>
           </div>
           <div className="divide-y divide-border/40 max-h-48 overflow-y-auto">
-            {existingUsers.length === 0 ? (
-              <p className="px-3 py-4 text-center text-[11px] text-muted-foreground">Henüz kullanıcı yok.</p>
+            {existingUsersLoading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1fr_80px] gap-3 items-center px-3 py-2">
+                  <Skeleton className="h-3 w-24 rounded-[3px]" />
+                  <Skeleton className="h-3 w-32 rounded-[3px]" />
+                  <Skeleton className="h-3 w-14 rounded-[3px] ml-auto" />
+                </div>
+              ))
+            ) : existingUsers.length === 0 ? (
+              <p className="px-3 py-4 text-center text-[11px] text-muted-foreground">
+                Bu firma için AD&apos;de henüz kullanıcı yok.
+              </p>
             ) : existingUsers.map((u) => (
               <div key={u.username} className={cn(
                 "grid grid-cols-[1fr_1fr_80px] gap-3 items-center px-3 py-2",
@@ -252,6 +296,61 @@ export function StepUsers({
         >
           <Plus className="size-3.5" />
           Kullanıcı Ekle
+        </button>
+      )}
+
+      {/* Test paneli */}
+      {testRunning && (
+        <div className="rounded-[5px] border border-blue-200 bg-blue-50/30 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-200/60 bg-blue-50">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="size-3.5 text-blue-700" />
+              <p className="text-[11px] font-semibold text-blue-800">Test: AD Kullanıcı Oluşturma</p>
+            </div>
+            <button
+              onClick={() => setTestRunning(false)}
+              className="text-blue-700 hover:text-blue-900 transition-colors"
+              title="Kapat"
+            >
+              <X className="size-3.5" />
+            </button>
+          </div>
+          <div className="p-3">
+            <AdProvisionRunner
+              key={testKey}
+              payload={{
+                serverId,
+                firmaId,
+                firmaName,
+                users: users.map((u) => ({
+                  username:    u.username,
+                  displayName: u.displayName,
+                  email:       u.email,
+                  phone:       u.phone,
+                  password:    u.password,
+                })),
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Test butonu */}
+      {!testRunning && (
+        <button
+          onClick={startTest}
+          disabled={!canTest}
+          title={
+            !allUsersValid
+              ? "Kullanıcı adı ve şifre girilmelidir"
+              : !serverId || !firmaId
+              ? "Sunucu veya firma seçili değil"
+              : "Bu kullanıcıları AD'ye ekle (test)"
+          }
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border border-blue-200 bg-blue-50 text-[11px] text-blue-700 hover:bg-blue-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <FlaskConical className="size-3.5" />
+          Test Et — Bu adıma kadar olanı AD'ye uygula
         </button>
       )}
     </div>

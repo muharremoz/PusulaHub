@@ -112,6 +112,11 @@ export default function ServerDetailPage({
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    try {
+      // 1) Ajana anlık pull emri ver → hub agent-store'u taze snapshot ile doldurur
+      await fetch(`/api/servers/${id}/refresh`, { method: "POST" });
+    } catch { }
+    // 2) Taze cache'i ekrana oku
     await Promise.all([fetchServer(), fetchDetail()]);
     setRefreshing(false);
   };

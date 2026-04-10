@@ -15,6 +15,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Net;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -199,27 +200,50 @@ class NotifyForm : Form
         pFoot.Controls.Add(MakeLabel(from, new Font("Segoe UI", 8.5f, FontStyle.Bold),
             Color.FromArgb(107, 114, 128), Color.Transparent, 16, 16, 180, 20));
 
-        var btn = new Button
+        // ── Okudum, Anladım butonu (anti-aliased rounded) ───────
+        Color btnBase  = ColBtn[ti];
+        Color btnHover = Color.FromArgb(
+            Math.Max(0, btnBase.R - 25),
+            Math.Max(0, btnBase.G - 25),
+            Math.Max(0, btnBase.B - 25));
+        bool[] hover = new bool[1];
+        var btn = new Panel
         {
-            Text = "Okudum, Anladım",
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            ForeColor = Color.White,
-            BackColor = ColBtn[ti],
-            FlatStyle = FlatStyle.Flat,
             Left = 284, Top = 10, Width = 180, Height = 32,
-            Cursor = Cursors.Hand,
+            BackColor = Color.FromArgb(250, 250, 250),
+            Cursor    = Cursors.Hand,
         };
-        btn.FlatAppearance.BorderSize = 0;
-        // Yuvarlak köşe (radius = 6px)
-        var btnPath = new GraphicsPath();
-        int br2 = 6;
-        btnPath.AddArc(0,              0,               br2*2, br2*2, 180, 90);
-        btnPath.AddArc(180-br2*2,      0,               br2*2, br2*2, 270, 90);
-        btnPath.AddArc(180-br2*2,      32-br2*2,        br2*2, br2*2, 0,   90);
-        btnPath.AddArc(0,              32-br2*2,        br2*2, br2*2, 90,  90);
-        btnPath.CloseAllFigures();
-        btn.Region = new Region(btnPath);
-        btn.Click += (s, e) => AckAndClose();
+        btn.Paint += (s, e) =>
+        {
+            var g = e.Graphics;
+            g.SmoothingMode     = SmoothingMode.AntiAlias;
+            g.PixelOffsetMode   = PixelOffsetMode.HighQuality;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+
+            int rad = 6;
+            var rect = new Rectangle(0, 0, btn.Width - 1, btn.Height - 1);
+            using (var path = new GraphicsPath())
+            {
+                path.AddArc(rect.X,                  rect.Y,                   rad*2, rad*2, 180, 90);
+                path.AddArc(rect.Right - rad*2,      rect.Y,                   rad*2, rad*2, 270, 90);
+                path.AddArc(rect.Right - rad*2,      rect.Bottom - rad*2,      rad*2, rad*2, 0,   90);
+                path.AddArc(rect.X,                  rect.Bottom - rad*2,      rad*2, rad*2, 90,  90);
+                path.CloseAllFigures();
+
+                using (var fill = new SolidBrush(hover[0] ? btnHover : btnBase))
+                    g.FillPath(fill, path);
+            }
+
+            using (var font = new Font("Segoe UI", 9.5f, FontStyle.Bold))
+            using (var br   = new SolidBrush(Color.White))
+            using (var sf   = new StringFormat
+                   { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center })
+                g.DrawString("Okudum, Anladım", font, br,
+                    new RectangleF(0, 0, btn.Width, btn.Height), sf);
+        };
+        btn.MouseEnter += (s, e) => { hover[0] = true;  btn.Invalidate(); };
+        btn.MouseLeave += (s, e) => { hover[0] = false; btn.Invalidate(); };
+        btn.Click      += (s, e) => AckAndClose();
         pFoot.Controls.Add(btn);
 
         y += 52;
@@ -227,21 +251,46 @@ class NotifyForm : Form
         Left = wa.Left + (wa.Width  - Width)  / 2;
         Top  = wa.Top  + (wa.Height - Height) / 2;
 
-        // Rounded corners
-        var gp = new GraphicsPath();
-        int r = 12;
-        gp.AddArc(0, 0, r*2, r*2, 180, 90);
-        gp.AddArc(Width-r*2, 0, r*2, r*2, 270, 90);
-        gp.AddArc(Width-r*2, Height-r*2, r*2, r*2, 0, 90);
-        gp.AddArc(0, Height-r*2, r*2, r*2, 90, 90);
-        gp.CloseAllFigures();
-        Region = new Region(gp);
+        // Not: Region ile yuvarlak köşe anti-alias yapmaz → tırtıklı görünür.
+        // Bunun yerine Windows 11'de DWM ile OS seviyesinde yumuşak köşe,
+        // tüm sürümlerde CS_DROPSHADOW ile hafif gölge uyguluyoruz.
 
         // Auto-close 5 min
         var t = new System.Windows.Forms.Timer { Interval = 300000 };
         t.Tick += (s, e) => { t.Stop(); Close(); };
         t.Start();
     }
+
+    // CS_DROPSHADOW — form gölgeli görünsün (Win 10 + 11)
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.ClassStyle |= 0x00020000; // CS_DROPSHADOW
+            return cp;
+        }
+    }
+
+    // DWM P/Invoke — Windows 11'de OS seviyesinde yumuşak köşe
+    [DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        // Windows 11 build 22000+
+        if (Environment.OSVersion.Version.Build >= 22000)
+        {
+            try
+            {
+                int pref = 2; // DWMWCP_ROUND
+                DwmSetWindowAttribute(Handle, 33, ref pref, 4); // DWMWA_WINDOW_CORNER_PREFERENCE
+            }
+            catch { }
+        }
+    }
+
 
     void AckAndClose()
     {

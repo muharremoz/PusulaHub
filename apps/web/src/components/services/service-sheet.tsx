@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Sheet,
   SheetContent,
@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -20,53 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
 import { cn } from "@/lib/utils"
-import { Check, ChevronsUpDown, FolderOpen } from "lucide-react"
+import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot } from "lucide-react"
+import { toast } from "sonner"
+import type { WizardServiceDto, ServiceType } from "@/app/api/services/route"
+import type { PortRangeDto } from "@/app/api/port-ranges/route"
 
-const CATEGORIES = [
-  { value: "Yazılım",     label: "Yazılım" },
-  { value: "Entegrasyon", label: "Entegrasyon" },
-  { value: "API",         label: "API" },
+/* ── Sabitler ── */
+const TYPE_OPTIONS: { value: ServiceType; label: string; icon: React.ReactNode; defaultCategory: string }[] = [
+  { value: "pusula-program", label: "Pusula Programı",      icon: <Server className="size-3.5" />, defaultCategory: "Pusula Programları" },
+  { value: "iis-site",       label: "IIS Sitesi",            icon: <Globe  className="size-3.5" />, defaultCategory: "API Hizmeti" },
 ]
 
-const STATUSES = [
-  { value: "active",      label: "Aktif" },
-  { value: "maintenance", label: "Bakımda" },
-  { value: "inactive",    label: "Pasif" },
-]
-
-const TAGS = [
-  { value: "ERP",        label: "ERP" },
-  { value: "CRM",        label: "CRM" },
-  { value: "İK",         label: "İK" },
-  { value: "Bordro",     label: "Bordro" },
-  { value: "Muhasebe",   label: "Muhasebe" },
-  { value: "Stok",       label: "Stok" },
-  { value: "Satış",      label: "Satış" },
-  { value: "GİB",        label: "GİB" },
-  { value: "E-Fatura",   label: "E-Fatura" },
-  { value: "E-Arşiv",    label: "E-Arşiv" },
-  { value: "Banka",      label: "Banka" },
-  { value: "REST",       label: "REST" },
-  { value: "Webhook",    label: "Webhook" },
-  { value: "OAuth",      label: "OAuth" },
-  { value: "Senkron",    label: "Senkron" },
-  { value: "Depo",       label: "Depo" },
-  { value: "Lojistik",   label: "Lojistik" },
-]
+const IIS_CATEGORIES = ["API Hizmeti", "Entegrasyonlar"]
 
 /* ── Bölüm kartı ── */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -81,186 +47,451 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 /* ── Alan ── */
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
       <Label className="text-[11px] font-medium text-foreground">{label}</Label>
       {children}
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   )
 }
 
 interface ServiceSheetProps {
-  open: boolean
+  open:         boolean
   onOpenChange: (open: boolean) => void
+  /** null → create modu, dolu → edit modu */
+  editing?:     WizardServiceDto | null
+  onSaved?:     () => void
 }
 
-export function ServiceSheet({ open, onOpenChange }: ServiceSheetProps) {
-  const [name, setName]           = useState("")
-  const [description, setDesc]    = useState("")
-  const [category, setCategory]   = useState("")
-  const [status, setStatus]       = useState("active")
-  const [folder, setFolder]       = useState("")
-  const [tag, setTag]             = useState("")
-  const [tagOpen, setTagOpen]     = useState(false)
+export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: ServiceSheetProps) {
+  const isEdit = !!editing
 
-  const selectedTag = TAGS.find((t) => t.value === tag)
+  /* ── Ortak alanlar ── */
+  const [type,         setType]         = useState<ServiceType>("pusula-program")
+  const [name,         setName]         = useState("")
+  const [category,     setCategory]     = useState("Pusula Programları")
+  const [displayOrder, setDisplayOrder] = useState("0")
+  const [isActive,     setIsActive]     = useState(true)
 
-  const handleReset = () => {
-    setName(""); setDesc(""); setCategory(""); setStatus("active")
-    setFolder(""); setTag("")
+  /* ── pusula-program config ── */
+  const [pSourceFolderPath, setPSourceFolderPath] = useState("")
+  const [pParamFileName,    setPParamFileName]    = useState("")
+  const [pProgramCode,      setPProgramCode]      = useState("")
+  const [pExeName,          setPExeName]          = useState("")
+
+  /* ── iis-site config ── */
+  const [iSourceFolderPath, setISourceFolderPath] = useState("")
+  const [iIisDestPath,      setIIisDestPath]      = useState("")
+  const [iConfigFileName,   setIConfigFileName]   = useState("")
+  const [iSiteNamePattern,  setISiteNamePattern]  = useState("")
+  const [iPortRangeId,      setIPortRangeId]      = useState<string>("")
+
+  const [portRanges,        setPortRanges]        = useState<PortRangeDto[]>([])
+  const [portRangesLoading, setPortRangesLoading] = useState(false)
+
+  const [saving, setSaving] = useState(false)
+
+  /* ── Sheet açıldığında formu yükle ── */
+  useEffect(() => {
+    if (!open) return
+
+    if (editing) {
+      setType(editing.type)
+      setName(editing.name)
+      setCategory(editing.category)
+      setDisplayOrder(String(editing.displayOrder))
+      setIsActive(editing.isActive)
+
+      if (editing.type === "pusula-program" && editing.config && "paramFileName" in editing.config) {
+        setPSourceFolderPath(editing.config.sourceFolderPath ?? "")
+        setPParamFileName(editing.config.paramFileName ?? "")
+        setPProgramCode(editing.config.programCode ?? "")
+        setPExeName(editing.config.exeName ?? "")
+      } else if (editing.type === "iis-site" && editing.config && "iisDestPath" in editing.config) {
+        setISourceFolderPath(editing.config.sourceFolderPath ?? "")
+        setIIisDestPath(editing.config.iisDestPath ?? "")
+        setIConfigFileName(editing.config.configFileName ?? "")
+        setISiteNamePattern(editing.config.siteNamePattern ?? "")
+        setIPortRangeId(String(editing.config.portRangeId ?? ""))
+      }
+    } else {
+      setType("pusula-program")
+      setName("")
+      setCategory("Pusula Programları")
+      setDisplayOrder("0")
+      setIsActive(true)
+      setPSourceFolderPath("")
+      setPParamFileName("")
+      setPProgramCode("")
+      setPExeName("")
+      setISourceFolderPath("")
+      setIIisDestPath("")
+      setIConfigFileName("")
+      setISiteNamePattern("")
+      setIPortRangeId("")
+    }
+  }, [open, editing])
+
+  /* ── Port aralıklarını çek (iis-site seçilince) ── */
+  useEffect(() => {
+    if (!open || type !== "iis-site") return
+    setPortRangesLoading(true)
+    fetch("/api/port-ranges?onlyActive=true")
+      .then((r) => r.json())
+      .then((data) => setPortRanges(Array.isArray(data) ? data : []))
+      .catch(() => setPortRanges([]))
+      .finally(() => setPortRangesLoading(false))
+  }, [open, type])
+
+  /* ── Type değişince default category set et (yeni ekleme modunda) ── */
+  const handleTypeChange = (newType: ServiceType) => {
+    setType(newType)
+    if (!isEdit) {
+      const def = TYPE_OPTIONS.find((t) => t.value === newType)
+      if (def) setCategory(def.defaultCategory)
+    }
   }
 
   const handleClose = () => {
-    handleReset()
+    if (saving) return
     onOpenChange(false)
   }
 
-  const canSave = name.trim() && category && description.trim()
+  /* ── Validation ── */
+  const canSave = (() => {
+    if (saving) return false
+    if (!name.trim() || !category.trim()) return false
+    if (type === "pusula-program") {
+      return !!pSourceFolderPath.trim()
+    }
+    if (type === "iis-site") {
+      return !!iSourceFolderPath.trim() && !!iIisDestPath.trim() && !!iSiteNamePattern.trim() && !!iPortRangeId
+    }
+    return false
+  })()
+
+  const handleSave = async () => {
+    if (!canSave) return
+    setSaving(true)
+    try {
+      const config = type === "pusula-program"
+        ? {
+            sourceFolderPath: pSourceFolderPath.trim(),
+            paramFileName:    pParamFileName.trim() || null,
+            programCode:      pProgramCode.trim() || null,
+            exeName:          pExeName.trim() || null,
+          }
+        : {
+            sourceFolderPath: iSourceFolderPath.trim(),
+            iisDestPath:      iIisDestPath.trim(),
+            configFileName:   iConfigFileName.trim() || null,
+            siteNamePattern:  iSiteNamePattern.trim(),
+            portRangeId:      Number(iPortRangeId),
+          }
+
+      const payload = {
+        name:         name.trim(),
+        category:     category.trim(),
+        type,
+        config,
+        displayOrder: Number(displayOrder) || 0,
+        isActive,
+      }
+
+      const url    = isEdit ? `/api/services/${editing!.id}` : "/api/services"
+      const method = isEdit ? "PATCH" : "POST"
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error ?? "Kaydedilemedi")
+
+      toast.success(isEdit ? "Hizmet güncellendi" : "Hizmet eklendi")
+      onSaved?.()
+      onOpenChange(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
+      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0 overflow-hidden">
 
-        {/* Başlık */}
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
-          <SheetTitle className="text-sm font-semibold">Yeni Hizmet Ekle</SheetTitle>
+          <SheetTitle className="text-sm font-semibold">
+            {isEdit ? "Hizmeti Düzenle" : "Yeni Hizmet Ekle"}
+          </SheetTitle>
           <SheetDescription className="text-[11px] text-muted-foreground">
-            Hizmet bilgilerini ve kategori ayarlarını girin.
+            Önce hizmetin tipini seçin — alanlar tipe göre değişir.
           </SheetDescription>
         </SheetHeader>
 
-        {/* İçerik */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-4 space-y-3">
+
+            {/* ── Tip Seçimi ── */}
+            <Section title="Hizmet Tipi">
+              <div className="grid grid-cols-2 gap-2">
+                {TYPE_OPTIONS.map((t) => {
+                  const active = type === t.value
+                  return (
+                    <button
+                      key={t.value}
+                      type="button"
+                      onClick={() => handleTypeChange(t.value)}
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-2.5 rounded-[5px] border transition-colors text-[11px] font-medium",
+                        active
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border/60 hover:border-foreground/40 hover:bg-muted/30",
+                      )}
+                    >
+                      {t.icon}
+                      {t.label}
+                    </button>
+                  )
+                })}
+              </div>
+              {type === "iis-site" && (
+                <p className="text-[10px] text-muted-foreground">
+                  IIS rolündeki sunucuda klasör kopyalanır, config güncellenir, IIS sitesi oluşturulur ve port havuzundan port atanır.
+                </p>
+              )}
+              {type === "pusula-program" && (
+                <p className="text-[10px] text-muted-foreground">
+                  RDP rolündeki sunucuda klasör kopyalanır, varsa parametre dosyasına firma kodu yazılır.
+                </p>
+              )}
+            </Section>
 
             {/* ── Temel Bilgiler ── */}
             <Section title="Temel Bilgiler">
               <Field label="Hizmet Adı">
                 <Input
-                  placeholder="PusulaERP"
+                  placeholder={type === "iis-site" ? "Pusula RFID" : "Toptan Satış"}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="rounded-[5px] text-[11px] h-8"
                 />
               </Field>
 
-              <Field label="Açıklama">
-                <Textarea
-                  placeholder="Hizmet hakkında kısa açıklama..."
-                  value={description}
-                  onChange={(e) => setDesc(e.target.value)}
-                  className="rounded-[5px] text-[11px] resize-none min-h-[72px]"
-                />
-              </Field>
-
               <Field label="Kategori">
-                <Select value={category} onValueChange={setCategory}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                    <SelectValue placeholder="Seçiniz…" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-[5px]">
-                    {CATEGORIES.map((c) => (
-                      <SelectItem key={c.value} value={c.value} className="text-[11px]">{c.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-
-              <Field label="Hizmet Klasörü">
-                <div className="relative">
-                  <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                {type === "iis-site" ? (
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                      <SelectValue placeholder="Kategori seçin…" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-[5px]">
+                      {IIS_CATEGORIES.map((c) => (
+                        <SelectItem key={c} value={c} className="text-[11px]">{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
                   <Input
-                    placeholder="C:\Program Files\PusulaERP"
-                    value={folder}
-                    onChange={(e) => setFolder(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="rounded-[5px] text-[11px] h-8"
+                    placeholder="Pusula Programları"
                   />
-                </div>
+                )}
               </Field>
 
-              <Field label="Etiket">
-                <Popover open={tagOpen} onOpenChange={setTagOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      role="combobox"
-                      aria-expanded={tagOpen}
-                      className={cn(
-                        "w-full flex items-center justify-between h-8 px-3 rounded-[5px] border border-input bg-transparent text-[11px] transition-[color,box-shadow] outline-none",
-                        "hover:border-ring/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !selectedTag && "text-muted-foreground"
-                      )}
-                    >
-                      {selectedTag ? selectedTag.label : "Seçiniz…"}
-                      <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-[5px]" align="start">
-                    <Command>
-                      <CommandInput placeholder="Etiket ara…" className="text-[11px] h-8" />
-                      <CommandList>
-                        <CommandEmpty className="text-[11px] text-muted-foreground py-3 text-center">
-                          Bulunamadı.
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {TAGS.map((t) => (
-                            <CommandItem
-                              key={t.value}
-                              value={t.value}
-                              onSelect={(val) => {
-                                setTag(val === tag ? "" : val)
-                                setTagOpen(false)
-                              }}
-                              className="text-[11px]"
-                            >
-                              <Check className={cn("size-3.5 mr-2 shrink-0", tag === t.value ? "opacity-100" : "opacity-0")} />
-                              {t.label}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+              <Field label="Sıralama" hint="Düşük sayı önce gelir.">
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={displayOrder}
+                  onChange={(e) => setDisplayOrder(e.target.value)}
+                  className="rounded-[5px] text-[11px] h-8 tabular-nums"
+                />
               </Field>
             </Section>
 
+            {/* ── Type-specific: pusula-program ── */}
+            {type === "pusula-program" && (
+              <>
+                <Section title="Kaynak Klasör">
+                  <Field label="Kaynak Klasör Yolu" hint="RDP sunucusundaki gerçek klasör. Sihirbaz bunu firmaya kopyalar.">
+                    <div className="relative">
+                      <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="C:\Pusula\Toptan"
+                        value={pSourceFolderPath}
+                        onChange={(e) => setPSourceFolderPath(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+                </Section>
+
+                <Section title="Parametre Dosyası">
+                  <Field label="Parametre TXT Adı (opsiyonel)" hint="Dolu ise içine [DATA KODU] {firmaId} yazılır. Boş bırakılırsa atlanır.">
+                    <div className="relative">
+                      <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="TptParametre.txt"
+                        value={pParamFileName}
+                        onChange={(e) => setPParamFileName(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+
+                  <Field label="Program Kodu (opsiyonel)" hint="Eski uygulamada kullanılan kısa kod.">
+                    <Input
+                      placeholder="TPT"
+                      value={pProgramCode}
+                      onChange={(e) => setPProgramCode(e.target.value)}
+                      className="rounded-[5px] text-[11px] h-8 font-mono uppercase"
+                    />
+                  </Field>
+                </Section>
+
+                <Section title="Masaüstü Kısayolu">
+                  <Field
+                    label="EXE Dosya Adı (opsiyonel)"
+                    hint="Firma kurulumunda masaüstü MUSTERILER klasörüne bu exe için kısayol oluşturulur. Boş bırakılırsa kısayol atlanır."
+                  >
+                    <div className="relative">
+                      <MonitorDot className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="pusulax.exe"
+                        value={pExeName}
+                        onChange={(e) => setPExeName(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+                </Section>
+              </>
+            )}
+
+            {/* ── Type-specific: iis-site ── */}
+            {type === "iis-site" && (
+              <>
+                <Section title="Kaynak / Hedef">
+                  <Field label="Kaynak Klasör Yolu" hint="IIS sunucusundaki kaynak klasör (Pusula tarafında).">
+                    <div className="relative">
+                      <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="C:\Pusula\RFID"
+                        value={iSourceFolderPath}
+                        onChange={(e) => setISourceFolderPath(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+
+                  <Field label="IIS Hedef Yolu" hint="{firmaKod} placeholder kullanabilirsiniz.">
+                    <div className="relative">
+                      <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder={"C:\\inetpub\\wwwroot\\rfid_{firmaKod}"}
+                        value={iIisDestPath}
+                        onChange={(e) => setIIisDestPath(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+                </Section>
+
+                <Section title="Config & Site">
+                  <Field label="Config Dosya Adı (opsiyonel)" hint="Hedefte port placeholder'ı bu dosyada güncellenir.">
+                    <div className="relative">
+                      <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="appsettings.json"
+                        value={iConfigFileName}
+                        onChange={(e) => setIConfigFileName(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+
+                  <Field label="IIS Site Adı Pattern" hint="{firmaKod} placeholder kullanabilirsiniz.">
+                    <Input
+                      placeholder={"RFID_{firmaKod}"}
+                      value={iSiteNamePattern}
+                      onChange={(e) => setISiteNamePattern(e.target.value)}
+                      className="rounded-[5px] text-[11px] h-8 font-mono"
+                    />
+                  </Field>
+                </Section>
+
+                <Section title="Port Havuzu">
+                  <Field label="Port Aralığı" hint="Sihirbaz çalıştığında bu havuzdan sıradaki boş port atanır.">
+                    <Select value={iPortRangeId} onValueChange={setIPortRangeId}>
+                      <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                        <SelectValue placeholder={portRangesLoading ? "Yükleniyor…" : "Port aralığı seçin…"} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-[5px]">
+                        {portRanges.length === 0 && !portRangesLoading && (
+                          <div className="px-2 py-3 text-[11px] text-muted-foreground text-center">
+                            Tanımlı aralık yok. Önce /ports sayfasından ekleyin.
+                          </div>
+                        )}
+                        {portRanges.map((r) => {
+                          const free = r.totalPorts - r.usedCount
+                          return (
+                            <SelectItem key={r.id} value={String(r.id)} className="text-[11px]">
+                              <div className="flex items-center gap-2 w-full">
+                                <Waypoints className="size-3 text-muted-foreground shrink-0" />
+                                <span className="font-medium">{r.name}</span>
+                                <span className="text-muted-foreground font-mono ml-2">{r.portStart}–{r.portEnd}</span>
+                                <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{free} boş</span>
+                              </div>
+                            </SelectItem>
+                          )
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                </Section>
+              </>
+            )}
+
             {/* ── Durum ── */}
             <Section title="Durum">
-              <Field label="Başlangıç Durumu">
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-[5px]">
-                    {STATUSES.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-[11px]">{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-medium">Aktif</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Pasif hizmetler firma kurulum sihirbazında görünmez.
+                  </p>
+                </div>
+                <Switch checked={isActive} onCheckedChange={setIsActive} />
+              </div>
             </Section>
 
           </div>
         </ScrollArea>
 
-        {/* Footer */}
         <SheetFooter className="px-4 py-3.5 border-t border-border/50 shrink-0">
           <div className="flex items-center gap-2 w-full">
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 text-[11px] font-medium py-2 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+              disabled={saving}
+              className="flex-1 text-[11px] font-medium py-2 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-40"
             >
               İptal
             </button>
             <button
               type="button"
               disabled={!canSave}
-              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              onClick={handleSave}
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
-              Hizmet Ekle
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {isEdit ? "Kaydet" : "Hizmet Ekle"}
             </button>
           </div>
         </SheetFooter>

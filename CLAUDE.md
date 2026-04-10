@@ -212,6 +212,26 @@ WTS session injection ile kullanıcılara anlık popup gönderme ve okundu takib
 
 ---
 
+## Uygulamayı Başlatma
+
+Port **4242** sabittir (`server.ts`). Başlatmadan önce port kontrolü yapılır:
+
+```powershell
+# 1) Port kontrolü
+netstat -ano | findstr ":4242" | findstr LISTENING
+
+# 2) Doluysa — PowerShell ile öldür (PID yukarıdaki çıktıdan alınır)
+powershell -Command "Stop-Process -Id <PID> -Force"
+
+# 3) Başlat
+pnpm dev
+```
+
+> **Kural:** `taskkill` ve `wmic` **kullanılmaz** — Git Bash path sorunu nedeniyle çalışmaz.
+> Port kapalıysa doğrudan `pnpm dev` başlatılır, beklenmeden çıktı kontrol edilir.
+
+---
+
 ## Teknoloji Stack
 
 - **Framework**: Next.js 15 (App Router)

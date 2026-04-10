@@ -1,21 +1,26 @@
 "use client"
 
-import { AdServer, WindowsServer, Company, ServiceItem, SqlServer, BackupFile, DemoDatabase, WizardUser } from "@/lib/setup-mock-data"
+import { Company, BackupFile, WizardUser } from "@/lib/setup-mock-data"
+import type { WizardServiceDto } from "@/app/api/services/route"
+import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
+import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
+import { type AdServerItem } from "./step-server"
+import { type RdpServerItem } from "./step-firma"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Props {
-  adServer: AdServer | null
-  windowsServer: WindowsServer | null
+  adServer: AdServerItem | null
+  windowsServer: RdpServerItem | null
   company: Company | null
   users: WizardUser[]
-  services: ServiceItem[]
+  services: WizardServiceDto[]
   selectedServiceIds: number[]
-  sqlServer: SqlServer | null
+  sqlServer: SqlServerItem | null
   sqlMode: 0 | 1
   backupFiles: BackupFile[]
   selectedDemoDbIds: number[]
-  demoDatabases: DemoDatabase[]
+  demoDatabases: DemoDatabaseDto[]
   addFirmaPrefix: boolean
 }
 
@@ -49,14 +54,23 @@ export function StepSummary({
   const selectedBackups = backupFiles.filter((f) => f.selected)
   const selectedDemos = demoDatabases.filter((d) => selectedDemoDbIds.includes(d.id))
 
+  const hasPusula = selectedServices.some((s) => s.type === "pusula-program")
+  const firmaNameSafe = (company?.firma ?? firmaId).replace(/[\\/:*?"<>|]/g, "_").trim() || firmaId
+
   const operations = [
     `AD'de Firmalar\\${firmaId} OU oluşturulacak`,
     `OU içinde ${firmaId}_users güvenlik grubu oluşturulacak`,
     `${users.length} domain kullanıcısı oluşturulup gruba eklenecek`,
-    `C:\\Pusula\\MUSTERI\\${firmaId} klasörü açılacak`,
+    `Depo sunucusunda D:\\Resimler\\${firmaId} klasörü açılacak`,
+    `${firmaId}_users grubuna Depo klasörü üzerinde tam yetki verilecek`,
+    `C:\\MUSTERI\\${firmaId} klasörü açılacak`,
     `${selectedServiceIds.length} hizmet klasörü kopyalanacak`,
     `Parametre dosyaları güncellenecek ([DATA KODU] → ${firmaId})`,
     `NTFS yetkileri (Full Control) uygulanacak`,
+    ...(hasPusula ? [
+      `Masaüstü MUSTERILER\\${firmaNameSafe} klasörü açılacak`,
+      `Pusula exe kısayolları ve Resimler kısayolu oluşturulacak`,
+    ] : []),
     ...(sqlServer
       ? sqlMode === 0
         ? [`${selectedBackups.length} veritabanı restore edilecek`]

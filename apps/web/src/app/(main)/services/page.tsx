@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { mockServices, type PusulaService, type ServiceCategory, type ServiceStatus } from "@/lib/mock-services";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,6 +9,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import {
   MoreVertical,
@@ -17,49 +27,28 @@ import {
   ChevronDown,
   ChevronsUpDown,
   Layers,
-  Plug,
-  Code2,
-  Building2,
-  Package,
+  FolderOpen,
+  FileText,
   Plus,
+  Tag,
+  Inbox,
+  Server,
+  Globe,
+  Waypoints,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
 import { StatsCard } from "@/components/shared/stats-card";
+import { toast } from "sonner";
+import type { WizardServiceDto, ServiceType } from "@/app/api/services/route";
 
 /* ── Tipler ── */
-type SortKey = "name" | "category" | "status" | "firmCount" | "updatedAt";
+type SortKey = "name" | "category" | "displayOrder" | "isActive" | "type";
 type SortDir = "asc" | "desc";
-type FilterCat = "all" | ServiceCategory;
+type FilterCat = "all" | string;
 
-/* ── Yardımcılar ── */
-const STATUS_LABEL: Record<ServiceStatus, string> = {
-  active:      "Aktif",
-  maintenance: "Bakımda",
-  inactive:    "Pasif",
-};
-
-const STATUS_BADGE: Record<ServiceStatus, string> = {
-  active:      "bg-emerald-50 text-emerald-700 border-emerald-200",
-  maintenance: "bg-amber-50 text-amber-700 border-amber-200",
-  inactive:    "bg-muted text-muted-foreground border-border",
-};
-
-const STATUS_DOT: Record<ServiceStatus, string> = {
-  active:      "bg-emerald-500",
-  maintenance: "bg-amber-400",
-  inactive:    "bg-slate-300",
-};
-
-const CAT_BADGE: Record<ServiceCategory, string> = {
-  "Yazılım":     "bg-blue-50 text-blue-700 border-blue-200",
-  "Entegrasyon": "bg-purple-50 text-purple-700 border-purple-200",
-  "API":         "bg-orange-50 text-orange-700 border-orange-200",
-};
-
-const CAT_ICON: Record<ServiceCategory, React.ElementType> = {
-  "Yazılım":     Package,
-  "Entegrasyon": Plug,
-  "API":         Code2,
+const TYPE_LABELS: Record<ServiceType, { label: string; icon: React.ReactNode; badge: string }> = {
+  "pusula-program": { label: "Pusula", icon: <Server className="size-3" />, badge: "bg-blue-50 text-blue-700 border-blue-200" },
+  "iis-site":       { label: "IIS",    icon: <Globe  className="size-3" />, badge: "bg-purple-50 text-purple-700 border-purple-200" },
 };
 
 /* ── SortHeader ── */
@@ -91,64 +80,135 @@ function SortHeader({ label, sortKey, active, dir, onSort }: {
 
 /* ── Ana Bileşen ── */
 export default function ServicesPage() {
-  const [sortKey, setSortKey]   = useState<SortKey>("category");
+  const [services, setServices] = useState<WizardServiceDto[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState<string | null>(null);
+
+  const [sortKey, setSortKey]   = useState<SortKey>("displayOrder");
   const [sortDir, setSortDir]   = useState<SortDir>("asc");
   const [filter, setFilter]     = useState<FilterCat>("all");
+
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing, setEditing]     = useState<WizardServiceDto | null>(null);
+  const [deleting, setDeleting]   = useState<WizardServiceDto | null>(null);
+
+  const refresh = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/services");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error ?? "Hizmetler alınamadı");
+      setServices(data as WizardServiceDto[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { refresh(); }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const filtered = mockServices
-    .filter((s) => filter === "all" || s.category === filter)
-    .sort((a, b) => {
-      const mul = sortDir === "asc" ? 1 : -1;
-      if (sortKey === "firmCount") return (a.firmCount - b.firmCount) * mul;
-      return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
-    });
+  const categories = useMemo(
+    () => [...new Set(services.map((s) => s.category))],
+    [services]
+  );
+
+  const filtered = useMemo(() => {
+    return services
+      .filter((s) => filter === "all" || s.category === filter)
+      .sort((a, b) => {
+        const mul = sortDir === "asc" ? 1 : -1;
+        if (sortKey === "displayOrder") return (a.displayOrder - b.displayOrder) * mul;
+        if (sortKey === "isActive")     return (Number(b.isActive) - Number(a.isActive)) * mul;
+        if (sortKey === "type")         return a.type.localeCompare(b.type) * mul;
+        return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
+      });
+  }, [services, filter, sortKey, sortDir]);
 
   const counts = {
-    total:       mockServices.length,
-    active:      mockServices.filter((s) => s.status === "active").length,
-    yazilim:     mockServices.filter((s) => s.category === "Yazılım").length,
-    entegrasyon: mockServices.filter((s) => s.category === "Entegrasyon").length,
-    api:         mockServices.filter((s) => s.category === "API").length,
-    totalFirms:  [...new Set(mockServices.flatMap((s) => s.firmCount))].reduce((a, b) => a + b, 0),
+    total:    services.length,
+    active:   services.filter((s) => s.isActive).length,
+    inactive: services.filter((s) => !s.isActive).length,
+    cats:     categories.length,
+  };
+
+  const openCreate = () => { setEditing(null); setSheetOpen(true); };
+  const openEdit   = (s: WizardServiceDto) => { setEditing(s); setSheetOpen(true); };
+
+  const handleToggleActive = async (s: WizardServiceDto) => {
+    try {
+      const r = await fetch(`/api/services/${s.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !s.isActive }),
+      });
+      if (!r.ok) throw new Error((await r.json())?.error ?? "Güncellenemedi");
+      toast.success(s.isActive ? "Hizmet pasife alındı" : "Hizmet aktif edildi");
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    try {
+      const r = await fetch(`/api/services/${deleting.id}`, { method: "DELETE" });
+      if (!r.ok) throw new Error((await r.json())?.error ?? "Silinemedi");
+      toast.success("Hizmet silindi");
+      setDeleting(null);
+      refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
-    <PageContainer title="Hizmetler" description="Pusula Yazılım ürün ve entegrasyon kataloğu">
+    <PageContainer title="Hizmetler" description="Firma kurulum sihirbazında kullanılan hizmet kataloğu">
 
       {/* ── İstatistikler ── */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM HİZMET" value={counts.total}       icon={<Layers className="h-4 w-4" />}   trend={{ value: `${counts.active} aktif hizmet`, positive: true }}  subtitle="Tüm kategoriler" />
-        <StatsCard title="YAZILIM"       value={counts.yazilim}     icon={<Package className="h-4 w-4" />}  trend={{ value: "Uygulama grubu", positive: true }}                  subtitle="Pusula ürünleri" />
-        <StatsCard title="ENTEGRASYON"   value={counts.entegrasyon} icon={<Plug className="h-4 w-4" />}     trend={{ value: "Dış sistem bağlantısı", positive: true }}           subtitle="Aktif entegrasyonlar" />
-        <StatsCard title="API"           value={counts.api}         icon={<Code2 className="h-4 w-4" />}   trend={{ value: "Servis katmanı", positive: true }}                  subtitle="REST / Webhook" />
+        <StatsCard title="TOPLAM HİZMET" value={counts.total}    icon={<Layers className="h-4 w-4" />}      trend={{ value: `${counts.active} aktif`, positive: true }} subtitle="Tüm kategoriler" />
+        <StatsCard title="AKTİF"          value={counts.active}   icon={<Tag className="h-4 w-4" />}         trend={{ value: "Sihirbazda görünür",   positive: true }} subtitle="Kullanılabilir hizmet" />
+        <StatsCard title="PASİF"          value={counts.inactive} icon={<Inbox className="h-4 w-4" />}       trend={{ value: "Sihirbazda gizli",     positive: false }} subtitle="Devre dışı" />
+        <StatsCard title="KATEGORİ"       value={counts.cats}     icon={<FolderOpen className="h-4 w-4" />}  trend={{ value: "Farklı grup",          positive: true }} subtitle="Otomatik gruplama" />
       </div>
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
-          {(["all", "Yazılım", "Entegrasyon", "API"] as FilterCat[]).map((f) => (
+        <div className="flex items-center rounded-[8px] p-1 flex-wrap gap-0.5" style={{ backgroundColor: "#F4F2F0" }}>
+          <button
+            onClick={() => setFilter("all")}
+            className={cn(
+              "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
+              filter === "all" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            Tümü
+          </button>
+          {categories.map((cat) => (
             <button
-              key={f}
-              onClick={() => setFilter(f)}
+              key={cat}
+              onClick={() => setFilter(cat)}
               className={cn(
                 "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                filter === cat ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {f === "all" ? "Tümü" : f}
+              {cat}
             </button>
           ))}
         </div>
 
         <div className="ml-auto flex items-center gap-2">
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={openCreate}
             className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3.5" />
@@ -164,79 +224,146 @@ export default function ServicesPage() {
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
         >
           {/* Header */}
-          <div className="grid grid-cols-[16px_2fr_3fr_100px_80px_60px_80px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+          <div className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
             <span />
-            <SortHeader label="Hizmet Adı"  sortKey="name"      active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Açıklama</span>
-            <SortHeader label="Kategori"    sortKey="category"  active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Durum"       sortKey="status"    active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Firma"       sortKey="firmCount" active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Güncelleme"  sortKey="updatedAt" active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Tip"          sortKey="type"          active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Hizmet Adı"   sortKey="name"          active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Kategori"     sortKey="category"      active={sortKey} dir={sortDir} onSort={handleSort} />
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kaynak Klasör</span>
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tipe Özel</span>
+            <SortHeader label="Durum"        sortKey="isActive"      active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Sıra"         sortKey="displayOrder"  active={sortKey} dir={sortDir} onSort={handleSort} />
             <span />
           </div>
 
+          {/* Loading */}
+          {loading && (
+            <div className="divide-y divide-border/40">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2.5 items-center">
+                  <Skeleton className="size-1.5 rounded-full" />
+                  <Skeleton className="h-3 w-12 rounded-[3px]" />
+                  <Skeleton className="h-3 w-32 rounded-[3px]" />
+                  <Skeleton className="h-3 w-16 rounded-[3px]" />
+                  <Skeleton className="h-3 w-48 rounded-[3px]" />
+                  <Skeleton className="h-3 w-32 rounded-[3px]" />
+                  <Skeleton className="h-3 w-12 rounded-[3px]" />
+                  <Skeleton className="h-3 w-6 rounded-[3px]" />
+                  <Skeleton className="size-4 rounded-[3px]" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Error */}
+          {error && !loading && (
+            <div className="px-4 py-8 text-center text-[11px] text-red-600">{error}</div>
+          )}
+
+          {/* Empty */}
+          {!loading && !error && filtered.length === 0 && (
+            <div className="px-4 py-12 text-center">
+              <Inbox className="size-8 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-[12px] font-medium text-foreground">
+                {filter === "all" ? "Henüz hizmet yok" : `${filter} kategorisinde hizmet yok`}
+              </p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {filter === "all"
+                  ? "Sağ üstteki “Yeni Hizmet” butonuyla ilk hizmetinizi ekleyin."
+                  : "Farklı bir kategori seçin veya yeni hizmet ekleyin."}
+              </p>
+            </div>
+          )}
+
           {/* Satırlar */}
-          <div className="divide-y divide-border/40">
-            {filtered.map((svc) => {
-              const CatIcon = CAT_ICON[svc.category];
-              return (
+          {!loading && !error && filtered.length > 0 && (
+            <div className="divide-y divide-border/40">
+              {filtered.map((svc) => {
+                const sourceFolder =
+                  svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : "—";
+                const programCode =
+                  svc.type === "pusula-program" && svc.config && "programCode" in svc.config
+                    ? svc.config.programCode
+                    : null;
+                const typeMeta = TYPE_LABELS[svc.type];
+                return (
                 <div
                   key={svc.id}
-                  className="grid grid-cols-[16px_2fr_3fr_100px_80px_60px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
                 >
                   {/* Durum noktası */}
                   <span className="flex items-center justify-center">
                     <span className="relative flex size-1.5">
-                      {svc.status === "active" && (
+                      {svc.isActive && (
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                       )}
-                      <span className={cn("relative inline-flex size-1.5 rounded-full", STATUS_DOT[svc.status])} />
+                      <span className={cn(
+                        "relative inline-flex size-1.5 rounded-full",
+                        svc.isActive ? "bg-emerald-500" : "bg-slate-300"
+                      )} />
                     </span>
                   </span>
 
-                  {/* Hizmet adı + versiyon + etiketler */}
+                  {/* Tip badge */}
+                  <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-[4px] border w-fit flex items-center gap-1", typeMeta.badge)}>
+                    {typeMeta.icon}
+                    {typeMeta.label}
+                  </span>
+
+                  {/* Hizmet adı + program kodu */}
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-medium truncate">{svc.name}</span>
-                      <span className="text-[9px] text-muted-foreground/60 tabular-nums shrink-0">{svc.version}</span>
                     </div>
-                    <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                      {svc.tags.map((t) => (
-                        <span key={t} className="text-[9px] bg-muted px-1 py-0 rounded-[3px] text-muted-foreground">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
+                    {programCode && (
+                      <p className="text-[9px] font-mono text-muted-foreground/70 mt-0.5">{programCode}</p>
+                    )}
                   </div>
 
-                  {/* Açıklama */}
-                  <span className="text-[11px] text-muted-foreground truncate">{svc.description}</span>
-
                   {/* Kategori */}
-                  <span className={cn(
-                    "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit flex items-center gap-1",
-                    CAT_BADGE[svc.category]
-                  )}>
-                    <CatIcon className="size-2.5" />
+                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/40 text-muted-foreground border-border/60 w-fit">
                     {svc.category}
                   </span>
+
+                  {/* Kaynak klasör */}
+                  <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground">
+                    <FolderOpen className="size-3 shrink-0" />
+                    <span className="font-mono truncate">{sourceFolder}</span>
+                  </div>
+
+                  {/* Tipe özel */}
+                  <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground">
+                    {svc.type === "pusula-program" && svc.config && "paramFileName" in svc.config ? (
+                      svc.config.paramFileName ? (
+                        <>
+                          <FileText className="size-3 shrink-0" />
+                          <span className="font-mono truncate">{svc.config.paramFileName}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/40">— param yok</span>
+                      )
+                    ) : svc.type === "iis-site" && svc.config && "siteNamePattern" in svc.config ? (
+                      <>
+                        <Waypoints className="size-3 shrink-0" />
+                        <span className="font-mono truncate">{svc.config.siteNamePattern}</span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground/40">—</span>
+                    )}
+                  </div>
 
                   {/* Durum */}
                   <span className={cn(
                     "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
-                    STATUS_BADGE[svc.status]
+                    svc.isActive
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-muted text-muted-foreground border-border"
                   )}>
-                    {STATUS_LABEL[svc.status]}
+                    {svc.isActive ? "Aktif" : "Pasif"}
                   </span>
 
-                  {/* Firma sayısı */}
-                  <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Building2 className="size-3 shrink-0" />
-                    <span className="tabular-nums">{svc.firmCount}</span>
-                  </div>
-
-                  {/* Güncelleme */}
-                  <span className="text-[10px] text-muted-foreground tabular-nums">{svc.updatedAt}</span>
+                  {/* Sıra */}
+                  <span className="text-[10px] text-muted-foreground tabular-nums text-center">{svc.displayOrder}</span>
 
                   {/* Aksiyon */}
                   <DropdownMenu>
@@ -246,16 +373,23 @@ export default function ServicesPage() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="rounded-[6px]">
-                      <DropdownMenuItem className="text-xs cursor-pointer">Düzenle</DropdownMenuItem>
-                      <DropdownMenuItem className="text-xs cursor-pointer">Firma Listesi</DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEdit(svc)}>
+                        Düzenle
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleToggleActive(svc)}>
+                        {svc.isActive ? "Pasife Al" : "Aktif Et"}
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive">Pasife Al</DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive" onClick={() => setDeleting(svc)}>
+                        Sil
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -265,7 +399,30 @@ export default function ServicesPage() {
         </div>
       </div>
 
-      <ServiceSheet open={sheetOpen} onOpenChange={setSheetOpen} />
+      <ServiceSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        editing={editing}
+        onSaved={refresh}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hizmet silinsin mi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-semibold">{deleting?.name}</span> kalıcı olarak silinecek. Bu işlem geri alınamaz.
+              Pasife almak istiyorsanız menüden “Pasife Al” seçeneğini kullanın.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>İptal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-white hover:bg-destructive/90">
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </PageContainer>
   );

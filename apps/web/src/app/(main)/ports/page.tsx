@@ -1,8 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
 import { StatsCard } from "@/components/shared/stats-card";
+import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,71 +30,35 @@ import {
   Waypoints,
   Plus,
   Layers,
+  Inbox,
 } from "lucide-react";
+import { toast } from "sonner";
 import { PortRangeSheet } from "@/components/ports/port-range-sheet";
+import type { PortRangeDto } from "@/app/api/port-ranges/route";
 
-/* ── Tipler ── */
-type RangeStatus   = "active" | "reserved" | "inactive";
-type PortProtocol  = "TCP" | "UDP" | "TCP/UDP";
-
-interface PortRange {
-  id: string;
-  hizmet: string;
-  firma: string;
-  portStart: number;
-  portEnd: number;
-  protocol: PortProtocol;
-  description: string;
-  status: RangeStatus;
-  usedCount: number;   // o aralıkta kaç port kullanılıyor
-}
-
-type SortKey = "hizmet" | "firma" | "portStart" | "status";
+type SortKey = "name" | "portStart" | "usage" | "status";
 type SortDir = "asc" | "desc";
-type FilterStatus = "all" | RangeStatus;
+type FilterStatus = "all" | "active" | "inactive";
 
-/* ── Mock Veri ── */
-const PORT_RANGES: PortRange[] = [
-  { id: "r01", hizmet: "PusulaERP",             firma: "Pusula Teknoloji", portStart: 8080, portEnd: 8089, protocol: "TCP",     description: "ERP uygulama sunucusu HTTP portları",        status: "active",   usedCount: 6 },
-  { id: "r02", hizmet: "PusulaERP",             firma: "Pusula Teknoloji", portStart: 8443, portEnd: 8449, protocol: "TCP",     description: "ERP uygulama sunucusu HTTPS portları",       status: "active",   usedCount: 3 },
-  { id: "r03", hizmet: "PusulaHR",              firma: "Pusula Teknoloji", portStart: 9000, portEnd: 9009, protocol: "TCP",     description: "İK modülü servis portları",                  status: "active",   usedCount: 4 },
-  { id: "r04", hizmet: "REST API Entegrasyonu", firma: "Atlas Lojistik",   portStart: 5000, portEnd: 5019, protocol: "TCP",     description: "Lojistik entegrasyon API portları",          status: "active",   usedCount: 12 },
-  { id: "r05", hizmet: "CRM Modülü",            firma: "Yildiz Holding",   portStart: 7000, portEnd: 7009, protocol: "TCP",     description: "CRM web uygulaması portları",                status: "active",   usedCount: 5 },
-  { id: "r06", hizmet: "Doküman Yönetimi",      firma: "Pusula Teknoloji", portStart: 6100, portEnd: 6109, protocol: "TCP",     description: "Doküman yönetim sistemi portları",           status: "active",   usedCount: 3 },
-  { id: "r07", hizmet: "İntranet Portalı",      firma: "Yildiz Holding",   portStart: 8800, portEnd: 8809, protocol: "TCP",     description: "İntranet portal servis portları",            status: "reserved", usedCount: 0 },
-  { id: "r08", hizmet: "PusulaERP",             firma: "Atlas Lojistik",   portStart: 8090, portEnd: 8099, protocol: "TCP",     description: "Atlas ERP uygulama sunucusu portları",       status: "active",   usedCount: 7 },
-  { id: "r09", hizmet: "Muhasebe Entegrasyonu", firma: "Yildiz Holding",   portStart: 4500, portEnd: 4509, protocol: "TCP/UDP", description: "Muhasebe sistemi entegrasyon portları",      status: "inactive", usedCount: 0 },
-  { id: "r10", hizmet: "Prometheus İzleme",     firma: "Pusula Teknoloji", portStart: 9090, portEnd: 9099, protocol: "TCP",     description: "Metrik toplama ve izleme portları",          status: "active",   usedCount: 2 },
-  { id: "r11", hizmet: "E-Fatura Servisi",      firma: "Atlas Lojistik",   portStart: 3500, portEnd: 3509, protocol: "TCP",     description: "GİB e-fatura entegrasyon portları",          status: "reserved", usedCount: 0 },
-  { id: "r12", hizmet: "Banka Entegrasyonu",    firma: "Yildiz Holding",   portStart: 4400, portEnd: 4419, protocol: "TCP",     description: "Banka API bağlantı portları",                status: "active",   usedCount: 8 },
-];
-
-/* ── Durum stilleri ── */
-const STATUS_CONFIG: Record<RangeStatus, { label: string; badge: string; dot: string }> = {
-  active:   { label: "Aktif",    badge: "bg-emerald-50 text-emerald-700 border-emerald-200", dot: "bg-emerald-500" },
-  reserved: { label: "Rezerve",  badge: "bg-blue-50 text-blue-700 border-blue-200",          dot: "bg-blue-400"    },
-  inactive: { label: "Pasif",    badge: "bg-muted text-muted-foreground border-border",       dot: "bg-slate-300"   },
-};
-
-const PROTOCOL_BADGE: Record<PortProtocol, string> = {
+const PROTOCOL_BADGE: Record<string, string> = {
   "TCP":     "bg-blue-50 text-blue-700 border-blue-200",
   "UDP":     "bg-purple-50 text-purple-700 border-purple-200",
   "TCP/UDP": "bg-orange-50 text-orange-700 border-orange-200",
 };
 
 /* ── Kullanım çubuğu ── */
-function UsageBar({ used, total, status }: { used: number; total: number; status: RangeStatus }) {
+function UsageBar({ used, total, isActive }: { used: number; total: number; isActive: boolean }) {
   const pct = total > 0 ? (used / total) * 100 : 0;
   const color = pct >= 80 ? "bg-red-400" : pct >= 50 ? "bg-amber-400" : "bg-emerald-400";
   return (
     <div className="flex items-center gap-2 min-w-0">
       <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-        {status === "active" && (
+        {isActive && (
           <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
         )}
       </div>
       <span className="text-[10px] tabular-nums text-muted-foreground shrink-0 w-12 text-right">
-        {status === "active" ? `${used}/${total}` : "—"}
+        {isActive ? `${used}/${total}` : "—"}
       </span>
     </div>
   );
@@ -114,44 +89,92 @@ function SortHeader({ label, sortKey, active, dir, onSort }: {
 
 /* ── Ana Bileşen ── */
 export default function PortsPage() {
-  const [sortKey,    setSortKey]    = useState<SortKey>("portStart");
-  const [sortDir,    setSortDir]    = useState<SortDir>("asc");
-  const [filter,     setFilter]     = useState<FilterStatus>("all");
-  const [sheetOpen,  setSheetOpen]  = useState(false);
+  const [ranges,   setRanges]   = useState<PortRangeDto[]>([]);
+  const [loading,  setLoading]  = useState(true);
+  const [error,    setError]    = useState<string | null>(null);
+
+  const [sortKey,  setSortKey]  = useState<SortKey>("portStart");
+  const [sortDir,  setSortDir]  = useState<SortDir>("asc");
+  const [filter,   setFilter]   = useState<FilterStatus>("all");
+
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [editing,   setEditing]   = useState<PortRangeDto | null>(null);
+
+  const [deleting,    setDeleting]    = useState<PortRangeDto | null>(null);
+  const [deletingNow, setDeletingNow] = useState(false);
+
+  const reload = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch("/api/port-ranges");
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error ?? "Yüklenemedi");
+      setRanges(data as PortRangeDto[]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { reload(); }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const filtered = PORT_RANGES
-    .filter((r) => filter === "all" || r.status === filter)
+  const filtered = ranges
+    .filter((r) => filter === "all" || (filter === "active" ? r.isActive : !r.isActive))
     .sort((a, b) => {
       const mul = sortDir === "asc" ? 1 : -1;
       if (sortKey === "portStart") return (a.portStart - b.portStart) * mul;
-      return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
+      if (sortKey === "usage")     return ((a.usedCount / Math.max(a.totalPorts, 1)) - (b.usedCount / Math.max(b.totalPorts, 1))) * mul;
+      if (sortKey === "status")    return ((a.isActive ? 1 : 0) - (b.isActive ? 1 : 0)) * mul;
+      return a.name.localeCompare(b.name) * mul;
     });
 
-  const totalPorts    = PORT_RANGES.reduce((s, r) => s + (r.portEnd - r.portStart + 1), 0);
-  const usedPorts     = PORT_RANGES.reduce((s, r) => s + r.usedCount, 0);
-  const activeRanges  = PORT_RANGES.filter((r) => r.status === "active").length;
-  const reservedRanges = PORT_RANGES.filter((r) => r.status === "reserved").length;
+  const totalPorts     = ranges.reduce((s, r) => s + r.totalPorts, 0);
+  const usedPorts      = ranges.reduce((s, r) => s + r.usedCount, 0);
+  const activeRanges   = ranges.filter((r) => r.isActive).length;
+  const inactiveRanges = ranges.length - activeRanges;
+
+  const handleAdd  = () => { setEditing(null); setSheetOpen(true); };
+  const handleEdit = (r: PortRangeDto) => { setEditing(r); setSheetOpen(true); };
+
+  const handleConfirmDelete = async () => {
+    if (!deleting) return;
+    setDeletingNow(true);
+    try {
+      const r = await fetch(`/api/port-ranges/${deleting.id}`, { method: "DELETE" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data?.error ?? "Silinemedi");
+      toast.success("Aralık silindi");
+      setDeleting(null);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeletingNow(false);
+    }
+  };
 
   return (
-    <PageContainer title="Port Yönetimi" description="Hizmet bazlı port aralığı tanımları ve kullanım takibi">
+    <PageContainer title="Port Yönetimi" description="IIS hizmetleri için port havuzları — tanım ve kullanım takibi">
 
       {/* ── KPI Kartlar ── */}
       <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM ARALIK"   value={PORT_RANGES.length} icon={<Layers    className="h-4 w-4" />} subtitle={`${totalPorts} port tanımlı`} />
-        <StatsCard title="AKTİF ARALIK"    value={activeRanges}       icon={<Waypoints className="h-4 w-4" />} trend={{ value: "Kullanımda", positive: true }} subtitle="Hizmet veriyor" />
-        <StatsCard title="REZERVE"          value={reservedRanges}     icon={<Waypoints className="h-4 w-4" />} trend={{ value: "Planlanmış", positive: true }} subtitle="Atanmayı bekliyor" />
-        <StatsCard title="KULLANILAN PORT"  value={usedPorts}          icon={<Waypoints className="h-4 w-4" />} trend={{ value: `${totalPorts - usedPorts} boş`, positive: true }} subtitle={`${totalPorts} portta`} />
+        <StatsCard title="TOPLAM ARALIK"   value={ranges.length}  icon={<Layers    className="h-4 w-4" />} subtitle={`${totalPorts} port tanımlı`} />
+        <StatsCard title="AKTİF ARALIK"    value={activeRanges}   icon={<Waypoints className="h-4 w-4" />} subtitle="Atama için kullanılabilir" />
+        <StatsCard title="PASİF ARALIK"    value={inactiveRanges} icon={<Waypoints className="h-4 w-4" />} subtitle="Yeni atama yapılmaz" />
+        <StatsCard title="KULLANILAN PORT" value={usedPorts}      icon={<Waypoints className="h-4 w-4" />} subtitle={`${totalPorts - usedPorts} boş / ${totalPorts}`} />
       </div>
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-2 mb-4">
         <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
-          {(["all", "active", "reserved", "inactive"] as FilterStatus[]).map((f) => (
+          {(["all", "active", "inactive"] as FilterStatus[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -160,13 +183,13 @@ export default function PortsPage() {
                 filter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              {f === "all" ? "Tümü" : STATUS_CONFIG[f as RangeStatus].label}
+              {f === "all" ? "Tümü" : f === "active" ? "Aktif" : "Pasif"}
             </button>
           ))}
         </div>
         <div className="ml-auto">
           <button
-            onClick={() => setSheetOpen(true)}
+            onClick={handleAdd}
             className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3.5" />
@@ -180,72 +203,85 @@ export default function PortsPage() {
         <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 
           {/* Header */}
-          <div className="grid grid-cols-[16px_1.6fr_1.2fr_110px_60px_90px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+          <div className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
             <span />
-            <SortHeader label="Hizmet"      sortKey="hizmet"    active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Firma"       sortKey="firma"     active={sortKey} dir={sortDir} onSort={handleSort} />
+            <SortHeader label="Aralık Adı"   sortKey="name"      active={sortKey} dir={sortDir} onSort={handleSort} />
             <SortHeader label="Port Aralığı" sortKey="portStart" active={sortKey} dir={sortDir} onSort={handleSort} />
             <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Proto</span>
-            <SortHeader label="Durum"       sortKey="status"    active={sortKey} dir={sortDir} onSort={handleSort} />
             <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Açıklama</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanım</span>
+            <SortHeader label="Kullanım"     sortKey="usage"     active={sortKey} dir={sortDir} onSort={handleSort} />
             <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Toplam</span>
             <span />
           </div>
 
-          {/* Satırlar */}
-          <div className="divide-y divide-border/40">
-            {filtered.map((entry) => {
-              const cfg   = STATUS_CONFIG[entry.status];
-              const total = entry.portEnd - entry.portStart + 1;
-              return (
+          {/* Body */}
+          {loading ? (
+            <div className="divide-y divide-border/40">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2.5 items-center">
+                  <Skeleton className="size-1.5 rounded-full" />
+                  <Skeleton className="h-3 w-32" />
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-10" />
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-1.5 w-full" />
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-5 w-5" />
+                </div>
+              ))}
+            </div>
+          ) : error ? (
+            <div className="px-4 py-12 text-center text-[11px] text-destructive">{error}</div>
+          ) : filtered.length === 0 ? (
+            <div className="px-4 py-16 flex flex-col items-center gap-3">
+              <Inbox className="size-8 text-muted-foreground/40" />
+              <div className="text-center">
+                <p className="text-[12px] font-medium">Henüz port aralığı yok</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">IIS hizmetleri için port havuzu tanımlayın</p>
+              </div>
+              <button
+                onClick={handleAdd}
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              >
+                <Plus className="size-3.5" />
+                Aralık Ekle
+              </button>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/40">
+              {filtered.map((entry) => (
                 <div
                   key={entry.id}
-                  className="grid grid-cols-[16px_1.6fr_1.2fr_110px_60px_90px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
                 >
                   {/* Durum noktası */}
                   <span className="flex items-center justify-center">
                     <span className="relative flex size-1.5">
-                      {entry.status === "active" && (
+                      {entry.isActive && (
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                       )}
-                      <span className={cn("relative inline-flex size-1.5 rounded-full", cfg.dot)} />
+                      <span className={cn("relative inline-flex size-1.5 rounded-full", entry.isActive ? "bg-emerald-500" : "bg-slate-300")} />
                     </span>
                   </span>
 
-                  {/* Hizmet */}
-                  <span className="text-[11px] font-medium truncate">{entry.hizmet}</span>
+                  <span className="text-[11px] font-medium truncate">{entry.name}</span>
 
-                  {/* Firma */}
-                  <span className="text-[11px] text-muted-foreground truncate">{entry.firma}</span>
-
-                  {/* Port aralığı */}
                   <span className="text-[11px] font-mono font-semibold tabular-nums">
                     {entry.portStart}
                     <span className="text-muted-foreground font-normal"> – </span>
                     {entry.portEnd}
                   </span>
 
-                  {/* Protokol */}
-                  <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-[4px] border w-fit", PROTOCOL_BADGE[entry.protocol])}>
+                  <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-[4px] border w-fit", PROTOCOL_BADGE[entry.protocol] ?? PROTOCOL_BADGE.TCP)}>
                     {entry.protocol}
                   </span>
 
-                  {/* Durum */}
-                  <span className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit", cfg.badge)}>
-                    {cfg.label}
-                  </span>
+                  <span className="text-[11px] text-muted-foreground truncate">{entry.description ?? "—"}</span>
 
-                  {/* Açıklama */}
-                  <span className="text-[11px] text-muted-foreground truncate">{entry.description}</span>
+                  <UsageBar used={entry.usedCount} total={entry.totalPorts} isActive={entry.isActive} />
 
-                  {/* Kullanım çubuğu */}
-                  <UsageBar used={entry.usedCount} total={total} status={entry.status} />
+                  <span className="text-[11px] text-muted-foreground tabular-nums">{entry.totalPorts} port</span>
 
-                  {/* Toplam port sayısı */}
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{total} port</span>
-
-                  {/* Aksiyon */}
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
@@ -253,16 +289,15 @@ export default function PortsPage() {
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="rounded-[6px]">
-                      <DropdownMenuItem className="text-xs cursor-pointer">Düzenle</DropdownMenuItem>
-                      <DropdownMenuItem className="text-xs cursor-pointer">Port Detayları</DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleEdit(entry)}>Düzenle</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive">Kaldır</DropdownMenuItem>
+                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive" onClick={() => setDeleting(entry)}>Sil</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -272,7 +307,33 @@ export default function PortsPage() {
         </div>
       </div>
 
-      <PortRangeSheet open={sheetOpen} onOpenChange={setSheetOpen} />
+      <PortRangeSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        editing={editing}
+        onSaved={reload}
+      />
+
+      <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Port aralığını sil</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{deleting?.name}</strong> aralığı kalıcı olarak silinecek. Aralığa atanmış port varsa veya bir hizmet bu aralığı kullanıyorsa silme reddedilir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingNow}>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              disabled={deletingNow}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              {deletingNow ? "Siliniyor…" : "Sil"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
     </PageContainer>
   );

@@ -42,10 +42,14 @@ export interface Company {
 }
 
 export interface ServiceItem {
-  id: number
-  name: string
-  category: string
-  folderPath: string
+  id:               number
+  name:             string
+  category:         string
+  sourceFolderPath: string
+  programCode:      string | null
+  paramFileName:    string | null
+  displayOrder:     number
+  isActive:         boolean
 }
 
 export interface SqlServer {
@@ -199,29 +203,6 @@ export const companies: Company[] = [
   { id: 'R013', firkod: 'R013', firma: 'Rüzgar Gayrimenkul', email: 'it@ruzgargay.com', phone: '0216 333 5566', userCount: 5, lastLogin: '2026-04-02T12:00:00', lisansBitis: '2026-08-31', city: 'İstanbul', country: 'TR' },
   { id: 'S014', firkod: 'S014', firma: 'Sarıkamış Turizm A.Ş.', email: 'info@sarikamis.com', phone: '0474 111 2233', pcName: 'TS-SERVER-02', userCount: 4, lastLogin: '2026-03-20T14:00:00', lisansBitis: '2026-05-01', city: 'Kars', country: 'TR' },
   { id: 'T015', firkod: 'T015', firma: 'Trakya Otomotiv Grup', email: 'sistem@trakyaoto.com', phone: '0282 444 7788', pcName: 'TS-SERVER-01', userCount: 9, lastLogin: '2026-04-01T16:00:00', lisansBitis: '2027-04-01', city: 'Tekirdağ', country: 'TR' },
-]
-
-export const serviceItems: ServiceItem[] = [
-  // Muhasebe
-  { id: 1, name: 'ERP Muhasebe', category: 'Muhasebe', folderPath: 'C:\\Pusula\\Servisler\\ERP\\Muhasebe' },
-  { id: 2, name: 'Fatura Yönetimi', category: 'Muhasebe', folderPath: 'C:\\Pusula\\Servisler\\Fatura' },
-  { id: 3, name: 'Bütçe Planlama', category: 'Muhasebe', folderPath: 'C:\\Pusula\\Servisler\\Butce' },
-  // İnsan Kaynakları
-  { id: 4, name: 'Personel Yönetimi', category: 'İnsan Kaynakları', folderPath: 'C:\\Pusula\\Servisler\\IK\\Personel' },
-  { id: 5, name: 'Bordro Sistemi', category: 'İnsan Kaynakları', folderPath: 'C:\\Pusula\\Servisler\\IK\\Bordro' },
-  { id: 6, name: 'İzin Yönetimi', category: 'İnsan Kaynakları', folderPath: 'C:\\Pusula\\Servisler\\IK\\Izin' },
-  // Üretim
-  { id: 7, name: 'Üretim Planlama', category: 'Üretim', folderPath: 'C:\\Pusula\\Servisler\\Uretim\\Plan' },
-  { id: 8, name: 'Stok Takip', category: 'Üretim', folderPath: 'C:\\Pusula\\Servisler\\Uretim\\Stok' },
-  { id: 9, name: 'Kalite Kontrol', category: 'Üretim', folderPath: 'C:\\Pusula\\Servisler\\Uretim\\Kalite' },
-  { id: 10, name: 'MRP Modülü', category: 'Üretim', folderPath: 'C:\\Pusula\\Servisler\\Uretim\\MRP' },
-  // CRM
-  { id: 11, name: 'Müşteri Yönetimi', category: 'CRM', folderPath: 'C:\\Pusula\\Servisler\\CRM\\Musteri' },
-  { id: 12, name: 'Satış Takip', category: 'CRM', folderPath: 'C:\\Pusula\\Servisler\\CRM\\Satis' },
-  { id: 13, name: 'Teklif Yönetimi', category: 'CRM', folderPath: 'C:\\Pusula\\Servisler\\CRM\\Teklif' },
-  // Raporlama
-  { id: 14, name: 'Standart Raporlar', category: 'Raporlama', folderPath: 'C:\\Pusula\\Servisler\\Rapor\\Standart' },
-  { id: 15, name: 'Dashboard & Analiz', category: 'Raporlama', folderPath: 'C:\\Pusula\\Servisler\\Rapor\\Dashboard' },
 ]
 
 export const sqlServers: SqlServer[] = [

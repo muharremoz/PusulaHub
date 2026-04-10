@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Sheet,
   SheetContent,
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Switch } from "@/components/ui/switch"
 import {
   Select,
   SelectContent,
@@ -21,19 +22,14 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { Waypoints } from "lucide-react"
-import { mockServices } from "@/lib/mock-services"
+import { Waypoints, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+import type { PortRangeDto, PortProtocol } from "@/app/api/port-ranges/route"
 
-const PROTOCOLS = [
+const PROTOCOLS: { value: PortProtocol; label: string }[] = [
   { value: "TCP",     label: "TCP" },
   { value: "UDP",     label: "UDP" },
   { value: "TCP/UDP", label: "TCP/UDP" },
-]
-
-const STATUSES = [
-  { value: "active",   label: "Aktif" },
-  { value: "reserved", label: "Rezerve" },
-  { value: "inactive", label: "Pasif" },
 ]
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -47,34 +43,59 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
       <Label className="text-[11px] font-medium text-foreground">{label}</Label>
       {children}
+      {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
   )
 }
 
 interface PortRangeSheetProps {
-  open: boolean
+  open:         boolean
   onOpenChange: (open: boolean) => void
+  /** null → create modu, dolu → edit modu */
+  editing?:     PortRangeDto | null
+  onSaved?:     () => void
 }
 
-export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
-  const [hizmet,      setHizmet]      = useState("")
+export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: PortRangeSheetProps) {
+  const isEdit = !!editing
+
+  const [name,        setName]        = useState("")
   const [portStart,   setPortStart]   = useState("")
   const [portEnd,     setPortEnd]     = useState("")
-  const [protocol,    setProtocol]    = useState("TCP")
+  const [protocol,    setProtocol]    = useState<PortProtocol>("TCP")
   const [description, setDescription] = useState("")
-  const [status,      setStatus]      = useState("active")
+  const [isActive,    setIsActive]    = useState(true)
+  const [saving,      setSaving]      = useState(false)
 
-  const handleReset = () => {
-    setHizmet(""); setPortStart(""); setPortEnd("")
-    setProtocol("TCP"); setDescription(""); setStatus("active")
+  // Sheet açıldığında / editing değiştiğinde formu yükle
+  useEffect(() => {
+    if (!open) return
+    if (editing) {
+      setName(editing.name)
+      setPortStart(String(editing.portStart))
+      setPortEnd(String(editing.portEnd))
+      setProtocol(editing.protocol)
+      setDescription(editing.description ?? "")
+      setIsActive(editing.isActive)
+    } else {
+      setName("")
+      setPortStart("")
+      setPortEnd("")
+      setProtocol("TCP")
+      setDescription("")
+      setIsActive(true)
+    }
+  }, [open, editing])
+
+  const handleClose = () => {
+    if (saving) return
+    onOpenChange(false)
   }
-
-  const handleClose = () => { handleReset(); onOpenChange(false) }
 
   /* Port aralığı önizleme ve doğrulama */
   const startNum = parseInt(portStart)
@@ -84,7 +105,39 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
     : null
   const portRangeValid = totalPorts !== null && startNum >= 1 && endNum <= 65535
 
-  const canSave = hizmet && portRangeValid && description.trim()
+  const canSave = !!name.trim() && portRangeValid && !saving
+
+  const handleSave = async () => {
+    if (!canSave) return
+    setSaving(true)
+    try {
+      const payload = {
+        name:        name.trim(),
+        portStart:   startNum,
+        portEnd:     endNum,
+        protocol,
+        description: description.trim() || null,
+        isActive,
+      }
+      const url    = isEdit ? `/api/port-ranges/${editing!.id}` : "/api/port-ranges"
+      const method = isEdit ? "PATCH" : "POST"
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data?.error ?? "Kaydedilemedi")
+
+      toast.success(isEdit ? "Aralık güncellendi" : "Aralık eklendi")
+      onSaved?.()
+      onOpenChange(false)
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
@@ -93,41 +146,34 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-2">
             <Waypoints className="size-4 text-muted-foreground" />
-            <SheetTitle className="text-sm font-semibold">Yeni Port Aralığı Ekle</SheetTitle>
+            <SheetTitle className="text-sm font-semibold">
+              {isEdit ? "Port Aralığını Düzenle" : "Yeni Port Aralığı Ekle"}
+            </SheetTitle>
           </div>
           <SheetDescription className="text-[11px] text-muted-foreground">
-            Hizmet için port aralığı tanımlayın ve takibe alın.
+            IIS sitesi gerektiren hizmetler bu havuzdan port alır. Sihirbaz, kurulum sırasında sıradaki boş portu atar.
           </SheetDescription>
         </SheetHeader>
 
         <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-4 space-y-3">
 
-            {/* ── Hizmet ── */}
-            <Section title="Hizmet">
-              <Field label="Hizmet">
-                <Select value={hizmet} onValueChange={setHizmet}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                    <SelectValue placeholder="Hizmet seçin…" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-[5px]">
-                    {mockServices.map((s) => (
-                      <SelectItem key={s.id} value={s.name} className="text-[11px]">
-                        {s.name}
-                        <span className="ml-2 text-muted-foreground text-[10px]">{s.category}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <Section title="Tanım">
+              <Field label="Aralık Adı" hint="Hizmet eklerken bu isimle seçilecek.">
+                <Input
+                  placeholder="Örn: RFID Portları"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="rounded-[5px] text-[11px] h-8"
+                />
               </Field>
             </Section>
 
-            {/* ── Port Aralığı ── */}
             <Section title="Port Aralığı">
               <div className="grid grid-cols-2 gap-2.5">
                 <Field label="Başlangıç Portu">
                   <Input
-                    placeholder="8080"
+                    placeholder="8000"
                     value={portStart}
                     onChange={(e) => setPortStart(e.target.value.replace(/\D/g, ""))}
                     className="rounded-[5px] text-[11px] h-8 font-mono"
@@ -136,7 +182,7 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
                 </Field>
                 <Field label="Bitiş Portu">
                   <Input
-                    placeholder="8089"
+                    placeholder="8099"
                     value={portEnd}
                     onChange={(e) => setPortEnd(e.target.value.replace(/\D/g, ""))}
                     className="rounded-[5px] text-[11px] h-8 font-mono"
@@ -146,7 +192,7 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
               </div>
 
               <Field label="Protokol">
-                <Select value={protocol} onValueChange={setProtocol}>
+                <Select value={protocol} onValueChange={(v) => setProtocol(v as PortProtocol)}>
                   <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -176,11 +222,10 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
               )}
             </Section>
 
-            {/* ── Açıklama ── */}
             <Section title="Açıklama">
-              <Field label="Açıklama">
+              <Field label="Açıklama (opsiyonel)">
                 <Textarea
-                  placeholder="Bu port aralığının kullanım amacını belirtin…"
+                  placeholder="Bu aralığın kullanım amacını belirtin…"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="rounded-[5px] text-[11px] resize-none min-h-[72px]"
@@ -188,20 +233,16 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
               </Field>
             </Section>
 
-            {/* ── Durum ── */}
             <Section title="Durum">
-              <Field label="Başlangıç Durumu">
-                <Select value={status} onValueChange={setStatus}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-[5px]">
-                    {STATUSES.map((s) => (
-                      <SelectItem key={s.value} value={s.value} className="text-[11px]">{s.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[11px] font-medium">Aktif</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    Pasif aralıklardan port atanmaz.
+                  </p>
+                </div>
+                <Switch checked={isActive} onCheckedChange={setIsActive} />
+              </div>
             </Section>
 
           </div>
@@ -212,16 +253,19 @@ export function PortRangeSheet({ open, onOpenChange }: PortRangeSheetProps) {
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 text-[11px] font-medium py-2 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+              disabled={saving}
+              className="flex-1 text-[11px] font-medium py-2 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground disabled:opacity-40"
             >
               İptal
             </button>
             <button
               type="button"
               disabled={!canSave}
-              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              onClick={handleSave}
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
-              Aralık Ekle
+              {saving && <Loader2 className="size-3.5 animate-spin" />}
+              {isEdit ? "Kaydet" : "Aralık Ekle"}
             </button>
           </div>
         </SheetFooter>

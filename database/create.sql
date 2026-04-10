@@ -34,9 +34,24 @@ CREATE TABLE Servers (
 IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='ServerRoles' AND xtype='U')
 CREATE TABLE ServerRoles (
     ServerId NVARCHAR(50) NOT NULL REFERENCES Servers(Id) ON DELETE CASCADE,
-    Role     NVARCHAR(20) NOT NULL CHECK (Role IN ('AD', 'SQL', 'IIS', 'File', 'DNS', 'DHCP', 'General')),
+    Role     NVARCHAR(20) NOT NULL CHECK (Role IN ('AD', 'SQL', 'IIS', 'File', 'DNS', 'DHCP', 'General', 'RDP')),
     PRIMARY KEY (ServerId, Role)
 );
+
+-- Ek kolonlar (schema evrimi için)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'ApiKey' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD ApiKey NVARCHAR(200) NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'AgentPort' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD AgentPort INT NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'Username' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD Username NVARCHAR(200) NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'Password' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD Password NVARCHAR(500) NULL;
+-- SQL sunucuları için sunucu bazlı SQL credentials (SA kullanıcısı/şifresi)
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'SqlUsername' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD SqlUsername NVARCHAR(200) NULL;
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = N'SqlPassword' AND Object_ID = Object_ID(N'Servers'))
+    ALTER TABLE Servers ADD SqlPassword NVARCHAR(500) NULL;
 
 -- ============================================================
 -- FIRMALAR
@@ -293,6 +308,36 @@ CREATE TABLE UserDailyUsage (
     SessionMinutes INT           NOT NULL DEFAULT 0,
     SampleCount    INT           NOT NULL DEFAULT 0,
     CONSTRAINT UQ_UserDailyUsage UNIQUE (Date, Username, Server)
+);
+
+-- ============================================================
+-- DEMO VERİTABANLARI (Firma Kurulum Sihirbazı — 5. adım)
+-- ============================================================
+
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='DemoDatabases' AND xtype='U')
+CREATE TABLE DemoDatabases (
+    Id           INT           IDENTITY(1,1) PRIMARY KEY,
+    Name         NVARCHAR(200) NOT NULL,
+    DataName     NVARCHAR(200) NOT NULL,
+    LocationType NVARCHAR(50)  NOT NULL DEFAULT 'Yerel',
+    LocationPath NVARCHAR(500) NULL,
+    Description  NVARCHAR(500) NULL,
+    DisplayOrder INT           NOT NULL DEFAULT 0,
+    IsActive     BIT           NOT NULL DEFAULT 1,
+    CreatedAt    DATETIME2     NOT NULL DEFAULT SYSDATETIME(),
+    UpdatedAt    DATETIME2     NOT NULL DEFAULT SYSDATETIME()
+);
+
+-- Demo DB ↔ Pusula Programı (WizardServices) many-to-many
+IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='DemoDatabaseServices' AND xtype='U')
+CREATE TABLE DemoDatabaseServices (
+    DemoDatabaseId INT NOT NULL,
+    ServiceId      INT NOT NULL,
+    CONSTRAINT PK_DemoDatabaseServices PRIMARY KEY (DemoDatabaseId, ServiceId),
+    CONSTRAINT FK_DemoDatabaseServices_DemoDatabase
+        FOREIGN KEY (DemoDatabaseId) REFERENCES DemoDatabases(Id) ON DELETE CASCADE,
+    CONSTRAINT FK_DemoDatabaseServices_Service
+        FOREIGN KEY (ServiceId) REFERENCES WizardServices(Id) ON DELETE CASCADE
 );
 
 PRINT 'PusulaHub veritabani basariyla olusturuldu.';

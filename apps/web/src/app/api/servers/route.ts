@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
+import { encrypt } from "@/lib/crypto"
 import { getAllAgents } from "@/lib/agent-store"
 import type { Server } from "@/types"
 
@@ -88,17 +89,26 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, ip, dns, os, status, cpu, ram, disk, uptime, lastChecked, roles, apiKey, agentPort, username, password } = body
+    const {
+      name, ip, dns, os, status, cpu, ram, disk, uptime, lastChecked,
+      roles, apiKey, agentPort, username, password,
+      sqlUsername, sqlPassword,
+    } = body
 
     const id = `srv-${Date.now()}`
 
+    // Hassas alanlar AES-256-GCM ile şifrelenir
+    const encryptedPassword    = encrypt(password ?? null)
+    const encryptedSqlPassword = encrypt(sqlPassword ?? null)
+
     await execute`
-      INSERT INTO Servers (Id, Name, IP, DNS, OS, Status, CPU, RAM, Disk, Uptime, LastChecked, ApiKey, AgentPort, Username, Password)
+      INSERT INTO Servers (Id, Name, IP, DNS, OS, Status, CPU, RAM, Disk, Uptime, LastChecked, ApiKey, AgentPort, Username, Password, SqlUsername, SqlPassword)
       VALUES (
         ${id}, ${name}, ${ip}, ${dns ?? null}, ${os},
         ${status ?? "offline"}, ${cpu ?? 0}, ${ram ?? 0}, ${disk ?? 0},
         ${uptime ?? null}, ${lastChecked ?? null},
-        ${apiKey ?? null}, ${agentPort ?? 8585}, ${username ?? null}, ${password ?? null}
+        ${apiKey ?? null}, ${agentPort ?? 8585}, ${username ?? null}, ${encryptedPassword},
+        ${sqlUsername ?? null}, ${encryptedSqlPassword}
       )
     `
 

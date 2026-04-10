@@ -97,6 +97,9 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
   const [username, setUsername]   = useState("")
   const [password, setPassword]   = useState("")
   const [showPw, setShowPw]       = useState(false)
+  const [sqlUsername, setSqlUsername] = useState("")
+  const [sqlPassword, setSqlPassword] = useState("")
+  const [showSqlPw, setShowSqlPw]     = useState(false)
   const [saving, setSaving]       = useState(false)
 
   // Düzenleme modunda mevcut veriyi yükle
@@ -115,6 +118,8 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
         setAgentPort(String(data.agentPort ?? 5000))
         setUsername(data.username ?? "")
         setPassword(data.password ?? "")
+        setSqlUsername(data.sqlUsername ?? "")
+        setSqlPassword(data.sqlPassword ?? "")
       })
       .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -126,6 +131,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
     setName(""); setIp(""); setDns(""); setOs(""); setRole("")
     setApiKey(""); setAgentPort("5000")
     setUsername(""); setPassword(""); setShowPw(false)
+    setSqlUsername(""); setSqlPassword(""); setShowSqlPw(false)
   }
 
   const handleClose = () => {
@@ -133,22 +139,27 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
     onOpenChange(false)
   }
 
-  const canSave = name.trim() && ip.trim() && os && role && apiKey.trim()
+  const isSqlRole = role === "SQL"
+  const canSave =
+    name.trim() && ip.trim() && os && role && apiKey.trim() &&
+    (!isSqlRole || (sqlUsername.trim() && sqlPassword))
 
   const handleSave = async () => {
     if (!canSave || saving) return
     setSaving(true)
     try {
       const payload = {
-        name:      name.trim(),
-        ip:        ip.trim(),
-        dns:       dns.trim() || null,
+        name:        name.trim(),
+        ip:          ip.trim(),
+        dns:         dns.trim() || null,
         os,
-        roles:     [role],
-        apiKey:    apiKey.trim(),
-        agentPort: parseInt(agentPort) || 5000,
-        username:  username.trim() || null,
-        password:  password || null,
+        roles:       [role],
+        apiKey:      apiKey.trim(),
+        agentPort:   parseInt(agentPort) || 5000,
+        username:    username.trim() || null,
+        password:    password || null,
+        sqlUsername: isSqlRole ? (sqlUsername.trim() || null) : null,
+        sqlPassword: isSqlRole ? (sqlPassword || null) : null,
       }
 
       const res = await fetch(
@@ -187,7 +198,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
         </SheetHeader>
 
         {/* İçerik */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-4 space-y-3">
 
             {/* ── Temel Bilgiler ── */}
@@ -358,6 +369,55 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                 </div>
               </Field>
             </Section>
+
+            {/* ── SQL Bilgileri (sadece SQL rolü seçilince) ── */}
+            {isSqlRole && (
+              <Section title="SQL Bilgileri">
+                <p className="text-[10px] text-muted-foreground -mt-1">
+                  SQL sunucusuna (veritabanı listesi, boyut vb.) bağlanırken kullanılacak SA kullanıcısı.
+                </p>
+                <Field label="SA Kullanıcı Adı">
+                  <Input
+                    placeholder="sa"
+                    value={sqlUsername}
+                    onChange={(e) => setSqlUsername(e.target.value)}
+                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                  />
+                </Field>
+                <Field label="SA Şifresi">
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative flex-1">
+                      <Input
+                        type={showSqlPw ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={sqlPassword}
+                        onChange={(e) => setSqlPassword(e.target.value)}
+                        className="rounded-[5px] text-[11px] h-8 pr-9 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSqlPw((v) => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showSqlPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!sqlPassword) return
+                        navigator.clipboard.writeText(sqlPassword)
+                        toast.success("Şifre kopyalandı")
+                      }}
+                      title="Kopyala"
+                      className="flex items-center justify-center h-8 w-8 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground shrink-0"
+                    >
+                      <Copy className="size-3.5" />
+                    </button>
+                  </div>
+                </Field>
+              </Section>
+            )}
 
           </div>
         </ScrollArea>

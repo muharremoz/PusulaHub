@@ -49,11 +49,12 @@ const navGroups: NavGroup[] = [
   {
     label: "Servisler",
     items: [
-      { title: "Pusula Hizmetleri",  url: "/services", icon: Wrench },
-      { title: "IIS",                url: "/iis",      icon: Globe },
-      { title: "Active Directory",   url: "/ad",       icon: Shield },
-      { title: "SQL",                url: "/sql",      icon: Database },
-      { title: "Port Yönetimi",      url: "/ports",    icon: Waypoints },
+      { title: "Pusula Hizmetleri",  url: "/services",       icon: Wrench },
+      { title: "Demo Veritabanları", url: "/demo-databases", icon: Database },
+      { title: "IIS",                url: "/iis",            icon: Globe },
+      { title: "Active Directory",   url: "/ad",             icon: Shield },
+      { title: "SQL",                url: "/sql",            icon: Database },
+      { title: "Port Yönetimi",      url: "/ports",          icon: Waypoints },
     ],
   },
   {

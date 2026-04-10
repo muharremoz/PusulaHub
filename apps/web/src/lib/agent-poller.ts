@@ -136,7 +136,7 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
           .input("id",          sql.NVarChar(50),  `${serverName}_${site.name}`.replace(/\s/g, "_"))
           .input("name",        sql.NVarChar(200), site.name)
           .input("server",      sql.NVarChar(100), serverName)
-          .input("status",      sql.NVarChar(20),  site.status ?? "Unknown")
+          .input("status",      sql.NVarChar(20),  site.status ?? "Stopped")
           .input("binding",     sql.NVarChar(500), site.binding ?? "")
           .input("appPool",     sql.NVarChar(200), site.appPool ?? "")
           .input("physicalPath",sql.NVarChar(500), site.physicalPath ?? "")
@@ -292,6 +292,44 @@ async function pollAll(): Promise<void> {
     }
   } catch (err) {
     console.error("[Poller] DB sorgu hatası:", err)
+  }
+}
+
+/* ── On-demand: tek sunucuyu anlık poll et ──
+   UI'daki "Yenile" butonu için. Id veya slug(name) ile eşleşir. */
+function slugifyName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i")
+    .replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+}
+
+export async function pollSingleAgent(idOrSlug: string): Promise<boolean> {
+  try {
+    // Önce Id ile dene
+    let rows = await pollerQuery<ServerRow[]>(
+      `SELECT Id, Name, IP, OS, ApiKey, AgentPort FROM Servers WHERE Id = '${idOrSlug.replace(/'/g, "''")}'`
+    )
+
+    // Bulunamazsa tüm sunucuları çekip slug ile eşleştir
+    if (!rows.length) {
+      const all = await pollerQuery<ServerRow[]>(
+        "SELECT Id, Name, IP, OS, ApiKey, AgentPort FROM Servers"
+      )
+      const match = all.find((s) => slugifyName(s.Name) === idOrSlug)
+      if (match) rows = [match]
+    }
+
+    if (!rows.length) return false
+    const server = rows[0]
+    if (!server.ApiKey || !server.AgentPort) return false
+
+    return await pollAgent(server)
+  } catch (err) {
+    console.error("[Poller] pollSingleAgent hatası:", err)
+    return false
   }
 }
 
