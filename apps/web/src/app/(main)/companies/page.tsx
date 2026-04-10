@@ -15,6 +15,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Skeleton } from "@/components/ui/skeleton";
 import { companies, messageRecipients, servers, iisSites } from "@/lib/mock-data";
 import type { Company } from "@/types";
+import type { Top5Company } from "@/app/api/companies/top5/route";
 
 interface FirmaCompany {
   id: string
@@ -256,20 +257,10 @@ const statusConfig = {
   trial:     { label: "Deneme",         variant: "warning" as const, color: "bg-amber-50 text-amber-700 border-amber-200/60" },
 };
 
-function calcYogunluk(comp: Company) {
-  const cpuPct  = Math.round((comp.currentUsage.cpu  / comp.monthlyQuota.cpu)  * 100);
-  const ramPct  = Math.round((comp.currentUsage.ram  / comp.monthlyQuota.ram)  * 100);
-  const diskPct = Math.round((comp.currentUsage.disk / comp.monthlyQuota.disk) * 100);
-  const userPct = Math.round((comp.userCount / comp.userCapacity) * 100);
-  const dbTotal = (comp.databases ?? []).reduce((s, d) => s + d.size, 0);
-  const dbPct   = Math.round((dbTotal / comp.dbQuota) * 100);
-  return Math.round((cpuPct + ramPct + diskPct + userPct + dbPct) / 5);
-}
-
-const top5 = [...companies].sort((a, b) => calcYogunluk(b) - calcYogunluk(a)).slice(0, 5);
-
 export default function CompaniesPage() {
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [top5, setTop5] = useState<Top5Company[]>([]);
+  const [top5Loading, setTop5Loading] = useState(true);
   const [selectedFirma, setSelectedFirma] = useState<FirmaCompany | null>(null);
   const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
@@ -287,6 +278,14 @@ export default function CompaniesPage() {
       .then((data: FirmaCompany[]) => setApiCompanies(data))
       .catch(() => setApiCompanies([]))
       .finally(() => setApiLoading(false))
+  }, [])
+
+  useEffect(() => {
+    fetch("/api/companies/top5")
+      .then((r) => r.ok ? r.json() : Promise.reject(r))
+      .then((data: Top5Company[]) => setTop5(Array.isArray(data) ? data : []))
+      .catch(() => setTop5([]))
+      .finally(() => setTop5Loading(false))
   }, [])
 
   useEffect(() => {
@@ -434,52 +433,71 @@ export default function CompaniesPage() {
           /* Seçili firma yok: kart grid */
           <NestedCard>
             <p className="text-[11px] font-medium text-muted-foreground tracking-wide mb-3">EN YOĞUN 5 FİRMA</p>
-            <div className="grid grid-cols-5 gap-2">
-              {top5.map((comp) => {
-                const st = statusConfig[comp.status];
-                const yogunluk = calcYogunluk(comp);
-                const yogunlukColor = yogunluk >= 80 ? "text-red-600" : yogunluk >= 60 ? "text-amber-600" : "text-emerald-600";
-                return (
-                  <button
-                    key={comp.id}
-                    onClick={() => {
-                      setSelectedCompany(comp.id)
-                      const apiMatch = apiCompanies.find((a) => a.firma.toLowerCase() === comp.name.toLowerCase())
-                      setSelectedFirma(apiMatch ?? null)
-                    }}
-                    className="rounded-[8px] p-2 pb-0 text-left transition-all flex flex-col hover:brightness-[0.97]"
-                    style={{ backgroundColor: "#F4F2F0" }}
-                  >
-                    <div
-                      className="rounded-[4px] px-3 py-3 w-full"
-                      style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-                    >
-                      <div className="flex items-start justify-between gap-1 mb-3">
-                        <p className="text-[11px] font-semibold leading-tight">{comp.name}</p>
-                        <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1 py-0 text-[9px] font-medium ${st.color}`}>
-                          {st.label}
-                        </span>
-                      </div>
+            {top5Loading ? (
+              <div className="grid grid-cols-5 gap-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                    <div className="rounded-[4px] px-3 py-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+                      <Skeleton className="h-3 w-3/4 mb-3 rounded-[3px]" />
                       <div className="flex gap-1.5">
-                        <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                          <span className={`text-[12px] font-bold tabular-nums leading-none ${yogunlukColor}`}>%{yogunluk}</span>
-                          <span className="text-[9px] text-muted-foreground">Yoğunluk</span>
-                        </div>
-                        <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                          <Server className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-[11px] font-semibold tabular-nums">{comp.servers.length}</span>
-                        </div>
-                        <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                          <Users className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-[11px] font-semibold tabular-nums">{comp.userCount}</span>
-                        </div>
+                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
+                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
+                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
                       </div>
                     </div>
                     <div className="h-2" />
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                ))}
+              </div>
+            ) : top5.length === 0 ? (
+              <p className="text-[11px] text-muted-foreground py-4 text-center">Henüz firma verisi yok</p>
+            ) : (
+              <div className="grid grid-cols-5 gap-2">
+                {top5.map((comp) => {
+                  const st = statusConfig[comp.status] ?? statusConfig.active;
+                  const yogunlukColor = comp.yogunluk >= 80 ? "text-red-600" : comp.yogunluk >= 60 ? "text-amber-600" : "text-emerald-600";
+                  return (
+                    <button
+                      key={comp.id}
+                      onClick={() => {
+                        const apiMatch = apiCompanies.find((a) => a.firkod === comp.id)
+                        setSelectedFirma(apiMatch ?? null)
+                        setSelectedCompany(apiMatch?.id ?? null)
+                      }}
+                      className="rounded-[8px] p-2 pb-0 text-left transition-all flex flex-col hover:brightness-[0.97]"
+                      style={{ backgroundColor: "#F4F2F0" }}
+                    >
+                      <div
+                        className="rounded-[4px] px-3 py-3 w-full"
+                        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                      >
+                        <div className="flex items-start justify-between gap-1 mb-3">
+                          <p className="text-[11px] font-semibold leading-tight line-clamp-2">{comp.name}</p>
+                          <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1 py-0 text-[9px] font-medium ${st.color}`}>
+                            {st.label}
+                          </span>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
+                            <span className={`text-[12px] font-bold tabular-nums leading-none ${yogunlukColor}`}>%{comp.yogunluk}</span>
+                            <span className="text-[9px] text-muted-foreground">Yoğunluk</span>
+                          </div>
+                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
+                            <Database className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[11px] font-semibold tabular-nums">{comp.dbCount}</span>
+                          </div>
+                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
+                            <Users className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[11px] font-semibold tabular-nums">{comp.userCount}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="h-2" />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </NestedCard>
         )}
       </div>
