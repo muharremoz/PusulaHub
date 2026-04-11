@@ -7,6 +7,10 @@ import {
   Database,
   FileText,
   FolderOpen,
+  CalendarDays,
+  FolderKanban,
+  Mail,
+  NotebookPen,
   Globe,
   LayoutDashboard,
   MessageSquare,
@@ -44,6 +48,10 @@ const navGroups: NavGroup[] = [
       { title: "Sunucular",  url: "/servers",    icon: Server },
       { title: "İzleme",     url: "/monitoring", icon: Activity },
       { title: "Firmalar",   url: "/companies",  icon: Building2 },
+      { title: "Projeler",    url: "/projects",  icon: FolderKanban },
+      { title: "Takvim",      url: "/calendar",  icon: CalendarDays },
+      { title: "Mail",        url: "/mail",       icon: Mail         },
+      { title: "Not Defteri", url: "/notes",     icon: NotebookPen },
     ],
   },
   {
@@ -125,7 +133,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser />
       </SidebarFooter>
     </Sidebar>
   )

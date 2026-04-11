@@ -148,6 +148,20 @@ Sunucu adında boşluk veya özel karakter varsa (örn. "Active Directory", "Ter
 
 ---
 
+### Agent exec — PowerShell Komutlarında `"` Yasak
+Agent `/api/exec` endpoint'i JSON regex-parse eder. Komut içinde çift tırnak `"` kullanılırsa parse bozulur, komut hata verir.
+
+**Çözüm:** Tüm PS komutlarını tek tırnak `'` ile yaz. Değişken içinde `'` geçiyorsa `''` ile escape et (`psEscape` fonksiyonu).
+
+---
+
+### IISSites — CHECK Constraint Sessiz Fail
+`IISSites.Status` kolonu `CHECK (Status IN ('Started', 'Stopped'))` kısıtına sahip. Agent `"Unknown"` gibi farklı bir değer gönderirse INSERT sessizce reddedilir, hata fırlatmaz.
+
+**Kural:** Agent ve agent-poller'dan gelen tüm status değerleri DB constraint'e uygun olmalı. Fallback her zaman constraint listesindeki geçerli bir değer olmalı.
+
+---
+
 ### Command (cmdk) Combobox — Büyük Listede Yavaş Açılma
 `Popover + Command` kombinasyonunda çok sayıda item (100+) varsa dropdown açılışı 3-4 saniye sürebilir. `cmdk` varsayılan olarak tüm item'ları iç filtreyle işler.
 

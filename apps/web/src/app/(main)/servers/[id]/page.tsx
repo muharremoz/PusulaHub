@@ -15,6 +15,7 @@ import {
   RefreshCw,
   LogOut,
   Settings,
+  FolderOpen,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -34,6 +35,7 @@ import { TabUsers } from "@/components/server-detail/tab-users";
 import { TabSecurity } from "@/components/server-detail/tab-security";
 import { TabLogs } from "@/components/server-detail/tab-logs";
 import { TabMessages } from "@/components/server-detail/tab-messages";
+import { TabFiles } from "@/components/server-detail/tab-files";
 import type { FirmaCompany } from "@/app/api/firma/companies/route";
 
 /** API /detail endpoint'inden dönen veri yapısı */
@@ -55,7 +57,8 @@ type TabId =
   | "users"
   | "security"
   | "logs"
-  | "messages";
+  | "messages"
+  | "files";
 
 const STATUS_DOT: Record<string, string> = {
   online: "bg-emerald-500",
@@ -180,6 +183,7 @@ export default function ServerDetailPage({
     { id: "security", label: "Güvenlik", icon: Shield },
     { id: "logs", label: "Kayıtlar", icon: FileText },
     { id: "messages", label: "Mesaj", icon: MessageSquare },
+    { id: "files", label: "Dosyalar", icon: FolderOpen },
   ];
 
   return (
@@ -311,7 +315,7 @@ export default function ServerDetailPage({
 
       {/* Tab Content */}
       <div>
-        {detailLoading && activeTab !== "overview" ? (
+        {detailLoading && activeTab !== "overview" && activeTab !== "files" ? (
           <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
             <div className="rounded-[4px] overflow-hidden space-y-px" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               {Array.from({ length: 6 }).map((_, i) => (
@@ -347,6 +351,9 @@ export default function ServerDetailPage({
             )}
             {activeTab === "messages" && (
               <TabMessages sessions={detail.sessions} serverId={server.id} />
+            )}
+            {activeTab === "files" && (
+              <TabFiles serverId={server.id} />
             )}
           </>
         )}

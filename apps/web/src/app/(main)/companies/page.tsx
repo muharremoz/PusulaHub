@@ -13,9 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
-import { companies, messageRecipients, servers, iisSites } from "@/lib/mock-data";
-import type { Company } from "@/types";
 import type { Top5Company } from "@/app/api/companies/top5/route";
+import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
 
 interface FirmaCompany {
   id: string
@@ -103,14 +102,23 @@ import {
   ToggleRight,
 } from "lucide-react";
 
-function YoğunlukKart({ selected }: { selected: Company }) {
-  const cpuPct  = Math.round((selected.currentUsage.cpu  / selected.monthlyQuota.cpu)  * 100);
-  const ramPct  = Math.round((selected.currentUsage.ram  / selected.monthlyQuota.ram)  * 100);
-  const diskPct = Math.round((selected.currentUsage.disk / selected.monthlyQuota.disk) * 100);
-  const userPct = Math.round((selected.userCount / selected.userCapacity) * 100);
-  const dbTotal = (selected.databases ?? []).reduce((s, d) => s + d.size, 0);
-  const dbPct   = Math.round((dbTotal / selected.dbQuota) * 100);
-  const yogunluk = Math.round((cpuPct + ramPct + diskPct + userPct + dbPct) / 5);
+function safePct(usage: number, quota: number) {
+  if (!quota || quota <= 0) return 0;
+  return Math.min(100, Math.round((usage / quota) * 100));
+}
+
+function YoğunlukKart({ d }: { d: CompanyDetail }) {
+  const cpuPct  = safePct(d.usageCpu,            d.quotaCpu);
+  const ramPct  = safePct(d.usageRam,            d.quotaRam);
+  const diskPct = safePct(d.usageDisk,           d.quotaDisk);
+  const userPct = safePct(d.userCount,           d.userCapacity);
+  const dbPct   = safePct(d.dbSizeMB / 1024,     d.dbQuota);
+
+  // Sadece kota tanımlı metrikler ortalamaya katılır
+  const active = [d.quotaCpu > 0, d.quotaRam > 0, d.quotaDisk > 0, d.userCapacity > 0, d.dbQuota > 0].filter(Boolean).length;
+  const yogunluk = active === 0
+    ? userPct
+    : Math.round(((d.quotaCpu > 0 ? cpuPct : 0) + (d.quotaRam > 0 ? ramPct : 0) + (d.quotaDisk > 0 ? diskPct : 0) + (d.userCapacity > 0 ? userPct : 0) + (d.dbQuota > 0 ? dbPct : 0)) / active);
 
   const [animValue, setAnimValue] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -125,11 +133,11 @@ function YoğunlukKart({ selected }: { selected: Company }) {
                      { text: "text-emerald-600", primary: "#10b981" };
 
   const metrics = [
-    { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  val: `${selected.currentUsage.cpu} / ${selected.monthlyQuota.cpu} vCPU` },
-    { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  val: `${selected.currentUsage.ram} / ${selected.monthlyQuota.ram} GB` },
-    { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, val: `${selected.currentUsage.disk} / ${selected.monthlyQuota.disk} GB` },
-    { label: "User", icon: <Users className="h-3.5 w-3.5 text-muted-foreground" />,       pct: userPct, val: `${selected.userCount} / ${selected.userCapacity} kullanıcı` },
-    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   val: `${dbTotal} / ${selected.dbQuota} GB` },
+    { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  val: `${d.usageCpu} / ${d.quotaCpu} vCPU` },
+    { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  val: `${d.usageRam} / ${d.quotaRam} GB` },
+    { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, val: `${d.usageDisk} / ${d.quotaDisk} GB` },
+    { label: "User", icon: <Users className="h-3.5 w-3.5 text-muted-foreground" />,       pct: userPct, val: `${d.userCount} / ${d.userCapacity} kullanıcı` },
+    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   val: `${(d.dbSizeMB / 1024).toFixed(1)} / ${d.dbQuota} GB` },
   ];
 
   return (
@@ -207,11 +215,11 @@ function YoğunlukKart({ selected }: { selected: Company }) {
 
         <div className="space-y-1.5 mt-1">
           {[
-            { label: "CPU Kullanımı",      icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `${selected.currentUsage.cpu} / ${selected.monthlyQuota.cpu} vCPU` },
-            { label: "RAM Kullanımı",      icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${selected.currentUsage.ram} / ${selected.monthlyQuota.ram} GB` },
-            { label: "Disk Kullanımı",     icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${selected.currentUsage.disk} / ${selected.monthlyQuota.disk} GB` },
-            { label: "Kullanıcı Doluluğu", icon: <Users className="h-3.5 w-3.5" />,       pct: userPct, detail: `${selected.userCount} / ${selected.userCapacity} kullanıcı` },
-            { label: "Veritabanı Boyutu",  icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${dbTotal} / ${selected.dbQuota} GB` },
+            { label: "CPU Kullanımı",      icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `${d.usageCpu} / ${d.quotaCpu} vCPU` },
+            { label: "RAM Kullanımı",      icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${d.usageRam} / ${d.quotaRam} GB` },
+            { label: "Disk Kullanımı",     icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk} / ${d.quotaDisk} GB` },
+            { label: "Kullanıcı Doluluğu", icon: <Users className="h-3.5 w-3.5" />,       pct: userPct, detail: `${d.userCount} / ${d.userCapacity} kullanıcı` },
+            { label: "Veritabanı Boyutu",  icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(1)} / ${d.dbQuota} GB` },
           ].map((m) => {
             const color = m.pct >= 80 ? "text-red-600" : m.pct >= 60 ? "text-amber-600" : "text-emerald-600";
             const bar   = m.pct >= 80 ? "bg-red-500"   : m.pct >= 60 ? "bg-amber-400"   : "bg-emerald-500";
@@ -272,6 +280,9 @@ export default function CompaniesPage() {
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
+  const [companyDetail, setCompanyDetail] = useState<CompanyDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
   useEffect(() => {
     fetch("/api/firma/companies")
       .then((r) => r.ok ? r.json() : Promise.reject(r))
@@ -292,39 +303,33 @@ export default function CompaniesPage() {
     if (!selectedFirma) return
     const firkod = selectedFirma.firkod
     setTabUsers([]); setTabIIS([]); setTabSQL([])
+    setCompanyDetail(null)
     setTabLoading(true)
+    setDetailLoading(true)
     Promise.all([
       fetch(`/api/companies/${firkod}/users`).then(r => r.ok ? r.json() : []),
       fetch(`/api/companies/${firkod}/iis`).then(r => r.ok ? r.json() : []),
       fetch(`/api/companies/${firkod}/sql`).then(r => r.ok ? r.json() : []),
-    ]).then(([users, iis, sql]) => {
+      fetch(`/api/companies/${firkod}/detail`).then(r => r.ok ? r.json() : null),
+    ]).then(([users, iis, sql, detail]) => {
       setTabUsers(Array.isArray(users) ? users : [])
       setTabIIS(Array.isArray(iis) ? iis : [])
       setTabSQL(Array.isArray(sql) ? sql : [])
-    }).catch(() => {}).finally(() => setTabLoading(false))
+      if (detail && !detail.error) setCompanyDetail(detail)
+    }).catch(() => {}).finally(() => { setTabLoading(false); setDetailLoading(false) })
   }, [selectedFirma?.firkod])
 
   function selectFirma(f: FirmaCompany) {
     setSelectedFirma(f)
-    const mockMatch = companies.find((c) => c.name.toLowerCase() === f.firma.toLowerCase())
-    setSelectedCompany(mockMatch?.id ?? companies[0]?.id ?? null)
     setSearchOpen(false)
     setSearchQuery("")
   }
 
   function clearSelection() {
     setSelectedFirma(null)
-    setSelectedCompany(null)
+    setCompanyDetail(null)
     setTabUsers([]); setTabIIS([]); setTabSQL([])
   }
-
-  const selected: Company | undefined = selectedCompany
-    ? companies.find((c) => c.id === selectedCompany)
-    : undefined;
-
-  const companyServers = selected
-    ? servers.filter((s) => selected.servers.includes(s.name))
-    : [];
 
   const apiFiltered = searchQuery.trim()
     ? apiCompanies.filter((c) => c.firma.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
@@ -334,7 +339,7 @@ export default function CompaniesPage() {
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
       {/* Company Selector / Header Bar */}
       <div className="mb-6">
-        {(selectedFirma || selected) ? (
+        {selectedFirma ? (
           /* Seçili firma: kompakt header bar */
           <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
             <div className="rounded-[4px] px-4 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
@@ -347,44 +352,24 @@ export default function CompaniesPage() {
                   Geri
                 </button>
 
-                {selectedFirma ? (
-                  <>
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
-                    <h2 className="text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      {selectedFirma.email && <span className="text-[11px]">{selectedFirma.email}</span>}
-                      {selectedFirma.email && selectedFirma.phone && <span className="text-[10px]">·</span>}
-                      {selectedFirma.phone && <span className="text-[11px] font-mono">{selectedFirma.phone}</span>}
-                      {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && <span className="text-[10px]">·</span>}
-                      {selectedFirma.lisansBitis && <span className="text-[11px]">Lisans: {selectedFirma.lisansBitis}</span>}
-                    </div>
-                    <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${
-                      firmaIsActive(selectedFirma)
-                        ? "text-emerald-700 border-emerald-200 bg-emerald-50"
-                        : "text-red-700 border-red-200 bg-red-50"
-                    }`}>
-                      {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
-                    </span>
-                  </>
-                ) : selected ? (
-                  <>
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${
-                      selected.status === "active" ? "bg-emerald-500" :
-                      selected.status === "trial"  ? "bg-amber-500"  : "bg-red-500"
-                    }`} />
-                    <h2 className="text-sm font-semibold tracking-tight">{selected.name}</h2>
-                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                      <span className="text-[11px]">{selected.sector}</span>
-                      <span className="text-[10px]">·</span>
-                      <span className="text-[11px]">{selected.contactPerson}</span>
-                      <span className="text-[10px]">·</span>
-                      <span className="text-[11px]">{selected.contactEmail}</span>
-                    </div>
-                    <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${statusConfig[selected.status].color}`}>
-                      {statusConfig[selected.status].label}
-                    </span>
-                  </>
-                ) : null}
+                <>
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
+                  <h2 className="text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
+                  <div className="flex items-center gap-1.5 text-muted-foreground">
+                    {selectedFirma.email && <span className="text-[11px]">{selectedFirma.email}</span>}
+                    {selectedFirma.email && selectedFirma.phone && <span className="text-[10px]">·</span>}
+                    {selectedFirma.phone && <span className="text-[11px] font-mono">{selectedFirma.phone}</span>}
+                    {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && <span className="text-[10px]">·</span>}
+                    {selectedFirma.lisansBitis && <span className="text-[11px]">Lisans: {selectedFirma.lisansBitis}</span>}
+                  </div>
+                  <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${
+                    firmaIsActive(selectedFirma)
+                      ? "text-emerald-700 border-emerald-200 bg-emerald-50"
+                      : "text-red-700 border-red-200 bg-red-50"
+                  }`}>
+                    {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
+                  </span>
+                </>
 
                 <div className="flex-1" />
 
@@ -503,11 +488,33 @@ export default function CompaniesPage() {
       </div>
 
       {/* Company Detail */}
-      {selected ? (
+      {selectedFirma ? (
         <div className="space-y-3">
           {/* Yoğunluk Skoru + Haftalık Kullanım */}
           <div className="grid grid-cols-[1fr_1fr] gap-3">
-            <YoğunlukKart key={selected.id} selected={selected} />
+            {detailLoading ? (
+              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+                  <Skeleton className="h-4 w-36 rounded-[3px]" />
+                  <div className="flex gap-4 items-center">
+                    <Skeleton className="size-32 rounded-full shrink-0" />
+                    <div className="flex-1 space-y-2.5">
+                      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-2 w-full rounded-full" />)}
+                    </div>
+                  </div>
+                </div>
+                <div className="h-2" />
+              </div>
+            ) : companyDetail ? (
+              <YoğunlukKart key={selectedFirma.firkod} d={companyDetail} />
+            ) : (
+              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                <div className="rounded-[4px] px-4 py-8 flex items-center justify-center" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+                  <p className="text-[12px] text-muted-foreground">Kullanım verisi bulunamadı</p>
+                </div>
+                <div className="h-2" />
+              </div>
+            )}
 
             <NestedCard
               className="h-full flex flex-col"
@@ -529,7 +536,7 @@ export default function CompaniesPage() {
               </div>
               <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={selected.weeklyUsage} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                  <AreaChart data={companyDetail?.weeklyUsage ?? []} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
                     <defs>
                       <linearGradient id="gCpu" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.3} />
@@ -548,7 +555,7 @@ export default function CompaniesPage() {
                     <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
                     <Tooltip
                       contentStyle={{ fontSize: 11, borderRadius: 6, border: "1px solid #e5e7eb", padding: "6px 10px" }}
-                      formatter={(value: number, name: string) => [`%${value}`, name.toUpperCase()]}
+                      formatter={(value, name) => [`%${value ?? 0}`, String(name ?? "").toUpperCase()]}
                     />
                     <Area type="monotone" dataKey="cpu"  stroke="#60a5fa" strokeWidth={1.5} fill="url(#gCpu)"  dot={false} />
                     <Area type="monotone" dataKey="ram"  stroke="#34d399" strokeWidth={1.5} fill="url(#gRam)"  dot={false} />

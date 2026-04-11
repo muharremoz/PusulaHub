@@ -29,9 +29,10 @@ export async function POST(req: NextRequest) {
 
     const message = queueMessage(agentId, {
       title,
-      body:  msgBody,
-      type:  msgType,
-      from:  from ?? "PusulaHub",
+      body:      msgBody,
+      type:      msgType,
+      from:      from ?? "PusulaHub",
+      toCompany: "",
     })
 
     return NextResponse.json({

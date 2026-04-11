@@ -1,17 +1,18 @@
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AppSidebar }               from "@/components/app-sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SessionProvider }          from "next-auth/react"
+import { auth }                     from "@/auth"
 
-export default function MainLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function MainLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth()
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset>
-        {children}
-      </SidebarInset>
-    </SidebarProvider>
-  );
+    <SessionProvider session={session}>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          {children}
+        </SidebarInset>
+      </SidebarProvider>
+    </SessionProvider>
+  )
 }

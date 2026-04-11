@@ -21,7 +21,7 @@ export async function GET(
     const rows = await query<IISSiteRow[]>`
       SELECT Id, Name, Server, Status, Binding, AppPool, PhysicalPath, Hizmet
       FROM IISSites
-      WHERE Name = ${firkod}
+      WHERE Firma = ${firkod}
       ORDER BY Server
     `
     return NextResponse.json(rows)

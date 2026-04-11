@@ -132,6 +132,10 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
         .query("DELETE FROM IISSites WHERE Server = @server")
 
       for (const site of report.iis.sites) {
+        // Firma no: site adının başındaki sayısal prefix — "6754_Site" → "6754"
+        const siteIisFirmaMatch = site.name.match(/^(\d+)/)
+        const siteIisFirma = siteIisFirmaMatch ? siteIisFirmaMatch[1] : null
+
         await pool.request()
           .input("id",          sql.NVarChar(50),  `${serverName}_${site.name}`.replace(/\s/g, "_"))
           .input("name",        sql.NVarChar(200), site.name)
@@ -140,12 +144,15 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
           .input("binding",     sql.NVarChar(500), site.binding ?? "")
           .input("appPool",     sql.NVarChar(200), site.appPool ?? "")
           .input("physicalPath",sql.NVarChar(500), site.physicalPath ?? "")
+          .input("firma",       sql.NVarChar(200), siteIisFirma)
           .query(`
             IF NOT EXISTS (SELECT 1 FROM IISSites WHERE Id = @id)
-              INSERT INTO IISSites (Id, Name, Server, Status, Binding, AppPool, PhysicalPath)
-              VALUES (@id, @name, @server, @status, @binding, @appPool, @physicalPath)
+              INSERT INTO IISSites (Id, Name, Server, Status, Binding, AppPool, PhysicalPath, Firma)
+              VALUES (@id, @name, @server, @status, @binding, @appPool, @physicalPath, @firma)
             ELSE
-              UPDATE IISSites SET Name=@name, Status=@status, Binding=@binding, AppPool=@appPool, PhysicalPath=@physicalPath
+              UPDATE IISSites SET Name=@name, Status=@status, Binding=@binding, AppPool=@appPool,
+                                  PhysicalPath=@physicalPath,
+                                  Firma = COALESCE(@firma, Firma)
               WHERE Id=@id
           `)
       }
@@ -275,6 +282,89 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
   }
 }
 
+/* ── Firma kullanım istatistiklerini güncelle (5 dk'da bir) ──
+   1. Companies.UserCount  ← ADUsers OU bazlı sayım
+   2. Companies.UsageCpu   ← bugünkü UserDailyUsage AVG(AvgCpu)
+   3. Companies.UsageRam   ← bugünkü UserDailyUsage SUM(AvgRamMB)/1024 GB
+   4. CompanyWeeklyUsage   ← son 7 günlük UserDailyUsage özeti (tam yeniden yaz)
+*/
+async function updateCompanyUsage(): Promise<void> {
+  try {
+    const pool = await getPollerPool()
+
+    // 1 — UserCount: AD'deki OU = CompanyId olan kullanıcı sayısı
+    await pool.request().query(`
+      UPDATE c
+      SET c.UserCount = (
+        SELECT COUNT(*) FROM ADUsers a WHERE a.OU = c.CompanyId
+      )
+      FROM Companies c
+      WHERE c.CompanyId IS NOT NULL
+    `)
+
+    // 2+3 — Bugünkü CPU/RAM kullanımı (UserDailyUsage → firma bazında özet)
+    await pool.request().query(`
+      UPDATE c
+      SET
+        c.UsageCpu = ISNULL((
+          SELECT ROUND(AVG(u.AvgCpu), 1)
+          FROM UserDailyUsage u
+          WHERE u.FirmaNo = c.CompanyId
+            AND u.Date = CAST(GETDATE() AS DATE)
+        ), 0),
+        c.UsageRam = ISNULL((
+          SELECT ROUND(SUM(u.AvgRamMB) / 1024.0, 2)
+          FROM UserDailyUsage u
+          WHERE u.FirmaNo = c.CompanyId
+            AND u.Date = CAST(GETDATE() AS DATE)
+        ), 0)
+      FROM Companies c
+      WHERE c.CompanyId IS NOT NULL
+    `)
+
+    // 4 — CompanyWeeklyUsage: son 7 günü tamamen yeniden yaz
+    await pool.request().query(`
+      DELETE w
+      FROM CompanyWeeklyUsage w
+      JOIN Companies c ON c.Id = w.CompanyId
+      WHERE c.CompanyId IS NOT NULL
+    `)
+
+    await pool.request().query(`
+      INSERT INTO CompanyWeeklyUsage (CompanyId, Day, DayOrder, CPU, RAM, Disk)
+      SELECT
+        c.Id,
+        CASE DATEPART(WEEKDAY, u.Date)
+          WHEN 1 THEN 'Paz' WHEN 2 THEN 'Pzt' WHEN 3 THEN 'Sal'
+          WHEN 4 THEN 'Car' WHEN 5 THEN 'Per' WHEN 6 THEN 'Cum'
+          WHEN 7 THEN 'Cmt'
+        END AS Day,
+        DATEDIFF(DAY, DATEADD(DAY, -6, CAST(GETDATE() AS DATE)), u.Date) + 1 AS DayOrder,
+        ROUND(AVG(u.AvgCpu), 1)              AS CPU,
+        ROUND(SUM(u.AvgRamMB) / 1024.0, 2)  AS RAM,
+        0                                    AS Disk
+      FROM UserDailyUsage u
+      JOIN Companies c ON c.CompanyId = u.FirmaNo
+      WHERE u.Date >= CAST(DATEADD(DAY, -6, GETDATE()) AS DATE)
+        AND u.FirmaNo IS NOT NULL
+      GROUP BY
+        c.Id,
+        u.Date,
+        DATEPART(WEEKDAY, u.Date),
+        DATEDIFF(DAY, DATEADD(DAY, -6, CAST(GETDATE() AS DATE)), u.Date)
+      HAVING
+        DATEDIFF(DAY, DATEADD(DAY, -6, CAST(GETDATE() AS DATE)), u.Date) BETWEEN 0 AND 6
+    `)
+
+    console.log("[Poller] Firma istatistikleri güncellendi")
+  } catch (err) {
+    console.log("[Poller] updateCompanyUsage hatası:", err instanceof Error ? err.message : err)
+  }
+}
+
+let _usageCounter = 0
+const USAGE_EVERY  = 30  // 30 × 10s = 5 dakika
+
 /* ── Tüm sunucuları poll et ── */
 async function pollAll(): Promise<void> {
   try {
@@ -289,6 +379,13 @@ async function pollAll(): Promise<void> {
     for (let i = 0; i < servers.length; i += batchSize) {
       const batch = servers.slice(i, i + batchSize)
       await Promise.allSettled(batch.map(pollAgent))
+    }
+
+    // Her 5 dakikada bir firma istatistiklerini güncelle
+    _usageCounter++
+    if (_usageCounter >= USAGE_EVERY) {
+      _usageCounter = 0
+      updateCompanyUsage()
     }
   } catch (err) {
     console.error("[Poller] DB sorgu hatası:", err)
@@ -378,6 +475,9 @@ export function startPolling(): void {
 
   // İlk poll'u 5 saniye sonra yap (Next.js env yüklenmesini bekle)
   setTimeout(pollAll, 5000)
+
+  // Firma istatistiklerini başlangıçta bir kez hemen güncelle
+  setTimeout(updateCompanyUsage, 8000)
 
   _timer = setInterval(pollAll, POLL_INTERVAL_MS)
 }

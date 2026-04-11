@@ -22,12 +22,11 @@ export async function POST(
   }
 
   const msg = queueMessage(serverId, {
-    title: title.trim(),
-    body: body.trim(),
+    title:     title.trim(),
+    body:      body.trim(),
     type,
     from,
     toCompany: "",
-    delivered: false,
   })
 
   if (!msg) {

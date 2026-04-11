@@ -1,0 +1,9 @@
+-- Notes tablosuna CreatedBy kolonu ekle
+IF NOT EXISTS (
+  SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+  WHERE TABLE_NAME = 'Notes' AND COLUMN_NAME = 'CreatedBy'
+)
+BEGIN
+  ALTER TABLE Notes ADD CreatedBy NVARCHAR(100) NOT NULL CONSTRAINT DF_Notes_CreatedBy DEFAULT 'Admin'
+END
+GO
