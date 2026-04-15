@@ -5,7 +5,7 @@ import { BackupFile } from "@/lib/setup-mock-data"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -160,6 +160,87 @@ export function StepSql({
   }, [sqlMode, selectedSqlServerId, demoDatabases])
 
   useEffect(() => { runPathCheck() }, [runPathCheck])
+
+  /* ── Restore Test ──────────────────────────────────────────
+   * Sihirbazdan bağımsız olarak seçili .bak dosyalarını / demo DB'leri
+   * gerçek RESTORE ile dener. Başarısızsa sebebini gösterir (yol yok,
+   * yetki hatası, zaten var, vs.). Test sonrası DB otomatik DROP edilir.
+   */
+  interface TestResult {
+    bakPath:      string
+    targetDbName: string
+    ok:           boolean
+    error?:       string
+    durationMs:   number
+    dropped?:     boolean
+  }
+  const [testing, setTesting] = useState(false)
+  const [testResults, setTestResults] = useState<TestResult[] | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
+  const [testDropAfter, setTestDropAfter] = useState(false)
+
+  async function handleTestRestore() {
+    if (!selectedSqlServerId) return
+    const prefix = addFirmaPrefix && firmaId ? `${firmaId}_` : ""
+
+    const tasks: Array<{ bakPath: string; targetDbName: string }> = []
+
+    if (sqlMode === 0) {
+      const folder = backupFolderPath.trim().replace(/[\\/]+$/, "")
+      for (const f of backupFiles) {
+        if (!f.selected) continue
+        const fileName = (f.fileName ?? "").trim()
+        const dbName   = (f.databaseName ?? "").trim()
+        if (!fileName || !dbName) continue
+        tasks.push({
+          bakPath:      folder ? `${folder}\\${fileName}` : fileName,
+          targetDbName: `${prefix}${dbName}`,
+        })
+      }
+    } else {
+      for (const db of demoDatabases) {
+        if (!selectedDemoDbIds.includes(db.id)) continue
+        const bakPath = (db.locationPath ?? "").trim()
+        if (!bakPath) continue
+        const name = (db.dataName ?? db.name).trim()
+        if (!name) continue
+        tasks.push({
+          bakPath,
+          targetDbName: `${prefix}${name}`,
+        })
+      }
+    }
+
+    if (tasks.length === 0) {
+      setTestError("Test edilecek görev yok — önce dosya/DB seçin")
+      setTestResults(null)
+      return
+    }
+
+    setTesting(true)
+    setTestError(null)
+    setTestResults(null)
+    try {
+      const r = await fetch(
+        `/api/setup/sql-servers/${encodeURIComponent(selectedSqlServerId)}/test-restore`,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ tasks, dropAfter: testDropAfter }),
+        },
+      )
+      const data = await r.json()
+      if (!r.ok) {
+        setTestError(data?.error || `Hata (HTTP ${r.status})`)
+      } else {
+        setTestResults(data.results as TestResult[])
+      }
+    } catch (err) {
+      setTestError(err instanceof Error ? err.message : "İstek başarısız")
+    } finally {
+      setTesting(false)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -575,6 +656,112 @@ export function StepSql({
                     </div>
                   )
                 })}
+              </div>
+            </div>
+          )}
+
+          {/* Restore Test — sihirbazdan bağımsız deneme */}
+          {hasSelection && (
+            <div className="rounded-[5px] border border-border/50 overflow-hidden">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
+                <PlayCircle className="size-3.5 text-muted-foreground" />
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">
+                  Restore Testi
+                </span>
+                <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                  <Checkbox
+                    checked={testDropAfter}
+                    onCheckedChange={(v) => setTestDropAfter(!!v)}
+                  />
+                  Test sonrası DROP
+                </label>
+                <button
+                  type="button"
+                  onClick={handleTestRestore}
+                  disabled={testing}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border border-border bg-background text-[10px] font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
+                >
+                  {testing
+                    ? <Loader2 className="size-3 animate-spin" />
+                    : <PlayCircle className="size-3" />}
+                  {testing ? "Deneniyor..." : "Restore'u Test Et"}
+                </button>
+              </div>
+              <div className="px-3 py-2.5 space-y-2">
+                {!testing && !testResults && !testError && (
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Seçili veritabanlarını gerçek RESTORE ile dener, başarısızsa nedenini gösterir.
+                    <strong className="font-medium"> DROP</strong> seçeneği açıksa test sonrası silinir; kapalıysa DB sunucuda kalır (veriyi inceleyebilirsin).
+                  </p>
+                )}
+                {testError && (
+                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-[4px] bg-red-50 border border-red-200 text-[10px] text-red-700">
+                    <AlertTriangle className="size-3 shrink-0 mt-0.5" />
+                    <span className="flex-1">{testError}</span>
+                    <button type="button" onClick={() => setTestError(null)} className="text-red-700/60 hover:text-red-700">
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                )}
+                {testResults && (
+                  <div className="space-y-1.5">
+                    {testResults.map((r, i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "px-2.5 py-2 rounded-[4px] border text-[10px]",
+                          r.ok
+                            ? "bg-emerald-50 border-emerald-200"
+                            : "bg-red-50 border-red-200",
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          {r.ok
+                            ? <FileCheck2 className="size-3 text-emerald-600 shrink-0 mt-0.5" />
+                            : <FileWarning className="size-3 text-red-600 shrink-0 mt-0.5" />}
+                          <div className="flex-1 min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={cn(
+                                "font-mono font-medium",
+                                r.ok ? "text-emerald-800" : "text-red-800",
+                              )}>
+                                [{r.targetDbName}]
+                              </span>
+                              <span className="text-muted-foreground tabular-nums">
+                                {(r.durationMs / 1000).toFixed(1)}s
+                              </span>
+                              {r.ok && r.dropped && (
+                                <span className="text-[9px] text-emerald-700/70">
+                                  · test sonrası DROP edildi
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[9px] font-mono text-muted-foreground truncate" title={r.bakPath}>
+                              {r.bakPath}
+                            </p>
+                            {!r.ok && r.error && (
+                              <p className="text-[10px] text-red-700 leading-relaxed whitespace-pre-wrap break-words">
+                                {r.error}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-3 pt-1 text-[9px] text-muted-foreground">
+                      <span>
+                        {testResults.filter((r) => r.ok).length}/{testResults.length} başarılı
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setTestResults(null)}
+                        className="ml-auto hover:text-foreground transition-colors"
+                      >
+                        Temizle
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

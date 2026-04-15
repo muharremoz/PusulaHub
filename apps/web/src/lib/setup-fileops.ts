@@ -74,6 +74,31 @@ export function buildSetNtfsPermissions(path: string, securityGroup: string): st
   ].join("; ")
 }
 
+/* ── Klasöre desktop.ini yaz + InfoTip olarak firma adını göster ────── */
+/**
+ * Klasöre tooltip (hover'da görünen açıklama) ekler:
+ *   1) desktop.ini dosyası yazılır: [.ShellClassInfo] InfoTip=<firmaAdi>
+ *   2) Dosyaya +sh (system + hidden) atanır
+ *   3) Klasöre +s (system) atanır → Explorer desktop.ini'yi okur
+ * Unicode Türkçe karakter için UTF-16 LE (ShellClassInfo resmi olarak Unicode bekler).
+ */
+export function buildWriteDesktopIni(folderPath: string, infoTip: string): string {
+  const p  = psQuote(folderPath)
+  const it = psQuote(infoTip)
+  return [
+    `$p='${p}'`,
+    `if(-not (Test-Path -LiteralPath $p)){throw ('Klasor bulunamadi: ' + $p)}`,
+    `$ini = Join-Path -Path $p -ChildPath 'desktop.ini'`,
+    `$content = '[.ShellClassInfo]' + [Environment]::NewLine + 'InfoTip=${it}' + [Environment]::NewLine`,
+    // Varsa attrib kaldır (yeniden yazabilmek için)
+    `if(Test-Path -LiteralPath $ini){$null = attrib -s -h -r $ini 2>$null}`,
+    `[System.IO.File]::WriteAllText($ini, $content, [System.Text.Encoding]::Unicode)`,
+    `$null = attrib +s +h $ini`,
+    `$null = attrib +s $p`,
+    `Write-Output 'OK'`,
+  ].join("; ")
+}
+
 /* ── Parametre TXT dosyasında [DATA KODU] satırını güncelle ─────────── */
 /**
  * Eski uygulama ile aynı davranış:

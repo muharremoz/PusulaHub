@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -10,9 +10,19 @@ import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "rec
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip as UiTooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
 import type { Top5Company } from "@/app/api/companies/top5/route";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
 
@@ -45,17 +55,36 @@ interface TabIISSite {
   AppPool:      string
   PhysicalPath: string
   Hizmet:       string | null
+  ServerIP:     string | null
 }
 
 interface TabSQLDatabase {
-  Id:         string
-  Name:       string
-  Server:     string
-  FirmaNo:    string | null
-  SizeMB:     number
-  Status:     string
-  LastBackup: string | null
-  Tables:     number
+  Id:            string
+  Name:          string
+  Server:        string
+  ServerIP:      string | null
+  SizeMB:        number
+  Status:        string
+  LastBackup:    string | null
+  Tables:        number
+  RecoveryModel: string | null
+  Owner:         string | null
+  DataFilePath:  string | null
+  LogFilePath:   string | null
+  ProgramCode:   string | null
+}
+
+interface TabCompanyService {
+  id:         number
+  name:       string
+  category:   string
+  type:       string
+  port:       number | null
+  siteName:   string
+  server:     string
+  status:     string
+  appPool:    string
+  assignedAt: string
 }
 
 function firmaIsActive(f: FirmaCompany): boolean {
@@ -95,12 +124,27 @@ import {
   ChevronLeft,
   Play,
   Square,
+  RotateCw,
   Trash2,
   Download,
+  Upload,
+  Terminal,
   Settings2,
   ToggleLeft,
   ToggleRight,
+  X,
+  Bookmark,
+  Trash,
+  Save,
+  Bug,
+  Plus,
+  Eye,
+  EyeOff,
+  RefreshCw,
+  UserPlus,
 } from "lucide-react";
+import { AdProvisionRunner } from "@/components/company-setup/ad-provision-runner";
+import { meetsAdComplexity } from "@/components/company-setup/step-users";
 
 function safePct(usage: number, quota: number) {
   if (!quota || quota <= 0) return 0;
@@ -278,7 +322,360 @@ export default function CompaniesPage() {
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
+  const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
+  const [iisActionBusy, setIisActionBusy] = useState<string | null>(null);
+  const [iisRemoveTarget, setIisRemoveTarget] = useState<TabIISSite | null>(null);
+
+  // SQL aksiyonları
+  const [sqlActionBusy, setSqlActionBusy] = useState<string | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<TabSQLDatabase | null>(null);
+  const [restorePath, setRestorePath]     = useState("");
+  const [queryTarget, setQueryTarget]     = useState<TabSQLDatabase | null>(null);
+  const [queryText, setQueryText]         = useState("SELECT TOP 50 * FROM sys.tables");
+  const [queryRunning, setQueryRunning]   = useState(false);
+  const [queryResult, setQueryResult]     = useState<{ rows: Record<string, unknown>[]; ms: number; affected: number[] } | null>(null);
+  const [queryError, setQueryError]       = useState<string | null>(null);
+  const [queryGlobalFilter, setQueryGlobalFilter] = useState("");
+  const [queryColFilters, setQueryColFilters]     = useState<Record<string, string>>({});
+  const [filterHelpOpen, setFilterHelpOpen]       = useState(false);
+  const [savedQueriesOpen, setSavedQueriesOpen]   = useState(false);
+  const [hoverQueryId, setHoverQueryId]           = useState<string | null>(null);
+  const [hoverPos, setHoverPos]                   = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [debugOpen, setDebugOpen]                 = useState(false);
+  const [debugRunning, setDebugRunning]           = useState(false);
+  const [debugContent, setDebugContent]           = useState("");
+  const [debugPath, setDebugPath]                 = useState("");
+  const [debugBusy, setDebugBusy]                 = useState(false);
+  const [debugError, setDebugError]               = useState<string | null>(null);
+  const [debugFolders, setDebugFolders]           = useState<string[]>([]);
+  const [debugSubfolder, setDebugSubfolder]       = useState<string>("");
+  const [debugServers, setDebugServers]           = useState<{ Id: string; Name: string; IP: string }[]>([]);
+  const [debugServerId, setDebugServerId]         = useState<string>("");
+
+  // Yeni Kullanıcı dialog
+  const [newUserOpen, setNewUserOpen]             = useState(false);
+  const [newUserAdServers, setNewUserAdServers]   = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
+  const [newUserRdpServers, setNewUserRdpServers] = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
+  const [newUserRdpServerId, setNewUserRdpServerId] = useState<string>("");
+  const [newUserAdLocked, setNewUserAdLocked]     = useState(false);
+  const [newUserRdpLocked, setNewUserRdpLocked]   = useState(false);
+  const [newUserDone, setNewUserDone]             = useState(false);
+  const [newUserMsgCopied, setNewUserMsgCopied]   = useState(false);
+  const [newUserAdServerId, setNewUserAdServerId] = useState<string>("");
+  const [newUserUsername, setNewUserUsername]     = useState("");
+  const [newUserDisplayName, setNewUserDisplayName] = useState("");
+  const [newUserEmail, setNewUserEmail]           = useState("");
+  const [newUserPhone, setNewUserPhone]           = useState("");
+  const [newUserPassword, setNewUserPassword]     = useState("");
+  const [newUserShowPw, setNewUserShowPw]         = useState(false);
+  const [newUserStarted, setNewUserStarted]       = useState(false);
+  const [newUserError, setNewUserError]           = useState<string | null>(null);
+
+  function generatePassword() {
+    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+    const lower = "abcdefghijkmnpqrstuvwxyz"
+    const digit = "23456789"
+    const special = "!@#$%&*"
+    const all = upper + lower + digit + special
+    let pw = ""
+    pw += upper[Math.floor(Math.random() * upper.length)]
+    pw += lower[Math.floor(Math.random() * lower.length)]
+    pw += digit[Math.floor(Math.random() * digit.length)]
+    pw += special[Math.floor(Math.random() * special.length)]
+    for (let i = 0; i < 6; i++) pw += all[Math.floor(Math.random() * all.length)]
+    return pw.split("").sort(() => Math.random() - 0.5).join("")
+  }
+
+  async function openNewUserDialog() {
+    if (!selectedFirma) return
+    setNewUserOpen(true)
+    setNewUserStarted(false); setNewUserError(null); setNewUserDone(false); setNewUserMsgCopied(false)
+    setNewUserUsername(""); setNewUserDisplayName(""); setNewUserEmail(""); setNewUserPhone(""); setNewUserPassword(""); setNewUserShowPw(false)
+    setNewUserAdServerId(""); setNewUserRdpServerId(""); setNewUserAdLocked(false); setNewUserRdpLocked(false)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/server-options`)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "Sunucu seçenekleri alınamadı")
+      setNewUserAdServers(d.adServers ?? [])
+      setNewUserRdpServers(d.rdpServers ?? [])
+      if (d.adServerId && (d.adServers ?? []).some((s: { id: string }) => s.id === d.adServerId)) {
+        setNewUserAdServerId(d.adServerId); setNewUserAdLocked(true)
+      } else if ((d.adServers ?? []).length === 1) {
+        setNewUserAdServerId(d.adServers[0].id)
+      }
+      if (d.windowsServerId && (d.rdpServers ?? []).some((s: { id: string }) => s.id === d.windowsServerId)) {
+        setNewUserRdpServerId(d.windowsServerId); setNewUserRdpLocked(true)
+      } else if ((d.rdpServers ?? []).length === 1) {
+        setNewUserRdpServerId(d.rdpServers[0].id)
+      }
+    } catch (err) {
+      setNewUserError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  async function refreshTabUsers() {
+    if (!selectedFirma) return
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users`, { cache: "no-store" })
+      if (r.ok) {
+        const d = await r.json()
+        setTabUsers(Array.isArray(d) ? d : [])
+      }
+    } catch {}
+  }
+
+  const newUserValid =
+    !!newUserAdServerId &&
+    !!newUserRdpServerId &&
+    !!newUserUsername.trim() &&
+    !!newUserPassword.trim() &&
+    meetsAdComplexity(newUserPassword)
+
+  // TODO: API hazır olunca /api/saved-queries'den çekilecek. Şimdilik mock.
+  const savedQueries: { id: string; name: string; sql: string; category?: string; description?: string }[] = [
+    { id: "1", name: "Tüm firmalar", category: "Firma", description: "firma tablosundaki ilk 100 kaydı firma koduna göre sıralı getirir.", sql: "SELECT TOP 100 * FROM firma ORDER BY firmaKodu" },
+    { id: "2", name: "Aktif firmalar", category: "Firma", description: "IsActive = 1 olan firmaların kod, tanım ve tip bilgilerini listeler.", sql: "SELECT firmaKodu, firmaTanimi, firmaTipi FROM firma WHERE IsActive = 1" },
+    { id: "3", name: "Son değişen tablolar", category: "Sistem", description: "Şema değişikliği son yapılan 20 kullanıcı tablosunu gösterir.", sql: "SELECT TOP 20 name, modify_date FROM sys.tables ORDER BY modify_date DESC" },
+    { id: "4", name: "Boyut bazlı en büyük 10 tablo", category: "Sistem", description: "Satır sayısına göre en kalabalık 10 tabloyu döner. Storage planlaması için kullanışlıdır.", sql: "SELECT TOP 10 t.name, SUM(p.rows) AS rows_count\nFROM sys.tables t\nJOIN sys.partitions p ON p.object_id = t.object_id\nWHERE p.index_id IN (0,1)\nGROUP BY t.name\nORDER BY rows_count DESC" },
+    { id: "5", name: "Günün siparişleri", category: "Sipariş", description: "Bugüne ait son 100 sipariş kaydını zaman azalan sıralı getirir.", sql: "SELECT TOP 100 * FROM siparis WHERE CAST(CreateDate AS DATE) = CAST(GETDATE() AS DATE) ORDER BY CreateDate DESC" },
+    { id: "6", name: "Bu ay fatura toplamı", category: "Fatura", description: "İçinde bulunulan ayın toplam fatura tutarı ve adedini hesaplar.", sql: "SELECT SUM(tutar) AS toplam, COUNT(*) AS adet FROM fatura WHERE MONTH(tarih) = MONTH(GETDATE()) AND YEAR(tarih) = YEAR(GETDATE())" },
+  ]
+
+  function loadSavedQuery(sql: string) {
+    setQueryText(sql)
+    setSavedQueriesOpen(false)
+  }
+
+  async function loadDebugFolders(serverId?: string) {
+    if (!selectedFirma) return
+    setDebugBusy(true); setDebugError(null); setDebugFolders([]); setDebugSubfolder("")
+    try {
+      const qs = serverId ? `?folders=1&serverId=${encodeURIComponent(serverId)}` : `?folders=1`
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/debug${qs}`)
+      const d = await r.json()
+      if (r.status === 404 && d.needServer) {
+        const sr = await fetch(`/api/companies/${selectedFirma.firkod}/debug?servers=1`)
+        const sd = await sr.json()
+        setDebugServers(sd.servers ?? [])
+        setDebugError("Bu firmaya Windows sunucusu tanımlı değil. Lütfen bir sunucu seçin.")
+        return
+      }
+      if (!r.ok) throw new Error(d.error ?? "Klasörler listelenemedi")
+      if (d.missing) { setDebugError(`C:\\MUSTERI\\${selectedFirma.firkod} bulunamadı — firma kurulumu yapılmamış olabilir.`); return }
+      const folders: string[] = d.folders ?? []
+      setDebugFolders(folders)
+      if (folders.length === 1) setDebugSubfolder(folders[0])
+    } catch (err) {
+      setDebugError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDebugBusy(false)
+    }
+  }
+
+  async function debugOpenDialog() {
+    if (!selectedFirma) return
+    setDebugOpen(true)
+    setDebugContent(""); setDebugRunning(false); setDebugServers([]); setDebugServerId("")
+    await loadDebugFolders()
+  }
+
+  async function debugStart() {
+    if (!selectedFirma || !debugSubfolder) return
+    setDebugBusy(true); setDebugError(null)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/debug`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "start", subfolder: debugSubfolder, serverId: debugServerId || undefined }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "Debug başlatılamadı")
+      setDebugPath(d.path ?? "")
+      setDebugRunning(true); setDebugContent("")
+    } catch (err) {
+      setDebugError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDebugBusy(false)
+    }
+  }
+
+  async function debugStop() {
+    if (!selectedFirma || !debugSubfolder) return
+    setDebugBusy(true)
+    try {
+      await fetch(`/api/companies/${selectedFirma.firkod}/debug`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "stop", subfolder: debugSubfolder, serverId: debugServerId || undefined }),
+      })
+    } catch {}
+    setDebugRunning(false)
+    setDebugBusy(false)
+  }
+
+  async function debugFetch() {
+    if (!selectedFirma || !debugSubfolder) return
+    try {
+      const sidQs = debugServerId ? `&serverId=${encodeURIComponent(debugServerId)}` : ""
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/debug?subfolder=${encodeURIComponent(debugSubfolder)}${sidQs}`)
+      const d = await r.json()
+      if (!r.ok) { setDebugError(d.error ?? "Okunamadı"); return }
+      setDebugContent(d.content ?? "")
+      setDebugError(null)
+    } catch (err) {
+      setDebugError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  useEffect(() => {
+    if (!debugOpen || !debugRunning) return
+    debugFetch()
+    const t = setInterval(debugFetch, 5000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debugOpen, debugRunning, debugSubfolder, selectedFirma?.firkod])
+
+  /* Akıllı filtre değerlendiricisi:
+     - "is:null" / "not:null" / "!null"
+     - >N, <N, >=N, <=N, =N  (sayısal karşılaştırma)
+     - "a..b"               (sayısal ya da lexicografik aralık)
+     - "\"x\""              (tam eşleşme, case-insensitive)
+     - "!x"                 (içermez)
+     - diğer                (contains, case-insensitive) */
+  function matchCell(value: unknown, filterRaw: string): boolean {
+    const f = filterRaw.trim()
+    if (!f) return true
+    const isNull = value === null || value === undefined
+    const lf = f.toLowerCase()
+    if (lf === "is:null" || lf === "null") return isNull
+    if (lf === "not:null" || lf === "!null") return !isNull
+    const s = isNull ? "" : String(value)
+    const sl = s.toLowerCase()
+
+    // Sayısal karşılaştırma
+    const cmp = f.match(/^(>=|<=|>|<|=)\s*(-?\d+(\.\d+)?)$/)
+    if (cmp) {
+      const n = Number(s); const t = Number(cmp[2])
+      if (Number.isNaN(n)) return false
+      switch (cmp[1]) { case ">": return n > t; case "<": return n < t; case ">=": return n >= t; case "<=": return n <= t; case "=": return n === t }
+    }
+    // Aralık
+    const range = f.match(/^(.+?)\.\.(.+)$/)
+    if (range) {
+      const a = range[1].trim(); const b = range[2].trim()
+      const na = Number(a); const nb = Number(b); const nv = Number(s)
+      if (!Number.isNaN(na) && !Number.isNaN(nb) && !Number.isNaN(nv)) return nv >= na && nv <= nb
+      return sl >= a.toLowerCase() && sl <= b.toLowerCase()
+    }
+    // Tam eşleşme
+    const exact = f.match(/^"(.*)"$/)
+    if (exact) return sl === exact[1].toLowerCase()
+    // Negatif contains
+    if (f.startsWith("!")) return !sl.includes(f.slice(1).toLowerCase())
+    // Varsayılan: contains
+    return sl.includes(lf)
+  }
+
+  async function exportQueryResult(format: "xlsx" | "txt" | "pdf") {
+    if (!queryResult?.rows.length) return
+    const rows = filteredQueryRows.length ? filteredQueryRows : queryResult.rows
+    const cols = Object.keys(queryResult.rows[0])
+    const dbName = queryTarget?.Name ?? "sorgu"
+    const ts = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")
+    const fname = `${dbName}_${ts}`
+    const cellStr = (v: unknown) => (v === null || v === undefined ? "" : String(v))
+
+    if (format === "xlsx") {
+      const XLSX = await import("xlsx")
+      const data: unknown[][] = [cols, ...rows.map((r) => cols.map((c) => {
+        const v = r[c]
+        if (v === null || v === undefined) return ""
+        if (typeof v === "number" || typeof v === "boolean") return v
+        if (v instanceof Date) return v
+        const s = String(v)
+        // ISO tarih ise Date'e çevir — Excel'de tarih hücresi olur
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(s)) {
+          const d = new Date(s)
+          if (!isNaN(d.getTime())) return d
+        }
+        return s
+      }))]
+      const ws = XLSX.utils.aoa_to_sheet(data)
+      // Sütun genişliklerini içerik uzunluğuna göre ayarla (max 60)
+      ws["!cols"] = cols.map((c, i) => ({
+        wch: Math.min(60, Math.max(c.length, ...rows.map((r) => cellStr(r[c]).length))) + 2,
+      }))
+      // Header satırını dondur + bold
+      ws["!freeze"] = { xSplit: 0, ySplit: 1 } as unknown as undefined
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, "Sonuc")
+      XLSX.writeFile(wb, `${fname}.xlsx`)
+      return
+    }
+
+    if (format === "txt") {
+      // TAB ayraçlı: her satır tek satırda kalsın; newline/tab karakterleri temizlenir.
+      const clean = (s: string) => s.replace(/[\r\n\t]+/g, " ")
+      const body = [
+        cols.join("\t"),
+        ...rows.map((r) => cols.map((c) => clean(cellStr(r[c]))).join("\t")),
+      ].join("\r\n")
+      const blob = new Blob(["\uFEFF" + body], { type: "text/plain;charset=utf-8" })
+      triggerDownload(blob, `${fname}.txt`)
+      return
+    }
+
+    if (format === "pdf") {
+      const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(fname)}</title>
+<style>
+body{font-family:system-ui,-apple-system,sans-serif;margin:16px;color:#111}
+h1{font-size:14px;margin:0 0 8px}
+.meta{font-size:10px;color:#666;margin-bottom:12px}
+table{border-collapse:collapse;width:100%;font-size:10px;font-family:Consolas,monospace}
+th,td{border:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top;white-space:nowrap}
+th{background:#f3f3f3}
+tr:nth-child(even) td{background:#fafafa}
+@media print{@page{size:A4 landscape;margin:10mm}}
+</style></head><body>
+<h1>${esc(dbName)} — Sorgu Sonucu</h1>
+<div class="meta">${rows.length} satır • ${new Date().toLocaleString("tr-TR")}</div>
+<table><thead><tr>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
+<tbody>${rows.map((r) => `<tr>${cols.map((c) => `<td>${esc(cellStr(r[c]))}</td>`).join("")}</tr>`).join("")}</tbody></table>
+<script>window.onload=()=>setTimeout(()=>window.print(),200)</script>
+</body></html>`
+      const w = window.open("", "_blank", "width=1000,height=700")
+      if (w) { w.document.write(html); w.document.close() }
+      return
+    }
+  }
+
+  function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url; a.download = filename
+    document.body.appendChild(a); a.click(); a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
+  const filteredQueryRows = useMemo(() => {
+    if (!queryResult) return [] as Record<string, unknown>[]
+    const rows = queryResult.rows
+    const g = queryGlobalFilter.trim().toLowerCase()
+    const activeCols = Object.entries(queryColFilters).filter(([, v]) => v.trim() !== "")
+    if (!g && !activeCols.length) return rows
+    return rows.filter((r) => {
+      if (g) {
+        const any = Object.values(r).some((v) => (v === null || v === undefined ? "" : String(v)).toLowerCase().includes(g))
+        if (!any) return false
+      }
+      for (const [k, v] of activeCols) {
+        if (!matchCell(r[k], v)) return false
+      }
+      return true
+    })
+  }, [queryResult, queryGlobalFilter, queryColFilters]);
 
   const [companyDetail, setCompanyDetail] = useState<CompanyDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -302,7 +699,7 @@ export default function CompaniesPage() {
   useEffect(() => {
     if (!selectedFirma) return
     const firkod = selectedFirma.firkod
-    setTabUsers([]); setTabIIS([]); setTabSQL([])
+    setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     setCompanyDetail(null)
     setTabLoading(true)
     setDetailLoading(true)
@@ -311,10 +708,12 @@ export default function CompaniesPage() {
       fetch(`/api/companies/${firkod}/iis`).then(r => r.ok ? r.json() : []),
       fetch(`/api/companies/${firkod}/sql`).then(r => r.ok ? r.json() : []),
       fetch(`/api/companies/${firkod}/detail`).then(r => r.ok ? r.json() : null),
-    ]).then(([users, iis, sql, detail]) => {
+      fetch(`/api/companies/${firkod}/services`).then(r => r.ok ? r.json() : []),
+    ]).then(([users, iis, sql, detail, services]) => {
       setTabUsers(Array.isArray(users) ? users : [])
       setTabIIS(Array.isArray(iis) ? iis : [])
       setTabSQL(Array.isArray(sql) ? sql : [])
+      setTabServices(Array.isArray(services) ? services : [])
       if (detail && !detail.error) setCompanyDetail(detail)
     }).catch(() => {}).finally(() => { setTabLoading(false); setDetailLoading(false) })
   }, [selectedFirma?.firkod])
@@ -325,10 +724,134 @@ export default function CompaniesPage() {
     setSearchQuery("")
   }
 
+  async function refreshIIS() {
+    if (!selectedFirma) return
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/iis`, { cache: "no-store" })
+      if (r.ok) {
+        const data = await r.json()
+        if (Array.isArray(data)) setTabIIS(data)
+      }
+    } catch {}
+  }
+
+  async function iisAction(site: TabIISSite, action: "start" | "stop" | "restart" | "remove") {
+    if (!selectedFirma) return
+    const labels: Record<typeof action, { running: string; ok: string; fail: string }> = {
+      start:   { running: "Site başlatılıyor…",        ok: "Site başlatıldı",        fail: "Site başlatılamadı" },
+      stop:    { running: "Site durduruluyor…",        ok: "Site durduruldu",        fail: "Site durdurulamadı" },
+      restart: { running: "Site yeniden başlatılıyor…", ok: "Site yeniden başlatıldı", fail: "Site yeniden başlatılamadı" },
+      remove:  { running: "Site kaldırılıyor…",        ok: "Site kaldırıldı",        fail: "Site kaldırılamadı" },
+    }
+    setIisActionBusy(site.Id)
+    const toastId = toast.loading(labels[action].running, { description: site.Name })
+    try {
+      const resp = await fetch(`/api/companies/${selectedFirma.firkod}/iis/action`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ server: site.Server, siteName: site.Name, action }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) {
+        toast.error(labels[action].fail, { id: toastId, description: data?.error ?? "Bilinmeyen hata" })
+        return
+      }
+      toast.success(labels[action].ok, { id: toastId, description: site.Name })
+      // Biraz bekle, agent'ın bir sonraki raporu DB'ye yazsın — sonra yenile
+      await new Promise((r) => setTimeout(r, 1200))
+      await refreshIIS()
+    } catch (err) {
+      toast.error(labels[action].fail, { id: toastId, description: err instanceof Error ? err.message : "Bağlantı hatası" })
+    } finally {
+      setIisActionBusy(null)
+    }
+  }
+
+  async function sqlBackup(db: TabSQLDatabase) {
+    if (!selectedFirma) return
+    setSqlActionBusy(db.Id)
+    const id = toast.loading("Yedek alınıyor…", { description: db.Name })
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql/backup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server: db.Server, dbName: db.Name }),
+      })
+      const data = await r.json()
+      if (!r.ok) {
+        toast.error("Yedek alınamadı", { id, description: data?.error ?? "" })
+        return
+      }
+      toast.success("Yedek alındı", { id, description: data.path })
+    } catch (e) {
+      toast.error("Yedek alınamadı", { id, description: e instanceof Error ? e.message : "Bağlantı hatası" })
+    } finally {
+      setSqlActionBusy(null)
+    }
+  }
+
+  function openRestore(db: TabSQLDatabase) {
+    setRestorePath("")
+    setRestoreTarget(db)
+  }
+
+  async function runRestore() {
+    if (!selectedFirma || !restoreTarget || !restorePath.trim()) return
+    const db = restoreTarget
+    setRestoreTarget(null)
+    setSqlActionBusy(db.Id)
+    const id = toast.loading("Geri yükleniyor…", { description: db.Name })
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server: db.Server, dbName: db.Name, backupPath: restorePath.trim() }),
+      })
+      const data = await r.json()
+      if (!r.ok) { toast.error("Geri yükleme başarısız", { id, description: data?.error ?? "" }); return }
+      toast.success("Geri yükleme tamamlandı", { id, description: db.Name })
+    } catch (e) {
+      toast.error("Geri yükleme başarısız", { id, description: e instanceof Error ? e.message : "Bağlantı hatası" })
+    } finally {
+      setSqlActionBusy(null)
+    }
+  }
+
+  function openQuery(db: TabSQLDatabase) {
+    setQueryResult(null)
+    setQueryError(null)
+    setQueryGlobalFilter("")
+    setQueryColFilters({})
+    setQueryTarget(db)
+  }
+
+  async function runQuery() {
+    if (!selectedFirma || !queryTarget || !queryText.trim()) return
+    setQueryRunning(true)
+    setQueryError(null)
+    setQueryResult(null)
+    setQueryGlobalFilter("")
+    setQueryColFilters({})
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ server: queryTarget.Server, dbName: queryTarget.Name, sql: queryText }),
+      })
+      const data = await r.json()
+      if (!r.ok) { setQueryError(data?.error ?? "Bilinmeyen hata"); return }
+      setQueryResult({ rows: data.recordset ?? [], ms: data.durationMs ?? 0, affected: data.rowsAffected ?? [] })
+    } catch (e) {
+      setQueryError(e instanceof Error ? e.message : "Bağlantı hatası")
+    } finally {
+      setQueryRunning(false)
+    }
+  }
+
   function clearSelection() {
     setSelectedFirma(null)
     setCompanyDetail(null)
-    setTabUsers([]); setTabIIS([]); setTabSQL([])
+    setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
   }
 
   const apiFiltered = searchQuery.trim()
@@ -578,6 +1101,7 @@ export default function CompaniesPage() {
                 <TabsTrigger value="services" className="text-[11px] h-7 gap-1.5">
                   <Briefcase className="h-3.5 w-3.5" />
                   Hizmetler
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabServices.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="iis" className="text-[11px] h-7 gap-1.5">
                   <Globe className="h-3.5 w-3.5" />
@@ -592,7 +1116,16 @@ export default function CompaniesPage() {
               </TabsList>
 
               {/* Kullanıcılar */}
-              <TabsContent value="users" className="mt-0">
+              <TabsContent value="users" className="mt-0 space-y-2">
+                <div className="flex items-center justify-end">
+                  <Button
+                    size="sm"
+                    onClick={openNewUserDialog}
+                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" /> Yeni Kullanıcı Ekle
+                  </Button>
+                </div>
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
                   <div className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı</span>
@@ -649,8 +1182,69 @@ export default function CompaniesPage() {
               {/* Hizmetler */}
               <TabsContent value="services" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="flex items-center justify-center py-10">
-                    <p className="text-xs text-muted-foreground">Hizmet tanımları henüz eklenmedi</p>
+                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Hizmet</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tip</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Port</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                    <span />
+                  </div>
+                  <div className="divide-y divide-border/40">
+                    {tabLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2.5 items-center gap-3">
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px] w-10" />
+                          <Skeleton className="h-3 rounded-[3px] w-14" />
+                        </div>
+                      ))
+                    ) : tabServices.length === 0 ? (
+                      <div className="flex items-center justify-center py-8">
+                        <p className="text-xs text-muted-foreground">Firmaya atanmış hizmet bulunamadı</p>
+                      </div>
+                    ) : tabServices.map((svc) => {
+                      const running = svc.status === "Started"
+                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
+                      return (
+                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[11px] font-medium truncate">{svc.name}</span>
+                              {svc.siteName && <span className="text-[10px] font-mono text-muted-foreground truncate">{svc.siteName}</span>}
+                            </div>
+                          </div>
+                          <span className="text-[10px] text-muted-foreground truncate">{typeLabel}</span>
+                          <span className="text-[11px] font-mono text-muted-foreground truncate">{svc.server || "—"}</span>
+                          <span className="text-[11px] tabular-nums text-muted-foreground">{svc.port ?? "—"}</span>
+                          {svc.status ? (
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-1.5 w-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-gray-300"}`} />
+                              <span className={`text-[10px] ${running ? "text-emerald-600" : "text-muted-foreground"}`}>
+                                {running ? "Çalışıyor" : "Durdu"}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          )}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 text-[11px]">
+                              <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
+                                <Trash2 className="h-3.5 w-3.5" /> Hizmeti Kaldır
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </TabsContent>
@@ -658,10 +1252,12 @@ export default function CompaniesPage() {
               {/* Veritabanları */}
               <TabsContent value="databases" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veritabanı</span>
+                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase pl-[22px]">Veritabanı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Boyut</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Recovery</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Owner</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Yedek</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
                     <span />
@@ -669,31 +1265,45 @@ export default function CompaniesPage() {
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-2.5 items-center gap-3">
+                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-2.5 items-center">
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-2/3" />
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-12" />
+                          <span />
                         </div>
                       ))
                     ) : tabSQL.length === 0 ? (
                       <div className="flex items-center justify-center py-8">
                         <p className="text-xs text-muted-foreground">Veritabanı bulunamadı</p>
                       </div>
-                    ) : tabSQL.map((db) => (
-                      <div key={db.Id} className="grid grid-cols-[1fr_120px_80px_140px_80px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
-                        <div className="flex items-center gap-2">
+                    ) : tabSQL.map((db) => {
+                      const tooltipLines = [
+                        db.DataFilePath ? `MDF: ${db.DataFilePath}` : null,
+                        db.LogFilePath  ? `LDF: ${db.LogFilePath}`  : null,
+                        db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
+                      ].filter(Boolean).join("\n")
+                      return (
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-2 hover:bg-muted/20 transition-colors items-center">
+                        <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="text-[11px] font-medium truncate">{db.Name}</span>
                         </div>
-                        <span className="text-[11px] font-mono text-muted-foreground truncate">{db.Server}</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{(db.SizeMB / 1024).toFixed(1)} GB</span>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-[11px] font-mono truncate">{db.Server}</span>
+                          {db.ServerIP && <span className="text-[10px] font-mono text-muted-foreground truncate">{db.ServerIP}</span>}
+                        </div>
+                        <span className="text-[11px] tabular-nums text-muted-foreground">{db.SizeMB >= 1024 ? `${(db.SizeMB / 1024).toFixed(1)} GB` : `${db.SizeMB} MB`}</span>
+                        <span className="text-[10px] text-muted-foreground truncate">{db.RecoveryModel ?? "—"}</span>
+                        <span className="text-[10px] text-muted-foreground truncate font-mono">{db.Owner ?? "—"}</span>
                         <span className="text-[10px] tabular-nums text-muted-foreground">{db.LastBackup ?? "—"}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${db.Status === "Online" ? "text-emerald-600" : "text-muted-foreground"}`}>
-                            {db.Status === "Online" ? "Çevrimiçi" : "Çevrimdışı"}
+                          <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
+                          <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600" : "text-muted-foreground"}`}>
+                            {(db.Status === "ONLINE" || db.Status === "Online") ? "Çevrimiçi" : "Çevrimdışı"}
                           </span>
                         </div>
                         <DropdownMenu>
@@ -703,15 +1313,19 @@ export default function CompaniesPage() {
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="text-[11px] gap-2"><Download className="h-3.5 w-3.5" /> Yedekle</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" /> Veritabanını Kaldır
+                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => sqlBackup(db)}>
+                              <Download className="h-3.5 w-3.5" /> Yedek Al
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openRestore(db)}>
+                              <Upload className="h-3.5 w-3.5" /> Geri Yükle
+                            </DropdownMenuItem>
+                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openQuery(db)}>
+                              <Terminal className="h-3.5 w-3.5" /> Sorgu Çalıştır
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </TabsContent>
@@ -719,23 +1333,24 @@ export default function CompaniesPage() {
               {/* IIS Siteler */}
               <TabsContent value="iis" className="mt-0">
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                  <div className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase pl-[22px]">Site Adı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Binding</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Port</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">App Pool</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                    <span />
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-2.5 items-center gap-3">
+                        <div key={i} className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] px-3 py-2.5 items-center gap-3">
+                          <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-12" />
+                          <Skeleton className="h-3 rounded-[3px] w-10" />
+                          <Skeleton className="h-3 rounded-[3px] w-14" />
+                          <span />
+                          <span />
                         </div>
                       ))
                     ) : tabIIS.length === 0 ? (
@@ -743,21 +1358,28 @@ export default function CompaniesPage() {
                         <p className="text-xs text-muted-foreground">IIS sitesi bulunamadı</p>
                       </div>
                     ) : tabIIS.map((site) => {
-                      const portMatch = site.Binding.match(/:(\d+)$/)
+                      const portMatch = (site.Binding ?? "").match(/:(\d+)(?:[,\s]|$)/)
                       const port = portMatch ? portMatch[1] : "—"
-                      const host = site.Binding.replace(/:\d+$/, "").replace(/^https?:\/\//, "")
                       return (
-                        <div key={site.Id} className="grid grid-cols-[120px_1fr_55px_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
-                          <span className="text-[11px] font-mono text-muted-foreground truncate">{site.Server}</span>
-                          <span className="text-[11px] font-mono text-muted-foreground truncate">{host || site.Binding}</span>
+                        <div key={site.Id} className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            <span className="text-[11px] font-medium truncate">{site.Name}</span>
+                          </div>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-[11px] truncate">{site.Server}</span>
+                            {site.ServerIP && (
+                              <span className="text-[10px] font-mono text-muted-foreground truncate">{site.ServerIP}</span>
+                            )}
+                          </div>
                           <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{port}</span>
-                          <span className="text-[11px] text-muted-foreground truncate">{site.AppPool}</span>
                           <div className="flex items-center gap-1.5">
                             <div className={`h-1.5 w-1.5 rounded-full ${site.Status === "Started" ? "bg-emerald-500" : "bg-gray-300"}`} />
                             <span className={`text-[10px] ${site.Status === "Started" ? "text-emerald-600" : "text-muted-foreground"}`}>
                               {site.Status === "Started" ? "Aktif" : "Durduruldu"}
                             </span>
                           </div>
+                          <span />
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
@@ -765,14 +1387,29 @@ export default function CompaniesPage() {
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem className="text-[11px] gap-2">
+                              <DropdownMenuItem
+                                className="text-[11px] gap-2"
+                                disabled={iisActionBusy === site.Id}
+                                onSelect={(e) => { e.preventDefault(); iisAction(site, site.Status === "Started" ? "stop" : "start") }}
+                              >
                                 {site.Status === "Started"
                                   ? <><Square className="h-3.5 w-3.5" /> Durdur</>
                                   : <><Play className="h-3.5 w-3.5" /> Başlat</>
                                 }
                               </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[11px] gap-2"
+                                disabled={iisActionBusy === site.Id}
+                                onSelect={(e) => { e.preventDefault(); iisAction(site, "restart") }}
+                              >
+                                <RotateCw className="h-3.5 w-3.5" /> Yeniden Başlat
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
+                              <DropdownMenuItem
+                                className="text-[11px] gap-2 text-destructive focus:text-destructive"
+                                disabled={iisActionBusy === site.Id}
+                                onSelect={(e) => { e.preventDefault(); setIisRemoveTarget(site) }}
+                              >
                                 <Trash2 className="h-3.5 w-3.5" /> Siteyi Kaldır
                               </DropdownMenuItem>
                             </DropdownMenuContent>
@@ -785,6 +1422,678 @@ export default function CompaniesPage() {
               </TabsContent>
             </Tabs>
           </NestedCard>
+
+          <AlertDialog open={iisRemoveTarget !== null} onOpenChange={(o) => { if (!o) setIisRemoveTarget(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>IIS Sitesini Kaldır</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <span className="font-mono font-medium">{iisRemoveTarget?.Name}</span> sitesi IIS'ten kaldırılacak.
+                  Fiziksel dosyalar sunucuda kalmaya devam eder, sadece IIS kaydı silinir. Bu işlem geri alınamaz.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>İptal</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                  onClick={() => {
+                    const target = iisRemoveTarget
+                    setIisRemoveTarget(null)
+                    if (target) iisAction(target, "remove")
+                  }}
+                >
+                  Kaldır
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* SQL Restore */}
+          <AlertDialog open={restoreTarget !== null} onOpenChange={(o) => { if (!o) setRestoreTarget(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Veritabanını Geri Yükle</AlertDialogTitle>
+                <AlertDialogDescription>
+                  <span className="font-mono font-medium">{restoreTarget?.Name}</span> üzerine yazılacak. Mevcut veriler kaybolur.
+                  SQL sunucusunda yer alan .bak dosyasının tam yolunu girin.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="restore-path" className="text-[11px]">.bak Dosya Yolu</Label>
+                <Input
+                  id="restore-path"
+                  value={restorePath}
+                  onChange={(e) => setRestorePath(e.target.value)}
+                  placeholder="C:\Backup\firma_20260414.bak"
+                  className="rounded-[5px] h-8 text-[11px] font-mono"
+                />
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>İptal</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                  onClick={runRestore}
+                  disabled={!restorePath.trim()}
+                >
+                  Geri Yükle
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* SQL Query Console */}
+          <Dialog open={queryTarget !== null} onOpenChange={(o) => { if (!o) setQueryTarget(null) }}>
+            <DialogContent className="p-0 gap-0 flex flex-col sm:max-w-[95vw] w-[95vw] h-[90vh] max-h-[90vh] overflow-hidden">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm">
+                  Sorgu Çalıştır — <span className="font-mono">{queryTarget?.Name}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+                <div className="px-4 py-3 space-y-2 border-b border-border/40">
+                  <Textarea
+                    value={queryText}
+                    onChange={(e) => setQueryText(e.target.value)}
+                    rows={8}
+                    spellCheck={false}
+                    className="rounded-[5px] text-[11px] font-mono resize-none"
+                    placeholder="SELECT TOP 50 * FROM ..."
+                  />
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-muted-foreground">Yalnızca SELECT sorgularına izin verilir (salt-okunur)</span>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" onClick={() => setSavedQueriesOpen(true)} className="rounded-[5px] h-7 text-[11px] gap-1">
+                        <Bookmark className="h-3 w-3" /> Kayıtlı Sorgular {savedQueries.length > 0 && <span className="text-muted-foreground">({savedQueries.length})</span>}
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={debugOpenDialog} className="rounded-[5px] h-7 text-[11px] gap-1">
+                        <Bug className="h-3 w-3" /> Debug
+                      </Button>
+                      <Button size="sm" onClick={runQuery} disabled={queryRunning || !queryText.trim()} className="rounded-[5px] h-7 text-[11px]">
+                        {queryRunning ? "Çalışıyor…" : "Çalıştır"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto">
+                  <div className="px-4 py-3">
+                    {queryError ? (
+                      <div className="rounded-[5px] border border-destructive/40 bg-destructive/5 px-3 py-2 text-[11px] font-mono text-destructive whitespace-pre-wrap">
+                        {queryError}
+                      </div>
+                    ) : queryResult ? (
+                      <>
+                        {(() => {
+                          const activeCols = Object.entries(queryColFilters).filter(([, v]) => v.trim())
+                          const hasActive = !!queryGlobalFilter.trim() || activeCols.length > 0
+                          return (
+                            <div className="mb-3 rounded-[5px] border border-border/50 bg-muted/20 p-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <Input
+                                  value={queryGlobalFilter}
+                                  onChange={(e) => setQueryGlobalFilter(e.target.value)}
+                                  placeholder="Tüm sütunlarda ara…"
+                                  className="rounded-[5px] h-7 text-[11px] w-64"
+                                />
+                                {hasActive && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 px-2 text-[11px] rounded-[5px]"
+                                    onClick={() => { setQueryGlobalFilter(""); setQueryColFilters({}) }}
+                                  >Filtreleri temizle</Button>
+                                )}
+                                <span className="text-[10px] text-muted-foreground ml-auto tabular-nums">
+                                  {filteredQueryRows.length} / {queryResult.rows.length} satır • {queryResult.ms} ms
+                                </span>
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-7 px-2 text-[11px] rounded-[5px] gap-1" disabled={!queryResult.rows.length}>
+                                      <Download className="h-3 w-3" /> Dışa Aktar
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-36 text-[11px]">
+                                    <DropdownMenuItem onClick={() => exportQueryResult("xlsx")} className="gap-2 text-[11px]">
+                                      <Download className="h-3 w-3" /> Excel (.xlsx)
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => exportQueryResult("pdf")} className="gap-2 text-[11px]">
+                                      <Download className="h-3 w-3" /> PDF
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => exportQueryResult("txt")} className="gap-2 text-[11px]">
+                                      <Download className="h-3 w-3" /> TXT
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              </div>
+                              {hasActive && (
+                                <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                                  {queryGlobalFilter.trim() && (
+                                    <span className="group inline-flex items-stretch text-[10px] rounded-[4px] border border-border/60 bg-background font-mono overflow-hidden">
+                                      <span className="flex items-center gap-1 px-2 py-0.5">
+                                        <span className="text-muted-foreground">tümü:</span>
+                                        <span>{queryGlobalFilter}</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQueryGlobalFilter("")}
+                                        aria-label="Filtreyi kaldır"
+                                        className="flex items-center justify-center bg-destructive text-white hover:bg-destructive/90 max-w-0 group-hover:max-w-[22px] overflow-hidden transition-[max-width] duration-200 ease-out"
+                                      >
+                                        <span className="flex items-center justify-center w-[22px] shrink-0"><X className="h-3 w-3" strokeWidth={3} /></span>
+                                      </button>
+                                    </span>
+                                  )}
+                                  {activeCols.map(([k, v]) => (
+                                    <span key={k} className="group inline-flex items-stretch text-[10px] rounded-[4px] border border-border/60 bg-background font-mono overflow-hidden">
+                                      <span className="flex items-center gap-1 px-2 py-0.5">
+                                        <span className="text-muted-foreground">{k}:</span>
+                                        <span>{v}</span>
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setQueryColFilters((f) => { const n = { ...f }; delete n[k]; return n })}
+                                        aria-label="Filtreyi kaldır"
+                                        className="flex items-center justify-center bg-destructive text-white hover:bg-destructive/90 max-w-0 group-hover:max-w-[22px] overflow-hidden transition-[max-width] duration-200 ease-out"
+                                      >
+                                        <span className="flex items-center justify-center w-[22px] shrink-0"><X className="h-3 w-3" strokeWidth={3} /></span>
+                                      </button>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                              <div className="mt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setFilterHelpOpen(true)}
+                                  className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <Info className="h-3 w-3" />
+                                  Filtre nasıl kullanılır?
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })()}
+                        {queryResult.rows.length === 0 ? (
+                          <div className="text-[11px] text-muted-foreground py-4 text-center">Sonuç boş</div>
+                        ) : (
+                          <div className="rounded-[4px] border border-border/40">
+                            <table className="text-[10px] w-max min-w-full">
+                              <thead className="sticky top-0 z-10">
+                                <tr>
+                                  {Object.keys(queryResult.rows[0]).map((k) => (
+                                    <th key={k} className="px-2 py-1 text-left font-medium text-muted-foreground border-b border-border/40 align-top bg-muted shadow-[inset_0_-1px_0_var(--border)]">
+                                      <div className="flex flex-col gap-1 min-w-[100px]">
+                                        <span>{k}</span>
+                                        <input
+                                          value={queryColFilters[k] ?? ""}
+                                          onChange={(e) => setQueryColFilters((f) => ({ ...f, [k]: e.target.value }))}
+                                          placeholder="filtre…"
+                                          className="h-5 px-1 text-[10px] font-mono font-normal border border-border/60 rounded-[3px] bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                        />
+                                      </div>
+                                    </th>
+                                  ))}
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border/30">
+                                {filteredQueryRows.slice(0, 200).map((row, i) => (
+                                  <tr key={i} className="hover:bg-muted/20">
+                                    {Object.keys(queryResult.rows[0]).map((k, j) => {
+                                      const v = row[k]
+                                      return (
+                                        <td key={j} className="px-2 py-1 font-mono whitespace-nowrap">{v === null || v === undefined ? <span className="text-muted-foreground/60">NULL</span> : String(v)}</td>
+                                      )
+                                    })}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                            {filteredQueryRows.length > 200 && (
+                              <div className="text-[10px] text-muted-foreground p-2 text-center">İlk 200 satır gösteriliyor ({filteredQueryRows.length} eşleşen)</div>
+                            )}
+                            {filteredQueryRows.length === 0 && (
+                              <div className="text-[11px] text-muted-foreground py-4 text-center">Filtreye uyan satır yok</div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-[11px] text-muted-foreground py-4 text-center">Sorgu çalıştırın</div>
+                    )}
+                  </div>
+                </div>
+                {/* İstatistik Barı — scroll'dan bağımsız, dialog altına sabit */}
+                {queryResult && queryResult.rows.length > 0 && (() => {
+                  const cols = Object.keys(queryResult.rows[0])
+                  const rows = filteredQueryRows
+                  const activeFilterCount = (queryGlobalFilter.trim() ? 1 : 0) + Object.values(queryColFilters).filter((v) => v.trim()).length
+                  return (
+                    <div className="border-t border-border/50 bg-muted/30 px-4 py-2 flex items-center gap-4 text-[10px]">
+                      <span><span className="text-muted-foreground">Satır:</span> <span className="font-mono tabular-nums font-medium">{rows.length.toLocaleString("tr-TR")}</span><span className="text-muted-foreground"> / {queryResult.rows.length.toLocaleString("tr-TR")}</span></span>
+                      <span><span className="text-muted-foreground">Sütun:</span> <span className="font-mono tabular-nums font-medium">{cols.length}</span></span>
+                      <span><span className="text-muted-foreground">Filtre:</span> <span className="font-mono tabular-nums font-medium">{activeFilterCount}</span></span>
+                      <span><span className="text-muted-foreground">Süre:</span> <span className="font-mono tabular-nums font-medium">{queryResult.ms} ms</span></span>
+                    </div>
+                  )
+                })()}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Kayıtlı Sorgular Dialog */}
+          <Dialog open={savedQueriesOpen} onOpenChange={setSavedQueriesOpen}>
+            <DialogContent className="sm:max-w-[640px] p-0 gap-0 overflow-hidden">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm">Kayıtlı Sorgular</DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-4 min-w-0">
+                <div className="max-h-[60vh] overflow-auto rounded-[4px] border border-border/40">
+                  {savedQueries.length === 0 ? (
+                    <div className="text-[11px] text-muted-foreground py-8 text-center">Henüz kayıtlı sorgu yok</div>
+                  ) : (
+                    <div className="divide-y divide-border/40">
+                      {savedQueries.map((q) => (
+                        <button
+                          key={q.id}
+                          type="button"
+                          onClick={() => loadSavedQuery(q.sql)}
+                          onMouseEnter={(e) => { setHoverQueryId(q.id); setHoverPos({ x: e.clientX, y: e.clientY }) }}
+                          onMouseMove={(e) => setHoverPos({ x: e.clientX, y: e.clientY })}
+                          onMouseLeave={() => setHoverQueryId((id) => (id === q.id ? null : id))}
+                          className="w-full min-w-0 px-3 py-2 hover:bg-muted/30 transition-colors flex items-start gap-3 text-left"
+                        >
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="flex items-center gap-2">
+                              <span className="text-[11px] font-medium truncate">{q.name}</span>
+                              {q.category && <span className="text-[9px] rounded-[3px] bg-muted px-1.5 py-0.5 text-muted-foreground shrink-0">{q.category}</span>}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{q.sql.replace(/\s+/g, " ")}</div>
+                          </div>
+                          <Play className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="px-5 py-3 border-t border-border/50 flex justify-end">
+                <Button size="sm" variant="outline" onClick={() => setSavedQueriesOpen(false)} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Debug İzleme Dialog */}
+          <Dialog open={debugOpen} onOpenChange={(o) => { if (!o) { setDebugOpen(false); if (debugRunning) debugStop() } }}>
+            <DialogContent className="p-0 gap-0 flex flex-col sm:max-w-[90vw] w-[90vw] h-[85vh] max-h-[85vh] overflow-hidden">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm flex items-center gap-2">
+                  <Bug className="h-4 w-4" /> Debug İzleme — <span className="font-mono">{selectedFirma?.firkod}</span>
+                  {debugRunning && (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-normal">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> canlı
+                    </span>
+                  )}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-3 border-b border-border/40 flex items-center gap-2 flex-wrap text-[11px]">
+                {debugServers.length > 0 && (
+                  <>
+                    <Label className="text-[11px] text-muted-foreground">Sunucu:</Label>
+                    <Select
+                      value={debugServerId}
+                      onValueChange={(v) => { setDebugServerId(v); loadDebugFolders(v) }}
+                      disabled={debugRunning}
+                    >
+                      <SelectTrigger className="h-7 text-[11px] rounded-[5px] w-[220px]">
+                        <SelectValue placeholder="Windows sunucusu seçin…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {debugServers.map((s) => (
+                          <SelectItem key={s.Id} value={s.Id} className="text-[11px]">
+                            {s.Name} <span className="text-muted-foreground font-mono ml-1">{s.IP}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <span className="text-muted-foreground">·</span>
+                  </>
+                )}
+                <Label className="text-[11px] text-muted-foreground">Program:</Label>
+                <Select value={debugSubfolder} onValueChange={setDebugSubfolder} disabled={debugRunning || !debugFolders.length}>
+                  <SelectTrigger className="h-7 text-[11px] rounded-[5px] w-[200px]">
+                    <SelectValue placeholder={debugFolders.length ? "Seçin…" : "Klasör yok"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {debugFolders.map((f) => <SelectItem key={f} value={f} className="text-[11px]">{f}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {debugPath && <span className="font-mono text-muted-foreground truncate text-[10px]" title={debugPath}>{debugPath}</span>}
+                <div className="ml-auto flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={debugFetch} disabled={!debugRunning} className="rounded-[5px] h-7 text-[11px] gap-1">
+                    <RotateCw className="h-3 w-3" /> Yenile
+                  </Button>
+                  {debugRunning ? (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" disabled={debugBusy} className="rounded-[5px] h-7 text-[11px] gap-1 bg-destructive hover:bg-destructive/90 text-white">
+                          <Square className="h-3 w-3" /> Durdur
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Debug durdurulsun mu?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Debug izleme sonlandırılacak ve <span className="font-mono">debugsql.txt</span> dosyası sunucudan silinecek. Devam edilsin mi?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+                          <AlertDialogAction onClick={debugStop} className="bg-destructive text-white hover:bg-destructive/90">Durdur ve Sil</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  ) : (
+                    <Button size="sm" onClick={debugStart} disabled={debugBusy || !debugSubfolder} className="rounded-[5px] h-7 text-[11px] gap-1">
+                      <Play className="h-3 w-3" /> Başlat
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <div className="flex-1 min-h-0 overflow-auto bg-zinc-950 text-zinc-100 font-mono text-[11px] leading-relaxed p-4 whitespace-pre-wrap">
+                {debugError ? (
+                  <div className="text-red-400">{debugError}</div>
+                ) : debugContent ? (
+                  debugContent
+                ) : (
+                  <div className="text-zinc-500 italic">
+                    {debugRunning ? "Dosya boş — 5 sn içinde yeniden denenecek…" : "Debug durduruldu."}
+                  </div>
+                )}
+              </div>
+              <div className="px-5 py-2 border-t border-border/50 text-[10px] text-muted-foreground">
+                5 saniyede bir otomatik yenilenir. Pencere kapatılınca debug otomatik durur ve dosya silinir.
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Yeni Kullanıcı Dialog */}
+          <Dialog open={newUserOpen} onOpenChange={(o) => { if (!newUserStarted) setNewUserOpen(o) }}>
+            <DialogContent className="sm:max-w-[560px] p-0 gap-0">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm flex items-center gap-2">
+                  <UserPlus className="h-4 w-4" /> Yeni Kullanıcı — <span className="font-mono">{selectedFirma?.firkod}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="max-h-[70vh]">
+                <div className="px-5 py-4 space-y-3">
+                  {!newUserStarted ? (
+                    <>
+                      {/* AD + RDP sunucu seçiciler */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] flex items-center gap-1">AD Sunucusu {newUserAdLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
+                          <Select value={newUserAdServerId} onValueChange={setNewUserAdServerId} disabled={newUserAdLocked}>
+                            <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                              <SelectValue placeholder={newUserAdServers.length ? "Seçin…" : "Yükleniyor…"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {newUserAdServers.map((s) => (
+                                <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                  {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px] flex items-center gap-1">RDP Sunucusu {newUserRdpLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
+                          <Select value={newUserRdpServerId} onValueChange={setNewUserRdpServerId} disabled={newUserRdpLocked}>
+                            <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                              <SelectValue placeholder={newUserRdpServers.length ? "Seçin…" : "Yükleniyor…"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {newUserRdpServers.map((s) => (
+                                <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                  {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Kullanıcı adı */}
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px]">Kullanıcı Adı</Label>
+                        <div className="flex items-center rounded-[5px] border border-border bg-background overflow-hidden focus-within:border-foreground/60 transition-colors h-8">
+                          <span className="text-[11px] text-muted-foreground bg-muted px-2 h-full flex items-center border-r border-border shrink-0 font-mono">
+                            {selectedFirma?.firkod}.
+                          </span>
+                          <input
+                            value={newUserUsername}
+                            onChange={(e) => setNewUserUsername(e.target.value)}
+                            placeholder="kullanici"
+                            className="flex-1 px-2 text-[11px] bg-transparent outline-none min-w-0 h-full"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Ad Soyad */}
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px]">Ad Soyad</Label>
+                        <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" className="h-8 rounded-[5px] text-[11px]" />
+                      </div>
+
+                      {/* Şifre */}
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px]">Şifre</Label>
+                        <div className={`flex items-center rounded-[5px] border bg-background h-8 ${newUserPassword && !meetsAdComplexity(newUserPassword) ? "border-red-400" : "border-border"}`}>
+                          <input
+                            type={newUserShowPw ? "text" : "password"}
+                            value={newUserPassword}
+                            onChange={(e) => setNewUserPassword(e.target.value)}
+                            placeholder="••••••••"
+                            className="flex-1 px-2 text-[11px] bg-transparent outline-none min-w-0 h-full"
+                          />
+                          <button type="button" onClick={() => setNewUserShowPw((v) => !v)} className="px-2 text-muted-foreground hover:text-foreground">
+                            {newUserShowPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          </button>
+                          <button type="button" onClick={() => setNewUserPassword(generatePassword())} title="Şifre oluştur" className="px-2 border-l border-border text-muted-foreground hover:text-foreground">
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        {newUserPassword && !meetsAdComplexity(newUserPassword) && (
+                          <p className="text-[10px] text-red-500">En az 7 karakter, büyük/küçük harf + rakam/özel karakter (3 kategori)</p>
+                        )}
+                      </div>
+
+                      {/* E-posta + Telefon */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px]">E-posta</Label>
+                          <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" className="h-8 rounded-[5px] text-[11px]" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-[11px]">Telefon</Label>
+                          <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" className="h-8 rounded-[5px] text-[11px]" />
+                        </div>
+                      </div>
+
+                      {newUserError && <p className="text-[11px] text-red-500">{newUserError}</p>}
+                    </>
+                  ) : (
+                    selectedFirma && (
+                      <AdProvisionRunner
+                        payload={{
+                          serverId:  newUserAdServerId,
+                          firmaId:   selectedFirma.firkod,
+                          firmaName: selectedFirma.firma,
+                          skipDepo:  true,
+                          users: [{
+                            username:    newUserUsername.trim(),
+                            displayName: newUserDisplayName.trim(),
+                            email:       newUserEmail.trim(),
+                            phone:       newUserPhone.trim(),
+                            password:    newUserPassword,
+                          }],
+                        }}
+                        onComplete={() => {
+                          toast.success("Kullanıcı oluşturuldu", { description: `${selectedFirma.firkod}.${newUserUsername} AD'ye eklendi` })
+                          setNewUserDone(true)
+                          refreshTabUsers()
+                        }}
+                        onError={(msg) => setNewUserError(msg)}
+                      />
+                    )
+                  )}
+
+                  {newUserDone && selectedFirma && (() => {
+                    const adSrv  = newUserAdServers.find((s) => s.id === newUserAdServerId)
+                    const rdpSrv = newUserRdpServers.find((s) => s.id === newUserRdpServerId)
+                    const srvAddr = rdpSrv?.ip ?? ""
+                    const portSfx = rdpSrv?.rdpPort ? `:${rdpSrv.rdpPort}` : ""
+                    const domainShort = (adSrv?.domain ?? "").split(".")[0]?.trim() ?? ""
+                    const userPart = `${selectedFirma.firkod}.${newUserUsername.trim()}`
+                    const fullUser = domainShort ? `${domainShort}\\${userPart}` : userPart
+                    const msg = [
+                      "Merhaba,",
+                      "",
+                      "Sunucu erişim bilgileriniz aşağıdadır.",
+                      "",
+                      `Sunucu: ${srvAddr}${portSfx}`,
+                      "",
+                      `Kullanıcı Adı: ${fullUser}`,
+                      `Şifre: ${newUserPassword}`,
+                      "",
+                      "Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734",
+                      "",
+                      "İyi çalışmalar.",
+                    ].join("\n")
+                    return (
+                      <div className="space-y-2 mt-2">
+                        <Label className="text-[11px]">Müşteri Bilgilendirme Mesajı</Label>
+                        <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => { await navigator.clipboard.writeText(msg); setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) }}
+                          className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
+                        >
+                          {newUserMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
+                        </Button>
+                      </div>
+                    )
+                  })()}
+                </div>
+              </ScrollArea>
+              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+                {!newUserStarted ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setNewUserOpen(false)} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
+                    <Button size="sm" disabled={!newUserValid} onClick={() => { setNewUserError(null); setNewUserStarted(true) }} className="rounded-[5px] h-7 text-[11px] gap-1.5">
+                      <UserPlus className="h-3.5 w-3.5" /> Oluştur
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" onClick={() => { setNewUserOpen(false); setNewUserStarted(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Mouse-takipli tooltip (kayıtlı sorgu için) */}
+          {savedQueriesOpen && hoverQueryId && (() => {
+            const q = savedQueries.find((x) => x.id === hoverQueryId)
+            if (!q) return null
+            const PAD = 14
+            const W = 340
+            const maxX = typeof window !== "undefined" ? window.innerWidth - W - 8 : 0
+            const x = Math.min(hoverPos.x + PAD, maxX)
+            const y = hoverPos.y + PAD
+            return (
+              <div
+                className="fixed z-[200] pointer-events-none rounded-[5px] bg-popover text-popover-foreground border border-border shadow-lg p-3 space-y-2"
+                style={{ left: x, top: y, width: W }}
+              >
+                {q.description && <p className="text-[11px] leading-relaxed">{q.description}</p>}
+                <div>
+                  <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">SQL</div>
+                  <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted/50 rounded-[3px] p-2 max-h-40 overflow-auto">{q.sql}</pre>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Filtre Yardım Dialog */}
+          <Dialog open={filterHelpOpen} onOpenChange={setFilterHelpOpen}>
+            <DialogContent className="sm:max-w-[560px] p-0 gap-0">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm">Filtre Nasıl Kullanılır?</DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-4 space-y-4 text-[12px] leading-relaxed max-h-[70vh] overflow-auto">
+                <p className="text-muted-foreground">
+                  Her tablo başlığının altındaki küçük <span className="font-mono text-foreground">filtre…</span> kutusuna aşağıdaki ifadeleri yazarak
+                  o sütunu filtreleyebilirsin. Birden fazla sütunda yazılırsa hepsi <b>VE</b> mantığıyla birleşir.
+                </p>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">Sayısal karşılaştırma</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li><code className="font-mono text-foreground">&gt;10</code> — 10&apos;dan büyük</li>
+                    <li><code className="font-mono text-foreground">&lt;5</code> — 5&apos;ten küçük</li>
+                    <li><code className="font-mono text-foreground">&gt;=100</code> — 100 ve üstü</li>
+                    <li><code className="font-mono text-foreground">&lt;=0</code> — 0 ve altı</li>
+                    <li><code className="font-mono text-foreground">=42</code> — tam 42</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">Aralık</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li><code className="font-mono text-foreground">1..100</code> — 1 ile 100 arası (iki uç dahil)</li>
+                    <li><code className="font-mono text-foreground">2020-01-01..2020-12-31</code> — tarih/metin aralığı</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">Metin eşleştirme</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li><code className="font-mono text-foreground">fatura</code> — içerir (varsayılan, büyük/küçük harf duyarsız)</li>
+                    <li><code className="font-mono text-foreground">&quot;USER_TABLE&quot;</code> — birebir eşitlik</li>
+                    <li><code className="font-mono text-foreground">!kar</code> — içermez</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">NULL kontrolü</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li><code className="font-mono text-foreground">is:null</code> — sadece NULL olanlar</li>
+                    <li><code className="font-mono text-foreground">not:null</code> — NULL olmayanlar</li>
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">Tüm sütunlarda ara</h4>
+                  <p className="text-muted-foreground">
+                    Üstteki <span className="font-mono text-foreground">Tüm sütunlarda ara…</span> kutusu her satırın herhangi bir hücresinde
+                    substring araması yapar; sütun filtreleri ile birlikte kullanılabilir.
+                  </p>
+                </section>
+
+                <section>
+                  <h4 className="font-medium mb-1.5">Örnekler</h4>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li><code className="font-mono text-foreground">type_desc: &quot;USER_TABLE&quot;</code> + <code className="font-mono text-foreground">object_id: &gt;100000000</code> → id&apos;si büyük kullanıcı tabloları</li>
+                    <li><code className="font-mono text-foreground">name: fatura</code> + <code className="font-mono text-foreground">modify_date: 2025..2026</code> → adında &quot;fatura&quot; geçen, bu yıl değişenler</li>
+                    <li><code className="font-mono text-foreground">principal_id: is:null</code> → sahibi sistem olanlar</li>
+                  </ul>
+                </section>
+              </div>
+              <div className="px-5 py-3 border-t border-border/50 flex justify-end">
+                <Button size="sm" onClick={() => setFilterHelpOpen(false)} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       ) : (
         <NestedCard>

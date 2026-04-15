@@ -21,6 +21,7 @@ CREATE TABLE Servers (
     Name        NVARCHAR(100) NOT NULL,
     IP          NVARCHAR(50)  NOT NULL,
     DNS         NVARCHAR(200) NULL,
+    Domain      NVARCHAR(255) NULL,
     OS          NVARCHAR(50)  NOT NULL,
     Status      NVARCHAR(20)  NOT NULL CHECK (Status IN ('online', 'warning', 'offline')),
     CPU         FLOAT         NOT NULL DEFAULT 0,

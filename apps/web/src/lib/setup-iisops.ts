@@ -63,14 +63,34 @@ export function buildCreateIisSite(siteName: string, physicalPath: string, port:
     `if(-not (Test-Path -LiteralPath $path)){throw ('Site klasoru bulunamadi: ' + $path)}`,
     `$existing = Get-Website | Where-Object { $_.Name -eq $name }`,
     `if($existing){` +
-      `Set-ItemProperty -Path ('IIS:\\Sites\\' + $name) -Name physicalPath -Value $path; ` +
-      `$existing.Bindings.Collection.Clear(); ` +
-      `New-WebBinding -Name $name -Protocol http -Port $port -IPAddress * -ErrorAction SilentlyContinue | Out-Null; ` +
-      `Write-Output 'EXISTS'` +
+      `try{Set-ItemProperty -Path ('IIS:\\Sites\\' + $name) -Name physicalPath -Value $path -ErrorAction Stop}catch{}; ` +
+      `try{$existing.Bindings.Collection.Clear()}catch{}; ` +
+      `try{New-WebBinding -Name $name -Protocol http -Port $port -IPAddress * -ErrorAction Stop | Out-Null}catch{}; ` +
+      `$result='EXISTS'` +
     `} else {` +
       `New-Website -Name $name -PhysicalPath $path -Port $port -Force | Out-Null; ` +
-      `Write-Output 'CREATED'` +
+      `$result='CREATED'` +
     `}`,
-    `Start-Website -Name $name -ErrorAction SilentlyContinue`,
+    // Önce app pool'u başlat (site start'ın başarılı olması için gerekli)
+    `try{` +
+      `$poolName = (Get-ItemProperty -Path ('IIS:\\Sites\\' + $name) -Name applicationPool -ErrorAction Stop).Value; ` +
+      `if($poolName){` +
+        `$poolState = (Get-WebAppPoolState -Name $poolName -ErrorAction Stop).Value; ` +
+        `if($poolState -ne 'Started'){Start-WebAppPool -Name $poolName -ErrorAction Stop | Out-Null}` +
+      `}` +
+    `}catch{}`,
+    // Site'ı başlat — zaten çalışıyorsa atla
+    `try{` +
+      `$siteState = (Get-WebsiteState -Name $name -ErrorAction Stop).Value; ` +
+      `if($siteState -ne 'Started'){Start-Website -Name $name -ErrorAction Stop | Out-Null}` +
+    `}catch{}`,
+    // Durumu doğrula — hâlâ Stopped ise hata fırlat (gerçek problem varsa göster)
+    `Start-Sleep -Milliseconds 500`,
+    `$finalState = (Get-WebsiteState -Name $name -ErrorAction SilentlyContinue).Value`,
+    `if($finalState -eq 'Stopped'){throw ('Site olusturuldu ama baslatilamadi: ' + $name + ' (port ' + $port + ' kullaniliyor olabilir)')}`,
+    // PowerShell error stream'ini temizle (eski yakalanan hatalar stderr'e sızmasın)
+    `$Error.Clear()`,
+    `$global:LASTEXITCODE=0`,
+    `Write-Output ($result + ':' + $finalState)`,
   ].join("; ")
 }

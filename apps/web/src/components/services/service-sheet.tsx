@@ -83,7 +83,6 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
 
   /* ── iis-site config ── */
   const [iSourceFolderPath, setISourceFolderPath] = useState("")
-  const [iIisDestPath,      setIIisDestPath]      = useState("")
   const [iConfigFileName,   setIConfigFileName]   = useState("")
   const [iSiteNamePattern,  setISiteNamePattern]  = useState("")
   const [iPortRangeId,      setIPortRangeId]      = useState<string>("")
@@ -109,9 +108,8 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
         setPParamFileName(editing.config.paramFileName ?? "")
         setPProgramCode(editing.config.programCode ?? "")
         setPExeName(editing.config.exeName ?? "")
-      } else if (editing.type === "iis-site" && editing.config && "iisDestPath" in editing.config) {
+      } else if (editing.type === "iis-site" && editing.config && "portRangeId" in editing.config) {
         setISourceFolderPath(editing.config.sourceFolderPath ?? "")
-        setIIisDestPath(editing.config.iisDestPath ?? "")
         setIConfigFileName(editing.config.configFileName ?? "")
         setISiteNamePattern(editing.config.siteNamePattern ?? "")
         setIPortRangeId(String(editing.config.portRangeId ?? ""))
@@ -127,7 +125,6 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       setPProgramCode("")
       setPExeName("")
       setISourceFolderPath("")
-      setIIisDestPath("")
       setIConfigFileName("")
       setISiteNamePattern("")
       setIPortRangeId("")
@@ -167,7 +164,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       return !!pSourceFolderPath.trim()
     }
     if (type === "iis-site") {
-      return !!iSourceFolderPath.trim() && !!iIisDestPath.trim() && !!iSiteNamePattern.trim() && !!iPortRangeId
+      return !!iSourceFolderPath.trim() && !!iPortRangeId
     }
     return false
   })()
@@ -185,9 +182,8 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
           }
         : {
             sourceFolderPath: iSourceFolderPath.trim(),
-            iisDestPath:      iIisDestPath.trim(),
             configFileName:   iConfigFileName.trim() || null,
-            siteNamePattern:  iSiteNamePattern.trim(),
+            siteNamePattern:  iSiteNamePattern.trim() || null,
             portRangeId:      Number(iPortRangeId),
           }
 
@@ -390,17 +386,9 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                     </div>
                   </Field>
 
-                  <Field label="IIS Hedef Yolu" hint="{firmaKod} placeholder kullanabilirsiniz.">
-                    <div className="relative">
-                      <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-                      <Input
-                        placeholder={"C:\\inetpub\\wwwroot\\rfid_{firmaKod}"}
-                        value={iIisDestPath}
-                        onChange={(e) => setIIisDestPath(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
-                      />
-                    </div>
-                  </Field>
+                  <p className="text-[10px] text-muted-foreground">
+                    Hedef yol sabittir: <span className="font-mono">C:\Pusula\Service\&lt;hizmet&gt;_&lt;firmaKod&gt;</span>
+                  </p>
                 </Section>
 
                 <Section title="Config & Site">

@@ -6,6 +6,7 @@ import {
 } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
+import type { DepoServerItem } from "@/app/api/setup/depo-servers/route"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { SqlDatabasesResponse } from "@/app/api/setup/sql-servers/[id]/databases/route"
 import type { ScanBackupsResponse } from "@/app/api/setup/sql-servers/[id]/scan-backups/route"
@@ -13,7 +14,7 @@ import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { toast } from "sonner"
 import { StepServer, type AdServerItem } from "./step-server"
 import { StepFirma, type RdpServerItem } from "./step-firma"
-import { StepUsers } from "./step-users"
+import { StepUsers, meetsAdComplexity } from "./step-users"
 import { StepServices } from "./step-services"
 import { StepSql } from "./step-sql"
 import { StepSummary } from "./step-summary"
@@ -35,8 +36,22 @@ const STEPS = [
 
 let _uid = 2
 function generatePassword() {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$"
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join("")
+  // AD karmaşıklık kuralı: en az büyük + küçük + rakam + özel karakter
+  const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ"
+  const lower   = "abcdefghjkmnpqrstuvwxyz"
+  const digits  = "23456789"
+  const special = "!@#$%&*+-?"
+  const all     = upper + lower + digits + special
+  const rand    = (s: string) => s[Math.floor(Math.random() * s.length)]
+  // Garantili 4 kategori + 8 rastgele karakter = 12 toplam
+  const base = [rand(upper), rand(upper), rand(lower), rand(lower), rand(digits), rand(digits), rand(special), rand(special)]
+  for (let i = 0; i < 4; i++) base.push(rand(all))
+  // Fisher-Yates karıştır
+  for (let i = base.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [base[i], base[j]] = [base[j], base[i]]
+  }
+  return base.join("")
 }
 function mkUser(): WizardUser {
   return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }
@@ -73,18 +88,22 @@ export function WizardShell() {
 
   useEffect(() => {
     if (step !== 1) return
-    if (apiCompanies.length > 0) return
+    // Her step 1'e girişte yeniden çek — UserCount dış kaynaktan güncellenebilir (lisans değişikliği).
     setCompaniesLoading(true)
     setCompaniesError(null)
-    fetch("/api/firma/companies")
+    fetch("/api/firma/companies?sync=true", { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setApiCompanies(data as Company[])
-        else setCompaniesError(data.error ?? "Firmalar alınamadı")
+        if (Array.isArray(data)) {
+          const fresh = data as Company[]
+          setApiCompanies(fresh)
+          // Seçili firma varsa taze veriyle güncelle (UserCount dış değişmiş olabilir)
+          setSelectedCompany((prev) => prev ? (fresh.find((c) => c.firkod === prev.firkod) ?? prev) : prev)
+        } else setCompaniesError(data.error ?? "Firmalar alınamadı")
       })
       .catch(() => setCompaniesError("Firma API bağlantı hatası"))
       .finally(() => setCompaniesLoading(false))
-  }, [step, apiCompanies.length])
+  }, [step])
 
   // RDP Sunucuları API (step 1)
   const [apiRdpServers, setApiRdpServers]       = useState<RdpServerItem[]>([])
@@ -109,6 +128,8 @@ export function WizardShell() {
   // Firma'nın AD'deki mevcut kullanıcıları (step 2)
   const [apiExistingUsers, setApiExistingUsers]     = useState<ExistingAdUser[]>([])
   const [existingUsersLoading, setExistingUsersLoading] = useState(false)
+  /** "serverId|firmaNo" — apiExistingUsers hangi firma için yüklendi? null = henüz yüklenmedi */
+  const [existingUsersKey, setExistingUsersKey] = useState<string | null>(null)
   const [existingUsersError, setExistingUsersError]     = useState<string | null>(null)
 
   // Hizmet kataloğu (step 3)
@@ -150,6 +171,26 @@ export function WizardShell() {
       .catch(() => setIisServersError("IIS sunucu API bağlantı hatası"))
       .finally(() => setIisServersLoading(false))
   }, [step, apiIisServers.length])
+
+  // Depo Sunucuları (step 3 — Pusula programı seçildiğinde)
+  const [apiDepoServers, setApiDepoServers]         = useState<DepoServerItem[]>([])
+  const [depoServersLoading, setDepoServersLoading] = useState(false)
+  const [depoServersError, setDepoServersError]     = useState<string | null>(null)
+
+  useEffect(() => {
+    if (step !== 3) return
+    if (apiDepoServers.length > 0) return
+    setDepoServersLoading(true)
+    setDepoServersError(null)
+    fetch("/api/setup/depo-servers")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) setApiDepoServers(data as DepoServerItem[])
+        else setDepoServersError(data.error ?? "Depo sunucuları alınamadı")
+      })
+      .catch(() => setDepoServersError("Depo sunucu API bağlantı hatası"))
+      .finally(() => setDepoServersLoading(false))
+  }, [step, apiDepoServers.length])
 
   // SQL Sunucuları (step 4)
   const [apiSqlServers, setApiSqlServers]         = useState<SqlServerItem[]>([])
@@ -204,6 +245,7 @@ export function WizardShell() {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null)
   const [selectedWindowsServerId, setSelectedWindowsServerId] = useState<string | null>(null)
   const [selectedIisServerId, setSelectedIisServerId] = useState<string | null>(null)
+  const [selectedDepoServerId, setSelectedDepoServerId] = useState<string | null>(null)
   const [users, setUsers] = useState<WizardUser[]>([{ id: 1, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }])
   const [selectedServiceIds, setSelectedServiceIds] = useState<number[]>([])
   const [selectedSqlServerId, setSelectedSqlServerId] = useState<string | null>(null)
@@ -236,25 +278,36 @@ export function WizardShell() {
       .finally(() => setDemoDbsLoading(false))
   }, [step, demoDatabases.length])
 
-  // Step 2'ye girince seçili sunucu+firma için AD'deki mevcut kullanıcıları çek
-  useEffect(() => {
-    if (step !== 2) return
+  // Mevcut AD kullanıcılarını çek — step 1 (lisans kontrolü) ve step 2 (liste) ortak kullanır
+  const refreshExistingUsers = useCallback((opts?: { force?: boolean }) => {
     if (!selectedServerId || !selectedCompany) return
+    const key = `${selectedServerId}|${selectedCompany.firkod}`
     setExistingUsersLoading(true)
     setExistingUsersError(null)
-    const qs = new URLSearchParams({
+    const params: Record<string, string> = {
       serverId: selectedServerId,
       firmaNo:  selectedCompany.firkod,
-    }).toString()
-    fetch(`/api/setup/company-users?${qs}`)
+    }
+    if (opts?.force) params.refresh = "true"
+    const qs = new URLSearchParams(params).toString()
+    fetch(`/api/setup/company-users?${qs}`, { cache: "no-store" })
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setApiExistingUsers(data as ExistingAdUser[])
-        else setExistingUsersError(data.error ?? "Kullanıcılar alınamadı")
+        if (Array.isArray(data)) {
+          setApiExistingUsers(data as ExistingAdUser[])
+          setExistingUsersKey(key)
+        } else {
+          setExistingUsersError(data.error ?? "Kullanıcılar alınamadı")
+        }
       })
       .catch(() => setExistingUsersError("Kullanıcı API bağlantı hatası"))
       .finally(() => setExistingUsersLoading(false))
-  }, [step, selectedServerId, selectedCompany])
+  }, [selectedServerId, selectedCompany])
+
+  useEffect(() => {
+    if (step !== 1 && step !== 2) return
+    refreshExistingUsers()
+  }, [step, refreshExistingUsers])
 
   const adServer = apiAdServers.find((s) => s.id === selectedServerId) ?? null
   const windowsServer = apiRdpServers.find((s) => s.id === selectedWindowsServerId) ?? null
@@ -263,12 +316,18 @@ export function WizardShell() {
 
   // Step 3 validation: iis-site hizmet seçildiyse IIS sunucusu da seçili olmalı
   const hasIisSelected = apiServices.some((s) => s.type === "iis-site" && selectedServiceIds.includes(s.id))
+  const hasPusulaSelected = apiServices.some((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))
 
   const canProceed =
     step === 0 ? selectedServerId !== null :
-    step === 1 ? selectedCompany !== null && (selectedCompany.userCount ?? 0) > 0 && selectedWindowsServerId !== null :
-    step === 2 ? users.every((u) => u.username.trim() && u.password.trim()) :
-    step === 3 ? !hasIisSelected || selectedIisServerId !== null :
+    step === 1 ? selectedCompany !== null
+                && (selectedCompany.userCount ?? 0) > 0
+                && existingUsersKey === `${selectedServerId}|${selectedCompany.firkod}`
+                && !existingUsersLoading
+                && apiExistingUsers.length < (selectedCompany.userCount ?? 0)
+                && selectedWindowsServerId !== null :
+    step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
+    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!hasPusulaSelected || selectedDepoServerId !== null) :
     true
 
   const go = (to: number) => {
@@ -357,17 +416,17 @@ export function WizardShell() {
   }, [step, sqlMode, selectedSqlServerId])
   const reset = () => {
     setStep(0); setSelectedServerId(null); setSelectedCompany(null)
-    setSelectedWindowsServerId(null); setSelectedIisServerId(null); setSelectedSqlServerId(null)
+    setSelectedWindowsServerId(null); setSelectedIisServerId(null); setSelectedDepoServerId(null); setSelectedSqlServerId(null)
     setUsers([{ id: 1, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }])
     setSelectedServiceIds([]); setSelectedDemoDbIds([]); setSetupDone(false)
     setBackupFiles([])
     // demoDatabases tekrar fetch edilsin diye boşalt — step 4'e girince useEffect yeniden doldurur
     setDemoDatabases([])
-    setApiExistingUsers([])
+    setApiExistingUsers([]); setExistingUsersKey(null)
   }
 
   return (
-    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2 pb-0 max-w-[1400px] mx-auto w-full" style={{ backgroundColor: "#F4F2F0" }}>
       <Confetti trigger={showConfetti} />
       <div
         className="rounded-[4px] overflow-hidden flex min-h-[600px]"
@@ -449,9 +508,18 @@ export function WizardShell() {
                   rdpServersError={rdpServersError}
                   selectedCompany={selectedCompany}
                   selectedWindowsServerId={selectedWindowsServerId}
-                  onSelectCompany={setSelectedCompany}
-                  onClearCompany={() => setSelectedCompany(null)}
+                  onSelectCompany={(c) => {
+                    setSelectedCompany(c)
+                    setApiExistingUsers([]); setExistingUsersKey(null)
+                  }}
+                  onClearCompany={() => {
+                    setSelectedCompany(null)
+                    setApiExistingUsers([]); setExistingUsersKey(null)
+                  }}
                   onSelectWindowsServer={setSelectedWindowsServerId}
+                  existingUserCount={apiExistingUsers.length}
+                  existingUsersLoading={existingUsersLoading}
+                  onRefreshExistingUsers={() => refreshExistingUsers({ force: true })}
                 />
               )}
               {step === 2 && (
@@ -486,6 +554,11 @@ export function WizardShell() {
                   iisServersError={iisServersError}
                   selectedIisServerId={selectedIisServerId}
                   onSelectIisServer={setSelectedIisServerId}
+                  depoServers={apiDepoServers}
+                  depoServersLoading={depoServersLoading}
+                  depoServersError={depoServersError}
+                  selectedDepoServerId={selectedDepoServerId}
+                  onSelectDepoServer={setSelectedDepoServerId}
                 />
               )}
               {step === 4 && (
@@ -524,9 +597,13 @@ export function WizardShell() {
                   serverId={selectedServerId ?? ""}
                   windowsServerId={selectedWindowsServerId ?? ""}
                   iisServerId={selectedIisServerId ?? ""}
+                  depoServerId={selectedDepoServerId ?? ""}
                   firmaId={firmaId}
                   firmaName={selectedCompany?.firma ?? ""}
-                  serverName={adServer?.name ?? ""}
+                  serverName={windowsServer?.name ?? adServer?.name ?? ""}
+                  serverDomain={adServer?.domain ?? ""}
+                  serverDns={windowsServer?.dns ?? ""}
+                  serverRdpPort={windowsServer?.rdpPort ?? null}
                   users={users}
                   services={apiServices.filter((s) => selectedServiceIds.includes(s.id))}
                   sqlServerId={selectedSqlServerId}

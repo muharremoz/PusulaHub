@@ -1,5 +1,6 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
+import { syncFirmalarNow } from "@/lib/firma-sync"
 
 export interface FirmaCompany {
   id:          string
@@ -20,8 +21,12 @@ interface CompanyRow {
   ContractEnd: string | null
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
+    const sync = new URL(req.url).searchParams.get("sync") === "true"
+    if (sync) {
+      try { await syncFirmalarNow() } catch (e) { console.error("[firma/companies] sync hata:", e) }
+    }
     const rows = await query<CompanyRow[]>`
       SELECT CompanyId, Name, ContactEmail, ContactPhone, UserCount, CONVERT(NVARCHAR(20), ContractEnd, 23) AS ContractEnd
       FROM Companies
@@ -40,7 +45,7 @@ export async function GET() {
     }))
 
     const resp = NextResponse.json(companies)
-    resp.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=60")
+    resp.headers.set("Cache-Control", "no-store")
     return resp
   } catch (err) {
     console.error("[GET /api/firma/companies]", err)

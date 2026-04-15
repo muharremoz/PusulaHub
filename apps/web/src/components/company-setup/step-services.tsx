@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
-import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff } from "lucide-react"
+import type { DepoServerItem } from "@/app/api/setup/depo-servers/route"
+import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -29,6 +30,13 @@ interface Props {
   iisServersError?:   string | null
   selectedIisServerId: string | null
   onSelectIisServer:   (id: string) => void
+
+  /** Depo sunucu seçimi (yalnızca Pusula programı seçildiğinde gerekli) */
+  depoServers:         DepoServerItem[]
+  depoServersLoading?: boolean
+  depoServersError?:   string | null
+  selectedDepoServerId: string | null
+  onSelectDepoServer:   (id: string) => void
 }
 
 function getSourcePath(svc: WizardServiceDto): string {
@@ -40,6 +48,8 @@ export function StepServices({
   services, loading, error, selectedIds, onToggle, onToggleAll,
   iisServers, iisServersLoading, iisServersError,
   selectedIisServerId, onSelectIisServer,
+  depoServers, depoServersLoading, depoServersError,
+  selectedDepoServerId, onSelectDepoServer,
 }: Props) {
   const categories = [...new Set(services.map((s) => s.category))]
   const [activeTab, setActiveTab] = useState<string | undefined>(categories[0])
@@ -58,6 +68,9 @@ export function StepServices({
   const activeTabHasIis = catItems.some((s) => s.type === "iis-site")
   // IIS picker'ı göster: ya zaten seçili ya da aktif tab IIS kategorisi
   const showIisPicker = hasIisSelected || activeTabHasIis
+
+  // Pusula programı seçili mi? Seçiliyse depo sunucusu istenir.
+  const hasPusulaSelected = services.some((s) => s.type === "pusula-program" && selectedIds.includes(s.id))
 
   if (loading) {
     return (
@@ -356,6 +369,123 @@ export function StepServices({
               </div>
               <p className="text-[10px] text-muted-foreground px-1 mt-2">
                 {iisServers.length} sunucu listeleniyor
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Depo Sunucusu — Pusula programı seçildiyse resim klasörü için gerekli */}
+      {hasPusulaSelected && (
+        <div>
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
+            Depo Sunucusu
+            <span className="ml-2 text-muted-foreground/70 normal-case tracking-normal">
+              — D:\Resimler\&lt;firmaId&gt; klasörü ve NTFS yetkisi bu sunucuda açılır
+            </span>
+          </p>
+
+          {depoServersLoading && (
+            <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 px-3 py-3">
+                  <Skeleton className="h-3 w-32 rounded-[4px]" />
+                  <Skeleton className="h-3 w-24 rounded-[4px]" />
+                  <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {!depoServersLoading && depoServersError && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+              <AlertTriangle className="size-3.5 shrink-0" />
+              {depoServersError}
+            </div>
+          )}
+
+          {!depoServersLoading && !depoServersError && depoServers.length === 0 && (
+            <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+              <HardDrive className="size-6 text-muted-foreground" />
+              <p className="text-[12px] font-medium">Depo sunucusu tanımlı değil</p>
+              <p className="text-[10px] text-muted-foreground max-w-xs">
+                Pusula programlarının resim klasörünün açılacağı bir sunucuyu
+                sisteme <span className="font-semibold">Depo</span> rolüyle eklemelisin.
+              </p>
+              <a
+                href="/servers"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              >
+                Sunucu Ekle
+              </a>
+            </div>
+          )}
+
+          {!depoServersLoading && !depoServersError && depoServers.length > 0 && (
+            <>
+              <div className="rounded-[4px] border border-border/50 overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
+                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
+                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
+                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Tip</TableHead>
+                      <TableHead className="h-8 w-8" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {depoServers.map((srv) => {
+                      const isSelected = selectedDepoServerId === srv.id
+                      const isDisabled = !srv.isOnline
+                      return (
+                        <TableRow
+                          key={srv.id}
+                          onClick={() => !isDisabled && onSelectDepoServer(srv.id)}
+                          className={cn(
+                            "border-b border-border/40 transition-colors",
+                            isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
+                            isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
+                          )}
+                        >
+                          <TableCell className="py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[11px] font-medium">{srv.name}</p>
+                              {srv.isOnline ? (
+                                <span className="relative flex size-1.5 shrink-0">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                                  <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                                </span>
+                              ) : (
+                                <WifiOff className="size-3 text-red-400 shrink-0" />
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
+                            {srv.ip}
+                          </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5 truncate max-w-[160px]">
+                            {srv.dns || "—"}
+                          </TableCell>
+                          <TableCell className="text-[11px] text-muted-foreground py-2.5">
+                            {srv.type}
+                          </TableCell>
+                          <TableCell className="py-2.5">
+                            <div className={cn(
+                              "size-4 rounded-full border flex items-center justify-center",
+                              isSelected ? "bg-foreground border-foreground" : "border-border"
+                            )}>
+                              {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <p className="text-[10px] text-muted-foreground px-1 mt-2">
+                {depoServers.length} sunucu listeleniyor
               </p>
             </>
           )}

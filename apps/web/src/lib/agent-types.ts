@@ -80,6 +80,10 @@ export interface AgentReport {
       status:     string
       lastBackup: string
       tables:     number
+      recoveryModel?: string
+      owner?:         string
+      dataFilePath?:  string
+      logFilePath?:   string
     }[]
   }
 

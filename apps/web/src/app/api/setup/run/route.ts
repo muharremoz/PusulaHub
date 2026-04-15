@@ -18,6 +18,7 @@ import {
   buildCopyFolder,
   buildSetNtfsPermissions,
   buildUpdateParamTxt,
+  buildWriteDesktopIni,
 } from "@/lib/setup-fileops"
 import {
   buildReplaceInFile,
@@ -124,6 +125,8 @@ interface RunPayload {
   windowsServerId?: string
   /** IIS sunucusu — iis-site klasör/copy/port/config/site adımları bu agent'a gider. */
   iisServerId?:     string
+  /** Depo sunucusu — D:\Resimler\<firmaId> klasörü + NTFS yetkisi bu agent'a gider. */
+  depoServerId?:    string
   firmaId:          string
   firmaName:        string
   users:            RunUser[]
@@ -147,6 +150,9 @@ interface RunPayload {
   addFirmaPrefix?:   boolean
   /** sirket.dbo.guvenlik tablosuna kayıt eklensin mi */
   addToSirketDb?:    boolean
+  /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır.
+   *  Tekil kullanıcı ekleme gibi depo ile ilgisiz akışlar için. */
+  skipDepo?:         boolean
 }
 
 interface ServerRow {
@@ -276,14 +282,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Depo sunucusu — Role='Depo' olan sunucu. Opsiyonel; yoksa depo adımları atlanır.
+  // Depo sunucusu — sihirbazda Pusula programı seçilmişse payload.depoServerId
+  // gelir; aksi halde sistemdeki ilk Role='Depo' sunucusu fallback olarak kullanılır.
   let depoAgent: AgentTarget | null = null
-  const depoRows = await query<ServerRow[]>`
-    SELECT s.IP, s.AgentPort, s.ApiKey
-    FROM Servers s
-    INNER JOIN ServerRoles r ON r.ServerId = s.Id
-    WHERE r.Role = 'Depo'
-  `
+  let depoRows: ServerRow[] = []
+  if (!payload.skipDepo) {
+    depoRows = payload.depoServerId
+      ? await query<ServerRow[]>`
+          SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${payload.depoServerId}
+        `
+      : await query<ServerRow[]>`
+          SELECT TOP 1 s.IP, s.AgentPort, s.ApiKey
+          FROM Servers s
+          INNER JOIN ServerRoles r ON r.ServerId = s.Id
+          WHERE r.Role = 'File'
+        `
+  }
   if (depoRows.length > 0 && depoRows[0].AgentPort && depoRows[0].ApiKey) {
     depoAgent = {
       ip:     depoRows[0].IP,
@@ -496,6 +510,20 @@ export async function POST(req: NextRequest) {
             `Depo: NTFS yetkileri: ${depoPath} → ${payload.firmaId}_users`,
             buildSetNtfsPermissions(depoPath, `${payload.firmaId}_users`),
           )
+          // desktop.ini — klasör tooltip'i olarak firma adı görünür
+          await runStep(
+            depoAgent,
+            "depo_tooltip",
+            `Depo: klasör açıklaması (desktop.ini): ${payload.firmaName}`,
+            buildWriteDesktopIni(depoPath, payload.firmaName),
+          )
+        } else if (pusulaServices.length > 0) {
+          send("step", {
+            stepId: "depo_skip",
+            label:  "Depo: resim klasörü atlandı — Depo sunucusu seçilmedi",
+            status: "error",
+            error:  "D:\\Resimler\\<firmaId> klasörü oluşturulamadı. Hizmetler adımında bir Depo sunucusu seçin veya /servers sayfasından bir sunucuya 'Depo' rolü atayın.",
+          })
         }
 
         // ── 5) Pusula programları → Windows/RDP agent ───────────────
@@ -564,8 +592,9 @@ export async function POST(req: NextRequest) {
           ))) { controller.close(); return }
 
           // 5d) Masaüstü MUSTERILER klasörü + kısayollar (non-critical, hata devam ettirir)
+          // Sadece Administrator masaüstüne — Public\Desktop tüm kullanıcılara yansırdı.
           const safeFirmaName    = sanitizeWindowsName(payload.firmaName) || payload.firmaId
-          const mustelierSubdir  = `C:\\Users\\Public\\Desktop\\MUSTERILER\\${safeFirmaName}`
+          const mustelierSubdir  = `C:\\Users\\Administrator\\Desktop\\MUSTERILER\\${safeFirmaName}`
 
           await runStep(
             winAgent,
@@ -621,9 +650,15 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            // Pattern'leri firmaKod ile genişlet
-            const destPath = expandPattern(cfg.iisDestPath,    payload.firmaId)
-            const siteName = expandPattern(cfg.siteNamePattern, payload.firmaId)
+            // IIS hedef yolu SABİT: C:\Pusula\Service\<serviceName>_<firmaKod>
+            const destPath = `C:\\Pusula\\Service\\${sanitizeWindowsName(s.name)}_${payload.firmaId}`
+            // siteNamePattern opsiyonel — yoksa servis adı + firmaId fallback
+            const siteName = expandPattern(
+              cfg.siteNamePattern && cfg.siteNamePattern.trim()
+                ? cfg.siteNamePattern
+                : `${s.name}_{firmaKod}`,
+              payload.firmaId,
+            )
 
             // i) Hedef klasör
             if (!(await runStep(
@@ -823,42 +858,77 @@ export async function POST(req: NextRequest) {
             }
 
             // Guvenlik insert'leri ayrı bağlantı (sirket DB) üzerinden
+            // Blok atlanıyorsa nedenini görünür kıl
+            if (!runAddSirket) {
+              send("step", {
+                stepId: "sql_guvenlik_skip_toggle",
+                label:  "Güvenlik kaydı atlandı — 'Şirket veritabanına ekle' kapalı",
+                status: "done",
+                output: `addToSirketDb=${payload.addToSirketDb}`,
+              })
+            } else if (sqlRestored === 0) {
+              send("step", {
+                stepId: "sql_guvenlik_skip_restore",
+                label:  "Güvenlik kaydı atlandı — hiçbir DB restore edilmedi",
+                status: "error",
+                error:  "sqlRestored=0; restore adımı başarılı olmadığı için güvenlik kaydı yapılmadı.",
+              })
+            }
+
             if (runAddSirket && sqlRestored > 0) {
-              try {
-                await withSqlConnection(
-                  {
-                    server:   sqlTarget.ip,
-                    port:     1433,
-                    user:     sqlTarget.username,
-                    password: sqlTarget.password,
-                    database: "sirket",
-                  },
-                  async (sirketPool) => {
-                    for (const t of tasks) {
-                      if (!t.programCode) continue
-                      await runSqlStep(
-                        `sql_guvenlik_${t.dbName}`,
-                        `Güvenlik kaydı: ${t.dbName} (${t.programCode})`,
-                        async () => {
-                          await insertGuvenlikRow(sirketPool, {
-                            dbName:      t.dbName,
-                            firmaId:     payload.firmaId,
-                            programCode: t.programCode!,
-                          })
-                          sqlGuvenlik++
-                        },
-                      )
-                    }
-                  },
-                )
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err)
+              const withCode    = tasks.filter((t) => !!t.programCode)
+              const withoutCode = tasks.filter((t) => !t.programCode)
+
+              // programCode yoksa kullanıcıya net uyarı ver — sessizce atlama
+              if (withoutCode.length > 0) {
                 send("step", {
-                  stepId: "sql_sirket_connect",
-                  label:  `sirket veritabanına bağlanılamadı: ${sqlTarget.name}`,
+                  stepId: "sql_guvenlik_skip",
+                  label:  `Güvenlik kaydı atlandı (${withoutCode.length} DB) — Pusula program kodu yok`,
                   status: "error",
-                  error:  msg,
+                  error:
+                    "Seçili Pusula program servislerinin config'inde 'programCode' tanımlı değil. " +
+                    "3. adımda (Servisler) en az bir Pusula Program servisi seç ve servis config'ine " +
+                    "programCode ekle (011=Toptan, 909=Perakende, 111=StokCari, 016=Uretim). " +
+                    `Atlanan DB'ler: ${withoutCode.map((t) => t.dbName).join(", ")}`,
                 })
+              }
+
+              if (withCode.length > 0) {
+                try {
+                  await withSqlConnection(
+                    {
+                      server:   sqlTarget.ip,
+                      port:     1433,
+                      user:     sqlTarget.username,
+                      password: sqlTarget.password,
+                      database: "sirket",
+                    },
+                    async (sirketPool) => {
+                      for (const t of withCode) {
+                        await runSqlStep(
+                          `sql_guvenlik_${t.dbName}`,
+                          `Güvenlik kaydı: ${t.dbName} (${t.programCode})`,
+                          async () => {
+                            await insertGuvenlikRow(sirketPool, {
+                              dbName:      t.dbName,
+                              firmaId:     payload.firmaId,
+                              programCode: t.programCode!,
+                            })
+                            sqlGuvenlik++
+                          },
+                        )
+                      }
+                    },
+                  )
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err)
+                  send("step", {
+                    stepId: "sql_sirket_connect",
+                    label:  `sirket veritabanına bağlanılamadı: ${sqlTarget.name}`,
+                    status: "error",
+                    error:  msg,
+                  })
+                }
               }
             }
           }
@@ -869,7 +939,8 @@ export async function POST(req: NextRequest) {
           await execute`
             UPDATE Companies
             SET WindowsServerId = ${payload.windowsServerId ?? null},
-                AdServerId      = ${payload.serverId ?? null}
+                AdServerId      = ${payload.serverId ?? null},
+                SqlServerId     = ${payload.sqlServerId ?? null}
             WHERE CompanyId = ${payload.firmaId}
           `
         } catch { /* Companies tablosunda kayıt yoksa sessizce geç */ }

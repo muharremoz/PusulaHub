@@ -58,12 +58,9 @@ function validateConfig(type: ServiceType, raw: unknown):
 
   if (type === "iis-site") {
     const sourceFolderPath = typeof c.sourceFolderPath === "string" ? c.sourceFolderPath.trim() : ""
-    const iisDestPath      = typeof c.iisDestPath      === "string" ? c.iisDestPath.trim()      : ""
     const siteNamePattern  = typeof c.siteNamePattern  === "string" ? c.siteNamePattern.trim()  : ""
     const portRangeId      = Number(c.portRangeId)
     if (!sourceFolderPath) return { ok: false, error: "config.sourceFolderPath zorunlu" }
-    if (!iisDestPath)      return { ok: false, error: "config.iisDestPath zorunlu" }
-    if (!siteNamePattern)  return { ok: false, error: "config.siteNamePattern zorunlu" }
     if (!Number.isFinite(portRangeId) || portRangeId <= 0) {
       return { ok: false, error: "config.portRangeId zorunlu" }
     }
@@ -71,9 +68,8 @@ function validateConfig(type: ServiceType, raw: unknown):
       ok: true,
       config: {
         sourceFolderPath,
-        iisDestPath,
         configFileName: typeof c.configFileName === "string" && c.configFileName.trim() ? c.configFileName.trim() : null,
-        siteNamePattern,
+        siteNamePattern: siteNamePattern || null,
         portRangeId,
       },
     }

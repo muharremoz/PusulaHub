@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
 import { getAllAgents } from "@/lib/agent-store"
+import { pollSingleAgent } from "@/lib/agent-poller"
 
 /**
  * GET /api/setup/company-users?serverId=...&firmaNo=...
@@ -28,12 +29,18 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const serverId = searchParams.get("serverId")
     const firmaNo  = searchParams.get("firmaNo")
+    const refresh  = searchParams.get("refresh") === "true"
 
     if (!serverId || !firmaNo) {
       return NextResponse.json(
         { error: "serverId ve firmaNo parametreleri zorunludur" },
         { status: 400 }
       )
+    }
+
+    // refresh=true ise agent'tan canlı rapor çek (cache'i atla) — AD'den kullanıcı silmeden sonra güncel listeyi almak için.
+    if (refresh) {
+      await pollSingleAgent(serverId)
     }
 
     // Sunucu adını/IP'sini DB'den çek — agent-store'da eşleştirmek için

@@ -89,11 +89,13 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
   const [name, setName]           = useState("")
   const [ip, setIp]               = useState("")
   const [dns, setDns]             = useState("")
+  const [domain, setDomain]       = useState("")
   const [os, setOs]               = useState("")
   const [role, setRole]           = useState("")
   const [roleOpen, setRoleOpen]   = useState(false)
   const [apiKey, setApiKey]       = useState("")
   const [agentPort, setAgentPort] = useState("5000")
+  const [rdpPort, setRdpPort]     = useState("")
   const [username, setUsername]   = useState("")
   const [password, setPassword]   = useState("")
   const [showPw, setShowPw]       = useState(false)
@@ -112,10 +114,12 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
         setName(data.name ?? "")
         setIp(data.ip ?? "")
         setDns(data.dns ?? "")
+        setDomain(data.domain ?? "")
         setOs(data.os ?? "")
         setRole(data.roles?.[0] ?? "")
         setApiKey(data.apiKey ?? "")
         setAgentPort(String(data.agentPort ?? 5000))
+        setRdpPort(data.rdpPort != null ? String(data.rdpPort) : "")
         setUsername(data.username ?? "")
         setPassword(data.password ?? "")
         setSqlUsername(data.sqlUsername ?? "")
@@ -128,8 +132,8 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
   const selectedRole = ROLES.find((r) => r.value === role)
 
   const handleReset = () => {
-    setName(""); setIp(""); setDns(""); setOs(""); setRole("")
-    setApiKey(""); setAgentPort("5000")
+    setName(""); setIp(""); setDns(""); setDomain(""); setOs(""); setRole("")
+    setApiKey(""); setAgentPort("5000"); setRdpPort("")
     setUsername(""); setPassword(""); setShowPw(false)
     setSqlUsername(""); setSqlPassword(""); setShowSqlPw(false)
   }
@@ -152,10 +156,12 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
         name:        name.trim(),
         ip:          ip.trim(),
         dns:         dns.trim() || null,
+        domain:      domain.trim() || null,
         os,
         roles:       [role],
         apiKey:      apiKey.trim(),
         agentPort:   parseInt(agentPort) || 5000,
+        rdpPort:     (role === "RDP" || role === "AD") && rdpPort.trim() ? parseInt(rdpPort) || null : null,
         username:    username.trim() || null,
         password:    password || null,
         sqlUsername: isSqlRole ? (sqlUsername.trim() || null) : null,
@@ -230,6 +236,15 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   />
                 </Field>
               </div>
+
+              <Field label="Domain Adresi">
+                <Input
+                  placeholder="sirket.local"
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  className="rounded-[5px] text-[11px] h-8 font-mono"
+                />
+              </Field>
 
               <Field label="İşletim Sistemi">
                 <Select value={os} onValueChange={setOs}>
@@ -310,6 +325,23 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                 />
               </Field>
             </Section>
+
+            {/* ── RDP Port (AD/RDP rolündeki sunucular için) ── */}
+            {(role === "RDP" || role === "AD") && (
+              <Section title="RDP Bilgileri">
+                <Field label="RDP Port">
+                  <Input
+                    placeholder="3389"
+                    value={rdpPort}
+                    onChange={(e) => setRdpPort(e.target.value)}
+                    className="rounded-[5px] text-[11px] h-8 font-mono w-28"
+                  />
+                </Field>
+                <p className="text-[10px] text-muted-foreground -mt-1">
+                  Müşteri bilgilendirme mesajında <span className="font-mono">dns:port</span> olarak gösterilir.
+                </p>
+              </Section>
+            )}
 
             {/* ── Kullanıcı Bilgileri ── */}
             <Section title="Kullanıcı Bilgileri">

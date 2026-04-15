@@ -11,17 +11,21 @@ export interface BoardColumn {
 }
 
 export interface BoardTask {
-  id:          string
-  columnId:    string
-  title:       string
-  description: string | null
-  priority:    "low" | "medium" | "high" | "critical"
-  assignedTo:  string | null
-  dueDate:     string | null
-  labels:      string[]
-  position:    number
-  createdAt:   string
-  commentCount:number
+  id:            string
+  columnId:      string
+  title:         string
+  description:   string | null
+  priority:      "low" | "medium" | "high" | "critical"
+  assignedTo:    string | null
+  dueDate:       string | null
+  labels:        string[]
+  position:      number
+  createdAt:     string
+  commentCount:  number
+  subtaskTotal:  number
+  subtaskDone:   number
+  estimatedHours:number | null
+  actualHours:   number | null
 }
 
 export interface BoardData {
@@ -46,6 +50,8 @@ interface TaskRow {
   Id: string; ColumnId: string; Title: string; Description: string | null
   Priority: string; AssignedTo: string | null; DueDate: string | null
   Labels: string | null; Position: number; CreatedAt: string; CommentCount: number
+  SubtaskTotal: number; SubtaskDone: number
+  EstimatedHours: number | null; ActualHours: number | null
 }
 
 export async function GET(
@@ -70,7 +76,10 @@ export async function GET(
                CONVERT(NVARCHAR(10), t.DueDate, 23) AS DueDate,
                t.Labels, t.Position,
                CONVERT(NVARCHAR(30), t.CreatedAt, 120) AS CreatedAt,
-               ISNULL((SELECT COUNT(*) FROM ProjectTaskComments cm WHERE cm.TaskId = t.Id), 0) AS CommentCount
+               ISNULL((SELECT COUNT(*) FROM ProjectTaskComments cm WHERE cm.TaskId = t.Id), 0) AS CommentCount,
+               ISNULL((SELECT COUNT(*) FROM ProjectSubtasks s WHERE s.TaskId = t.Id), 0) AS SubtaskTotal,
+               ISNULL((SELECT COUNT(*) FROM ProjectSubtasks s WHERE s.TaskId = t.Id AND s.Completed = 1), 0) AS SubtaskDone,
+               t.EstimatedHours, t.ActualHours
         FROM ProjectTasks t WHERE t.ProjectId = ${id} ORDER BY t.Position
       `,
     ])
@@ -95,6 +104,10 @@ export async function GET(
             labels: t.Labels ? t.Labels.split(",").map((l) => l.trim()).filter(Boolean) : [],
             position: t.Position, createdAt: t.CreatedAt,
             commentCount: t.CommentCount,
+            subtaskTotal: t.SubtaskTotal,
+            subtaskDone: t.SubtaskDone,
+            estimatedHours: t.EstimatedHours,
+            actualHours: t.ActualHours,
           })),
       })),
     }

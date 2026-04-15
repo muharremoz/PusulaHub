@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
-import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff } from "lucide-react"
+import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 
@@ -11,6 +11,7 @@ export interface RdpServerItem {
   name:       string
   ip:         string
   dns:        string
+  rdpPort:    number | null
   type:       string
   userCount:  number
   totalRamGB: number
@@ -47,6 +48,9 @@ export function StepFirma({
   onSelectCompany,
   onClearCompany,
   onSelectWindowsServer,
+  existingUserCount = 0,
+  existingUsersLoading = false,
+  onRefreshExistingUsers,
 }: {
   companies: Company[]
   companiesLoading?: boolean
@@ -59,7 +63,12 @@ export function StepFirma({
   onSelectCompany: (c: Company) => void
   onClearCompany: () => void
   onSelectWindowsServer: (id: string) => void
+  existingUserCount?: number
+  existingUsersLoading?: boolean
+  onRefreshExistingUsers?: () => void
 }) {
+  const userLimit = selectedCompany?.userCount ?? 0
+  const licenseFull = userLimit > 0 && existingUserCount >= userLimit
   const [search, setSearch] = useState("")
 
   const filtered = search.trim()
@@ -227,8 +236,38 @@ export function StepFirma({
             </div>
           )}
 
-          {/* Bağlantı sunucusu (RDP) seçimi — sadece kullanıcı hakkı > 0 ise */}
-          {(selectedCompany.userCount ?? 0) > 0 && <div>
+          {/* Lisans dolu uyarısı — sistemdeki mevcut kullanıcı sayısı lisansa ulaşmış */}
+          {(selectedCompany.userCount ?? 0) > 0 && licenseFull && (
+            <div className="rounded-[5px] border border-red-200 bg-red-50 overflow-hidden">
+              <div className="flex items-start gap-3 px-4 py-4">
+                <div className="size-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
+                  <Ban className="size-4 text-red-600" />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <p className="text-[12px] font-semibold text-red-800">Lisans dolu — kullanıcı eklenemez</p>
+                  <p className="text-[11px] text-red-700 leading-relaxed">
+                    Firmanın kullanıcı hakkı <span className="font-semibold">{userLimit}</span> ve
+                    Active Directory&apos;de zaten <span className="font-semibold">{existingUserCount}</span> kullanıcı kayıtlı.
+                    Devam edebilmek için lisansın artırılması veya mevcut bir kullanıcının silinmesi gerekmektedir.
+                  </p>
+                  {onRefreshExistingUsers && (
+                    <button
+                      type="button"
+                      onClick={onRefreshExistingUsers}
+                      disabled={existingUsersLoading}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border border-red-300 bg-white hover:bg-red-100 transition-colors text-[10px] font-medium text-red-700 disabled:opacity-50"
+                    >
+                      <RefreshCw className={cn("size-3", existingUsersLoading && "animate-spin")} />
+                      AD&apos;den yenile
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Bağlantı sunucusu (RDP) seçimi — sadece kullanıcı hakkı > 0 ve lisans doluysa gizle */}
+          {(selectedCompany.userCount ?? 0) > 0 && !licenseFull && <div>
             <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
               Bağlantı Sunucusu
             </p>

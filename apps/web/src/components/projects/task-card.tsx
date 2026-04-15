@@ -2,7 +2,7 @@
 
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Calendar, MessageSquare, User, GripVertical } from "lucide-react"
+import { Calendar, MessageSquare, User, GripVertical, ListChecks, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { BoardTask } from "@/app/api/projects/[id]/route"
 
@@ -78,6 +78,22 @@ export function TaskCard({ task, onClick, overlay }: Props) {
           </div>
         )}
 
+        {/* Subtask progress */}
+        {task.subtaskTotal > 0 && (
+          <div className="flex items-center gap-1.5 mt-2 ml-5">
+            <ListChecks className="size-3 text-muted-foreground" />
+            <div className="flex-1 h-1 bg-muted/60 rounded-full overflow-hidden max-w-[80px]">
+              <div
+                className="h-full bg-emerald-500 rounded-full transition-all"
+                style={{ width: `${Math.round((task.subtaskDone / task.subtaskTotal) * 100)}%` }}
+              />
+            </div>
+            <span className="text-[9px] text-muted-foreground tabular-nums">
+              {task.subtaskDone}/{task.subtaskTotal}
+            </span>
+          </div>
+        )}
+
         {/* Meta */}
         <div className="flex items-center justify-between mt-2.5 ml-5">
           <div className="flex items-center gap-2">
@@ -94,6 +110,14 @@ export function TaskCard({ task, onClick, overlay }: Props) {
               )}>
                 <Calendar className="size-2.5" />
                 {new Date(task.dueDate).toLocaleDateString("tr-TR", { day: "2-digit", month: "short" })}
+              </span>
+            )}
+
+            {/* Süre tahmini */}
+            {task.estimatedHours != null && (
+              <span className="flex items-center gap-0.5 text-[9px] text-muted-foreground">
+                <Clock className="size-2.5" />
+                {task.actualHours != null ? `${task.actualHours}/${task.estimatedHours}s` : `${task.estimatedHours}s`}
               </span>
             )}
           </div>

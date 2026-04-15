@@ -27,24 +27,41 @@ interface ProjectRow {
   CreatedAt:   string
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const includeArchived = new URL(req.url).searchParams.get("archived") === "1"
   try {
-    const rows = await query<ProjectRow[]>`
-      SELECT
-        p.Id, p.Name, p.Description, p.Status, p.Color, p.CompanyId,
-        c.Name AS CompanyName,
-        ISNULL((SELECT COUNT(*) FROM ProjectTasks t WHERE t.ProjectId = p.Id), 0) AS TaskCount,
-        ISNULL((
-          SELECT COUNT(*) FROM ProjectTasks t
-          JOIN ProjectColumns col ON col.Id = t.ColumnId
-          WHERE t.ProjectId = p.Id AND col.Name IN ('Tamamlandı', 'Done', 'Bitti')
-        ), 0) AS DoneCount,
-        CONVERT(NVARCHAR(30), p.CreatedAt, 120) AS CreatedAt
-      FROM Projects p
-      LEFT JOIN Companies c ON c.Id = p.CompanyId
-      WHERE p.Status != 'archived'
-      ORDER BY p.CreatedAt DESC
-    `
+    const rows = includeArchived
+      ? await query<ProjectRow[]>`
+          SELECT
+            p.Id, p.Name, p.Description, p.Status, p.Color, p.CompanyId,
+            c.Name AS CompanyName,
+            ISNULL((SELECT COUNT(*) FROM ProjectTasks t WHERE t.ProjectId = p.Id), 0) AS TaskCount,
+            ISNULL((
+              SELECT COUNT(*) FROM ProjectTasks t
+              JOIN ProjectColumns col ON col.Id = t.ColumnId
+              WHERE t.ProjectId = p.Id AND col.Name IN ('Tamamlandı', 'Done', 'Bitti')
+            ), 0) AS DoneCount,
+            CONVERT(NVARCHAR(30), p.CreatedAt, 120) AS CreatedAt
+          FROM Projects p
+          LEFT JOIN Companies c ON c.Id = p.CompanyId
+          ORDER BY p.CreatedAt DESC
+        `
+      : await query<ProjectRow[]>`
+          SELECT
+            p.Id, p.Name, p.Description, p.Status, p.Color, p.CompanyId,
+            c.Name AS CompanyName,
+            ISNULL((SELECT COUNT(*) FROM ProjectTasks t WHERE t.ProjectId = p.Id), 0) AS TaskCount,
+            ISNULL((
+              SELECT COUNT(*) FROM ProjectTasks t
+              JOIN ProjectColumns col ON col.Id = t.ColumnId
+              WHERE t.ProjectId = p.Id AND col.Name IN ('Tamamlandı', 'Done', 'Bitti')
+            ), 0) AS DoneCount,
+            CONVERT(NVARCHAR(30), p.CreatedAt, 120) AS CreatedAt
+          FROM Projects p
+          LEFT JOIN Companies c ON c.Id = p.CompanyId
+          WHERE p.Status != 'archived'
+          ORDER BY p.CreatedAt DESC
+        `
     return NextResponse.json(rows.map((r) => ({
       id:          r.Id,
       name:        r.Name,

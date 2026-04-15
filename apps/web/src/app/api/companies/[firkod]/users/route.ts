@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getAllAgents } from "@/lib/agent-store"
 
-interface ADUserRow {
-  Username:    string
-  DisplayName: string
-  Email:       string
-  OU:          string
-  Enabled:     boolean
-  LastLogin:   string | null
-  Server:      string | null
+/**
+ * GET /api/companies/[firkod]/users
+ * Firma detay sayfası "Kullanıcılar" tabı için:
+ * agent-store'daki tüm AD agent raporlarından firmaNo = firkod olan
+ * firmanın kullanıcılarını toplar ve döndürür.
+ */
+
+export interface CompanyUserDto {
+  username:    string
+  displayName: string
+  email:       string
+  ou:          string
+  enabled:     boolean
+  lastLogin:   string
+  server:      string
+  groups:      string[]
 }
 
 export async function GET(
@@ -17,22 +25,39 @@ export async function GET(
 ) {
   const { firkod } = await params
   try {
-    const rows = await query<ADUserRow[]>`
-      SELECT Username, DisplayName, Email, OU, Enabled, Server,
-             CONVERT(NVARCHAR(30), LastLogin, 120) AS LastLogin
-      FROM ADUsers
-      WHERE OU = ${firkod}
-      ORDER BY Username
-    `
-    return NextResponse.json(rows.map((r) => ({
-      username:    r.Username,
-      displayName: r.DisplayName,
-      email:       r.Email,
-      ou:          r.OU,
-      enabled:     !!r.Enabled,
-      lastLogin:   r.LastLogin ?? "",
-      groups:      [],
-    })))
+    const agents = getAllAgents()
+    const seen = new Map<string, CompanyUserDto>()
+
+    for (const agent of agents) {
+      const companies = agent.lastReport?.ad?.companies
+      if (!companies?.length) continue
+
+      const company = companies.find((c) => c.firmaNo === firkod)
+      if (!company?.users?.length) continue
+
+      const serverLabel = agent.hostname || agent.ip || ""
+      for (const u of company.users) {
+        const raw = u.lastLogin ?? ""
+        const hasLogin = raw && raw !== "Hiç" && raw !== "Never" && raw !== "0"
+        const key = `${u.username}|${serverLabel}`
+        if (seen.has(key)) continue
+        seen.set(key, {
+          username:    u.username,
+          displayName: u.displayName ?? "",
+          email:       "",
+          ou:          firkod,
+          enabled:     !!u.enabled,
+          lastLogin:   hasLogin ? raw : "",
+          server:      serverLabel,
+          groups:      [],
+        })
+      }
+    }
+
+    const users = Array.from(seen.values()).sort((a, b) => a.username.localeCompare(b.username))
+    const resp = NextResponse.json(users)
+    resp.headers.set("Cache-Control", "private, max-age=10, stale-while-revalidate=30")
+    return resp
   } catch (err) {
     console.error("[GET /api/companies/[firkod]/users]", err)
     return NextResponse.json({ error: "Kullanıcı verisi alınamadı" }, { status: 500 })

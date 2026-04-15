@@ -10,10 +10,12 @@ import { getAllAgents } from "@/lib/agent-store"
  */
 
 interface Row {
-  Id:    string
-  Name:  string
-  IP:    string
-  DNS:   string | null
+  Id:     string
+  Name:   string
+  IP:     string
+  DNS:    string | null
+  Domain: string | null
+  RdpPort: number | null
   Status: string
 }
 
@@ -21,7 +23,9 @@ export interface AdServerDto {
   id:           string
   name:         string
   ip:           string
+  dns:          string
   domain:       string
+  rdpPort:      number | null
   isOnline:     boolean
   userCount:    number
   companyCount: number
@@ -38,7 +42,7 @@ function domainFromDns(dns: string | null): string {
 export async function GET() {
   try {
     const rows = await query<Row[]>`
-      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.Status
+      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.Domain, s.RdpPort, s.Status
       FROM Servers s
       INNER JOIN ServerRoles r ON r.ServerId = s.Id
       WHERE r.Role = 'AD'
@@ -56,7 +60,10 @@ export async function GET() {
         id:           r.Id,
         name:         r.Name,
         ip:           r.IP,
-        domain:       domainFromDns(r.DNS),
+        dns:          r.DNS ?? "",
+        // Önce Servers.Domain kolonu (ör. "pusuladc.local"); yoksa DNS'ten türet
+        domain:       (r.Domain && r.Domain.trim()) ? r.Domain.trim() : domainFromDns(r.DNS),
+        rdpPort:      r.RdpPort,
         isOnline:     agent ? agent.status === "online" : r.Status === "online",
         userCount:    ad?.users?.length ?? 0,
         companyCount: ad?.companies?.length ?? 0,

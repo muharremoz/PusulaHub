@@ -16,7 +16,9 @@ export interface AdServerItem {
   id:           string
   name:         string
   ip:           string
+  dns:          string
   domain:       string
+  rdpPort:      number | null
   isOnline:     boolean
   userCount:    number
   companyCount: number

@@ -8,11 +8,11 @@ export const SCOPES = [
   "https://www.googleapis.com/auth/userinfo.email",
 ]
 
-export function createOAuth2Client() {
+export function createOAuth2Client(redirectUri?: string) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI ?? `${process.env.NEXT_PUBLIC_APP_URL}/api/mail/auth/callback`
+    redirectUri ?? `http://hub.pusulanet.net:4242/api/mail/auth/callback`
   )
 }
 

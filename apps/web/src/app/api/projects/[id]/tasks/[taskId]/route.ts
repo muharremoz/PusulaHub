@@ -29,7 +29,7 @@ export async function PATCH(
   const { taskId } = await params
   try {
     const body = await req.json()
-    const { title, description, priority, assignedTo, dueDate, labels, columnId, position, comment } = body
+    const { title, description, priority, assignedTo, dueDate, labels, columnId, position, comment, estimatedHours, actualHours } = body
 
     // Yorum ekle
     if (comment !== undefined) {
@@ -55,13 +55,15 @@ export async function PATCH(
     await execute`
       UPDATE ProjectTasks
       SET
-        Title       = COALESCE(${title       ?? null}, Title),
-        Description = COALESCE(${description ?? null}, Description),
-        Priority    = COALESCE(${priority    ?? null}, Priority),
-        AssignedTo  = ${assignedTo !== undefined ? (assignedTo ?? null) : null},
-        DueDate     = ${dueDate    !== undefined ? (dueDate    ?? null) : null},
-        Labels      = COALESCE(${labelsStr   ?? null}, Labels),
-        UpdatedAt   = GETDATE()
+        Title          = COALESCE(${title       ?? null}, Title),
+        Description    = COALESCE(${description ?? null}, Description),
+        Priority       = COALESCE(${priority    ?? null}, Priority),
+        AssignedTo     = ${assignedTo !== undefined ? (assignedTo ?? null) : null},
+        DueDate        = ${dueDate    !== undefined ? (dueDate    ?? null) : null},
+        Labels         = COALESCE(${labelsStr   ?? null}, Labels),
+        EstimatedHours = ${estimatedHours !== undefined ? (estimatedHours ?? null) : null},
+        ActualHours    = ${actualHours    !== undefined ? (actualHours    ?? null) : null},
+        UpdatedAt      = GETDATE()
       WHERE Id = ${taskId}
     `
     return NextResponse.json({ ok: true })

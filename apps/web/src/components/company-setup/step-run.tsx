@@ -4,9 +4,10 @@ import { useState } from "react"
 import { createPortal } from "react-dom"
 import { WizardUser, BackupFile } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
-import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X } from "lucide-react"
+import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { AdProvisionRunner } from "./ad-provision-runner"
+import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
+import { meetsAdComplexity } from "./step-users"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 
@@ -40,9 +41,13 @@ interface Props {
   serverId:        string
   windowsServerId: string
   iisServerId:     string
+  depoServerId:    string
   firmaId:         string
   firmaName:       string
   serverName:      string
+  serverDomain?:   string
+  serverDns?:      string
+  serverRdpPort?:  number | null
   users:           WizardUser[]
   services:        WizardServiceDto[]
   /* 4. adım: SQL */
@@ -59,16 +64,54 @@ interface Props {
 }
 
 export function StepRun({
-  serverId, windowsServerId, iisServerId, firmaId, firmaName, serverName, users, services,
+  serverId, windowsServerId, iisServerId, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
   sqlServerId, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, addFirmaPrefix, addToSirketDb,
   onComplete, onReset, onConfetti,
 }: Props) {
-  const [completed, setCompleted] = useState(false)
-  const [hasError, setHasError]   = useState(false)
-  const [fwItems, setFwItems]     = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
-  const [showFw, setShowFw]       = useState(false)
-  const [showMsg, setShowMsg]     = useState(false)
-  const [copied, setCopied]       = useState(false)
+  const [completed, setCompleted]   = useState(false)
+  const [hasError, setHasError]     = useState(false)
+  const [runKey, setRunKey]         = useState(0)
+  const [localUsers, setLocalUsers] = useState<WizardUser[]>(users.map((u) => ({ ...u })))
+  const [fwItems, setFwItems]       = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
+  const [showFw, setShowFw]         = useState(false)
+  const [showMsg, setShowMsg]       = useState(false)
+  const [copied, setCopied]         = useState(false)
+
+  // Şifre yeniden deneme
+  const [pwRetry, setPwRetry]       = useState<{ fullUsername: string; shortUsername: string } | null>(null)
+  const [newPw, setNewPw]           = useState("")
+  const [showNewPw, setShowNewPw]   = useState(false)
+
+  const handleStepError = (step: ProvisionStep) => {
+    const isPasswordError =
+      step.error?.includes("ADPasswordComplexity") ||
+      step.error?.includes("password does not meet") ||
+      step.error?.includes("PasswordComplexity")
+    if (!isPasswordError) return
+
+    // Label: "Kullanıcı oluşturuluyor: 343.test" → fullUsername = "343.test"
+    const match = step.label.match(/Kullanıcı oluşturuluyor:\s*(.+)/)
+    if (!match) return
+    const fullUsername  = match[1].trim()
+    // Short username: firmaId. önekini kaldır
+    const shortUsername = fullUsername.includes(".")
+      ? fullUsername.slice(fullUsername.indexOf(".") + 1)
+      : fullUsername
+    setPwRetry({ fullUsername, shortUsername })
+    setNewPw("")
+    setShowNewPw(false)
+  }
+
+  const handlePwRetrySubmit = () => {
+    if (!pwRetry || !meetsAdComplexity(newPw)) return
+    setLocalUsers((prev) =>
+      prev.map((u) => u.username === pwRetry.shortUsername ? { ...u, password: newPw } : u)
+    )
+    setPwRetry(null)
+    setHasError(false)
+    setCompleted(false)
+    setRunKey((k) => k + 1) // runner'ı yeniden başlat
+  }
 
   const fwDone = fwItems.filter((i) => i.checked).length
 
@@ -77,9 +120,15 @@ export function StepRun({
     "",
     "Sunucu erişim bilgileriniz aşağıdadır.",
     "",
-    `Sunucu: ${serverName}`,
+    `Sunucu: ${(serverDns && serverDns.trim()) ? serverDns : serverName}${serverRdpPort ? `:${serverRdpPort}` : ""}`,
     "",
-    ...users.flatMap((u) => [`Kullanıcı Adı: ${firmaId}.${u.username}`, `Şifre: ${u.password}`, ""]),
+    ...localUsers.flatMap((u) => {
+      // Domain'den .local/.lan/.corp gibi uzantıları çıkar (ör: pusuladc.local → pusuladc)
+      const domainShort = (serverDomain ?? "").split(".")[0]?.trim() ?? ""
+      const userPart = `${firmaId}.${u.username}`
+      const fullUser = domainShort ? `${domainShort}\\${userPart}` : userPart
+      return [`Kullanıcı Adı: ${fullUser}`, `Şifre: ${u.password}`, ""]
+    }),
     "Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734",
     "",
     "İyi çalışmalar.",
@@ -96,13 +145,15 @@ export function StepRun({
 
       {/* Asıl runner */}
       <AdProvisionRunner
+        key={runKey}
         payload={{
           serverId,
           windowsServerId,
           iisServerId,
+          depoServerId: depoServerId || undefined,
           firmaId,
           firmaName,
-          users: users.map((u) => ({
+          users: localUsers.map((u) => ({
             username:    u.username,
             displayName: u.displayName,
             email:       u.email,
@@ -135,6 +186,7 @@ export function StepRun({
           onComplete()
         }}
         onError={() => setHasError(true)}
+        onStepError={handleStepError}
       />
 
       {/* Tamamlama banner */}
@@ -184,6 +236,87 @@ export function StepRun({
             </button>
           </div>
         </div>
+      )}
+
+      {/* Şifre yeniden deneme modal */}
+      {pwRetry && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+          <div className="relative w-full max-w-sm mx-4 rounded-[8px] border border-border bg-background shadow-xl overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/50 bg-amber-50">
+              <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-[12px] font-semibold text-amber-900">Şifre Karmaşıklık Hatası</p>
+                <p className="text-[11px] text-amber-700 mt-0.5">
+                  <span className="font-mono font-semibold">{pwRetry.fullUsername}</span> için şifre AD kuralını karşılamıyor.
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-4 space-y-3">
+              <p className="text-[11px] text-muted-foreground">
+                Yeni bir şifre girin. En az 7 karakter, büyük/küçük harf + rakam veya özel karakter içermelidir.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium">Yeni Şifre</label>
+                <div className={cn(
+                  "flex items-center rounded-[5px] border-2 bg-background transition-colors",
+                  newPw && !meetsAdComplexity(newPw) ? "border-red-400" : newPw ? "border-emerald-400" : "border-border"
+                )}>
+                  <input
+                    type={showNewPw ? "text" : "password"}
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handlePwRetrySubmit()}
+                    placeholder="••••••••"
+                    autoFocus
+                    className="flex-1 px-3 py-2 text-[13px] bg-transparent outline-none min-w-0"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPw((v) => !v)}
+                    className="px-2 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                  >
+                    {showNewPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                  </button>
+                </div>
+                {newPw && !meetsAdComplexity(newPw) && (
+                  <p className="text-[10px] text-red-500">AD karmaşıklık kuralı karşılanmıyor.</p>
+                )}
+                {newPw && meetsAdComplexity(newPw) && (
+                  <p className="text-[10px] text-emerald-600">✓ Şifre uygun, kurulum devam edebilir.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-border/50 bg-muted/20">
+              <button
+                onClick={() => { setPwRetry(null); onReset() }}
+                className="text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-border hover:bg-muted/40 transition-colors"
+              >
+                Baştan Başla
+              </button>
+              <button
+                onClick={handlePwRetrySubmit}
+                disabled={!meetsAdComplexity(newPw)}
+                className={cn(
+                  "flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] transition-colors",
+                  meetsAdComplexity(newPw)
+                    ? "bg-foreground text-background hover:bg-foreground/90"
+                    : "bg-muted text-muted-foreground cursor-not-allowed"
+                )}
+              >
+                <KeyRound className="size-3.5" />
+                Yeniden Dene
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* Firewall Modal */}

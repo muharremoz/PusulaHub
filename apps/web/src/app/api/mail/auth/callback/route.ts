@@ -2,15 +2,23 @@ import { NextRequest, NextResponse } from "next/server"
 import { google }                   from "googleapis"
 import { createOAuth2Client, saveTokens } from "@/lib/google-oauth"
 
-// GET /api/mail/auth/callback?code=...
+// GET /api/mail/auth/callback?code=...&state=...
 export async function GET(req: NextRequest) {
-  const code = new URL(req.url).searchParams.get("code")
+  const params = new URL(req.url).searchParams
+  const code   = params.get("code")
+  const state  = params.get("state")
   if (!code) {
     return NextResponse.redirect(new URL("/mail?error=no_code", req.url))
   }
 
+  // Auth route'tan gelen state içinde redirectUri saklı
+  let redirectUri: string | undefined
+  if (state) {
+    try { redirectUri = Buffer.from(state, "base64").toString("utf-8") } catch { }
+  }
+
   try {
-    const client = createOAuth2Client()
+    const client = createOAuth2Client(redirectUri)
     const { tokens } = await client.getToken(code)
     client.setCredentials(tokens)
 

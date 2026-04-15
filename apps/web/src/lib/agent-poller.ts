@@ -8,6 +8,48 @@
 import sql from "mssql"
 import { upsertAgentFromPoll, getAllAgents, markMessageRead, markAgentOffline } from "./agent-store"
 import type { AgentReport } from "./agent-types"
+import { withSqlConnection } from "./sql-external"
+import { decrypt } from "./crypto"
+
+/* Hub → harici SQL sunucusu: DB metadata'sını SA ile doğrudan topla.
+   Böylece agent'ın LocalSystem yetki sınırlamasından etkilenmeyiz. */
+interface SqlDbRow {
+  name:           string
+  sizeMB:         number
+  status:         string
+  lastBackup:     Date | null
+  recoveryModel:  string
+  owner:          string
+  dataFilePath:   string
+  logFilePath:    string
+}
+
+async function collectSqlFromServer(serverIp: string, user: string, password: string): Promise<SqlDbRow[] | null> {
+  try {
+    return await withSqlConnection(
+      { server: serverIp, user, password, database: "master", requestTimeout: 15000 },
+      async (pool) => {
+        const res = await pool.request().query<SqlDbRow>(`
+          SELECT
+            d.name                                                                                                           AS name,
+            CAST(ISNULL((SELECT SUM(CAST(f.size AS BIGINT) * 8 / 1024) FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0), 0) AS INT) AS sizeMB,
+            d.state_desc                                                                                                     AS status,
+            (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D')         AS lastBackup,
+            d.recovery_model_desc                                                                                            AS recoveryModel,
+            ISNULL(SUSER_SNAME(d.owner_sid), '')                                                                             AS owner,
+            ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=0 ORDER BY file_id), '') AS dataFilePath,
+            ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=1 ORDER BY file_id), '') AS logFilePath
+          FROM sys.databases d
+          WHERE d.name NOT IN ('master','tempdb','model','msdb')
+        `)
+        return res.recordset as SqlDbRow[]
+      },
+    )
+  } catch (err) {
+    console.log(`[Poller] SQL direct collect hatası (${serverIp}):`, err instanceof Error ? err.message : err)
+    return null
+  }
+}
 
 /* ── Poller'a özel DB pool (lazy init) ── */
 let _pool: sql.ConnectionPool | null = null
@@ -42,6 +84,15 @@ interface ServerRow {
 }
 
 const POLL_INTERVAL_MS = 10_000  // 10 saniye
+
+/* SQLDatabases.Status CHECK constraint: 'Online'/'Offline'/'Restoring' yalnız.
+   Agent state_desc'i UPPERCASE döner — burada normalize ediyoruz. */
+function normalizeDbStatus(raw: string | null | undefined): string {
+  const s = (raw ?? "").trim().toUpperCase()
+  if (s === "RESTORING") return "Restoring"
+  if (s === "OFFLINE")   return "Offline"
+  return "Online" // default + ONLINE/SUSPECT/RECOVERING vb. hepsi
+}
 
 /* ── IIS ve SQL verilerini DB'ye yaz ── */
 async function persistHeavyData(serverName: string, report: AgentReport): Promise<void> {
@@ -99,7 +150,7 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
 
       for (const company of report.ad.companies) {
         for (const user of company.users) {
-          const lastLogin = user.lastLogin && user.lastLogin !== "Hiç" && user.lastLogin !== ""
+          const lastLogin = user.lastLogin && user.lastLogin !== "Hiç" && user.lastLogin !== "Yok" && user.lastLogin !== ""
             ? new Date(user.lastLogin)
             : null
 
@@ -158,24 +209,72 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
       }
     }
 
-    // SQL Databases — sunucuya ait tüm satırları sil, yeniden yaz
-    if (report.sql?.databases?.length) {
+    // SQL Databases — Hub'dan direkt SA ile topla (öncelik), yoksa agent verisi
+    // Agent LocalSystem olduğu için sys.master_files erişimi kısıtlı → SizeMB/path boş kalıyor.
+    // Servers tablosunda SA creds varsa direkt bağlanıp topluyoruz.
+    let directRows: SqlDbRow[] | null = null
+    try {
+      const srvRes = await pool.request()
+        .input("name", sql.NVarChar(100), serverName)
+        .query<{ IP: string; SqlUsername: string | null; SqlPassword: string | null }>(
+          "SELECT IP, SqlUsername, SqlPassword FROM Servers WHERE Name = @name"
+        )
+      const srv = srvRes.recordset[0]
+      if (srv?.SqlUsername && srv?.SqlPassword) {
+        const pw = decrypt(srv.SqlPassword) ?? ""
+        if (pw) {
+          directRows = await collectSqlFromServer(srv.IP, srv.SqlUsername, pw)
+        }
+      }
+    } catch (err) {
+      console.log(`[Poller] SQL creds lookup hatası (${serverName}):`, err instanceof Error ? err.message : err)
+    }
+
+    // Kaynak seçimi: direkt SA > agent raporu
+    type DbSource = {
+      name: string
+      sizeMB: number
+      status: string
+      lastBackup: Date | string | null
+      tables?: number
+      recoveryModel?: string | null
+      owner?: string | null
+      dataFilePath?: string | null
+      logFilePath?: string | null
+    }
+    const sourceDbs: DbSource[] = directRows
+      ? directRows.map((r) => ({
+          name:          r.name,
+          sizeMB:        r.sizeMB,
+          status:        r.status,
+          lastBackup:    r.lastBackup,
+          recoveryModel: r.recoveryModel,
+          owner:         r.owner,
+          dataFilePath:  r.dataFilePath,
+          logFilePath:   r.logFilePath,
+        }))
+      : (report.sql?.databases ?? [])
+
+    if (sourceDbs.length) {
       await pool.request()
         .input("server", sql.NVarChar(100), serverName)
         .query("DELETE FROM SQLDatabases WHERE Server = @server")
 
       const SKIP_DBS = new Set(["master", "tempdb", "model", "msdb"])
 
-      for (const db of report.sql.databases) {
+      for (const db of sourceDbs) {
         if (SKIP_DBS.has(db.name.toLowerCase())) continue
 
-        // Firma no: başındaki sayısal prefix, örn. "6754_Muhasebe" → "6754"
         const firmaNoMatch = db.name.match(/^(\d+)/)
         const firmaNo = firmaNoMatch ? firmaNoMatch[1] : null
 
-        const lastBackup = db.lastBackup && db.lastBackup !== "Hiç" && db.lastBackup !== ""
-          ? new Date(db.lastBackup)
-          : null
+        let lastBackup: Date | null = null
+        if (db.lastBackup instanceof Date) {
+          lastBackup = !isNaN(db.lastBackup.getTime()) ? db.lastBackup : null
+        } else if (typeof db.lastBackup === "string" && db.lastBackup && !["Hiç","Yok","NULL",""].includes(db.lastBackup)) {
+          const d = new Date(db.lastBackup)
+          lastBackup = !isNaN(d.getTime()) ? d : null
+        }
 
         await pool.request()
           .input("id",         sql.NVarChar(50),   `${serverName}_${db.name}`.replace(/\s/g, "_"))
@@ -183,15 +282,20 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
           .input("server",     sql.NVarChar(100),  serverName)
           .input("firmaNo",    sql.NVarChar(20),   firmaNo)
           .input("sizeMB",     sql.Int,            db.sizeMB ?? 0)
-          .input("status",     sql.NVarChar(20),   db.status ?? "Online")
+          .input("status",     sql.NVarChar(20),   normalizeDbStatus(db.status))
           .input("lastBackup", sql.DateTime2,      lastBackup)
           .input("tables",     sql.Int,            db.tables ?? 0)
+          .input("recoveryModel", sql.NVarChar(30),  db.recoveryModel ?? null)
+          .input("owner",         sql.NVarChar(200), db.owner ?? null)
+          .input("dataFilePath",  sql.NVarChar(500), db.dataFilePath ?? null)
+          .input("logFilePath",   sql.NVarChar(500), db.logFilePath ?? null)
           .query(`
             IF NOT EXISTS (SELECT 1 FROM SQLDatabases WHERE Id = @id)
-              INSERT INTO SQLDatabases (Id, Name, Server, FirmaNo, SizeMB, Status, LastBackup, Tables)
-              VALUES (@id, @name, @server, @firmaNo, @sizeMB, @status, @lastBackup, @tables)
+              INSERT INTO SQLDatabases (Id, Name, Server, FirmaNo, SizeMB, Status, LastBackup, Tables, RecoveryModel, [Owner], DataFilePath, LogFilePath)
+              VALUES (@id, @name, @server, @firmaNo, @sizeMB, @status, @lastBackup, @tables, @recoveryModel, @owner, @dataFilePath, @logFilePath)
             ELSE
-              UPDATE SQLDatabases SET Name=@name, FirmaNo=@firmaNo, SizeMB=@sizeMB, Status=@status, LastBackup=@lastBackup, Tables=@tables
+              UPDATE SQLDatabases SET Name=@name, FirmaNo=@firmaNo, SizeMB=@sizeMB, Status=@status, LastBackup=@lastBackup, Tables=@tables,
+                RecoveryModel=@recoveryModel, [Owner]=@owner, DataFilePath=@dataFilePath, LogFilePath=@logFilePath
               WHERE Id=@id
           `)
       }
@@ -259,7 +363,8 @@ async function pollAgent(server: ServerRow): Promise<boolean> {
     })
 
     // Ağır veri: AD / IIS / SQL / UserProcesses — agent 5 dk'da bir gönderir, DB'ye yaz
-    if (report.ad?.companies || report.iis || report.sql || report.userProcesses) {
+    const hasSqlRole = Array.isArray(report.roles) && report.roles.some((r) => String(r).toUpperCase() === "SQL")
+    if (report.ad?.companies || report.iis || report.sql || report.userProcesses || hasSqlRole) {
       persistHeavyData(server.Name, report)
     }
 

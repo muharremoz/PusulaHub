@@ -22,7 +22,7 @@ declare global {
   var _mssqlPool: sql.ConnectionPool | undefined;
 }
 
-async function getPool(): Promise<sql.ConnectionPool> {
+export async function getPool(): Promise<sql.ConnectionPool> {
   if (global._mssqlPool && global._mssqlPool.connected) {
     return global._mssqlPool;
   }

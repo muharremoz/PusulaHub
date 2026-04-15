@@ -39,6 +39,10 @@ async function getSyncPool(): Promise<sql.ConnectionPool> {
   return _pool
 }
 
+export async function syncFirmalarNow(): Promise<void> {
+  return syncFirmalar()
+}
+
 async function syncFirmalar(): Promise<void> {
   const baseUrl  = process.env.FIRMA_API_URL      ?? ""
   const username = process.env.FIRMA_API_USERNAME ?? ""

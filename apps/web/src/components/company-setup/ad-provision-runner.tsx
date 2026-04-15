@@ -47,6 +47,8 @@ export interface AdProvisionPayload {
   windowsServerId?: string
   /** IIS sunucusu — iis-site hizmet adımları (klasör/copy/port/config/site) bu agent'a gider. */
   iisServerId?:     string
+  /** Depo sunucusu — D:\Resimler\<firmaId> klasörü + NTFS yetkisi bu agent'a gider. */
+  depoServerId?:    string
   firmaId:          string
   firmaName:        string
   users:            AdProvisionUser[]
@@ -61,19 +63,23 @@ export interface AdProvisionPayload {
   selectedDemoDbIds?: number[]
   addFirmaPrefix?:    boolean
   addToSirketDb?:     boolean
+  /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır */
+  skipDepo?:          boolean
 }
 
 interface Props {
-  payload:     AdProvisionPayload
+  payload:        AdProvisionPayload
   /** Mount edilince otomatik başlasın mı (default: true) */
-  autoStart?:  boolean
+  autoStart?:     boolean
   /** Başarıyla tamamlandığında çağrılır */
-  onComplete?: () => void
+  onComplete?:    () => void
   /** Fatal hata veya adım hatasında çağrılır */
-  onError?:    (msg: string) => void
+  onError?:       (msg: string) => void
+  /** Adım hatasında adım detayıyla çağrılır (şifre hatası tespiti için) */
+  onStepError?:   (step: ProvisionStep) => void
 }
 
-export function AdProvisionRunner({ payload, autoStart = true, onComplete, onError }: Props) {
+export function AdProvisionRunner({ payload, autoStart = true, onComplete, onError, onStepError }: Props) {
   const [steps, setSteps]           = useState<ProvisionStep[]>([])
   const [completed, setCompleted]   = useState(false)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -97,7 +103,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   const sqlStepCount = sqlDbCount * (payload.addToSirketDb ? 2 : 1)
   // 2 Depo adımı (klasör + NTFS) — Depo sunucusu yoksa zaten gelmez, ama
   // progress bar için her zaman sayıyoruz (en kötü %2 sapma — kabul edilebilir)
-  const depoStepCount = 2
+  const depoStepCount = payload.skipDepo ? 0 : 2
   // Masaüstü adımları: MUSTERILER subdir (1) + exe kısayolları (pusulaCount) + Resimler kısayolu (1)
   // Sadece pusula servisi varsa oluşturulur
   const desktopStepCount = pusulaCount > 0 ? pusulaCount + 2 : 0
@@ -148,6 +154,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
         })
         if (data.status === "error" && data.error) {
           onError?.(data.error)
+          onStepError?.({ stepId: data.stepId!, label: data.label!, status: "error", error: data.error })
         }
       } else if (event === "done") {
         setCompleted(true)

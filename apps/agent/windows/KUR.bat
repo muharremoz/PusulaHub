@@ -32,6 +32,14 @@ if "%CSC%"=="" (
     exit /b 1
 )
 
+echo  [0/5] Calisan servis/process durduruluyor (exe kilidini acmak icin)...
+sc stop PusulaAgent >nul 2>&1
+timeout /t 2 /nobreak >nul
+taskkill /f /im PusulaAgent.exe >nul 2>&1
+taskkill /f /im PusulaNotify.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
+
+echo.
 echo  [1/5] PusulaAgent.exe derleniyor...
 "%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu /out:PusulaAgent.exe ^
   /r:System.Core.dll ^

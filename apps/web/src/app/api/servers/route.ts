@@ -90,8 +90,8 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const {
-      name, ip, dns, os, status, cpu, ram, disk, uptime, lastChecked,
-      roles, apiKey, agentPort, username, password,
+      name, ip, dns, domain, os, status, cpu, ram, disk, uptime, lastChecked,
+      roles, apiKey, agentPort, rdpPort, username, password,
       sqlUsername, sqlPassword,
     } = body
 
@@ -102,12 +102,12 @@ export async function POST(req: Request) {
     const encryptedSqlPassword = encrypt(sqlPassword ?? null)
 
     await execute`
-      INSERT INTO Servers (Id, Name, IP, DNS, OS, Status, CPU, RAM, Disk, Uptime, LastChecked, ApiKey, AgentPort, Username, Password, SqlUsername, SqlPassword)
+      INSERT INTO Servers (Id, Name, IP, DNS, Domain, OS, Status, CPU, RAM, Disk, Uptime, LastChecked, ApiKey, AgentPort, RdpPort, Username, Password, SqlUsername, SqlPassword)
       VALUES (
-        ${id}, ${name}, ${ip}, ${dns ?? null}, ${os},
+        ${id}, ${name}, ${ip}, ${dns ?? null}, ${domain ?? null}, ${os},
         ${status ?? "offline"}, ${cpu ?? 0}, ${ram ?? 0}, ${disk ?? 0},
         ${uptime ?? null}, ${lastChecked ?? null},
-        ${apiKey ?? null}, ${agentPort ?? 8585}, ${username ?? null}, ${encryptedPassword},
+        ${apiKey ?? null}, ${agentPort ?? 8585}, ${rdpPort ?? null}, ${username ?? null}, ${encryptedPassword},
         ${sqlUsername ?? null}, ${encryptedSqlPassword}
       )
     `

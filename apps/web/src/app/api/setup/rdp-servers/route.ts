@@ -15,6 +15,7 @@ interface Row {
   Name:  string
   IP:    string
   DNS:   string | null
+  RdpPort: number | null
   Status: string
 }
 
@@ -23,6 +24,7 @@ export interface RdpServerItem {
   name:       string
   ip:         string
   dns:        string
+  rdpPort:    number | null
   type:       string
   userCount:  number
   totalRamGB: number
@@ -32,7 +34,7 @@ export interface RdpServerItem {
 export async function GET() {
   try {
     const rows = await query<Row[]>`
-      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.Status
+      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.RdpPort, s.Status
       FROM Servers s
       INNER JOIN ServerRoles r ON r.ServerId = s.Id
       WHERE r.Role = 'RDP'
@@ -58,6 +60,7 @@ export async function GET() {
         name:       r.Name,
         ip:         r.IP,
         dns:        r.DNS ?? "",
+        rdpPort:    r.RdpPort,
         type:       "Terminal Server",
         userCount:  activeSessions,
         totalRamGB: Math.round(totalMB / 1024),

@@ -411,30 +411,49 @@ static class Metrics
                     sd["name"] = name;
                     sd["id"]   = Convert.ToInt32(mo["Id"]);
 
-                    // ServerState: 2=Started, 4=Stopped, diğer=Unknown
-                    int serverState = 0;
-                    try { serverState = Convert.ToInt32(mo["ServerState"]); } catch { }
-                    if (serverState == 2) sd["status"] = "Started";
-                    else                  sd["status"] = "Stopped";
+                    // IIS Site durumu: WMI'da Site class'inda `GetState()` methodu var,
+                    // property `ServerState` degil. Method return: 0=Starting, 1=Started,
+                    // 2=Stopping, 3=Stopped, 4=Unknown. Fallback olarak property'yi de deniyoruz.
+                    int serverState = -1;
+                    try
+                    {
+                        ManagementBaseObject outParams = mo.InvokeMethod("GetState", null, null);
+                        if (outParams != null && outParams["ReturnValue"] != null)
+                            serverState = Convert.ToInt32(outParams["ReturnValue"]);
+                    }
+                    catch { }
+                    if (serverState < 0)
+                    {
+                        try { serverState = Convert.ToInt32(mo["ServerState"]); } catch { }
+                    }
+                    if (serverState == 0 || serverState == 1) sd["status"] = "Started";
+                    else                                      sd["status"] = "Stopped";
 
                     // Bindings: protocol + bindingInformation (ip:port:hostname)
+                    // WMI embedded object array — cast `ManagementBaseObject[]` bazı sürümlerde null döner,
+                    // onun yerine object olarak okuyup IEnumerable üzerinden geziyoruz.
                     var bindingParts = new List<string>();
                     try
                     {
-                        ManagementBaseObject[] bindings = mo["Bindings"] as ManagementBaseObject[];
-                        if (bindings != null)
+                        object bindingsObj = mo.GetPropertyValue("Bindings");
+                        System.Collections.IEnumerable bindingEnum = bindingsObj as System.Collections.IEnumerable;
+                        if (bindingEnum != null)
                         {
-                            foreach (ManagementBaseObject b in bindings)
+                            foreach (object bObj in bindingEnum)
                             {
-                                string proto = (b["Protocol"] ?? "").ToString();
-                                string info  = (b["BindingInformation"] ?? "").ToString();
+                                ManagementBaseObject b = bObj as ManagementBaseObject;
+                                if (b == null) continue;
+                                string proto = "";
+                                string info  = "";
+                                try { proto = (b["Protocol"] ?? "").ToString(); } catch { }
+                                try { info  = (b["BindingInformation"] ?? "").ToString(); } catch { }
                                 // info format: "ipAddress:port:hostHeader"
-                                // Güzel gösterim: http://hostname:port
                                 string[] parts = info.Split(':');
                                 string host = (parts.Length >= 3 && parts[2].Length > 0)
                                     ? parts[2]
-                                    : (parts.Length >= 2 ? parts[0] : "*");
+                                    : (parts.Length >= 2 && parts[0].Length > 0 ? parts[0] : "*");
                                 string port = (parts.Length >= 2) ? parts[1] : "80";
+                                if (proto.Length == 0) proto = "http";
                                 bindingParts.Add(proto + "://" + host + ":" + port);
                             }
                         }
@@ -1047,14 +1066,26 @@ static class Metrics
         return users;
     }
 
-    /* --- MSSQL databases --- */
+    /* --- MSSQL databases ---
+       Genislettigimiz alanlar: RecoveryModel, Owner, DataFilePath, LogFilePath.
+       sqlcmd tek sorgu ile siralama: name|sizeMB|status|lastBackup|recovery|owner|dataFile|logFile */
     private static Dictionary<string, object> CollectMssql()
     {
         var result = new Dictionary<string, object>();
         var databases = new List<Dictionary<string, object>>();
         try
         {
-            var psi = new ProcessStartInfo("sqlcmd", "-Q \"SET NOCOUNT ON; SELECT name, (SELECT SUM(size*8/1024) FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0) as sizeMB, state_desc, (SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D') as lastBackup FROM sys.databases d WHERE name NOT IN ('master','tempdb','model','msdb')\" -h -1 -s \"|\" -W")
+            string q = "SET NOCOUNT ON; SELECT d.name, "
+                     + "(SELECT SUM(size*8/1024) FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0) AS sizeMB, "
+                     + "d.state_desc, "
+                     + "(SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D') AS lastBackup, "
+                     + "d.recovery_model_desc, "
+                     + "ISNULL(SUSER_SNAME(d.owner_sid), '') AS ownerName, "
+                     + "ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=0), '') AS dataFile, "
+                     + "ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=1), '') AS logFile "
+                     + "FROM sys.databases d WHERE name NOT IN ('master','tempdb','model','msdb')";
+
+            var psi = new ProcessStartInfo("sqlcmd", "-Q \"" + q + "\" -h -1 -s \"|\" -W")
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
@@ -1063,12 +1094,12 @@ static class Metrics
             };
             var proc = Process.Start(psi);
             string output = proc.StandardOutput.ReadToEnd();
-            proc.WaitForExit(15000);
+            proc.WaitForExit(20000);
 
             foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var parts = line.Split('|');
-                if (parts.Length < 4) continue;
+                if (parts.Length < 8) continue;
                 string name = parts[0].Trim();
                 if (string.IsNullOrEmpty(name) || name.StartsWith("-")) continue;
 
@@ -1079,6 +1110,10 @@ static class Metrics
                 dd["sizeMB"] = sizeMB;
                 dd["status"] = parts[2].Trim();
                 dd["lastBackup"] = parts[3].Trim() == "NULL" ? "Yok" : parts[3].Trim();
+                dd["recoveryModel"] = parts[4].Trim();
+                dd["owner"] = parts[5].Trim();
+                dd["dataFilePath"] = parts[6].Trim();
+                dd["logFilePath"] = parts[7].Trim();
                 dd["tables"] = 0;
                 databases.Add(dd);
             }

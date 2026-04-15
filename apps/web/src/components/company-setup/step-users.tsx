@@ -28,11 +28,16 @@ interface Props {
 }
 
 function getStrength(p: string) {
-  const hasUpper = /[A-Z]/.test(p)
-  const hasLower = /[a-z]/.test(p)
-  const hasDigit = /[0-9]/.test(p)
+  const hasUpper   = /[A-Z]/.test(p)
+  const hasLower   = /[a-z]/.test(p)
+  const hasDigit   = /[0-9]/.test(p)
   const hasSpecial = /[^A-Za-z0-9]/.test(p)
-  const lengthOk = p.length >= 8
+  const lengthOk   = p.length >= 7   // AD minimum 7 karakter
+
+  // AD karmaşıklık: en az 3 kategori (büyük/küçük/rakam/özel) + uzunluk
+  const categories = [hasUpper, hasLower, hasDigit, hasSpecial].filter(Boolean).length
+  const adOk       = lengthOk && categories >= 3
+
   const score = [hasUpper, hasLower, hasDigit, hasSpecial, lengthOk].filter(Boolean).length
   const levels = [
     { label: "Zayıf",  color: "bg-red-500",     text: "text-red-500",     pct: 20 },
@@ -41,7 +46,12 @@ function getStrength(p: string) {
     { label: "İyi",    color: "bg-blue-500",    text: "text-blue-500",    pct: 75 },
     { label: "Güçlü",  color: "bg-emerald-500", text: "text-emerald-500", pct: 100 },
   ]
-  return { ...levels[score], hasUpper, hasLower, hasDigit, hasSpecial, lengthOk }
+  return { ...levels[score], hasUpper, hasLower, hasDigit, hasSpecial, lengthOk, adOk, categories }
+}
+
+/** AD şifre kuralını karşılıyor mu? */
+export function meetsAdComplexity(p: string) {
+  return getStrength(p).adOk
 }
 
 export function StepUsers({
@@ -59,7 +69,7 @@ export function StepUsers({
   const limitReached = userLimit > 0 && activeExisting + users.length >= userLimit
 
   const allUsersValid = users.length > 0 &&
-    users.every((u) => u.username.trim() && u.password.trim())
+    users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password))
   const canTest = allUsersValid && !!serverId && !!firmaId
 
   const startTest = () => {
@@ -204,7 +214,12 @@ export function StepUsers({
                 {/* Şifre */}
                 <div>
                   <p className="text-[11px] font-medium text-foreground mb-1.5">Şifre</p>
-                  <div className="flex items-center rounded-[5px] border-2 border-border bg-background focus-within:border-foreground/60 transition-colors">
+                  <div className={cn(
+                    "flex items-center rounded-[5px] border-2 bg-background focus-within:border-foreground/60 transition-colors",
+                    user.password && !meetsAdComplexity(user.password)
+                      ? "border-red-400 focus-within:border-red-500"
+                      : "border-border"
+                  )}>
                     <input
                       type={user.showPassword ? "text" : "password"}
                       value={user.password}
@@ -257,30 +272,39 @@ export function StepUsers({
 
               {/* Şifre güç barı */}
               {str && (
-                <div className="flex items-center gap-2 pt-0.5">
-                  <div className="flex-1 h-0.5 bg-muted rounded-full overflow-hidden">
-                    <div
-                      className={cn("h-full rounded-full transition-all duration-300", str.color)}
-                      style={{ width: `${str.pct}%` }}
-                    />
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-0.5 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className={cn("h-full rounded-full transition-all duration-300", str.color)}
+                        style={{ width: `${str.pct}%` }}
+                      />
+                    </div>
+                    <span className={cn("text-[10px] font-medium shrink-0", str.text)}>{str.label}</span>
+                    <div className="flex gap-1">
+                      {[
+                        { ok: str.hasUpper,   label: "A-Z" },
+                        { ok: str.hasLower,   label: "a-z" },
+                        { ok: str.hasDigit,   label: "0-9" },
+                        { ok: str.hasSpecial, label: "!@#" },
+                        { ok: str.lengthOk,   label: "7+" },
+                      ].map(({ ok, label }) => (
+                        <span key={label} className={cn(
+                          "text-[9px] px-1 py-0.5 rounded-[3px]",
+                          ok ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+                        )}>
+                          {label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                  <span className={cn("text-[10px] font-medium shrink-0", str.text)}>{str.label}</span>
-                  <div className="flex gap-1">
-                    {[
-                      { ok: str.hasUpper, label: "A-Z" },
-                      { ok: str.hasLower, label: "a-z" },
-                      { ok: str.hasDigit, label: "0-9" },
-                      { ok: str.hasSpecial, label: "!@#" },
-                      { ok: str.lengthOk,  label: "8+" },
-                    ].map(({ ok, label }) => (
-                      <span key={label} className={cn(
-                        "text-[9px] px-1 py-0.5 rounded-[3px]",
-                        ok ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
-                      )}>
-                        {label}
-                      </span>
-                    ))}
-                  </div>
+                  {/* AD uyarısı */}
+                  {!str.adOk && (
+                    <p className="text-[10px] text-red-500 flex items-center gap-1">
+                      <span>⚠</span>
+                      AD karmaşıklık kuralı: en az 7 karakter, büyük/küçük harf + rakam veya özel karakter ({str.categories}/3 kategori)
+                    </p>
+                  )}
                 </div>
               )}
             </div>
