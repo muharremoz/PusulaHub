@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -66,6 +67,9 @@ interface TabSQLDatabase {
   SizeMB:        number
   Status:        string
   LastBackup:    string | null
+  LastDiffBackup: string | null
+  LastBackupStart: string | null
+  LastDiffBackupStart: string | null
   Tables:        number
   RecoveryModel: string | null
   Owner:         string | null
@@ -138,31 +142,49 @@ import {
   Save,
   Bug,
   Plus,
+  Check,
   Eye,
   EyeOff,
   RefreshCw,
   UserPlus,
 } from "lucide-react";
-import { AdProvisionRunner } from "@/components/company-setup/ad-provision-runner";
+import { AdProvisionRunner, type AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
-
-function safePct(usage: number, quota: number) {
-  if (!quota || quota <= 0) return 0;
-  return Math.min(100, Math.round((usage / quota) * 100));
-}
+import type { WizardServiceDto } from "@/app/api/services/route";
 
 function YoğunlukKart({ d }: { d: CompanyDetail }) {
-  const cpuPct  = safePct(d.usageCpu,            d.quotaCpu);
-  const ramPct  = safePct(d.usageRam,            d.quotaRam);
-  const diskPct = safePct(d.usageDisk,           d.quotaDisk);
-  const userPct = safePct(d.userCount,           d.userCapacity);
-  const dbPct   = safePct(d.dbSizeMB / 1024,     d.dbQuota);
+  // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
+  const pctMB = (use: number | undefined, quota: number | undefined): number => {
+    const q = quota ?? 0;
+    const u = use ?? 0;
+    if (!q || q <= 0) return 0;
+    const p = (u / q) * 100;
+    if (p > 0 && p < 1) return 1;  // ≈%0 gösterme, minimum %1
+    return Math.min(100, Math.round(p));
+  };
+  const pctCpu = (v: number): number => {
+    if (!v || v <= 0) return 0;
+    if (v < 1) return 1;
+    return Math.min(100, Math.round(v));
+  };
 
-  // Sadece kota tanımlı metrikler ortalamaya katılır
-  const active = [d.quotaCpu > 0, d.quotaRam > 0, d.quotaDisk > 0, d.userCapacity > 0, d.dbQuota > 0].filter(Boolean).length;
+  // 30 günlük ortalama bazlı bar değerleri (satış konuşması için daha anlamlı).
+  // Geçmiş veri yoksa canlı değerlere düş.
+  const h = d.history30d;
+  const avgRamMB    = h ? h.avgRamGB * 1024 : d.usageRamMB;
+  const avgDbMB     = h ? (h.dbStartMB + h.dbEndMB) / 2 : d.dbSizeMB;
+  const avgCpuValue = h ? h.avgCpu : d.usageCpu;
+
+  const cpuPct  = pctCpu(avgCpuValue);
+  const ramPct  = pctMB(avgRamMB,       d.quotaRamMB);
+  const diskPct = pctMB(d.usageDiskMB,  d.quotaDiskMB);
+  const dbPct   = pctMB(avgDbMB,        d.dbTotalMB);
+
+  // Yoğunluk: CPU + RAM + Disk + DB yüzdelerinin ortalaması (User kaldırıldı)
+  const active = [d.quotaCpu > 0, d.quotaRam > 0, d.quotaDisk > 0, d.dbQuota > 0].filter(Boolean).length;
   const yogunluk = active === 0
-    ? userPct
-    : Math.round(((d.quotaCpu > 0 ? cpuPct : 0) + (d.quotaRam > 0 ? ramPct : 0) + (d.quotaDisk > 0 ? diskPct : 0) + (d.userCapacity > 0 ? userPct : 0) + (d.dbQuota > 0 ? dbPct : 0)) / active);
+    ? 0
+    : Math.round(((d.quotaCpu > 0 ? cpuPct : 0) + (d.quotaRam > 0 ? ramPct : 0) + (d.quotaDisk > 0 ? diskPct : 0) + (d.dbQuota > 0 ? dbPct : 0)) / active);
 
   const [animValue, setAnimValue] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -180,8 +202,7 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
     { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  val: `${d.usageCpu} / ${d.quotaCpu} vCPU` },
     { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  val: `${d.usageRam} / ${d.quotaRam} GB` },
     { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, val: `${d.usageDisk} / ${d.quotaDisk} GB` },
-    { label: "User", icon: <Users className="h-3.5 w-3.5 text-muted-foreground" />,       pct: userPct, val: `${d.userCount} / ${d.userCapacity} kullanıcı` },
-    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   val: `${(d.dbSizeMB / 1024).toFixed(1)} / ${d.dbQuota} GB` },
+    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   val: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },
   ];
 
   return (
@@ -193,7 +214,7 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-1.5">
             <Activity className="h-3 w-3" />
-            <span>CPU + RAM + Disk + Kullanıcı + Veritabanı ortalaması</span>
+            <span>Son 30 gün ortalaması · CPU + RAM + Disk + Kullanıcı + Veritabanı</span>
           </div>
           <button
             onClick={() => setDetailOpen(true)}
@@ -244,6 +265,35 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
           })}
         </div>
       </div>
+
+      {/* 30 günlük geçmiş özeti — satış için */}
+      {d.history30d && (
+        <div className="mt-4 pt-3 border-t border-border/40 grid grid-cols-3 gap-3">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">CPU 30g</span>
+            <span className="text-[13px] font-semibold tabular-nums">Ort %{d.history30d.avgCpu} <span className="text-muted-foreground font-normal">/ Peak %{d.history30d.peakCpu}</span></span>
+            {d.history30d.peakCpuDate && (
+              <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakCpuDate}</span>
+            )}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">RAM 30g</span>
+            <span className="text-[13px] font-semibold tabular-nums">Ort {d.history30d.avgRamGB} GB <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakRamGB} GB</span></span>
+            {d.history30d.peakRamDate && (
+              <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakRamDate}</span>
+            )}
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">DB Büyüme</span>
+            <span className="text-[13px] font-semibold tabular-nums">
+              {(d.history30d.dbStartMB / 1024).toFixed(1)} → {(d.history30d.dbEndMB / 1024).toFixed(1)} GB
+            </span>
+            <span className={`text-[9px] ${d.history30d.dbGrowthPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+              {d.history30d.dbGrowthPct >= 0 ? "+" : ""}{d.history30d.dbGrowthPct}%
+            </span>
+          </div>
+        </div>
+      )}
     </NestedCard>
 
     <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -253,17 +303,16 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
         </DialogHeader>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Yoğunluk skoru, firmanın kaynak kullanımını tek bir sayıya indirger.
-          Aşağıdaki 5 metriğin aritmetik ortalaması alınır:
+          Firmanın kaynak kullanımı (son 30 gün ortalaması) ile kotasına oranı.
+          4 metriğin ortalaması yoğunluk skorunu oluşturur:
         </p>
 
         <div className="space-y-1.5 mt-1">
           {[
-            { label: "CPU Kullanımı",      icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `${d.usageCpu} / ${d.quotaCpu} vCPU` },
-            { label: "RAM Kullanımı",      icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${d.usageRam} / ${d.quotaRam} GB` },
-            { label: "Disk Kullanımı",     icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk} / ${d.quotaDisk} GB` },
-            { label: "Kullanıcı Doluluğu", icon: <Users className="h-3.5 w-3.5" />,       pct: userPct, detail: `${d.userCount} / ${d.userCapacity} kullanıcı` },
-            { label: "Veritabanı Boyutu",  icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(1)} / ${d.dbQuota} GB` },
+            { label: "CPU Kullanımı",  icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `Ort %${h?.avgCpu ?? 0} · Peak %${h?.peakCpu ?? 0}` },
+            { label: "RAM Kullanımı",  icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${(avgRamMB/1024).toFixed(1)} / ${d.quotaRam} GB` },
+            { label: "Disk Kullanımı", icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk.toFixed(1)} / ${d.quotaDisk} GB` },
+            { label: "Veritabanı",     icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },
           ].map((m) => {
             const color = m.pct >= 80 ? "text-red-600" : m.pct >= 60 ? "text-amber-600" : "text-emerald-600";
             const bar   = m.pct >= 80 ? "bg-red-500"   : m.pct >= 60 ? "bg-amber-400"   : "bg-emerald-500";
@@ -290,7 +339,7 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
         <div className="mt-2 rounded-[5px] border border-border/40 px-3 py-2.5 bg-muted/20">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-muted-foreground">
-              ({cpuPct} + {ramPct} + {diskPct} + {userPct} + {dbPct}) ÷ 5
+              ({cpuPct} + {ramPct} + {diskPct} + {dbPct}) ÷ 4
             </span>
             <span className={`text-base font-bold tabular-nums ${
               yogunluk >= 80 ? "text-red-600" : yogunluk >= 60 ? "text-amber-600" : "text-emerald-600"
@@ -310,6 +359,9 @@ const statusConfig = {
 };
 
 export default function CompaniesPage() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const urlFirkod    = searchParams.get("firkod");
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [top5, setTop5] = useState<Top5Company[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
@@ -322,6 +374,7 @@ export default function CompaniesPage() {
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
+  const [sqlRefreshing, setSqlRefreshing] = useState(false);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
   const [iisActionBusy, setIisActionBusy] = useState<string | null>(null);
@@ -372,6 +425,126 @@ export default function CompaniesPage() {
   const [newUserStarted, setNewUserStarted]       = useState(false);
   const [newUserError, setNewUserError]           = useState<string | null>(null);
 
+  // Kullanıcı aksiyonları
+  const [pwResetUser, setPwResetUser]       = useState<TabUser | null>(null);
+  const [pwResetValue, setPwResetValue]     = useState("");
+  const [pwResetShow, setPwResetShow]       = useState(false);
+  const [pwResetBusy, setPwResetBusy]       = useState(false);
+  const [pwResetError, setPwResetError]     = useState<string | null>(null);
+  const [pwResetDone, setPwResetDone]       = useState(false);
+  const [pwResetMsgCopied, setPwResetMsgCopied] = useState(false);
+  const [pwResetAdServer, setPwResetAdServer]   = useState<{ domain?: string | null } | null>(null);
+  const [pwResetRdpServer, setPwResetRdpServer] = useState<{ ip: string; rdpPort?: number | null } | null>(null);
+  const [toggleUser, setToggleUser]         = useState<TabUser | null>(null);
+  const [toggleBusy, setToggleBusy]         = useState(false);
+  const [deleteUser, setDeleteUser]         = useState<TabUser | null>(null);
+  const [deleteConfirm, setDeleteConfirm]   = useState("");
+  const [deleteBusy, setDeleteBusy]         = useState(false);
+  const [deleteError, setDeleteError]       = useState<string | null>(null);
+
+  async function openPwReset(usr: TabUser) {
+    setPwResetUser(usr); setPwResetValue(""); setPwResetShow(false); setPwResetError(null)
+    setPwResetDone(false); setPwResetMsgCopied(false)
+    setPwResetAdServer(null); setPwResetRdpServer(null)
+    if (!selectedFirma) return
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/server-options`)
+      if (!r.ok) return
+      const d = await r.json() as { adServerId?: string | null; windowsServerId?: string | null;
+        adServers?: { id: string; domain?: string | null }[];
+        rdpServers?: { id: string; ip: string; rdpPort?: number | null }[] }
+      const ad  = (d.adServers  ?? []).find((s) => s.id === d.adServerId)
+      const rdp = (d.rdpServers ?? []).find((s) => s.id === d.windowsServerId) ?? (d.rdpServers ?? [])[0]
+      if (ad)  setPwResetAdServer({ domain: ad.domain ?? null })
+      if (rdp) setPwResetRdpServer({ ip: rdp.ip, rdpPort: rdp.rdpPort ?? null })
+    } catch {}
+  }
+
+  async function submitPasswordReset() {
+    if (!selectedFirma || !pwResetUser) return
+    if (!meetsAdComplexity(pwResetValue)) { setPwResetError("Şifre AD karmaşıklık kuralını karşılamıyor"); return }
+    setPwResetBusy(true); setPwResetError(null)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users/action`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ username: pwResetUser.username, action: "reset-password", password: pwResetValue }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "Şifre değiştirilemedi")
+      toast.success("Şifre sıfırlandı", { description: pwResetUser.username })
+      setPwResetDone(true)
+    } catch (err) {
+      setPwResetError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPwResetBusy(false)
+    }
+  }
+
+  async function submitDeleteUser() {
+    if (!selectedFirma || !deleteUser) return
+    if (deleteConfirm.trim() !== deleteUser.username) { setDeleteError("Kullanıcı adı eşleşmiyor"); return }
+    setDeleteBusy(true); setDeleteError(null)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users/action`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ username: deleteUser.username, action: "delete" }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "Silinemedi")
+      toast.success("Kullanıcı silindi", { description: deleteUser.username })
+      setTabUsers((prev) => prev.filter((u) => u.username !== deleteUser.username))
+      setDeleteUser(null); setDeleteConfirm("")
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setDeleteBusy(false)
+    }
+  }
+
+  async function submitToggleEnabled() {
+    if (!selectedFirma || !toggleUser) return
+    setToggleBusy(true)
+    try {
+      const action = toggleUser.enabled ? "disable" : "enable"
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users/action`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ username: toggleUser.username, action }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "İşlem başarısız")
+      toast.success(toggleUser.enabled ? "Hesap askıya alındı" : "Hesap aktifleştirildi", { description: toggleUser.username })
+      // Agent AD verisini 5 dk cache'liyor → UI'yi hemen optimistic güncelle
+      const newEnabled = !toggleUser.enabled
+      setTabUsers((prev) => prev.map((u) => u.username === toggleUser.username ? { ...u, enabled: newEnabled } : u))
+      setToggleUser(null)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    } finally {
+      setToggleBusy(false)
+    }
+  }
+
+  // Yeni Hizmet dialog
+  const [newSvcOpen, setNewSvcOpen]                   = useState(false);
+  const [newSvcCatalog, setNewSvcCatalog]             = useState<WizardServiceDto[]>([]);
+  const [newSvcLoading, setNewSvcLoading]             = useState(false);
+  const [newSvcSelectedIds, setNewSvcSelectedIds]     = useState<number[]>([]);
+  const [newSvcActiveCat, setNewSvcActiveCat]         = useState<string>("");
+  const [newSvcAdServerId, setNewSvcAdServerId]       = useState<string>("");
+  const [newSvcWindowsServerId, setNewSvcWindowsServerId] = useState<string>("");
+  const [newSvcWindowsLocked, setNewSvcWindowsLocked] = useState(false);
+  const [newSvcIisServers, setNewSvcIisServers]       = useState<{ id: string; name: string; ip: string; isOnline: boolean }[]>([]);
+  const [newSvcIisServerId, setNewSvcIisServerId]     = useState<string>("");
+  const [newSvcDepoServers, setNewSvcDepoServers]     = useState<{ id: string; name: string; ip: string; isOnline: boolean }[]>([]);
+  const [newSvcDepoServerId, setNewSvcDepoServerId]   = useState<string>("");
+  const [newSvcWindowsList, setNewSvcWindowsList]     = useState<{ id: string; name: string; ip: string }[]>([]);
+  const [newSvcStarted, setNewSvcStarted]             = useState(false);
+  const [newSvcDone, setNewSvcDone]                   = useState(false);
+  const [newSvcError, setNewSvcError]                 = useState<string | null>(null);
+
   function generatePassword() {
     const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
     const lower = "abcdefghijkmnpqrstuvwxyz"
@@ -417,13 +590,68 @@ export default function CompaniesPage() {
   async function refreshTabUsers() {
     if (!selectedFirma) return
     try {
-      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users`, { cache: "no-store" })
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users?refresh=1`, { cache: "no-store" })
       if (r.ok) {
         const d = await r.json()
         setTabUsers(Array.isArray(d) ? d : [])
       }
     } catch {}
   }
+
+  async function refreshTabServices() {
+    if (!selectedFirma) return
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/services`, { cache: "no-store" })
+      if (r.ok) {
+        const d = await r.json()
+        setTabServices(Array.isArray(d) ? d : [])
+      }
+    } catch {}
+  }
+
+  async function openNewSvcDialog() {
+    if (!selectedFirma) return
+    setNewSvcOpen(true)
+    setNewSvcStarted(false); setNewSvcDone(false); setNewSvcError(null)
+    setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId("")
+    setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
+    setNewSvcLoading(true)
+    try {
+      const [svcR, iisR, depoR, optR] = await Promise.all([
+        fetch(`/api/services?onlyActive=true`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/setup/iis-servers`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/setup/depo-servers`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/companies/${selectedFirma.firkod}/server-options`).then(r => r.ok ? r.json() : {}) as Promise<{ adServerId?: string | null; windowsServerId?: string | null; adServers?: { id: string; name: string; ip: string }[]; rdpServers?: { id: string; name: string; ip: string }[] }>,
+      ])
+      const catalog: WizardServiceDto[] = Array.isArray(svcR) ? svcR : []
+      setNewSvcCatalog(catalog)
+      const cats = [...new Set(catalog.map((s) => s.category))]
+      setNewSvcActiveCat(cats[0] ?? "")
+      setNewSvcIisServers(Array.isArray(iisR) ? iisR : [])
+      setNewSvcDepoServers(Array.isArray(depoR) ? depoR : [])
+      const rdpServers = optR.rdpServers ?? []
+      setNewSvcWindowsList(rdpServers)
+      if (optR.adServerId) setNewSvcAdServerId(optR.adServerId)
+      if (optR.windowsServerId && rdpServers.some((s: { id: string }) => s.id === optR.windowsServerId)) {
+        setNewSvcWindowsServerId(optR.windowsServerId); setNewSvcWindowsLocked(true)
+      } else if (rdpServers.length === 1) {
+        setNewSvcWindowsServerId(rdpServers[0].id)
+      }
+    } catch (err) {
+      setNewSvcError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setNewSvcLoading(false)
+    }
+  }
+
+  const newSvcSelected         = newSvcCatalog.filter((s) => newSvcSelectedIds.includes(s.id))
+  const newSvcHasPusula        = newSvcSelected.some((s) => s.type === "pusula-program")
+  const newSvcHasIis           = newSvcSelected.some((s) => s.type === "iis-site")
+  const newSvcValid =
+    newSvcSelectedIds.length > 0 &&
+    !!newSvcAdServerId &&
+    (!newSvcHasPusula || (!!newSvcWindowsServerId && !!newSvcDepoServerId)) &&
+    (!newSvcHasIis || !!newSvcIisServerId)
 
   const newUserValid =
     !!newUserAdServerId &&
@@ -722,7 +950,17 @@ tr:nth-child(even) td{background:#fafafa}
     setSelectedFirma(f)
     setSearchOpen(false)
     setSearchQuery("")
+    router.replace(`/companies?firkod=${encodeURIComponent(f.firkod)}`, { scroll: false })
   }
+
+  // URL'deki firkod → firma otomatik seçimi (F5 / direkt link)
+  useEffect(() => {
+    if (!urlFirkod) return
+    if (selectedFirma?.firkod === urlFirkod) return
+    if (!apiCompanies.length) return
+    const match = apiCompanies.find((c) => c.firkod === urlFirkod)
+    if (match) setSelectedFirma(match)
+  }, [urlFirkod, apiCompanies, selectedFirma?.firkod])
 
   async function refreshIIS() {
     if (!selectedFirma) return
@@ -852,6 +1090,7 @@ tr:nth-child(even) td{background:#fafafa}
     setSelectedFirma(null)
     setCompanyDetail(null)
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
+    router.replace(`/companies`, { scroll: false })
   }
 
   const apiFiltered = searchQuery.trim()
@@ -1166,10 +1405,25 @@ tr:nth-child(even) td{background:#fafafa}
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44 text-[11px]">
-                            <DropdownMenuItem className="text-[11px] gap-2"><KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla</DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2"
+                              onClick={() => openPwReset(usr)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
-                              <Ban className="h-3.5 w-3.5" /> Hesabı Askıya Al
+                            <DropdownMenuItem
+                              className={`text-[11px] gap-2 ${usr.enabled ? "text-destructive focus:text-destructive" : ""}`}
+                              onClick={() => setToggleUser(usr)}
+                            >
+                              <Ban className="h-3.5 w-3.5" /> {usr.enabled ? "Hesabı Askıya Al" : "Hesabı Aktifleştir"}
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2 text-destructive focus:text-destructive"
+                              onClick={() => { setDeleteUser(usr); setDeleteConfirm(""); setDeleteError(null) }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> Kullanıcıyı Sil
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -1180,7 +1434,16 @@ tr:nth-child(even) td{background:#fafafa}
               </TabsContent>
 
               {/* Hizmetler */}
-              <TabsContent value="services" className="mt-0">
+              <TabsContent value="services" className="mt-0 space-y-2">
+                <div className="flex items-center justify-end">
+                  <Button
+                    size="sm"
+                    onClick={openNewSvcDialog}
+                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Yeni Hizmet Ekle
+                  </Button>
+                </div>
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
                   <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Hizmet</span>
@@ -1251,23 +1514,48 @@ tr:nth-child(even) td{background:#fafafa}
 
               {/* Veritabanları */}
               <TabsContent value="databases" className="mt-0">
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={async () => {
+                      if (!selectedFirma || sqlRefreshing) return
+                      setSqlRefreshing(true)
+                      try {
+                        const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql?refresh=1`)
+                        const data = r.ok ? await r.json() : []
+                        setTabSQL(Array.isArray(data) ? data : [])
+                        toast.success("Veritabanı listesi güncellendi")
+                      } catch {
+                        toast.error("Yenileme başarısız")
+                      } finally {
+                        setSqlRefreshing(false)
+                      }
+                    }}
+                    disabled={sqlRefreshing}
+                    className="h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border border-border/50 bg-white hover:bg-muted/40 transition-colors disabled:opacity-50"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${sqlRefreshing ? "animate-spin" : ""}`} />
+                    {sqlRefreshing ? "Yenileniyor…" : "Yenile"}
+                  </button>
+                </div>
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase pl-[22px]">Veritabanı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Boyut</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Recovery</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Owner</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tam Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Diff Yedek</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-2.5 items-center">
+                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-2.5 items-center">
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px]" />
@@ -1287,7 +1575,7 @@ tr:nth-child(even) td{background:#fafafa}
                         db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
                       ].filter(Boolean).join("\n")
                       return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_130px_85px_32px] gap-3 px-3 py-2 hover:bg-muted/20 transition-colors items-center">
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-2 hover:bg-muted/20 transition-colors items-center">
                         <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="text-[11px] font-medium truncate">{db.Name}</span>
@@ -1299,7 +1587,14 @@ tr:nth-child(even) td{background:#fafafa}
                         <span className="text-[11px] tabular-nums text-muted-foreground">{db.SizeMB >= 1024 ? `${(db.SizeMB / 1024).toFixed(1)} GB` : `${db.SizeMB} MB`}</span>
                         <span className="text-[10px] text-muted-foreground truncate">{db.RecoveryModel ?? "—"}</span>
                         <span className="text-[10px] text-muted-foreground truncate font-mono">{db.Owner ?? "—"}</span>
-                        <span className="text-[10px] tabular-nums text-muted-foreground">{db.LastBackup ?? "—"}</span>
+                        <span
+                          className="text-[10px] tabular-nums text-muted-foreground cursor-help"
+                          title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş:      ${db.LastBackup ?? "—"}` : ""}
+                        >{db.LastBackup ?? "—"}</span>
+                        <span
+                          className="text-[10px] tabular-nums text-muted-foreground cursor-help"
+                          title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş:      ${db.LastDiffBackup ?? "—"}` : ""}
+                        >{db.LastDiffBackup ?? "—"}</span>
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
                           <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600" : "text-muted-foreground"}`}>
@@ -1315,9 +1610,6 @@ tr:nth-child(even) td{background:#fafafa}
                           <DropdownMenuContent align="end" className="w-44">
                             <DropdownMenuItem className="text-[11px] gap-2" onClick={() => sqlBackup(db)}>
                               <Download className="h-3.5 w-3.5" /> Yedek Al
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openRestore(db)}>
-                              <Upload className="h-3.5 w-3.5" /> Geri Yükle
                             </DropdownMenuItem>
                             <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openQuery(db)}>
                               <Terminal className="h-3.5 w-3.5" /> Sorgu Çalıştır
@@ -1996,6 +2288,332 @@ tr:nth-child(even) td{background:#fafafa}
                   </>
                 ) : (
                   <Button size="sm" onClick={() => { setNewUserOpen(false); setNewUserStarted(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Şifre Sıfırla Dialog */}
+          <Dialog open={!!pwResetUser} onOpenChange={(o) => { if (!o && !pwResetBusy) { setPwResetUser(null); setPwResetValue(""); setPwResetError(null); setPwResetDone(false); setPwResetMsgCopied(false) } }}>
+            <DialogContent className="sm:max-w-[480px] p-0 gap-0">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" /> Şifre Sıfırla — <span className="font-mono">{pwResetUser?.username}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-4 space-y-3">
+                {!pwResetDone ? (
+                  <>
+                    <div className="space-y-1.5">
+                      <Label className="text-[11px]">Yeni Şifre</Label>
+                      <div className={`flex items-center rounded-[5px] border bg-background h-8 ${pwResetValue && !meetsAdComplexity(pwResetValue) ? "border-red-400" : "border-border"}`}>
+                        <input
+                          type={pwResetShow ? "text" : "password"}
+                          value={pwResetValue}
+                          onChange={(e) => setPwResetValue(e.target.value)}
+                          placeholder="••••••••"
+                          className="flex-1 px-2 text-[11px] bg-transparent outline-none min-w-0 h-full"
+                        />
+                        <button type="button" onClick={() => setPwResetShow((v) => !v)} className="px-2 text-muted-foreground hover:text-foreground">
+                          {pwResetShow ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </button>
+                        <button type="button" onClick={() => setPwResetValue(generatePassword())} title="Şifre oluştur" className="px-2 border-l border-border text-muted-foreground hover:text-foreground">
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      {pwResetValue && !meetsAdComplexity(pwResetValue) && (
+                        <p className="text-[10px] text-red-500">En az 7 karakter, büyük/küçük harf + rakam/özel karakter (3 kategori)</p>
+                      )}
+                    </div>
+                    {pwResetError && <p className="text-[11px] text-red-500">{pwResetError}</p>}
+                  </>
+                ) : (() => {
+                  const srvAddr = pwResetRdpServer?.ip ?? ""
+                  const portSfx = pwResetRdpServer?.rdpPort ? `:${pwResetRdpServer.rdpPort}` : ""
+                  const domainShort = (pwResetAdServer?.domain ?? "").split(".")[0]?.trim() ?? ""
+                  const fullUser = domainShort ? `${domainShort}\\${pwResetUser?.username}` : (pwResetUser?.username ?? "")
+                  const msg = [
+                    "Merhaba,",
+                    "",
+                    "Şifreniz sıfırlandı. Güncel erişim bilgileriniz aşağıdadır.",
+                    "",
+                    srvAddr ? `Sunucu: ${srvAddr}${portSfx}` : null,
+                    "",
+                    `Kullanıcı Adı: ${fullUser}`,
+                    `Şifre: ${pwResetValue}`,
+                    "",
+                    "Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734",
+                    "",
+                    "İyi çalışmalar.",
+                  ].filter((l) => l !== null).join("\n")
+                  return (
+                    <div className="space-y-2">
+                      <Label className="text-[11px]">Müşteri Bilgilendirme Mesajı</Label>
+                      <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => { await navigator.clipboard.writeText(msg); setPwResetMsgCopied(true); setTimeout(() => setPwResetMsgCopied(false), 2000) }}
+                        className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
+                      >
+                        {pwResetMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
+                      </Button>
+                    </div>
+                  )
+                })()}
+              </div>
+              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+                {!pwResetDone ? (
+                  <>
+                    <Button size="sm" variant="outline" disabled={pwResetBusy} onClick={() => { setPwResetUser(null); setPwResetValue(""); setPwResetError(null) }} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
+                    <Button size="sm" disabled={pwResetBusy || !meetsAdComplexity(pwResetValue)} onClick={submitPasswordReset} className="rounded-[5px] h-7 text-[11px] gap-1.5">
+                      <KeyRound className="h-3.5 w-3.5" /> {pwResetBusy ? "Uygulanıyor…" : "Sıfırla"}
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" onClick={() => { setPwResetUser(null); setPwResetValue(""); setPwResetDone(false); setPwResetMsgCopied(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Hesabı Askıya Al / Aktifleştir */}
+          <AlertDialog open={!!toggleUser} onOpenChange={(o) => { if (!o && !toggleBusy) setToggleUser(null) }}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-sm">
+                  {toggleUser?.enabled ? "Hesap askıya alınsın mı?" : "Hesap aktifleştirilsin mi?"}
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-[11px]">
+                  <span className="font-mono">{toggleUser?.username}</span> hesabı {toggleUser?.enabled ? "AD üzerinde devre dışı bırakılacak" : "AD üzerinde yeniden etkinleştirilecek"}.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={toggleBusy} className="text-[11px] h-7 rounded-[5px]">Vazgeç</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={toggleBusy}
+                  onClick={(e) => { e.preventDefault(); submitToggleEnabled() }}
+                  className={`text-[11px] h-7 rounded-[5px] ${toggleUser?.enabled ? "bg-destructive text-white hover:bg-destructive/90" : ""}`}
+                >
+                  {toggleBusy ? "İşleniyor…" : (toggleUser?.enabled ? "Askıya Al" : "Aktifleştir")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Kullanıcıyı Sil Dialog */}
+          <Dialog open={!!deleteUser} onOpenChange={(o) => { if (!o && !deleteBusy) { setDeleteUser(null); setDeleteConfirm(""); setDeleteError(null) } }}>
+            <DialogContent className="sm:max-w-[440px] p-0 gap-0">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm flex items-center gap-2 text-destructive">
+                  <Trash2 className="h-4 w-4" /> Kullanıcıyı Sil
+                </DialogTitle>
+              </DialogHeader>
+              <div className="px-5 py-4 space-y-3">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  <span className="font-mono text-foreground">{deleteUser?.username}</span> kullanıcısı AD üzerinden <b>kalıcı olarak</b> silinecek.
+                  Bu işlem geri alınamaz. Onaylamak için aşağıya kullanıcı adını aynen yaz.
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px]">Kullanıcı Adı Onayı</Label>
+                  <Input
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder={deleteUser?.username}
+                    className="h-8 rounded-[5px] text-[11px] font-mono"
+                    autoFocus
+                  />
+                </div>
+                {deleteError && <p className="text-[11px] text-red-500">{deleteError}</p>}
+              </div>
+              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" disabled={deleteBusy} onClick={() => { setDeleteUser(null); setDeleteConfirm(""); setDeleteError(null) }} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
+                <Button
+                  size="sm"
+                  disabled={deleteBusy || deleteConfirm.trim() !== deleteUser?.username}
+                  onClick={submitDeleteUser}
+                  className="rounded-[5px] h-7 text-[11px] gap-1.5 bg-destructive text-white hover:bg-destructive/90"
+                >
+                  <Trash2 className="h-3.5 w-3.5" /> {deleteBusy ? "Siliniyor…" : "Kalıcı Olarak Sil"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Yeni Hizmet Ekle Dialog */}
+          <Dialog open={newSvcOpen} onOpenChange={(o) => { if (!newSvcStarted) setNewSvcOpen(o) }}>
+            <DialogContent className="sm:max-w-[640px] p-0 gap-0">
+              <DialogHeader className="px-5 py-4 border-b border-border/50">
+                <DialogTitle className="text-sm flex items-center gap-2">
+                  <Plus className="h-4 w-4" /> Yeni Hizmet — <span className="font-mono">{selectedFirma?.firkod}</span>
+                </DialogTitle>
+              </DialogHeader>
+              <ScrollArea className="max-h-[72vh]">
+                <div className="px-5 py-4 space-y-3">
+                  {!newSvcStarted ? (
+                    <>
+                      {newSvcLoading ? (
+                        <div className="space-y-2">
+                          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[4px]" />)}
+                        </div>
+                      ) : newSvcCatalog.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground text-center py-6">Kayıtlı hizmet bulunamadı.</p>
+                      ) : (
+                        <>
+                          {/* Kategori sekmeleri */}
+                          <div className="flex items-center gap-1 border-b border-border/50">
+                            {[...new Set(newSvcCatalog.map((s) => s.category))].map((cat) => {
+                              const count = newSvcCatalog.filter((s) => s.category === cat && newSvcSelectedIds.includes(s.id)).length
+                              const isActive = newSvcActiveCat === cat
+                              return (
+                                <button
+                                  key={cat}
+                                  onClick={() => setNewSvcActiveCat(cat)}
+                                  className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 -mb-px transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                                >
+                                  {cat}
+                                  {count > 0 && (
+                                    <span className="size-4 rounded-full bg-foreground text-background text-[9px] flex items-center justify-center font-bold">{count}</span>
+                                  )}
+                                </button>
+                              )
+                            })}
+                          </div>
+
+                          {/* Hizmet listesi */}
+                          <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                                {newSvcActiveCat} — {newSvcCatalog.filter((s) => s.category === newSvcActiveCat).length} hizmet
+                              </span>
+                            </div>
+                            <div className="divide-y divide-border/40 max-h-[240px] overflow-y-auto">
+                              {newSvcCatalog.filter((s) => s.category === newSvcActiveCat).map((svc) => {
+                                const isSelected = newSvcSelectedIds.includes(svc.id)
+                                return (
+                                  <button
+                                    key={svc.id}
+                                    onClick={() => setNewSvcSelectedIds((p) => p.includes(svc.id) ? p.filter((x) => x !== svc.id) : [...p, svc.id])}
+                                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${isSelected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"}`}
+                                  >
+                                    <span className={`size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-foreground border-foreground" : "border-border"}`}>
+                                      {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
+                                    </span>
+                                    {svc.type === "iis-site" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                    <span className={`text-[11px] font-medium flex-1 ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>{svc.name}</span>
+                                    <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
+                                      {svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : "—"}
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Pusula: Windows + Depo sunucusu */}
+                          {newSvcHasPusula && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px] flex items-center gap-1">
+                                  Windows/RDP Sunucusu {newSvcWindowsLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}
+                                </Label>
+                                <Select value={newSvcWindowsServerId} onValueChange={setNewSvcWindowsServerId} disabled={newSvcWindowsLocked}>
+                                  <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                    <SelectValue placeholder={newSvcWindowsList.length ? "Seçin…" : "Sunucu yok"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {newSvcWindowsList.map((s) => (
+                                      <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                        {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-[11px]">Depo Sunucusu</Label>
+                                <Select value={newSvcDepoServerId} onValueChange={setNewSvcDepoServerId}>
+                                  <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                    <SelectValue placeholder={newSvcDepoServers.length ? "Seçin…" : "Sunucu yok"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {newSvcDepoServers.map((s) => (
+                                      <SelectItem key={s.id} value={s.id} className="text-[11px]" disabled={!s.isOnline}>
+                                        {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* IIS sunucusu */}
+                          {newSvcHasIis && (
+                            <div className="space-y-1.5">
+                              <Label className="text-[11px]">IIS Sunucusu</Label>
+                              <Select value={newSvcIisServerId} onValueChange={setNewSvcIisServerId}>
+                                <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                  <SelectValue placeholder={newSvcIisServers.length ? "Seçin…" : "Sunucu yok"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {newSvcIisServers.map((s) => (
+                                    <SelectItem key={s.id} value={s.id} className="text-[11px]" disabled={!s.isOnline}>
+                                      {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          {!newSvcAdServerId && (
+                            <p className="text-[10px] text-amber-600">Uyarı: Bu firma için AD sunucusu tanımlı değil — hizmet kurulumu OU/grup adımları için AD ister.</p>
+                          )}
+                          {newSvcError && <p className="text-[11px] text-red-500">{newSvcError}</p>}
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    selectedFirma && (
+                      <AdProvisionRunner
+                        payload={{
+                          serverId:         newSvcAdServerId,
+                          windowsServerId:  newSvcHasPusula ? newSvcWindowsServerId : undefined,
+                          iisServerId:      newSvcHasIis ? newSvcIisServerId : undefined,
+                          depoServerId:     newSvcHasPusula ? newSvcDepoServerId : undefined,
+                          firmaId:          selectedFirma.firkod,
+                          firmaName:        selectedFirma.firma,
+                          users:            [],
+                          services:         newSvcSelected.map<AdProvisionService>((s) => ({
+                            id:     s.id,
+                            name:   s.name,
+                            type:   s.type,
+                            config: s.config,
+                          })),
+                          skipDepo:         !newSvcHasPusula,
+                        }}
+                        onComplete={() => {
+                          toast.success("Hizmet kuruldu", { description: `${newSvcSelected.length} hizmet firmaya eklendi` })
+                          setNewSvcDone(true)
+                          refreshTabServices()
+                        }}
+                        onError={(msg) => setNewSvcError(msg)}
+                      />
+                    )
+                  )}
+                </div>
+              </ScrollArea>
+              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+                {!newSvcStarted ? (
+                  <>
+                    <Button size="sm" variant="outline" onClick={() => setNewSvcOpen(false)} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
+                    <Button size="sm" disabled={!newSvcValid} onClick={() => { setNewSvcError(null); setNewSvcStarted(true) }} className="rounded-[5px] h-7 text-[11px] gap-1.5">
+                      <Plus className="h-3.5 w-3.5" /> Oluştur
+                    </Button>
+                  </>
+                ) : (
+                  <Button size="sm" disabled={!newSvcDone && !newSvcError} onClick={() => { setNewSvcOpen(false); setNewSvcStarted(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
                 )}
               </div>
             </DialogContent>

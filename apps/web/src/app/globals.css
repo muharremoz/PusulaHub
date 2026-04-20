@@ -119,3 +119,120 @@
   --color-4: oklch(80.2% 0.134 225);
   --color-5: oklch(90.7% 0.231 133);
 }
+
+/* ── Tiptap zengin metin editörü (notes) ───────────────────── */
+.tiptap-editor { outline: none; }
+.tiptap-editor p { margin: 0 0 0.5em 0; }
+.tiptap-editor p:last-child { margin-bottom: 0; }
+.tiptap-editor h1 { font-size: 1.25rem; font-weight: 700; margin: 0.75em 0 0.35em; line-height: 1.3; }
+.tiptap-editor h2 { font-size: 1.1rem;  font-weight: 700; margin: 0.6em 0 0.3em;  line-height: 1.3; }
+.tiptap-editor h3 { font-size: 1rem;    font-weight: 600; margin: 0.5em 0 0.25em; line-height: 1.3; }
+.tiptap-editor ul, .tiptap-editor ol { padding-left: 1.25rem; margin: 0.25em 0 0.5em; }
+.tiptap-editor ul { list-style: disc; }
+.tiptap-editor ol { list-style: decimal; }
+.tiptap-editor li > p { margin: 0; }
+.tiptap-editor a { color: #2563eb; text-decoration: underline; cursor: pointer; }
+.tiptap-editor hr { border: 0; border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent); margin: 0.75em 0; }
+.tiptap-editor blockquote { border-left: 3px solid var(--border); padding-left: 0.75rem; color: var(--muted-foreground); margin: 0.5em 0; }
+.tiptap-editor code { background: color-mix(in srgb, var(--muted) 60%, transparent); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+.tiptap-editor pre { background: color-mix(in srgb, var(--muted) 60%, transparent); padding: 0.6em 0.8em; border-radius: 5px; overflow-x: auto; font-size: 0.9em; }
+
+/* Ek not (annotation mark) — seçili metne sarı highlight + hover ipucu */
+.tiptap-editor mark.note-annotation {
+  background: #fef08a;          /* sarı */
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+  cursor: help;
+}
+.tiptap-editor mark.note-annotation:hover {
+  background: #fde047;
+}
+/* Görüntü modu (yeni notlardaki preview'da da geçerli olsun diye) */
+mark.note-annotation {
+  background: #fef08a;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* Task list — editörde shadcn Checkbox ile React NodeView render edilir.
+   Salt-okunur görünümde (NoteViewer, takvim sheet'i vb.) ise tarayıcının
+   native checkbox'ı görünür; her iki durumda da layout'un doğru gelmesi
+   ve checkbox'ın tasarımla uyumlu olması için aşağıdaki kurallar geçerli. */
+.tiptap-editor ul[data-type="taskList"],
+.tiptap-editor ul.note-task-list {
+  list-style: none !important;
+  padding-left: 0 !important;
+  margin: 0.25em 0 0.5em;
+}
+.tiptap-editor ul[data-type="taskList"] li,
+.tiptap-editor ul.note-task-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin: 0.2em 0;
+}
+.tiptap-editor ul[data-type="taskList"] li > label,
+.tiptap-editor ul.note-task-list li > label {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 0.15em;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+.tiptap-editor ul[data-type="taskList"] li > div,
+.tiptap-editor ul.note-task-list li > div { flex: 1; min-width: 0; }
+.tiptap-editor ul[data-type="taskList"] li[data-checked="true"] > div,
+.tiptap-editor ul.note-task-list li[data-checked="true"] > div {
+  text-decoration: line-through;
+  color: var(--muted-foreground);
+}
+
+/* Salt-okunur görünümde native checkbox'ı shadcn tasarımına yakın stilleyelim.
+   Editördeki React NodeView'da zaten shadcn Checkbox render ediliyor; bu
+   kurallar onu etkilemez (React root 'button' olduğu için `input[type=checkbox]`
+   seçicisine uymaz). */
+.note-viewer ul[data-type="taskList"] li > label > input[type="checkbox"],
+.note-viewer ul.note-task-list li > label > input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  position: relative;
+  transition: background-color 120ms, border-color 120ms;
+  flex-shrink: 0;
+  cursor: default;
+  pointer-events: none;           /* Salt-okunur; kullanıcı toggle etmesin */
+}
+.note-viewer ul[data-type="taskList"] li > label > input[type="checkbox"]:checked,
+.note-viewer ul.note-task-list li > label > input[type="checkbox"]:checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+.note-viewer ul[data-type="taskList"] li > label > input[type="checkbox"]:checked::after,
+.note-viewer ul.note-task-list li > label > input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--primary-foreground);
+  border-width: 0 1.75px 1.75px 0;
+  transform: rotate(45deg);
+}
+
+/* Placeholder (boş editör ipucu) */
+.tiptap-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: color-mix(in srgb, var(--muted-foreground) 40%, transparent);
+  float: left; height: 0; pointer-events: none;
+}

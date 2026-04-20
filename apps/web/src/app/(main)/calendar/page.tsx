@@ -30,6 +30,8 @@ import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
+import { stripHtml } from "@/lib/strip-html"
+import { NoteViewer } from "@/components/notes/note-viewer"
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden"
 import type { CalendarEvent } from "@/app/api/calendar/route"
 
@@ -95,21 +97,47 @@ function DraggableEventPill({
     disabled: !canDrag,
   })
 
+  // Not = post-it görünümü (dolu sarı + gölge + ikon).
+  // Diğer tipler (event/task/reminder) klasik pill.
+  if (evt.type === "note") {
+    return (
+      <button
+        ref={setNodeRef}
+        onClick={e => { e.stopPropagation(); onClick(evt) }}
+        className={cn(
+          "w-full text-left rounded-[4px] px-1.5 py-1 text-[10px] font-semibold transition-all cursor-pointer",
+          "bg-yellow-200 text-amber-900 border border-amber-400/60 shadow-[0_1px_2px_rgba(146,64,14,0.2)]",
+          "hover:bg-yellow-300 hover:shadow-[0_2px_4px_rgba(146,64,14,0.25)]",
+          "flex items-center gap-1",
+          isDragging ? "opacity-30" : ""
+        )}
+      >
+        <StickyNote className="size-3 shrink-0 text-amber-700" />
+        <span className="truncate">{evt.title}</span>
+      </button>
+    )
+  }
+
+  const TypeIcon = evt.type === "task"     ? ListTodo
+                 : evt.type === "reminder" ? AlarmClock
+                                           : null
+
   return (
     <button
       ref={setNodeRef}
       {...(canDrag ? { ...listeners, ...attributes } : {})}
       onClick={e => { e.stopPropagation(); onClick(evt) }}
       className={cn(
-        "w-full text-left rounded-[3px] px-1.5 py-0.5 text-[10px] font-medium truncate transition-opacity",
+        "w-full text-left rounded-[3px] px-1.5 py-0.5 text-[10px] font-medium truncate transition-opacity flex items-center gap-1",
         isDragging ? "opacity-30" : "hover:opacity-80",
         canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       )}
-      style={{ backgroundColor: evt.color + "25", color: evt.color, borderLeft: `2px solid ${evt.color}` }}
+      style={{ backgroundColor: evt.color + "33", color: evt.color, borderLeft: `2px solid ${evt.color}` }}
     >
-      {!evt.allDay && <span className="opacity-60 mr-1">{formatTime(evt.startDate)}</span>}
-      {isRecurring(evt) && <RotateCcw className="inline size-2.5 mr-0.5 opacity-50" />}
-      {evt.title}
+      {TypeIcon && <TypeIcon className="size-2.5 shrink-0 opacity-80" />}
+      {!evt.allDay && <span className="opacity-60">{formatTime(evt.startDate)}</span>}
+      {isRecurring(evt) && <RotateCcw className="inline size-2.5 opacity-50" />}
+      <span className="truncate">{evt.title}</span>
     </button>
   )
 }
@@ -193,10 +221,11 @@ function SearchPanel({
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
+  const qLower = q.toLowerCase()
   const results = q.trim().length < 1 ? [] : events
     .filter(e =>
-      e.title.toLowerCase().includes(q.toLowerCase()) ||
-      e.description.toLowerCase().includes(q.toLowerCase())
+      e.title.toLowerCase().includes(qLower) ||
+      stripHtml(e.description).toLowerCase().includes(qLower)
     )
     .slice(0, 20)
 
@@ -516,12 +545,25 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
             </div>
           </SheetHeader>
 
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 min-h-0">
             <div className="px-5 py-4 space-y-4">
               {isReadonly ? (
                 <div className="space-y-3">
                   <h2 className="text-lg font-bold">{event!.title}</h2>
-                  {event!.description && <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">{event!.description}</p>}
+                  {event!.type === "note" ? (
+                    event!.description && (
+                      <NoteViewer
+                        html={event!.description}
+                        className="text-[12px] text-foreground leading-relaxed"
+                      />
+                    )
+                  ) : (
+                    event!.description && (
+                      <p className="text-[12px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                        {event!.description}
+                      </p>
+                    )
+                  )}
                   <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                     <Clock className="size-3.5" />
                     {event!.allDay

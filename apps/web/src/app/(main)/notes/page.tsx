@@ -16,6 +16,8 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { NoteItem } from "@/app/api/notes/route"
 import type { NoteDetail } from "@/app/api/notes/[id]/route"
+import { NoteRichEditor } from "@/components/notes/note-rich-editor"
+import { stripHtml } from "@/lib/strip-html"
 
 /* ── Renk seçenekleri ── */
 const NOTE_COLORS = [
@@ -52,10 +54,11 @@ function NoteList({
   onCreate: () => void
   onPin: (id: string, pinned: boolean) => void
 }) {
+  const q = search.toLowerCase()
   const filtered = notes.filter(n =>
-    n.title.toLowerCase().includes(search.toLowerCase()) ||
-    n.excerpt.toLowerCase().includes(search.toLowerCase()) ||
-    n.tags.some(t => t.toLowerCase().includes(search.toLowerCase()))
+    n.title.toLowerCase().includes(q) ||
+    stripHtml(n.excerpt).toLowerCase().includes(q) ||
+    n.tags.some(t => t.toLowerCase().includes(q))
   )
   const pinned   = filtered.filter(n => n.pinned)
   const unpinned = filtered.filter(n => !n.pinned)
@@ -136,10 +139,13 @@ function NoteListItem({ note, selected, onSelect, onPin }: {
   onPin: (id: string, pinned: boolean) => void
 }) {
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onSelect(note.id)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id) } }}
       className={cn(
-        "w-full text-left rounded-[6px] px-2.5 py-2 transition-colors group relative",
+        "w-full text-left rounded-[6px] px-2.5 py-2 transition-colors group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected ? "bg-foreground/[0.07]" : "hover:bg-muted/50"
       )}
       style={note.color !== "#ffffff" ? { backgroundColor: selected ? undefined : note.color + "80" } : {}}
@@ -153,9 +159,12 @@ function NoteListItem({ note, selected, onSelect, onPin }: {
       </button>
 
       <p className="text-[12px] font-medium leading-tight line-clamp-1 pr-4">{note.title || "Başlıksız"}</p>
-      {note.excerpt && (
-        <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">{note.excerpt}</p>
-      )}
+      {(() => {
+        const plain = stripHtml(note.excerpt)
+        return plain ? (
+          <p className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5 leading-relaxed">{plain}</p>
+        ) : null
+      })()}
       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
         <span className="text-[9px] text-muted-foreground flex items-center gap-0.5">
           <Clock className="size-2.5" />{formatDate(note.updatedAt)}
@@ -167,7 +176,7 @@ function NoteListItem({ note, selected, onSelect, onPin }: {
           <span key={t} className="text-[9px] bg-muted/60 text-muted-foreground px-1.5 py-0.5 rounded-full">{t}</span>
         ))}
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -410,18 +419,17 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
 
       <div className="h-px bg-border/30 mx-5" />
 
-      {/* İçerik */}
-      <textarea
+      {/* İçerik — Tiptap zengin metin editörü */}
+      <NoteRichEditor
         value={content}
-        onChange={e => handleContent(e.target.value)}
+        onChange={handleContent}
         placeholder="Notunuzu buraya yazın..."
-        className="flex-1 w-full px-5 py-4 bg-transparent outline-none resize-none text-[13px] leading-relaxed placeholder:text-muted-foreground/30"
       />
 
       {/* Alt bilgi */}
       <div className="px-5 py-2 border-t border-border/20 flex items-center justify-between shrink-0">
         <span className="text-[10px] text-muted-foreground">
-          {content.length} karakter · {content.split(/\s+/).filter(Boolean).length} kelime
+          {stripHtml(content).length} karakter · {stripHtml(content).split(/\s+/).filter(Boolean).length} kelime
         </span>
         {note && (
           <span className="text-[10px] text-muted-foreground flex items-center gap-1">
@@ -493,7 +501,7 @@ export default function NotesPage() {
   function handleUpdated(id: string, title: string, content: string) {
     setNotes(prev => prev.map(n =>
       n.id === id
-        ? { ...n, title, excerpt: content.replace(/\n+/g, " ").trim().slice(0, 120), updatedAt: new Date().toISOString() }
+        ? { ...n, title, excerpt: stripHtml(content).slice(0, 120), updatedAt: new Date().toISOString() }
         : n
     ))
   }

@@ -342,6 +342,12 @@ static class Metrics
         lock (_lock) { return _lastSnapshot; }
     }
 
+    // Yenile butonu — heavy cache'i sifirla, bir sonraki Collect() taze veri toplayacak
+    public static void InvalidateHeavy()
+    {
+        _heavyLastCollected = DateTime.MinValue;
+    }
+
     private static Dictionary<string, object> CollectIis()
     {
         var sites = new List<Dictionary<string, object>>();
@@ -1082,7 +1088,10 @@ static class Metrics
                      + "d.recovery_model_desc, "
                      + "ISNULL(SUSER_SNAME(d.owner_sid), '') AS ownerName, "
                      + "ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=0), '') AS dataFile, "
-                     + "ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=1), '') AS logFile "
+                     + "ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=1), '') AS logFile, "
+                     + "(SELECT MAX(backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='I') AS lastDiffBackup, "
+                     + "(SELECT TOP 1 backup_start_date FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D' ORDER BY backup_finish_date DESC) AS lastBackupStart, "
+                     + "(SELECT TOP 1 backup_start_date FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='I' ORDER BY backup_finish_date DESC) AS lastDiffBackupStart "
                      + "FROM sys.databases d WHERE name NOT IN ('master','tempdb','model','msdb')";
 
             var psi = new ProcessStartInfo("sqlcmd", "-Q \"" + q + "\" -h -1 -s \"|\" -W")
@@ -1099,7 +1108,7 @@ static class Metrics
             foreach (string line in output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 var parts = line.Split('|');
-                if (parts.Length < 8) continue;
+                if (parts.Length < 11) continue;
                 string name = parts[0].Trim();
                 if (string.IsNullOrEmpty(name) || name.StartsWith("-")) continue;
 
@@ -1114,6 +1123,9 @@ static class Metrics
                 dd["owner"] = parts[5].Trim();
                 dd["dataFilePath"] = parts[6].Trim();
                 dd["logFilePath"] = parts[7].Trim();
+                dd["lastDiffBackup"] = parts[8].Trim() == "NULL" ? "Yok" : parts[8].Trim();
+                dd["lastBackupStart"] = parts[9].Trim() == "NULL" ? "" : parts[9].Trim();
+                dd["lastDiffBackupStart"] = parts[10].Trim() == "NULL" ? "" : parts[10].Trim();
                 dd["tables"] = 0;
                 databases.Add(dd);
             }
@@ -1396,8 +1408,20 @@ class ApiServer
             // Routes
             if (path == "/api/report" && method == "GET")
             {
-                var report = Metrics.GetLast();
-                if (report == null) report = Metrics.Collect();
+                // ?force=1 → heavy cache'i sifirla, taze veri topla (Yenile butonu)
+                string forceStr = ctx.Request.QueryString["force"];
+                bool force = forceStr == "1" || forceStr == "true";
+                Dictionary<string, object> report;
+                if (force)
+                {
+                    Metrics.InvalidateHeavy();
+                    report = Metrics.Collect();
+                }
+                else
+                {
+                    report = Metrics.GetLast();
+                    if (report == null) report = Metrics.Collect();
+                }
 
                 // Bekleyen ACK'leri rapora ekle ve listeyi temizle
                 var acks = PopPendingAcks();

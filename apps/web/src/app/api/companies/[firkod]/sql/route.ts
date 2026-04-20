@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { query, getPool } from "@/lib/db"
 import { withSqlConnection } from "@/lib/sql-external"
 import { decrypt } from "@/lib/crypto"
+import { pollSingleAgent } from "@/lib/agent-poller"
 
 interface CompanyRow {
   CompanyId:   string
@@ -23,7 +24,10 @@ interface DbInfoRow {
   ServerIP:      string | null
   SizeMB:        number
   Status:        string
-  LastBackup:    string | null
+  LastBackup:          string | null
+  LastDiffBackup:      string | null
+  LastBackupStart:     string | null
+  LastDiffBackupStart: string | null
   Tables:        number
   RecoveryModel: string | null
   Owner:         string | null
@@ -38,11 +42,12 @@ interface GuvenlikRow {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
   const { firkod } = await params
   try {
+    const refresh = req.nextUrl.searchParams.get("refresh") === "1"
     // 1) Firma'nın SQL sunucusu
     const companyRows = await query<CompanyRow[]>`
       SELECT CompanyId, SqlServerId FROM Companies WHERE CompanyId = ${firkod}
@@ -51,6 +56,11 @@ export async function GET(
       return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
     }
     const company = companyRows[0]
+
+    // ?refresh=1 → SQL sunucusunu force-poll et (heavy cache bypass)
+    if (refresh && company.SqlServerId) {
+      try { await pollSingleAgent(company.SqlServerId, true) } catch {}
+    }
 
     // SqlServerId yoksa → sadece FirmaNo eşleşmesi ile topla
     let dbFilter: { names: string[]; prgMap: Map<string, string> } = { names: [], prgMap: new Map() }
@@ -103,6 +113,9 @@ export async function GET(
       const rawSql =
         `SELECT d.Id, d.Name, d.Server, s.IP AS ServerIP, d.SizeMB, d.Status,
                 CONVERT(NVARCHAR(30), d.LastBackup, 120) AS LastBackup,
+                CONVERT(NVARCHAR(30), d.LastDiffBackup, 120) AS LastDiffBackup,
+                CONVERT(NVARCHAR(30), d.LastBackupStart, 120) AS LastBackupStart,
+                CONVERT(NVARCHAR(30), d.LastDiffBackupStart, 120) AS LastDiffBackupStart,
                 d.Tables, d.RecoveryModel, d.[Owner] AS Owner, d.DataFilePath, d.LogFilePath
          FROM SQLDatabases d
          LEFT JOIN Servers s ON s.Name = d.Server
@@ -118,6 +131,9 @@ export async function GET(
       dbs = await query<DbInfoRow[]>`
         SELECT d.Id, d.Name, d.Server, s.IP AS ServerIP, d.SizeMB, d.Status,
                CONVERT(NVARCHAR(30), d.LastBackup, 120) AS LastBackup,
+               CONVERT(NVARCHAR(30), d.LastDiffBackup, 120) AS LastDiffBackup,
+               CONVERT(NVARCHAR(30), d.LastBackupStart, 120) AS LastBackupStart,
+               CONVERT(NVARCHAR(30), d.LastDiffBackupStart, 120) AS LastDiffBackupStart,
                d.Tables, d.RecoveryModel, d.[Owner] AS Owner, d.DataFilePath, d.LogFilePath
         FROM SQLDatabases d
         LEFT JOIN Servers s ON s.Name = d.Server

@@ -105,14 +105,14 @@ export async function GET(req: NextRequest) {
         AND t.DueDate <= ${endStr} AND t.DueDate >= ${startStr}
     `
 
-    // 3. Notlar
+    // 3. Notlar — Content'i tam HTML olarak gönder (sheet içinde zengin metin olarak render)
     const notes = await query<EventRow[]>`
       SELECT n.Id, n.Title,
-        LEFT(ISNULL(n.Content,''), 120) AS Description,
+        ISNULL(n.Content,'') AS Description,
         CONVERT(NVARCHAR(30), n.CreatedAt, 120) AS StartDate,
         CONVERT(NVARCHAR(30), n.CreatedAt, 120) AS EndDate,
         1 AS AllDay,
-        ISNULL(NULLIF(n.Color,'#ffffff'), '#fef9c3') AS Color,
+        ISNULL(NULLIF(n.Color,'#ffffff'), '#eab308') AS Color,
         'note' AS Type, n.Id AS RefId,
         NULL AS RecurrenceType, NULL AS RecurrenceEnd,
         ISNULL(n.CreatedBy,'Admin') AS CreatedBy,

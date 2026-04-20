@@ -19,9 +19,20 @@ interface NoteRow {
   CreatedBy: string; CreatedAt: string; UpdatedAt: string
 }
 
+/** HTML etiketlerini temizleyip (Tiptap çıktıları için) kısa önizleme döndür. */
 function excerpt(content: string | null): string {
   if (!content) return ""
-  return content.replace(/\n+/g, " ").trim().slice(0, 120)
+  return content
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<\/(p|div|h[1-6]|li)>/gi, " ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 120)
 }
 
 export async function GET() {

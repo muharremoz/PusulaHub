@@ -940,7 +940,8 @@ export async function POST(req: NextRequest) {
             UPDATE Companies
             SET WindowsServerId = ${payload.windowsServerId ?? null},
                 AdServerId      = ${payload.serverId ?? null},
-                SqlServerId     = ${payload.sqlServerId ?? null}
+                SqlServerId     = ${payload.sqlServerId ?? null},
+                FileServerId    = ${payload.depoServerId ?? null}
             WHERE CompanyId = ${payload.firmaId}
           `
         } catch { /* Companies tablosunda kayıt yoksa sessizce geç */ }

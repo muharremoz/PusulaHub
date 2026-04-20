@@ -1,5 +1,7 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
+import { pollSingleAgent } from "@/lib/agent-poller"
+import { query } from "@/lib/db"
 
 /**
  * GET /api/companies/[firkod]/users
@@ -20,11 +22,22 @@ export interface CompanyUserDto {
 }
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
   const { firkod } = await params
   try {
+    const refresh = req.nextUrl.searchParams.get("refresh") === "1"
+    if (refresh) {
+      // Firma'nın AD sunucusunu bul ve anlık poll et — agent-store'daki rapor tazelensin
+      const adRows = await query<{ AdServerId: string | null }[]>`
+        SELECT AdServerId FROM Companies WHERE CompanyId = ${firkod}
+      `
+      const adId = adRows[0]?.AdServerId
+      if (adId) {
+        try { await pollSingleAgent(adId) } catch {}
+      }
+    }
     const agents = getAllAgents()
     const seen = new Map<string, CompanyUserDto>()
 
