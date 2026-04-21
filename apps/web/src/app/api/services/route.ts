@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * /api/services
@@ -119,6 +120,8 @@ function validateConfig(type: ServiceType, raw: unknown):
 
 /* ── GET ──────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
+  const gate = await requirePermission("services", "read")
+  if (gate) return gate
   try {
     const onlyActive = req.nextUrl.searchParams.get("onlyActive") === "true"
 
@@ -153,6 +156,8 @@ interface CreatePayload {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePermission("services", "write")
+  if (gate) return gate
   try {
     const body = (await req.json()) as CreatePayload
 

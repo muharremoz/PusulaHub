@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
 import { encrypt, decrypt } from "@/lib/crypto"
+import { requirePermission } from "@/lib/require-permission"
 
 /* ── Tipler ── */
 interface VaultRow {
@@ -20,6 +21,8 @@ interface VaultRow {
 
 /* GET /api/vault — tüm girişleri listele (şifreler çözülmüş olarak) */
 export async function GET() {
+  const gate = await requirePermission("vault", "read")
+  if (gate) return gate
   try {
     const rows = await query<VaultRow[]>`
       SELECT Id, Category, Title, Username, Password, Host, Url, Notes,
@@ -52,6 +55,8 @@ export async function GET() {
 
 /* POST /api/vault — yeni giriş ekle (şifre AES-256-GCM ile saklanır) */
 export async function POST(req: NextRequest) {
+  const gate = await requirePermission("vault", "write")
+  if (gate) return gate
   try {
     const { category, title, username, password, host, url, notes } = await req.json()
     if (!title?.trim() || !username?.trim() || !password?.trim()) {

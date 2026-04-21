@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { execute, query } from "@/lib/db"
 import { encrypt } from "@/lib/crypto"
+import { requirePermission } from "@/lib/require-permission"
 
 /* PATCH /api/vault/[id] — giriş güncelle */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requirePermission("vault", "write")
+  if (gate) return gate
   const { id } = await params
   try {
     const { category, title, username, password, host, url, notes } = await req.json()
@@ -67,6 +70,8 @@ export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requirePermission("vault", "write")
+  if (gate) return gate
   const { id } = await params
   try {
     await execute`DELETE FROM VaultEntries WHERE Id = ${id}`

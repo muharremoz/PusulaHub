@@ -5,8 +5,9 @@ import { useSession }          from "next-auth/react"
 import { useRouter }           from "next/navigation"
 import {
   Plus, Pencil, Trash2, User, MoreVertical,
-  ToggleLeft, ToggleRight, ShieldCheck, ShieldOff,
+  ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, Shield,
 } from "lucide-react"
+import { PermissionsSheet } from "@/components/users/permissions-sheet"
 import { Button }       from "@/components/ui/button"
 import { Input }        from "@/components/ui/input"
 import { Label }        from "@/components/ui/label"
@@ -33,14 +34,6 @@ import { toast }   from "sonner"
 import { cn }      from "@/lib/utils"
 import type { AppUser } from "@/app/api/users/route"
 
-function avatarInitials(name: string) {
-  return (name ?? "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase() || "?"
-}
-function avatarColor(name: string) {
-  const colors = ["#3b82f6","#8b5cf6","#ec4899","#f97316","#10b981","#06b6d4","#f59e0b"]
-  let h = 0; for (let i = 0; i < name.length; i++) h = name.charCodeAt(i) + ((h << 5) - h)
-  return colors[Math.abs(h) % colors.length]
-}
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })
 }
@@ -151,6 +144,7 @@ export default function UsersPage() {
   const [sheetOpen,  setSheetOpen]  = useState(false)
   const [editUser,   setEditUser]   = useState<AppUser | null>(null)
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null)
+  const [permsUser,  setPermsUser]  = useState<AppUser | null>(null)
 
   useEffect(() => {
     if (session === undefined) return
@@ -240,42 +234,34 @@ export default function UsersPage() {
                   </TableRow>
                 ))
               ) : users.map(u => {
-                const color    = avatarColor(u.fullName ?? u.username)
-                const initials = avatarInitials(u.fullName ?? u.username)
-                const isSelf   = session?.user?.id === u.id
+                const isSelf = session?.user?.id === u.id
                 return (
                   <TableRow key={u.id} className="hover:bg-muted/20 transition-colors">
                     <TableCell className="text-[11px] py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="size-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                          style={{ backgroundColor: color }}>
-                          {initials}
-                        </div>
-                        <div>
-                          <p className="font-medium">{u.fullName ?? u.username}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">@{u.username}</p>
-                        </div>
+                      <div>
+                        <p className="font-medium">{u.fullName ?? u.username}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">@{u.username}</p>
                       </div>
                     </TableCell>
                     <TableCell className="text-[11px] text-muted-foreground">{u.email ?? "—"}</TableCell>
                     <TableCell>
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border", roleBadge(u.role))}>
+                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[5px] border", roleBadge(u.role))}>
                         {roleLabel(u.role)}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full border",
+                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[5px] border",
                         u.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-200")}>
                         {u.isActive ? "Aktif" : "Pasif"}
                       </span>
                     </TableCell>
                     <TableCell>
                       {u.twoFactorEnabled ? (
-                        <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200 w-fit">
+                        <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-[5px] border bg-green-50 text-green-700 border-green-200 w-fit">
                           <ShieldCheck className="size-3" />Aktif
                         </span>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-full border border-border/40 bg-muted/20">
+                        <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-[5px] border border-border/40 bg-muted/20">
                           Pasif
                         </span>
                       )}
@@ -291,6 +277,9 @@ export default function UsersPage() {
                         <DropdownMenuContent align="end" className="text-[12px] w-44">
                           <DropdownMenuItem onClick={() => { setEditUser(u); setSheetOpen(true) }} className="gap-2">
                             <Pencil className="size-3.5" />Düzenle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setPermsUser(u)} className="gap-2">
+                            <Shield className="size-3.5" />İzinler
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => toggleActive(u)} disabled={isSelf} className="gap-2">
                             {u.isActive ? <ToggleLeft className="size-3.5" /> : <ToggleRight className="size-3.5" />}
@@ -322,6 +311,13 @@ export default function UsersPage() {
       </div>
 
       <UserSheet open={sheetOpen} user={editUser} onClose={() => setSheetOpen(false)} onSaved={load} />
+
+      <PermissionsSheet
+        userId={permsUser?.id ?? null}
+        userName={permsUser?.fullName ?? permsUser?.username ?? ""}
+        open={!!permsUser}
+        onClose={() => setPermsUser(null)}
+      />
 
       <AlertDialog open={!!deleteUser} onOpenChange={v => !v && setDeleteUser(null)}>
         <AlertDialogContent>

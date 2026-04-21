@@ -4,15 +4,17 @@ import bcrypt      from "bcryptjs"
 import { verifySync } from "otplib"
 import { query, execute } from "@/lib/db"
 import { authConfig } from "@/auth.config"
+import { getUserPermissions, type PermissionMap } from "@/lib/permissions"
 
 /* ── Tip genişletme ── */
 declare module "next-auth" {
   interface Session {
     user: {
-      id:       string
-      username: string
-      fullName: string
-      role:     string
+      id:          string
+      username:    string
+      fullName:    string
+      role:        string
+      permissions: PermissionMap
     } & DefaultSession["user"]
   }
   interface User {
@@ -117,20 +119,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
-        token.id       = user.id
-        token.username = user.username
-        token.fullName = user.fullName
-        token.role     = user.role
+        token.id          = user.id
+        token.username    = user.username
+        token.fullName    = user.fullName
+        token.role        = user.role
+        token.permissions = await getUserPermissions(user.id, user.role)
+      }
+      // Session güncelleme tetiklendiğinde (ör. izin değişikliği sonrası) izinleri yenile
+      if (trigger === "update" && token.id && token.role) {
+        token.permissions = await getUserPermissions(token.id as string, token.role as string)
       }
       return token
     },
     session({ session, token }) {
-      session.user.id       = token.id       as string
-      session.user.username = token.username as string
-      session.user.fullName = token.fullName as string
-      session.user.role     = token.role     as string
+      session.user.id          = token.id          as string
+      session.user.username    = token.username    as string
+      session.user.fullName    = token.fullName    as string
+      session.user.role        = token.role        as string
+      session.user.permissions = (token.permissions ?? {}) as PermissionMap
       return session
     },
   },

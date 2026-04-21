@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
+import { requirePermission } from "@/lib/require-permission"
 
 export interface ProjectListItem {
   id:          string
@@ -28,6 +29,8 @@ interface ProjectRow {
 }
 
 export async function GET(req: NextRequest) {
+  const gate = await requirePermission("projects", "read")
+  if (gate) return gate
   const includeArchived = new URL(req.url).searchParams.get("archived") === "1"
   try {
     const rows = includeArchived
@@ -81,6 +84,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePermission("projects", "write")
+  if (gate) return gate
   try {
     const body = await req.json()
     const { name, description, color = "#3b82f6", companyId } = body

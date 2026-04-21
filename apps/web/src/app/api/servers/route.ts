@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
 import { encrypt } from "@/lib/crypto"
 import { getAllAgents } from "@/lib/agent-store"
+import { requirePermission } from "@/lib/require-permission"
 import type { Server } from "@/types"
 
 function slugify(name: string): string {
@@ -38,6 +39,8 @@ function formatUptime(seconds: number): string {
 }
 
 export async function GET() {
+  const gate = await requirePermission("servers", "read")
+  if (gate) return gate
   try {
     const rows = await query<ServerRow[]>`
       SELECT
@@ -87,6 +90,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const gate = await requirePermission("servers", "write")
+  if (gate) return gate
   try {
     const body = await req.json()
     const {

@@ -7,7 +7,7 @@ export async function POST(
 ) {
   const { id: projectId } = await params
   try {
-    const { columnId, title, description, priority = "medium", assignedTo, dueDate, labels } = await req.json()
+    const { columnId, title, description, priority = "medium", assignedTo, startDate, dueDate, labels } = await req.json()
     if (!columnId || !title?.trim()) {
       return NextResponse.json({ error: "columnId ve title zorunlu" }, { status: 400 })
     }
@@ -21,11 +21,11 @@ export async function POST(
     const taskId = crypto.randomUUID()
 
     await execute`
-      INSERT INTO ProjectTasks (Id, ProjectId, ColumnId, Title, Description, Priority, AssignedTo, DueDate, Labels, Position)
+      INSERT INTO ProjectTasks (Id, ProjectId, ColumnId, Title, Description, Priority, AssignedTo, StartDate, DueDate, Labels, Position)
       VALUES (
         ${taskId}, ${projectId}, ${columnId}, ${title.trim()},
         ${description ?? null}, ${priority}, ${assignedTo ?? null},
-        ${dueDate ?? null}, ${labels ? labels.join(",") : null}, ${nextPos}
+        ${startDate ?? null}, ${dueDate ?? null}, ${labels ? labels.join(",") : null}, ${nextPos}
       )
     `
     return NextResponse.json({ id: taskId }, { status: 201 })

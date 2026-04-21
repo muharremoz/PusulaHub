@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
 import { encrypt, decrypt } from "@/lib/crypto"
+import { requirePermission } from "@/lib/require-permission"
 
 interface ServerRow {
   Id: string; Name: string; IP: string; DNS: string | null; Domain: string | null; OS: string
@@ -10,6 +11,8 @@ interface ServerRow {
 }
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requirePermission("servers", "read")
+  if (gate) return gate
   try {
     const { id } = await params
     const rows = await query<ServerRow[]>`
@@ -50,6 +53,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requirePermission("servers", "write")
+  if (gate) return gate
   try {
     const { id } = await params
     const {
@@ -94,6 +99,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const gate = await requirePermission("servers", "write")
+  if (gate) return gate
   try {
     const { id } = await params
     await execute`DELETE FROM Servers WHERE Id = ${id}`

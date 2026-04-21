@@ -29,7 +29,7 @@ export async function PATCH(
   const { taskId } = await params
   try {
     const body = await req.json()
-    const { title, description, priority, assignedTo, dueDate, labels, columnId, position, comment, estimatedHours, actualHours } = body
+    const { title, description, priority, assignedTo, startDate, dueDate, labels, columnId, position, comment, estimatedHours, actualHours } = body
 
     // Yorum ekle
     if (comment !== undefined) {
@@ -59,6 +59,7 @@ export async function PATCH(
         Description    = COALESCE(${description ?? null}, Description),
         Priority       = COALESCE(${priority    ?? null}, Priority),
         AssignedTo     = ${assignedTo !== undefined ? (assignedTo ?? null) : null},
+        StartDate      = ${startDate  !== undefined ? (startDate  ?? null) : null},
         DueDate        = ${dueDate    !== undefined ? (dueDate    ?? null) : null},
         Labels         = COALESCE(${labelsStr   ?? null}, Labels),
         EstimatedHours = ${estimatedHours !== undefined ? (estimatedHours ?? null) : null},

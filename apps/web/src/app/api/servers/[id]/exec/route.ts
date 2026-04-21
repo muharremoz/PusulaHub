@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
 import { execOnAgent } from "@/lib/agent-poller"
+import { requirePermission } from "@/lib/require-permission"
 
 interface ServerRow {
   Name: string
@@ -14,6 +15,8 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requirePermission("servers", "write")
+  if (gate) return gate
   const { id } = await params
   const { command, timeout } = await req.json()
 

@@ -85,9 +85,9 @@ export function GanttChart({ board, loading }: Props) {
 
     const dates: Date[] = [now]
     for (const t of tasks) {
-      const created = parseDate(t.createdAt)
+      const start = parseDate(t.startDate) || parseDate(t.createdAt)
       const due = parseDate(t.dueDate)
-      if (created) dates.push(created)
+      if (start) dates.push(start)
       if (due) dates.push(due)
     }
 
@@ -327,9 +327,9 @@ export function GanttChart({ board, loading }: Props) {
 
                   {/* Task bars */}
                   {tasks.map((task, rowIdx) => {
-                    const created = parseDate(task.createdAt) || new Date()
+                    const start = parseDate(task.startDate) || parseDate(task.createdAt) || new Date()
                     const due = parseDate(task.dueDate)
-                    const barStart = diffDays(startDate, created)
+                    const barStart = diffDays(startDate, start)
                     const barEnd = due ? diffDays(startDate, due) : barStart + 3
                     const barDuration = Math.max(barEnd - barStart, 1)
 
@@ -396,7 +396,7 @@ export function GanttChart({ board, loading }: Props) {
                         >
                           <p className="font-semibold">{task.title}</p>
                           <p className="text-muted-foreground mt-0.5">
-                            {formatDateFull(created)}
+                            {formatDateFull(start)}
                             {due ? ` → ${formatDateFull(due)}` : ""}
                           </p>
                           <p className="text-muted-foreground mt-0.5">

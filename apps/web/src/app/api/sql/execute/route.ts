@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { query } from "@/lib/db"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * POST /api/sql/execute
@@ -31,6 +32,8 @@ export interface ExecuteResponse {
 const ROW_LIMIT = 1000
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePermission("sql", "write")
+  if (gate) return gate
   try {
     const body = (await req.json()) as {
       serverId?: string

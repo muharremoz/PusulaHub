@@ -7,7 +7,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
+import { NoteRichEditor } from "@/components/notes/note-rich-editor"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -53,6 +53,7 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
   const [description,    setDescription]    = useState("")
   const [priority,       setPriority]       = useState<BoardTask["priority"]>("medium")
   const [assignedTo,     setAssignedTo]     = useState("")
+  const [startDate,      setStartDate]      = useState("")
   const [dueDate,        setDueDate]        = useState("")
   const [labelInput,     setLabelInput]     = useState("")
   const [labels,         setLabels]         = useState<string[]>([])
@@ -84,6 +85,7 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
     setDescription(task.description ?? "")
     setPriority(task.priority)
     setAssignedTo(task.assignedTo ?? "")
+    setStartDate(task.startDate ?? "")
     setDueDate(task.dueDate ?? "")
     setLabels(task.labels)
     setColumnId(task.columnId)
@@ -127,8 +129,9 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
     setSaving(true)
     try {
       const body: Record<string, unknown> = {
-        title, description: description || null,
+        title, description: description && description !== "<p></p>" ? description : null,
         priority, assignedTo: assignedTo || null,
+        startDate: startDate || null,
         dueDate: dueDate || null, labels,
         estimatedHours: estimatedHours ? parseFloat(estimatedHours) : null,
         actualHours: actualHours ? parseFloat(actualHours) : null,
@@ -231,7 +234,7 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
           </p>
         </SheetHeader>
 
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-4 space-y-4">
 
             {/* Başlık + Açıklama */}
@@ -247,8 +250,13 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
                 </div>
                 <div className="space-y-1">
                   <Label className="text-[10px] text-muted-foreground">Açıklama</Label>
-                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)}
-                    rows={3} className="text-[11px] rounded-[5px] resize-none" placeholder="Açıklama ekle..." />
+                  <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white min-h-[160px] flex flex-col">
+                    <NoteRichEditor
+                      value={description}
+                      onChange={setDescription}
+                      placeholder="Açıklama ekle... Metin seçince ek not ekleyebilirsin"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -316,6 +324,15 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
                     <Input value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}
                       className="h-8 text-[11px] rounded-[5px]" placeholder="Kullanıcı adı..." />
                   )}
+                </div>
+
+                {/* Başlangıç tarihi */}
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Calendar className="size-3" /> Başlangıç Tarihi
+                  </Label>
+                  <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                    className="h-8 text-[11px] rounded-[5px]" />
                 </div>
 
                 {/* Bitiş tarihi */}

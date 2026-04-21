@@ -100,6 +100,77 @@ function normalizeDbStatus(raw: string | null | undefined): string {
   return "Online" // default + ONLINE/SUSPECT/RECOVERING vb. hepsi
 }
 
+/* ── Failed logon denemelerini DB'ye yaz ──
+   Agent her pollda son 20 tane 4625 event'ini döner. Duplicate'ları önlemek için
+   (ServerId, Timestamp, Username, ClientIp) unique index kullanıyoruz. */
+async function persistFailedLogons(
+  serverId: string,
+  serverName: string,
+  report: AgentReport,
+): Promise<void> {
+  const failedLogins = report.logs?.failedLogins
+  if (!failedLogins || !failedLogins.length) return
+
+  try {
+    const pool = await getPollerPool()
+
+    // Şema: tablo + unique index (idempotent)
+    await pool.request().query(`
+      IF OBJECT_ID('FailedLogonAttempts','U') IS NULL
+      BEGIN
+        CREATE TABLE FailedLogonAttempts (
+          Id          BIGINT         IDENTITY(1,1) PRIMARY KEY,
+          ServerId    NVARCHAR(50)   NOT NULL,
+          ServerName  NVARCHAR(100)  NOT NULL,
+          [Timestamp] DATETIME2      NOT NULL,
+          Username    NVARCHAR(200)  NULL,
+          ClientIp    NVARCHAR(45)   NULL,
+          CreatedAt   DATETIME2      NOT NULL DEFAULT SYSUTCDATETIME()
+        )
+        CREATE UNIQUE INDEX UX_FailedLogon_Dedup
+          ON FailedLogonAttempts (ServerId, [Timestamp], Username, ClientIp)
+          WHERE Username IS NOT NULL AND ClientIp IS NOT NULL
+        CREATE INDEX IX_FailedLogon_Timestamp
+          ON FailedLogonAttempts ([Timestamp] DESC)
+      END
+    `)
+
+    for (const fl of failedLogins) {
+      const ts = fl.timestamp ? new Date(fl.timestamp) : null
+      if (!ts || isNaN(ts.getTime())) continue
+      const user = (fl.username ?? "").trim() || "-"
+      const ip   = (fl.clientIp ?? "").trim() || "-"
+
+      await pool.request()
+        .input("serverId",   sql.NVarChar(50),  serverId)
+        .input("serverName", sql.NVarChar(100), serverName)
+        .input("timestamp",  sql.DateTime2,     ts)
+        .input("username",   sql.NVarChar(200), user)
+        .input("clientIp",   sql.NVarChar(45),  ip)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1 FROM FailedLogonAttempts
+            WHERE ServerId = @serverId
+              AND [Timestamp] = @timestamp
+              AND Username = @username
+              AND ClientIp = @clientIp
+          )
+          INSERT INTO FailedLogonAttempts (ServerId, ServerName, [Timestamp], Username, ClientIp)
+          VALUES (@serverId, @serverName, @timestamp, @username, @clientIp)
+        `)
+    }
+
+    // 30 günden eski kayıtları temizle (nadiren çalışır — her 100. pollda bir)
+    if (Math.random() < 0.01) {
+      await pool.request().query(
+        "DELETE FROM FailedLogonAttempts WHERE [Timestamp] < DATEADD(day, -30, SYSUTCDATETIME())"
+      )
+    }
+  } catch (err) {
+    console.log(`[Poller] persistFailedLogons hatası (${serverName}):`, err instanceof Error ? err.message : err)
+  }
+}
+
 /* ── IIS ve SQL verilerini DB'ye yaz ── */
 async function persistHeavyData(serverName: string, report: AgentReport): Promise<void> {
   try {
@@ -409,6 +480,11 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
     const hasSqlRole = Array.isArray(report.roles) && report.roles.some((r) => String(r).toUpperCase() === "SQL")
     if (report.ad?.companies || report.iis || report.sql || report.userProcesses || hasSqlRole) {
       persistHeavyData(server.Name, report)
+    }
+
+    // Failed RDP logon denemeleri (4625 event'leri)
+    if (report.logs?.failedLogins?.length) {
+      persistFailedLogons(server.Id, server.Name, report)
     }
 
     // Bekleyen okundu bilgilerini işle

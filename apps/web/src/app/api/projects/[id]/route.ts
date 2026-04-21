@@ -17,6 +17,7 @@ export interface BoardTask {
   description:   string | null
   priority:      "low" | "medium" | "high" | "critical"
   assignedTo:    string | null
+  startDate:     string | null
   dueDate:       string | null
   labels:        string[]
   position:      number
@@ -48,7 +49,7 @@ interface ColRow {
 }
 interface TaskRow {
   Id: string; ColumnId: string; Title: string; Description: string | null
-  Priority: string; AssignedTo: string | null; DueDate: string | null
+  Priority: string; AssignedTo: string | null; StartDate: string | null; DueDate: string | null
   Labels: string | null; Position: number; CreatedAt: string; CommentCount: number
   SubtaskTotal: number; SubtaskDone: number
   EstimatedHours: number | null; ActualHours: number | null
@@ -73,6 +74,7 @@ export async function GET(
       `,
       query<TaskRow[]>`
         SELECT t.Id, t.ColumnId, t.Title, t.Description, t.Priority, t.AssignedTo,
+               CONVERT(NVARCHAR(10), t.StartDate, 23) AS StartDate,
                CONVERT(NVARCHAR(10), t.DueDate, 23) AS DueDate,
                t.Labels, t.Position,
                CONVERT(NVARCHAR(30), t.CreatedAt, 120) AS CreatedAt,
@@ -100,7 +102,7 @@ export async function GET(
             id: t.Id, columnId: t.ColumnId, title: t.Title,
             description: t.Description,
             priority: t.Priority as BoardTask["priority"],
-            assignedTo: t.AssignedTo, dueDate: t.DueDate,
+            assignedTo: t.AssignedTo, startDate: t.StartDate, dueDate: t.DueDate,
             labels: t.Labels ? t.Labels.split(",").map((l) => l.trim()).filter(Boolean) : [],
             position: t.Position, createdAt: t.CreatedAt,
             commentCount: t.CommentCount,

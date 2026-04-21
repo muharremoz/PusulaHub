@@ -8,7 +8,10 @@ import {
 } from "@dnd-kit/core"
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable"
 import { useDroppable } from "@dnd-kit/core"
-import { Plus, MoreVertical, Pencil, Trash2, Settings2, CheckSquare } from "lucide-react"
+import { Plus, MoreVertical, Pencil, Trash2, Settings2, CheckSquare, CalendarIcon } from "lucide-react"
+import { Calendar } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import type { DateRange } from "react-day-picker"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
@@ -22,6 +25,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { NoteRichEditor } from "@/components/notes/note-rich-editor"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -34,7 +40,7 @@ function ColumnDropZone({ column, children }: { column: BoardColumn; children: R
   const { setNodeRef, isOver } = useDroppable({ id: column.id, data: { type: "column", column } })
   return (
     <div ref={setNodeRef} className={cn(
-      "flex-1 min-h-[100px] rounded-[4px] transition-colors",
+      "min-h-[40px] rounded-[4px] transition-colors",
       isOver && "bg-muted/40"
     )}>
       {children}
@@ -44,13 +50,11 @@ function ColumnDropZone({ column, children }: { column: BoardColumn; children: R
 
 /* ── Tek kolon ── */
 function KanbanColumn({
-  column, projectId, onRefresh, onCardClick, filteredTasks,
+  column, onCardClick, filteredTasks,
   selectedTasks, onToggleSelect, bulkMode,
-  onEditColumn, onDeleteColumn,
+  onEditColumn, onDeleteColumn, onOpenAdd,
 }: {
   column: BoardColumn
-  projectId: string
-  onRefresh: () => void
   onCardClick: (task: BoardTask) => void
   filteredTasks: BoardTask[]
   selectedTasks: Set<string>
@@ -58,29 +62,9 @@ function KanbanColumn({
   bulkMode: boolean
   onEditColumn: (col: BoardColumn) => void
   onDeleteColumn: (col: BoardColumn) => void
+  onOpenAdd: (col: BoardColumn) => void
 }) {
-  const [adding, setAdding] = useState(false)
-  const [newTitle, setNewTitle] = useState("")
-  const [saving, setSaving] = useState(false)
-
   const wipOver = column.wipLimit !== null && filteredTasks.length >= column.wipLimit
-
-  async function addTask() {
-    if (!newTitle.trim()) return
-    setSaving(true)
-    try {
-      const r = await fetch(`/api/projects/${projectId}/tasks`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ columnId: column.id, title: newTitle.trim() }),
-      })
-      if (!r.ok) throw new Error()
-      setNewTitle(""); setAdding(false)
-      toast.success("Görev eklendi")
-      onRefresh()
-    } catch {
-      toast.error("Görev eklenemedi")
-    } finally { setSaving(false) }
-  }
 
   return (
     <div className="w-[272px] shrink-0 flex flex-col gap-0">
@@ -102,7 +86,7 @@ function KanbanColumn({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-[6px] text-[11px]">
-            <DropdownMenuItem onClick={() => setAdding(true)}>
+            <DropdownMenuItem onClick={() => onOpenAdd(column)}>
               <Plus className="size-3.5 mr-2" /> Görev Ekle
             </DropdownMenuItem>
             <DropdownMenuSeparator />
@@ -147,43 +131,261 @@ function KanbanColumn({
 
       {/* Görev ekle */}
       <div className="mt-2">
-        {adding ? (
-          <div className="rounded-[4px] bg-white border border-border/50 p-2.5 space-y-2"
-            style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.07)" }}>
-            <Input
-              autoFocus
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addTask()
-                if (e.key === "Escape") { setAdding(false); setNewTitle("") }
-              }}
-              placeholder="Görev başlığı..."
-              className="h-7 text-[11px] rounded-[4px]"
-            />
-            <div className="flex items-center gap-1.5">
-              <button onClick={addTask} disabled={saving || !newTitle.trim()}
-                className="px-2.5 py-1 text-[10px] font-semibold rounded-[4px] bg-foreground text-background disabled:opacity-40 transition-colors">
-                {saving ? "..." : "Ekle"}
-              </button>
-              <button onClick={() => { setAdding(false); setNewTitle("") }}
-                className="px-2.5 py-1 text-[10px] font-medium rounded-[4px] hover:bg-muted/60 text-muted-foreground transition-colors">
-                İptal
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            data-add-task-btn
-            onClick={() => setAdding(true)}
-            className="w-full flex items-center gap-1.5 px-3 py-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-white/70 rounded-[4px] transition-all group"
-          >
-            <Plus className="size-3.5 group-hover:text-foreground" />
-            Görev ekle
-          </button>
-        )}
+        <button
+          data-add-task-btn
+          onClick={() => onOpenAdd(column)}
+          className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-white/70 rounded-[4px] transition-all group"
+        >
+          <Plus className="size-3.5 group-hover:text-foreground" />
+          Görev ekle
+        </button>
       </div>
     </div>
+  )
+}
+
+/* ── Yeni görev ekleme modal ── */
+const PRIORITY_OPTS = [
+  { value: "low",      label: "Düşük" },
+  { value: "medium",   label: "Orta" },
+  { value: "high",     label: "Yüksek" },
+  { value: "critical", label: "Kritik" },
+]
+
+interface UserLookup { id: string; username: string; fullName: string | null }
+
+function AddTaskDialog({
+  open, column, projectId, users, onClose, onCreated,
+}: {
+  open:      boolean
+  column:    BoardColumn | null
+  projectId: string
+  users:     UserLookup[]
+  onClose:   () => void
+  onCreated: () => void
+}) {
+  const [title,       setTitle]       = useState("")
+  const [description, setDescription] = useState("")
+  const [priority,    setPriority]    = useState<string>("medium")
+  const [assignedTo,  setAssignedTo]  = useState("")
+  const [dateRange,   setDateRange]   = useState<DateRange | undefined>(undefined)
+  const [labelInput,  setLabelInput]  = useState("")
+  const [labels,      setLabels]      = useState<string[]>([])
+  const [saving,      setSaving]      = useState(false)
+
+  React.useEffect(() => {
+    if (open) {
+      setTitle(""); setDescription(""); setPriority("medium")
+      setAssignedTo(""); setDateRange(undefined); setLabelInput(""); setLabels([])
+    }
+  }, [open])
+
+  function addLabel() {
+    const v = labelInput.trim()
+    if (v && !labels.includes(v)) setLabels([...labels, v])
+    setLabelInput("")
+  }
+
+  async function save() {
+    if (!title.trim() || !column) return
+    setSaving(true)
+    try {
+      const toISO = (d: Date | undefined) =>
+        d ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}` : null
+      const r = await fetch(`/api/projects/${projectId}/tasks`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          columnId:    column.id,
+          title:       title.trim(),
+          description: description && description !== "<p></p>" ? description : null,
+          priority,
+          assignedTo:  assignedTo || null,
+          startDate:   toISO(dateRange?.from),
+          dueDate:     toISO(dateRange?.to ?? dateRange?.from),
+          labels,
+        }),
+      })
+      if (!r.ok) throw new Error()
+      toast.success("Görev eklendi")
+      onCreated()
+      onClose()
+    } catch {
+      toast.error("Görev eklenemedi")
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="rounded-[8px] !max-w-2xl p-0 gap-0">
+        <DialogHeader className="px-5 py-4 border-b border-border/50">
+          <DialogTitle className="text-[13px] font-semibold">
+            Yeni Görev
+            {column && (
+              <span className="ml-2 inline-flex items-center gap-1 text-[10px] font-normal text-muted-foreground">
+                <div className="size-1.5 rounded-full" style={{ backgroundColor: column.color }} />
+                {column.name}
+              </span>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+          {/* Başlık */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Başlık *</Label>
+            <Input
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && title.trim()) { e.preventDefault(); save() } }}
+              placeholder="Görev başlığı..."
+              className="h-8 text-[11px] rounded-[5px]"
+            />
+          </div>
+
+          {/* Açıklama */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Açıklama</Label>
+            <div className="rounded-[5px] border border-input overflow-hidden bg-white min-h-[180px] flex flex-col">
+              <NoteRichEditor
+                value={description}
+                onChange={setDescription}
+                placeholder="Detay ekle... Metin seçince ek not ekleyebilirsin"
+              />
+            </div>
+          </div>
+
+          {/* Öncelik + Atanan */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Öncelik</Label>
+              <Select value={priority} onValueChange={setPriority}>
+                <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRIORITY_OPTS.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-[11px]">
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Atanan</Label>
+              {users.length > 0 ? (
+                <Select value={assignedTo || "__none__"} onValueChange={(v) => setAssignedTo(v === "__none__" ? "" : v)}>
+                  <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                    <SelectValue placeholder="Seçiniz..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__" className="text-[11px] text-muted-foreground">Atanmamış</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.id} value={u.fullName || u.username} className="text-[11px]">
+                        {u.fullName || u.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input value={assignedTo} onChange={(e) => setAssignedTo(e.target.value)}
+                  className="h-8 text-[11px] rounded-[5px]" placeholder="Kullanıcı..." />
+              )}
+            </div>
+          </div>
+
+          {/* Tarih Aralığı */}
+          <div className="space-y-1">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Başlangıç — Bitiş</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    "w-full h-8 px-3 text-[11px] rounded-[5px] border border-input bg-transparent flex items-center gap-2 hover:bg-muted/40 transition-colors",
+                    !dateRange?.from && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="size-3.5" />
+                  {dateRange?.from ? (
+                    dateRange.to && dateRange.to.getTime() !== dateRange.from.getTime() ? (
+                      <span>
+                        {dateRange.from.toLocaleDateString("tr-TR")} — {dateRange.to.toLocaleDateString("tr-TR")}
+                      </span>
+                    ) : (
+                      <span>{dateRange.from.toLocaleDateString("tr-TR")}</span>
+                    )
+                  ) : (
+                    <span>Tarih aralığı seçin...</span>
+                  )}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="range"
+                  selected={dateRange}
+                  onSelect={setDateRange}
+                  numberOfMonths={2}
+                  defaultMonth={dateRange?.from ?? new Date()}
+                />
+                {dateRange?.from && (
+                  <div className="flex justify-end border-t border-border/50 p-2">
+                    <button
+                      type="button"
+                      onClick={() => setDateRange(undefined)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground px-2 py-1 rounded-[4px] hover:bg-muted/40 transition-colors"
+                    >
+                      Temizle
+                    </button>
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Etiketler */}
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide">Etiketler</Label>
+            <div className="flex gap-1.5">
+              <Input
+                value={labelInput}
+                onChange={(e) => setLabelInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLabel() } }}
+                placeholder="Etiket ekle, Enter'a bas..."
+                className="h-7 text-[11px] rounded-[5px] flex-1"
+              />
+              <button onClick={addLabel} type="button"
+                className="h-7 px-2.5 text-[10px] font-medium rounded-[5px] bg-muted hover:bg-muted/80 transition-colors">
+                Ekle
+              </button>
+            </div>
+            {labels.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {labels.map((l) => (
+                  <Badge key={l} variant="secondary" className="text-[10px] px-2 py-0.5 gap-1 cursor-pointer"
+                    onClick={() => setLabels(labels.filter((x) => x !== l))}>
+                    {l} ×
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-border/50 flex justify-end gap-2">
+          <button onClick={onClose}
+            className="px-3 py-1.5 rounded-[5px] text-[11px] font-medium border border-border/60 hover:bg-muted/40 transition-colors">
+            İptal
+          </button>
+          <button onClick={save} disabled={saving || !title.trim()}
+            className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+            {saving ? "Kaydediliyor..." : "Görev Ekle"}
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -212,6 +414,14 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
   const [editColColor, setEditColColor] = useState("")
   const [editColWip, setEditColWip] = useState("")
   const [deleteCol, setDeleteCol] = useState<BoardColumn | null>(null)
+
+  // Add task dialog
+  const [addTaskCol, setAddTaskCol] = useState<BoardColumn | null>(null)
+  const [users, setUsers] = useState<UserLookup[]>([])
+
+  React.useEffect(() => {
+    fetch("/api/users/lookup").then((r) => r.ok ? r.json() : []).then(setUsers).catch(() => {})
+  }, [])
 
   // Optimistic state
   const [columns, setColumns] = useState<BoardColumn[]>(board.columns)
@@ -308,10 +518,12 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
     fetch(`/api/projects/${board.id}/tasks/${active.id}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ columnId: overColId, position: newPos }),
-    }).catch(() => {
-      toast.error("Taşıma kaydedilemedi")
-      onRefresh()
     })
+      .then(() => onRefresh())
+      .catch(() => {
+        toast.error("Taşıma kaydedilemedi")
+        onRefresh()
+      })
   }
 
   const openSheet = useCallback((task: BoardTask) => {
@@ -489,8 +701,6 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
             <KanbanColumn
               key={col.id}
               column={col}
-              projectId={board.id}
-              onRefresh={onRefresh}
               onCardClick={openSheet}
               filteredTasks={col.filteredTasks}
               selectedTasks={selectedTasks}
@@ -498,6 +708,7 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
               bulkMode={bulkMode}
               onEditColumn={openEditColumn}
               onDeleteColumn={(c) => setDeleteCol(c)}
+              onOpenAdd={(c) => setAddTaskCol(c)}
             />
           ))}
         </div>
@@ -506,6 +717,15 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
           {activeTask && <TaskCard task={activeTask} onClick={() => {}} overlay />}
         </DragOverlay>
       </DndContext>
+
+      <AddTaskDialog
+        open={!!addTaskCol}
+        column={addTaskCol}
+        projectId={board.id}
+        users={users}
+        onClose={() => setAddTaskCol(null)}
+        onCreated={onRefresh}
+      />
 
       <TaskSheet
         task={sheetTask}

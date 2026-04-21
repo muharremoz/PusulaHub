@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * GET /api/iis/sites
@@ -34,6 +35,8 @@ export interface IISSiteDto {
 }
 
 export async function GET() {
+  const gate = await requirePermission("iis", "read")
+  if (gate) return gate
   try {
     const rows = await query<Row[]>`
       SELECT

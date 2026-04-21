@@ -24,6 +24,7 @@ interface NavItem {
   url: string
   icon: LucideIcon
   isActive?: boolean
+  moduleKey?: string
   items?: { title: string; url: string }[]
 }
 

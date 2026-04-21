@@ -6,8 +6,11 @@
 
 import { NextRequest, NextResponse } from "next/server"
 import { queueMessage, getAgentById } from "@/lib/agent-store"
+import { requirePermission } from "@/lib/require-permission"
 
 export async function POST(req: NextRequest) {
+  const gate = await requirePermission("messages", "write")
+  if (gate) return gate
   try {
     const body = await req.json()
     const { agentId, title, body: msgBody, type, from } = body
@@ -50,6 +53,8 @@ export async function POST(req: NextRequest) {
 
 /* GET /api/messages/send — Tüm mesaj geçmişi (UI için) */
 export async function GET() {
+  const gate = await requirePermission("messages", "read")
+  if (gate) return gate
   const { getAllMessages } = await import("@/lib/agent-store")
   return NextResponse.json({ messages: getAllMessages() })
 }
