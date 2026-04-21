@@ -148,6 +148,8 @@ import {
   EyeOff,
   RefreshCw,
   UserPlus,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
@@ -372,6 +374,9 @@ export default function CompaniesPage() {
   const [apiLoading, setApiLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [listSearch, setListSearch] = useState("");
+  const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
+  const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
@@ -1098,6 +1103,40 @@ tr:nth-child(even) td{background:#fafafa}
   const apiFiltered = searchQuery.trim()
     ? apiCompanies.filter((c) => c.firma.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
     : apiCompanies.slice(0, 50);
+
+  // Firma listesi (empty-state) için arama + sıralama
+  function parseLisansDate(s: string): number {
+    if (!s) return Number.POSITIVE_INFINITY;
+    const parts = s.split(".");
+    if (parts.length === 3) {
+      const d = new Date(+parts[2], +parts[1] - 1, +parts[0]).getTime();
+      return isNaN(d) ? Number.POSITIVE_INFINITY : d;
+    }
+    const d = new Date(s).getTime();
+    return isNaN(d) ? Number.POSITIVE_INFINITY : d;
+  }
+  const listFiltered = listSearch.trim()
+    ? apiCompanies.filter((c) => {
+        const q = listSearch.toLowerCase();
+        return c.firma.toLowerCase().includes(q) || (c.firkod || "").toLowerCase().includes(q);
+      })
+    : apiCompanies.slice();
+  const listSorted = listFiltered.slice().sort((a, b) => {
+    let cmp = 0;
+    switch (listSortKey) {
+      case "firma":       cmp = a.firma.localeCompare(b.firma, "tr"); break;
+      case "firkod":      cmp = (a.firkod || "").localeCompare(b.firkod || "", "tr"); break;
+      case "userCount":   cmp = a.userCount - b.userCount; break;
+      case "lisansBitis": cmp = parseLisansDate(a.lisansBitis) - parseLisansDate(b.lisansBitis); break;
+      case "status": {
+        const av = firmaIsActive(a) ? 1 : 0;
+        const bv = firmaIsActive(b) ? 1 : 0;
+        cmp = bv - av;
+        break;
+      }
+    }
+    return listSortDir === "asc" ? cmp : -cmp;
+  });
 
   return (
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
@@ -2691,47 +2730,101 @@ tr:nth-child(even) td{background:#fafafa}
         </div>
       ) : (
         <NestedCard>
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Building2 className="h-12 w-12 text-muted-foreground/30 mb-3" />
-            <p className="text-sm font-medium text-muted-foreground">Detayları görmek için bir firma seçin</p>
-            <p className="text-[11px] text-muted-foreground/60 mt-1 mb-4">Yukarıdaki kartlardan bir firmaya tıklayın</p>
-            <Popover open={searchOpen} onOpenChange={(o) => { setSearchOpen(o); if (!o) setSearchQuery(""); }}>
-              <PopoverTrigger asChild>
-                <button className="flex items-center gap-2 text-[11px] font-medium bg-foreground text-background rounded-[5px] px-3 py-1.5 hover:bg-foreground/90 transition-colors">
-                  <Search className="h-3.5 w-3.5" />
-                  Firma Ara
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-0 rounded-[5px]">
-                <Command shouldFilter={false}>
-                  <CommandInput placeholder="Firma ara..." className="text-[11px] h-8" value={searchQuery} onValueChange={setSearchQuery} />
-                  <CommandList className="max-h-56 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                    {apiLoading ? (
-                      <div className="p-2 space-y-1">
-                        {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[4px]" />)}
+          <div className="flex flex-col gap-0">
+            {/* Üst bar: arama + sıralama */}
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-muted/20">
+              <div className="relative flex-1">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input
+                  value={listSearch}
+                  onChange={(e) => setListSearch(e.target.value)}
+                  placeholder="Firma adı veya kodu ara..."
+                  className="h-8 pl-7 text-[11px] rounded-[5px]"
+                />
+              </div>
+              <Select value={listSortKey} onValueChange={(v) => setListSortKey(v as typeof listSortKey)}>
+                <SelectTrigger className="h-8 w-[160px] text-[11px] rounded-[5px]">
+                  <SelectValue placeholder="Sırala..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="firma" className="text-[11px]">Firma Adı</SelectItem>
+                  <SelectItem value="firkod" className="text-[11px]">Firma Kodu</SelectItem>
+                  <SelectItem value="userCount" className="text-[11px]">Kullanıcı Sayısı</SelectItem>
+                  <SelectItem value="lisansBitis" className="text-[11px]">Lisans Bitiş</SelectItem>
+                  <SelectItem value="status" className="text-[11px]">Durum</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 w-8 p-0 rounded-[5px]"
+                onClick={() => setListSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                title={listSortDir === "asc" ? "Artan" : "Azalan"}
+              >
+                {listSortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+              </Button>
+            </div>
+
+            {/* Liste başlığı */}
+            <div className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-1.5 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              <div>Firma</div>
+              <div className="text-right">Firma Kodu</div>
+              <div className="text-right">Kullanıcı</div>
+              <div className="text-right">Lisans Bitiş</div>
+              <div className="text-right">Durum</div>
+            </div>
+
+            {/* Liste satırları */}
+            <div className="divide-y divide-border/40 max-h-[520px] overflow-y-auto">
+              {apiLoading ? (
+                <div className="p-3 space-y-1.5">
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[4px]" />)}
+                </div>
+              ) : listSorted.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Building2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
+                  <p className="text-[12px] font-medium text-muted-foreground">
+                    {listSearch.trim() ? "Arama sonucu bulunamadı" : "Kayıtlı firma yok"}
+                  </p>
+                </div>
+              ) : (
+                listSorted.map((comp) => {
+                  const active = firmaIsActive(comp);
+                  return (
+                    <button
+                      key={comp.id}
+                      onClick={() => selectFirma(comp)}
+                      className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors text-left items-center w-full"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate">{comp.firma}</span>
                       </div>
-                    ) : (
-                      <>
-                        <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
-                        <CommandGroup>
-                          {apiFiltered.map((comp) => (
-                            <CommandItem
-                              key={comp.id}
-                              value={comp.id}
-                              onSelect={() => selectFirma(comp)}
-                              className="text-[11px] flex items-center justify-between"
-                            >
-                              <span>{comp.firma}</span>
-                              <span className="text-[10px] text-muted-foreground tabular-nums font-mono">{comp.firkod}</span>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </>
-                    )}
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+                      <div className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">{comp.firkod || "—"}</div>
+                      <div className="text-right tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                          <Users className="h-3 w-3" />
+                          {comp.userCount}
+                        </span>
+                      </div>
+                      <div className="text-right text-muted-foreground tabular-nums">{comp.lisansBitis || "—"}</div>
+                      <div className="flex justify-end">
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${active ? "text-emerald-600" : "text-red-600"}`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`} />
+                          {active ? "Aktif" : "Süresi Doldu"}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-3 py-2 border-t border-border/40 bg-muted/20 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Building2 className="h-3 w-3" />
+              {listSorted.length} / {apiCompanies.length} firma listeleniyor
+            </div>
           </div>
         </NestedCard>
       )}

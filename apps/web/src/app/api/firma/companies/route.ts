@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
     const rows = await query<CompanyRow[]>`
       SELECT CompanyId, Name, ContactEmail, ContactPhone, UserCount, CONVERT(NVARCHAR(20), ContractEnd, 23) AS ContractEnd
       FROM Companies
-      WHERE CompanyId IS NOT NULL
+      WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
       ORDER BY Name
     `
 
