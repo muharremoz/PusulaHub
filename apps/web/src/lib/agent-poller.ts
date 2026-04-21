@@ -7,6 +7,7 @@
 
 import sql from "mssql"
 import { upsertAgentFromPoll, getAllAgents, markMessageRead, markAgentOffline } from "./agent-store"
+import { markReadByMsgId } from "./messages-db"
 import type { AgentReport } from "./agent-types"
 import { withSqlConnection } from "./sql-external"
 import { decrypt } from "./crypto"
@@ -487,11 +488,12 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
       persistFailedLogons(server.Id, server.Name, report)
     }
 
-    // Bekleyen okundu bilgilerini işle
+    // Bekleyen okundu bilgilerini işle: hem in-memory log hem DB
     const pendingAcks: { msgId: string; username: string }[] = data.pendingAcks ?? []
     for (const ack of pendingAcks) {
       if (ack.msgId && ack.username) {
         markMessageRead(ack.msgId, ack.username)
+        try { await markReadByMsgId(ack.msgId, ack.username) } catch { /* ignore */ }
       }
     }
 

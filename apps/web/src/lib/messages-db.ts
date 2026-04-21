@@ -1,0 +1,265 @@
+import { query, execute } from "./db"
+
+/**
+ * Mesaj sistemi veri katmanı.
+ *
+ * İki tablo kullanır:
+ *   Messages            — gönderilen mesajın metadata'sı
+ *   MessageRecipients   — mesajın her bir alıcı (sunucu+kullanıcı) satırı
+ *
+ * İlk çağrıda tablolar yoksa oluşturulur (idempotent).
+ */
+
+export type MessageType         = "info" | "warning" | "urgent"
+export type MessagePriority     = "normal" | "high" | "urgent"
+export type RecipientKind       = "all" | "company" | "selected"
+export type RecipientStatus     = "pending" | "delivered" | "read" | "failed"
+
+export interface MessageRow {
+  Id:            string
+  Subject:       string
+  Body:          string
+  Type:          MessageType
+  Priority:      MessagePriority
+  RecipientType: RecipientKind
+  CompanyId:     string | null
+  CompanyName:   string | null
+  SenderUserId:  string | null
+  SenderName:    string
+  SentAt:        string
+  TotalCount:    number
+  ReadCount:     number
+}
+
+export interface RecipientRow {
+  Id:           number
+  MessageId:    string
+  ServerId:     string
+  ServerName:   string | null
+  Username:     string
+  Status:       RecipientStatus
+  DeliveredAt:  string | null
+  ReadAt:       string | null
+  ErrorMessage: string | null
+}
+
+let _schemaReady = false
+async function ensureSchema(): Promise<void> {
+  if (_schemaReady) return
+  await execute`
+    IF OBJECT_ID('Messages','U') IS NULL
+    BEGIN
+      CREATE TABLE Messages (
+        Id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
+        Subject       NVARCHAR(300)    NOT NULL,
+        Body          NVARCHAR(MAX)    NOT NULL,
+        Type          NVARCHAR(20)     NOT NULL CONSTRAINT DF_Messages_Type     DEFAULT 'info',
+        Priority      NVARCHAR(20)     NOT NULL CONSTRAINT DF_Messages_Priority DEFAULT 'normal',
+        RecipientType NVARCHAR(20)     NOT NULL,
+        CompanyId     UNIQUEIDENTIFIER NULL,
+        CompanyName   NVARCHAR(200)    NULL,
+        SenderUserId  UNIQUEIDENTIFIER NULL,
+        SenderName    NVARCHAR(200)    NOT NULL,
+        SentAt        DATETIME2        NOT NULL CONSTRAINT DF_Messages_SentAt   DEFAULT SYSUTCDATETIME(),
+        TotalCount    INT              NOT NULL CONSTRAINT DF_Messages_Total    DEFAULT 0,
+        ReadCount     INT              NOT NULL CONSTRAINT DF_Messages_Read     DEFAULT 0
+      )
+      CREATE INDEX IX_Messages_SentAt ON Messages (SentAt DESC)
+    END
+  `
+  await execute`
+    IF OBJECT_ID('MessageRecipients','U') IS NULL
+    BEGIN
+      CREATE TABLE MessageRecipients (
+        Id            BIGINT           IDENTITY(1,1) PRIMARY KEY,
+        MessageId     UNIQUEIDENTIFIER NOT NULL,
+        ServerId      NVARCHAR(50)     NOT NULL,
+        ServerName    NVARCHAR(200)    NULL,
+        Username      NVARCHAR(200)    NOT NULL,
+        Status        NVARCHAR(20)     NOT NULL CONSTRAINT DF_MR_Status DEFAULT 'pending',
+        DeliveredAt   DATETIME2        NULL,
+        ReadAt        DATETIME2        NULL,
+        ErrorMessage  NVARCHAR(500)    NULL,
+        CONSTRAINT FK_MR_Message FOREIGN KEY (MessageId) REFERENCES Messages(Id) ON DELETE CASCADE
+      )
+      CREATE INDEX IX_MR_MessageId ON MessageRecipients (MessageId)
+      CREATE INDEX IX_MR_Lookup    ON MessageRecipients (MessageId, Username)
+    END
+  `
+  _schemaReady = true
+}
+
+/* ── Create ───────────────────────────────────────────── */
+
+export interface CreateMessageInput {
+  id:            string
+  subject:       string
+  body:          string
+  type:          MessageType
+  priority:      MessagePriority
+  recipientType: RecipientKind
+  companyId?:    string | null
+  companyName?:  string | null
+  senderUserId?: string | null
+  senderName:    string
+  totalCount:    number
+}
+
+export async function createMessage(m: CreateMessageInput): Promise<void> {
+  await ensureSchema()
+  await execute`
+    INSERT INTO Messages
+      (Id, Subject, Body, Type, Priority, RecipientType, CompanyId, CompanyName,
+       SenderUserId, SenderName, TotalCount, ReadCount)
+    VALUES
+      (${m.id}, ${m.subject}, ${m.body}, ${m.type}, ${m.priority}, ${m.recipientType},
+       ${m.companyId ?? null}, ${m.companyName ?? null},
+       ${m.senderUserId ?? null}, ${m.senderName}, ${m.totalCount}, 0)
+  `
+}
+
+export interface AddRecipientInput {
+  messageId:    string
+  serverId:     string
+  serverName?:  string | null
+  username:     string
+  status?:      RecipientStatus
+  deliveredAt?: Date | null
+  errorMessage?: string | null
+}
+
+export async function addRecipient(r: AddRecipientInput): Promise<void> {
+  await ensureSchema()
+  await execute`
+    INSERT INTO MessageRecipients
+      (MessageId, ServerId, ServerName, Username, Status, DeliveredAt, ErrorMessage)
+    VALUES
+      (${r.messageId}, ${r.serverId}, ${r.serverName ?? null}, ${r.username},
+       ${r.status ?? "pending"}, ${r.deliveredAt ?? null}, ${r.errorMessage ?? null})
+  `
+}
+
+/** Bir sunucuya inject sonrası — o sunucudaki tüm henüz teslim edilmemiş alıcıları "delivered" yap. */
+export async function markServerDelivered(messageId: string, serverId: string): Promise<void> {
+  await ensureSchema()
+  await execute`
+    UPDATE MessageRecipients
+       SET Status = 'delivered', DeliveredAt = SYSUTCDATETIME()
+     WHERE MessageId = ${messageId} AND ServerId = ${serverId} AND Status = 'pending'
+  `
+}
+
+/** Bir sunucu fan-out'ta hata verirse — o sunucudaki alıcıları "failed" işaretle. */
+export async function markServerFailed(messageId: string, serverId: string, error: string): Promise<void> {
+  await ensureSchema()
+  await execute`
+    UPDATE MessageRecipients
+       SET Status = 'failed', ErrorMessage = ${error.slice(0, 500)}
+     WHERE MessageId = ${messageId} AND ServerId = ${serverId} AND Status = 'pending'
+  `
+}
+
+/** ACK geldiğinde kullanıcıyı okundu işaretle ve mesajın ReadCount'unu güncelle. */
+export async function markRead(messageId: string, serverId: string, username: string): Promise<void> {
+  await ensureSchema()
+  // İdempotent: yalnızca daha önce okunmamış satırı işaretle
+  const result = await execute`
+    UPDATE MessageRecipients
+       SET Status = 'read', ReadAt = SYSUTCDATETIME()
+     WHERE MessageId = ${messageId} AND ServerId = ${serverId}
+       AND Username = ${username} AND Status <> 'read'
+  `
+  const updated = (result?.rowsAffected?.[0] ?? 0) > 0
+  if (updated) {
+    await execute`
+      UPDATE Messages SET ReadCount = ReadCount + 1 WHERE Id = ${messageId}
+    `
+  }
+}
+
+/** ACK geldi ama mesaj/sunucu/kullanıcı bilinmiyorsa kayıt eksik olabilir. msgId üzerinden lookup eder. */
+export async function markReadByMsgId(msgId: string, username: string): Promise<void> {
+  await ensureSchema()
+  // Hangi sunucularda bu kullanıcı için pending/delivered satır var → hepsi read
+  const result = await execute`
+    UPDATE MessageRecipients
+       SET Status = 'read', ReadAt = SYSUTCDATETIME()
+     WHERE MessageId = ${msgId} AND Username = ${username} AND Status <> 'read'
+  `
+  const n = result?.rowsAffected?.[0] ?? 0
+  if (n > 0) {
+    await execute`
+      UPDATE Messages SET ReadCount = ReadCount + ${n} WHERE Id = ${msgId}
+    `
+  }
+}
+
+/* ── Read ─────────────────────────────────────────────── */
+
+export interface ListFilter {
+  search?:    string
+  type?:      MessageType
+  agentId?:   string  // sadece bu sunucuya gönderilenler
+  limit?:     number
+  offset?:    number
+}
+
+export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
+  await ensureSchema()
+  const limit  = Math.min(f.limit ?? 100, 500)
+  const offset = f.offset ?? 0
+  const search = f.search?.trim() ? `%${f.search.trim()}%` : null
+
+  if (f.agentId) {
+    return query<MessageRow[]>`
+      SELECT m.Id, m.Subject, m.Body, m.Type, m.Priority, m.RecipientType,
+             m.CompanyId, m.CompanyName, m.SenderUserId, m.SenderName,
+             CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt,
+             m.TotalCount, m.ReadCount
+        FROM Messages m
+       WHERE EXISTS (
+         SELECT 1 FROM MessageRecipients r
+          WHERE r.MessageId = m.Id AND r.ServerId = ${f.agentId}
+       )
+         AND (${search} IS NULL OR m.Subject LIKE ${search} OR m.Body LIKE ${search})
+       ORDER BY m.SentAt DESC
+       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+    `
+  }
+
+  return query<MessageRow[]>`
+    SELECT Id, Subject, Body, Type, Priority, RecipientType,
+           CompanyId, CompanyName, SenderUserId, SenderName,
+           CONVERT(NVARCHAR(30), SentAt, 120) AS SentAt,
+           TotalCount, ReadCount
+      FROM Messages
+     WHERE (${search} IS NULL OR Subject LIKE ${search} OR Body LIKE ${search})
+     ORDER BY SentAt DESC
+     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
+  `
+}
+
+export async function getMessage(id: string): Promise<MessageRow | null> {
+  await ensureSchema()
+  const rows = await query<MessageRow[]>`
+    SELECT Id, Subject, Body, Type, Priority, RecipientType,
+           CompanyId, CompanyName, SenderUserId, SenderName,
+           CONVERT(NVARCHAR(30), SentAt, 120) AS SentAt,
+           TotalCount, ReadCount
+      FROM Messages WHERE Id = ${id}
+  `
+  return rows[0] ?? null
+}
+
+export async function getRecipients(messageId: string): Promise<RecipientRow[]> {
+  await ensureSchema()
+  return query<RecipientRow[]>`
+    SELECT Id, MessageId, ServerId, ServerName, Username, Status,
+           CONVERT(NVARCHAR(30), DeliveredAt, 120) AS DeliveredAt,
+           CONVERT(NVARCHAR(30), ReadAt,      120) AS ReadAt,
+           ErrorMessage
+      FROM MessageRecipients
+     WHERE MessageId = ${messageId}
+     ORDER BY Status DESC, ServerName, Username
+  `
+}

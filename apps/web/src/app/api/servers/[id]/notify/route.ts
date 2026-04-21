@@ -1,84 +1,74 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
-import { logSentMessage } from "@/lib/agent-store"
+import { requirePermission } from "@/lib/require-permission"
+import { auth } from "@/auth"
+import { broadcast } from "@/lib/messages-fanout"
+import { getAllAgents } from "@/lib/agent-store"
 import { randomUUID } from "crypto"
 
 interface ServerRow {
+  Id:   string
   Name: string
-  IP: string
-  ApiKey: string | null
-  AgentPort: number | null
 }
 
+/**
+ * POST /api/servers/[id]/notify
+ * Tek sunucudaki aktif oturumlara mesaj gönderir.
+ * Aslında merkezi `broadcast()` fonksiyonunu çağırır → DB'ye de yazılır.
+ */
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const gate = await requirePermission("messages", "write")
+  if (gate) return gate
+
   const { id } = await params
-  const { title, body: msgBody, type = "info", from = "Pusula Yazılım" } = await req.json()
+  const { title, body: msgBody, type = "info" } = await req.json().catch(() => ({}))
 
   if (!title?.trim() || !msgBody?.trim()) {
     return NextResponse.json({ error: "Başlık ve mesaj zorunlu" }, { status: 400 })
   }
 
   const rows = await query<ServerRow[]>`
-    SELECT Name, IP, ApiKey, AgentPort FROM Servers
+    SELECT Id, Name FROM Servers
     WHERE Id = ${id} OR LOWER(Name) = ${id.toLowerCase()}
   `
   if (!rows.length) {
     return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
   }
+  const serverId = rows[0].Id
 
-  const server = rows[0]
-  if (!server.ApiKey || !server.AgentPort) {
-    return NextResponse.json({ error: "Agent bağlantı bilgileri eksik" }, { status: 400 })
+  // Sunucuda aktif WTS oturumu var mı? — yoksa yine de gönder ama "0 alıcı" döner
+  const agent = getAllAgents().find(a => a.agentId === serverId)
+  const sessions = agent?.lastReport?.sessions ?? []
+  const usernames = Array.from(new Set(
+    sessions.filter(s => s.username && s.state === "Active").map(s => s.username)
+  ))
+
+  if (usernames.length === 0) {
+    return NextResponse.json({ ok: false, error: "Aktif oturum yok", sessions: 0 }, { status: 200 })
   }
 
-  const msgId = randomUUID()
-  const sentAt = new Date().toISOString()
-  const agentUrl = `http://${server.IP}:${server.AgentPort}`
+  const session = await auth()
+  const senderName   = session?.user?.fullName ?? session?.user?.username ?? "PusulaHub"
+  const senderUserId = session?.user?.id       ?? null
 
-  const payload = {
-    msgId,
-    title: title.trim(),
-    body: msgBody.trim(),
-    type,
-    from,
-    sentAt,
-  }
+  const result = await broadcast({
+    msgId: randomUUID(),
+    subject:       title.trim(),
+    body:          msgBody.trim(),
+    type:          (["info", "warning", "urgent"].includes(type) ? type : "info") as "info"|"warning"|"urgent",
+    priority:      "normal",
+    recipientType: "selected",
+    targets:       usernames.map(u => ({ agentId: serverId, username: u })),
+    senderName,
+    senderUserId,
+  })
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 12000)
-
-  try {
-    const res = await fetch(`${agentUrl}/api/notify`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Api-Key": server.ApiKey,
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    })
-    clearTimeout(timer)
-
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}))
-      return NextResponse.json(
-        { error: err.error ?? `Agent HTTP ${res.status}` },
-        { status: 502 }
-      )
-    }
-
-    const data = await res.json()
-    const sessions: number = data.sessions ?? 0
-
-    logSentMessage({ id: msgId, agentId: id, title: title.trim(), body: msgBody.trim(), type, from, sentAt, sessions })
-
-    return NextResponse.json({ ok: true, sessions })
-  } catch (err: unknown) {
-    clearTimeout(timer)
-    const msg = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: msg }, { status: 502 })
-  }
+  return NextResponse.json({
+    ok:       result.serversOk > 0,
+    sessions: result.totalRecipients,
+    msgId:    result.msgId,
+  })
 }
