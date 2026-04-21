@@ -72,9 +72,17 @@ getSentMessages(agentId)      // Son 50 mesajı döndürür
 ```
 1. body JSON'una agentPort ekler (PusulaNotify için)
 2. JSON'u base64'e encode eder
-3. SessionInjector.Inject() ile her WTSActive oturuma PusulaNotify.exe inject eder
+3. body içinde "targetUsernames":["a","b"] varsa yalnız eşleşen oturumlara inject
+   (yoksa tüm aktif oturumlara)
 4. Inject edilen oturum sayısını döndürür
 ```
+
+**Payload'a `targetUsernames` eklenmesi (opsiyonel):**
+- Hub `selected` modunda gönderdiğinde her sunucu için yalnızca seçili kullanıcı
+  adlarını içeren bir array gönderir: `"targetUsernames": ["ali", "veli"]`
+- Agent `WTSQuerySessionInformation(WTSUserName)` ile her oturumun kullanıcısını
+  alır, normalize eder (`DOMAIN\user` → `user`, lowercase), listede yoksa skip
+- Alan yoksa geriye dönük davranış: tüm aktif oturumlara inject
 
 **`SessionInjector` (P/Invoke):**
 - `WTSEnumerateSessions` → aktif oturumları listeler

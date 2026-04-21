@@ -170,20 +170,30 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
     try {
       const ctrl  = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 12000)
+      // "selected" modunda agent'a yalnızca seçili kullanıcılara inject etmesini söyle;
+      // diğer modlarda (all/company) tüm aktif oturumlara gönderilsin — alan yollanmaz.
+      const payload: Record<string, unknown> = {
+        msgId:  input.msgId,
+        title:  input.subject,
+        body:   input.body,
+        type:   input.type,
+        from:   input.senderName,
+        sentAt,
+      }
+      if (input.recipientType === "selected") {
+        const serverUsernames = groups.get(serverId) ?? []
+        if (serverUsernames.length > 0) {
+          payload.targetUsernames = serverUsernames
+        }
+      }
+
       const res = await fetch(`http://${info.IP}:${info.AgentPort}/api/notify`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Api-Key":    info.ApiKey,
         },
-        body: JSON.stringify({
-          msgId:  input.msgId,
-          title:  input.subject,
-          body:   input.body,
-          type:   input.type,
-          from:   input.senderName,
-          sentAt,
-        }),
+        body: JSON.stringify(payload),
         signal: ctrl.signal,
       })
       clearTimeout(timer)

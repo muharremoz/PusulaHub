@@ -1580,6 +1580,23 @@ class ApiServer
         return m.Groups[1].Value;
     }
 
+    // "key":["a","b","c"] gibi string array'leri cikarir; yoksa null doner.
+    private static List<string> ExtractStringArray(string json, string key)
+    {
+        var m = Regex.Match(json,
+            "\"" + Regex.Escape(key) + "\"\\s*:\\s*\\[([^\\]]*)\\]");
+        if (!m.Success) return null;
+        var items = Regex.Matches(m.Groups[1].Value, "\"((?:[^\"\\\\]|\\\\.)*)\"");
+        if (items.Count == 0) return null;
+        var result = new List<string>();
+        foreach (Match im in items)
+        {
+            string v = im.Groups[1].Value.Replace("\\\"", "\"").Replace("\\\\", "\\");
+            if (!string.IsNullOrEmpty(v)) result.Add(v);
+        }
+        return result.Count > 0 ? result : null;
+    }
+
     private void HandleNotify(HttpListenerContext ctx)
     {
         string body;
@@ -1603,8 +1620,13 @@ class ApiServer
                       ",\"agentPort\":" + _config.Port + "}";
 
         string base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(payload));
+
+        // targetUsernames varsa yalnizca listedeki kullanicilara inject et.
+        // Yoksa (eski davranis) tum aktif WTS oturumlarina gonder.
+        List<string> targetUsers = ExtractStringArray(body, "targetUsernames");
+
         int injected = 0;
-        try { injected = SessionInjector.Inject(notifyExe, base64); }
+        try { injected = SessionInjector.Inject(notifyExe, base64, targetUsers); }
         catch (Exception ex)
         {
             Respond(ctx, 500, "{\"error\":\"" + ex.Message.Replace("\"","'") + "\"}");
@@ -2154,6 +2176,34 @@ static class SessionInjector
     [DllImport("wtsapi32.dll", SetLastError = true)]
     static extern bool WTSQueryUserToken(uint SessionId, out IntPtr phToken);
 
+    [DllImport("wtsapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    static extern bool WTSQuerySessionInformation(IntPtr hServer, int sessionId,
+        int wtsInfoClass, out IntPtr ppBuffer, out uint pBytesReturned);
+
+    const int WTS_USERNAME = 5;
+
+    static string GetSessionUserName(int sessionId)
+    {
+        IntPtr buf; uint len;
+        if (!WTSQuerySessionInformation(IntPtr.Zero, sessionId, WTS_USERNAME, out buf, out len))
+            return "";
+        try
+        {
+            string s = Marshal.PtrToStringUni(buf);
+            return s == null ? "" : s;
+        }
+        finally { WTSFreeMemory(buf); }
+    }
+
+    // Hedef kullanici adini normalize et: "DOMAIN\user" -> "user", kucuk harf
+    static string NormalizeUser(string u)
+    {
+        if (string.IsNullOrEmpty(u)) return "";
+        int slash = u.IndexOf('\\');
+        string core = slash >= 0 ? u.Substring(slash + 1) : u;
+        return core.ToLowerInvariant();
+    }
+
     [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     static extern bool CreateProcessAsUser(IntPtr hToken, string lpApp, string lpCmd,
         IntPtr lpProcAttr, IntPtr lpThreadAttr, bool bInherit, uint dwFlags,
@@ -2186,6 +2236,25 @@ static class SessionInjector
 
     public static int Inject(string exePath, string base64Data)
     {
+        return Inject(exePath, base64Data, null);
+    }
+
+    // targetUsernames null ya da boşsa TÜM aktif oturumlara; doluysa yalnız eşleşenlere inject eder.
+    // Karşılaştırma: "DOMAIN\user" ve "user" formları eşdeğer, büyük-küçük duyarsız.
+    public static int Inject(string exePath, string base64Data, List<string> targetUsernames)
+    {
+        List<string> allowed = null;
+        if (targetUsernames != null && targetUsernames.Count > 0)
+        {
+            allowed = new List<string>();
+            foreach (string u in targetUsernames)
+            {
+                string n = NormalizeUser(u);
+                if (!string.IsNullOrEmpty(n)) allowed.Add(n);
+            }
+            if (allowed.Count == 0) allowed = null;
+        }
+
         int count = 0;
         IntPtr pSessions;
         uint sessionCount;
@@ -2198,6 +2267,14 @@ static class SessionInjector
                 var info = (WTS_SESSION_INFO)Marshal.PtrToStructure(
                     new IntPtr(pSessions.ToInt64() + i * sz), typeof(WTS_SESSION_INFO));
                 if (info.State != 0) continue; // WTSActive only
+
+                // Username filtresi varsa önce kontrol et
+                if (allowed != null)
+                {
+                    string sessionUser = NormalizeUser(GetSessionUserName(info.SessionID));
+                    if (string.IsNullOrEmpty(sessionUser)) continue;
+                    if (!allowed.Contains(sessionUser)) continue;
+                }
 
                 IntPtr hToken;
                 if (!WTSQueryUserToken((uint)info.SessionID, out hToken)) continue;
