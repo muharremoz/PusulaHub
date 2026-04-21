@@ -5,7 +5,7 @@ import Link from "next/link"
 import {
   Server, ShieldAlert, Building2, FolderKanban,
   CheckCircle2, XCircle, HardDrive, AlertTriangle,
-  Calendar as CalendarIcon, KeyRound, Clock,
+  Calendar as CalendarIcon, KeyRound, Clock, NotebookPen, Pin, User, Tag,
 } from "lucide-react"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -43,6 +43,12 @@ interface DashboardData {
     id: string; title: string
     startDate: string; endDate: string
     allDay: boolean; color: string; type: string
+  }[]
+  notes: {
+    id: string; title: string
+    color: string; pinned: boolean
+    tags: string[]; createdBy: string
+    createdAt: string; updatedAt: string
   }[]
 }
 
@@ -244,7 +250,7 @@ export default function DashboardPage() {
         <PanelCard
           title="Aktif Projeler"
           icon={<FolderKanban className="size-3.5" />}
-          footer={data ? `${data.projects.length} aktif proje` : undefined}
+          footer={data ? `${data.kpi.activeProjects} aktif proje${data.kpi.activeProjects > data.projects.length ? ` · son ${data.projects.length} gösteriliyor` : ""}` : undefined}
           action={<Link href="/projects" className="text-[11px] text-primary hover:underline">Tümü</Link>}
         >
           {loading ? (
@@ -318,6 +324,7 @@ export default function DashboardPage() {
           )}
         </PanelCard>
 
+        <div className="flex flex-col gap-2 min-h-0">
         <PanelCard
           title="Bugünkü Takvim"
           icon={<CalendarIcon className="size-3.5" />}
@@ -368,6 +375,81 @@ export default function DashboardPage() {
             </div>
           )}
         </PanelCard>
+
+        <PanelCard
+          title="Son Notlar"
+          icon={<NotebookPen className="size-3.5" />}
+          footer={data ? `${data.notes.length} not` : undefined}
+          action={<Link href="/notes" className="text-[11px] text-primary hover:underline">Tümü</Link>}
+        >
+          {loading ? (
+            <SkeletonList rows={4} />
+          ) : !data || data.notes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 gap-2">
+              <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center">
+                <NotebookPen className="size-5 text-muted-foreground" />
+              </div>
+              <div className="text-center">
+                <p className="text-[12px] font-medium text-foreground">Henüz not yok</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
+                  Hızlı notlar, hatırlatmalar ve fikirler için
+                </p>
+              </div>
+              <Link href="/notes" className="mt-1 text-[11px] text-primary hover:underline">
+                Not ekle
+              </Link>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/40">
+              {data.notes.map((n) => (
+                <Link
+                  key={n.id}
+                  href={`/notes?id=${n.id}`}
+                  className="py-2 flex items-stretch gap-2 text-[11px] hover:bg-muted/20 -mx-1 px-1 rounded"
+                >
+                  <span
+                    className="w-1 rounded-full shrink-0"
+                    style={{ backgroundColor: n.color || "#6366f1" }}
+                  />
+                  <div className="flex-1 min-w-0 flex flex-col gap-1">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {n.pinned && <Pin className="size-2.5 text-amber-500 shrink-0 fill-amber-500" />}
+                      <span className="font-medium truncate">{n.title}</span>
+                      {n.tags.length > 0 && (
+                        <div className="flex items-center gap-1 shrink-0">
+                          {n.tags.slice(0, 2).map((t) => (
+                            <Badge
+                              key={t}
+                              variant="outline"
+                              className="h-4 px-1.5 text-[9px] font-normal gap-0.5"
+                            >
+                              <Tag className="size-2" />
+                              {t}
+                            </Badge>
+                          ))}
+                          {n.tags.length > 2 && (
+                            <span className="text-[9px] text-muted-foreground">+{n.tags.length - 2}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span className="flex items-center gap-0.5 truncate">
+                        <User className="size-2.5" />
+                        {n.createdBy}
+                      </span>
+                      <span className="flex items-center gap-0.5 tabular-nums shrink-0">
+                        <Clock className="size-2.5" />
+                        {formatDateTime(n.updatedAt)}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </PanelCard>
+        </div>
       </div>
       </div>
     </PageContainer>

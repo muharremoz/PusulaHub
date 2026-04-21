@@ -41,6 +41,17 @@ interface CalendarRow {
   Type:      string
 }
 
+interface NoteRow {
+  Id:        string
+  Title:     string
+  Color:     string
+  Pinned:    boolean
+  Tags:      string | null
+  CreatedBy: string
+  CreatedAt: string
+  UpdatedAt: string
+}
+
 interface CompanyCountRow { Count: number }
 
 export async function GET() {
@@ -106,7 +117,9 @@ export async function GET() {
 
     /* ── KPI 3: Aktif proje sayısı ── */
     const activeProjectRows = await query<CompanyCountRow[]>`
-      SELECT COUNT(*) AS Count FROM Projects WHERE Status = 'active'
+      SELECT COUNT(*) AS Count FROM Projects p
+      WHERE p.Status = 'active'
+        AND EXISTS (SELECT 1 FROM ProjectTasks t WHERE t.ProjectId = p.Id)
     `
     const activeProjects = activeProjectRows[0]?.Count ?? 0
 
@@ -139,9 +152,9 @@ export async function GET() {
       failedLogonTotal24h = countRows[0]?.Count ?? 0
     } catch { /* ignore */ }
 
-    /* ── Aktif projeler listesi (en son oluşturulan 8) ── */
+    /* ── Aktif projeler listesi (en son oluşturulan 20) ── */
     const projectRows = await query<ProjectRow[]>`
-      SELECT TOP 8
+      SELECT TOP 20
         p.Id, p.Name, p.Color, p.Status,
         c.Name AS CompanyName,
         ISNULL((SELECT COUNT(*) FROM ProjectTasks t WHERE t.ProjectId = p.Id), 0) AS TaskCount,
@@ -157,6 +170,7 @@ export async function GET() {
       FROM Projects p
       LEFT JOIN Companies c ON c.Id = p.CompanyId
       WHERE p.Status = 'active'
+        AND EXISTS (SELECT 1 FROM ProjectTasks t WHERE t.ProjectId = p.Id)
       ORDER BY p.CreatedAt DESC
     `
 
@@ -178,6 +192,16 @@ export async function GET() {
       WHERE StartDate <= ${todayEndStr}
         AND EndDate   >= ${todayStartStr}
       ORDER BY StartDate ASC
+    `
+
+    /* ── Son notlar (pinned + en güncel 6) ── */
+    const noteRows = await query<NoteRow[]>`
+      SELECT TOP 6
+        Id, Title, Color, Pinned, Tags, CreatedBy,
+        CONVERT(NVARCHAR(16), CreatedAt, 120) AS CreatedAt,
+        CONVERT(NVARCHAR(16), UpdatedAt, 120) AS UpdatedAt
+      FROM Notes
+      ORDER BY Pinned DESC, UpdatedAt DESC
     `
 
     return NextResponse.json({
@@ -216,6 +240,16 @@ export async function GET() {
         allDay:    c.AllDay,
         color:     c.Color,
         type:      c.Type,
+      })),
+      notes: noteRows.map((n) => ({
+        id:        n.Id,
+        title:     n.Title,
+        color:     n.Color,
+        pinned:    !!n.Pinned,
+        tags:      n.Tags ? n.Tags.split(",").map((t) => t.trim()).filter(Boolean) : [],
+        createdBy: n.CreatedBy,
+        createdAt: n.CreatedAt,
+        updatedAt: n.UpdatedAt,
       })),
     })
   } catch (err) {
