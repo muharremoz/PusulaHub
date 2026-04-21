@@ -1,6 +1,7 @@
 "use client";
 
 import { use, useState, useEffect, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -29,13 +30,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Server } from "@/types";
 import type { AgentReport } from "@/lib/agent-types";
 import { TabOverview } from "@/components/server-detail/tab-overview";
-import { TabSessions } from "@/components/server-detail/tab-sessions";
-import { TabCompanies } from "@/components/server-detail/tab-companies";
-import { TabUsers } from "@/components/server-detail/tab-users";
-import { TabSecurity } from "@/components/server-detail/tab-security";
-import { TabLogs } from "@/components/server-detail/tab-logs";
-import { TabMessages } from "@/components/server-detail/tab-messages";
-import { TabFiles } from "@/components/server-detail/tab-files";
+
+const TabSessions  = dynamic(() => import("@/components/server-detail/tab-sessions").then((m) => m.TabSessions),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabCompanies = dynamic(() => import("@/components/server-detail/tab-companies").then((m) => m.TabCompanies),  { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabUsers     = dynamic(() => import("@/components/server-detail/tab-users").then((m) => m.TabUsers),          { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabSecurity  = dynamic(() => import("@/components/server-detail/tab-security").then((m) => m.TabSecurity),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabLogs      = dynamic(() => import("@/components/server-detail/tab-logs").then((m) => m.TabLogs),            { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabMessages  = dynamic(() => import("@/components/server-detail/tab-messages").then((m) => m.TabMessages),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabFiles     = dynamic(() => import("@/components/server-detail/tab-files").then((m) => m.TabFiles),          { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 import type { FirmaCompany } from "@/app/api/firma/companies/route";
 
 /** API /detail endpoint'inden dönen veri yapısı */

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition, useRef, useEffect } from "react"
+import { useState, useTransition, useRef, useEffect, Suspense } from "react"
 import { signIn }    from "next-auth/react"
 import { useRouter, useSearchParams } from "next/navigation"
 import {
@@ -15,6 +15,14 @@ import { cn }     from "@/lib/utils"
 type Step = "password" | "otp"
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginInner />
+    </Suspense>
+  )
+}
+
+function LoginInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl  = searchParams.get("callbackUrl") ?? "/dashboard"

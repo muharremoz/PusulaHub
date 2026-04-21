@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import dynamic from "next/dynamic"
 import {
   WizardUser, BackupFile, Company, ExistingAdUser,
 } from "@/lib/setup-mock-data"
@@ -13,14 +14,16 @@ import type { ScanBackupsResponse } from "@/app/api/setup/sql-servers/[id]/scan-
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { toast } from "sonner"
 import { StepServer, type AdServerItem } from "./step-server"
-import { StepFirma, type RdpServerItem } from "./step-firma"
 import { StepUsers, meetsAdComplexity } from "./step-users"
-import { StepServices } from "./step-services"
-import { StepSql } from "./step-sql"
-import { StepSummary } from "./step-summary"
-import { StepRun } from "./step-run"
+import type { RdpServerItem } from "./step-firma"
 import { BlurFade } from "@/components/magicui/blur-fade"
-import { Confetti } from "@/components/magicui/confetti"
+
+const StepFirma    = dynamic(() => import("./step-firma").then((m) => m.StepFirma),       { ssr: false })
+const StepServices = dynamic(() => import("./step-services").then((m) => m.StepServices), { ssr: false })
+const StepSql      = dynamic(() => import("./step-sql").then((m) => m.StepSql),           { ssr: false })
+const StepSummary  = dynamic(() => import("./step-summary").then((m) => m.StepSummary),   { ssr: false })
+const StepRun      = dynamic(() => import("./step-run").then((m) => m.StepRun),           { ssr: false })
+const Confetti     = dynamic(() => import("@/components/magicui/confetti").then((m) => m.Confetti), { ssr: false })
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 

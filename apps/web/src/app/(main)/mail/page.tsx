@@ -16,6 +16,10 @@ import { Skeleton }     from "@/components/ui/skeleton"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { cn }    from "@/lib/utils"
 import type { MailMessage }  from "@/app/api/mail/messages/route"
@@ -140,17 +144,54 @@ function MessageRow({ msg, selected, onClick }: {
 /* ──────────────────────────────────────────
    Yeni Mail / Yanıt Compose
 ────────────────────────────────────────── */
-function ComposeWindow({ replyTo, onClose, onSent }: {
+interface AttachmentPayload { name: string; type: string; data: string } // data = base64
+
+function ComposeWindow({ open, replyTo, onClose, onSent }: {
+  open: boolean
   replyTo?: MailDetail | null
   onClose: () => void
   onSent:  () => void
 }) {
-  const [to,       setTo]       = useState(replyTo ? replyTo.from : "")
-  const [cc,       setCc]       = useState("")
-  const [subject,  setSubject]  = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "")}` : "")
-  const [body,     setBody]     = useState("")
-  const [showCc,   setShowCc]   = useState(false)
-  const [sending,  setSending]  = useState(false)
+  const [to,          setTo]          = useState("")
+  const [cc,          setCc]          = useState("")
+  const [subject,     setSubject]     = useState("")
+  const [body,        setBody]        = useState("")
+  const [showCc,      setShowCc]      = useState(false)
+  const [sending,     setSending]     = useState(false)
+  const [attachments, setAttachments] = useState<AttachmentPayload[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setTo(replyTo ? replyTo.from : "")
+      setCc("")
+      setSubject(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, "")}` : "")
+      setBody("")
+      setShowCc(false)
+      setAttachments([])
+    }
+  }, [open, replyTo])
+
+  async function handleFiles(files: FileList | null) {
+    if (!files || !files.length) return
+    const MAX = 20 * 1024 * 1024 // 20MB
+    const next: AttachmentPayload[] = []
+    for (const f of Array.from(files)) {
+      if (f.size > MAX) { toast.error(`${f.name} 20MB'den büyük`); continue }
+      const b64 = await new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload  = () => res((r.result as string).split(",")[1] ?? "")
+        r.onerror = () => rej(r.error)
+        r.readAsDataURL(f)
+      })
+      next.push({ name: f.name, type: f.type || "application/octet-stream", data: b64 })
+    }
+    setAttachments((cur) => [...cur, ...next])
+  }
+
+  function removeAttachment(i: number) {
+    setAttachments((cur) => cur.filter((_, idx) => idx !== i))
+  }
 
   async function send() {
     if (!to.trim()) { toast.error("Alıcı gerekli"); return }
@@ -163,6 +204,7 @@ function ComposeWindow({ replyTo, onClose, onSent }: {
           to, cc: cc || undefined, subject,
           body: `<div style="font-family:sans-serif;font-size:13px">${body.replace(/\n/g,"<br>")}</div>`,
           replyToMessageId: replyTo?.id,
+          attachments: attachments.length ? attachments : undefined,
         }),
       })
       if (!r.ok) throw new Error()
@@ -172,47 +214,69 @@ function ComposeWindow({ replyTo, onClose, onSent }: {
   }
 
   return (
-    <div className="absolute bottom-4 right-4 w-[480px] bg-white rounded-[8px] shadow-2xl border border-border/50 flex flex-col z-50" style={{ maxHeight: "520px" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-foreground text-background rounded-t-[8px]">
-        <span className="text-[12px] font-medium">{replyTo ? "Yanıtla" : "Yeni Mail"}</span>
-        <button onClick={onClose} className="text-background/70 hover:text-background"><X className="size-4" /></button>
-      </div>
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-[640px] p-0 gap-0 rounded-[8px]">
+        <DialogHeader className="px-5 py-3 border-b border-border/50">
+          <DialogTitle className="text-[13px] font-semibold">{replyTo ? "Yanıtla" : "Yeni Mail"}</DialogTitle>
+        </DialogHeader>
 
-      {/* Alanlar */}
-      <div className="px-4 py-2 border-b border-border/30 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground w-8 shrink-0">Kime</span>
-          <input value={to} onChange={e => setTo(e.target.value)}
-            className="flex-1 text-[12px] outline-none bg-transparent"
-            placeholder="alici@ornek.com" />
-          <button onClick={() => setShowCc(v => !v)} className="text-[10px] text-muted-foreground hover:text-foreground">{showCc ? "Gizle" : "Cc"}</button>
-        </div>
-        {showCc && (
+        {/* Alanlar */}
+        <div className="px-5 py-3 border-b border-border/30 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-muted-foreground w-8 shrink-0">Cc</span>
-            <input value={cc} onChange={e => setCc(e.target.value)} className="flex-1 text-[12px] outline-none bg-transparent" placeholder="cc@ornek.com" />
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide w-10 shrink-0">Kime</Label>
+            <input value={to} onChange={e => setTo(e.target.value)}
+              className="flex-1 text-[12px] outline-none bg-transparent"
+              placeholder="alici@ornek.com" />
+            <button onClick={() => setShowCc(v => !v)} className="text-[10px] text-muted-foreground hover:text-foreground">{showCc ? "Gizle" : "Cc"}</button>
+          </div>
+          {showCc && (
+            <div className="flex items-center gap-2">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wide w-10 shrink-0">Cc</Label>
+              <input value={cc} onChange={e => setCc(e.target.value)} className="flex-1 text-[12px] outline-none bg-transparent" placeholder="cc@ornek.com" />
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            <Label className="text-[10px] text-muted-foreground uppercase tracking-wide w-10 shrink-0">Konu</Label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} className="flex-1 text-[12px] outline-none bg-transparent font-medium" placeholder="Konu..." />
+          </div>
+        </div>
+
+        {/* Gövde */}
+        <Textarea value={body} onChange={e => setBody(e.target.value)}
+          placeholder="Mesajınızı yazın..."
+          className="border-0 rounded-none text-[12px] resize-none min-h-[240px] focus-visible:ring-0 px-5 py-3" />
+
+        {/* Attachment listesi */}
+        {attachments.length > 0 && (
+          <div className="px-5 py-2 border-t border-border/30 flex flex-wrap gap-1.5">
+            {attachments.map((a, i) => (
+              <span key={i} className="flex items-center gap-1.5 text-[11px] bg-muted/50 px-2 py-1 rounded-[4px] border border-border/40">
+                <Paperclip className="size-3" />
+                <span className="max-w-[160px] truncate">{a.name}</span>
+                <button onClick={() => removeAttachment(i)} className="text-muted-foreground hover:text-destructive"><X className="size-3" /></button>
+              </span>
+            ))}
           </div>
         )}
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground w-8 shrink-0">Konu</span>
-          <input value={subject} onChange={e => setSubject(e.target.value)} className="flex-1 text-[12px] outline-none bg-transparent font-medium" placeholder="Konu..." />
+
+        {/* Alt */}
+        <div className="px-5 py-3 border-t border-border/50 flex items-center gap-2">
+          <input ref={fileInputRef} type="file" multiple className="hidden"
+            onChange={(e) => { handleFiles(e.target.files); if (fileInputRef.current) fileInputRef.current.value = "" }} />
+          <button onClick={() => fileInputRef.current?.click()}
+            className="h-8 px-2.5 rounded-[5px] text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors flex items-center gap-1.5"
+            title="Dosya ekle">
+            <Paperclip className="size-3.5" /> Ek Ekle
+          </button>
+          <div className="ml-auto flex items-center gap-2">
+            <button onClick={onClose} className="text-[11px] text-muted-foreground hover:text-foreground">Kapat</button>
+            <Button onClick={send} disabled={sending} className="h-8 text-[12px] rounded-[5px] gap-1.5">
+              <Send className="size-3.5" />{sending ? "Gönderiliyor..." : "Gönder"}
+            </Button>
+          </div>
         </div>
-      </div>
-
-      {/* Gövde */}
-      <Textarea value={body} onChange={e => setBody(e.target.value)}
-        placeholder="Mesajınızı yazın..."
-        className="flex-1 border-0 rounded-none text-[12px] resize-none min-h-[180px] focus-visible:ring-0 px-4 py-3" />
-
-      {/* Alt */}
-      <div className="px-4 py-2.5 border-t border-border/30 flex items-center gap-2">
-        <Button onClick={send} disabled={sending} className="h-8 text-[12px] rounded-[5px] gap-1.5">
-          <Send className="size-3.5" />{sending ? "Gönderiliyor..." : "Gönder"}
-        </Button>
-        <button onClick={onClose} className="text-[11px] text-muted-foreground hover:text-foreground ml-auto">Kapat</button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -625,14 +689,14 @@ export default function MailPage() {
         )}
       </div>
 
-      {/* ── Compose Window ── */}
-      {composeOpen && (
-        <ComposeWindow
-          replyTo={replyTo}
-          onClose={() => { setComposeOpen(false); setReplyTo(null) }}
-          onSent={() => loadMessages(activeLabel, searchQ)}
-        />
-      )}
+      {/* ── Compose Dialog ── */}
+      <ComposeWindow
+        open={composeOpen}
+        replyTo={replyTo}
+        onClose={() => { setComposeOpen(false); setReplyTo(null) }}
+        onSent={() => loadMessages(activeLabel, searchQ)}
+      />
+
     </div>
   )
 }

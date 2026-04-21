@@ -3,9 +3,9 @@
 import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Plus, FolderKanban, Building2, CheckCircle2,
+  Plus, FolderKanban, CheckCircle2,
   MoreVertical, Archive, Trash2, Circle, Pencil,
-  Search, Filter, Download, SlidersHorizontal,
+  Search,
 } from "lucide-react"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -20,13 +20,9 @@ import {
   DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  Table, TableBody, TableCell, TableHead,
-  TableHeader, TableRow,
-} from "@/components/ui/table"
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
@@ -230,26 +226,24 @@ export default function ProjectsPage() {
           </div>
 
           {/* Durum filtresi */}
-          <ToggleGroup type="single" value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}
-            className="gap-0.5">
-            <ToggleGroupItem value="all" className="h-7 px-2.5 text-[10px] font-medium rounded-[4px] data-[state=on]:bg-foreground data-[state=on]:text-background">
-              Tümü
-            </ToggleGroupItem>
-            <ToggleGroupItem value="active" className="h-7 px-2.5 text-[10px] font-medium rounded-[4px] data-[state=on]:bg-emerald-600 data-[state=on]:text-white">
-              Aktif
-            </ToggleGroupItem>
-            <ToggleGroupItem value="completed" className="h-7 px-2.5 text-[10px] font-medium rounded-[4px] data-[state=on]:bg-blue-600 data-[state=on]:text-white">
-              Tamamlandı
-            </ToggleGroupItem>
-            <ToggleGroupItem value="archived" className="h-7 px-2.5 text-[10px] font-medium rounded-[4px] data-[state=on]:bg-muted data-[state=on]:text-foreground">
-              Arşiv
-            </ToggleGroupItem>
-          </ToggleGroup>
+          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+            {(["all", "active", "completed", "archived"] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setStatusFilter(f)}
+                className={cn(
+                  "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
+                  statusFilter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                {f === "all" ? "Tümü" : f === "active" ? "Aktif" : f === "completed" ? "Tamamlandı" : "Arşiv"}
+              </button>
+            ))}
+          </div>
 
           {/* Arşivlenmiş dahil et */}
-          <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)}
-              className="size-3 rounded-sm" />
+          <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground cursor-pointer select-none">
+            <Checkbox checked={showArchived} onCheckedChange={(c) => setShowArchived(!!c)} />
             Arşivi dahil et
           </label>
 
@@ -292,111 +286,45 @@ export default function ProjectsPage() {
               )}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/30 border-b border-border/40">
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase w-[3%]" />
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Proje</TableHead>
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</TableHead>
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Firma</TableHead>
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">İlerleme</TableHead>
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-center">Görev</TableHead>
-                  <TableHead className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase w-[40px]" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((p) => {
-                  const donePct = p.taskCount > 0 ? Math.round((p.doneCount / p.taskCount) * 100) : 0
-                  const st = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.active
-                  return (
-                    <TableRow
-                      key={p.id}
-                      className="hover:bg-muted/20 transition-colors cursor-pointer group"
-                      onClick={() => router.push(`/projects/${p.id}`)}
-                    >
-                      {/* Renk */}
-                      <TableCell className="px-0 py-0 w-[3px]">
-                        <div className="w-[3px] h-10 rounded-r-full" style={{ backgroundColor: p.color }} />
-                      </TableCell>
-
-                      {/* Proje adı + açıklama */}
-                      <TableCell className="py-2.5">
-                        <p className="text-[12px] font-semibold leading-tight">{p.name}</p>
-                        {p.description && (
-                          <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{p.description}</p>
-                        )}
-                      </TableCell>
-
-                      {/* Durum badge */}
-                      <TableCell className="py-2.5">
-                        <Badge variant="outline" className={cn("text-[10px] font-medium px-2 py-0.5 rounded-full", st.badgeCls)}>
-                          {st.label}
-                        </Badge>
-                      </TableCell>
-
-                      {/* Firma */}
-                      <TableCell className="py-2.5">
-                        {p.companyName ? (
-                          <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <Building2 className="size-3 shrink-0" />{p.companyName}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] text-muted-foreground/50">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* İlerleme */}
-                      <TableCell className="py-2.5">
-                        <div className="flex items-center gap-2 min-w-[120px]">
-                          <Progress value={donePct} className="h-1.5 flex-1" />
-                          <span className="text-[10px] font-semibold tabular-nums w-8 text-right" style={{ color: p.color }}>
-                            %{donePct}
-                          </span>
-                        </div>
-                      </TableCell>
-
-                      {/* Görev sayısı */}
-                      <TableCell className="py-2.5 text-center">
-                        <span className="text-[11px] tabular-nums text-muted-foreground">
-                          {p.doneCount}<span className="text-muted-foreground/50">/{p.taskCount}</span>
-                        </span>
-                      </TableCell>
-
-                      {/* Aksiyon */}
-                      <TableCell className="py-2.5 pr-3">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical className="size-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-[6px] text-[11px]"
-                            onClick={(e) => e.stopPropagation()}>
-                            <DropdownMenuItem onClick={() => router.push(`/projects/${p.id}`)}>
-                              <FolderKanban className="size-3.5 mr-2" /> Kanban Aç
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(p)}>
-                              <Pencil className="size-3.5 mr-2" /> Düzenle
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleArchive(p.id)}>
-                              <Archive className="size-3.5 mr-2" /> Arşivle
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive"
-                              onClick={() => setDeleteId(p.id)}>
-                              <Trash2 className="size-3.5 mr-2" /> Sil
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
+            <div className="divide-y divide-border/30">
+              {filtered.map((p) => {
+                const donePct = p.taskCount > 0 ? Math.round((p.doneCount / p.taskCount) * 100) : 0
+                const st = STATUS_CONFIG[p.status] ?? STATUS_CONFIG.active
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => router.push(`/projects/${p.id}`)}
+                    className="group flex items-center gap-3 px-3 py-1.5 hover:bg-muted/20 cursor-pointer transition-colors"
+                  >
+                    <div className="size-2 rounded-full shrink-0" style={{ backgroundColor: p.color }} />
+                    <div className="flex items-baseline gap-2 min-w-0 flex-1">
+                      <span className="text-[12px] font-semibold truncate">{p.name}</span>
+                      {p.description && <span className="text-[10px] text-muted-foreground truncate">· {p.description}</span>}
+                    </div>
+                    <Badge variant="outline" className={cn("text-[9px] font-medium px-1.5 py-0 rounded-full shrink-0", st.badgeCls)}>{st.label}</Badge>
+                    <div className="flex items-center gap-1.5 w-[140px] shrink-0">
+                      <Progress value={donePct} className="h-1 flex-1" />
+                      <span className="text-[10px] font-semibold tabular-nums w-7 text-right" style={{ color: p.color }}>%{donePct}</span>
+                    </div>
+                    <span className="text-[10px] tabular-nums text-muted-foreground w-10 text-right shrink-0">{p.doneCount}/{p.taskCount}</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={(e) => e.stopPropagation()}>
+                          <MoreVertical className="size-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="rounded-[6px] text-[11px]" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => router.push(`/projects/${p.id}`)}><FolderKanban className="size-3.5 mr-2" /> Kanban Aç</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEdit(p)}><Pencil className="size-3.5 mr-2" /> Düzenle</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => handleArchive(p.id)}><Archive className="size-3.5 mr-2" /> Arşivle</DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 className="size-3.5 mr-2" /> Sil</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )
+              })}
+            </div>
           )}
 
           {/* Footer */}

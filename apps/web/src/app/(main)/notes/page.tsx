@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import dynamic from "next/dynamic"
 import {
   Plus, Search, Pin, PinOff, Trash2, Tag, X,
   StickyNote, Clock, ChevronDown, User, Calendar,
@@ -16,7 +17,7 @@ import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { NoteItem } from "@/app/api/notes/route"
 import type { NoteDetail } from "@/app/api/notes/[id]/route"
-import { NoteRichEditor } from "@/components/notes/note-rich-editor"
+const NoteRichEditor = dynamic(() => import("@/components/notes/note-rich-editor").then((m) => m.NoteRichEditor), { ssr: false, loading: () => <div className="flex-1 px-5 py-4"><Skeleton className="h-full w-full" /></div> })
 import { stripHtml } from "@/lib/strip-html"
 
 /* ── Renk seçenekleri ── */

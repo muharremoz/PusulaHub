@@ -94,7 +94,13 @@ export function NavUser() {
             <DropdownMenuSeparator />
 
             <DropdownMenuItem
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={async () => {
+                // NextAuth v5'in server-side redirect'i bazı koşullarda
+                // localhost:3000'e düşüyor. redirect:false ile bypass edip
+                // manuel olarak kendi origin'imize yönlendiriyoruz.
+                await signOut({ redirect: false })
+                window.location.href = `${window.location.origin}/login`
+              }}
               className="gap-2 text-[12px] text-destructive focus:text-destructive"
             >
               <LogOut className="size-3.5" />Çıkış Yap

@@ -94,7 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           SELECT Id, Username, Email, PasswordHash, FullName, Role,
                  IsActive, TwoFactorEnabled, TwoFactorSecret
           FROM AppUsers
-          WHERE LOWER(Username) = ${username} AND IsActive = 1
+          WHERE (LOWER(Username) = ${username} OR LOWER(Email) = ${username}) AND IsActive = 1
         `
         if (!rows.length) return null
 

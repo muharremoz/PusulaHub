@@ -7,8 +7,13 @@ export async function GET(req: NextRequest) {
   const params = new URL(req.url).searchParams
   const code   = params.get("code")
   const state  = params.get("state")
+
+  // Host header'dan base URL — custom server (port 4242) için req.url güvenilmez
+  const host = req.headers.get("host") ?? "localhost:4242"
+  const base = `http://${host}`
+
   if (!code) {
-    return NextResponse.redirect(new URL("/mail?error=no_code", req.url))
+    return NextResponse.redirect(`${base}/mail?error=no_code`)
   }
 
   // Auth route'tan gelen state içinde redirectUri saklı
@@ -35,9 +40,9 @@ export async function GET(req: NextRequest) {
       email
     )
 
-    return NextResponse.redirect(new URL("/mail?connected=1", req.url))
+    return NextResponse.redirect(`${base}/mail?connected=1`)
   } catch (e) {
     console.error("OAuth callback error:", e)
-    return NextResponse.redirect(new URL("/mail?error=auth_failed", req.url))
+    return NextResponse.redirect(`${base}/mail?error=auth_failed`)
   }
 }

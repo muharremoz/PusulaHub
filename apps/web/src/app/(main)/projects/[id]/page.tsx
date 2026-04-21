@@ -1,6 +1,7 @@
 "use client"
 
 import { use, useState, useEffect, useCallback } from "react"
+import dynamic from "next/dynamic"
 import { useRouter } from "next/navigation"
 import {
   ChevronLeft, RefreshCw, MoreVertical,
@@ -21,9 +22,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { KanbanBoard } from "@/components/projects/kanban-board"
-import { ActivityPanel } from "@/components/projects/activity-panel"
-import { GanttChart } from "@/components/projects/gantt-chart"
-import { ProjectCharts } from "@/components/projects/project-charts"
+
+const ActivityPanel = dynamic(
+  () => import("@/components/projects/activity-panel").then((m) => m.ActivityPanel),
+  { ssr: false },
+)
+const GanttChart = dynamic(
+  () => import("@/components/projects/gantt-chart").then((m) => m.GanttChart),
+  { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-64 w-full" /></div> },
+)
+const ProjectCharts = dynamic(
+  () => import("@/components/projects/project-charts").then((m) => m.ProjectCharts),
+  { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-64 w-full" /></div> },
+)
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { BoardData } from "@/app/api/projects/[id]/route"
 
