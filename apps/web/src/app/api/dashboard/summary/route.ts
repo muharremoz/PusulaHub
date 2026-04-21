@@ -109,9 +109,10 @@ export async function GET() {
       .sort((a, b) => b.disk - a.disk)
       .slice(0, 8)
 
-    /* ── KPI 2: Firma sayısı ── */
+    /* ── KPI 2: Firma sayısı (AD sunucularda kaydı olanlar) ── */
     const companyRows = await query<CompanyCountRow[]>`
-      SELECT COUNT(*) AS Count FROM Companies WHERE CompanyId IS NOT NULL
+      SELECT COUNT(*) AS Count FROM Companies
+      WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
     `
     const totalCompanies = companyRows[0]?.Count ?? 0
 
