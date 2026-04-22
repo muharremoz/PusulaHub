@@ -37,7 +37,11 @@ function getLanAddresses(): string[] {
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    const parsedUrl = parse(req.url ?? "/", true)
+    // Next.js 15 + custom server + basePath + middleware kombinasyonunda
+    // Next'in internal NextURL'si params.request.url'i relative alıyor ve
+    // "Invalid URL" atıyor. req.url'i absolute hale getirip parse ederek veriyoruz.
+    const host      = req.headers.host ?? `localhost:${port}`
+    const parsedUrl = parse(`http://${host}${req.url ?? "/"}`, true)
     handle(req, res, parsedUrl)
   })
 
