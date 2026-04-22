@@ -50,6 +50,24 @@ const APPS: AppEntry[] = [
 const CURRENT_ID = "hub"
 
 export function AppSwitcher() {
+  const [accessibleApps, setAccessibleApps] = React.useState<string[] | null>(null)
+
+  // Kullanıcının erişebildiği app id'lerini session endpoint'inden al —
+  // yetki olmayan uygulamalar dropdown'da görünmesin.
+  React.useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        const apps = d?.user?.apps as Array<{ id: string }> | undefined
+        setAccessibleApps(apps?.map((a) => a.id) ?? [])
+      })
+  }, [])
+
+  const visibleApps = React.useMemo(() => {
+    if (accessibleApps === null) return APPS.filter((a) => a.id === CURRENT_ID)
+    return APPS.filter((a) => accessibleApps.includes(a.id))
+  }, [accessibleApps])
+
   const current = APPS.find((a) => a.id === CURRENT_ID) ?? APPS[0]
   const Icon    = current.icon
 
@@ -78,7 +96,7 @@ export function AppSwitcher() {
         <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
           Pusula Uygulamaları
         </DropdownMenuLabel>
-        {APPS.map((app) => {
+        {visibleApps.map((app) => {
           const ItemIcon = app.icon
           const isActive = app.id === CURRENT_ID
           return (
