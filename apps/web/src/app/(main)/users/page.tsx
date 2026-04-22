@@ -51,7 +51,7 @@ function UserSheet({ open, user, onClose, onSaved }: {
   const [fullName,    setFullName]    = useState("")
   const [role,        setRole]        = useState("user")
   const [password,    setPassword]    = useState("")
-  const [allowedApps, setAllowedApps] = useState<string[]>([])
+  const [allowedApps, setAllowedApps] = useState<Array<{ id: string; role: "admin" | "user" | "viewer" }>>([])
   const [saving,      setSaving]      = useState(false)
 
   useEffect(() => {
@@ -59,7 +59,11 @@ function UserSheet({ open, user, onClose, onSaved }: {
     if (user) {
       setUsername(user.username); setEmail(user.email ?? "")
       setFullName(user.fullName ?? ""); setRole(user.role); setPassword("")
-      setAllowedApps(user.allowedApps ?? [])
+      // Eski string[] formatini da tolere et
+      const raw = user.allowedApps ?? []
+      setAllowedApps(raw.map((x) =>
+        typeof x === "string" ? { id: x, role: "user" as const } : x,
+      ))
     } else {
       setUsername(""); setEmail(""); setFullName(""); setRole("user"); setPassword("")
       setAllowedApps([])
@@ -67,8 +71,13 @@ function UserSheet({ open, user, onClose, onSaved }: {
   }, [open, user])
 
   function toggleApp(id: string) {
-    setAllowedApps((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])
+    setAllowedApps((cur) =>
+      cur.some((g) => g.id === id)
+        ? cur.filter((g) => g.id !== id)
+        : [...cur, { id, role: "user" }],
+    )
   }
+  const hasApp = (id: string) => allowedApps.some((g) => g.id === id)
 
   async function handleSave() {
     if (!isEdit && !username.trim()) { toast.error("Kullanıcı adı gerekli"); return }
@@ -144,7 +153,7 @@ function UserSheet({ open, user, onClose, onSaved }: {
                 {APP_REGISTRY.map((app) => (
                   <label key={app.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/20">
                     <Checkbox
-                      checked={allowedApps.includes(app.id)}
+                      checked={hasApp(app.id)}
                       onCheckedChange={() => toggleApp(app.id)}
                     />
                     <span className="text-[12px]">{app.name}</span>
@@ -306,11 +315,14 @@ export default function UsersPage() {
                         <span className="text-[10px] text-muted-foreground">—</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
-                          {u.allowedApps.map((id) => {
-                            const app = APP_REGISTRY.find((a) => a.id === id)
+                          {u.allowedApps.map((g) => {
+                            const id   = typeof g === "string" ? g : g.id
+                            const role = typeof g === "string" ? null : g.role
+                            const app  = APP_REGISTRY.find((a) => a.id === id)
                             return (
                               <span key={id} className="text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/30 border-border/40">
                                 {app?.name ?? id}
+                                {role ? <span className="ml-1 text-muted-foreground">· {role}</span> : null}
                               </span>
                             )
                           })}
