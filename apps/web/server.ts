@@ -20,7 +20,11 @@ import { startFirmaSync } from "./src/lib/firma-sync"
 const dev  = process.env.NODE_ENV !== "production"
 const port = 4242
 const host = "0.0.0.0"  // tüm network interface'lerinde dinle (LAN erişimi için)
-const app  = next({ dev })
+// NOT: hostname/port **zorunlu** — Next.js edge middleware adapter'ı
+// (next-server.js runMiddleware) absolute URL kurarken bunları kullanıyor.
+// Eksik bırakılırsa `http://localhost:undefined/...` oluşur ve NextURL
+// "Invalid URL" atar (vercel/next.js#67277). fetchHostname "localhost".
+const app  = next({ dev, hostname: "localhost", port })
 const handle = app.getRequestHandler()
 
 /** LAN'daki IPv4 adreslerini bul — kullanıcı hangi adresten bağlanacağını bilsin. */
@@ -37,11 +41,7 @@ function getLanAddresses(): string[] {
 
 app.prepare().then(() => {
   const server = createServer((req, res) => {
-    // Next.js 15 + custom server + basePath + middleware kombinasyonunda
-    // Next'in internal NextURL'si params.request.url'i relative alıyor ve
-    // "Invalid URL" atıyor. req.url'i absolute hale getirip parse ederek veriyoruz.
-    const host      = req.headers.host ?? `localhost:${port}`
-    const parsedUrl = parse(`http://${host}${req.url ?? "/"}`, true)
+    const parsedUrl = parse(req.url ?? "/", true)
     handle(req, res, parsedUrl)
   })
 

@@ -162,6 +162,44 @@ Agent `/api/exec` endpoint'i JSON regex-parse eder. Komut içinde çift tırnak 
 
 ---
 
+### Switch + Hub — İki Next Dev Server Çakışması
+PusulaSwitch (:4000) gateway olarak `/apps/hub/*` isteklerini Hub'a (:4242) rewrite ediyor. **İki uygulama da `next dev` modunda çalışırsa** tarayıcıda `Cannot read properties of undefined (reading 'call')` / `originalFactory is undefined` hatası + dev overlay'de `(outdated) Webpack` etiketi görülür. Sebep: Switch'in HMR runtime'ı (`:4000/_next/*`) ve Hub'ın HMR runtime'ı (`:4242/apps/hub/_next/*`) aynı browser window'da yan yana çalışınca webpack module registry çakışır.
+
+**Çözüm:** Switch'i production modda çalıştır (HMR gereksiz), Hub dev'de kalsın.
+
+```bash
+# Switch — nadir değişir
+cd PusulaSwitch && pnpm build && pnpm start   # :4000
+
+# Hub — aktif geliştirme
+cd PusulaHub/apps/web && pnpm dev             # :4242, HMR çalışır
+```
+
+Switch kodunda değişiklik olursa `pnpm build && pnpm start` tekrar.
+
+---
+
+### Next 15 Edge Middleware — Absolute Location Header Zorunlu
+`src/middleware.ts` içinde 307/308 redirect yapılırken Location header **absolute URL** olmalı. Relative (`/login?next=...`) verilirse Next 15 edge adapter (adapter.js:318) `new NextURL(location)` ile parse ederken "Invalid URL" atar ve tüm istekler 500 döner (vercel/next.js#67277).
+
+```ts
+const fwdProto = req.headers.get("x-forwarded-proto")
+const fwdHost  = req.headers.get("x-forwarded-host")
+const origin   = fwdHost ? `${fwdProto ?? "http"}://${fwdHost}` : req.nextUrl.origin
+
+return new NextResponse(null, {
+  status: 307,
+  headers: { Location: `${origin}/login?next=${encodeURIComponent(next)}` },
+})
+```
+
+Ayrıca `server.ts`'de `next()` çağrısına **hostname ve port zorunlu** — eksikse Next internal URL builder `http://localhost:undefined/...` üretir:
+```ts
+const app = next({ dev, hostname: "localhost", port })
+```
+
+---
+
 ### Command (cmdk) Combobox — Büyük Listede Yavaş Açılma
 `Popover + Command` kombinasyonunda çok sayıda item (100+) varsa dropdown açılışı 3-4 saniye sürebilir. `cmdk` varsayılan olarak tüm item'ları iç filtreyle işler.
 

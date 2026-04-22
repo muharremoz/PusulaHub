@@ -19,13 +19,20 @@ export async function middleware(req: NextRequest) {
 const token   = req.cookies.get(COOKIE_NAME)?.value
   const payload = await verifyEdge(token)
 
+  // NOT: Next 15 edge adapter (adapter.js:318) Location header'ını NextURL
+  // ile parse ediyor → relative URL "Invalid URL" atıyor.
+  // Origin'i browser'ın gördüğü host'tan (gateway: :4000) alıyoruz ki 307
+  // doğru yere gitsin; gateway proxy x-forwarded-* header'larını setliyor.
+  const fwdProto = req.headers.get("x-forwarded-proto")
+  const fwdHost  = req.headers.get("x-forwarded-host")
+  const origin   = fwdHost ? `${fwdProto ?? "http"}://${fwdHost}` : req.nextUrl.origin
+
   if (!payload) {
     // Session yok → gateway /login'e (basePath YOK).
-    // Raw 307 ile Location header'ı Next basePath re-yazmasın diye.
     const next = `/apps/hub${pathname}`
     return new NextResponse(null, {
       status:  307,
-      headers: { Location: `/login?next=${encodeURIComponent(next)}` },
+      headers: { Location: `${origin}/login?next=${encodeURIComponent(next)}` },
     })
   }
 
@@ -34,7 +41,7 @@ const token   = req.cookies.get(COOKIE_NAME)?.value
   if (!allowed) {
     return new NextResponse(null, {
       status:  307,
-      headers: { Location: "/?error=unauthorized" },
+      headers: { Location: `${origin}/?error=unauthorized` },
     })
   }
 
