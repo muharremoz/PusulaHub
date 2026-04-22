@@ -7,6 +7,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Switch } from "@/components/ui/switch"
 import { Shield, ShieldCheck, Eye, Pencil, Ban, Boxes } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -174,21 +175,11 @@ export function PermissionsSheet({ userId, userName, initialAllowedApps, open, o
                           <span className="text-[12px] font-medium">{app.name}</span>
                           <span className="text-[10px] text-muted-foreground font-mono">{app.id}</span>
                         </div>
-                        <button
-                          onClick={() => toggleApp(app.id)}
-                          className={cn(
-                            "relative h-5 w-9 rounded-full transition-colors",
-                            on ? "bg-emerald-500" : "bg-muted-foreground/30"
-                          )}
+                        <Switch
+                          checked={on}
+                          onCheckedChange={() => toggleApp(app.id)}
                           aria-label={`${app.name} erişimi`}
-                        >
-                          <span
-                            className={cn(
-                              "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
-                              on ? "translate-x-[18px]" : "translate-x-0.5"
-                            )}
-                          />
-                        </button>
+                        />
                       </div>
                     )
                   })}
