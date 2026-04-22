@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { query, execute } from "@/lib/db"
 import { auth } from "@/auth"
-import { parseAllowedApps, serializeAllowedApps } from "@/lib/apps-registry"
+import { filterKnownApps } from "@/lib/apps-registry"
 
 export interface AppUser {
   id:               string
@@ -19,7 +19,7 @@ export interface AppUser {
 interface UserRow {
   Id: string; Username: string; Email: string | null
   FullName: string | null; Role: string; IsActive: boolean
-  TwoFactorEnabled: boolean; AllowedApps: string | null; CreatedAt: string
+  TwoFactorEnabled: boolean; AppsCsv: string | null; CreatedAt: string
 }
 
 // GET /api/users  (sadece admin)
@@ -28,16 +28,19 @@ export async function GET() {
   if (session?.user?.role !== "admin")
     return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
 
+  // UserApps ile LEFT JOIN — STRING_AGG ile CSV'ye topla (SQL Server 2017+)
   const rows = await query<UserRow[]>`
-    SELECT Id, Username, Email, FullName, Role, IsActive, TwoFactorEnabled, AllowedApps,
-           CONVERT(NVARCHAR(30), CreatedAt, 120) AS CreatedAt
-    FROM AppUsers ORDER BY CreatedAt DESC
+    SELECT u.Id, u.Username, u.Email, u.FullName, u.Role, u.IsActive, u.TwoFactorEnabled,
+           CONVERT(NVARCHAR(30), u.CreatedAt, 120) AS CreatedAt,
+           (SELECT STRING_AGG(ua.AppId, ',') FROM dbo.UserApps ua WHERE ua.UserId = u.Id) AS AppsCsv
+    FROM   dbo.AppUsers u
+    ORDER  BY u.CreatedAt DESC
   `
   return NextResponse.json(rows.map(r => ({
     id: r.Id, username: r.Username, email: r.Email,
     fullName: r.FullName, role: r.Role, isActive: !!r.IsActive,
     twoFactorEnabled: !!r.TwoFactorEnabled,
-    allowedApps: parseAllowedApps(r.AllowedApps),
+    allowedApps: r.AppsCsv ? r.AppsCsv.split(",").filter(Boolean) : [],
     createdAt: r.CreatedAt,
   }) satisfies AppUser))
 }
@@ -62,11 +65,19 @@ export async function POST(req: NextRequest) {
 
   const id   = crypto.randomUUID()
   const hash = await bcrypt.hash(password, 12)
-  const apps = Array.isArray(allowedApps) ? serializeAllowedApps(allowedApps) : null
+  const apps = Array.isArray(allowedApps) ? filterKnownApps(allowedApps) : []
 
   await execute`
-    INSERT INTO AppUsers (Id, Username, Email, PasswordHash, FullName, Role, AllowedApps)
-    VALUES (${id}, ${username.trim()}, ${email ?? null}, ${hash}, ${fullName ?? null}, ${role}, ${apps})
+    INSERT INTO AppUsers (Id, Username, Email, PasswordHash, FullName, Role)
+    VALUES (${id}, ${username.trim()}, ${email ?? null}, ${hash}, ${fullName ?? null}, ${role})
   `
+
+  // UserApps kayitlari — admin degilse (admin zaten tumune yetkili varsayilir)
+  for (const appId of apps) {
+    await execute`
+      INSERT INTO UserApps (UserId, AppId) VALUES (${id}, ${appId})
+    `
+  }
+
   return NextResponse.json({ id }, { status: 201 })
 }

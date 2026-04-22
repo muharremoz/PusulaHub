@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import bcrypt from "bcryptjs"
 import { execute } from "@/lib/db"
 import { auth }    from "@/auth"
-import { serializeAllowedApps } from "@/lib/apps-registry"
+import { filterKnownApps } from "@/lib/apps-registry"
 
 type Params = { params: Promise<{ id: string }> }
 
-// PATCH /api/users/[id]  { email?, fullName?, role?, isActive?, password?, reset2FA? }
+// PATCH /api/users/[id]  { email?, fullName?, role?, isActive?, password?, reset2FA?, allowedApps? }
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth()
   if (session?.user?.role !== "admin")
@@ -27,20 +27,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     `
   }
 
-  // AllowedApps CSV — gönderildiyse (array) tamamen değiştir; boş array → NULL
-  const appsCsv =
-    Array.isArray(body.allowedApps) ? serializeAllowedApps(body.allowedApps) : undefined
-
   await execute`
     UPDATE AppUsers SET
-      Email       = COALESCE(${body.email    ?? null}, Email),
-      FullName    = COALESCE(${body.fullName ?? null}, FullName),
-      Role        = COALESCE(${body.role     ?? null}, Role),
-      IsActive    = COALESCE(${body.isActive != null ? (body.isActive ? 1 : 0) : null}, IsActive),
-      AllowedApps = CASE WHEN ${appsCsv === undefined ? 1 : 0} = 1 THEN AllowedApps ELSE ${appsCsv ?? null} END,
-      UpdatedAt   = GETDATE()
+      Email     = COALESCE(${body.email    ?? null}, Email),
+      FullName  = COALESCE(${body.fullName ?? null}, FullName),
+      Role      = COALESCE(${body.role     ?? null}, Role),
+      IsActive  = COALESCE(${body.isActive != null ? (body.isActive ? 1 : 0) : null}, IsActive),
+      UpdatedAt = GETDATE()
     WHERE Id = ${id}
   `
+
+  // AllowedApps — gonderildiyse UserApps tablosunu tamamen yeniden yaz (diff yerine replace)
+  if (Array.isArray(body.allowedApps)) {
+    const apps = filterKnownApps(body.allowedApps)
+    await execute`DELETE FROM UserApps WHERE UserId = ${id}`
+    for (const appId of apps) {
+      await execute`INSERT INTO UserApps (UserId, AppId) VALUES (${id}, ${appId})`
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
 
@@ -54,6 +59,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (session.user.id === id)
     return NextResponse.json({ error: "Kendi hesabınızı silemezsiniz" }, { status: 400 })
 
+  // UserApps FK'da ON DELETE CASCADE var — ayrica silmeye gerek yok
   await execute`DELETE FROM AppUsers WHERE Id = ${id}`
   return NextResponse.json({ ok: true })
 }
