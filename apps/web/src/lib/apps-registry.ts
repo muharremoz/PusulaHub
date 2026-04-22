@@ -9,13 +9,14 @@
  * tutulmalı (ileride tümü DB'den dinamik okunabilir).
  */
 export interface AppRegistryEntry {
-  id:   string
-  name: string
+  id:          string
+  name:        string
+  description: string
 }
 
 export const APP_REGISTRY: AppRegistryEntry[] = [
-  { id: "hub",       name: "PusulaHub"  },
-  { id: "spareflow", name: "SpareFlow"  },
+  { id: "hub",       name: "PusulaHub",  description: "Sunucu yönetim paneli"      },
+  { id: "spareflow", name: "SpareFlow",  description: "SpareBackup izleme uygulaması" },
 ]
 
 /** Geçersiz / bilinmeyen app id'lerini ele — INSERT etmeden önce temizle. */

@@ -12,7 +12,7 @@ export type Level = "read" | "write"
 
 export interface AppGrant {
   id:   string
-  role: "admin" | "user" | "viewer"
+  role: "admin" | "user"
   /** Module-level perms — admin'de undefined, non-admin'de anahtar yoksa "none". */
   perms?: Record<string, Level>
 }

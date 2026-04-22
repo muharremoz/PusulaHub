@@ -6,7 +6,7 @@ import { filterKnownApps } from "@/lib/apps-registry"
 
 export interface AppGrantDto {
   id:   string
-  role: "admin" | "user" | "viewer"
+  role: "admin" | "user"
 }
 
 export interface AppUser {
@@ -31,9 +31,10 @@ function parseAppsJson(json: string | null): AppGrantDto[] {
   if (!json) return []
   try {
     const arr = JSON.parse(json) as Array<{ AppId: string; Role: string }>
+    // "viewer" eski kayıtlar için geriye dönük → "user"'a düşür.
     return arr.map((r) => ({
       id:   r.AppId,
-      role: (["admin", "user", "viewer"].includes(r.Role) ? r.Role : "user") as AppGrantDto["role"],
+      role: (r.Role === "admin" ? "admin" : "user") as AppGrantDto["role"],
     }))
   } catch { return [] }
 }
@@ -46,7 +47,8 @@ function normalizeGrants(input: unknown): AppGrantDto[] {
       out.push({ id: x, role: "user" })
     } else if (x && typeof x === "object" && "id" in (x as object)) {
       const o = x as { id: string; role?: string }
-      const role = (["admin", "user", "viewer"].includes(o.role ?? "") ? o.role : "user") as AppGrantDto["role"]
+      // Eski "viewer" rol kayıtları artık desteklenmiyor → "user"'a düşür.
+      const role: AppGrantDto["role"] = o.role === "admin" ? "admin" : "user"
       out.push({ id: String(o.id), role })
     }
   }

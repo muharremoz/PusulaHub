@@ -6,7 +6,7 @@ import { filterKnownApps } from "@/lib/apps-registry"
 
 type Params = { params: Promise<{ id: string }> }
 
-type AppGrant = { id: string; role: "admin" | "user" | "viewer" }
+type AppGrant = { id: string; role: "admin" | "user" }
 
 function normalizeGrants(input: unknown): AppGrant[] {
   if (!Array.isArray(input)) return []
@@ -16,7 +16,8 @@ function normalizeGrants(input: unknown): AppGrant[] {
       out.push({ id: x, role: "user" })
     } else if (x && typeof x === "object" && "id" in (x as object)) {
       const o = x as { id: string; role?: string }
-      const role = (["admin", "user", "viewer"].includes(o.role ?? "") ? o.role : "user") as AppGrant["role"]
+      // Eski "viewer" rol kayıtları artık desteklenmiyor → "user"'a düşür.
+      const role: AppGrant["role"] = o.role === "admin" ? "admin" : "user"
       out.push({ id: String(o.id), role })
     }
   }
