@@ -50,7 +50,11 @@ module.exports = {
       name: "spareflow",
       cwd: "C:/GitHub/Pusula Yazılım/SpareFlow/spare-flow-ui",
       script: "cmd.exe",
-      args: "/c npm run dev -- --port 4243",
+      // Prod modda çalıştırılır — dev HMR WebSocket Switch gateway'den
+      // geçemiyor, diğer PC'lerde client bundle tutarsız yükleniyor ve
+      // dashboard skeleton'da takılıyordu (bkz. CLAUDE.md Switch+Hub notu).
+      args: "/c npm run start",
+      env: { PORT: "4243" },
       autorestart: true,
       max_restarts: 10,
       restart_delay: 3000,
