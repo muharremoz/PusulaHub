@@ -179,6 +179,83 @@ Switch kodunda değişiklik olursa `pnpm build && pnpm start` tekrar.
 
 ---
 
+### SpareFlow — LAN'daki Diğer PC'de Dashboard Skeleton'da Takılıyor
+Aynı hatanın SpareFlow versiyonu. SpareFlow `next dev` modunda Switch
+gateway (`:4000/apps/spareflow/*`) arkasından LAN'daki başka bir PC'ye
+sunulduğunda HMR WebSocket (`/apps/spareflow/_next/webpack-hmr`)
+proxy'den geçemiyor (`ERR_INVALID_HTTP_RESPONSE`). Turbopack dev chunk'ları
+tutarsız yükleniyor, useEffect hiç ateşlenmiyor, `loading` state hep
+`true` kalıyor → 4 skeleton kartta takılıp kalıyor. API'ler 200 döner,
+`fetch("/api/dashboard/summary")` console'dan manuel çağırıldığında
+veri gelir — ama sayfa render olmaz.
+
+**Çözüm:** SpareFlow'u da prod modda çalıştır (`ecosystem.config.js`
+zaten böyle ayarlı: `args: "/c npm run start"`, `env: { PORT: "4243" }`).
+
+```bash
+cd "C:/GitHub/Pusula Yazılım/SpareFlow/spare-flow-ui"
+npm run build
+pm2 restart spareflow
+```
+
+> Kural: Switch gateway arkasındaki her alt uygulama **prod modda**
+> çalıştırılmalıdır. Sadece Hub dev modda kalabilir çünkü doğrudan
+> `:4242` üzerinden geliştirilir, gateway arkasından değil.
+
+---
+
+### SpareFlow — Client Fetch basePath Patch'i `<head>`'de Olmalı
+SpareFlow `basePath: "/apps/spareflow"` ile çalışıyor. Next client-side
+`fetch("/api/...")` çağrılarına basePath'i otomatik eklemez — runtime
+monkey-patch gerekir. Patch'i **`<FetchBasePath />` gibi bir
+component'in `useEffect`'ine koymak yetmez**: React child effect'leri
+parent effect'lerinden önce ateşlenir, yani `Sidebar`'ın
+`fetch("/api/auth/me")` çağrısı patch uygulanmadan çalışır ve istek
+Switch gateway'in `/api/auth/me`'sine düşer (Switch bu path'i kendi
+session handler'ına yönlendiriyor, farklı şekilde bir JSON döner,
+SpareFlow UI sessizce kırılır).
+
+**Çözüm:** Patch'i `app/layout.tsx`'te `<head>` içinde inline `<script>`
+olarak ver — React hydration'dan **önce** senkron çalışsın:
+
+```tsx
+const fetchBasePathPatch = `(function(){
+  if (typeof window === "undefined" || window.__fetchPatched) return;
+  window.__fetchPatched = true;
+  var BP = "/apps/spareflow";
+  var orig = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    // ... /api/ ile başlıyorsa BP prefix'le
+  };
+})();`;
+
+<head><script dangerouslySetInnerHTML={{ __html: fetchBasePathPatch }} /></head>
+```
+
+Debug için: tarayıcı console'dan `window.__fetchPatched` → `true` olmalı.
+`fetch("/api/auth/me")` SpareFlow şeklini (`{id, email, perms, ...}`)
+dönmeli — Switch şeklini (`{user: {...}}`) DEĞİL.
+
+---
+
+### LAN HTTP'de Cookie Secure Flag → Sonsuz Login Döngüsü
+Hub/Switch login endpoint'leri cookie'yi `secure: true` basarsa Chrome/Edge
+HTTP üzerinden (LAN, `10.10.10.x`) cookie'yi reddeder, kullanıcı login sonrası
+yine login ekranına düşer. `localhost` istisnası sadece lokal makineyi kurtarır.
+
+**Çözüm:** `secure` flag'i istek protokolüne göre dinamik belirle:
+
+```ts
+const proto   = req.headers.get("x-forwarded-proto") ?? req.nextUrl.protocol.replace(":", "")
+const isHttps = proto === "https"
+res.cookies.set(COOKIE_NAME, jwt, { /* ... */ secure: isHttps })
+```
+
+`process.env.NODE_ENV === "production"` ile belirlemek YANLIŞ — prod
+build HTTP üzerinden de çalışabilir.
+
+---
+
 ### Next 15 Edge Middleware — Absolute Location Header Zorunlu
 `src/middleware.ts` içinde 307/308 redirect yapılırken Location header **absolute URL** olmalı. Relative (`/login?next=...`) verilirse Next 15 edge adapter (adapter.js:318) `new NextURL(location)` ile parse ederken "Invalid URL" atar ve tüm istekler 500 döner (vercel/next.js#67277).
 
