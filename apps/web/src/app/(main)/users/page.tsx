@@ -366,8 +366,10 @@ export default function UsersPage() {
       <PermissionsSheet
         userId={permsUser?.id ?? null}
         userName={permsUser?.fullName ?? permsUser?.username ?? ""}
+        initialAllowedApps={permsUser?.allowedApps ?? []}
         open={!!permsUser}
         onClose={() => setPermsUser(null)}
+        onSaved={load}
       />
 
       <AlertDialog open={!!deleteUser} onOpenChange={v => !v && setDeleteUser(null)}>

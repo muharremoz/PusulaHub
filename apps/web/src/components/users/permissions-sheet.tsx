@@ -7,9 +7,10 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Shield, ShieldCheck, Eye, Pencil, Ban } from "lucide-react"
+import { Shield, ShieldCheck, Eye, Pencil, Ban, Boxes } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { APP_REGISTRY } from "@/lib/apps-registry"
 
 type Level = "none" | "read" | "write"
 interface Perm { moduleKey: string; level: Level }
@@ -24,22 +25,26 @@ const GROUP_LABELS: Record<ModuleDef["group"], string> = {
 }
 
 interface Props {
-  userId:   string | null
-  userName: string
-  open:     boolean
-  onClose:  () => void
+  userId:             string | null
+  userName:           string
+  initialAllowedApps: string[]
+  open:               boolean
+  onClose:            () => void
+  onSaved?:           () => void
 }
 
-export function PermissionsSheet({ userId, userName, open, onClose }: Props) {
-  const [modules, setModules] = useState<ModuleDef[]>([])
-  const [perms,   setPerms]   = useState<Record<string, Level>>({})
-  const [role,    setRole]    = useState<string>("user")
-  const [loading, setLoading] = useState(false)
-  const [saving,  setSaving]  = useState(false)
+export function PermissionsSheet({ userId, userName, initialAllowedApps, open, onClose, onSaved }: Props) {
+  const [modules,     setModules]     = useState<ModuleDef[]>([])
+  const [perms,       setPerms]       = useState<Record<string, Level>>({})
+  const [allowedApps, setAllowedApps] = useState<string[]>([])
+  const [role,        setRole]        = useState<string>("user")
+  const [loading,     setLoading]     = useState(false)
+  const [saving,      setSaving]      = useState(false)
 
   useEffect(() => {
     if (!open || !userId) return
     setLoading(true)
+    setAllowedApps(initialAllowedApps ?? [])
     Promise.all([
       fetch("/api/permissions/modules").then((r) => r.json()),
       fetch(`/api/users/${userId}/permissions`).then((r) => r.json()),
@@ -53,7 +58,7 @@ export function PermissionsSheet({ userId, userName, open, onClose }: Props) {
       })
       .catch(() => toast.error("İzinler yüklenemedi"))
       .finally(() => setLoading(false))
-  }, [open, userId])
+  }, [open, userId, initialAllowedApps])
 
   const isAdmin = role === "admin"
 
@@ -67,18 +72,33 @@ export function PermissionsSheet({ userId, userName, open, onClose }: Props) {
     setPerms(next)
   }
 
+  function toggleApp(id: string) {
+    setAllowedApps((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])
+  }
+
   async function save() {
     if (!userId) return
     setSaving(true)
     try {
+      // 1) AllowedApps — kullanıcı düzenlemesi ile aynı endpoint
+      const rApps = await fetch(`/api/users/${userId}`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ allowedApps }),
+      })
+      if (!rApps.ok) throw new Error("apps")
+
+      // 2) Modül izinleri
       const payload = modules.map((m) => ({ moduleKey: m.key, level: perms[m.key] ?? "none" }))
-      const r = await fetch(`/api/users/${userId}/permissions`, {
+      const rPerms = await fetch(`/api/users/${userId}/permissions`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ permissions: payload }),
       })
-      if (!r.ok) throw new Error()
-      toast.success("İzinler kaydedildi", { description: "Kullanıcı bir sonraki girişinde değişiklikler geçerli olur." })
+      if (!rPerms.ok) throw new Error("perms")
+
+      toast.success("Yetkiler kaydedildi", { description: "Kullanıcı bir sonraki girişinde değişiklikler geçerli olur." })
+      onSaved?.()
       onClose()
     } catch {
       toast.error("Kaydedilemedi")
@@ -103,11 +123,11 @@ export function PermissionsSheet({ userId, userName, open, onClose }: Props) {
           {isAdmin ? (
             <p className="text-[11px] text-amber-600 mt-1 flex items-center gap-1">
               <ShieldCheck className="size-3" />
-              Admin rolündeki kullanıcı tüm modüllere otomatik olarak yazma yetkisine sahiptir.
+              Admin rolündeki kullanıcı tüm uygulamalara ve tüm modüllere otomatik olarak yazma yetkisine sahiptir.
             </p>
           ) : (
             <p className="text-[11px] text-muted-foreground mt-1">
-              Her modül için erişim seviyesini seçin. Değişiklikler kullanıcının bir sonraki girişinde geçerli olur.
+              Kullanıcının erişebileceği uygulamaları ve her modüldeki yetki seviyesini seçin. Değişiklikler bir sonraki girişinde geçerli olur.
             </p>
           )}
         </SheetHeader>
@@ -132,6 +152,51 @@ export function PermissionsSheet({ userId, userName, open, onClose }: Props) {
 
         <ScrollArea className="flex-1 min-h-0">
           <div className="px-4 py-3 space-y-3">
+            {/* ── Uygulama Erişimi ───────────────────────── */}
+            <div className="rounded-[5px] border border-border/50 overflow-hidden">
+              <div className="px-3 py-1.5 bg-muted/30 border-b border-border/40 flex items-center gap-1.5">
+                <Boxes className="size-3 text-muted-foreground" />
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  Uygulama Erişimi
+                </span>
+              </div>
+              {isAdmin ? (
+                <div className="px-3 py-2.5 text-[11px] text-muted-foreground italic">
+                  Admin tüm uygulamalara erişebilir.
+                </div>
+              ) : (
+                <div className="divide-y divide-border/40">
+                  {APP_REGISTRY.map((app) => {
+                    const on = allowedApps.includes(app.id)
+                    return (
+                      <div key={app.id} className="px-3 py-2 flex items-center justify-between gap-3">
+                        <div className="flex flex-col">
+                          <span className="text-[12px] font-medium">{app.name}</span>
+                          <span className="text-[10px] text-muted-foreground font-mono">{app.id}</span>
+                        </div>
+                        <button
+                          onClick={() => toggleApp(app.id)}
+                          className={cn(
+                            "relative h-5 w-9 rounded-full transition-colors",
+                            on ? "bg-emerald-500" : "bg-muted-foreground/30"
+                          )}
+                          aria-label={`${app.name} erişimi`}
+                        >
+                          <span
+                            className={cn(
+                              "absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform",
+                              on ? "translate-x-[18px]" : "translate-x-0.5"
+                            )}
+                          />
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Modül İzinleri (Hub içi) ───────────────── */}
             {loading ? (
               <div className="space-y-2">
                 {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[4px]" />)}
