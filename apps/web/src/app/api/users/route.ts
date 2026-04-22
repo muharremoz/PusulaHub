@@ -110,11 +110,19 @@ export async function POST(req: NextRequest) {
     VALUES (${id}, ${username.trim()}, ${email ?? null}, ${hash}, ${fullName ?? null}, ${role})
   `
 
-  // UserApps kayıtları — her biri için ayrı rol
-  for (const g of grants) {
+  // Admin rolünde yeni kullanıcı → tüm aktif app'lere admin UserApps satırı
+  // (aksi halde Switch landing'de erişimi yok gibi görünür).
+  if (role === "admin") {
     await execute`
-      INSERT INTO UserApps (UserId, AppId, [Role]) VALUES (${id}, ${g.id}, ${g.role})
+      INSERT INTO UserApps (UserId, AppId, [Role])
+      SELECT ${id}, a.Id, 'admin' FROM dbo.Apps a WHERE a.IsActive = 1
     `
+  } else {
+    for (const g of grants) {
+      await execute`
+        INSERT INTO UserApps (UserId, AppId, [Role]) VALUES (${id}, ${g.id}, ${g.role})
+      `
+    }
   }
 
   return NextResponse.json({ id }, { status: 201 })
