@@ -33,6 +33,7 @@
     "framer-motion": "^12.38.0",
     "googleapis": "^171.4.0",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.2",
     "lucide-react": "^0.469.0",
     "motion": "^12.38.0",
     "mssql": "^12.2.1",

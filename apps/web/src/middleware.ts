@@ -1,43 +1,46 @@
-import NextAuth      from "next-auth"
-import { authConfig } from "@/auth.config"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
+import { verifyEdge, COOKIE_NAME }         from "@/lib/pusula-session-edge"
 
 /**
- * Middleware: Edge runtime'da çalışır.
- * Ağır paketler (bcryptjs, otplib) import edilmez — sadece authConfig kullanılır.
+ * Hub middleware: pusula_session cookie'sini doğrular.
+ * Session yoksa gateway /login'e (basePath dışı) yönlendirir.
+ *
+ * NOT: basePath = /apps/hub. Browser gateway:4000 üzerinden erişir,
+ * /login path'i gateway'e gider (Hub'ın kendi /login sayfası kaldırıldı).
  */
-const { auth } = NextAuth(authConfig)
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl
 
-export default auth((req) => {
-  const { nextUrl }  = req
-  const isLoggedIn   = !!req.auth
-  const isAuthPage   = nextUrl.pathname.startsWith("/login")
-  const isApiAuth    = nextUrl.pathname.startsWith("/api/auth")
-
-  // NextAuth API her zaman erişilebilir
-  if (isApiAuth) return NextResponse.next()
-
-  // Redirect URL'leri basePath farkında olmalı — clone() basePath'i korur
-  // Giriş yapmamış → /login'e yönlendir
-  if (!isLoggedIn && !isAuthPage) {
-    const loginUrl = nextUrl.clone()
-    loginUrl.pathname = "/login"
-    loginUrl.search = ""
-    loginUrl.searchParams.set("callbackUrl", nextUrl.pathname)
-    return NextResponse.redirect(loginUrl)
+  // Static asset & public API
+  if (pathname.startsWith("/_next") || pathname.includes(".")) {
+    return NextResponse.next()
   }
 
-  // Giriş yapmış → /login'e gitmeye çalışırsa dashboard'a yönlendir
-  if (isLoggedIn && isAuthPage) {
-    const dashUrl = nextUrl.clone()
-    dashUrl.pathname = "/dashboard"
-    dashUrl.search = ""
-    return NextResponse.redirect(dashUrl)
+const token   = req.cookies.get(COOKIE_NAME)?.value
+  const payload = await verifyEdge(token)
+
+  if (!payload) {
+    // Session yok → gateway /login'e (basePath YOK).
+    // Raw 307 ile Location header'ı Next basePath re-yazmasın diye.
+    const next = `/apps/hub${pathname}`
+    return new NextResponse(null, {
+      status:  307,
+      headers: { Location: `/login?next=${encodeURIComponent(next)}` },
+    })
+  }
+
+  // Admin dışı kullanıcı "hub" app'e yetkili mi?
+  const allowed = payload.role === "admin" || (payload.apps ?? []).includes("hub")
+  if (!allowed) {
+    return new NextResponse(null, {
+      status:  307,
+      headers: { Location: "/?error=unauthorized" },
+    })
   }
 
   return NextResponse.next()
-})
+}
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|api/auth).*)"],
 }

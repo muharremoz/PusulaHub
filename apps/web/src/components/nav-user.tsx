@@ -1,7 +1,7 @@
 "use client"
 
 import { ChevronsUpDown, LogOut, Settings, Shield, User } from "lucide-react"
-import { useSession, signOut } from "next-auth/react"
+import { useSession } from "next-auth/react"
 import { useRouter }           from "next/navigation"
 import {
   Avatar, AvatarFallback,
@@ -95,11 +95,9 @@ export function NavUser() {
 
             <DropdownMenuItem
               onClick={async () => {
-                // NextAuth v5'in server-side redirect'i bazı koşullarda
-                // localhost:3000'e düşüyor. redirect:false ile bypass edip
-                // manuel olarak kendi origin'imize yönlendiriyoruz.
-                await signOut({ redirect: false })
-                window.location.href = `${window.location.origin}/login`
+                // Logout gateway'de — cookie orada kesilir, sonra /login'e.
+                await fetch("/api/auth/logout", { method: "POST" })
+                window.location.href = "/login"
               }}
               className="gap-2 text-[12px] text-destructive focus:text-destructive"
             >
