@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
 import { requirePermission } from "@/lib/require-permission"
-import { MODULES, HUB_APP_ID, type PermissionLevel } from "@/lib/permissions"
+import { MODULES, HUB_APP_ID, type ModuleDef, type PermissionLevel } from "@/lib/permissions"
 
 interface UserAppRow { Role: string }
 interface PermRow    { ModuleKey: string; Level: string }
+
+/**
+ * Verilen appId için modül kataloğunu döner. Hub kodda sabit, diğer app'ler
+ * dbo.Apps.ModulesJson kolonundan okunur. App seed etmemişse boş dizi döner.
+ *
+ * ÖNEMLİ: GET ve PUT burada ortak — eskiden her iki route da HUB MODULES'unu
+ * kullanıyor, SpareFlow gibi alt uygulamalarda kaydedilen izinler "geçerli
+ * moduleKey değil" diye filtrelenip sessizce yok ediliyordu.
+ */
+async function loadModules(appId: string): Promise<ModuleDef[]> {
+  if (appId === HUB_APP_ID) return MODULES
+  const rows = await query<{ ModulesJson: string | null }[]>`
+    SELECT ModulesJson FROM dbo.Apps WHERE Id = ${appId}
+  `
+  if (!rows.length || !rows[0].ModulesJson) return []
+  try {
+    return JSON.parse(rows[0].ModulesJson) as ModuleDef[]
+  } catch {
+    return []
+  }
+}
 
 /**
  * Belirli kullanıcının BELİRLİ BİR APP'teki modül izinlerini getirir.
@@ -21,13 +42,15 @@ export async function GET(
   const appId  = req.nextUrl.searchParams.get("appId") ?? HUB_APP_ID
 
   try {
+    const modules = await loadModules(appId)
+
     // Kullanıcının bu app'teki rolü (UserApps). Yoksa app'e erişimi yok demektir.
     const userApps = await query<UserAppRow[]>`
       SELECT [Role] FROM UserApps WHERE UserId = ${id} AND AppId = ${appId}
     `
     if (!userApps.length) {
       // Erişim yok — boş izin listesi + isAdmin=false
-      const perms = MODULES.map((m) => ({ moduleKey: m.key, level: "none" as PermissionLevel }))
+      const perms = modules.map((m) => ({ moduleKey: m.key, level: "none" as PermissionLevel }))
       return NextResponse.json({ appId, role: "none", isAdmin: false, hasAccess: false, permissions: perms })
     }
 
@@ -35,7 +58,7 @@ export async function GET(
 
     // Admin → hepsi write (satır gerekmez)
     if (role === "admin") {
-      const perms = MODULES.map((m) => ({ moduleKey: m.key, level: "write" as PermissionLevel }))
+      const perms = modules.map((m) => ({ moduleKey: m.key, level: "write" as PermissionLevel }))
       return NextResponse.json({ appId, role, isAdmin: true, hasAccess: true, permissions: perms })
     }
 
@@ -44,7 +67,7 @@ export async function GET(
       WHERE UserId = ${id} AND AppId = ${appId}
     `
     const map = new Map(rows.map((r) => [r.ModuleKey, r.Level as PermissionLevel]))
-    const perms = MODULES.map((m) => ({
+    const perms = modules.map((m) => ({
       moduleKey: m.key,
       level:     (map.get(m.key) ?? "none") as PermissionLevel,
     }))
@@ -75,8 +98,11 @@ export async function PUT(
     const appId   = body.appId ?? HUB_APP_ID
     const entries = body.permissions ?? []
 
-    // Geçerli key'leri kontrol et
-    const validKeys = new Set(MODULES.map((m) => m.key))
+    // Geçerli key'leri hedef app'in kendi module catalog'una göre kontrol et.
+    // Aksi hâlde SpareFlow gibi alt uygulamaların key'leri (installations, vb.)
+    // Hub MODULES set'inde olmadığı için hepsi filtrelenip sessizce yok oluyordu.
+    const modules   = await loadModules(appId)
+    const validKeys = new Set(modules.map((m) => m.key))
     const cleaned   = entries.filter((e) =>
       validKeys.has(e.moduleKey) && ["none", "read", "write"].includes(e.level),
     )
