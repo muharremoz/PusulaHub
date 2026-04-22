@@ -8,9 +8,13 @@ import { jwtVerify } from "jose"
 
 export const COOKIE_NAME = "pusula_session"
 
+export type Level = "read" | "write"
+
 export interface AppGrant {
   id:   string
   role: "admin" | "user" | "viewer"
+  /** Module-level perms — admin'de undefined, non-admin'de anahtar yoksa "none". */
+  perms?: Record<string, Level>
 }
 
 export interface PusulaPayload {
@@ -32,6 +36,15 @@ function getSecret(): Uint8Array {
 }
 
 /** Eski string[] formatından yeni AppGrant[]'e esnek parse. */
+function normalizePerms(raw: unknown): Record<string, Level> | undefined {
+  if (!raw || typeof raw !== "object") return undefined
+  const out: Record<string, Level> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (v === "read" || v === "write") out[k] = v
+  }
+  return out
+}
+
 function normalizeApps(raw: unknown, fallbackRole: string): AppGrant[] {
   if (!Array.isArray(raw)) return []
   return raw.map((x) => {
@@ -39,9 +52,9 @@ function normalizeApps(raw: unknown, fallbackRole: string): AppGrant[] {
       return { id: x, role: (fallbackRole as AppGrant["role"]) }
     }
     if (x && typeof x === "object" && "id" in x) {
-      const o = x as { id: string; role?: string }
+      const o = x as { id: string; role?: string; perms?: unknown }
       const r = (o.role ?? fallbackRole) as AppGrant["role"]
-      return { id: String(o.id), role: r }
+      return { id: String(o.id), role: r, perms: normalizePerms(o.perms) }
     }
     return null
   }).filter((a): a is AppGrant => a !== null)
