@@ -30,9 +30,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { toast }   from "sonner"
 import { cn }      from "@/lib/utils"
 import type { AppUser } from "@/app/api/users/route"
+import { APP_REGISTRY } from "@/lib/apps-registry"
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })
@@ -44,22 +46,29 @@ function UserSheet({ open, user, onClose, onSaved }: {
   onClose: () => void; onSaved: () => void
 }) {
   const isEdit = !!user
-  const [username,  setUsername]  = useState("")
-  const [email,     setEmail]     = useState("")
-  const [fullName,  setFullName]  = useState("")
-  const [role,      setRole]      = useState("user")
-  const [password,  setPassword]  = useState("")
-  const [saving,    setSaving]    = useState(false)
+  const [username,    setUsername]    = useState("")
+  const [email,       setEmail]       = useState("")
+  const [fullName,    setFullName]    = useState("")
+  const [role,        setRole]        = useState("user")
+  const [password,    setPassword]    = useState("")
+  const [allowedApps, setAllowedApps] = useState<string[]>([])
+  const [saving,      setSaving]      = useState(false)
 
   useEffect(() => {
     if (!open) return
     if (user) {
       setUsername(user.username); setEmail(user.email ?? "")
       setFullName(user.fullName ?? ""); setRole(user.role); setPassword("")
+      setAllowedApps(user.allowedApps ?? [])
     } else {
       setUsername(""); setEmail(""); setFullName(""); setRole("user"); setPassword("")
+      setAllowedApps([])
     }
   }, [open, user])
+
+  function toggleApp(id: string) {
+    setAllowedApps((cur) => cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id])
+  }
 
   async function handleSave() {
     if (!isEdit && !username.trim()) { toast.error("Kullanıcı adı gerekli"); return }
@@ -69,8 +78,8 @@ function UserSheet({ open, user, onClose, onSaved }: {
       const url    = isEdit ? `/api/users/${user!.id}` : "/api/users"
       const method = isEdit ? "PATCH" : "POST"
       const body   = isEdit
-        ? { email: email || null, fullName: fullName || null, role, ...(password ? { password } : {}) }
-        : { username: username.trim(), email: email || null, fullName: fullName || null, role, password }
+        ? { email: email || null, fullName: fullName || null, role, allowedApps, ...(password ? { password } : {}) }
+        : { username: username.trim(), email: email || null, fullName: fullName || null, role, password, allowedApps }
 
       const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       const d = await r.json()
@@ -121,6 +130,29 @@ function UserSheet({ open, user, onClose, onSaved }: {
             </Label>
             <Input type="password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder={isEdit ? "Değiştirmek için girin" : "En az 6 karakter"} className="h-8 text-[12px] rounded-[5px]" />
+          </div>
+
+          {/* Uygulama Erişimi */}
+          <div className="space-y-1.5 pt-2">
+            <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Uygulama Erişimi</Label>
+            {role === "admin" ? (
+              <div className="text-[11px] text-muted-foreground rounded-[5px] border border-dashed border-border/60 px-3 py-2">
+                Admin rolü tüm uygulamalara otomatik erişir.
+              </div>
+            ) : (
+              <div className="rounded-[5px] border border-border/50 divide-y divide-border/40">
+                {APP_REGISTRY.map((app) => (
+                  <label key={app.id} className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/20">
+                    <Checkbox
+                      checked={allowedApps.includes(app.id)}
+                      onCheckedChange={() => toggleApp(app.id)}
+                    />
+                    <span className="text-[12px]">{app.name}</span>
+                    <span className="text-[10px] text-muted-foreground font-mono ml-auto">{app.id}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -219,6 +251,7 @@ export default function UsersPage() {
                 <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Rol</TableHead>
                 <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Durum</TableHead>
                 <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">2FA</TableHead>
+                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Uygulamalar</TableHead>
                 <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Oluşturuldu</TableHead>
                 <TableHead className="h-8 w-10" />
               </TableRow>
@@ -227,7 +260,7 @@ export default function UsersPage() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
                   <TableRow key={i}>
-                    {Array.from({ length: 5 }).map((_, j) => (
+                    {Array.from({ length: 6 }).map((_, j) => (
                       <TableCell key={j}><Skeleton className="h-3 w-full rounded-[3px]" /></TableCell>
                     ))}
                     <TableCell />
@@ -264,6 +297,24 @@ export default function UsersPage() {
                         <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-[5px] border border-border/40 bg-muted/20">
                           Pasif
                         </span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {u.role === "admin" ? (
+                        <span className="text-[10px] text-muted-foreground italic">Tümü</span>
+                      ) : u.allowedApps.length === 0 ? (
+                        <span className="text-[10px] text-muted-foreground">—</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {u.allowedApps.map((id) => {
+                            const app = APP_REGISTRY.find((a) => a.id === id)
+                            return (
+                              <span key={id} className="text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/30 border-border/40">
+                                {app?.name ?? id}
+                              </span>
+                            )
+                          })}
+                        </div>
                       )}
                     </TableCell>
                     <TableCell className="text-[11px] text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
