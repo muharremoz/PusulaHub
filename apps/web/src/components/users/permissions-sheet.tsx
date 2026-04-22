@@ -10,8 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Shield, ShieldCheck, Eye, Pencil, Ban, Boxes } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Shield, ShieldCheck, Boxes } from "lucide-react"
 import { toast } from "sonner"
 import { APP_REGISTRY } from "@/lib/apps-registry"
 
@@ -279,11 +278,7 @@ export function PermissionsSheet({ userId, userName, initialAllowedApps, open, o
                           <span className="text-[10px] text-muted-foreground uppercase tracking-wide mr-1">Toplu:</span>
                           <button onClick={() => setAll(activeTab, "write")}
                             className="text-[10px] font-medium px-2 py-1 rounded-[4px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
-                            Tümüne Yaz
-                          </button>
-                          <button onClick={() => setAll(activeTab, "read")}
-                            className="text-[10px] font-medium px-2 py-1 rounded-[4px] bg-blue-50 text-blue-700 hover:bg-blue-100">
-                            Tümüne Oku
+                            Tümünü Aç
                           </button>
                           <button onClick={() => setAll(activeTab, "none")}
                             className="text-[10px] font-medium px-2 py-1 rounded-[4px] bg-muted/60 text-muted-foreground hover:bg-muted">
@@ -311,17 +306,15 @@ export function PermissionsSheet({ userId, userName, initialAllowedApps, open, o
                                 <div className="divide-y divide-border/40">
                                   {grouped[g].map((m) => {
                                     const lvl = activePerms[m.key] ?? "none"
+                                    const on  = lvl !== "none"
                                     return (
                                       <div key={m.key} className="px-3 py-2 flex items-center justify-between gap-3">
                                         <span className="text-[12px]">{m.label}</span>
-                                        <div className="flex gap-0.5 rounded-[5px] border border-border/60 bg-muted/20 p-0.5">
-                                          <LevelBtn active={lvl === "none"}  onClick={() => setLevel(activeTab, m.key, "none")}
-                                            icon={<Ban className="size-3" />}     label="Yok"  cls="text-muted-foreground" />
-                                          <LevelBtn active={lvl === "read"}  onClick={() => setLevel(activeTab, m.key, "read")}
-                                            icon={<Eye className="size-3" />}     label="Oku"  cls="text-blue-700 bg-blue-50" />
-                                          <LevelBtn active={lvl === "write"} onClick={() => setLevel(activeTab, m.key, "write")}
-                                            icon={<Pencil className="size-3" />}  label="Yaz"  cls="text-emerald-700 bg-emerald-50" />
-                                        </div>
+                                        <Switch
+                                          checked={on}
+                                          onCheckedChange={(v) => setLevel(activeTab, m.key, v ? "write" : "none")}
+                                          aria-label={`${m.label} erişimi`}
+                                        />
                                       </div>
                                     )
                                   })}
@@ -348,27 +341,6 @@ export function PermissionsSheet({ userId, userName, initialAllowedApps, open, o
         </div>
       </SheetContent>
     </Sheet>
-  )
-}
-
-function LevelBtn({
-  active, onClick, disabled, icon, label, cls,
-}: {
-  active: boolean; onClick: () => void; disabled?: boolean
-  icon: React.ReactNode; label: string; cls: string
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className={cn(
-        "flex items-center gap-1 px-2 py-0.5 rounded-[4px] text-[10px] font-medium transition-colors",
-        active ? cls : "text-muted-foreground hover:bg-muted/40",
-        disabled && "opacity-50 cursor-not-allowed"
-      )}
-    >
-      {icon}{label}
-    </button>
   )
 }
 
