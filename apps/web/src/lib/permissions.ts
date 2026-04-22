@@ -5,6 +5,9 @@
  * - Seviyeler: "none" (default) | "read" | "write"
  * - Admin rolü → otomatik tüm modüllere "write"
  * - Diğer kullanıcılar → UserPermissions tablosundan yüklenir
+ *
+ * Çoklu uygulama: `UserPermissions` artık (UserId, AppId, ModuleKey) ile
+ * saklanır. Her app kendi modül kataloğunu getirir ve kendi AppId'siyle okur.
  */
 
 import { query } from "@/lib/db"
@@ -17,7 +20,7 @@ export interface ModuleDef {
   group:  "general" | "services" | "data" | "admin" | "dev"
 }
 
-/** Sidebar'daki tüm modüller — key'ler stabil tutulmalı (DB'de saklanıyor) */
+/** Hub sidebar'daki tüm modüller — key'ler stabil tutulmalı (DB'de saklanıyor) */
 export const MODULES: ModuleDef[] = [
   // Genel
   { key: "dashboard",        label: "Dashboard",         group: "general" },
@@ -52,32 +55,43 @@ export const MODULES: ModuleDef[] = [
   { key: "preview",          label: "Mesaj Önizleme",    group: "dev" },
 ]
 
+export const HUB_APP_ID = "hub"
+
 export type PermissionMap = Record<string, PermissionLevel>
 
 interface PermRow { ModuleKey: string; Level: string }
 
 /**
- * Bir kullanıcının tüm modül izinlerini döner.
+ * Bir kullanıcının belirtilen uygulamadaki modül izinlerini döner.
  * Admin → tüm modüllerde "write"
  * Diğerleri → DB'den, yoksa "none"
+ *
+ * @param userId  AppUsers.Id
+ * @param appId   Apps.Id  (örn. "hub", "spareflow")
+ * @param role    UserApps.Role (bu app için kullanıcının rolü)
+ * @param modules İzin haritasında key olarak kullanılacak modül listesi
+ *                (varsayılan: Hub modülleri)
  */
 export async function getUserPermissions(
-  userId: string,
-  role:   string,
+  userId:  string,
+  appId:   string,
+  role:    string,
+  modules: ModuleDef[] = MODULES,
 ): Promise<PermissionMap> {
   const map: PermissionMap = {}
 
   if (role === "admin") {
-    for (const m of MODULES) map[m.key] = "write"
+    for (const m of modules) map[m.key] = "write"
     return map
   }
 
   // Default: hepsi none
-  for (const m of MODULES) map[m.key] = "none"
+  for (const m of modules) map[m.key] = "none"
 
   try {
     const rows = await query<PermRow[]>`
-      SELECT ModuleKey, [Level] FROM UserPermissions WHERE UserId = ${userId}
+      SELECT ModuleKey, [Level] FROM UserPermissions
+      WHERE UserId = ${userId} AND AppId = ${appId}
     `
     for (const r of rows) {
       if (r.Level === "read" || r.Level === "write") {

@@ -6,6 +6,24 @@ import { filterKnownApps } from "@/lib/apps-registry"
 
 type Params = { params: Promise<{ id: string }> }
 
+type AppGrant = { id: string; role: "admin" | "user" | "viewer" }
+
+function normalizeGrants(input: unknown): AppGrant[] {
+  if (!Array.isArray(input)) return []
+  const out: AppGrant[] = []
+  for (const x of input) {
+    if (typeof x === "string") {
+      out.push({ id: x, role: "user" })
+    } else if (x && typeof x === "object" && "id" in (x as object)) {
+      const o = x as { id: string; role?: string }
+      const role = (["admin", "user", "viewer"].includes(o.role ?? "") ? o.role : "user") as AppGrant["role"]
+      out.push({ id: String(o.id), role })
+    }
+  }
+  const known = new Set(filterKnownApps(out.map((g) => g.id)))
+  return out.filter((g) => known.has(g.id))
+}
+
 // PATCH /api/users/[id]  { email?, fullName?, role?, isActive?, password?, reset2FA?, allowedApps? }
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth()
@@ -37,12 +55,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     WHERE Id = ${id}
   `
 
-  // AllowedApps — gonderildiyse UserApps tablosunu tamamen yeniden yaz (diff yerine replace)
+  // AllowedApps — gönderildiyse UserApps tablosunu tamamen yeniden yaz (diff yerine replace)
+  // Yeni format: [{ id, role }]; eski string[] formatı da kabul edilir.
   if (Array.isArray(body.allowedApps)) {
-    const apps = filterKnownApps(body.allowedApps)
+    const grants = normalizeGrants(body.allowedApps)
     await execute`DELETE FROM UserApps WHERE UserId = ${id}`
-    for (const appId of apps) {
-      await execute`INSERT INTO UserApps (UserId, AppId) VALUES (${id}, ${appId})`
+    for (const g of grants) {
+      await execute`INSERT INTO UserApps (UserId, AppId, [Role]) VALUES (${id}, ${g.id}, ${g.role})`
     }
   }
 
@@ -59,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (session.user.id === id)
     return NextResponse.json({ error: "Kendi hesabınızı silemezsiniz" }, { status: 400 })
 
-  // UserApps FK'da ON DELETE CASCADE var — ayrica silmeye gerek yok
+  // UserApps FK'da ON DELETE CASCADE var — ayrıca silmeye gerek yok
   await execute`DELETE FROM AppUsers WHERE Id = ${id}`
   return NextResponse.json({ ok: true })
 }

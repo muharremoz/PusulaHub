@@ -36,8 +36,8 @@ const token   = req.cookies.get(COOKIE_NAME)?.value
     })
   }
 
-  // Admin dışı kullanıcı "hub" app'e yetkili mi?
-  const allowed = payload.role === "admin" || (payload.apps ?? []).includes("hub")
+  // Hub'a erişim: kullanıcının apps listesinde "hub" var mı?
+  const allowed = (payload.apps ?? []).some((a) => a.id === "hub")
   if (!allowed) {
     return new NextResponse(null, {
       status:  307,
