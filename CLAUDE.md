@@ -264,6 +264,45 @@ WTS session injection ile kullanıcılara anlık popup gönderme ve okundu takib
 
 ---
 
+## PM2 ile 3 Uygulamayı Yönetme
+
+PusulaSwitch + PusulaHub + SpareFlow PM2 altında yönetilir. Config:
+`ecosystem.config.js` (repo kökünde). 3 uygulamayı da boot'ta otomatik
+başlatır, crash olursa restart eder, tek komutla yönetim sağlar.
+
+### İlk Kurulum (bir defa)
+```bash
+npm i -g pm2 pm2-windows-startup
+cd "C:/GitHub/Pusula Yazılım/PusulaHub"
+pm2 start ecosystem.config.js
+pm2 save
+pm2-startup install      # Windows boot'ta otomatik baslat
+```
+
+### Günlük Kullanım
+```bash
+pm2 list                 # durum
+pm2 logs hub             # canli log (hub / switch / spareflow)
+pm2 restart hub          # sadece birini yeniden baslat
+pm2 restart all          # hepsini
+pm2 monit                # CPU/RAM panel
+pm2 stop spareflow       # durdur
+```
+
+Log dosyalari: `C:\GitHub\Pusula Yazılım\logs\*.log`
+
+### Önemli Notlar
+- `ecosystem.config.js` mutlak path kullanir (`C:/GitHub/Pusula Yazılım/...`).
+  Baska makinede farkliysa path'leri guncelle.
+- Windows'ta `.cmd` dosyalari direkt spawn edilemedigi icin `cmd.exe /c`
+  ile sarmalandi (`script: "cmd.exe"`, `args: "/c pnpm dev"`).
+- PM2 boot'ta `pm2-startup install` ile kullanici login'inde calisir.
+  Login gerektirmeden servis olarak calismasi icin `pm2-installer`
+  (ayri kurulum) gerekir.
+- Config degistirirsen: `pm2 delete all && pm2 start ecosystem.config.js && pm2 save`
+
+---
+
 ## Uygulamayı Başlatma
 
 Port **4242** sabittir (`server.ts`). Başlatmadan önce port kontrolü yapılır:
