@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import {
   Activity,
   Building2,
@@ -134,11 +135,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         {(isAdmin || (perms["companies"] ?? "none") === "write") && (
           <div className="px-3 pt-3">
-            <a href="/companies/setup">
+            <Link href="/companies/setup">
               <RainbowButton className="w-full text-xs font-semibold h-9">
                 + Firma Kurulum Sihirbazı
               </RainbowButton>
-            </a>
+            </Link>
           </div>
         )}
         <NavMain groups={visibleGroups} />

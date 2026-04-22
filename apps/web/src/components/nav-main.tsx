@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { ChevronDown, ChevronRight, type LucideIcon } from "lucide-react"
 
 import {
@@ -40,10 +41,10 @@ function FlatGroupItems({ items }: { items: NavItem[] }) {
         <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip={item.title}>
-              <a href={item.url}>
+              <Link href={item.url}>
                 <item.icon />
                 <span>{item.title}</span>
-              </a>
+              </Link>
             </SidebarMenuButton>
             {item.items?.length ? (
               <>
@@ -58,9 +59,9 @@ function FlatGroupItems({ items }: { items: NavItem[] }) {
                     {item.items.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton asChild>
-                          <a href={subItem.url}>
+                          <Link href={subItem.url}>
                             <span>{subItem.title}</span>
-                          </a>
+                          </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                     ))}
@@ -102,10 +103,10 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
                       {group.items.map((item) => (
                         <SidebarMenuSubItem key={item.title}>
                           <SidebarMenuSubButton asChild>
-                            <a href={item.url}>
+                            <Link href={item.url}>
                               <item.icon />
                               <span>{item.title}</span>
-                            </a>
+                            </Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       ))}
