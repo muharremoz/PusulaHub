@@ -17,16 +17,22 @@ export default auth((req) => {
   // NextAuth API her zaman erişilebilir
   if (isApiAuth) return NextResponse.next()
 
+  // Redirect URL'leri basePath farkında olmalı — clone() basePath'i korur
   // Giriş yapmamış → /login'e yönlendir
   if (!isLoggedIn && !isAuthPage) {
-    const loginUrl = new URL("/login", nextUrl.origin)
+    const loginUrl = nextUrl.clone()
+    loginUrl.pathname = "/login"
+    loginUrl.search = ""
     loginUrl.searchParams.set("callbackUrl", nextUrl.pathname)
     return NextResponse.redirect(loginUrl)
   }
 
   // Giriş yapmış → /login'e gitmeye çalışırsa dashboard'a yönlendir
   if (isLoggedIn && isAuthPage) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl.origin))
+    const dashUrl = nextUrl.clone()
+    dashUrl.pathname = "/dashboard"
+    dashUrl.search = ""
+    return NextResponse.redirect(dashUrl)
   }
 
   return NextResponse.next()
