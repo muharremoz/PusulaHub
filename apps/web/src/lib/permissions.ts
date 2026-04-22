@@ -29,7 +29,6 @@ export const MODULES: ModuleDef[] = [
   { key: "companies",        label: "Firmalar",          group: "general" },
   { key: "projects",         label: "Projeler",          group: "general" },
   { key: "calendar",         label: "Takvim",            group: "general" },
-  { key: "mail",             label: "Mail",              group: "general" },
   { key: "notes",            label: "Not Defteri",       group: "general" },
 
   // Servisler
