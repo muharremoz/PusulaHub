@@ -41,7 +41,7 @@ const APPS: AppEntry[] = [
   {
     id:          "spareflow",
     name:        "SpareFlow",
-    description: "Yedek parça akışı",
+    description: "SpareBackup izleme uygulaması",
     icon:        Package,
     color:       "#10b981",
   },
