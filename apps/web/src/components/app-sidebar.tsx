@@ -12,7 +12,6 @@ import {
   Globe,
   LayoutDashboard,
   MessageSquare,
-  Plug,
   Server,
   Settings,
   Shield,
@@ -69,7 +68,6 @@ const navGroups: NavGroup[] = [
     items: [
       { title: "Mesajlar",         url: "/messages",       icon: MessageSquare, moduleKey: "messages" },
       { title: "Kullanıcılar",     url: "/users",          icon: Users,         moduleKey: "users" },
-      { title: "API Bağlantıları", url: "/api-connections",icon: Plug,          moduleKey: "api-connections" },
       { title: "Şifre Kasası",     url: "/vault",          icon: KeyRound,      moduleKey: "vault" },
     ],
   },

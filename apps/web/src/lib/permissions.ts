@@ -42,7 +42,6 @@ export const MODULES: ModuleDef[] = [
   // Yönetim
   { key: "messages",         label: "Mesajlar",          group: "admin" },
   { key: "users",            label: "Kullanıcılar",      group: "admin" },
-  { key: "api-connections",  label: "API Bağlantıları",  group: "admin" },
   { key: "vault",            label: "Şifre Kasası",      group: "admin" },
 
   // Geliştirici
