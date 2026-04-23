@@ -16,6 +16,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Internal service-to-service endpoint — x-internal-key ile kendini koruyor.
+  // Module registry push'u (instrumentation.ts içinden) session olmadan çağırır.
+  if (pathname.startsWith("/api/apps/register")) {
+    return NextResponse.next()
+  }
+
 const token   = req.cookies.get(COOKIE_NAME)?.value
   const payload = await verifyEdge(token)
 
