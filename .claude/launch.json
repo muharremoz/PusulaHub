@@ -1,1 +1,17 @@
-{"version":"0.0.1","configurations":[{"name":"pusulaHub","runtimeExecutable":"pnpm","runtimeArgs":["--filter","web","dev"],"port":4242,"autoPort":true}]}
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "pusulaHub",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "web",
+        "dev"
+      ],
+      "port": 4242,
+      "autoPort": false
+    }
+  ],
+  "autoVerify": false
+}

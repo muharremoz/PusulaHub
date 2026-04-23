@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
 import { Activity, AlertTriangle, CheckCircle2, WifiOff, Volume2, VolumeX } from "lucide-react"
+import { DottedGlowBackground } from "@/components/ui/dotted-glow-background"
+import { HyperText } from "@/components/ui/hyper-text"
 
 /* ══════════════════════════════════════════════════════════
    Proje stili — Dark varyantı
@@ -198,32 +200,62 @@ function KpiCard({
   accent:   "emerald" | "amber" | "red" | "zinc"
   pulse?:   boolean
 }) {
-  const accentText =
-    accent === "emerald" ? "text-emerald-400" :
-    accent === "amber"   ? "text-amber-400"   :
-    accent === "red"     ? "text-red-400"     :
-                           "text-zinc-100"
+  const palette =
+    accent === "emerald" ? { txt: "text-emerald-400", rgb: "52,211,153" } :
+    accent === "amber"   ? { txt: "text-amber-400",   rgb: "251,191,36" } :
+    accent === "red"     ? { txt: "text-red-400",     rgb: "239,68,68"  } :
+                           { txt: "text-zinc-100",    rgb: "161,161,170" }
 
   return (
-    <div className={cn("rounded-[8px] p-2 pb-0 flex flex-col", OUTER_BG)}>
+    <div
+      className={cn(
+        "group relative overflow-hidden rounded-[6px] border border-white/5",
+        pulse && "animate-[pulse_1.6s_ease-in-out_infinite]",
+      )}
+      style={{
+        background: `linear-gradient(145deg, rgba(${palette.rgb},0.08) 0%, rgba(20,20,23,0.95) 55%, rgba(14,14,16,1) 100%)`,
+        boxShadow: `0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 40px rgba(${palette.rgb},0.04)`,
+      }}
+    >
+      {/* Üst accent şeridi — status renkli gradient ışık çizgisi */}
       <div
-        className={cn("rounded-[4px] flex-1", INNER_BG, pulse && "ring-2 ring-red-500/60 animate-[pulse_1.5s_ease-in-out_infinite]")}
-        style={INNER_SHADOW}
-      >
-        <div className="px-4 py-3 h-full">
-          <p className="text-[11px] font-medium tracking-widest uppercase text-zinc-500">{title}</p>
-          <p className={cn("text-[44px] font-bold tabular-nums leading-none mt-1.5", accentText)}>
-            {value}
-          </p>
-          {trend && (
-            <p className={cn("text-[12px] mt-2 font-medium", trend.positive ? "text-emerald-400/80" : "text-red-400/80")}>
-              {trend.value}
-            </p>
-          )}
-          <p className="text-[11px] text-zinc-500 mt-0.5">{subtitle}</p>
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{
+          background: `linear-gradient(90deg, transparent, rgba(${palette.rgb},1), transparent)`,
+          boxShadow: `0 0 10px rgba(${palette.rgb},0.6)`,
+        }}
+      />
+
+      {/* Değerin arkasındaki yumuşak renk halosu */}
+      <div
+        className="pointer-events-none absolute left-4 top-8 h-16 w-24 rounded-full opacity-50"
+        style={{
+          background: `radial-gradient(ellipse at center, rgba(${palette.rgb},0.35), transparent 70%)`,
+          filter: "blur(18px)",
+        }}
+      />
+
+      <div className="relative px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block size-1.5 rounded-full"
+            style={{
+              backgroundColor: `rgb(${palette.rgb})`,
+              boxShadow: `0 0 8px rgba(${palette.rgb},0.9)`,
+            }}
+          />
+          <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-zinc-400">{title}</p>
         </div>
+        <p className={cn("mt-1.5 font-mono text-[44px] font-black tabular-nums leading-none", palette.txt)}>
+          {value}
+        </p>
+        {trend && (
+          <p className={cn("mt-2 text-[11px] font-semibold tracking-wide", trend.positive ? "text-emerald-300/90" : "text-red-300/90")}>
+            {trend.value}
+          </p>
+        )}
+        <p className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-500">{subtitle}</p>
       </div>
-      <div className="h-2" />
     </div>
   )
 }
@@ -240,24 +272,43 @@ function ClockCard({ fetchedAt }: { fetchedAt?: string }) {
     : null
 
   return (
-    <div className={cn("rounded-[8px] p-2 pb-0 flex flex-col", OUTER_BG)}>
-      <div className={cn("rounded-[4px] flex-1 relative", INNER_BG)} style={INNER_SHADOW}>
-        {/* Kuma Bağlı — sağ üst köşede canlı yeşil dot */}
-        <span className="absolute top-2 right-2">
-          <LiveDot ui="online" size="size-2" />
-        </span>
-        <div className="px-4 py-3 h-full">
-          <p className="text-[11px] font-medium tracking-widest uppercase text-zinc-500">Saat</p>
-          <p className="text-[44px] font-bold tabular-nums leading-none mt-1.5 font-mono text-zinc-100">{time}</p>
-          <p className="text-[11px] text-zinc-500 mt-2 capitalize">{date}</p>
-          {updatedTime && (
-            <p className="text-[11px] text-zinc-500 mt-0.5">
-              Son güncelleme: <span className="text-zinc-300 font-mono tabular-nums">{updatedTime}</span>
-            </p>
-          )}
+    <div
+      className="group relative overflow-hidden rounded-[6px] border border-white/5"
+      style={{
+        background: "linear-gradient(145deg, rgba(125,211,252,0.08) 0%, rgba(20,20,23,0.95) 55%, rgba(14,14,16,1) 100%)",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 40px rgba(125,211,252,0.04)",
+      }}
+    >
+      {/* Üst cyan ışık şeridi */}
+      <div
+        className="absolute inset-x-0 top-0 h-[2px]"
+        style={{
+          background: "linear-gradient(90deg, transparent, rgba(125,211,252,1), transparent)",
+          boxShadow: "0 0 10px rgba(125,211,252,0.6)",
+        }}
+      />
+
+      {/* Canlı bağlantı dot'u sağ üst */}
+      <span className="absolute top-2 right-2 z-10">
+        <LiveDot ui="online" size="size-2" />
+      </span>
+
+      <div className="relative px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block size-1.5 rounded-full"
+            style={{ backgroundColor: "rgb(125,211,252)", boxShadow: "0 0 8px rgba(125,211,252,0.9)" }}
+          />
+          <p className="text-[10px] font-bold tracking-[0.25em] uppercase text-zinc-400">Saat</p>
         </div>
+        <p className="mt-1.5 font-mono text-[44px] font-black tabular-nums leading-none text-zinc-100">{time}</p>
+        <p className="mt-2 text-[11px] text-zinc-400 capitalize">{date}</p>
+        {updatedTime && (
+          <p className="mt-0.5 text-[10px] uppercase tracking-wider text-zinc-500">
+            Son güncelleme <span className="text-zinc-300 font-mono tabular-nums normal-case">{updatedTime}</span>
+          </p>
+        )}
       </div>
-      <div className="h-2" />
     </div>
   )
 }
@@ -271,7 +322,7 @@ const STATUS_CONFIG: Record<UiStatus, { label: string; dot: string; dotPing: str
     dot:    "bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,0.8)]",
     dotPing: "bg-emerald-400",
     badge:  "text-emerald-300 bg-emerald-500/10 border-emerald-500/30",
-    bg:     INNER_BG,
+    bg:     "bg-black",
     ring:   "",
     name:   "text-zinc-100",
     target: "text-zinc-500",
@@ -281,7 +332,7 @@ const STATUS_CONFIG: Record<UiStatus, { label: string; dot: string; dotPing: str
     dot:    "bg-amber-400 shadow-[0_0_14px_rgba(251,191,36,0.8)]",
     dotPing: "bg-amber-400",
     badge:  "text-amber-200 bg-amber-500/15 border-amber-500/40",
-    bg:     "bg-amber-950/40",
+    bg:     "bg-black",
     ring:   "ring-1 ring-amber-500/30",
     name:   "text-amber-100",
     target: "text-amber-200/50",
@@ -291,7 +342,7 @@ const STATUS_CONFIG: Record<UiStatus, { label: string; dot: string; dotPing: str
     dot:    "bg-red-500 shadow-[0_0_18px_rgba(239,68,68,1)]",
     dotPing: "bg-red-500",
     badge:  "text-red-200 bg-red-500/15 border-red-500/40",
-    bg:     "bg-red-950/60",
+    bg:     "bg-black",
     ring:   "ring-2 ring-red-500/50 animate-[pulse_1.5s_ease-in-out_infinite]",
     name:   "text-red-100",
     target: "text-red-200/60",
@@ -399,6 +450,74 @@ function EventLog({ events }: { events: StatusEvent[] }) {
   )
 }
 
+/** Grafana/Prometheus tarzı canlı sparkline çizgisi (akış + kuyruk efektli) */
+function Sparkline({ data, color, width = 200, height = 28 }: { data: number[]; color: string; width?: number; height?: number }) {
+  if (data.length < 2) {
+    return <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="block w-full" />
+  }
+  const pad = 2
+  const max = Math.max(...data, 1)
+  const min = Math.min(...data, 0)
+  const span = Math.max(max - min, 1)
+  const w = width - pad * 2
+  const h = height - pad * 2
+  const step = data.length > 1 ? w / (data.length - 1) : w
+  const points = data.map((v, i) => {
+    const x = pad + i * step
+    const y = pad + h - ((v - min) / span) * h
+    return { x, y }
+  })
+  const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")
+  const area = `${line} L${points[points.length - 1].x.toFixed(1)},${height} L${points[0].x.toFixed(1)},${height} Z`
+  const last = points[points.length - 1]
+  const key     = color.replace(/[^a-z0-9]/gi, "")
+  const gradId  = `spark-g-${key}`
+  const sweepId = `spark-sw-${key}`
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="block w-full overflow-visible">
+      <defs>
+        <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%"   stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+        {/* Soldan sağa akan parlaklık şeridi — "live data streaming" hissi */}
+        <linearGradient id={sweepId} x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%"   stopColor={color} stopOpacity="0" />
+          <stop offset="45%"  stopColor={color} stopOpacity="0" />
+          <stop offset="55%"  stopColor="#ffffff" stopOpacity="0.9" />
+          <stop offset="65%"  stopColor={color} stopOpacity="0" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+          <animate attributeName="x1" values="-1;1" dur="2.4s" repeatCount="indefinite" />
+          <animate attributeName="x2" values="0;2"  dur="2.4s" repeatCount="indefinite" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      {/* Ana çizgi */}
+      <path d={line} fill="none" stroke={color} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Soldan sağa akan parlak şerit — çizginin üstünü gezer */}
+      <path d={line} fill="none" stroke={`url(#${sweepId})`} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Son noktadan geri doğru kuyruk (glow trail) */}
+      <path
+        d={points.slice(-8).map((p, i, arr) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")}
+        fill="none"
+        stroke={color}
+        strokeWidth="2.6"
+        strokeLinecap="round"
+        strokeOpacity="0.6"
+        style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+      />
+      {/* Uç nokta — atım */}
+      <circle cx={last.x} cy={last.y} r="2" fill={color}>
+        <animate attributeName="r" values="2;3.5;2" dur="1.2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx={last.x} cy={last.y} r="4" fill={color} opacity="0.35">
+        <animate attributeName="r"       values="2;8;2"     dur="1.2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.6;0;0.6" dur="1.2s" repeatCount="indefinite" />
+      </circle>
+    </svg>
+  )
+}
+
 function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
   const ui  = mapStatus(m.status)
   const cfg = STATUS_CONFIG[ui]
@@ -410,46 +529,117 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
                             "text-red-300"
   const downDuration = ui === "offline" && since && now ? formatDuration(now.getTime() - since) : null
 
+  // Yanıt süresi geçmişi — son 40 ölçüm (canlı sparkline)
+  const [history, setHistory] = useState<number[]>([])
+  useEffect(() => {
+    if (m.responseMs === null) return
+    setHistory((h) => {
+      const next = [...h, m.responseMs as number]
+      return next.length > 40 ? next.slice(next.length - 40) : next
+    })
+  }, [m.responseMs])
+
+  // Dotted glow — tam doygun status rengi (alpha animasyonu component içinde)
+  const glow =
+    ui === "online"  ? { dot: "rgb(52,211,153)",  glow: "rgb(52,211,153)",  speed: 0.8, tintA: "rgba(52,211,153,0.22)",  tintB: "rgba(52,211,153,0.05)" } :
+    ui === "warning" ? { dot: "rgb(251,191,36)",  glow: "rgb(251,191,36)",  speed: 1.4, tintA: "rgba(251,191,36,0.25)",  tintB: "rgba(251,191,36,0.05)" } :
+                       { dot: "rgb(239,68,68)",   glow: "rgb(239,68,68)",   speed: 2.2, tintA: "rgba(239,68,68,0.28)",   tintB: "rgba(239,68,68,0.06)" }
+
+  const isDown = ui === "offline"
+
   return (
-    <div
-      className={cn("rounded-[8px] p-2 pb-0 relative overflow-hidden min-w-0", OUTER_BG)}
-      style={stripedBg(ui === "online" ? STRIPE_COLOR.emerald : ui === "warning" ? STRIPE_COLOR.amber : STRIPE_COLOR.red)}
-    >
+    <div className={cn("min-w-0", isDown && "tv-down-pulse")}>
+      {/* Dış kart — glow'lu ana kart */}
       <div
-        className={cn("rounded-[4px] relative overflow-hidden", cfg.bg, cfg.ring)}
-        style={INNER_SHADOW}
-      >
-        {/* Üst — dot + ad */}
-        <div className="px-4 pt-3 flex items-center gap-2 min-w-0">
-          <LiveDot ui={ui} size="size-2.5" />
-          <h3 className={cn("text-[16px] font-semibold truncate", cfg.name)}>{m.name}</h3>
-        </div>
-
-        {/* Orta — devasa ms sayı */}
-        <div className={cn("flex items-end justify-center gap-2 pt-3", downDuration ? "pb-2" : "pb-4")}>
-          {m.responseMs !== null ? (
-            <>
-              <span className={cn("text-[56px] font-black tabular-nums leading-none tracking-tight", respClass)}>
-                {Math.max(1, Math.round(m.responseMs))}
-              </span>
-            </>
-          ) : (
-            <>
-              <WifiOff className="size-10 text-red-400 self-center" />
-              <span className="text-[56px] font-black text-red-400 leading-none">—</span>
-            </>
-          )}
-        </div>
-
-        {/* DOWN süresi — sadece offline durumda */}
-        {downDuration && (
-          <div className="flex items-center justify-center gap-1.5 pb-3 animate-pulse">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-red-300">Down</span>
-            <span className="text-[13px] font-mono font-bold text-red-200 tabular-nums">{downDuration}</span>
-          </div>
+        className={cn(
+          "rounded-[5px] relative overflow-hidden p-2",
+          cfg.bg,
+          isDown ? "ring-2 ring-red-500/70" : cfg.ring,
         )}
+        style={{
+          ...INNER_SHADOW,
+          ...(isDown && { boxShadow: "0 0 0 1px rgba(239,68,68,0.3), 0 0 10px rgba(239,68,68,0.2), 0 4px 16px rgba(0,0,0,0.5)" }),
+        }}
+      >
+        {/* Dotted glow katmanı — duruma göre renk ve hız */}
+        <DottedGlowBackground
+          gap={14}
+          radius={1.5}
+          color={glow.dot}
+          darkColor={glow.dot}
+          glowColor={glow.glow}
+          darkGlowColor={glow.glow}
+          opacity={isDown ? 0.45 : 0.3}
+          speedScale={glow.speed}
+          className="pointer-events-none"
+        />
+
+        {/* İç kart — glow'un üstüne binen cam (glassmorphism) katman */}
+        <div
+          className={cn(
+            "relative z-10 rounded-[4px] overflow-hidden backdrop-blur-[4px] border",
+            isDown ? "border-red-400/40" : "border-white/5",
+          )}
+          style={{
+            background: isDown
+              ? "linear-gradient(135deg, rgba(239,68,68,0.22), rgba(239,68,68,0.04))"
+              : "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+          }}
+        >
+          <div className="min-h-[96px] p-3">
+            {/* Ad satırı — solda isim, sağda DOWN rozeti */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <HyperText
+                    as="div"
+                    duration={700}
+                    animateOnHover={false}
+                    className="truncate text-[13px] font-semibold text-zinc-100 !py-0 !text-[13px] tracking-normal"
+                    title={m.name}
+                  >
+                    {m.name}
+                  </HyperText>
+                </div>
+                <div
+                  className="mt-0.5 truncate font-mono text-[10px] text-zinc-400"
+                  title={m.hostname ?? m.url ?? ""}
+                >
+                  {m.hostname ?? m.url ?? "—"}
+                  {m.port ? `:${m.port}` : ""}
+                </div>
+              </div>
+              {downDuration ? (
+                <div className="shrink-0 flex flex-col items-end animate-pulse">
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-red-300">Down</span>
+                  <span className="text-[12px] font-mono font-bold text-red-200 tabular-nums leading-tight">{downDuration}</span>
+                </div>
+              ) : (
+                <span
+                  className="shrink-0 rounded-[3px] border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-zinc-300"
+                  title={`Tür: ${m.type}`}
+                >
+                  {m.type}
+                </span>
+              )}
+            </div>
+
+            {/* Yanıt süresi + canlı sparkline */}
+            <div className="mt-2 flex items-end justify-between gap-3">
+              <div className="flex items-baseline gap-1">
+                <span className={cn("font-mono text-xl font-bold tabular-nums", respClass)}>
+                  {m.responseMs === null ? "—" : m.responseMs.toFixed(0)}
+                </span>
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">ms</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <Sparkline data={history} color={glow.dot} height={24} />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="h-2" />
     </div>
   )
 }
@@ -477,66 +667,105 @@ function ExchangeTile({ monitors, health }: { monitors: KumaMonitor[]; health?: 
   const warningSources = monitors.filter((m) => mapStatus(m.status) === "warning").length
   const now = useClock()
 
+  // Dış kart glow rengi — aggregate status
+  const glow =
+    ui === "online"  ? { dot: "rgb(52,211,153)",  speed: 0.8 } :
+    ui === "warning" ? { dot: "rgb(251,191,36)",  speed: 1.4 } :
+                       { dot: "rgb(239,68,68)",   speed: 2.2 }
+
   return (
-    <div
-      className={cn("rounded-[8px] p-2 pb-0 flex flex-col shrink-0 w-full lg:w-[260px] xl:w-[300px]", OUTER_BG)}
-    >
+    <div className="flex flex-col shrink-0 w-full lg:w-[260px] xl:w-[300px]">
+      {/* Dış kart — dotted glow (monitör kartlarıyla aynı dil) */}
       <div
-        className={cn("rounded-[4px] flex flex-col flex-1", cfg.bg, cfg.ring)}
+        className={cn("rounded-[5px] relative overflow-hidden p-2 flex flex-col flex-1", cfg.bg, cfg.ring)}
         style={INNER_SHADOW}
       >
-        <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-white/5">
-          <LiveDot ui={ui} size="size-2.5" />
-          <h3 className={cn("text-[13px] font-bold leading-none flex-1 truncate", cfg.name)}>Döviz Kurları</h3>
-          <span className={cn("text-[8px] font-bold uppercase tracking-wider shrink-0", ui === "online" ? "text-emerald-300" : ui === "warning" ? "text-amber-300" : "text-red-300")}>
-            {ui === "online" ? `${monitors.length}/${monitors.length}` : ui === "offline" ? `${downSources} DOWN` : `${warningSources} UYARI`}
-          </span>
-        </div>
+        <DottedGlowBackground
+          gap={14}
+          radius={1.5}
+          color={glow.dot}
+          darkColor={glow.dot}
+          glowColor={glow.dot}
+          darkGlowColor={glow.dot}
+          opacity={0.3}
+          speedScale={glow.speed}
+          className="pointer-events-none"
+        />
 
-        {/* 5 kaynak — mini kart grid */}
-        <div className="p-2 grid grid-cols-1 gap-2">
-          {sorted.map((m) => {
-            const s   = mapStatus(m.status)
-            const sc  = STATUS_CONFIG[s]
-            const ping = m.responseMs === null ? "—" : String(Math.max(1, Math.round(m.responseMs)))
-            const respClass =
-              m.responseMs === null ? "text-red-400" :
-              m.responseMs < 30     ? "text-emerald-300" :
-              m.responseMs < 80     ? "text-amber-300" :
-                                      "text-red-300"
-            return (
-              <div
-                key={m.name}
-                className={cn(
-                  "rounded-[5px] px-3 py-2 flex items-center justify-between gap-2 border",
-                  s === "offline" ? "bg-red-500/10 border-red-500/30"
-                  : s === "warning" ? "bg-amber-500/10 border-amber-500/30"
-                  : "bg-black/30 border-white/5",
-                )}
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <LiveDot ui={s} size="size-1.5" />
-                  <span className={cn("text-[17px] font-semibold truncate", sc.name)}>{stripExchangePrefix(m.name)}</span>
+        {/* İç cam katman */}
+        <div
+          className="relative z-10 rounded-[4px] overflow-hidden border border-white/5 backdrop-blur-[4px] flex flex-col flex-1"
+          style={{
+            background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+          }}
+        >
+          {/* Başlık satırı */}
+          <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-white/5">
+            <LiveDot ui={ui} size="size-2.5" />
+            <h3 className="text-[13px] font-bold leading-none flex-1 truncate text-zinc-100">Döviz Kurları</h3>
+            <span className={cn("text-[8px] font-bold uppercase tracking-wider shrink-0", ui === "online" ? "text-emerald-300" : ui === "warning" ? "text-amber-300" : "text-red-300")}>
+              {ui === "online" ? `${monitors.length}/${monitors.length}` : ui === "offline" ? `${downSources} DOWN` : `${warningSources} UYARI`}
+            </span>
+          </div>
+
+          {/* 5 kaynak — mini kart grid */}
+          <div className="p-2 grid grid-cols-1 gap-2">
+            {sorted.map((m) => {
+              const s   = mapStatus(m.status)
+              const ping = m.responseMs === null ? "—" : String(Math.max(1, Math.round(m.responseMs)))
+              const respClass =
+                m.responseMs === null ? "text-red-400" :
+                m.responseMs < 30     ? "text-emerald-300" :
+                m.responseMs < 80     ? "text-amber-300" :
+                                        "text-red-300"
+              const rowTint =
+                s === "offline" ? "linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.04))" :
+                s === "warning" ? "linear-gradient(135deg, rgba(251,191,36,0.15), rgba(251,191,36,0.03))" :
+                                  "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))"
+              const rowBorder =
+                s === "offline" ? "border-red-400/30" :
+                s === "warning" ? "border-amber-400/30" :
+                                  "border-white/10"
+              return (
+                <div
+                  key={m.name}
+                  className={cn(
+                    "relative rounded-[5px] overflow-hidden border px-3 py-2 flex items-center justify-between gap-2",
+                    rowBorder,
+                  )}
+                  style={{ background: rowTint }}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <LiveDot ui={s} size="size-1.5" />
+                    <HyperText
+                      as="span"
+                      duration={700}
+                      animateOnHover={false}
+                      className="text-[17px] font-semibold truncate text-zinc-100 !py-0 !text-[17px] inline-block"
+                    >
+                      {stripExchangePrefix(m.name)}
+                    </HyperText>
+                  </div>
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <span className={cn("text-[20px] font-black tabular-nums leading-none", respClass)}>{ping}</span>
+                    {(() => {
+                      const key = EXCHANGE_HEALTH_KEY[stripExchangePrefix(m.name)]
+                      const hs  = key && health ? health[key] : null
+                      if (!hs || !now) return null
+                      return (
+                        <span className="text-[11px] font-mono font-semibold text-zinc-300 tabular-nums">
+                          {formatAgo(hs.lastUpdatedAt, now)}
+                        </span>
+                      )
+                    })()}
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-0.5 shrink-0">
-                  <span className={cn("text-[20px] font-black tabular-nums leading-none", respClass)}>{ping}</span>
-                  {(() => {
-                    const key = EXCHANGE_HEALTH_KEY[stripExchangePrefix(m.name)]
-                    const hs  = key && health ? health[key] : null
-                    if (!hs || !now) return null
-                    return (
-                      <span className="text-[11px] font-mono font-semibold text-zinc-300 tabular-nums">
-                        {formatAgo(hs.lastUpdatedAt, now)}
-                      </span>
-                    )
-                  })()}
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
         </div>
       </div>
-      <div className="h-2" />
     </div>
   )
 }
@@ -672,6 +901,13 @@ export default function TvMonitoringPage() {
 
   return (
     <div className="min-h-screen flex flex-col p-3 md:p-5 gap-3 bg-[#0E0E0E]">
+      <style>{`
+        @keyframes tv-down-pulse {
+          0%,100% { transform: scale(1);     filter: drop-shadow(0 0 0px rgba(239,68,68,0)); }
+          50%     { transform: scale(1.01); filter: drop-shadow(0 0 8px rgba(239,68,68,0.3)); }
+        }
+        .tv-down-pulse { animation: tv-down-pulse 1.6s ease-in-out infinite; }
+      `}</style>
       {/* ── DOWN Alarm Banner — tam genişlik, yanıp söner ── */}
       {downMonitors.length > 0 && (
         <DownBanner monitors={downMonitors} tracker={tracker} />
@@ -683,7 +919,10 @@ export default function TvMonitoringPage() {
           <div className="size-6 rounded-[4px] bg-sky-950 flex items-center justify-center shrink-0">
             <Activity className="size-3.5 text-sky-300" />
           </div>
-          <h1 className="text-[12px] md:text-[13px] font-bold tracking-tight text-zinc-100 truncate">PUSULA İZLEME MERKEZİ</h1>
+          <div className="min-w-0 leading-tight">
+            <h1 className="text-[12px] md:text-[13px] font-bold tracking-tight text-zinc-100 truncate">DEVOPS İZLEME MERKEZİ</h1>
+            <div className="text-[9px] md:text-[10px] font-medium uppercase tracking-[0.2em] text-zinc-500 truncate">Pusula Yazılım</div>
+          </div>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <button
