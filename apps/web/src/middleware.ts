@@ -22,6 +22,12 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Alt uygulamaların Hub'a proxy'lediği istekler (örn. 2FA doğrulama).
+  // Endpoint'ler kendi x-internal-key kontrollerini yapar.
+  if (pathname.startsWith("/api/hub/")) {
+    return NextResponse.next()
+  }
+
 const token   = req.cookies.get(COOKIE_NAME)?.value
   const payload = await verifyEdge(token)
 
