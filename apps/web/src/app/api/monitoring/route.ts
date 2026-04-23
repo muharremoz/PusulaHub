@@ -3,6 +3,31 @@ import { fetchKumaMonitors, invalidateKumaCache } from "@/lib/kuma"
 import { fetchKumaHistory, invalidateKumaHistoryCache, type MonitorHistory } from "@/lib/kuma-history"
 
 /**
+ * Döviz kaynaklarının son güncelleme zamanını Fastify health endpoint'inden
+ * çeker. /tv'de mini kartlara "N sn önce" bilgisi basmak için kullanılır.
+ * Kısa TTL (10 sn) ile in-memory cache — health zaten çok hafif.
+ */
+interface HealthUpstream {
+  status:        string
+  state:         string
+  enabled:       boolean
+  lastUpdatedAt: string
+  lastChangedAt: string
+  lastError:     string | null
+}
+interface HealthResponse { services: { upstream: Record<string, HealthUpstream> } }
+
+let healthCache: { at: number; data: Record<string, HealthUpstream> } | null = null
+async function fetchExchangeHealth(): Promise<Record<string, HealthUpstream>> {
+  if (healthCache && Date.now() - healthCache.at < 10_000) return healthCache.data
+  const res  = await fetch("http://api.pusulanet.net:8080/health", { cache: "no-store", signal: AbortSignal.timeout(2500) })
+  const json = await res.json() as HealthResponse
+  const data = json.services?.upstream ?? {}
+  healthCache = { at: Date.now(), data }
+  return data
+}
+
+/**
  * GET /api/monitoring
  *   ?refresh=1 → current state cache'ini bypass et
  *   ?history=1 → 30 günlük heartbeat geçmişini de ekle (Kuma SQLite'tan SSH ile)
@@ -35,12 +60,21 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Döviz kaynakları için son güncelleme zamanı (best-effort, patlarsa sessiz)
+    let exchangeHealth: Record<string, HealthUpstream> | null = null
+    try {
+      exchangeHealth = await fetchExchangeHealth()
+    } catch (e) {
+      console.error("[monitoring] exchange health fetch failed:", e)
+    }
+
     return NextResponse.json({
       ok:       true,
       fetchedAt: new Date().toISOString(),
       counts:   { total: monitors.length, online, warning, offline },
       monitors,
       history,
+      exchangeHealth,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Kuma'ya ulaşılamadı."

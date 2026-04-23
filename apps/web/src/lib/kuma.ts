@@ -34,9 +34,9 @@ const STATUS_MAP: Record<string, KumaStatus> = {
   "3": "maintenance",
 }
 
-/* ── 30 sn cache ───────────────────────────────────────── */
+/* ── 1 sn cache (TV canlı görünüm için) ──────────────────── */
 let cache: { at: number; data: KumaMonitor[] } | null = null
-const TTL_MS = 30 * 1000
+const TTL_MS = 1000
 
 /**
  * Prometheus text format satırını `key{labels} value` şeklinde parse eder.
