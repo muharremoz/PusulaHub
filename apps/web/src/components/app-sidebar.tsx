@@ -33,6 +33,7 @@ import { CommandPalette } from "@/components/shared/command-palette"
 import type { PermissionLevel, PermissionMap } from "@/lib/permissions"
 import { RainbowButton } from "@/components/ui/rainbow-button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
@@ -240,30 +241,37 @@ export function AppSidebar() {
             {visibleGroups.map((g, i) => {
               const active = i === activeIdx
               return (
-                <button
-                  key={g.key}
-                  onClick={() => setActiveIdx(i)}
-                  title={g.label}
-                  className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
-                    active
-                      ? "bg-neutral-800 text-white"
-                      : "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
-                  }`}
-                >
-                  <Ic I={g.railIcon} size={18} />
-                </button>
+                <Tooltip key={g.key}>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={() => setActiveIdx(i)}
+                      className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
+                        active
+                          ? "bg-neutral-800 text-white"
+                          : "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+                      }`}
+                    >
+                      <Ic I={g.railIcon} size={18} />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" sideOffset={8}>{g.label}</TooltipContent>
+                </Tooltip>
               )
             })}
           </div>
           {/* bottom: settings + avatar */}
           <div className="mt-auto flex flex-col items-center gap-1">
-            <Link
-              href="/settings"
-              title="Ayarlar"
-              className="flex h-9 w-9 items-center justify-center rounded-[8px] text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200 transition-colors"
-            >
-              <Ic I={Setting} size={18} />
-            </Link>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/settings"
+                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200 transition-colors"
+                >
+                  <Ic I={Setting} size={18} />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>Ayarlar</TooltipContent>
+            </Tooltip>
             <CompactUserAvatar />
           </div>
         </nav>
