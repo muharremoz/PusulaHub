@@ -232,7 +232,7 @@ export function AppSidebar() {
       <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#082F49] text-sky-50 border-r border-sky-950">
         {/* -------- RAIL (sol) -------- */}
         <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-sky-900 py-3">
-          <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-sky-500 text-white">
+          <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-white text-sky-950">
             <Ic I={Category2} size={20} />
           </div>
           <div className="flex flex-col gap-1">
