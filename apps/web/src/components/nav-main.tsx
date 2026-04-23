@@ -55,7 +55,7 @@ function FlatGroupItems({ items }: { items: NavItem[] }) {
                   </SidebarMenuAction>
                 </CollapsibleTrigger>
                 <CollapsibleContent>
-                  <SidebarMenuSub>
+                  <SidebarMenuSub className="border-l-0 mx-0 px-1">
                     {item.items.map((subItem) => (
                       <SidebarMenuSubItem key={subItem.title}>
                         <SidebarMenuSubButton asChild>
@@ -99,7 +99,7 @@ export function NavMain({ groups }: { groups: NavGroup[] }) {
                   <CollapsibleContent
                     className="overflow-hidden data-[state=open]:[animation:collapsible-down_200ms_ease-out] data-[state=closed]:[animation:collapsible-up_200ms_ease-out]"
                   >
-                    <SidebarMenuSub>
+                    <SidebarMenuSub className="border-l-0 mx-0 px-1">
                       {group.items.map((item) => (
                         <SidebarMenuSubItem key={item.title}>
                           <SidebarMenuSubButton asChild>
