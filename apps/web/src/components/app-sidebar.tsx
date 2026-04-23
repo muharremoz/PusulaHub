@@ -131,7 +131,7 @@ function CompactUserAvatar() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-blue-100 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-blue-800 transition-colors"
           title={name}
         >
           <Avatar className="h-7 w-7 rounded-[6px]">
@@ -229,9 +229,9 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#EFF6FF] text-slate-800 border-r border-blue-100">
+      <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#1E40AF] text-blue-50 border-r border-blue-900">
         {/* -------- RAIL (sol) -------- */}
-        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-blue-100 py-3">
+        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-blue-800 py-3">
           <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-sky-500 text-white">
             <Ic I={Category2} size={20} />
           </div>
@@ -245,8 +245,8 @@ export function AppSidebar() {
                       onClick={() => setActiveIdx(i)}
                       className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
                         active
-                          ? "bg-blue-700 text-white"
-                          : "text-blue-900/60 hover:bg-blue-100 hover:text-blue-900"
+                          ? "bg-white text-blue-800"
+                          : "text-blue-200 hover:bg-blue-800 hover:text-white"
                       }`}
                     >
                       <Ic I={g.railIcon} size={18} />
@@ -277,7 +277,7 @@ export function AppSidebar() {
               <TooltipTrigger asChild>
                 <Link
                   href="/settings"
-                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-blue-900/60 hover:bg-blue-100 hover:text-blue-900 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-blue-200 hover:bg-blue-800 hover:text-white transition-colors"
                 >
                   <Ic I={Setting} size={18} />
                 </Link>
