@@ -40,7 +40,6 @@ export const MODULES: ModuleDef[] = [
   { key: "ports",            label: "Port Yönetimi",     group: "services" },
 
   // Veri & Raporlar
-  { key: "files",            label: "Dosyalar",          group: "data" },
   { key: "logs",             label: "Loglar",            group: "data" },
   { key: "reports",          label: "Raporlar",          group: "data" },
 

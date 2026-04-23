@@ -7,7 +7,6 @@ import {
   Building2,
   Database,
   FileText,
-  FolderOpen,
   CalendarDays,
   FolderKanban,
   NotebookPen,
@@ -70,7 +69,6 @@ const navGroups: NavGroup[] = [
   {
     label: "Veri & Raporlar",
     items: [
-      { title: "Dosyalar", url: "/files",   icon: FolderOpen, moduleKey: "files" },
       { title: "Loglar",   url: "/logs",    icon: FileText,   moduleKey: "logs" },
       { title: "Raporlar", url: "/reports", icon: Network,    moduleKey: "reports" },
     ],

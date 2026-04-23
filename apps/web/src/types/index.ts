@@ -74,13 +74,6 @@ export interface LogEntry {
   message: string;
 }
 
-export interface FileItem {
-  name: string;
-  type: "file" | "folder";
-  size?: number;
-  modified: string;
-  permissions?: string;
-}
 
 export interface PanelUser {
   id: string;

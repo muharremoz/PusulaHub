@@ -6,7 +6,6 @@ import type {
   IISSite,
   IISAppPool,
   LogEntry,
-  FileItem,
   PanelUser,
   DashboardStats,
   RecentEvent,
@@ -711,13 +710,3 @@ export const messages: Message[] = [
   },
 ];
 
-export const sampleFiles: FileItem[] = [
-  { name: "Documents", type: "folder", modified: "2024-03-29 10:00" },
-  { name: "Backups", type: "folder", modified: "2024-03-29 02:00" },
-  { name: "Logs", type: "folder", modified: "2024-03-29 14:30" },
-  { name: "Scripts", type: "folder", modified: "2024-03-28 16:00" },
-  { name: "config.xml", type: "file", size: 2048, modified: "2024-03-27 09:15" },
-  { name: "backup.log", type: "file", size: 156000, modified: "2024-03-29 02:30" },
-  { name: "readme.txt", type: "file", size: 512, modified: "2024-03-15 11:00" },
-  { name: "deploy.ps1", type: "file", size: 4096, modified: "2024-03-20 14:20" },
-];
