@@ -23,6 +23,7 @@ import {
   Notification,
   Setting,
   Code,
+  MagicStar,
 } from "iconsax-reactjs"
 
 import { useSession } from "next-auth/react"
@@ -256,8 +257,22 @@ export function AppSidebar() {
               )
             })}
           </div>
-          {/* bottom: settings + avatar */}
+          {/* bottom: firma sihirbazı + settings + avatar */}
           <div className="mt-auto flex flex-col items-center gap-1">
+            {canWriteCompanies && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Link href="/companies/setup" className="mb-1">
+                    <RainbowButton asChild size="icon" className="h-9 w-9">
+                      <span className="flex items-center justify-center">
+                        <MagicStar size="16" color="currentColor" variant="Bold" />
+                      </span>
+                    </RainbowButton>
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>Firma Kurulum Sihirbazı</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Link
@@ -286,17 +301,6 @@ export function AppSidebar() {
               {activeGroup?.label ?? "Menü"}
             </h2>
           </div>
-
-          {/* Rainbow button (sadece companies write yetkisi varsa) */}
-          {canWriteCompanies && (
-            <div className="px-2 pt-3">
-              <Link href="/companies/setup">
-                <RainbowButton className="w-full text-xs font-semibold h-9">
-                  + Firma Kurulum Sihirbazı
-                </RainbowButton>
-              </Link>
-            </div>
-          )}
 
           {/* Items list */}
           <nav className="flex-1 overflow-y-auto px-2 pt-3 pb-3">
