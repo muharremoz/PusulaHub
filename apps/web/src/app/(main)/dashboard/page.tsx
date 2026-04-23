@@ -3,10 +3,24 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
-  Server, ShieldAlert, Building2, FolderKanban,
-  CheckCircle2, XCircle, HardDrive, AlertTriangle,
-  Calendar as CalendarIcon, KeyRound, Clock, NotebookPen, Pin, User, Tag,
+  CheckCircle2, XCircle, Clock, Pin, User, Tag, AlertTriangle,
 } from "lucide-react"
+import {
+  Monitor as IsMonitor,
+  Building as IsBuilding,
+  Kanban as IsKanban,
+  SecurityUser as IsSecurityUser,
+  Driver as IsDriver,
+  Danger as IsDanger,
+  Calendar as IsCalendar,
+  Note1 as IsNote,
+} from "iconsax-reactjs"
+
+const CardIcon = ({ Icon, className }: { Icon: React.ComponentType<Record<string, unknown>>; className?: string }) => (
+  <span className={`inline-flex ${className ?? ""}`}>
+    <Icon size="14" color="currentColor" variant="TwoTone" />
+  </span>
+)
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -82,7 +96,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-3 gap-2">
         <KpiCard
           title="SUNUCULAR"
-          icon={<Server className="size-4" />}
+          icon={<CardIcon Icon={IsMonitor} />}
           loading={loading}
           value={data ? data.kpi.totalServers : 0}
           extra={data ? (
@@ -98,14 +112,14 @@ export default function DashboardPage() {
         />
         <KpiCard
           title="FIRMALAR"
-          icon={<Building2 className="size-4" />}
+          icon={<CardIcon Icon={IsBuilding} />}
           loading={loading}
           value={data ? data.kpi.totalCompanies : 0}
           extra={<span className="text-[11px] text-muted-foreground">toplam kayıtlı firma</span>}
         />
         <KpiCard
           title="AKTİF PROJELER"
-          icon={<FolderKanban className="size-4" />}
+          icon={<CardIcon Icon={IsKanban} />}
           loading={loading}
           value={data ? data.kpi.activeProjects : 0}
           extra={<span className="text-[11px] text-muted-foreground">devam eden proje</span>}
@@ -118,7 +132,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-3 gap-2">
         <PanelCard
           title="RDP Başarısız Denemeler"
-          icon={<ShieldAlert className="size-3.5" />}
+          icon={<CardIcon Icon={IsSecurityUser} />}
           footer={data ? `Son 24 saatte toplam ${data.failedLogons.total24h} deneme` : undefined}
         >
           {loading ? (
@@ -159,7 +173,7 @@ export default function DashboardPage() {
 
         <PanelCard
           title="Disk Kullanımı"
-          icon={<HardDrive className="size-3.5" />}
+          icon={<CardIcon Icon={IsDriver} />}
           footer="En dolu ilk 8 sunucu"
         >
           {loading ? (
@@ -198,7 +212,7 @@ export default function DashboardPage() {
 
         <PanelCard
           title="Sorunlu Sunucular"
-          icon={<AlertTriangle className="size-3.5" />}
+          icon={<CardIcon Icon={IsDanger} />}
           footer={data ? `${data.problemServers.length} sunucu dikkat gerektiriyor` : undefined}
         >
           {loading ? (
@@ -249,7 +263,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-2">
         <PanelCard
           title="Aktif Projeler"
-          icon={<FolderKanban className="size-3.5" />}
+          icon={<CardIcon Icon={IsKanban} />}
           footer={data ? `${data.kpi.activeProjects} aktif proje${data.kpi.activeProjects > data.projects.length ? ` · son ${data.projects.length} gösteriliyor` : ""}` : undefined}
           action={<Link href="/projects" className="text-[11px] text-primary hover:underline">Tümü</Link>}
         >
@@ -327,7 +341,7 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-2 min-h-0">
         <PanelCard
           title="Bugünkü Takvim"
-          icon={<CalendarIcon className="size-3.5" />}
+          icon={<CardIcon Icon={IsCalendar} />}
           footer={data ? `${data.calendar.length} etkinlik` : undefined}
           action={<Link href="/calendar" className="text-[11px] text-primary hover:underline">Takvim</Link>}
         >
@@ -336,7 +350,7 @@ export default function DashboardPage() {
           ) : !data || data.calendar.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 gap-2">
               <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center">
-                <CalendarIcon className="size-5 text-muted-foreground" />
+                <IsCalendar size="20" color="currentColor" variant="TwoTone" className="text-muted-foreground" />
               </div>
               <div className="text-center">
                 <p className="text-[12px] font-medium text-foreground">Bugün için etkinlik yok</p>
@@ -378,7 +392,7 @@ export default function DashboardPage() {
 
         <PanelCard
           title="Son Notlar"
-          icon={<NotebookPen className="size-3.5" />}
+          icon={<CardIcon Icon={IsNote} />}
           footer={data ? `${data.notes.length} not` : undefined}
           action={<Link href="/notes" className="text-[11px] text-primary hover:underline">Tümü</Link>}
         >
@@ -387,7 +401,7 @@ export default function DashboardPage() {
           ) : !data || data.notes.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 gap-2">
               <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center">
-                <NotebookPen className="size-5 text-muted-foreground" />
+                <IsNote size="20" color="currentColor" variant="TwoTone" className="text-muted-foreground" />
               </div>
               <div className="text-center">
                 <p className="text-[12px] font-medium text-foreground">Henüz not yok</p>
