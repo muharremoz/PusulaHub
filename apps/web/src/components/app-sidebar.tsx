@@ -131,7 +131,7 @@ function CompactUserAvatar() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-neutral-900 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-[#E5E2DE] transition-colors"
           title={name}
         >
           <Avatar className="h-7 w-7 rounded-[6px]">
@@ -231,9 +231,9 @@ export function AppSidebar() {
   return (
     <>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-black text-neutral-200 border-r border-neutral-900">
+      <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#F4F2F0] text-neutral-800 border-r border-[#E5E2DE]">
         {/* -------- RAIL (sol) -------- */}
-        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-neutral-900 py-3">
+        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-[#E5E2DE] py-3">
           <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-sky-500 text-white">
             <Ic I={Category2} size={20} />
           </div>
@@ -247,8 +247,8 @@ export function AppSidebar() {
                       onClick={() => setActiveIdx(i)}
                       className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
                         active
-                          ? "bg-neutral-800 text-white"
-                          : "text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200"
+                          ? "bg-neutral-900 text-white"
+                          : "text-neutral-500 hover:bg-[#E5E2DE] hover:text-neutral-900"
                       }`}
                     >
                       <Ic I={g.railIcon} size={18} />
@@ -265,7 +265,7 @@ export function AppSidebar() {
               <TooltipTrigger asChild>
                 <Link
                   href="/settings"
-                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-neutral-500 hover:bg-neutral-900 hover:text-neutral-200 transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-neutral-500 hover:bg-[#E5E2DE] hover:text-neutral-900 transition-colors"
                 >
                   <Ic I={Setting} size={18} />
                 </Link>
@@ -277,7 +277,7 @@ export function AppSidebar() {
         </nav>
 
         {/* -------- PANEL (sağ) -------- */}
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col bg-white">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
@@ -285,7 +285,7 @@ export function AppSidebar() {
 
           {/* Group title */}
           <div className="px-3 pt-4 pb-2">
-            <h2 className="text-[15px] font-semibold text-white">
+            <h2 className="text-[15px] font-semibold text-neutral-900">
               {activeGroup?.label ?? "Menü"}
             </h2>
           </div>
@@ -294,12 +294,12 @@ export function AppSidebar() {
           <div className="px-2">
             <button
               onClick={() => setPaletteOpen(true)}
-              className="flex h-9 w-full items-center gap-2 rounded-lg bg-black/60 border border-neutral-800 px-2.5 text-[12px] text-neutral-400 hover:text-neutral-100 hover:border-neutral-700 transition-colors"
+              className="flex h-9 w-full items-center gap-2 rounded-lg bg-[#F4F2F0] border border-[#E5E2DE] px-2.5 text-[12px] text-neutral-500 hover:text-neutral-900 hover:border-neutral-300 transition-colors"
               title="Ara (Ctrl+K)"
             >
               <SearchIcon className="h-3.5 w-3.5 shrink-0" />
               <span className="flex-1 text-left">Ara...</span>
-              <kbd className="text-[9px] bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded font-mono shrink-0">
+              <kbd className="text-[9px] bg-white border border-[#E5E2DE] px-1.5 py-0.5 rounded font-mono shrink-0 text-neutral-600">
                 Ctrl K
               </kbd>
             </button>
@@ -327,8 +327,8 @@ export function AppSidebar() {
                     href={it.url}
                     className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors ${
                       active
-                        ? "bg-neutral-800 text-white"
-                        : "text-neutral-300 hover:bg-neutral-900 hover:text-white"
+                        ? "bg-neutral-900 text-white"
+                        : "text-neutral-700 hover:bg-[#F4F2F0] hover:text-neutral-900"
                     }`}
                   >
                     <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
