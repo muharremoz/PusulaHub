@@ -3,24 +3,25 @@
 import * as React from "react"
 import Link from "next/link"
 import {
+  Category2,
+  Monitor,
+  Building,
   Activity,
-  Building2,
-  Database,
-  CalendarDays,
-  FolderKanban,
-  NotebookPen,
-  Globe,
-  LayoutDashboard,
-  MessageSquare,
-  Server,
-  Settings,
-  Shield,
-  Users,
-  Wrench,
-  Bell,
-  KeyRound,
-  Waypoints,
-} from "lucide-react"
+  Messages2,
+  Kanban,
+  Calendar,
+  Note1,
+  Setting2,
+  Data2,
+  Global,
+  SecuritySafe,
+  DocumentText,
+  Routing2,
+  Profile2User,
+  KeySquare,
+  Notification,
+  Setting,
+} from "iconsax-reactjs"
 
 import { useSession } from "next-auth/react"
 import { AppSwitcher } from "@/components/app-switcher"
@@ -39,42 +40,74 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 
+// Tüm sidebar ikonları için ortak TwoTone + pulse-scale wrapper
+function makeIcon(Icon: React.ComponentType<Record<string, unknown>>) {
+  const Wrapped = ({ className }: { className?: string }) => (
+    <span
+      className={`inline-flex transition-transform duration-500 ease-out group-hover/navitem:scale-125 ${className ?? ""}`}
+    >
+      <Icon size="16" color="currentColor" variant="TwoTone" />
+    </span>
+  )
+  Wrapped.displayName = `Icon(${Icon.displayName ?? Icon.name ?? "anon"})`
+  return Wrapped
+}
+
+const DashboardIcon = makeIcon(Category2)
+const ServerIcon    = makeIcon(Monitor)
+const MonitoringIcon= makeIcon(Activity)
+const CompanyIcon   = makeIcon(Building)
+const MessageIcon   = makeIcon(Messages2)
+const ProjectIcon   = makeIcon(Kanban)
+const CalendarIcon  = makeIcon(Calendar)
+const NoteIcon      = makeIcon(Note1)
+const ServiceIcon   = makeIcon(Setting2)
+const DatabaseIcon  = makeIcon(Data2)
+const IISIcon       = makeIcon(Global)
+const ADIcon        = makeIcon(SecuritySafe)
+const SQLIcon       = makeIcon(DocumentText)
+const PortIcon      = makeIcon(Routing2)
+const UsersIcon     = makeIcon(Profile2User)
+const VaultIcon     = makeIcon(KeySquare)
+const PreviewIcon   = makeIcon(Notification)
+const SettingsIcon  = makeIcon(Setting)
+
 const navGroups: NavGroup[] = [
   {
     label: "Genel",
     items: [
-      { title: "Dashboard",  url: "/dashboard",  icon: LayoutDashboard, isActive: true, moduleKey: "dashboard" },
-      { title: "Sunucular",  url: "/servers",    icon: Server,       moduleKey: "servers" },
-      { title: "İzleme",     url: "/monitoring", icon: Activity,     moduleKey: "monitoring" },
-      { title: "Firmalar",   url: "/companies",  icon: Building2,    moduleKey: "companies" },
-      { title: "Mesajlar",    url: "/messages",  icon: MessageSquare, moduleKey: "messages" },
-      { title: "Projeler",    url: "/projects",  icon: FolderKanban, moduleKey: "projects" },
-      { title: "Takvim",      url: "/calendar",  icon: CalendarDays, moduleKey: "calendar" },
-      { title: "Not Defteri", url: "/notes",     icon: NotebookPen,  moduleKey: "notes" },
+      { title: "Dashboard",   url: "/dashboard",  icon: DashboardIcon, isActive: true, moduleKey: "dashboard" },
+      { title: "Sunucular",   url: "/servers",    icon: ServerIcon,    moduleKey: "servers" },
+      { title: "İzleme",      url: "/monitoring", icon: MonitoringIcon,moduleKey: "monitoring" },
+      { title: "Firmalar",    url: "/companies",  icon: CompanyIcon,   moduleKey: "companies" },
+      { title: "Mesajlar",    url: "/messages",   icon: MessageIcon,   moduleKey: "messages" },
+      { title: "Projeler",    url: "/projects",   icon: ProjectIcon,   moduleKey: "projects" },
+      { title: "Takvim",      url: "/calendar",   icon: CalendarIcon,  moduleKey: "calendar" },
+      { title: "Not Defteri", url: "/notes",      icon: NoteIcon,      moduleKey: "notes" },
     ],
   },
   {
     label: "Servisler",
     items: [
-      { title: "Pusula Hizmetleri",  url: "/services",       icon: Wrench,   moduleKey: "services" },
-      { title: "Demo Veritabanları", url: "/demo-databases", icon: Database, moduleKey: "databases" },
-      { title: "IIS",                url: "/iis",            icon: Globe,    moduleKey: "iis" },
-      { title: "Active Directory",   url: "/ad",             icon: Shield,   moduleKey: "active-directory" },
-      { title: "SQL",                url: "/sql",            icon: Database, moduleKey: "sql" },
-      { title: "Port Yönetimi",      url: "/ports",          icon: Waypoints, moduleKey: "ports" },
+      { title: "Pusula Hizmetleri",  url: "/services",       icon: ServiceIcon,  moduleKey: "services" },
+      { title: "Demo Veritabanları", url: "/demo-databases", icon: DatabaseIcon, moduleKey: "databases" },
+      { title: "IIS",                url: "/iis",            icon: IISIcon,      moduleKey: "iis" },
+      { title: "Active Directory",   url: "/ad",             icon: ADIcon,       moduleKey: "active-directory" },
+      { title: "SQL",                url: "/sql",            icon: SQLIcon,      moduleKey: "sql" },
+      { title: "Port Yönetimi",      url: "/ports",          icon: PortIcon,     moduleKey: "ports" },
     ],
   },
   {
     label: "Yönetim",
     items: [
-      { title: "Kullanıcılar",     url: "/users",          icon: Users,         moduleKey: "users" },
-      { title: "Şifre Kasası",     url: "/vault",          icon: KeyRound,      moduleKey: "vault" },
+      { title: "Kullanıcılar",   url: "/users", icon: UsersIcon, moduleKey: "users" },
+      { title: "Şifre Kasası",   url: "/vault", icon: VaultIcon, moduleKey: "vault" },
     ],
   },
   {
     label: "Geliştirici",
     items: [
-      { title: "Mesaj Önizleme", url: "/preview", icon: Bell, moduleKey: "preview" },
+      { title: "Mesaj Önizleme", url: "/preview", icon: PreviewIcon, moduleKey: "preview" },
     ],
   },
 ]
@@ -86,7 +119,7 @@ const data = {
     avatar: "",
   },
   navSecondary: [
-    { title: "Ayarlar", url: "/settings", icon: Settings },
+    { title: "Ayarlar", url: "/settings", icon: SettingsIcon },
   ],
 }
 
