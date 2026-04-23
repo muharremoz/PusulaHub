@@ -36,14 +36,14 @@ const APPS: AppEntry[] = [
     name:        "PusulaHub",
     description: "Sunucu yönetim paneli",
     icon:        Server,
-    color:       "#0ea5e9",
+    color:       "#082F49",
   },
   {
     id:          "spareflow",
     name:        "SpareFlow",
     description: "SpareBackup izleme uygulaması",
     icon:        Package,
-    color:       "#10b981",
+    color:       "#0C4A6E",
   },
 ]
 
@@ -74,7 +74,10 @@ export function AppSwitcher() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
+        <SidebarMenuButton
+          size="lg"
+          className="bg-white border border-sky-100 hover:bg-sky-50 data-[state=open]:bg-sky-50 rounded-[6px]"
+        >
           <div
             className="flex aspect-square size-8 items-center justify-center rounded-lg"
             style={{ background: current.color }}
@@ -82,10 +85,10 @@ export function AppSwitcher() {
             <Icon className="size-4 text-white" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-medium">{current.name}</span>
-            <span className="truncate text-xs text-muted-foreground">{current.description}</span>
+            <span className="truncate font-medium text-sky-950">{current.name}</span>
+            <span className="truncate text-xs text-sky-900/60">{current.description}</span>
           </div>
-          <ChevronsUpDown className="ml-auto size-4 text-muted-foreground" />
+          <ChevronsUpDown className="ml-auto size-4 text-sky-900/60" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
