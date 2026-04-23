@@ -839,7 +839,7 @@ export async function POST(req: NextRequest) {
                       `sql_restore_${t.dbName}`,
                       `Veritabanı restore ediliyor: ${t.dbName}`,
                       async () => {
-                        await restoreBackupOnServer(masterPool, t.bakPath, t.dbName)
+                        await restoreBackupOnServer(masterPool, t.bakPath, t.dbName, { firmaId: payload.firmaId })
                         sqlRestored++
                         return `${t.bakPath} → [${t.dbName}]`
                       },

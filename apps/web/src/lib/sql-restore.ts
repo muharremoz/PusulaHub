@@ -6,16 +6,29 @@
  *   - Mode 1 (Demo DB):       `demoDb.locationPath` yolundaki .bak'ları restore eder
  *
  * Eski ServerManager (CompanySetupService.cs) RESTORE akışının birebir
- * karşılığı. FILELISTONLY ile logical file adlarını alır, InstanceDefaultDataPath
- * ile hedef klasörü tespit eder, ardından MOVE clause'u ile yeni hedef adına
+ * karşılığı. FILELISTONLY ile logical file adlarını alır, hedef dizini
+ * tespit eder (firmaId verilmişse `D:\SQLData\{firmaId}`, aksi halde
+ * InstanceDefaultDataPath), ardından MOVE clause'u ile yeni hedef adına
  * restore atar. Var olan DB'yi REPLACE ile üzerine yazar.
  */
 
 import sql from "mssql"
 
+/** Firma bazlı MDF/LDF hedef klasörünün kökü — SQL sunucusunun yerel diski. */
+const DEFAULT_FIRMA_DATA_ROOT = "D:\\SQLData"
+
 interface FileListRow {
   LogicalName: string
   Type:        string // "D" = data, "L" = log
+}
+
+export interface RestoreOptions {
+  /**
+   * Varsa MDF/LDF dosyaları `D:\SQLData\{firmaId}\` altına yazılır.
+   * Klasör yoksa xp_create_subdir ile otomatik oluşturulur.
+   * Boş bırakılırsa SQL Server'ın InstanceDefaultDataPath'i kullanılır.
+   */
+  firmaId?: string
 }
 
 /**
@@ -24,11 +37,13 @@ interface FileListRow {
  * @param pool          mssql ConnectionPool — `master` DB'sine bağlanmış olmalı
  * @param bakPath       Kaynak .bak dosyasının tam yolu (SQL sunucusundaki yereli)
  * @param targetDbName  Oluşturulacak hedef DB adı
+ * @param options       firmaId verilirse `D:\SQLData\{firmaId}` altına restore edilir
  */
 export async function restoreBackupOnServer(
   pool:         sql.ConnectionPool,
   bakPath:      string,
   targetDbName: string,
+  options:      RestoreOptions = {},
 ): Promise<void> {
   // 1) FILELISTONLY — mantıksal dosya adları
   const fileListResult = await pool
@@ -42,17 +57,32 @@ export async function restoreBackupOnServer(
   }
 
   // 2) Hedef DATA klasörü
-  let dataDir = "C:\\Program Files\\Microsoft SQL Server\\MSSQL16.MSSQLSERVER\\MSSQL\\DATA"
-  try {
-    const pathRes = await pool.request().query<{ Path: string | null }>(`
-      SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS NVARCHAR(512)) AS Path
-    `)
-    const reported = pathRes.recordset?.[0]?.Path
-    if (reported && reported.trim()) {
-      dataDir = reported.replace(/\\+$/g, "")
+  //    firmaId verilmişse `D:\SQLData\{firmaId}` — klasör yoksa xp_create_subdir
+  //    ile oluşturulur. Aksi halde eski davranış (SQL Server default path).
+  let dataDir: string
+  if (options.firmaId && options.firmaId.trim()) {
+    const safeFirma = options.firmaId.trim().replace(/[\\/:*?"<>|]/g, "_")
+    dataDir = `${DEFAULT_FIRMA_DATA_ROOT}\\${safeFirma}`
+    // xp_create_subdir idempotent — klasör varsa sorun çıkarmaz.
+    // `master..xp_create_subdir` sysadmin yetkisi ister (SA OK).
+    // Hata atarsa restore'a hiç girmeden çıksın ki path problemi net görünsün.
+    await pool
+      .request()
+      .input("dir", sql.NVarChar, dataDir)
+      .query(`EXEC master.dbo.xp_create_subdir @dir`)
+  } else {
+    dataDir = "C:\\Program Files\\Microsoft SQL Server\\MSSQL16.MSSQLSERVER\\MSSQL\\DATA"
+    try {
+      const pathRes = await pool.request().query<{ Path: string | null }>(`
+        SELECT CAST(SERVERPROPERTY('InstanceDefaultDataPath') AS NVARCHAR(512)) AS Path
+      `)
+      const reported = pathRes.recordset?.[0]?.Path
+      if (reported && reported.trim()) {
+        dataDir = reported.replace(/\\+$/g, "")
+      }
+    } catch {
+      // Bazı eski SQL Server sürümlerinde InstanceDefaultDataPath yok — default'u kullan
     }
-  } catch {
-    // Bazı eski SQL Server sürümlerinde InstanceDefaultDataPath yok — default'u kullan
   }
 
   // 3) MOVE clause — her logical file için hedef fiziksel yol üret

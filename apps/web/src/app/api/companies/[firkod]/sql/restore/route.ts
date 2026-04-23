@@ -27,7 +27,7 @@ export async function POST(
     await withSqlConnection(
       { server: target.ip, user: target.username, password: target.password, database: "master", requestTimeout: 600000 },
       async (pool) => {
-        await restoreBackupOnServer(pool, body.backupPath!, body.dbName!)
+        await restoreBackupOnServer(pool, body.backupPath!, body.dbName!, { firmaId: firkod })
       },
     )
 
