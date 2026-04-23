@@ -229,7 +229,7 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#082F49] text-sky-50 border-r border-sky-950">
+      <aside className="group/sidebar sticky top-0 flex h-svh w-[296px] shrink-0 self-stretch bg-[#082F49] text-sky-50">
         {/* -------- RAIL (sol) -------- */}
         <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-sky-900 py-3">
           {canWriteCompanies && (
