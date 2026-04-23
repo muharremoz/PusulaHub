@@ -47,6 +47,7 @@ const navGroups: NavGroup[] = [
       { title: "Sunucular",  url: "/servers",    icon: Server,       moduleKey: "servers" },
       { title: "İzleme",     url: "/monitoring", icon: Activity,     moduleKey: "monitoring" },
       { title: "Firmalar",   url: "/companies",  icon: Building2,    moduleKey: "companies" },
+      { title: "Mesajlar",    url: "/messages",  icon: MessageSquare, moduleKey: "messages" },
       { title: "Projeler",    url: "/projects",  icon: FolderKanban, moduleKey: "projects" },
       { title: "Takvim",      url: "/calendar",  icon: CalendarDays, moduleKey: "calendar" },
       { title: "Not Defteri", url: "/notes",     icon: NotebookPen,  moduleKey: "notes" },
@@ -66,7 +67,6 @@ const navGroups: NavGroup[] = [
   {
     label: "Yönetim",
     items: [
-      { title: "Mesajlar",         url: "/messages",       icon: MessageSquare, moduleKey: "messages" },
       { title: "Kullanıcılar",     url: "/users",          icon: Users,         moduleKey: "users" },
       { title: "Şifre Kasası",     url: "/vault",          icon: KeyRound,      moduleKey: "vault" },
     ],

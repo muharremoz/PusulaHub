@@ -27,6 +27,7 @@ export const MODULES: ModuleDef[] = [
   { key: "servers",          label: "Sunucular",         group: "general" },
   { key: "monitoring",       label: "İzleme",            group: "general" },
   { key: "companies",        label: "Firmalar",          group: "general" },
+  { key: "messages",         label: "Mesajlar",          group: "general" },
   { key: "projects",         label: "Projeler",          group: "general" },
   { key: "calendar",         label: "Takvim",            group: "general" },
   { key: "notes",            label: "Not Defteri",       group: "general" },
@@ -40,7 +41,6 @@ export const MODULES: ModuleDef[] = [
   { key: "ports",            label: "Port Yönetimi",     group: "services" },
 
   // Yönetim
-  { key: "messages",         label: "Mesajlar",          group: "admin" },
   { key: "users",            label: "Kullanıcılar",      group: "admin" },
   { key: "vault",            label: "Şifre Kasası",      group: "admin" },
 
