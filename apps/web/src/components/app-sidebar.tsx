@@ -157,7 +157,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <Sidebar variant="inset" className={DARK_SIDEBAR_VARS} {...props}>
+      <Sidebar variant="inset" className={`${DARK_SIDEBAR_VARS} text-sidebar-foreground`} {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
