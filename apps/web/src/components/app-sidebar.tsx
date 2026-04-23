@@ -295,37 +295,44 @@ export function AppSidebar() {
             <AppSwitcher />
           </div>
 
-          {/* Group title */}
-          <div className="px-3 pt-4 pb-2">
-            <h2 className="text-[15px] font-semibold text-neutral-900">
-              {activeGroup?.label ?? "Menü"}
-            </h2>
-          </div>
-
-          {/* Items list */}
-          <nav className="flex-1 overflow-y-auto px-2 pt-3 pb-3">
-            <div className="flex flex-col gap-0.5">
-              {activeGroup?.items.map((it) => {
-                const active = pathname === it.url || pathname?.startsWith(it.url + "/")
-                return (
-                  <Link
-                    key={it.url}
-                    href={it.url}
-                    className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors ${
-                      active
-                        ? "bg-neutral-900 text-white"
-                        : "text-neutral-700 hover:bg-[#F4F2F0] hover:text-neutral-900"
-                    }`}
-                  >
-                    <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
-                      <it.icon size="16" color="currentColor" variant="Bulk" />
-                    </span>
-                    <span className="flex-1 truncate">{it.title}</span>
-                  </Link>
-                )
-              })}
+          {/* Grup içeriği — grup değişince soldan kayarak giriyor */}
+          <div
+            key={activeGroup?.key}
+            className="flex min-h-0 flex-1 flex-col animate-in slide-in-from-left-3 fade-in duration-300 ease-out"
+          >
+            {/* Group title */}
+            <div className="px-3 pt-4 pb-2">
+              <h2 className="text-[15px] font-semibold text-neutral-900">
+                {activeGroup?.label ?? "Menü"}
+              </h2>
             </div>
-          </nav>
+
+            {/* Items list */}
+            <nav className="flex-1 overflow-y-auto px-2 pt-3 pb-3">
+              <div className="flex flex-col gap-0.5">
+                {activeGroup?.items.map((it, idx) => {
+                  const active = pathname === it.url || pathname?.startsWith(it.url + "/")
+                  return (
+                    <Link
+                      key={it.url}
+                      href={it.url}
+                      style={{ animationDelay: `${idx * 30}ms`, animationFillMode: "both" }}
+                      className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors animate-in slide-in-from-left-2 fade-in duration-300 ease-out ${
+                        active
+                          ? "bg-neutral-900 text-white"
+                          : "text-neutral-700 hover:bg-[#F4F2F0] hover:text-neutral-900"
+                      }`}
+                    >
+                      <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
+                        <it.icon size="16" color="currentColor" variant="Bulk" />
+                      </span>
+                      <span className="flex-1 truncate">{it.title}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </nav>
+          </div>
         </div>
       </aside>
     </>
