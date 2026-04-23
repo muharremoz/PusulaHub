@@ -46,7 +46,7 @@ type IconComp = React.ComponentType<Record<string, unknown>>
 function Ic({ I, size = 18, className = "" }: { I: IconComp; size?: number; className?: string }) {
   return (
     <span className={`inline-flex ${className}`}>
-      <I size={String(size)} color="currentColor" variant="TwoTone" />
+      <I size={String(size)} color="currentColor" variant="Bulk" />
     </span>
   )
 }
@@ -324,7 +324,7 @@ export function AppSidebar() {
                     }`}
                   >
                     <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
-                      <it.icon size="16" color="currentColor" variant="TwoTone" />
+                      <it.icon size="16" color="currentColor" variant="Bulk" />
                     </span>
                     <span className="flex-1 truncate">{it.title}</span>
                   </Link>
