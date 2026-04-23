@@ -232,9 +232,20 @@ export function AppSidebar() {
       <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#082F49] text-sky-50 border-r border-sky-950">
         {/* -------- RAIL (sol) -------- */}
         <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-sky-900 py-3">
-          <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-[8px] bg-white text-sky-950 font-bold text-[12px] tracking-tight">
-            PH
-          </div>
+          {canWriteCompanies && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href="/companies/setup" className="mb-2">
+                  <RainbowButton asChild size="icon" className="h-9 w-9">
+                    <span className="flex items-center justify-center">
+                      <MagicStar size="16" color="currentColor" variant="Bold" />
+                    </span>
+                  </RainbowButton>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>Firma Kurulum Sihirbazı</TooltipContent>
+            </Tooltip>
+          )}
           <div className="flex flex-col gap-1">
             {visibleGroups.map((g, i) => {
               const active = i === activeIdx
@@ -257,22 +268,8 @@ export function AppSidebar() {
               )
             })}
           </div>
-          {/* bottom: firma sihirbazı + settings + avatar */}
+          {/* bottom: settings + avatar */}
           <div className="mt-auto flex flex-col items-center gap-1">
-            {canWriteCompanies && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Link href="/companies/setup" className="mb-1">
-                    <RainbowButton asChild size="icon" className="h-9 w-9">
-                      <span className="flex items-center justify-center">
-                        <MagicStar size="16" color="currentColor" variant="Bold" />
-                      </span>
-                    </RainbowButton>
-                  </Link>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>Firma Kurulum Sihirbazı</TooltipContent>
-              </Tooltip>
-            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Link
