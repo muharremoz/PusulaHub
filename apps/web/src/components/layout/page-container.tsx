@@ -1,11 +1,13 @@
 "use client";
 
+import * as React from "react";
 import { Separator } from "@/components/ui/separator";
 import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Bell, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { CommandPalette } from "@/components/shared/command-palette";
 
 interface PageContainerProps {
   title: string;
@@ -14,8 +16,10 @@ interface PageContainerProps {
 }
 
 export function PageContainer({ title, description, children }: PageContainerProps) {
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
   return (
     <>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <header className="flex h-16 shrink-0 items-center justify-between gap-2 border-b px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="-ml-1" />
@@ -31,8 +35,14 @@ export function PageContainer({ title, description, children }: PageContainerPro
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="flex items-center justify-center h-8 w-8 rounded-[6px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-            <Search className="h-4 w-4" />
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex items-center gap-2 h-8 rounded-[6px] px-2.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/60 border border-border/60 transition-colors"
+            title="Ara (Ctrl+K)"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">Ara...</span>
+            <kbd className="hidden md:inline text-[9px] bg-muted px-1 py-0.5 rounded font-mono ml-1">⌘K</kbd>
           </button>
           <button className="relative flex items-center justify-center h-8 w-8 rounded-[6px] text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
             <Bell className="h-4 w-4" />
