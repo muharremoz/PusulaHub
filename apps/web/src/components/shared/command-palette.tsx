@@ -65,6 +65,11 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     return () => window.removeEventListener("keydown", onKey)
   }, [open, onOpenChange])
 
+  // Clear query when dialog closes
+  React.useEffect(() => {
+    if (!open) setQuery("")
+  }, [open])
+
   // Load dynamic lists when dialog opens
   React.useEffect(() => {
     if (!open) return
