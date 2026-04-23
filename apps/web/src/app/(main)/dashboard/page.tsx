@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
-  CheckCircle2, XCircle, Clock, Pin, User, Tag, AlertTriangle,
+  CheckCircle2, XCircle, Clock, Pin, User, Tag, AlertTriangle, Activity,
 } from "lucide-react"
 import {
   Monitor as IsMonitor,
@@ -66,9 +66,17 @@ interface DashboardData {
   }[]
 }
 
+interface MonitoringSummary {
+  ok:     boolean
+  counts: { total: number; online: number; warning: number; offline: number }
+  monitors: { name: string; status: string }[]
+}
+
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [monitoring, setMonitoring] = useState<MonitoringSummary | null>(null)
+  const [monitoringLoading, setMonitoringLoading] = useState(true)
 
   useEffect(() => {
     let mounted = true
@@ -84,16 +92,29 @@ export default function DashboardPage() {
         if (mounted) setLoading(false)
       }
     }
+    const loadMonitoring = async () => {
+      try {
+        const r = await fetch("/api/monitoring", { cache: "no-store" })
+        const j = await r.json()
+        if (mounted) setMonitoring(j.ok ? j : null)
+      } catch {
+        if (mounted) setMonitoring(null)
+      } finally {
+        if (mounted) setMonitoringLoading(false)
+      }
+    }
     load()
-    const iv = setInterval(load, 30_000) // 30 sn'de bir otomatik yenile
-    return () => { mounted = false; clearInterval(iv) }
+    loadMonitoring()
+    const iv  = setInterval(load, 30_000)
+    const iv2 = setInterval(loadMonitoring, 30_000)
+    return () => { mounted = false; clearInterval(iv); clearInterval(iv2) }
   }, [])
 
   return (
     <PageContainer title="Kontrol Paneli" description="Sistem genel görünümü">
-      {/* ─── KPI Kartları (3) ─── */}
+      {/* ─── KPI Kartları (4) ─── */}
       <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#F4F2F0" }}>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <KpiCard
           title="SUNUCULAR"
           icon={<CardIcon Icon={IsMonitor} />}
@@ -110,6 +131,7 @@ export default function DashboardPage() {
             </div>
           ) : null}
         />
+        <MonitoringKpi loading={monitoringLoading} data={monitoring} />
         <KpiCard
           title="FIRMALAR"
           icon={<CardIcon Icon={IsBuilding} />}
@@ -501,6 +523,76 @@ function KpiCard({
         </>
       )}
     </div>
+  )
+}
+
+function MonitoringKpi({
+  loading, data,
+}: {
+  loading: boolean
+  data: MonitoringSummary | null
+}) {
+  const hasOffline = !!data && data.counts.offline > 0
+  const hasWarn    = !!data && data.counts.warning > 0
+  const allGreen   = !!data && !hasOffline && !hasWarn && data.counts.total > 0
+
+  // Offline olan ilk 2 monitor — detay olarak göstermek için
+  const downNames = data?.monitors.filter((m) => m.status === "down").slice(0, 2).map((m) => m.name) ?? []
+
+  return (
+    <Link
+      href="/monitoring"
+      className="bg-white rounded-[4px] p-3 hover:opacity-95 transition-opacity block"
+      style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          İZLEME
+        </span>
+        <span className={hasOffline ? "text-destructive" : hasWarn ? "text-amber-500" : "text-muted-foreground"}>
+          <Activity className="size-3.5" />
+        </span>
+      </div>
+      {loading ? (
+        <>
+          <Skeleton className="h-7 w-20 mb-1.5" />
+          <Skeleton className="h-3 w-32" />
+        </>
+      ) : !data ? (
+        <>
+          <div className="text-2xl font-bold tabular-nums leading-tight text-muted-foreground">—</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">Kuma'ya ulaşılamadı</div>
+        </>
+      ) : (
+        <>
+          <div className="text-2xl font-bold tabular-nums leading-tight">
+            <span className={allGreen ? "text-emerald-600" : hasOffline ? "text-destructive" : "text-amber-600"}>
+              {data.counts.online}
+            </span>
+            <span className="text-muted-foreground">/{data.counts.total}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-[11px]">
+            {hasOffline ? (
+              <span className="inline-flex items-center gap-1 text-destructive truncate" title={downNames.join(", ")}>
+                <XCircle className="size-3 shrink-0" />
+                <span className="truncate">
+                  {downNames.length > 0 ? downNames.join(", ") : `${data.counts.offline} çevrimdışı`}
+                  {data.counts.offline > downNames.length && ` +${data.counts.offline - downNames.length}`}
+                </span>
+              </span>
+            ) : hasWarn ? (
+              <span className="inline-flex items-center gap-1 text-amber-600">
+                <AlertTriangle className="size-3" /> {data.counts.warning} uyarı
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-emerald-600">
+                <Activity className="size-3" /> tüm servisler çevrimiçi
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </Link>
   )
 }
 

@@ -1,5 +1,7 @@
 # PusulaHub — Claude Geliştirme Kuralları
 
+> **Biriken iş:** [`TODO.md`](./TODO.md) — yapılacak işler + yapılanların log'u. Yeni oturumda önce bir göz at.
+
 ## Proje Hakkında
 PusulaHub, Windows/Linux sunucularını yöneten bir Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 panelidir.
 Monorepo yapısı: `apps/web` ana uygulama dizinidir.
@@ -306,6 +308,75 @@ const filtered = search.trim()
 
 - `onWheel={(e) => e.stopPropagation()}` → Popover içinde mouse wheel scroll'u çalıştırır.
 - Seçim sonrası `setSearch("")` ile arama temizlenir.
+
+---
+
+## Ubuntu Altyapı Sunucusu — 10.15.2.6
+
+Tek bir Ubuntu 22.04 VM, iki rol: **Fastify API** (SpareFlow backend) ve **Uptime Kuma** (tüm sunucuların izlenmesi). LAN only, Pusula network.
+
+### Erişim
+| Alan | Değer |
+|---|---|
+| **LAN IP** | `10.15.2.6` |
+| **WAN IP** | `185.130.59.123` |
+| **OS** | Ubuntu 22.04.5 LTS |
+| **SSH Kullanıcı** | `root` |
+| **SSH Parola** | `4Dr616R4wwqA` |
+
+SSH (Windows, Git Bash yok, `taskkill` gibi):
+```bash
+"C:/Program Files/PuTTY/plink.exe" -ssh -l root -pw "4Dr616R4wwqA" 10.15.2.6 "<komut>"
+```
+
+> **Kural:** Bu sunucuda **var olan hiç bir şeye dokunmadan** ekleme yapılır. Fastify API (pm2 `fastify-api`) ve Kuma ayrı ayrı çalışır, birbirini etkilemez. Detaylı Fastify dokümanı: `SpareFlow/docs/fastify-server.md`.
+
+### Fastify API — pm2
+| Alan | Değer |
+|---|---|
+| **Port** | `3000` |
+| **pm2 adı** | `fastify-api` |
+| **Dizin** | `/root/my-fastify-app/` |
+| **Admin API Key** | `69432a3c21bcb005cb0cfd2df2b22c266efeab5a4096e0500ace5a77bdd24f1a` |
+| **Auth** | `X-API-Key` header (whitelist: `127.0.0.1`, `10.15.2.x`) |
+
+### Uptime Kuma — Docker
+| Alan | Değer |
+|---|---|
+| **URL** | `http://10.15.2.6:3001` (LAN only) |
+| **Container** | `uptime-kuma` (image `louislam/uptime-kuma:1`) |
+| **Volume host** | `/opt/uptime-kuma/data/` |
+| **SQLite** | `/opt/uptime-kuma/data/kuma.db` |
+| **Admin** | `muharrem.oz@pusulanet.net` / `4Dr616R4wwqA` |
+| **Metrics API Key** | `uk1_l-jozwsUDnKTqtTttP8POfK89thi2a9hxsSaj2XC` (Hub env: `UPTIME_KUMA_METRICS_TOKEN`) |
+| **Prometheus** | `GET /metrics` — Basic auth, username boş |
+
+Hub entegrasyonu: `apps/web/src/lib/kuma.ts` + `/api/monitoring` endpoint'i, 30sn in-memory cache. `/monitoring` sayfası bu veriyi tüketir.
+
+### Kuma Monitor DB İşlemleri
+
+UI'dan yapılamayan toplu değişiklikler için SQLite'a direkt yazılır. **Önemli:** Kuma DB'yi runtime'da cache'liyor — `docker stop` / edit / `docker start` şart, yoksa değişiklik görünmez.
+
+```bash
+# Monitor listele
+plink -ssh -l root -pw "4Dr616R4wwqA" 10.15.2.6 \
+  "sqlite3 /opt/uptime-kuma/data/kuma.db 'SELECT id, name, type, url, accepted_statuscodes_json FROM monitor;'"
+
+# Heartbeat hata mesajları (bir monitor neden DOWN diye bakmak için)
+plink ... "sqlite3 /opt/uptime-kuma/data/kuma.db \
+  'SELECT id, monitor_id, status, msg, time FROM heartbeat WHERE monitor_id=6 ORDER BY time DESC LIMIT 5;'"
+
+# Güvenli update pattern
+plink ... "docker stop uptime-kuma && \
+  sqlite3 /opt/uptime-kuma/data/kuma.db \"UPDATE monitor SET headers='{...}' WHERE id=6;\" && \
+  docker start uptime-kuma"
+```
+
+### Bilinen Tuzaklar
+
+- **Docker bridge vs LAN:** Kuma container'ı `10.15.2.6:3000` veya `172.17.0.1:3000` ile host'a erişebilir — ikisi de çalışır. Ama container IP'si (`172.17.0.x`) Fastify'ın LAN whitelist'inde değil → Fastify auth'lu endpoint'i `401` döner. Çözüm: monitor'e `headers={"X-API-Key":"<admin-key>"}` ekle.
+- **accepted_statuscodes manuel eklerken kaybolur:** JSON import ederken set edilse de, kullanıcı UI'dan "Edit" yaptığında default `["200-299"]`'a dönebilir. Auth'lu endpoint'te `401` beklenen durumsa bunu listeye ekle.
+- **Kuma import'u çok fazla NOT NULL alanı ister:** JSON backup ile import yaparken `invertKeyword`, `keyword`, `timeout`, `port`, `packetSize`, `expiryNotification` gibi alanlar eksik olursa SQLite constraint hatası verir. Referans: `kuma-import.json`.
 
 ---
 

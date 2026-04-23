@@ -62,6 +62,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       sqlUsername, sqlPassword,
     } = await req.json()
 
+    // Kuma sync'i için eski (Name, IP) değerlerini yakala.
+    const prev = await query<{ Name: string; IP: string }[]>`SELECT Name, IP FROM Servers WHERE Id = ${id}`
+    const prevName = prev[0]?.Name ?? null
+    const prevIp   = prev[0]?.IP   ?? null
+
     // Hassas alanlar AES-256-GCM ile şifrelenir
     const encryptedPassword    = encrypt(password ?? null)
     const encryptedSqlPassword = encrypt(sqlPassword ?? null)
@@ -91,6 +96,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
+    // Name/IP değiştiyse Kuma monitor'ünü de güncelle. Ad değişmemişse
+    // bile IP değişmiş olabilir; her iki durumda editMonitor çağırıyoruz.
+    if (prevName && name && ip && (prevName !== name || prevIp !== ip)) {
+      const { updateKumaMonitorByName, kumaSafeCall } = await import("@/lib/kuma-client")
+      void kumaSafeCall(`updateMonitor(${prevName} → ${name})`, () =>
+        updateKumaMonitorByName(prevName, { name, hostname: ip, type: "ping" })
+      )
+    }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[PATCH /api/servers/[id]]", err)
@@ -103,7 +117,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (gate) return gate
   try {
     const { id } = await params
+
+    // DELETE'den ÖNCE ad yakala — sonra Kuma'da ada göre silmek için.
+    const prev = await query<{ Name: string }[]>`SELECT Name FROM Servers WHERE Id = ${id}`
+    const prevName = prev[0]?.Name ?? null
+
     await execute`DELETE FROM Servers WHERE Id = ${id}`
+
+    if (prevName) {
+      const { deleteKumaMonitorByName, kumaSafeCall } = await import("@/lib/kuma-client")
+      void kumaSafeCall(`deleteMonitor(${prevName})`, () => deleteKumaMonitorByName(prevName))
+    }
+
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("[DELETE /api/servers/[id]]", err)

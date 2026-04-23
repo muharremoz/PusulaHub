@@ -123,6 +123,15 @@ export async function POST(req: Request) {
       }
     }
 
+    // Kuma'da otomatik ping monitor'ü oluştur — hata olursa sessizce logla,
+    // Hub tarafındaki insert başarılıysa response'u bozma.
+    if (name && ip) {
+      const { createKumaMonitor, kumaSafeCall } = await import("@/lib/kuma-client")
+      void kumaSafeCall(`createMonitor(${name})`, () =>
+        createKumaMonitor({ name, hostname: ip, type: "ping" })
+      )
+    }
+
     return NextResponse.json({ id }, { status: 201 })
   } catch (err) {
     console.error("[POST /api/servers]", err)
