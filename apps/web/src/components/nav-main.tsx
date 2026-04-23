@@ -11,8 +11,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
+import { usePathname } from "next/navigation"
 import {
   SidebarGroup,
+  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuButton,
@@ -37,12 +39,20 @@ export interface NavGroup {
 }
 
 function FlatGroupItems({ items }: { items: NavItem[] }) {
+  const pathname = usePathname()
   return (
     <SidebarMenu>
-      {items.map((item) => (
+      {items.map((item) => {
+        const isActive = pathname === item.url || pathname?.startsWith(item.url + "/")
+        return (
         <Collapsible key={item.title} asChild defaultOpen={item.isActive}>
           <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip={item.title} className="group/navitem">
+            <SidebarMenuButton
+              asChild
+              tooltip={item.title}
+              isActive={isActive}
+              className="group/navitem transition-all duration-300 [transition-timing-function:cubic-bezier(0.34,1.56,0.64,1)]"
+            >
               <Link href={item.url}>
                 <item.icon />
                 <span>{item.title}</span>
@@ -73,16 +83,23 @@ function FlatGroupItems({ items }: { items: NavItem[] }) {
             ) : null}
           </SidebarMenuItem>
         </Collapsible>
-      ))}
+        )
+      })}
     </SidebarMenu>
   )
 }
 
 export function NavMain({ groups }: { groups: NavGroup[] }) {
-  const allItems = groups.flatMap((g) => g.items)
   return (
-    <SidebarGroup className="py-0">
-      <FlatGroupItems items={allItems} />
-    </SidebarGroup>
+    <>
+      {groups.map((group) => (
+        <SidebarGroup key={group.label} className="py-0">
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-wider text-neutral-500 px-2">
+            {group.label}
+          </SidebarGroupLabel>
+          <FlatGroupItems items={group.items} />
+        </SidebarGroup>
+      ))}
+    </>
   )
 }

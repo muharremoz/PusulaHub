@@ -24,10 +24,12 @@ import {
 } from "iconsax-reactjs"
 
 import { useSession } from "next-auth/react"
+import { Search as SearchIcon } from "lucide-react"
 import { AppSwitcher } from "@/components/app-switcher"
 import { NavMain, type NavGroup } from "@/components/nav-main"
 import { NavSecondary } from "@/components/nav-secondary"
 import { NavUser } from "@/components/nav-user"
+import { CommandPalette } from "@/components/shared/command-palette"
 import type { PermissionLevel, PermissionMap } from "@/lib/permissions"
 import { RainbowButton } from "@/components/ui/rainbow-button"
 import {
@@ -123,11 +125,22 @@ const data = {
   ],
 }
 
+// Dark sidebar tema override (21st.dev jshguo stili)
+const DARK_SIDEBAR_VARS = [
+  "[--sidebar:hsl(0_0%_4%)]",
+  "[--sidebar-foreground:hsl(0_0%_98%)]",
+  "[--sidebar-border:hsl(0_0%_15%)]",
+  "[--sidebar-accent:hsl(0_0%_12%)]",
+  "[--sidebar-accent-foreground:hsl(0_0%_98%)]",
+  "[--sidebar-ring:hsl(0_0%_40%)]",
+].join(" ")
+
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: session } = useSession()
   const role = session?.user?.role
   const perms = (session?.user?.permissions ?? {}) as PermissionMap
   const isAdmin = role === "admin"
+  const [paletteOpen, setPaletteOpen] = React.useState(false)
 
   const visibleGroups: NavGroup[] = navGroups
     .map((g) => ({
@@ -142,13 +155,28 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     .filter((g) => g.items.length > 0)
 
   return (
-    <Sidebar variant="inset" {...props}>
+    <>
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+      <Sidebar variant="inset" className={DARK_SIDEBAR_VARS} {...props}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
             <AppSwitcher />
           </SidebarMenuItem>
         </SidebarMenu>
+
+        {/* Search pill — triggers Command palette */}
+        <div className="px-1 pt-1">
+          <button
+            onClick={() => setPaletteOpen(true)}
+            className="flex items-center gap-2 h-9 w-full rounded-lg bg-black/60 border border-neutral-800 px-2.5 text-[12px] text-neutral-400 hover:text-neutral-100 hover:border-neutral-700 transition-colors"
+            title="Ara (Ctrl+K)"
+          >
+            <SearchIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="flex-1 text-left">Ara...</span>
+            <kbd className="text-[9px] bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 rounded font-mono shrink-0">Ctrl K</kbd>
+          </button>
+        </div>
       </SidebarHeader>
       <SidebarContent>
         {(isAdmin || (perms["companies"] ?? "none") === "write") && (
@@ -167,5 +195,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavUser />
       </SidebarFooter>
     </Sidebar>
+    </>
   )
 }
