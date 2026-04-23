@@ -65,16 +65,6 @@ export interface IISAppPool {
   pipelineMode: string;
 }
 
-export interface LogEntry {
-  id: string;
-  timestamp: string;
-  server: string;
-  level: "info" | "warning" | "error" | "critical";
-  source: string;
-  message: string;
-}
-
-
 export interface PanelUser {
   id: string;
   name: string;

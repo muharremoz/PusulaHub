@@ -5,7 +5,6 @@ import type {
   SQLDatabase,
   IISSite,
   IISAppPool,
-  LogEntry,
   PanelUser,
   DashboardStats,
   RecentEvent,
@@ -263,19 +262,6 @@ export const iisAppPools: IISAppPool[] = [
   { name: "ApiPool", status: "Started", runtime: "No Managed Code", pipelineMode: "Integrated" },
   { name: "CrmPool", status: "Stopped", runtime: "v4.0", pipelineMode: "Integrated" },
   { name: "DocsPool", status: "Started", runtime: "v4.0", pipelineMode: "Classic" },
-];
-
-export const logEntries: LogEntry[] = [
-  { id: "log-1", timestamp: "2024-03-29 14:32:15", server: "SQL-PROD", level: "warning", source: "Performance Monitor", message: "RAM kullanimi %85 uzerine cikti" },
-  { id: "log-2", timestamp: "2024-03-29 14:28:03", server: "WEB-IIS-02", level: "error", source: "IIS", message: "Application pool 'ApiPool' beklenmedik sekilde durdu" },
-  { id: "log-3", timestamp: "2024-03-29 14:15:22", server: "UBUNTU-DB", level: "warning", source: "Disk Monitor", message: "Disk kullanimi %91 - /var/lib/mysql" },
-  { id: "log-4", timestamp: "2024-03-29 13:55:00", server: "DC-PRIMARY", level: "info", source: "AD Replication", message: "DC-SECONDARY ile replikasyon tamamlandi" },
-  { id: "log-5", timestamp: "2024-03-29 13:40:18", server: "FILE-SRV", level: "info", source: "Backup Agent", message: "Gunluk yedekleme basariyla tamamlandi (245 GB)" },
-  { id: "log-6", timestamp: "2024-03-29 13:22:45", server: "MONITOR-SRV", level: "critical", source: "Health Check", message: "Sunucu 30 dakikadir yanit vermiyor" },
-  { id: "log-7", timestamp: "2024-03-29 12:58:10", server: "WEB-IIS-01", level: "info", source: "Certificate Manager", message: "SSL sertifikasi basariyla yenilendi (*.sirket.com)" },
-  { id: "log-8", timestamp: "2024-03-29 12:30:55", server: "UBUNTU-APP-01", level: "info", source: "APT", message: "Sistem guncellemesi tamamlandi (12 paket)" },
-  { id: "log-9", timestamp: "2024-03-29 11:45:30", server: "SQL-PROD", level: "info", source: "SQL Agent", message: "ERP_Production yedekleme islemi tamamlandi" },
-  { id: "log-10", timestamp: "2024-03-29 10:15:00", server: "DC-PRIMARY", level: "warning", source: "Group Policy", message: "GPO 'Firewall Rules' 3 bilgisayara uygulanamadi" },
 ];
 
 export const panelUsers: PanelUser[] = [

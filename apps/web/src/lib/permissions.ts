@@ -39,10 +39,6 @@ export const MODULES: ModuleDef[] = [
   { key: "sql",              label: "SQL",               group: "services" },
   { key: "ports",            label: "Port Yönetimi",     group: "services" },
 
-  // Veri & Raporlar
-  { key: "logs",             label: "Loglar",            group: "data" },
-  { key: "reports",          label: "Raporlar",          group: "data" },
-
   // Yönetim
   { key: "messages",         label: "Mesajlar",          group: "admin" },
   { key: "users",            label: "Kullanıcılar",      group: "admin" },

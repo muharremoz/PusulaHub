@@ -6,14 +6,12 @@ import {
   Activity,
   Building2,
   Database,
-  FileText,
   CalendarDays,
   FolderKanban,
   NotebookPen,
   Globe,
   LayoutDashboard,
   MessageSquare,
-  Network,
   Plug,
   Server,
   Settings,
@@ -64,13 +62,6 @@ const navGroups: NavGroup[] = [
       { title: "Active Directory",   url: "/ad",             icon: Shield,   moduleKey: "active-directory" },
       { title: "SQL",                url: "/sql",            icon: Database, moduleKey: "sql" },
       { title: "Port Yönetimi",      url: "/ports",          icon: Waypoints, moduleKey: "ports" },
-    ],
-  },
-  {
-    label: "Veri & Raporlar",
-    items: [
-      { title: "Loglar",   url: "/logs",    icon: FileText,   moduleKey: "logs" },
-      { title: "Raporlar", url: "/reports", icon: Network,    moduleKey: "reports" },
     ],
   },
   {
