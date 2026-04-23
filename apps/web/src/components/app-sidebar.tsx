@@ -27,9 +27,8 @@ import {
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Search as SearchIcon, LogOut, Shield, User as UserLucide } from "lucide-react"
+import { LogOut, Shield, User as UserLucide } from "lucide-react"
 import { AppSwitcher } from "@/components/app-switcher"
-import { CommandPalette } from "@/components/shared/command-palette"
 import type { PermissionLevel, PermissionMap } from "@/lib/permissions"
 import { RainbowButton } from "@/components/ui/rainbow-button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -200,7 +199,6 @@ export function AppSidebar() {
   const role = session?.user?.role
   const perms = (session?.user?.permissions ?? {}) as PermissionMap
   const isAdmin = role === "admin"
-  const [paletteOpen, setPaletteOpen] = React.useState(false)
   const pathname = usePathname()
 
   // Yetkiye göre filtrelenmiş gruplar
@@ -230,7 +228,6 @@ export function AppSidebar() {
 
   return (
     <>
-      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <aside className="group/sidebar flex h-svh w-[296px] shrink-0 bg-[#F4F2F0] text-neutral-800 border-r border-[#E5E2DE]">
         {/* -------- RAIL (sol) -------- */}
         <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-[#E5E2DE] py-3">
@@ -288,21 +285,6 @@ export function AppSidebar() {
             <h2 className="text-[15px] font-semibold text-neutral-900">
               {activeGroup?.label ?? "Menü"}
             </h2>
-          </div>
-
-          {/* Search pill */}
-          <div className="px-2">
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex h-9 w-full items-center gap-2 rounded-lg bg-[#F4F2F0] border border-[#E5E2DE] px-2.5 text-[12px] text-neutral-500 hover:text-neutral-900 hover:border-neutral-300 transition-colors"
-              title="Ara (Ctrl+K)"
-            >
-              <SearchIcon className="h-3.5 w-3.5 shrink-0" />
-              <span className="flex-1 text-left">Ara...</span>
-              <kbd className="text-[9px] bg-white border border-[#E5E2DE] px-1.5 py-0.5 rounded font-mono shrink-0 text-neutral-600">
-                Ctrl K
-              </kbd>
-            </button>
           </div>
 
           {/* Rainbow button (sadece companies write yetkisi varsa) */}
