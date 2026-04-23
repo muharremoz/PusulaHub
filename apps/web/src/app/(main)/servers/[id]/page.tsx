@@ -3,21 +3,37 @@
 import { use, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
+import { ChevronLeft, Power as IsPower } from "lucide-react";
 import {
-  LayoutDashboard,
-  Monitor,
-  Building2,
-  Users,
-  Shield,
-  FileText,
-  MessageSquare,
-  ChevronLeft,
-  Power,
-  RefreshCw,
-  LogOut,
-  Settings,
-  FolderOpen,
-} from "lucide-react";
+  Category2 as IsDashboard,
+  Monitor as IsMonitor,
+  Building as IsBuilding,
+  Profile2User as IsUsers,
+  SecuritySafe as IsShield,
+  DocumentText as IsFile,
+  Messages2 as IsMessage,
+  FolderOpen as IsFolder,
+  Refresh as IsRefresh,
+  Logout as IsLogout,
+  Setting2 as IsSetting,
+} from "iconsax-reactjs";
+
+const mkTabIcon = (I: React.ComponentType<Record<string, unknown>>) => {
+  const Wrapped = ({ className }: { className?: string }) => (
+    <span className={`inline-flex ${className ?? ""}`}>
+      <I size="14" color="currentColor" variant="TwoTone" />
+    </span>
+  );
+  return Wrapped;
+};
+const DashboardTab = mkTabIcon(IsDashboard);
+const MonitorTab   = mkTabIcon(IsMonitor);
+const BuildingTab  = mkTabIcon(IsBuilding);
+const UsersTab     = mkTabIcon(IsUsers);
+const ShieldTab    = mkTabIcon(IsShield);
+const FileTab      = mkTabIcon(IsFile);
+const MessageTab   = mkTabIcon(IsMessage);
+const FolderTab    = mkTabIcon(IsFolder);
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -178,14 +194,14 @@ export default function ServerDetailPage({
     icon: React.ElementType;
     count?: number;
   }[] = [
-    { id: "overview", label: "Genel Durum", icon: LayoutDashboard },
-    { id: "sessions", label: "Oturumlar", icon: Monitor, count: sessionCount },
-    { id: "companies", label: "Firmalar", icon: Building2 },
-    { id: "users", label: "Kullanıcılar", icon: Users, count: userCount },
-    { id: "security", label: "Güvenlik", icon: Shield },
-    { id: "logs", label: "Kayıtlar", icon: FileText },
-    { id: "messages", label: "Mesaj", icon: MessageSquare },
-    { id: "files", label: "Dosyalar", icon: FolderOpen },
+    { id: "overview", label: "Genel Durum", icon: DashboardTab },
+    { id: "sessions", label: "Oturumlar", icon: MonitorTab, count: sessionCount },
+    { id: "companies", label: "Firmalar", icon: BuildingTab },
+    { id: "users", label: "Kullanıcılar", icon: UsersTab, count: userCount },
+    { id: "security", label: "Güvenlik", icon: ShieldTab },
+    { id: "logs", label: "Kayıtlar", icon: FileTab },
+    { id: "messages", label: "Mesaj", icon: MessageTab },
+    { id: "files", label: "Dosyalar", icon: FolderTab },
   ];
 
   return (
@@ -254,26 +270,26 @@ export default function ServerDetailPage({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-1.5 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-3 py-1.5 text-muted-foreground transition-colors">
-                  <Power className="size-3.5" />
+                  <IsPower className="size-3.5" />
                   Güç
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="rounded-[6px] min-w-[160px]">
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <RefreshCw className="size-3.5" />
+                  <IsRefresh size="14" color="currentColor" variant="TwoTone" />
                   Yeniden Başlat
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer text-destructive">
-                  <Power className="size-3.5" />
+                  <IsPower className="size-3.5" />
                   Kapat
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <LogOut className="size-3.5" />
+                  <IsLogout size="14" color="currentColor" variant="TwoTone" />
                   Oturumları Kapat
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <Settings className="size-3.5" />
+                  <IsSetting size="14" color="currentColor" variant="TwoTone" />
                   Detayları Düzenle
                 </DropdownMenuItem>
               </DropdownMenuContent>

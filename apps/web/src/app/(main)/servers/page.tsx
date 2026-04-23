@@ -8,7 +8,19 @@ import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import type { Server as ServerType } from "@/types";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { Server, MoreVertical, RefreshCw, LayoutList, LayoutGrid, Clock, Plus, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { MoreVertical, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import {
+  Monitor as IsMonitor,
+  Refresh as IsRefresh,
+  RowHorizontal as IsRowList,
+  Element3 as IsGrid,
+  Clock as IsClock,
+  Add as IsAdd,
+} from "iconsax-reactjs";
+
+const Ic = ({ I, className }: { I: React.ComponentType<Record<string, unknown>>; className?: string }) => (
+  <span className={`inline-flex ${className ?? ""}`}><I size="14" color="currentColor" variant="TwoTone" /></span>
+);
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -332,7 +344,7 @@ export default function ServersPage() {
                 view === "list" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <LayoutList className="size-3.5" />
+              <Ic I={IsRowList} />
             </button>
             <button
               onClick={() => setView("card")}
@@ -341,7 +353,7 @@ export default function ServersPage() {
                 view === "card" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <LayoutGrid className="size-3.5" />
+              <Ic I={IsGrid} />
             </button>
           </div>
 
@@ -365,7 +377,7 @@ export default function ServersPage() {
               onClick={handleRefresh}
               className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
             >
-              <RefreshCw className={cn("size-3.5", refreshing && "animate-spin")} />
+              <span className={cn("inline-flex", refreshing && "animate-spin")}><IsRefresh size="14" color="currentColor" variant="TwoTone" /></span>
               Yenile
             </button>
           </div>
@@ -375,7 +387,7 @@ export default function ServersPage() {
             onClick={() => setSheetOpen(true)}
             className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
           >
-            <Plus className="size-3.5" />
+            <Ic I={IsAdd} />
             Yeni Sunucu
           </button>
         </div>
@@ -420,7 +432,7 @@ export default function ServersPage() {
             className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
           >
-            <Server className="size-8 text-muted-foreground/30" />
+            <IsMonitor size="32" color="currentColor" variant="TwoTone" className="text-muted-foreground/30" />
             <div className="text-center space-y-1">
               <p className="text-[13px] font-medium text-foreground">Henüz sunucu eklenmedi</p>
               <p className="text-[11px] text-muted-foreground">Yönetmek istediğiniz sunucuları buradan ekleyin.</p>
@@ -429,7 +441,7 @@ export default function ServersPage() {
               onClick={() => setSheetOpen(true)}
               className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors mt-1"
             >
-              <Plus className="size-3.5" />
+              <Ic I={IsAdd} />
               Yeni Sunucu Ekle
             </button>
           </div>
@@ -521,7 +533,7 @@ export default function ServersPage() {
 
           {/* Footer */}
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-            <Server className="size-3" />
+            <IsMonitor size="12" color="currentColor" variant="TwoTone" />
             <span>{filtered.length} sunucu listeleniyor</span>
           </div>
         </div>
@@ -585,7 +597,7 @@ export default function ServersPage() {
 
                   {/* Card footer */}
                   <div className="flex items-center gap-1 px-3 py-2 border-t border-border/40 bg-muted/20">
-                    <Clock className="size-3 text-muted-foreground" />
+                    <IsClock size="12" color="currentColor" variant="TwoTone" className="text-muted-foreground" />
                     <span className="text-[10px] text-muted-foreground">{srv.lastChecked}</span>
                     <span className="ml-auto text-[10px] text-muted-foreground">↑ {srv.uptime}</span>
                   </div>
@@ -595,7 +607,7 @@ export default function ServersPage() {
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1">
-            <Server className="size-3" />
+            <IsMonitor size="12" color="currentColor" variant="TwoTone" />
             <span>{filtered.length} sunucu listeleniyor</span>
           </div>
         </div>
