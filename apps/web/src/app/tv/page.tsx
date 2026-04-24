@@ -378,10 +378,7 @@ function MonitorGroup({ title, count, monitors, tracker }: { title: string; coun
         )}
         <div className="flex-1 h-px bg-gradient-to-r from-zinc-800 to-transparent" />
       </div>
-      <div
-        className="grid content-start gap-3"
-        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))" }}
-      >
+      <div className="grid content-start gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {monitors.map((m) => <MonitorTile key={m.name} m={m} since={tracker.get(m.name)?.since} />)}
       </div>
     </div>
@@ -415,6 +412,281 @@ function DownBanner({ monitors, tracker }: { monitors: KumaMonitor[]; tracker: M
             )
           })}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   DOWN SPOTLIGHT — tek monitör çevrimdışıyken tüm ekranı karart,
+   ilgili kartı ortada büyük göster, sağında sorun + çözüm anlat
+══════════════════════════════════════════════════════════ */
+
+interface Troubleshoot {
+  title: string
+  problem: string[]
+  solution: string[]
+}
+
+function troubleshootFor(m: KumaMonitor): Troubleshoot {
+  const target = m.hostname ?? m.url ?? m.name
+  switch (m.type) {
+    case "ping":
+      return {
+        title: "Sunucuya ulaşılamıyor",
+        problem: [
+          `${target} adresine ICMP (ping) yanıtı gelmiyor.`,
+          "Sunucu kapalı, network bağlantısı kopuk veya ICMP firewall tarafından engelleniyor olabilir.",
+        ],
+        solution: [
+          "1. Sunucu fiziksel olarak açık mı kontrol et (güç + ekran).",
+          "2. Network kablosu / switch portu link veriyor mu bak.",
+          "3. RDP / KVM ile giriş dene — sadece ICMP mi engelli?",
+          "4. Windows Defender Firewall → ICMPv4-In kuralı açık mı.",
+          "5. Switch / router üzerinde VLAN değişikliği oldu mu kontrol et.",
+        ],
+      }
+    case "http":
+    case "keyword":
+      return {
+        title: "HTTP servisi yanıt vermiyor",
+        problem: [
+          `${target} HTTP isteğine cevap vermiyor (timeout veya 5xx).`,
+          "Web servisi çökmüş, port dinlenmiyor veya uygulama başlatılamamış olabilir.",
+        ],
+        solution: [
+          "1. Sunucuya RDP ile bağlan, IIS / pm2 / docker durumunu kontrol et.",
+          `2. PowerShell: Test-NetConnection ${m.hostname ?? "<host>"} -Port ${m.port ?? "80"}`,
+          "3. Servis loglarına bak: pm2 logs <name>  veya  Event Viewer → Application.",
+          "4. Disk doluluk + RAM tüketimi kontrolü (servis OOM olmuş olabilir).",
+          "5. Servisi yeniden başlat: pm2 restart <name>  veya  iisreset.",
+        ],
+      }
+    case "dns":
+      return {
+        title: "DNS çözümlemesi başarısız",
+        problem: [
+          `${target} için DNS sorgusu cevap vermiyor.`,
+          "DNS sunucu kapalı, zone bozuk veya UDP/53 portu engelli olabilir.",
+        ],
+        solution: [
+          "1. DNS sunucu host'unu ping ile kontrol et.",
+          "2. nslookup veya Resolve-DnsName ile manuel sorgu çek.",
+          "3. DNS Server servisi (Windows) çalışıyor mu — services.msc.",
+          "4. Zone dosyası / forwarder konfigürasyonu değişmiş mi.",
+          "5. UDP/53 firewall kuralı açık mı kontrol et.",
+        ],
+      }
+    case "port":
+      return {
+        title: "Port erişilemiyor",
+        problem: [
+          `${target}:${m.port ?? "?"} TCP portu kapalı veya yanıt vermiyor.`,
+          "Servis çökmüş, port değişmiş veya firewall engelliyor olabilir.",
+        ],
+        solution: [
+          "1. Sunucu üzerinde: netstat -ano | findstr :<port> — port LISTENING mi.",
+          "2. Servisi başlat / yeniden başlat.",
+          "3. Windows Firewall inbound kuralı kontrolü.",
+          "4. LAN üzerinden başka bir PC'den telnet / Test-NetConnection ile dene.",
+        ],
+      }
+    default:
+      return {
+        title: "Servis çevrimdışı",
+        problem: [
+          `${m.name} (${m.type}) monitörü hata veriyor.`,
+          "Servisin türüne özel kontrol gerekebilir.",
+        ],
+        solution: [
+          "1. Uptime Kuma panelinden monitör detayına bak (10.15.2.6:3001).",
+          "2. Son heartbeat hata mesajını incele.",
+          "3. İlgili sunucuda servis loglarını kontrol et.",
+          "4. Servisi yeniden başlat ve tekrar test et.",
+        ],
+      }
+  }
+}
+
+function DownSpotlight({
+  monitors,
+  tracker,
+  histories,
+  onDismiss,
+}: {
+  monitors: KumaMonitor[]
+  tracker: Map<string, { since: number }>
+  histories: Record<string, number[]>
+  onDismiss?: () => void
+}) {
+  const [idx, setIdx] = useState(0)
+  // Birden fazla DOWN varsa 8 saniyede bir döndür
+  useEffect(() => {
+    if (monitors.length <= 1) return
+    const t = setInterval(() => setIdx((i) => (i + 1) % monitors.length), 8000)
+    return () => clearInterval(t)
+  }, [monitors.length])
+  const safeIdx = Math.min(idx, monitors.length - 1)
+  const m       = monitors[safeIdx]
+  if (!m) return null
+  const since   = tracker.get(m.name)?.since
+  const tip     = troubleshootFor(m)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-8 backdrop-blur-md bg-black/85"
+      style={{ animation: "tv-spotlight-in 220ms ease-out" }}
+    >
+      <style>{`
+        @keyframes tv-spotlight-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        @keyframes tv-spotlight-card-in {
+          from { opacity: 0; transform: scale(0.96); }
+          to   { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
+
+      <div
+        className="grid w-full max-w-[1600px] gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] items-stretch"
+        style={{ animation: "tv-spotlight-card-in 320ms ease-out" }}
+      >
+        {/* SOL — büyük down monitör kartı */}
+        <div className="flex">
+          <div
+            className="w-full rounded-[10px] relative overflow-hidden ring-2 ring-red-500/70 bg-red-950/40"
+            style={{ boxShadow: "0 0 0 1px rgba(239,68,68,0.4), 0 0 60px rgba(239,68,68,0.35), 0 20px 60px rgba(0,0,0,0.7)" }}
+          >
+            <DottedGlowBackground
+              gap={16}
+              radius={1.8}
+              color="rgb(239,68,68)"
+              darkColor="rgb(239,68,68)"
+              glowColor="rgb(239,68,68)"
+              darkGlowColor="rgb(239,68,68)"
+              opacity={0.55}
+              speedScale={2.4}
+              className="pointer-events-none"
+            />
+            <div
+              className="relative z-10 m-3 rounded-[8px] overflow-hidden border border-red-400/40 backdrop-blur-[6px]"
+              style={{
+                background: "linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.04))",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              <div className="p-8 min-h-[480px] flex flex-col">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-3 text-red-300">
+                      <AlertTriangle className="size-5 animate-pulse" />
+                      <span className="text-[12px] font-bold uppercase tracking-[0.3em]">Çevrimdışı</span>
+                    </div>
+                    <HyperText
+                      as="div"
+                      duration={500}
+                      animateOnHover={false}
+                      className="mt-3 truncate text-[44px] font-bold text-white !py-0 !text-[44px] tracking-tight"
+                    >
+                      {m.name}
+                    </HyperText>
+                    <div className="mt-1 truncate font-mono text-[16px] text-red-200/80">
+                      {m.hostname ?? m.url ?? "—"}{m.port ? `:${m.port}` : ""}
+                    </div>
+                  </div>
+                  <span className="shrink-0 rounded-[5px] border border-red-400/40 bg-red-500/15 px-3 py-1 font-mono text-[14px] font-semibold uppercase tracking-wider text-red-200">
+                    {m.type}
+                  </span>
+                </div>
+
+                <div className="mt-auto pt-8 space-y-5">
+                  {/* Yanıt çizgisi — son 40 ölçüm, DOWN'a düşüş görünür */}
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-300/80 mb-2">Yanıt Geçmişi</div>
+                    <Sparkline data={histories[m.name] ?? []} color="rgb(239,68,68)" width={800} height={120} />
+                  </div>
+                  <div className="flex items-end justify-between gap-6 flex-wrap">
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-300/80">Yanıt</div>
+                      <div className="font-mono text-[64px] font-bold text-red-300 tabular-nums leading-none">—</div>
+                    </div>
+                    {since && <DownTimer since={since} />}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* SAĞ — sorun + çözüm */}
+        <div className="flex">
+          <div
+            className="w-full rounded-[10px] bg-zinc-900/70 border border-zinc-700/60 backdrop-blur-[6px] flex flex-col"
+            style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)" }}
+          >
+            <div className="px-6 py-4 border-b border-zinc-800/80 flex items-center justify-between gap-3">
+              <div className="text-[11px] font-bold uppercase tracking-[0.3em] text-zinc-400">Olası Sorun ve Çözüm</div>
+              {monitors.length > 1 && (
+                <div className="text-[10px] font-mono text-zinc-500 tabular-nums">
+                  {safeIdx + 1} / {monitors.length} · 8sn
+                </div>
+              )}
+            </div>
+
+            <div className="p-6 flex-1 overflow-auto">
+              <div className="text-[24px] font-bold text-white mb-4">{tip.title}</div>
+
+              <div className="rounded-[6px] bg-red-950/40 border border-red-500/30 p-4 mb-5">
+                <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-300 mb-2">Sorun</div>
+                <ul className="space-y-1.5">
+                  {tip.problem.map((p, i) => (
+                    <li key={i} className="text-[15px] text-red-100/90 leading-relaxed">{p}</li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="rounded-[6px] bg-emerald-950/30 border border-emerald-500/30 p-4">
+                <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-emerald-300 mb-2">Çözüm Adımları</div>
+                <ol className="space-y-2">
+                  {tip.solution.map((s, i) => (
+                    <li key={i} className="text-[15px] text-emerald-50/90 leading-relaxed font-mono">{s}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+
+            <div className="px-6 py-3 border-t border-zinc-800/80 flex items-center justify-between gap-3">
+              <div className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">
+                Uptime Kuma · 10.15.2.6:3001
+              </div>
+              {onDismiss && (
+                <button
+                  type="button"
+                  onClick={onDismiss}
+                  className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-200 px-2 py-1 rounded-[4px] hover:bg-zinc-800/60"
+                  title="Kapat (sistem yeniden DOWN olursa tekrar açılır)"
+                >
+                  Kapat
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Sadece spotlight için — büyük tabular DOWN süre sayacı */
+function DownTimer({ since }: { since: number }) {
+  const now = useClock()
+  if (!now) return null
+  return (
+    <div className="text-right">
+      <div className="text-[10px] font-bold uppercase tracking-[0.25em] text-red-300/80">Süre</div>
+      <div className="font-mono text-[40px] font-bold text-red-200 tabular-nums leading-none">
+        {formatDuration(now.getTime() - since)}
       </div>
     </div>
   )
@@ -587,7 +859,7 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
             boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
           }}
         >
-          <div className="min-h-[96px] p-3">
+          <div className="min-h-[140px] p-3 flex flex-col">
             {/* Ad satırı — solda isim, sağda DOWN rozeti */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
@@ -596,14 +868,14 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
                     as="div"
                     duration={700}
                     animateOnHover={false}
-                    className="truncate text-[13px] font-semibold text-zinc-100 !py-0 !text-[13px] tracking-normal"
+                    className="truncate text-[16px] font-semibold text-zinc-100 !py-0 !text-[16px] tracking-normal"
                     title={m.name}
                   >
                     {m.name}
                   </HyperText>
                 </div>
                 <div
-                  className="mt-0.5 truncate font-mono text-[10px] text-zinc-400"
+                  className="mt-1 truncate font-mono text-[12px] text-zinc-400"
                   title={m.hostname ?? m.url ?? ""}
                 >
                   {m.hostname ?? m.url ?? "—"}
@@ -617,7 +889,7 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
                 </div>
               ) : (
                 <span
-                  className="shrink-0 rounded-[3px] border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold uppercase tracking-wider text-zinc-300"
+                  className="shrink-0 rounded-[3px] border border-white/10 bg-white/5 px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300"
                   title={`Tür: ${m.type}`}
                 >
                   {m.type}
@@ -626,15 +898,15 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
             </div>
 
             {/* Yanıt süresi + canlı sparkline */}
-            <div className="mt-2 flex items-end justify-between gap-3">
+            <div className="mt-auto flex items-end justify-between gap-3 pt-3">
               <div className="flex items-baseline gap-1">
-                <span className={cn("font-mono text-xl font-bold tabular-nums", respClass)}>
+                <span className={cn("font-mono text-2xl font-bold tabular-nums", respClass)}>
                   {m.responseMs === null ? "—" : m.responseMs.toFixed(0)}
                 </span>
                 <span className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">ms</span>
               </div>
               <div className="flex-1 min-w-0">
-                <Sparkline data={history} color={glow.dot} height={24} />
+                <Sparkline data={history} color={glow.dot} height={40} />
               </div>
             </div>
           </div>
@@ -836,6 +1108,25 @@ export default function TvMonitoringPage() {
     [dataForRender],
   )
 
+  /* ── Tüm monitörler için yanıt geçmişi (spotlight + ileride başka kart için) ── */
+  const [histories, setHistories] = useState<Record<string, number[]>>({})
+  useEffect(() => {
+    const monitors = dataForRender?.monitors
+    if (!monitors) return
+    setHistories((prev) => {
+      const next = { ...prev }
+      for (const m of monitors) {
+        const arr = next[m.name] ? [...next[m.name]] : []
+        // DOWN ise 0 ms olarak işle ki spotlight'taki sparkline çizgisi düşüş gösterebilsin
+        const v = m.responseMs === null ? 0 : m.responseMs
+        arr.push(v)
+        if (arr.length > 40) arr.splice(0, arr.length - 40)
+        next[m.name] = arr
+      }
+      return next
+    })
+  }, [dataForRender])
+
   /* ── Ses toggle (localStorage) ── */
   const [soundOn, setSoundOn] = useState(false)
   useEffect(() => {
@@ -1015,6 +1306,11 @@ export default function TvMonitoringPage() {
 
       {/* ── Son olaylar (event log) ── */}
       {events.length > 0 && <EventLog events={events} />}
+
+      {/* ── DOWN Spotlight — herhangi bir monitör çevrimdışıysa tüm ekranı karart ── */}
+      {downMonitors.length > 0 && (
+        <DownSpotlight monitors={downMonitors} tracker={tracker} histories={histories} />
+      )}
 
     </div>
   )
