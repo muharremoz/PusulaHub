@@ -3,7 +3,7 @@
  *
  * Dev ecosystem.config.js'den FARKLARI:
  *   - cwd path'leri C:/PusulaProd/ altında (dev: C:/GitHub/Pusula Yazılım/)
- *   - Hub da "pnpm start" ile prod build çalışır (dev: "pnpm dev")
+ *   - Hub da prod build çalışır (dev: pnpm dev)
  *   - Log'lar C:/PusulaProd/logs/ altında
  *
  * Kullanım (ofis sunucusunda):
@@ -11,33 +11,32 @@
  *   pm2 save
  *   pm2-startup install   # Windows boot'ta otomatik başlatma
  *
- * Her deploy öncesi:
- *   pnpm -C apps/web build   (Hub için)
- *   pnpm build               (Switch ve SpareFlow için)
- * sonra:
- *   pm2 restart hub
+ * KRİTİK — PM2 Windows wrapper SORUNU ve ÇÖZÜMÜ:
  *
- * KRİTİK — script: "pnpm"/"npm" (cmd.exe wrapper YOK):
- *   Eski versiyon `script: "cmd.exe", args: "/c pnpm start"` Windows'ta
- *   alt process stdout/stderr'ını PM2 log dosyalarına yazmıyordu (PM2'nin
- *   bilinen Windows sorunu). Sonuç: hub-out.log, hub-err.log boş kalıyor,
- *   bir hata olduğunda kör kalıyoruz.
+ * 1) cmd.exe /c pnpm start  → PM2 alt process stdout/stderr'ını yakalayamıyor.
+ *    Log dosyaları boş kalıyor, hata olduğunda kör kalıyoruz.
  *
- *   Çözüm: doğrudan pnpm.cmd / npm.cmd çağır. PM2 .cmd uzantısını Windows'ta
- *   otomatik resolve eder ve stdout'u doğru pipe eder.
+ * 2) script: "pnpm" + interpreter: "none"  → spawn EINVAL.
+ *    Windows Node spawn() .cmd dosyalarını shell olmadan çağıramıyor.
+ *
+ * 3) script: <doğrudan js/ts entry> + interpreter: "node"  → ÇÖZÜM.
+ *    Wrapper yok, PM2 PID'i doğru takip eder, stdout/stderr log dosyalarına
+ *    akıyor. package.json'daki "start" script'inin ne yaptığını bilip aynısını
+ *    PM2'ye veriyoruz:
+ *      Hub:       node -r tsx/cjs server.ts        → script: server.ts + interpreter_args
+ *      Switch:    next start --port 4000           → next CLI direkt
+ *      SpareFlow: node server.js                   → script: server.js
  */
 module.exports = {
   apps: [
     {
       name: "switch",
       cwd: "C:/PusulaProd/PusulaSwitch",
-      script: "pnpm",
-      args: "start",
-      // KRİTİK: interpreter "none" — PM2 .cmd dosyasını Node ile parse etmesin
-      interpreter: "none",
-      // PROD: NODE_ENV=production ZORUNLU. apps/web/server.ts ve next start
-      // bu env'e bakıyor; eksikse Hub dev modda koşar, .env.production
-      // yüklenmez, DB bağlantısı "Login failed for user SA" verir.
+      // Switch package.json: "start": "next start --port 4000"
+      // PM2'ye next CLI'ı doğrudan veriyoruz, wrapper yok.
+      script: "node_modules/next/dist/bin/next",
+      args: "start --port 4000",
+      interpreter: "node",
       env: { NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
@@ -50,10 +49,11 @@ module.exports = {
     {
       name: "hub",
       cwd: "C:/PusulaProd/PusulaHub/apps/web",
-      script: "pnpm",
-      args: "start",
-      interpreter: "none",
-      // KRİTİK: yoksa server.ts dev modda koşar, .env.production yüklenmez.
+      // Hub package.json: "start": "node -r tsx/cjs server.ts"
+      // server.ts içinde dev/prod ayrımı NODE_ENV'e bakar.
+      script: "server.ts",
+      interpreter: "node",
+      interpreter_args: "-r tsx/cjs",
       env: { NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
@@ -66,9 +66,9 @@ module.exports = {
     {
       name: "spareflow",
       cwd: "C:/PusulaProd/SpareFlow/spare-flow-ui",
-      script: "npm",
-      args: "run start",
-      interpreter: "none",
+      // SpareFlow package.json: "start": "node server.js"
+      script: "server.js",
+      interpreter: "node",
       env: { PORT: "4243", NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
