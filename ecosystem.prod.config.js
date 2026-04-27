@@ -33,6 +33,8 @@ module.exports = {
       cwd: "C:/PusulaProd/PusulaSwitch",
       script: "pnpm",
       args: "start",
+      // KRİTİK: interpreter "none" — PM2 .cmd dosyasını Node ile parse etmesin
+      interpreter: "none",
       // PROD: NODE_ENV=production ZORUNLU. apps/web/server.ts ve next start
       // bu env'e bakıyor; eksikse Hub dev modda koşar, .env.production
       // yüklenmez, DB bağlantısı "Login failed for user SA" verir.
@@ -50,6 +52,7 @@ module.exports = {
       cwd: "C:/PusulaProd/PusulaHub/apps/web",
       script: "pnpm",
       args: "start",
+      interpreter: "none",
       // KRİTİK: yoksa server.ts dev modda koşar, .env.production yüklenmez.
       env: { NODE_ENV: "production" },
       autorestart: true,
@@ -65,6 +68,7 @@ module.exports = {
       cwd: "C:/PusulaProd/SpareFlow/spare-flow-ui",
       script: "npm",
       args: "run start",
+      interpreter: "none",
       env: { PORT: "4243", NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
