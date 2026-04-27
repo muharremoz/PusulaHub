@@ -109,20 +109,25 @@ async function ensureSchema(): Promise<void> {
       EXEC sp_rename 'MessageRecipients', 'MessageRecipients_Legacy'
   `
 
+  // KRİTİK: MessageRecipients.MessageId'nin tipi Messages.Id ile EŞLEŞMELİ.
+  // Eski create.sql Messages.Id'yi NVARCHAR olarak oluşturmuş; UNIQUEIDENTIFIER
+  // beklersek FK kurulamaz ("Column ... is not the same data type" → 1750).
+  // NVARCHAR(36) UUID için yeterli (dash dahil 36 char). Constraint adlarını
+  // anonymous bırak — DB-wide name conflict riskini sıfıra indirir.
   await execute`
     IF OBJECT_ID('MessageRecipients','U') IS NULL
     BEGIN
       CREATE TABLE MessageRecipients (
         Id            BIGINT           IDENTITY(1,1) PRIMARY KEY,
-        MessageId     UNIQUEIDENTIFIER NOT NULL,
+        MessageId     NVARCHAR(36)     NOT NULL,
         ServerId      NVARCHAR(50)     NOT NULL,
         ServerName    NVARCHAR(200)    NULL,
         Username      NVARCHAR(200)    NOT NULL,
-        Status        NVARCHAR(20)     NOT NULL CONSTRAINT DF_MR_Status DEFAULT 'pending',
+        Status        NVARCHAR(20)     NOT NULL DEFAULT 'pending',
         DeliveredAt   DATETIME2        NULL,
         ReadAt        DATETIME2        NULL,
         ErrorMessage  NVARCHAR(500)    NULL,
-        CONSTRAINT FK_MR_Message FOREIGN KEY (MessageId) REFERENCES Messages(Id) ON DELETE CASCADE
+        FOREIGN KEY (MessageId) REFERENCES Messages(Id) ON DELETE CASCADE
       )
       CREATE INDEX IX_MR_MessageId ON MessageRecipients (MessageId)
       CREATE INDEX IX_MR_Lookup    ON MessageRecipients (MessageId, Username)
