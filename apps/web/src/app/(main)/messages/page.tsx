@@ -26,14 +26,32 @@ import {
 import {
   Send, Plus, Search, Mail, MailOpen,
   AlertTriangle, Users, Building2, UserCheck, Check, CheckCheck, X,
-  Server, ChevronsUpDown, Sparkles, Bookmark,
+  Server, ChevronsUpDown, Sparkles, Bookmark, MoreVertical, Pencil, Trash2,
 } from "lucide-react"
-import { PRESET_MESSAGES, type PresetMessage } from "@/lib/preset-messages"
 
 type MsgType         = "info" | "warning" | "urgent"
 type MsgPriority     = "normal" | "high" | "urgent"
 type RecipientKind   = "all" | "company" | "selected"
 type RecipientStatus = "pending" | "delivered" | "read" | "failed"
+
+/**
+ * Mesaj şablonu — sol panelde "Hazır Mesajlar" listesinde gösterilir.
+ * built-in olanlar `apps/web/src/lib/preset-messages.ts`'den, kullanıcı
+ * şablonları DB'den (MessageTemplates tablosu) gelir; API merge eder.
+ */
+interface MessageTemplate {
+  id:          string
+  title:       string
+  description: string
+  subject:     string
+  body:        string
+  type:        MsgType
+  priority:    MsgPriority
+  builtIn:     boolean
+  createdBy?:  string | null
+  createdAt?:  string | null
+  updatedAt?:  string | null
+}
 
 interface MessageItem {
   id:            string
@@ -126,8 +144,19 @@ export default function MessagesPage() {
   const [loading,    setLoading]    = useState(true)
   const [recipients, setRecipients] = useState<DirectoryRecipient[]>([])
   const [companies,  setCompanies]  = useState<Company[]>([])
+  const [templates,  setTemplates]  = useState<MessageTemplate[]>([])
+  // Şablon CRUD dialog state — null = kapalı, "new" = yeni şablon, MessageTemplate = düzenle
+  const [templateDialog, setTemplateDialog] = useState<MessageTemplate | "new" | null>(null)
 
   const [search,            setSearch]            = useState("")
+  // Liste filtreleri
+  const [filterFrom,        setFilterFrom]        = useState<string>("")  // yyyy-MM-dd
+  const [filterTo,          setFilterTo]          = useState<string>("")
+  const [filterCompany,     setFilterCompany]     = useState<string>("")  // companyId
+  const [filterUser,        setFilterUser]        = useState<string>("")  // username
+  const [filterSubject,     setFilterSubject]     = useState<string>("")
+  const [filterPriority,    setFilterPriority]    = useState<string>("")  // "" | "normal" | "high" | "urgent"
+  const [filtersOpen,       setFiltersOpen]       = useState(false)
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [detailRecipients,  setDetailRecipients]  = useState<RecipientItem[]>([])
   const [showCompose,       setShowCompose]       = useState(false)
@@ -149,7 +178,15 @@ export default function MessagesPage() {
   const loadList = async () => {
     setLoading(true)
     try {
-      const r = await fetch("/api/messages?limit=100")
+      // Filtreleri server'a query string olarak ilet
+      const qs = new URLSearchParams({ limit: "100" })
+      if (filterFrom)     qs.set("from",     filterFrom)
+      if (filterTo)       qs.set("to",       filterTo)
+      if (filterCompany)  qs.set("companyId",filterCompany)
+      if (filterUser)     qs.set("username", filterUser)
+      if (filterSubject)  qs.set("subject",  filterSubject)
+      if (filterPriority) qs.set("priority", filterPriority)
+      const r = await fetch(`/api/messages?${qs.toString()}`)
       const d = await r.json()
       setMessages(d.messages ?? [])
     } catch {
@@ -168,10 +205,52 @@ export default function MessagesPage() {
     } catch { /* ignore */ }
   }
 
+  const loadTemplates = async () => {
+    try {
+      const r = await fetch("/api/messages/templates")
+      const d = await r.json()
+      setTemplates(d.templates ?? [])
+    } catch { /* ignore */ }
+  }
+
+  /** Şablon sil — sadece kullanıcı şablonları için. */
+  const deleteTemplate = async (id: string) => {
+    if (!confirm("Bu şablon silinsin mi?")) return
+    try {
+      const r = await fetch(`/api/messages/templates/${id}`, { method: "DELETE" })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        toast.error(d.error ?? "Silinemedi")
+        return
+      }
+      toast.success("Şablon silindi")
+      loadTemplates()
+    } catch {
+      toast.error("Sunucu hatası")
+    }
+  }
+
   useEffect(() => {
     loadList()
     loadRecipients()
+    loadTemplates()
   }, [])
+
+  // Filtre değişince listeyi yeniden çek (debounce için 250ms gecikme).
+  useEffect(() => {
+    const t = setTimeout(() => loadList(), 250)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterFrom, filterTo, filterCompany, filterUser, filterSubject, filterPriority])
+
+  const activeFilterCount =
+    (filterFrom ? 1 : 0) + (filterTo ? 1 : 0) + (filterCompany ? 1 : 0) +
+    (filterUser ? 1 : 0) + (filterSubject ? 1 : 0) + (filterPriority ? 1 : 0)
+
+  const clearFilters = () => {
+    setFilterFrom(""); setFilterTo(""); setFilterCompany("")
+    setFilterUser(""); setFilterSubject(""); setFilterPriority("")
+  }
 
   // Detay yükle
   useEffect(() => {
@@ -233,17 +312,17 @@ export default function MessagesPage() {
     setComposePriority("normal"); setComposeType("info")
   }
 
-  /** Hazır mesaj seçimini forma uygula. Kullanıcı göndermeden düzenleyebilir. */
-  const applyPreset = (p: PresetMessage) => {
-    setComposeSubject(p.subject)
-    setComposeBody(p.body)
-    setComposeType(p.type)
-    setComposePriority(p.priority)
+  /** Şablon seçimini compose formuna uygula. Kullanıcı göndermeden düzenleyebilir. */
+  const applyTemplate = (t: MessageTemplate) => {
+    setComposeSubject(t.subject)
+    setComposeBody(t.body)
+    setComposeType(t.type)
+    setComposePriority(t.priority)
   }
 
-  /** Ana sayfadaki hazır mesaj kartından tıklandığında dialog'u aç + presetle doldur. */
-  const openComposeWithPreset = (p: PresetMessage) => {
-    applyPreset(p)
+  /** Sol paneldeki şablon kartından tıklandığında dialog'u aç + şablonla doldur. */
+  const openComposeWithTemplate = (t: MessageTemplate) => {
+    applyTemplate(t)
     setSelectedMessageId(null)
     setShowCompose(true)
   }
@@ -431,34 +510,79 @@ export default function MessagesPage() {
           </NestedCard>
         ) : (
           <NestedCard>
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-              <h3 className="text-sm font-semibold">Hazır Mesajlar</h3>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">Hazır Mesajlar</h3>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
+                onClick={() => setTemplateDialog("new")}
+                title="Yeni şablon ekle"
+              >
+                <Plus className="h-3 w-3" />
+                Yeni Şablon
+              </Button>
             </div>
             <p className="text-[10px] text-muted-foreground mb-3">
-              Bir şablon seç — düzenleyip gönder
+              Bir şablon seç — düzenleyip gönder. Sistem şablonları silinemez.
             </p>
             <div className="grid grid-cols-2 gap-2">
-              {PRESET_MESSAGES.map(p => {
+              {templates.map(t => {
                 const badge =
-                  p.priority === "urgent" ? { label: "Acil",    cls: "bg-red-100 text-red-700 border-red-200" } :
-                  p.priority === "high"   ? { label: "Yüksek",  cls: "bg-amber-100 text-amber-700 border-amber-200" } :
+                  t.priority === "urgent" ? { label: "Acil",    cls: "bg-red-100 text-red-700 border-red-200" } :
+                  t.priority === "high"   ? { label: "Yüksek",  cls: "bg-amber-100 text-amber-700 border-amber-200" } :
                                              { label: "Normal",  cls: "bg-muted text-muted-foreground border-border/50" }
                 return (
-                  <button
-                    key={p.id}
-                    onClick={() => openComposeWithPreset(p)}
-                    className="group flex flex-col items-start gap-1 rounded-[5px] border border-border/50 bg-white hover:border-foreground/30 hover:shadow-sm transition-all p-2.5 text-left"
+                  <div
+                    key={t.id}
+                    className="group relative flex flex-col items-start gap-1 rounded-[5px] border border-border/50 bg-white hover:border-foreground/30 hover:shadow-sm transition-all p-2.5 text-left cursor-pointer"
+                    onClick={() => openComposeWithTemplate(t)}
                   >
                     <div className="flex items-center justify-between w-full">
                       <Bookmark className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
-                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-[3px] border ${badge.cls}`}>
-                        {badge.label}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-[3px] border ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                        {/* Kullanıcı şablonu — düzenle/sil dropdown */}
+                        {!t.builtIn && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                type="button"
+                                onClick={(e) => e.stopPropagation()}
+                                className="rounded-[3px] hover:bg-muted/60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                aria-label="Şablon işlemleri"
+                              >
+                                <MoreVertical className="h-3 w-3 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem
+                                className="text-[11px] cursor-pointer"
+                                onSelect={() => setTemplateDialog(t)}
+                              >
+                                <Pencil className="h-3 w-3 mr-2" />
+                                Düzenle
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-[11px] cursor-pointer text-destructive focus:text-destructive"
+                                onSelect={() => deleteTemplate(t.id)}
+                              >
+                                <Trash2 className="h-3 w-3 mr-2" />
+                                Sil
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                     </div>
-                    <span className="text-[11px] font-semibold leading-snug mt-1">{p.title}</span>
-                    <span className="text-[10px] text-muted-foreground leading-snug line-clamp-2">{p.description}</span>
-                  </button>
+                    <span className="text-[11px] font-semibold leading-snug mt-1">{t.title}</span>
+                    <span className="text-[10px] text-muted-foreground leading-snug line-clamp-2">{t.description}</span>
+                  </div>
                 )
               })}
             </div>
@@ -707,15 +831,15 @@ export default function MessagesPage() {
                         </button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-[320px] max-h-[360px] overflow-y-auto">
-                        {PRESET_MESSAGES.map(p => (
+                        {templates.map(t => (
                           <DropdownMenuItem
-                            key={p.id}
-                            onSelect={() => applyPreset(p)}
+                            key={t.id}
+                            onSelect={() => applyTemplate(t)}
                             className="text-[11px] cursor-pointer"
                           >
                             <div className="flex flex-col gap-0.5">
-                              <span className="font-medium">{p.title}</span>
-                              <span className="text-[10px] text-muted-foreground">{p.description}</span>
+                              <span className="font-medium">{t.title}</span>
+                              <span className="text-[10px] text-muted-foreground">{t.description}</span>
                             </div>
                           </DropdownMenuItem>
                         ))}
@@ -782,9 +906,85 @@ export default function MessagesPage() {
 
         {/* Mesaj listesi */}
         <NestedCard footer={<><Mail className="h-3 w-3" /><span>{filtered.length} mesaj</span></>}>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2">
               <h3 className="text-sm font-semibold">Gönderilen Mesajlar</h3>
+              <div className="flex items-center gap-2">
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                  >
+                    Filtreleri temizle
+                  </button>
+                )}
+                <Button
+                  size="sm"
+                  variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
+                  className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
+                  onClick={() => setFiltersOpen(v => !v)}
+                >
+                  <Search className="h-3 w-3" />
+                  Filtre
+                  {activeFilterCount > 0 && (
+                    <span className="ml-0.5 rounded-full bg-white/20 px-1 text-[9px] font-bold tabular-nums">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </Button>
+              </div>
             </div>
+
+            {/* Filtre paneli — açıldığında genişler, kapandığında gizli */}
+            {filtersOpen && (
+              <div className="rounded-[5px] border border-border/50 bg-muted/20 p-3 mb-3 grid grid-cols-2 lg:grid-cols-3 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
+                  <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+                    className="h-7 text-[11px] rounded-[4px]" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
+                  <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+                    className="h-7 text-[11px] rounded-[4px]" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Öncelik</Label>
+                  <Select value={filterPriority || "all"} onValueChange={(v) => setFilterPriority(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Hepsi</SelectItem>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="high">Yüksek</SelectItem>
+                      <SelectItem value="urgent">Acil</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Firma</Label>
+                  <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
+                    <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Hepsi</SelectItem>
+                      {companies.map(c => (
+                        <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Kullanıcı</Label>
+                  <Input value={filterUser} onChange={(e) => setFilterUser(e.target.value)}
+                    placeholder="kullanıcı adı"
+                    className="h-7 text-[11px] rounded-[4px] font-mono" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Konu içerir</Label>
+                  <Input value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
+                    placeholder="konu kelimesi"
+                    className="h-7 text-[11px] rounded-[4px]" />
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-[0.4fr_2fr_0.7fr_0.7fr_0.8fr_0.6fr] gap-2 px-1 py-1.5 bg-muted/30 rounded-[4px] border-b">
               <span className="text-[11px] font-medium text-muted-foreground tracking-wide">ÖNCELİK</span>
@@ -858,6 +1058,174 @@ export default function MessagesPage() {
         </NestedCard>
 
       </div>
+
+      {/* Şablon ekle/düzenle dialog */}
+      <TemplateFormDialog
+        open={templateDialog !== null}
+        initial={templateDialog === "new" ? null : templateDialog}
+        onClose={() => setTemplateDialog(null)}
+        onSaved={() => { setTemplateDialog(null); loadTemplates() }}
+      />
     </PageContainer>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   TemplateFormDialog — yeni şablon ekle veya mevcudu düzenle
+   ──────────────────────────────────────────────────────────────────────
+   `initial` null ise yeni mod (POST), MessageTemplate ise düzenle mod (PATCH).
+══════════════════════════════════════════════════════════════════════ */
+function TemplateFormDialog({
+  open, initial, onClose, onSaved,
+}: {
+  open:    boolean
+  initial: MessageTemplate | null
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const isEdit = initial !== null
+  const [title,       setTitle]       = useState("")
+  const [description, setDescription] = useState("")
+  const [subject,     setSubject]     = useState("")
+  const [body,        setBody]        = useState("")
+  const [type,        setType]        = useState<MsgType>("info")
+  const [priority,    setPriority]    = useState<MsgPriority>("normal")
+  const [saving,      setSaving]      = useState(false)
+
+  // Dialog her açıldığında initial'a göre formu sıfırla/doldur
+  useEffect(() => {
+    if (!open) return
+    if (initial) {
+      setTitle(initial.title)
+      setDescription(initial.description)
+      setSubject(initial.subject)
+      setBody(initial.body)
+      setType(initial.type)
+      setPriority(initial.priority)
+    } else {
+      setTitle(""); setDescription(""); setSubject(""); setBody("")
+      setType("info"); setPriority("normal")
+    }
+  }, [open, initial])
+
+  const save = async () => {
+    if (!title.trim())   { toast.error("Başlık zorunlu"); return }
+    if (!subject.trim()) { toast.error("Konu zorunlu"); return }
+    if (!body.trim())    { toast.error("Mesaj metni zorunlu"); return }
+
+    setSaving(true)
+    try {
+      const payload = { title: title.trim(), description: description.trim(), subject: subject.trim(), body: body.trim(), type, priority }
+      const url = isEdit ? `/api/messages/templates/${initial!.id}` : "/api/messages/templates"
+      const method = isEdit ? "PATCH" : "POST"
+      const r = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}))
+        toast.error(d.error ?? (isEdit ? "Güncellenemedi" : "Eklenemedi"))
+        return
+      }
+      toast.success(isEdit ? "Şablon güncellendi" : "Şablon eklendi")
+      onSaved()
+    } catch {
+      toast.error("Sunucu hatası")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        className="sm:max-w-[520px] rounded-[8px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden"
+        style={{ backgroundColor: "#F4F2F0" }}
+      >
+        <DialogHeader className="px-5 py-4 border-b border-border/50 bg-white">
+          <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+            <Bookmark className="h-3.5 w-3.5 text-muted-foreground" />
+            {isEdit ? "Şablonu Düzenle" : "Yeni Şablon"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1">
+          <div className="px-4 py-4 space-y-3">
+            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Şablon Bilgileri</span>
+              </div>
+              <div className="p-3 space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Başlık</Label>
+                  <Input value={title} onChange={(e) => setTitle(e.target.value)}
+                    className="h-8 text-[11px] rounded-[5px]" placeholder="Örn. Planlı Bakım" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Açıklama (opsiyonel)</Label>
+                  <Input value={description} onChange={(e) => setDescription(e.target.value)}
+                    className="h-8 text-[11px] rounded-[5px]" placeholder="Listede 2. satırda görünür" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Mesaj Tipi</Label>
+                  <Select value={type} onValueChange={(v) => setType(v as MsgType)}>
+                    <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="info">Bilgi</SelectItem>
+                      <SelectItem value="warning">Uyarı</SelectItem>
+                      <SelectItem value="urgent">Acil</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Öncelik</Label>
+                  <Select value={priority} onValueChange={(v) => setPriority(v as MsgPriority)}>
+                    <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="normal">Normal</SelectItem>
+                      <SelectItem value="high">Yüksek</SelectItem>
+                      <SelectItem value="urgent">Acil</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Mesaj İçeriği</span>
+              </div>
+              <div className="p-3 space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Konu</Label>
+                  <Input value={subject} onChange={(e) => setSubject(e.target.value)}
+                    className="h-8 text-[11px] rounded-[5px]" placeholder="Mesaj konusu" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[11px] text-muted-foreground">Mesaj</Label>
+                  <textarea
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    className="w-full h-32 rounded-[5px] border border-border/50 bg-white p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                    placeholder="Mesaj metni — [SAAT], [SÜRE] gibi yer tutucular kullanabilirsin."
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="px-5 py-3 border-t border-border/50 gap-2 sm:gap-2 bg-white">
+          <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]"
+            onClick={onClose} disabled={saving}>İptal</Button>
+          <Button size="sm" className="rounded-[5px] h-8 text-[11px] gap-1.5"
+            onClick={save} disabled={saving}>
+            <Check className="h-3 w-3" />
+            {saving ? "Kaydediliyor..." : (isEdit ? "Güncelle" : "Ekle")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

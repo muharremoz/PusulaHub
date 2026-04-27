@@ -3,6 +3,9 @@ import { randomUUID } from "crypto"
 import { auth } from "@/auth"
 import { requirePermission } from "@/lib/require-permission"
 import { listMessages, type MessageType, type MessagePriority, type RecipientKind } from "@/lib/messages-db"
+
+const VALID_TYPES:      MessageType[]     = ["info", "warning", "urgent"]
+const VALID_PRIORITIES: MessagePriority[] = ["normal", "high", "urgent"]
 import { broadcast } from "@/lib/messages-fanout"
 
 /**
@@ -15,17 +18,28 @@ export async function GET(req: NextRequest) {
   if (gate) return gate
 
   const { searchParams } = new URL(req.url)
-  const search  = searchParams.get("search")  ?? undefined
-  const type    = searchParams.get("type")    ?? undefined
-  const agentId = searchParams.get("agentId") ?? undefined
-  const limit   = parseInt(searchParams.get("limit")  ?? "100", 10)
-  const offset  = parseInt(searchParams.get("offset") ?? "0",   10)
+  const sp = searchParams
+  const search    = sp.get("search")    || undefined
+  const subject   = sp.get("subject")   || undefined
+  const typeRaw   = sp.get("type")      || undefined
+  const prioRaw   = sp.get("priority")  || undefined
+  const agentId   = sp.get("agentId")   || undefined
+  const companyId = sp.get("companyId") || undefined
+  const username  = sp.get("username")  || undefined
+  const from      = sp.get("from")      || undefined
+  const to        = sp.get("to")        || undefined
+  const limit  = parseInt(sp.get("limit")  ?? "100", 10)
+  const offset = parseInt(sp.get("offset") ?? "0",   10)
+
+  // Bilinmeyen enum değerlerini sessizce yok say (filtre uygulanmasın)
+  const type     = typeRaw && VALID_TYPES.includes(typeRaw as MessageType)        ? (typeRaw as MessageType)     : undefined
+  const priority = prioRaw && VALID_PRIORITIES.includes(prioRaw as MessagePriority) ? (prioRaw as MessagePriority) : undefined
 
   try {
     const rows = await listMessages({
-      search,
-      type:    type as MessageType | undefined,
-      agentId: agentId ?? undefined,
+      search, subject, type, priority,
+      agentId, companyId, username,
+      from, to,
       limit:   isNaN(limit)  ? 100 : limit,
       offset:  isNaN(offset) ? 0   : offset,
     })

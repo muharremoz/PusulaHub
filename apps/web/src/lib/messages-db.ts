@@ -128,8 +128,32 @@ async function ensureSchema(): Promise<void> {
       CREATE INDEX IX_MR_Lookup    ON MessageRecipients (MessageId, Username)
     END
   `
+
+  // MessageTemplates — kullanıcının kendi hazır mesaj şablonları.
+  // Statik PRESET_MESSAGES (apps/web/src/lib/preset-messages.ts) korunur,
+  // bu tablo SADECE kullanıcının eklediği şablonları tutar. API GET
+  // sırasında ikisi merge edilir (statik = built-in, DB = user).
+  await execute`
+    IF OBJECT_ID('MessageTemplates','U') IS NULL
+    BEGIN
+      CREATE TABLE MessageTemplates (
+        Id          UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_MT PRIMARY KEY DEFAULT NEWID(),
+        Title       NVARCHAR(100)    NOT NULL,
+        Description NVARCHAR(255)    NULL,
+        Subject     NVARCHAR(200)    NOT NULL,
+        Body        NVARCHAR(MAX)    NOT NULL,
+        Type        NVARCHAR(20)     NOT NULL CONSTRAINT DF_MT_Type     DEFAULT 'info',
+        Priority    NVARCHAR(20)     NOT NULL CONSTRAINT DF_MT_Priority DEFAULT 'normal',
+        CreatedBy   NVARCHAR(100)    NULL,
+        CreatedAt   DATETIME2        NOT NULL CONSTRAINT DF_MT_Created  DEFAULT SYSUTCDATETIME(),
+        UpdatedAt   DATETIME2        NULL
+      )
+    END
+  `
   _schemaReady = true
 }
+
+export { ensureSchema }
 
 /* ── Create ───────────────────────────────────────────── */
 
@@ -239,44 +263,54 @@ export async function markReadByMsgId(msgId: string, username: string): Promise<
 /* ── Read ─────────────────────────────────────────────── */
 
 export interface ListFilter {
-  search?:    string
+  search?:    string             // Subject veya Body içinde geçen
+  subject?:   string             // sadece Subject — search'ten ayrı, filtre çubuğunda "Konu" alanı
   type?:      MessageType
-  agentId?:   string  // sadece bu sunucuya gönderilenler
+  priority?:  MessagePriority
+  agentId?:   string             // sadece bu sunucuya gönderilenler
+  companyId?: string             // sadece bu firmaya gönderilenler (m.CompanyId)
+  username?:  string             // alıcı kullanıcısı (MessageRecipients.Username) bu kişiyi içerenler
+  from?:      string             // ISO tarih (yyyy-MM-dd) — bu tarih dahil
+  to?:        string             // ISO tarih (yyyy-MM-dd) — bu tarih dahil
   limit?:     number
   offset?:    number
 }
 
 export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
   await ensureSchema()
-  const limit  = Math.min(f.limit ?? 100, 500)
-  const offset = f.offset ?? 0
-  const search = f.search?.trim() ? `%${f.search.trim()}%` : null
-
-  if (f.agentId) {
-    return query<MessageRow[]>`
-      SELECT m.Id, m.Subject, m.Body, m.Type, m.Priority, m.RecipientType,
-             m.CompanyId, m.CompanyName, m.SenderUserId, m.SenderName,
-             CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt,
-             m.TotalCount, m.ReadCount
-        FROM Messages m
-       WHERE EXISTS (
-         SELECT 1 FROM MessageRecipients r
-          WHERE r.MessageId = m.Id AND r.ServerId = ${f.agentId}
-       )
-         AND (${search} IS NULL OR m.Subject LIKE ${search} OR m.Body LIKE ${search})
-       ORDER BY m.SentAt DESC
-       OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
-    `
-  }
+  const limit   = Math.min(f.limit ?? 100, 500)
+  const offset  = f.offset ?? 0
+  const search  = f.search?.trim()  ? `%${f.search.trim()}%`  : null
+  const subject = f.subject?.trim() ? `%${f.subject.trim()}%` : null
+  // SQL Server NULL safety + parametreli filtreleme — NULL ise filtre uygulanmaz.
+  const type      = f.type      ?? null
+  const priority  = f.priority  ?? null
+  const agentId   = f.agentId   ?? null
+  const companyId = f.companyId ?? null
+  const username  = f.username  ?? null
+  const from      = f.from      ?? null
+  const to        = f.to        ?? null
 
   return query<MessageRow[]>`
-    SELECT Id, Subject, Body, Type, Priority, RecipientType,
-           CompanyId, CompanyName, SenderUserId, SenderName,
-           CONVERT(NVARCHAR(30), SentAt, 120) AS SentAt,
-           TotalCount, ReadCount
-      FROM Messages
-     WHERE (${search} IS NULL OR Subject LIKE ${search} OR Body LIKE ${search})
-     ORDER BY SentAt DESC
+    SELECT m.Id, m.Subject, m.Body, m.Type, m.Priority, m.RecipientType,
+           m.CompanyId, m.CompanyName, m.SenderUserId, m.SenderName,
+           CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt,
+           m.TotalCount, m.ReadCount
+      FROM Messages m
+     WHERE (${search}    IS NULL OR m.Subject LIKE ${search} OR m.Body LIKE ${search})
+       AND (${subject}   IS NULL OR m.Subject LIKE ${subject})
+       AND (${type}      IS NULL OR m.Type     = ${type})
+       AND (${priority}  IS NULL OR m.Priority = ${priority})
+       AND (${companyId} IS NULL OR m.CompanyId = ${companyId})
+       AND (${from}      IS NULL OR m.SentAt >= ${from})
+       AND (${to}        IS NULL OR m.SentAt <  DATEADD(day, 1, CAST(${to} AS DATE)))
+       AND (${agentId}   IS NULL OR EXISTS (
+         SELECT 1 FROM MessageRecipients r
+          WHERE r.MessageId = m.Id AND r.ServerId = ${agentId}))
+       AND (${username}  IS NULL OR EXISTS (
+         SELECT 1 FROM MessageRecipients r
+          WHERE r.MessageId = m.Id AND r.Username = ${username}))
+     ORDER BY m.SentAt DESC
      OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
   `
 }
