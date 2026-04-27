@@ -9,6 +9,31 @@ import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
 
+/** HTTPS / localhost dısında navigator.clipboard undefined — fallback */
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch { /* fallback altta */ }
+  try {
+    const ta = document.createElement("textarea")
+    ta.value = text
+    ta.style.position = "fixed"
+    ta.style.opacity = "0"
+    ta.style.left = "-9999px"
+    document.body.appendChild(ta)
+    ta.focus()
+    ta.select()
+    const ok = document.execCommand("copy")
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 
 const FW_ITEMS: Omit<FwItem, "checked">[] = [
@@ -18,6 +43,41 @@ const FW_ITEMS: Omit<FwItem, "checked">[] = [
   { title: "Sabit sanal IP tanımla",       description: "Gerekiyorsa SSL-VPN Portals'dan kullanıcıya sabit IP kaydı aç", optional: true },
   { title: "Sabit IP mapping'i ekle",      description: "Oluşturulan IP kaydını SSL-VPN Settings → Mapping alanına ekle", optional: true },
 ]
+
+/** Tek satirlik label + degeri + kopyala butonu */
+function CopyField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  const [copied, setCopied] = useState(false)
+  const handle = async () => {
+    const ok = await copyToClipboard(value)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    }
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-[5px] border border-border/50 bg-background px-2 py-1.5">
+      <span className="w-[90px] shrink-0 text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+        {label}
+      </span>
+      <span className={cn("flex-1 min-w-0 truncate text-[12px] text-foreground", mono && "font-mono")} title={value}>
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={handle}
+        className={cn(
+          "shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[10px] font-medium transition-colors",
+          copied
+            ? "bg-emerald-100 text-emerald-700"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        )}
+        title="Kopyala"
+      >
+        {copied ? <><CheckCheck className="size-3" /> OK</> : <Copy className="size-3" />}
+      </button>
+    </div>
+  )
+}
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return createPortal(
@@ -115,29 +175,63 @@ export function StepRun({
 
   const fwDone = fwItems.filter((i) => i.checked).length
 
-  const customerMessage = [
-    "Merhaba,",
-    "",
-    "Sunucu erişim bilgileriniz aşağıdadır.",
-    "",
-    `Sunucu: ${(serverDns && serverDns.trim()) ? serverDns : serverName}${serverRdpPort ? `:${serverRdpPort}` : ""}`,
-    "",
-    ...localUsers.flatMap((u) => {
-      // Domain'den .local/.lan/.corp gibi uzantıları çıkar (ör: pusuladc.local → pusuladc)
-      const domainShort = (serverDomain ?? "").split(".")[0]?.trim() ?? ""
+  // Her kullanici icin structured kimlik bilgisi — modal'da her alan ayri kopyalanabilir
+  const credentials = (() => {
+    const domainShort = (serverDomain ?? "").split(".")[0]?.trim() ?? ""
+    const rdpHost     = (serverDns && serverDns.trim()) ? serverDns : serverName
+    const rdpTarget   = `${rdpHost}${serverRdpPort ? `:${serverRdpPort}` : ""}`
+    return localUsers.map((u) => {
       const userPart = `${firmaId}.${u.username}`
       const fullUser = domainShort ? `${domainShort}\\${userPart}` : userPart
-      return [`Kullanıcı Adı: ${fullUser}`, `Şifre: ${u.password}`, ""]
-    }),
-    "Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734",
-    "",
-    "İyi çalışmalar.",
-  ].join("\n")
+      return {
+        displayName:  u.displayName || u.username,
+        vpnUsername:  userPart,
+        rdpServer:    rdpTarget,
+        rdpUsername:  fullUser,
+        password:     u.password,
+      }
+    })
+  })()
+
+  const customerMessage = (() => {
+    const lines: string[] = [
+      "Merhaba,",
+      "",
+      "Sunucu erişim bilgileriniz aşağıdadır.",
+      "Öncesinde Forticlient uygulaması ile VPN bağlantısını sağlamanız gerekiyor.",
+      "",
+    ]
+
+    credentials.forEach((c, i) => {
+      lines.push("VPN Bilgileri:")
+      lines.push(`Kullanıcı Adı: ${c.vpnUsername}`)
+      lines.push(`Şifre: ${c.password}`)
+      lines.push("")
+      lines.push("RDP Bilgileri:")
+      lines.push(`Sunucu: ${c.rdpServer}`)
+      lines.push(`Kullanıcı Adı: ${c.rdpUsername}`)
+      lines.push(`Şifre: ${c.password}`)
+      lines.push("")
+
+      if (i < credentials.length - 1) {
+        lines.push("—")
+        lines.push("")
+      }
+    })
+
+    lines.push("Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734")
+    lines.push("")
+    lines.push("İyi çalışmalar.")
+
+    return lines.join("\n")
+  })()
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(customerMessage)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    const ok = await copyToClipboard(customerMessage)
+    if (ok) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   return (
@@ -359,10 +453,38 @@ export function StepRun({
       {/* Müşteri Mesajı Modal */}
       {showMsg && (
         <Modal title="Müşteri Bilgilendirme Mesajı" onClose={() => setShowMsg(false)}>
-          <div className="space-y-3">
-            <pre className="text-[11px] font-mono text-foreground whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">
-              {customerMessage}
-            </pre>
+          <div className="space-y-4 max-h-[70vh] overflow-auto pr-1">
+            {credentials.map((c, i) => (
+              <div key={i} className="rounded-[5px] border border-border/60 overflow-hidden">
+                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                    Kullanıcı · {c.displayName}
+                  </p>
+                </div>
+
+                <div className="p-3 space-y-3">
+                  {/* VPN */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">VPN Bilgileri</p>
+                    <div className="space-y-1">
+                      <CopyField label="Kullanıcı Adı" value={c.vpnUsername} />
+                      <CopyField label="Şifre"         value={c.password} mono />
+                    </div>
+                  </div>
+
+                  {/* RDP */}
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">RDP Bilgileri</p>
+                    <div className="space-y-1">
+                      <CopyField label="Sunucu"        value={c.rdpServer} />
+                      <CopyField label="Kullanıcı Adı" value={c.rdpUsername} />
+                      <CopyField label="Şifre"         value={c.password} mono />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             <button
               onClick={handleCopy}
               className={cn(
@@ -372,7 +494,7 @@ export function StepRun({
                   : "border-border hover:bg-muted/40 text-foreground"
               )}
             >
-              {copied ? <><CheckCheck className="size-3.5" /> Kopyalandı</> : <><Copy className="size-3.5" /> Kopyala</>}
+              {copied ? <><CheckCheck className="size-3.5" /> Tüm mesaj kopyalandı</> : <><Copy className="size-3.5" /> Tüm Mesajı Kopyala</>}
             </button>
           </div>
         </Modal>

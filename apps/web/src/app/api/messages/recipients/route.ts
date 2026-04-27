@@ -22,7 +22,7 @@ export async function GET() {
   try {
     const agents = getAllAgents()
 
-    // Her sunucunun firma adını DB'den çek (Companies.WindowsServerId / AdServerId üzerinden)
+    // Sunucu bazlı fallback firma (AD sunucusu, tek-firma sunucusu için).
     const ids = agents.map(a => a.agentId)
     const serverCompany = new Map<string, string | null>()
     if (ids.length > 0) {
@@ -36,6 +36,25 @@ export async function GET() {
       `
       for (const r of rows) serverCompany.set(r.Id, r.CompanyName)
     }
+
+    // Kullanıcı bazlı gerçek firma — ADUsers.Username → Companies.Name
+    // (ADUsers.OU = Companies.CompanyId eşlemesi kurulum sırasında yapıldı).
+    // Shared RDP sunucularında (örn. PUSULARDP) tek sunucuya birçok firma
+    // kullanıcısı bağlanır — sunucu eşlemesi yanıltıcı olur, bu yüzden
+    // kullanıcı eşlemesi öncelikli.
+    const userCompany = new Map<string, string>()  // key: username (lowercase)
+    try {
+      const urows = await query<{ Username: string; CompanyName: string }[]>`
+        SELECT u.Username, c.Name AS CompanyName
+          FROM ADUsers u
+          JOIN Companies c ON c.CompanyId = u.OU
+      `
+      for (const r of urows) {
+        if (r.Username && r.CompanyName) {
+          userCompany.set(r.Username.toLowerCase(), r.CompanyName)
+        }
+      }
+    } catch { /* ADUsers yoksa sessizce geç */ }
 
     const recipients: {
       agentId:     string
@@ -51,11 +70,13 @@ export async function GET() {
       const sessions = a.lastReport?.sessions ?? []
       for (const s of sessions) {
         if (!s.username) continue
+        const byUser   = userCompany.get(s.username.toLowerCase())
+        const byServer = serverCompany.get(a.agentId)
         recipients.push({
           agentId:     a.agentId,
           serverName:  a.hostname,
           username:    s.username,
-          company:     serverCompany.get(a.agentId) ?? "—",
+          company:     byUser ?? byServer ?? "—",
           online:      a.status === "online" && s.state === "Active",
           sessionType: s.sessionType,
           state:       s.state,
@@ -86,9 +107,9 @@ export async function GET() {
         .map(c => ({
           id:        c.CompanyId,
           name:      c.Name,
-          userCount: dedup.filter(r =>
-            r.agentId === c.WindowsServerId || r.agentId === c.AdServerId
-          ).length,
+          // Firmaya ait kullanıcı = recipients içinde company adı eşleşenler
+          // (kullanıcı→firma eşlemesi üzerinden, shared RDP senaryosunda doğru).
+          userCount: dedup.filter(r => r.company === c.Name).length,
         }))
     } catch { /* ignore */ }
 

@@ -88,24 +88,47 @@ export function WizardShell() {
   const [apiCompanies, setApiCompanies]         = useState<Company[]>([])
   const [companiesLoading, setCompaniesLoading] = useState(false)
   const [companiesError, setCompaniesError]     = useState<string | null>(null)
+  const [companiesSyncing, setCompaniesSyncing] = useState(false)
 
   useEffect(() => {
     if (step !== 1) return
-    // Her step 1'e girişte yeniden çek — UserCount dış kaynaktan güncellenebilir (lisans değişikliği).
-    setCompaniesLoading(true)
-    setCompaniesError(null)
-    fetch("/api/firma/companies?sync=true", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const fresh = data as Company[]
+
+    let cancelled = false
+
+    const applyList = (data: unknown, setErr: boolean): Company[] | null => {
+      if (Array.isArray(data)) {
+        const fresh = data as Company[]
+        if (!cancelled) {
           setApiCompanies(fresh)
           // Seçili firma varsa taze veriyle güncelle (UserCount dış değişmiş olabilir)
           setSelectedCompany((prev) => prev ? (fresh.find((c) => c.firkod === prev.firkod) ?? prev) : prev)
-        } else setCompaniesError(data.error ?? "Firmalar alınamadı")
-      })
-      .catch(() => setCompaniesError("Firma API bağlantı hatası"))
-      .finally(() => setCompaniesLoading(false))
+        }
+        return fresh
+      }
+      if (setErr && !cancelled) {
+        setCompaniesError((data as { error?: string })?.error ?? "Firmalar alınamadı")
+      }
+      return null
+    }
+
+    // ── Faz 1: anlik cache (DB), hizli ───────────────────────────────
+    setCompaniesLoading(true)
+    setCompaniesError(null)
+    fetch("/api/firma/companies?all=true", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => applyList(d, true))
+      .catch(() => { if (!cancelled) setCompaniesError("Firma listesi alinamadi") })
+      .finally(() => { if (!cancelled) setCompaniesLoading(false) })
+
+    // ── Faz 2: arka planda taze sync + yeniden cek (sessiz guncelleme) ──
+    setCompaniesSyncing(true)
+    fetch("/api/firma/companies?sync=true&all=true", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => applyList(d, false))
+      .catch(() => { /* cache gosterildi, sessiz gec */ })
+      .finally(() => { if (!cancelled) setCompaniesSyncing(false) })
+
+    return () => { cancelled = true }
   }, [step])
 
   // RDP Sunucuları API (step 1)

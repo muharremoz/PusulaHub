@@ -57,17 +57,52 @@ export async function GET(req: NextRequest) {
     const rows = onlyActive
       ? await query<Row[]>`
           SELECT r.Id, r.Name, r.PortStart, r.PortEnd, r.Protocol, r.Description, r.IsActive,
-                 (SELECT COUNT(*) FROM WizardPortAssignments a WHERE a.PortRangeId = r.Id) AS UsedCount
+                 0 AS UsedCount
           FROM WizardPortRanges r
           WHERE r.IsActive = 1
           ORDER BY r.PortStart ASC
         `
       : await query<Row[]>`
           SELECT r.Id, r.Name, r.PortStart, r.PortEnd, r.Protocol, r.Description, r.IsActive,
-                 (SELECT COUNT(*) FROM WizardPortAssignments a WHERE a.PortRangeId = r.Id) AS UsedCount
+                 0 AS UsedCount
           FROM WizardPortRanges r
           ORDER BY r.PortStart ASC
         `
+
+    // Atanmış portlar (sihirbaz kaydı)
+    const assigns = await query<{ PortRangeId: number; Port: number }[]>`
+      SELECT PortRangeId, Port FROM WizardPortAssignments
+    `
+
+    // IIS sitelerinin binding'lerinden fiili kullanılan portlar
+    // Binding format: "http://*:80, https://example.com:443, http://10.0.0.1:8080"
+    const iisRows = await query<{ Binding: string | null }[]>`
+      SELECT Binding FROM IISSites WHERE Binding IS NOT NULL AND Binding <> ''
+    `
+    const iisPorts: number[] = []
+    const portRe = /:(\d+)(?=$|[,\s/])/g
+    for (const r of iisRows) {
+      if (!r.Binding) continue
+      let m: RegExpExecArray | null
+      while ((m = portRe.exec(r.Binding)) !== null) {
+        const p = Number(m[1])
+        if (Number.isFinite(p) && p > 0 && p <= 65535) iisPorts.push(p)
+      }
+    }
+
+    // Her aralık için kullanılan port setini topla (tekil)
+    const perRange = new Map<number, Set<number>>()
+    for (const r of rows) perRange.set(r.Id, new Set<number>())
+    for (const a of assigns) {
+      perRange.get(a.PortRangeId)?.add(a.Port)
+    }
+    for (const r of rows) {
+      const set = perRange.get(r.Id)!
+      for (const p of iisPorts) {
+        if (p >= r.PortStart && p <= r.PortEnd) set.add(p)
+      }
+      r.UsedCount = set.size
+    }
 
     return NextResponse.json(rows.map(rowToDto))
   } catch (err) {

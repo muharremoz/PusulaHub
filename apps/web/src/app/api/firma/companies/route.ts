@@ -23,16 +23,26 @@ interface CompanyRow {
 
 export async function GET(req: NextRequest) {
   try {
-    const sync = new URL(req.url).searchParams.get("sync") === "true"
+    const params = new URL(req.url).searchParams
+    const sync   = params.get("sync") === "true"
+    // all=true → kurulmamis firmalari da dondur (sihirbaz step 1'de ihtiyac var)
+    const all    = params.get("all") === "true"
     if (sync) {
       try { await syncFirmalarNow() } catch (e) { console.error("[firma/companies] sync hata:", e) }
     }
-    const rows = await query<CompanyRow[]>`
-      SELECT CompanyId, Name, ContactEmail, ContactPhone, UserCount, CONVERT(NVARCHAR(20), ContractEnd, 23) AS ContractEnd
-      FROM Companies
-      WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
-      ORDER BY Name
-    `
+    const rows = all
+      ? await query<CompanyRow[]>`
+          SELECT CompanyId, Name, ContactEmail, ContactPhone, UserCount, CONVERT(NVARCHAR(20), ContractEnd, 23) AS ContractEnd
+          FROM Companies
+          WHERE CompanyId IS NOT NULL
+          ORDER BY Name
+        `
+      : await query<CompanyRow[]>`
+          SELECT CompanyId, Name, ContactEmail, ContactPhone, UserCount, CONVERT(NVARCHAR(20), ContractEnd, 23) AS ContractEnd
+          FROM Companies
+          WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
+          ORDER BY Name
+        `
 
     const companies: FirmaCompany[] = rows.map((r) => ({
       id:          r.CompanyId,

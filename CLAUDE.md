@@ -164,6 +164,63 @@ Agent `/api/exec` endpoint'i JSON regex-parse eder. Komut içinde çift tırnak 
 
 ---
 
+### Hub Prod Modda Çalışır — Sayfa Geçişleri Hızlı Olsun Diye
+Hub `next dev` modunda çalıştırıldığında her route ilk ziyarette lazy
+compile ediliyor (Turbopack), bu da sayfa geçişlerinde 1–3 sn takılmaya
+yol açıyor. Kullanıcı paneli sık sık sayfa değiştirdiği için bu fark
+hissediliyor. SpareFlow (prod) ile karşılaştırıldığında Hub belirgin
+şekilde yavaş kalıyordu.
+
+**Çözüm:** Hub da prod modda (`pnpm start`) çalışır, PM2 altında bir
+`hub-watcher` process'i `apps/web/src` ve `apps/web/public`'ı
+`fs.watch` ile dinler; değişiklik olursa 3 sn debounce ile
+**`pm2 stop hub` → `pnpm build` → `pm2 start hub` → port readiness bekle**
+sırasını çalıştırır.
+
+- **Script:** `scripts/hub-watcher.mjs` (deps'siz, Node built-in `fs.watch`)
+- **PM2 kaydı:** `ecosystem.config.js` → `hub` (prod) + `hub-watcher`
+
+> **KRİTİK — build ÖNCESİ stop:** Eskiden watcher `pnpm build && pm2 restart hub`
+> yapıyordu. `next build` çalışırken `.next/` dizinine üzerine yazıyor ve
+> eski hub process'i hâlâ aynı `.next/`'ten chunk'ları lazy-load ediyor →
+> hash uyuşmazlığı → hub crash → PM2 auto-restart loop (25–60 restart gördük,
+> restart_delay 3sn × 15sn build = uzun pencerede kullanıcıya 500). Düzeltme:
+> build'den önce hub'ı **stop**, build bitince **start**, sonra TCP port
+> probe (`127.0.0.1:4242` connect) ile gerçek hazır olma teyidi. Tek seferlik
+> ~15sn kesinti — crash loop yok, "Internal Server Error" yok.
+
+> **KRİTİK — NODE_ENV tuzağı:** `apps/web/server.ts` satır 20:
+> ```ts
+> const dev = process.env.NODE_ENV !== "production"
+> ```
+> PM2 env'e `NODE_ENV=production` vermezsen `pnpm start` yine dev modda
+> koşar (N badge + yavaş sayfa geçişleri). `ecosystem.config.js`'de hub
+> entry'sinde **`env: { NODE_ENV: "production" }`** olmak **zorunda**.
+> Değişiklik sonrası `pm2 delete hub && pm2 start ecosystem.config.js --only hub && pm2 save`
+> gerekir — sadece `pm2 restart hub` env'i güncellemez.
+
+```bash
+# Manuel restart (acil — watcher beklemeden)
+cd "C:/GitHub/Pusula Yazılım/PusulaHub/apps/web"
+pnpm build && pm2 restart hub
+
+# Watcher loglarını gör
+pm2 logs hub-watcher
+
+# Watcher'ı geçici durdur (büyük refactor sırasında)
+pm2 stop hub-watcher
+```
+
+Build tipik olarak 15–25 sn. Watcher debounce'u 2 sn — arka arkaya
+kaydedilen dosyalar tek build'de toplanır. Bu yüzden kod değiştirip
+~25 sn beklemek, ardından sayfayı yenilemek (Ctrl+Shift+R) lazım —
+aksi halde önceki bundle cache'den gelir.
+
+> Not: Dev mode'a dönmek istersen (örn. agresif debug / yeni feature
+> geliştirirken) `pm2 stop hub hub-watcher && cd apps/web && pnpm dev`.
+
+---
+
 ### Switch + Hub — İki Next Dev Server Çakışması
 PusulaSwitch (:4000) gateway olarak `/apps/hub/*` isteklerini Hub'a (:4242) rewrite ediyor. **İki uygulama da `next dev` modunda çalışırsa** tarayıcıda `Cannot read properties of undefined (reading 'call')` / `originalFactory is undefined` hatası + dev overlay'de `(outdated) Webpack` etiketi görülür. Sebep: Switch'in HMR runtime'ı (`:4000/_next/*`) ve Hub'ın HMR runtime'ı (`:4242/apps/hub/_next/*`) aynı browser window'da yan yana çalışınca webpack module registry çakışır.
 

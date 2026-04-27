@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { adUsers, adOUTree } from "@/lib/mock-data";
-import type { ADOU } from "@/types";
+import type { ADOU, ADUser } from "@/types";
 import { ADUserSheet } from "@/components/ad/ad-user-sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -101,12 +101,42 @@ export default function ADPage() {
   const [sortDir,    setSortDir]    = useState<SortDir>("asc");
   const [sheetOpen,  setSheetOpen]  = useState(false);
 
+  const [users,      setUsers]      = useState<ADUser[]>([]);
+  const [ouTree,     setOUTree]     = useState<ADOU[]>([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [uRes, oRes] = await Promise.all([
+          fetch("/api/ad/users", { cache: "no-store" }),
+          fetch("/api/ad/ous",   { cache: "no-store" }),
+        ]);
+        const [uData, oData] = await Promise.all([uRes.json(), oRes.json()]);
+        if (!uRes.ok) throw new Error(uData?.error ?? "Kullanıcılar alınamadı");
+        if (!oRes.ok) throw new Error(oData?.error ?? "OU ağacı alınamadı");
+        if (cancelled) return;
+        setUsers(uData as ADUser[]);
+        setOUTree(oData as ADOU[]);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const filtered = adUsers
+  const filtered = users
     .filter((u) => {
       if (search) {
         const q = search.toLowerCase();
@@ -116,7 +146,7 @@ export default function ADPage() {
           u.email.toLowerCase().includes(q)
         );
       }
-      if (selectedOU) return selectedOU.includes(u.ou);
+      if (selectedOU && selectedOU !== "Firmalar") return u.ou === selectedOU;
       return true;
     })
     .sort((a, b) => {
@@ -140,9 +170,13 @@ export default function ADPage() {
             </div>
             {/* Ağaç */}
             <div className="p-2 space-y-0.5 max-h-[520px] overflow-y-auto">
-              {adOUTree.map((ou) => (
-                <OUTreeItem key={ou.path} ou={ou} depth={0} selectedOU={selectedOU} onSelect={setSelectedOU} />
-              ))}
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-full rounded-[4px]" />
+                  ))
+                : ouTree.map((ou) => (
+                    <OUTreeItem key={ou.path} ou={ou} depth={0} selectedOU={selectedOU} onSelect={setSelectedOU} />
+                  ))}
             </div>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
@@ -195,7 +229,25 @@ export default function ADPage() {
 
               {/* Satırlar */}
               <div className="divide-y divide-border/40">
-                {filtered.map((user) => (
+                {loading && Array.from({ length: 6 }).map((_, i) => (
+                  <div key={`sk-${i}`} className="grid grid-cols-[1.4fr_1fr_1.8fr_80px_70px_120px_28px] gap-3 px-3 py-2.5 items-center">
+                    <Skeleton className="h-3 w-28" />
+                    <Skeleton className="h-3 w-24" />
+                    <Skeleton className="h-3 w-40" />
+                    <Skeleton className="h-3 w-12" />
+                    <Skeleton className="h-3 w-10" />
+                    <Skeleton className="h-3 w-20" />
+                    <span />
+                  </div>
+                ))}
+
+                {!loading && error && (
+                  <div className="px-3 py-8 text-center text-[11px] text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                {!loading && !error && filtered.map((user) => (
                   <div
                     key={user.id}
                     className="grid grid-cols-[1.4fr_1fr_1.8fr_80px_70px_120px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
@@ -247,7 +299,7 @@ export default function ADPage() {
                   </div>
                 ))}
 
-                {filtered.length === 0 && (
+                {!loading && !error && filtered.length === 0 && (
                   <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
                     Kullanıcı bulunamadı.
                   </div>

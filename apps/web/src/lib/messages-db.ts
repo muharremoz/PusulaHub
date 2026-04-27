@@ -67,6 +67,48 @@ async function ensureSchema(): Promise<void> {
       CREATE INDEX IX_Messages_SentAt ON Messages (SentAt DESC)
     END
   `
+  // Eski create.sql ile oluşmuş Messages tablosunu yeni şemaya hizala.
+  // Her ALTER idempotent — kolon yoksa ekle, eski 'Sender' varsa 'SenderName'e yeniden adlandır.
+  await execute`
+    IF COL_LENGTH('Messages','SenderName') IS NULL AND COL_LENGTH('Messages','Sender') IS NOT NULL
+      EXEC sp_rename 'Messages.Sender', 'SenderName', 'COLUMN'
+  `
+  await execute`
+    IF COL_LENGTH('Messages','SenderName') IS NULL
+      ALTER TABLE Messages ADD SenderName NVARCHAR(200) NOT NULL CONSTRAINT DF_Messages_SenderName DEFAULT ''
+  `
+  await execute`
+    IF COL_LENGTH('Messages','Type') IS NULL
+      ALTER TABLE Messages ADD Type NVARCHAR(20) NOT NULL CONSTRAINT DF_Messages_Type DEFAULT 'info'
+  `
+  await execute`
+    IF COL_LENGTH('Messages','CompanyId') IS NULL
+      ALTER TABLE Messages ADD CompanyId UNIQUEIDENTIFIER NULL
+  `
+  await execute`
+    IF COL_LENGTH('Messages','CompanyName') IS NULL
+      ALTER TABLE Messages ADD CompanyName NVARCHAR(200) NULL
+  `
+  await execute`
+    IF COL_LENGTH('Messages','SenderUserId') IS NULL
+      ALTER TABLE Messages ADD SenderUserId UNIQUEIDENTIFIER NULL
+  `
+  // Eski 'Company' kolonu varsa değerini CompanyName'e taşı (bir defa).
+  await execute`
+    IF COL_LENGTH('Messages','Company') IS NOT NULL AND COL_LENGTH('Messages','CompanyName') IS NOT NULL
+    BEGIN
+      UPDATE Messages SET CompanyName = Company WHERE CompanyName IS NULL AND Company IS NOT NULL
+    END
+  `
+
+  // Eski create.sql MessageRecipients tablosu (user directory şeması) varsa
+  // yeniden adlandır — doğru şemayla yeniden oluşturulacak.
+  await execute`
+    IF OBJECT_ID('MessageRecipients','U') IS NOT NULL
+       AND COL_LENGTH('MessageRecipients','MessageId') IS NULL
+      EXEC sp_rename 'MessageRecipients', 'MessageRecipients_Legacy'
+  `
+
   await execute`
     IF OBJECT_ID('MessageRecipients','U') IS NULL
     BEGIN

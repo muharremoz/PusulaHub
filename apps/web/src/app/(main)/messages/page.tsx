@@ -14,10 +14,21 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  MessageSquare, Send, Plus, Search, Mail, MailOpen,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command"
+import {
+  Send, Plus, Search, Mail, MailOpen,
   AlertTriangle, Users, Building2, UserCheck, Check, CheckCheck, X,
-  Server,
+  Server, ChevronsUpDown, Sparkles, Bookmark,
 } from "lucide-react"
+import { PRESET_MESSAGES, type PresetMessage } from "@/lib/preset-messages"
 
 type MsgType         = "info" | "warning" | "urgent"
 type MsgPriority     = "normal" | "high" | "urgent"
@@ -123,13 +134,16 @@ export default function MessagesPage() {
 
   // Compose state
   const [recipientType,      setRecipientType]      = useState<RecipientKind>("all")
-  const [composeCompany,     setComposeCompany]     = useState<string>("")
+  const [composeCompanies,   setComposeCompanies]   = useState<Set<string>>(new Set())
+  const [companyPickerOpen,  setCompanyPickerOpen]  = useState(false)
+  const [companyPickerSearch, setCompanyPickerSearch] = useState("")
   const [composeSubject,     setComposeSubject]     = useState("")
   const [composeBody,        setComposeBody]        = useState("")
   const [composePriority,    setComposePriority]    = useState<MsgPriority>("normal")
   const [composeType,        setComposeType]        = useState<MsgType>("info")
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set())
   const [companyFilter,      setCompanyFilter]      = useState<string>("all")
+  const [userSearch,         setUserSearch]         = useState<string>("")
   const [sending,            setSending]            = useState(false)
 
   const loadList = async () => {
@@ -185,11 +199,16 @@ export default function MessagesPage() {
   const urgentCount = messages.filter(m => m.priority === "urgent").length
 
   const filteredDirectory = useMemo(() => {
+    const q = userSearch.trim().toLowerCase()
     return recipients.filter(r => {
       if (companyFilter !== "all" && r.company !== companyFilter) return false
+      if (q) {
+        const hay = `${r.username} ${r.company} ${r.serverName}`.toLowerCase()
+        if (!hay.includes(q)) return false
+      }
       return true
     })
-  }, [recipients, companyFilter])
+  }, [recipients, companyFilter, userSearch])
 
   const selected = selectedMessageId ? messages.find(m => m.id === selectedMessageId) ?? null : null
 
@@ -209,51 +228,88 @@ export default function MessagesPage() {
 
   const resetCompose = () => {
     setComposeSubject(""); setComposeBody("")
-    setRecipientType("all"); setComposeCompany("")
-    setSelectedRecipients(new Set()); setCompanyFilter("all")
+    setRecipientType("all"); setComposeCompanies(new Set()); setCompanyPickerSearch("")
+    setSelectedRecipients(new Set()); setCompanyFilter("all"); setUserSearch("")
     setComposePriority("normal"); setComposeType("info")
+  }
+
+  /** Hazır mesaj seçimini forma uygula. Kullanıcı göndermeden düzenleyebilir. */
+  const applyPreset = (p: PresetMessage) => {
+    setComposeSubject(p.subject)
+    setComposeBody(p.body)
+    setComposeType(p.type)
+    setComposePriority(p.priority)
+  }
+
+  /** Ana sayfadaki hazır mesaj kartından tıklandığında dialog'u aç + presetle doldur. */
+  const openComposeWithPreset = (p: PresetMessage) => {
+    applyPreset(p)
+    setSelectedMessageId(null)
+    setShowCompose(true)
   }
 
   const sendMessage = async () => {
     if (!composeSubject.trim() || !composeBody.trim()) {
       toast.error("Konu ve mesaj zorunlu"); return
     }
-    if (recipientType === "company" && !composeCompany) {
-      toast.error("Firma seçimi zorunlu"); return
+    if (recipientType === "company" && composeCompanies.size === 0) {
+      toast.error("En az bir firma seçmelisiniz"); return
     }
     if (recipientType === "selected" && selectedRecipients.size === 0) {
       toast.error("En az bir alıcı seçilmeli"); return
     }
 
-    const payload: Record<string, unknown> = {
+    const base: Record<string, unknown> = {
       subject:       composeSubject.trim(),
       body:          composeBody.trim(),
       type:          composeType,
       priority:      composePriority,
-      recipientType,
-    }
-    if (recipientType === "company")  payload.companyId = composeCompany
-    if (recipientType === "selected") {
-      payload.targets = [...selectedRecipients].map(k => {
-        const [agentId, username] = k.split("::")
-        return { agentId, username }
-      })
     }
 
     setSending(true)
     try {
-      const r = await fetch("/api/messages", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(payload),
-      })
-      const d = await r.json()
-      if (!r.ok || d.ok === false) {
-        toast.error(d.error ?? "Gönderim başarısız")
-      } else {
-        toast.success("Mesaj gönderildi", {
-          description: `${d.totalRecipients ?? 0} alıcıya iletildi (${d.serversOk ?? 0}/${d.serversTargeted ?? 0} sunucu)`,
+      // Firma modu: her firma için ayrı POST (API tek companyId alıyor).
+      const requests: Record<string, unknown>[] = []
+      if (recipientType === "company") {
+        for (const id of composeCompanies) {
+          requests.push({ ...base, recipientType: "company", companyId: id })
+        }
+      } else if (recipientType === "selected") {
+        requests.push({
+          ...base, recipientType: "selected",
+          targets: [...selectedRecipients].map(k => {
+            const [agentId, username] = k.split("::")
+            return { agentId, username }
+          }),
         })
+      } else {
+        requests.push({ ...base, recipientType: "all" })
+      }
+
+      let totalRecipients = 0, serversOk = 0, serversTargeted = 0, failed = 0
+      for (const payload of requests) {
+        const r = await fetch("/api/messages", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify(payload),
+        })
+        const d = await r.json()
+        if (!r.ok || d.ok === false) {
+          failed++
+          continue
+        }
+        totalRecipients += d.totalRecipients ?? 0
+        serversOk       += d.serversOk       ?? 0
+        serversTargeted += d.serversTargeted ?? 0
+      }
+
+      if (failed === requests.length) {
+        toast.error("Gönderim başarısız")
+      } else {
+        toast.success(
+          requests.length > 1 ? `${requests.length} firmaya mesaj gönderildi` : "Mesaj gönderildi",
+          { description: `${totalRecipients} alıcıya iletildi (${serversOk}/${serversTargeted} sunucu)` },
+        )
         resetCompose()
         setShowCompose(false)
         loadList()
@@ -281,10 +337,10 @@ export default function MessagesPage() {
         <Button
           size="sm"
           className="rounded-[5px] text-xs gap-1.5 h-8"
-          onClick={() => { setShowCompose(v => !v); setSelectedMessageId(null) }}
+          onClick={() => { setShowCompose(true); setSelectedMessageId(null) }}
         >
           <Plus className="h-3.5 w-3.5" />
-          {showCompose ? "Kapat" : "Yeni Mesaj"}
+          Yeni Mesaj
         </Button>
         <div className="relative ml-auto">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -297,173 +353,435 @@ export default function MessagesPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_380px] gap-3">
-        {/* Sol: Compose veya Liste */}
-        {showCompose ? (
-          <NestedCard footer={<><MessageSquare className="h-3 w-3" /><span>Yeni mesaj oluşturuluyor</span></>}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold">Yeni Mesaj</h3>
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowCompose(false)}>İptal</Button>
-            </div>
-
+      {/*
+        2 sütun layout:
+          SOL  (~380px) — Hazır Mesajlar paneli (mesaj seçilince detay buraya geçer)
+          SAĞ  (1fr)    — Gönderilen mesajlar listesi
+      */}
+      <div className="grid gap-3 grid-cols-[380px_1fr] items-start">
+        {/* SOL SÜTUN — mesaj seçiliyse detay, değilse Hazır Mesajlar paneli */}
+        {selected ? (
+          <NestedCard>
             <div className="space-y-4">
-              {/* Alıcı tipi */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium ${priorityConfig[selected.priority].color}`}>
+                    {priorityConfig[selected.priority].label}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setSelectedMessageId(null)}
+                  className="h-6 w-6 inline-flex items-center justify-center rounded-[4px] hover:bg-muted/40 transition-colors"
+                  title="Kapat"
+                >
+                  <X className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+              </div>
               <div>
-                <Label className="text-[11px] text-muted-foreground mb-2 block">Alıcı Tipi</Label>
-                <div className="flex items-center rounded-[8px] p-1 w-fit" style={{ backgroundColor: "#F4F2F0" }}>
-                  {(["all", "company", "selected"] as const).map(t => (
-                    <button
-                      key={t}
-                      onClick={() => { setRecipientType(t); clearSelection(); setComposeCompany("") }}
-                      className={`rounded-[6px] text-xs px-3 py-1.5 font-medium transition-colors flex items-center gap-1.5 ${
-                        recipientType === t ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {t === "all"      && <Users      className="h-3 w-3" />}
-                      {t === "company"  && <Building2  className="h-3 w-3" />}
-                      {t === "selected" && <UserCheck  className="h-3 w-3" />}
-                      {recipientTypeLabels[t]}
-                    </button>
-                  ))}
-                </div>
-                {recipientType === "all" && (
-                  <p className="text-[11px] text-muted-foreground mt-2">
-                    {recipients.length} kullanıcıya iletilecek
-                  </p>
-                )}
+                <h3 className="text-sm font-semibold">{selected.subject}</h3>
+                <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap">{selected.body}</p>
               </div>
 
-              {/* Firma seçimi */}
-              {recipientType === "company" && (
-                <div>
-                  <Label className="text-[11px] text-muted-foreground mb-2 block">Firma</Label>
-                  {companies.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">Aktif sunucusu olan firma yok</p>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {companies.map(c => (
-                        <button
-                          key={c.id}
-                          onClick={() => setComposeCompany(c.id)}
-                          className={`flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                            composeCompany === c.id ? "bg-foreground text-background border-foreground" : "bg-white border-border/40 hover:bg-muted/30"
-                          }`}
-                        >
-                          <Building2 className="h-3 w-3" />
-                          {c.name}
-                          <span className={`text-[10px] ${composeCompany === c.id ? "text-background/70" : "text-muted-foreground"}`}>
-                            ({c.userCount})
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
+              <div className="pt-3 border-t border-border/40 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Gönderen</span>
+                  <span className="text-xs font-medium">{selected.senderName}</span>
                 </div>
-              )}
-
-              {/* Kullanıcı seçimi */}
-              {recipientType === "selected" && (
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-[11px] text-muted-foreground">Alıcılar ({selectedRecipients.size} seçili)</Label>
-                    <div className="flex items-center gap-2">
-                      <Select value={companyFilter} onValueChange={setCompanyFilter}>
-                        <SelectTrigger className="h-7 text-[11px] rounded-[5px] w-40"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Tüm Firmalar</SelectItem>
-                          {companies.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Button variant="ghost" size="sm" className="h-7 text-[11px] px-2" onClick={selectAllVisible}>Tümünü Seç</Button>
-                    </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Alıcı Tipi</span>
+                  <span className="text-xs">{recipientTypeLabels[selected.recipientType]}</span>
+                </div>
+                {selected.companyName && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Firma</span>
+                    <span className="text-xs font-medium">{selected.companyName}</span>
                   </div>
-                  <ScrollArea className="rounded-[5px] max-h-[220px]" style={{ backgroundColor: "#F4F2F0" }}>
-                    <div className="p-2 space-y-0.5">
-                      {filteredDirectory.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground p-2">Aktif oturum bulunamadı</p>
-                      ) : filteredDirectory.map(r => {
-                        const key = `${r.agentId}::${r.username}`
-                        const isSel = selectedRecipients.has(key)
-                        return (
-                          <button
-                            key={key}
-                            onClick={() => toggleRecipient(key)}
-                            className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[4px] text-left text-xs transition-colors ${
-                              isSel ? "bg-foreground text-background" : "hover:bg-white/60"
-                            }`}
-                          >
-                            <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${r.online ? "bg-emerald-500" : "bg-gray-300"}`} />
-                            <span className="font-medium flex-1 truncate font-mono">{r.username}</span>
-                            <span className={`text-[10px] truncate ${isSel ? "text-background/60" : "text-muted-foreground"}`}>{r.company}</span>
-                            <span className={`text-[10px] truncate ${isSel ? "text-background/60" : "text-muted-foreground"}`}>{r.serverName}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </ScrollArea>
+                )}
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Gönderim</span>
+                  <span className="text-xs tabular-nums">{formatDate(selected.sentAt)}</span>
                 </div>
-              )}
-
-              {/* Konu */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Konu</Label>
-                <Input
-                  placeholder="Mesaj konusu..."
-                  className="h-8 text-sm rounded-[5px] bg-white"
-                  value={composeSubject}
-                  onChange={(e) => setComposeSubject(e.target.value)}
-                />
-              </div>
-
-              {/* Tip + Öncelik */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground mb-2 block">Mesaj Tipi</Label>
-                  <Select value={composeType} onValueChange={(v) => setComposeType(v as MsgType)}>
-                    <SelectTrigger className="h-8 text-xs rounded-[5px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="info">Bilgi</SelectItem>
-                      <SelectItem value="warning">Uyarı</SelectItem>
-                      <SelectItem value="urgent">Acil</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-[11px] text-muted-foreground mb-2 block">Öncelik</Label>
-                  <Select value={composePriority} onValueChange={(v) => setComposePriority(v as MsgPriority)}>
-                    <SelectTrigger className="h-8 text-xs rounded-[5px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">Yüksek</SelectItem>
-                      <SelectItem value="urgent">Acil</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Okunma</span>
+                  <span className="text-xs font-medium tabular-nums">{selected.readCount} / {selected.totalCount}</span>
                 </div>
               </div>
 
-              {/* Mesaj */}
-              <div className="space-y-1">
-                <Label className="text-[11px] text-muted-foreground">Mesaj</Label>
-                <textarea
-                  className="w-full h-32 rounded-[5px] border border-border/40 bg-white p-3 text-xs resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                  placeholder="Mesajınızı yazın..."
-                  value={composeBody}
-                  onChange={(e) => setComposeBody(e.target.value)}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <Button variant="outline" size="sm" className="rounded-[5px] text-xs" onClick={() => setShowCompose(false)} disabled={sending}>İptal</Button>
-                <Button size="sm" className="rounded-[5px] text-xs gap-1" onClick={sendMessage} disabled={sending}>
-                  <Send className="h-3.5 w-3.5" />
-                  {sending ? "Gönderiliyor..." : "Gönder"}
-                </Button>
+              <div className="pt-3 border-t border-border/40">
+                <p className="text-[11px] text-muted-foreground mb-1.5">Alıcılar ({detailRecipients.length})</p>
+                <ScrollArea className="h-[260px]">
+                  <div className="space-y-1 pr-2">
+                    {detailRecipients.map(r => (
+                      <div key={r.id} className="flex items-center gap-2 text-[11px] py-1 px-1 rounded hover:bg-muted/30">
+                        {statusIcon(r.status)}
+                        <span className="font-mono font-medium truncate flex-1">{r.username}</span>
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <Server className="h-2.5 w-2.5" />
+                          {r.serverName ?? "—"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums w-20 text-right">
+                          {r.readAt ? formatDate(r.readAt) : r.deliveredAt ? formatDate(r.deliveredAt) : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             </div>
           </NestedCard>
         ) : (
-          /* Mesaj listesi */
-          <NestedCard footer={<><Mail className="h-3 w-3" /><span>{filtered.length} mesaj</span></>}>
+          <NestedCard>
+            <div className="flex items-center gap-2 mb-3">
+              <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
+              <h3 className="text-sm font-semibold">Hazır Mesajlar</h3>
+            </div>
+            <p className="text-[10px] text-muted-foreground mb-3">
+              Bir şablon seç — düzenleyip gönder
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {PRESET_MESSAGES.map(p => {
+                const badge =
+                  p.priority === "urgent" ? { label: "Acil",    cls: "bg-red-100 text-red-700 border-red-200" } :
+                  p.priority === "high"   ? { label: "Yüksek",  cls: "bg-amber-100 text-amber-700 border-amber-200" } :
+                                             { label: "Normal",  cls: "bg-muted text-muted-foreground border-border/50" }
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => openComposeWithPreset(p)}
+                    className="group flex flex-col items-start gap-1 rounded-[5px] border border-border/50 bg-white hover:border-foreground/30 hover:shadow-sm transition-all p-2.5 text-left"
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <Bookmark className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                      <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-[3px] border ${badge.cls}`}>
+                        {badge.label}
+                      </span>
+                    </div>
+                    <span className="text-[11px] font-semibold leading-snug mt-1">{p.title}</span>
+                    <span className="text-[10px] text-muted-foreground leading-snug line-clamp-2">{p.description}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </NestedCard>
+        )}
+
+        {/* Yeni mesaj dialog */}
+        <Dialog open={showCompose} onOpenChange={setShowCompose}>
+          <DialogContent
+            className="sm:max-w-[560px] rounded-[8px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden"
+            style={{ backgroundColor: "#F4F2F0" }}
+          >
+            <DialogHeader className="px-5 py-4 border-b border-border/50 bg-white">
+              <DialogTitle className="text-sm font-semibold flex items-center gap-2">
+                <Send className="h-3.5 w-3.5 text-muted-foreground" />
+                Yeni Mesaj
+              </DialogTitle>
+            </DialogHeader>
+
+            <ScrollArea className="flex-1">
+              <div className="px-4 py-4 space-y-3">
+                {/* Alıcılar bölümü */}
+                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Alıcılar</span>
+                    {recipientType === "all" && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{recipients.length} kullanıcı</span>
+                    )}
+                    {recipientType === "company" && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{composeCompanies.size} firma seçili</span>
+                    )}
+                    {recipientType === "selected" && (
+                      <span className="text-[10px] text-muted-foreground tabular-nums">{selectedRecipients.size} seçili</span>
+                    )}
+                  </div>
+                  <div className="p-3 space-y-3">
+                    {/* Alıcı tipi toggle */}
+                    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#F4F2F0" }}>
+                      {(["all", "company", "selected"] as const).map(t => (
+                        <button
+                          key={t}
+                          onClick={() => { setRecipientType(t); clearSelection(); setComposeCompanies(new Set()) }}
+                          className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                            recipientType === t ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {t === "all"      && <Users      className="h-3 w-3" />}
+                          {t === "company"  && <Building2  className="h-3 w-3" />}
+                          {t === "selected" && <UserCheck  className="h-3 w-3" />}
+                          {recipientTypeLabels[t]}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Firma seçimi — multi-select combobox + chip listesi */}
+                    {recipientType === "company" && (
+                      companies.length === 0 ? (
+                        <p className="text-[11px] text-muted-foreground py-1">Aktif sunucusu olan firma yok</p>
+                      ) : (
+                        <div className="space-y-2">
+                          <Popover open={companyPickerOpen} onOpenChange={setCompanyPickerOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                role="combobox"
+                                className="w-full justify-between h-8 text-[11px] rounded-[5px] font-normal"
+                              >
+                                <span className="text-muted-foreground">
+                                  {composeCompanies.size === 0
+                                    ? "Firma seçin..."
+                                    : `${composeCompanies.size} firma seçildi`}
+                                </span>
+                                <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                              <Command shouldFilter={false}>
+                                <CommandInput
+                                  placeholder="Firma ara..."
+                                  value={companyPickerSearch}
+                                  onValueChange={setCompanyPickerSearch}
+                                  className="h-8 text-[11px]"
+                                />
+                                <CommandList onWheel={(e) => e.stopPropagation()} className="max-h-60">
+                                  <CommandEmpty className="text-[11px] py-3 text-muted-foreground">Sonuç bulunamadı</CommandEmpty>
+                                  <CommandGroup>
+                                    {(companyPickerSearch.trim()
+                                      ? companies.filter(c => c.name.toLowerCase().includes(companyPickerSearch.toLowerCase()))
+                                      : companies
+                                    ).slice(0, 50).map(c => {
+                                      const checked = composeCompanies.has(c.id)
+                                      return (
+                                        <CommandItem
+                                          key={c.id}
+                                          value={c.id}
+                                          onSelect={() => {
+                                            setComposeCompanies(prev => {
+                                              const next = new Set(prev)
+                                              if (next.has(c.id)) next.delete(c.id)
+                                              else next.add(c.id)
+                                              return next
+                                            })
+                                          }}
+                                          className="text-[11px] gap-2"
+                                        >
+                                          <div className={`h-3.5 w-3.5 rounded-[3px] border flex items-center justify-center shrink-0 ${checked ? "bg-foreground border-foreground" : "border-border"}`}>
+                                            {checked && <Check className="h-2.5 w-2.5 text-background" />}
+                                          </div>
+                                          <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                          <span className="flex-1 truncate">{c.name}</span>
+                                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{c.userCount}</span>
+                                        </CommandItem>
+                                      )
+                                    })}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+
+                          {/* Seçilen firma chip'leri */}
+                          {composeCompanies.size > 0 && (
+                            <div className="flex flex-wrap gap-1.5 rounded-[5px] border border-border/50 p-2" style={{ backgroundColor: "#F4F2F0" }}>
+                              {[...composeCompanies].map(id => {
+                                const c = companies.find(x => x.id === id)
+                                if (!c) return null
+                                return (
+                                  <span
+                                    key={id}
+                                    className="inline-flex items-center gap-1.5 rounded-[5px] bg-white border border-border/50 pl-2 pr-1 py-1 text-[11px] font-medium"
+                                  >
+                                    <Building2 className="h-3 w-3 text-muted-foreground" />
+                                    <span>{c.name}</span>
+                                    <span className="text-[10px] text-muted-foreground tabular-nums">{c.userCount}</span>
+                                    <button
+                                      onClick={() => setComposeCompanies(prev => {
+                                        const next = new Set(prev)
+                                        next.delete(id)
+                                        return next
+                                      })}
+                                      className="h-4 w-4 rounded-[3px] hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                                      aria-label="Kaldır"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </button>
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    )}
+
+                    {/* Kullanıcı seçimi */}
+                    {recipientType === "selected" && (
+                      <div className="space-y-2">
+                        {/* Arama + firma filtresi + tümünü seç */}
+                        <div className="flex items-center gap-2">
+                          <div className="relative flex-1">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                            <Input
+                              placeholder="Kullanıcı / firma / sunucu ara..."
+                              className="h-8 text-[11px] rounded-[5px] pl-7"
+                              value={userSearch}
+                              onChange={(e) => setUserSearch(e.target.value)}
+                            />
+                          </div>
+                          <Select value={companyFilter} onValueChange={setCompanyFilter}>
+                            <SelectTrigger className="h-8 text-[11px] rounded-[5px] w-40"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Tüm Firmalar</SelectItem>
+                              {companies.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Button variant="outline" size="sm" className="h-8 text-[11px] rounded-[5px] px-2.5 shrink-0" onClick={selectAllVisible}>Tümü</Button>
+                        </div>
+
+                        <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+                          {/* Tablo header */}
+                          <div className="grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                            <span></span>
+                            <span>Kullanıcı</span>
+                            <span>Firma</span>
+                            <span>Sunucu</span>
+                          </div>
+                          {filteredDirectory.length === 0 ? (
+                            <p className="text-[11px] text-muted-foreground p-3">
+                              {userSearch ? "Eşleşen kullanıcı yok" : "Aktif oturum bulunamadı"}
+                            </p>
+                          ) : (
+                            <ScrollArea className="h-[240px]">
+                              <div className="divide-y divide-border/40">
+                                {filteredDirectory.map(r => {
+                                  const key = `${r.agentId}::${r.username}`
+                                  const isSel = selectedRecipients.has(key)
+                                  return (
+                                    <button
+                                      key={key}
+                                      onClick={() => toggleRecipient(key)}
+                                      className={`w-full grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 text-left text-[11px] items-center transition-colors ${
+                                        isSel ? "bg-foreground text-background" : "hover:bg-muted/20"
+                                      }`}
+                                    >
+                                      <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${r.online ? "bg-emerald-500" : "bg-gray-300"}`} />
+                                      <span className="font-mono font-medium truncate">{r.username}</span>
+                                      <span className={`text-[10px] truncate ${isSel ? "text-background/60" : "text-muted-foreground"}`}>{r.company}</span>
+                                      <span className={`text-[10px] truncate ${isSel ? "text-background/60" : "text-muted-foreground"}`}>{r.serverName}</span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </ScrollArea>
+                          )}
+                          {/* Footer: sayım */}
+                          <div className="px-2.5 py-1.5 bg-muted/20 border-t border-border/40 text-[10px] text-muted-foreground flex items-center justify-between">
+                            <span>{filteredDirectory.length} kullanıcı</span>
+                            {selectedRecipients.size > 0 && (
+                              <button
+                                onClick={clearSelection}
+                                className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                              >
+                                Seçimi temizle
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Mesaj içeriği bölümü */}
+                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Mesaj İçeriği</span>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          className="h-6 inline-flex items-center gap-1 px-2 rounded-[4px] border border-border/50 bg-white text-[10px] hover:bg-muted/30 transition-colors"
+                        >
+                          <Sparkles className="h-3 w-3 text-muted-foreground" />
+                          <span>Hazır Mesaj</span>
+                          <ChevronsUpDown className="h-3 w-3 text-muted-foreground opacity-60" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-[320px] max-h-[360px] overflow-y-auto">
+                        {PRESET_MESSAGES.map(p => (
+                          <DropdownMenuItem
+                            key={p.id}
+                            onSelect={() => applyPreset(p)}
+                            className="text-[11px] cursor-pointer"
+                          >
+                            <div className="flex flex-col gap-0.5">
+                              <span className="font-medium">{p.title}</span>
+                              <span className="text-[10px] text-muted-foreground">{p.description}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                  <div className="p-3 space-y-3">
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Konu</Label>
+                      <Input
+                        placeholder="Mesaj konusu..."
+                        className="h-8 text-[11px] rounded-[5px]"
+                        value={composeSubject}
+                        onChange={(e) => setComposeSubject(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Mesaj Tipi</Label>
+                      <Select value={composeType} onValueChange={(v) => setComposeType(v as MsgType)}>
+                        <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="info">Bilgi</SelectItem>
+                          <SelectItem value="warning">Uyarı</SelectItem>
+                          <SelectItem value="urgent">Acil</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Öncelik</Label>
+                      <Select value={composePriority} onValueChange={(v) => setComposePriority(v as MsgPriority)}>
+                        <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="normal">Normal</SelectItem>
+                          <SelectItem value="high">Yüksek</SelectItem>
+                          <SelectItem value="urgent">Acil</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">Mesaj</Label>
+                      <textarea
+                        className="w-full h-32 rounded-[5px] border border-border/50 bg-white p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                        placeholder="Mesajınızı yazın..."
+                        value={composeBody}
+                        onChange={(e) => setComposeBody(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+
+            <DialogFooter className="px-5 py-3 border-t border-border/50 gap-2 sm:gap-2 bg-white">
+              <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]" onClick={() => setShowCompose(false)} disabled={sending}>İptal</Button>
+              <Button size="sm" className="rounded-[5px] h-8 text-[11px] gap-1.5" onClick={sendMessage} disabled={sending}>
+                <Send className="h-3 w-3" />
+                {sending ? "Gönderiliyor..." : "Gönder"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Mesaj listesi */}
+        <NestedCard footer={<><Mail className="h-3 w-3" /><span>{filtered.length} mesaj</span></>}>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-semibold">Gönderilen Mesajlar</h3>
             </div>
@@ -537,95 +855,8 @@ export default function MessagesPage() {
                 </div>
               )
             })}
-          </NestedCard>
-        )}
+        </NestedCard>
 
-        {/* Sağ panel */}
-        <div className="space-y-3">
-          {selected && !showCompose && (
-            <NestedCard>
-              <div className="space-y-4">
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium ${priorityConfig[selected.priority].color}`}>
-                      {priorityConfig[selected.priority].label}
-                    </span>
-                  </div>
-                  <h3 className="text-sm font-semibold">{selected.subject}</h3>
-                  <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap">{selected.body}</p>
-                </div>
-
-                <div className="pt-3 border-t border-border/40 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Gönderen</span>
-                    <span className="text-xs font-medium">{selected.senderName}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Alıcı Tipi</span>
-                    <span className="text-xs">{recipientTypeLabels[selected.recipientType]}</span>
-                  </div>
-                  {selected.companyName && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-muted-foreground">Firma</span>
-                      <span className="text-xs font-medium">{selected.companyName}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Gönderim</span>
-                    <span className="text-xs tabular-nums">{formatDate(selected.sentAt)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Okunma</span>
-                    <span className="text-xs font-medium tabular-nums">{selected.readCount} / {selected.totalCount}</span>
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-border/40">
-                  <p className="text-[11px] text-muted-foreground mb-1.5">Alıcılar ({detailRecipients.length})</p>
-                  <ScrollArea className="max-h-[260px]">
-                    <div className="space-y-1">
-                      {detailRecipients.map(r => (
-                        <div key={r.id} className="flex items-center gap-2 text-[11px] py-1 px-1 rounded hover:bg-muted/30">
-                          {statusIcon(r.status)}
-                          <span className="font-mono font-medium truncate flex-1">{r.username}</span>
-                          <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                            <Server className="h-2.5 w-2.5" />
-                            {r.serverName ?? "—"}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground tabular-nums w-20 text-right">
-                            {r.readAt ? formatDate(r.readAt) : r.deliveredAt ? formatDate(r.deliveredAt) : ""}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </div>
-              </div>
-            </NestedCard>
-          )}
-
-          {/* Firmalar paneli */}
-          <NestedCard footer={<><Building2 className="h-3 w-3" /><span>{companies.length} firma aktif</span></>}>
-            <h3 className="text-sm font-semibold mb-3">Firmalar</h3>
-            <div className="space-y-1.5">
-              {companies.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground py-4 text-center">Aktif sunucusu olan firma yok</p>
-              ) : companies.map(c => (
-                <div key={c.id} className="flex items-center justify-between px-2.5 py-2 rounded-[5px] hover:bg-muted/30 transition-colors">
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center justify-center h-7 w-7 rounded-[5px] bg-muted/50">
-                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-medium">{c.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{c.userCount} aktif kullanıcı</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </NestedCard>
-        </div>
       </div>
     </PageContainer>
   )

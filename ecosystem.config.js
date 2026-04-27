@@ -34,15 +34,35 @@ module.exports = {
       time: true,
     },
     {
+      // Hub prod modda kosar — sayfa gecisleri hizli olsun diye.
+      // Kod degisiklikleri hub-watcher tarafindan otomatik build + restart edilir.
       name: "hub",
       cwd: "C:/GitHub/Pusula Yazılım/PusulaHub/apps/web",
       script: "cmd.exe",
-      args: "/c pnpm dev",
+      args: "/c pnpm start",
+      // NODE_ENV=production ZORUNLU — server.ts: `dev = NODE_ENV !== "production"`.
+      // Eksik olursa Next dev modda calisir (N badge + yavas ilk render).
+      env: { NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
       restart_delay: 3000,
       out_file: "C:/GitHub/Pusula Yazılım/logs/hub-out.log",
       error_file: "C:/GitHub/Pusula Yazılım/logs/hub-err.log",
+      merge_logs: true,
+      time: true,
+    },
+    {
+      // apps/web/src|public altinda degisiklik olursa 2sn debounce ile
+      // pnpm build + pm2 restart hub calistirir.
+      name: "hub-watcher",
+      cwd: "C:/GitHub/Pusula Yazılım/PusulaHub",
+      script: "node",
+      args: "scripts/hub-watcher.mjs",
+      autorestart: true,
+      max_restarts: 20,
+      restart_delay: 5000,
+      out_file: "C:/GitHub/Pusula Yazılım/logs/hub-watcher-out.log",
+      error_file: "C:/GitHub/Pusula Yazılım/logs/hub-watcher-err.log",
       merge_logs: true,
       time: true,
     },

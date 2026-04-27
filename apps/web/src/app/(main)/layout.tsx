@@ -12,7 +12,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     ? { ...session, expires: new Date(Date.now() + 12 * 3600 * 1000).toISOString() }
     : null
   return (
-    <SessionProvider session={nextAuthSession}>
+    <SessionProvider session={nextAuthSession as unknown as Parameters<typeof SessionProvider>[0]["session"]}>
       <SidebarProvider>
         <AppSidebar />
         <SidebarInset>

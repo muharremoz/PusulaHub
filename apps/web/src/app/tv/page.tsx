@@ -863,13 +863,12 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
             {/* Ad satırı — solda isim, sağda DOWN rozeti */}
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5" title={m.name}>
                   <HyperText
                     as="div"
                     duration={700}
                     animateOnHover={false}
                     className="truncate text-[16px] font-semibold text-zinc-100 !py-0 !text-[16px] tracking-normal"
-                    title={m.name}
                   >
                     {m.name}
                   </HyperText>

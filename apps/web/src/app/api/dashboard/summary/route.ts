@@ -109,12 +109,14 @@ export async function GET() {
       .sort((a, b) => b.disk - a.disk)
       .slice(0, 8)
 
-    /* ── KPI 2: Firma sayısı (AD sunucularda kaydı olanlar) ── */
-    const companyRows = await query<CompanyCountRow[]>`
-      SELECT COUNT(*) AS Count FROM Companies
+    /* ── KPI 2: Firma sayısı + toplam kullanıcı sayısı (AD kurulmuş firmalar) ── */
+    const companyRows = await query<{ Count: number; UserSum: number }[]>`
+      SELECT COUNT(*) AS Count, ISNULL(SUM(UserCount), 0) AS UserSum
+      FROM Companies
       WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
     `
-    const totalCompanies = companyRows[0]?.Count ?? 0
+    const totalCompanies     = companyRows[0]?.Count   ?? 0
+    const totalCompanyUsers  = companyRows[0]?.UserSum ?? 0
 
     /* ── KPI 3: Aktif proje sayısı ── */
     const activeProjectRows = await query<CompanyCountRow[]>`
@@ -211,6 +213,7 @@ export async function GET() {
         onlineServers,
         offlineServers,
         totalCompanies,
+        totalCompanyUsers,
         activeProjects,
       },
       failedLogons: {

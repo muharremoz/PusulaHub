@@ -14,6 +14,7 @@ import {
   Danger as IsDanger,
   Calendar as IsCalendar,
   Note1 as IsNote,
+  People as IsPeople,
 } from "iconsax-reactjs"
 
 const CardIcon = ({ Icon, className }: { Icon: React.ComponentType<Record<string, unknown>>; className?: string }) => (
@@ -31,6 +32,7 @@ interface DashboardData {
     onlineServers: number
     offlineServers: number
     totalCompanies: number
+    totalCompanyUsers: number
     activeProjects: number
   }
   failedLogons: {
@@ -132,12 +134,20 @@ export default function DashboardPage() {
           ) : null}
         />
         <MonitoringKpi loading={monitoringLoading} data={monitoring} />
-        <KpiCard
-          title="FIRMALAR"
-          icon={<CardIcon Icon={IsBuilding} />}
+        <DualKpiCard
           loading={loading}
-          value={data ? data.kpi.totalCompanies : 0}
-          extra={<span className="text-[11px] text-muted-foreground">toplam kayıtlı firma</span>}
+          left={{
+            title: "FIRMALAR",
+            icon:  <CardIcon Icon={IsBuilding} />,
+            value: data ? data.kpi.totalCompanies : 0,
+            hint:  "toplam firma",
+          }}
+          right={{
+            title: "KULLANICI",
+            icon:  <CardIcon Icon={IsPeople} />,
+            value: data ? data.kpi.totalCompanyUsers : 0,
+            hint:  "tüm firmalarda",
+          }}
         />
         <KpiCard
           title="AKTİF PROJELER"
@@ -493,6 +503,44 @@ export default function DashboardPage() {
 }
 
 /* ─────────────────────────────────────────────────────────── */
+
+/** Tek slot'ta iki yan-yana KPI — ayirici cizgili, ayni KpiCard ile ayni shell */
+function DualKpiCard({
+  loading, left, right,
+}: {
+  loading: boolean
+  left:  { title: string; icon: React.ReactNode; value: number; hint: string }
+  right: { title: string; icon: React.ReactNode; value: number; hint: string }
+}) {
+  const Half = ({ d }: { d: { title: string; icon: React.ReactNode; value: number; hint: string } }) => (
+    <div className="flex-1 min-w-0 p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase truncate">
+          {d.title}
+        </span>
+        <span className="text-muted-foreground">{d.icon}</span>
+      </div>
+      {loading ? (
+        <>
+          <Skeleton className="h-7 w-16 mb-1.5" />
+          <Skeleton className="h-3 w-24" />
+        </>
+      ) : (
+        <>
+          <div className="text-2xl font-bold tabular-nums leading-tight">{d.value}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground truncate">{d.hint}</div>
+        </>
+      )}
+    </div>
+  )
+  return (
+    <div className="bg-white rounded-[4px] flex items-stretch" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+      <Half d={left} />
+      <div className="w-px my-3 bg-border/60" />
+      <Half d={right} />
+    </div>
+  )
+}
 
 function KpiCard({
   title, icon, value, extra, loading,
