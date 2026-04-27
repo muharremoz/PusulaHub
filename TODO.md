@@ -29,9 +29,28 @@ _Şimdilik boş._
 
 ---
 
+## Üretim Sunucusuna Taşıma (10.10.10.5)
+
+### Yapılacak
+
+_Şimdilik boş._
+
+### Yapıldı
+
+- ✅ Windows Server 2019 (10.10.10.5) prod sunucusu kuruldu — SQL Server 2022 + SSMS yüklendi, `PusulaHub` ve `SpareFlow` DB'leri açıldı, dev'den restore edildi (Companies 5632, customers 41 vs.).
+- ✅ `setup-prod.ps1` ile tek tık kurulum — Node + Git + pnpm + pm2 yüklendi (winget Server 2019'da yok, Git/Node MSI elle kuruldu, sonrası script). 3 repo `C:\PusulaProd\` altına klonlandı, `.env.production` rastgele secret'larla üretildi.
+- ✅ `ecosystem.prod.config.js`'de **NODE_ENV=production env'i her 3 app'e** eklendi — eksikse `apps/web/server.ts` dev modda kalıyor, `.env.production` yüklenmiyor, `Login failed for user SA` veriyor. Yeni env için `pm2 delete + start` zorunlu (sadece restart yetmez).
+- ✅ Hub layout.tsx SessionProvider tipinde cast lokal'de unutulmuştu, prod build'i patlatıyordu — `as unknown as Parameters<typeof SessionProvider>[0]["session"]` cast commit'lendi (`8dd5619`).
+- ✅ SpareFlow build için 4 paket eksikti — `@supabase/supabase-js`, `drizzle-orm@0.43.1-f677fb2` (canary, MSSQL desteği bu özel branch'te), `ssh2`, `@radix-ui/react-dialog` elle eklendi. Drizzle resmi 0.45.2'de bile `mssql-core`/`node-mssql` subpath'leri yok — kod sahibi commit'lerken `pnpm add` yapmamış, lokal canary versiyonuna güveniyordu.
+- ✅ PM2 boot startup (`pm2-startup install`) — Windows reboot sonrası 3 process otomatik kalkar.
+
+---
+
 ## Kayıt İçin — Şu An Çalışan Durum
 
 - **Ubuntu 10.15.2.6:** Fastify API (pm2 `fastify-api`, :3000) + Uptime Kuma (docker, :3001)
 - **Kuma admin:** `muharrem.oz@pusulanet.net` / `4Dr616R4wwqA`
 - **Kuma metrics API key:** `uk1_l-jozwsUDnKTqtTttP8POfK89thi2a9hxsSaj2XC` (Hub `.env.local`'de)
 - **Fastify admin key:** `69432a3c21bcb005cb0cfd2df2b22c266efeab5a4096e0500ace5a77bdd24f1a`
+- **Prod sunucusu 10.10.10.5 (Windows Server 2019):** SQL Server 2022 (sa: `P67S96L332008%`), DB'ler `PusulaHub` + `SpareFlow`, PM2 altında 3 app: `switch` (:4000), `hub` (:4242), `spareflow` (:4243). Kurulum kökü `C:\PusulaProd\`, log'lar `C:\PusulaProd\logs\`. Panel: **http://10.10.10.5:4000**.
+- **Günlük deploy:** `cd C:\PusulaProd\PusulaHub && .\deploy.ps1 [hub|switch|spareflow|all]` — git pull + pnpm install + build + pm2 restart zinciri.
