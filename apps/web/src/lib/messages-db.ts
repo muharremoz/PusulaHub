@@ -133,19 +133,25 @@ async function ensureSchema(): Promise<void> {
   // Statik PRESET_MESSAGES (apps/web/src/lib/preset-messages.ts) korunur,
   // bu tablo SADECE kullanıcının eklediği şablonları tutar. API GET
   // sırasında ikisi merge edilir (statik = built-in, DB = user).
+  //
+  // KRİTİK — anonymous constraint: PK/DEFAULT adlarını NAMED bırakmak
+  // SQL Server'ın DB-wide constraint name uniqueness'ı yüzünden IF guard
+  // false olsa bile re-execution sırasında "Could not create constraint
+  // or index" (1750) hatası veriyor. Adsız bırak, SQL Server otomatik
+  // benzersiz ad üretir.
   await execute`
     IF OBJECT_ID('MessageTemplates','U') IS NULL
     BEGIN
       CREATE TABLE MessageTemplates (
-        Id          UNIQUEIDENTIFIER NOT NULL CONSTRAINT PK_MT PRIMARY KEY DEFAULT NEWID(),
+        Id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
         Title       NVARCHAR(100)    NOT NULL,
         Description NVARCHAR(255)    NULL,
         Subject     NVARCHAR(200)    NOT NULL,
         Body        NVARCHAR(MAX)    NOT NULL,
-        Type        NVARCHAR(20)     NOT NULL CONSTRAINT DF_MT_Type     DEFAULT 'info',
-        Priority    NVARCHAR(20)     NOT NULL CONSTRAINT DF_MT_Priority DEFAULT 'normal',
+        Type        NVARCHAR(20)     NOT NULL DEFAULT 'info',
+        Priority    NVARCHAR(20)     NOT NULL DEFAULT 'normal',
         CreatedBy   NVARCHAR(100)    NULL,
-        CreatedAt   DATETIME2        NOT NULL CONSTRAINT DF_MT_Created  DEFAULT SYSUTCDATETIME(),
+        CreatedAt   DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
         UpdatedAt   DATETIME2        NULL
       )
     END
