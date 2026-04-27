@@ -194,14 +194,18 @@ export interface CreateMessageInput {
 
 export async function createMessage(m: CreateMessageInput): Promise<void> {
   await ensureSchema()
+  // Eski create.sql Messages.SentAt'a default tanımı bırakmamış (nullable=false,
+  // default=null) → SentAt göndermezsek "Cannot insert NULL". SYSUTCDATETIME()
+  // ile explicit doldur — yeni şemada zaten default vardı, eski tabloyla
+  // hizalanmak için INSERT'te de explicit veriyoruz.
   await execute`
     INSERT INTO Messages
       (Id, Subject, Body, Type, Priority, RecipientType, CompanyId, CompanyName,
-       SenderUserId, SenderName, TotalCount, ReadCount)
+       SenderUserId, SenderName, SentAt, TotalCount, ReadCount)
     VALUES
       (${m.id}, ${m.subject}, ${m.body}, ${m.type}, ${m.priority}, ${m.recipientType},
        ${m.companyId ?? null}, ${m.companyName ?? null},
-       ${m.senderUserId ?? null}, ${m.senderName}, ${m.totalCount}, 0)
+       ${m.senderUserId ?? null}, ${m.senderName}, SYSUTCDATETIME(), ${m.totalCount}, 0)
   `
 }
 
