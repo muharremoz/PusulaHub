@@ -67,12 +67,18 @@ _Şimdilik boş._
 
 ### Yapılacak
 
-- [ ] **Yeni Mesaj — hazır mesaj seçimi gözden geçirilecek.** Compose dialog header'ında `DropdownMenu` var ama akış kullanıcı için belirsiz olabilir; daha belirgin bir "Şablon Seç" butonu / sticky banner gerekebilir.
-- [ ] **Hazır mesaj tanımlanabilmeli (CRUD).** Şu an presetler statik `apps/web/src/lib/preset-messages.ts`'den geliyor. Kullanıcının panelden kendi şablonlarını ekleyip/düzenleyip/silebilmesi gerek. DB tablosu (`MessageTemplates`?), Hub içinde yönetim sayfası, mesaj compose'da hem statik hem kullanıcı şablonları birlikte gösterilsin.
-- [ ] **Gönderilen mesajlar listesi — filtreler eklenecek.** Şu an sadece arama var. Eklenmesi gereken filtreler: tarih aralığı (DatePicker, Date range), firma (multi-select Combobox), kullanıcı (search/select), konu (text contains), öncelik (toggle group: normal/yüksek/acil). URL query string'e aktarılırsa kalıcı/paylaşılabilir filtreler olur.
 - [ ] **Sunuculara mesaj gönderme — uçtan uca test.** Agent → WTS session injection → popup → okundu raporu → `MessageRecipients.readAt` ↔ Hub UI'da "okundu" işaretleme zinciri prod ortamda gerçek bir sunucuda doğrulanacak. Hata durumlarında (agent offline, session yok, kullanıcı popup'ı kapatmadı) UI'da net feedback.
 
 ### Yapıldı
+
+- ✅ **Hazır Mesaj seçimi gözden geçirildi** — sol panel'de "Yeni Şablon" butonu belirginleştirildi, kullanıcı şablonlarında MoreVertical (⋮) → Düzenle/Sil dropdown, built-in olanlarda gizli.
+- ✅ **Hazır mesaj CRUD** (`82385d1`) — `MessageTemplates` DB tablosu, `lib/templates-db.ts` (list/get/create/update/delete), 4 API route (`GET/POST /api/messages/templates`, `GET/PATCH/DELETE /api/messages/templates/[id]`). Statik PRESET_MESSAGES (`preset-messages.ts`) korundu, kullanıcı şablonları DB'den. API'de `builtIn: true|false` flag, sistem şablonları silinemez (403). UI: TemplateFormDialog (yeni/düzenle birleşik), validation, toast feedback.
+- ✅ **Liste filtreleri** (`82385d1`) — `messages-db.ts` ListFilter genişletildi: from/to/companyId/username/subject/priority. Tek SQL, NULL-safe parametreli, EXISTS subquery (username için). UI: filtre çubuğu açılır panel, aktif sayaç badge, "Filtreleri temizle", 250ms debounce.
+- ✅ **5 yeni hazır mesaj** seed — Yazılım Güncellemesi, VPN Sorunu, Disk Uyarısı, Veritabanı Bakımı, Toplantı Hatırlatması (DB MessageTemplates'e CreatedBy=`system-seed` ile).
+
+### Tuzaklar (yaşandı, çözüldü)
+
+- ⚠️ **SQL Server FK tip+uzunluk eşleşme zorunluluğu** (`5a9a84d`, `6ef941d`) — Eski `create.sql` `Messages.Id`'yi `NVARCHAR(50)` olarak oluşturmuş; yeni `messages-db.ts` migration `MessageRecipients.MessageId`'yi `UNIQUEIDENTIFIER` beklerken FK kuramıyor → SQL Server **error 1750** ("Could not create constraint or index"). Asıl hata mesajı **Hub log'unda gizleniyor**, sadece `precedingErrors: [Array]` yazıyor. Manuel SQL ile CREATE TABLE çalıştırırsan gerçek mesaj görünür: "Column 'Messages.Id' is not the same data type/length as referencing column". Çözüm: `MessageId NVARCHAR(50)` (Messages.Id ile birebir eşleş). Bonus: tüm named constraint'leri (`PK_MT`, `DF_MR_Status`, `FK_MR_Message`) **anonymous** yap — DB-wide name uniqueness yüzünden IF guard skip etse bile parser-time çakışma ihtimali sıfırlanır.
 
 ---
 

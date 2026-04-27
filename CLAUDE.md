@@ -164,6 +164,37 @@ Agent `/api/exec` endpoint'i JSON regex-parse eder. Komut içinde çift tırnak 
 
 ---
 
+### SQL Server FK — Tip + Uzunluk Birebir Eşleşmeli
+Yeni bir tablo oluştururken Foreign Key kurarken, **referans aldığın
+kolonun hem TIPİ hem UZUNLUĞU** birebir eşleşmek zorunda. Aksi halde:
+
+```
+Error 1750: Could not create constraint or index. See previous errors.
+```
+
+Bu hata **Hub log'unda yanıltıcıdır** — gerçek mesajı (`Column 'X' is not
+the same data type/length as referencing column 'Y'`) `precedingErrors`
+array'inde gizlenir. Asıl hatayı görmek için **manuel SQL** ile CREATE
+TABLE'ı doğrudan çalıştır:
+
+```powershell
+$cmd.CommandText = "<CREATE TABLE ... FOREIGN KEY ...>"
+try { $cmd.ExecuteNonQuery() } catch { $_.Exception.Message }  # asıl mesaj
+```
+
+**Yaşandığı yer:** `MessageRecipients.MessageId UNIQUEIDENTIFIER` →
+`Messages.Id NVARCHAR(50)` (eski create.sql) → tip uyuşmazlığı → fail.
+Çözüm: `MessageId NVARCHAR(50)`.
+
+**Bonus tuzak — DB-wide constraint name uniqueness:** SQL Server
+constraint adları (`PK_X`, `DF_X_Y`, `FK_X_Y`) DB-wide unique olmalı.
+`IF OBJECT_ID(...) IS NULL` guard'ı tabloyu skip etse bile, parser
+constraint adlarını compile-time çözebilir → çakışma → 1750. **Yeni
+tablolarda named constraint kullanma**, anonymous bırak (`Id PRIMARY KEY`,
+`Type DEFAULT 'info'` gibi) — SQL otomatik benzersiz ad üretir.
+
+---
+
 ### Hub Prod Modda Çalışır — Sayfa Geçişleri Hızlı Olsun Diye
 Hub `next dev` modunda çalıştırıldığında her route ilk ziyarette lazy
 compile ediliyor (Turbopack), bu da sayfa geçişlerinde 1–3 sn takılmaya
