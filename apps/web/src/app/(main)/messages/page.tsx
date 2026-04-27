@@ -325,6 +325,7 @@ export default function MessagesPage() {
     applyTemplate(t)
     setSelectedMessageId(null)
     setShowCompose(true)
+    loadRecipients()  // taze alıcı listesi (online durum güncel olsun)
   }
 
   const sendMessage = async () => {
@@ -416,7 +417,7 @@ export default function MessagesPage() {
         <Button
           size="sm"
           className="rounded-[5px] text-xs gap-1.5 h-8"
-          onClick={() => { setShowCompose(true); setSelectedMessageId(null) }}
+          onClick={() => { setShowCompose(true); setSelectedMessageId(null); loadRecipients() }}
         >
           <Plus className="h-3.5 w-3.5" />
           Yeni Mesaj
@@ -608,15 +609,26 @@ export default function MessagesPage() {
                 <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
                   <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Alıcılar</span>
-                    {recipientType === "all" && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">{recipients.length} kullanıcı</span>
-                    )}
-                    {recipientType === "company" && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">{composeCompanies.size} firma seçili</span>
-                    )}
-                    {recipientType === "selected" && (
-                      <span className="text-[10px] text-muted-foreground tabular-nums">{selectedRecipients.size} seçili</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {recipientType === "all" && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{recipients.length} kullanıcı</span>
+                      )}
+                      {recipientType === "company" && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{composeCompanies.size} firma seçili</span>
+                      )}
+                      {recipientType === "selected" && (
+                        <span className="text-[10px] text-muted-foreground tabular-nums">{selectedRecipients.size} seçili</span>
+                      )}
+                      {/* Manuel yenile — agent heartbeat ~10sn, dialog açıkken eklenen kullanıcılar görünsün */}
+                      <button
+                        type="button"
+                        onClick={loadRecipients}
+                        className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                        title="Alıcı listesini yenile (agent her 10sn'de güncellenir)"
+                      >
+                        Yenile
+                      </button>
+                    </div>
                   </div>
                   <div className="p-3 space-y-3">
                     {/* Alıcı tipi toggle */}

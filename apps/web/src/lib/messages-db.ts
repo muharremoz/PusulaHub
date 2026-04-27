@@ -100,6 +100,16 @@ async function ensureSchema(): Promise<void> {
       UPDATE Messages SET CompanyName = Company WHERE CompanyName IS NULL AND Company IS NOT NULL
     END
   `
+  // Eski create.sql Messages.Status'u NOT NULL/default'suz oluşturmuş; yeni
+  // INSERT'ler bu kolona değer göndermediği için "Cannot insert NULL into
+  // column 'Status'" hatası veriyor. Nullable yap (idempotent).
+  await execute`
+    IF EXISTS (
+      SELECT 1 FROM sys.columns
+       WHERE object_id = OBJECT_ID('Messages') AND name = 'Status' AND is_nullable = 0
+    )
+      ALTER TABLE Messages ALTER COLUMN Status NVARCHAR(50) NULL
+  `
 
   // Eski create.sql MessageRecipients tablosu (user directory şeması) varsa
   // yeniden adlandır — doğru şemayla yeniden oluşturulacak.
