@@ -16,14 +16,23 @@
  *   pnpm build               (Switch ve SpareFlow için)
  * sonra:
  *   pm2 restart hub
+ *
+ * KRİTİK — script: "pnpm"/"npm" (cmd.exe wrapper YOK):
+ *   Eski versiyon `script: "cmd.exe", args: "/c pnpm start"` Windows'ta
+ *   alt process stdout/stderr'ını PM2 log dosyalarına yazmıyordu (PM2'nin
+ *   bilinen Windows sorunu). Sonuç: hub-out.log, hub-err.log boş kalıyor,
+ *   bir hata olduğunda kör kalıyoruz.
+ *
+ *   Çözüm: doğrudan pnpm.cmd / npm.cmd çağır. PM2 .cmd uzantısını Windows'ta
+ *   otomatik resolve eder ve stdout'u doğru pipe eder.
  */
 module.exports = {
   apps: [
     {
       name: "switch",
       cwd: "C:/PusulaProd/PusulaSwitch",
-      script: "cmd.exe",
-      args: "/c pnpm start",
+      script: "pnpm",
+      args: "start",
       // PROD: NODE_ENV=production ZORUNLU. apps/web/server.ts ve next start
       // bu env'e bakıyor; eksikse Hub dev modda koşar, .env.production
       // yüklenmez, DB bağlantısı "Login failed for user SA" verir.
@@ -39,9 +48,8 @@ module.exports = {
     {
       name: "hub",
       cwd: "C:/PusulaProd/PusulaHub/apps/web",
-      script: "cmd.exe",
-      // PROD: dev değil start
-      args: "/c pnpm start",
+      script: "pnpm",
+      args: "start",
       // KRİTİK: yoksa server.ts dev modda koşar, .env.production yüklenmez.
       env: { NODE_ENV: "production" },
       autorestart: true,
@@ -55,8 +63,8 @@ module.exports = {
     {
       name: "spareflow",
       cwd: "C:/PusulaProd/SpareFlow/spare-flow-ui",
-      script: "cmd.exe",
-      args: "/c npm run start",
+      script: "npm",
+      args: "run start",
       env: { PORT: "4243", NODE_ENV: "production" },
       autorestart: true,
       max_restarts: 10,
