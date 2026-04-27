@@ -65,10 +65,14 @@ _Şimdilik boş._
 
 ## Mesajlar Sayfası — UI İyileştirmeleri
 
-### Yapıldı
+### Yapılacak
 
-- ✅ "Hazır Mesaj" picker — Radix `Select` `value=""` ile uncontrolled davranamıyor, dropdown açılmıyordu. `DropdownMenu`'ye çevrildi (semantik olarak da doğru — değer seçmiyoruz, aksiyon tetikliyoruz). 10 preset şablon, 320px genişlik, 360px scroll.
-- ✅ Mesaj Tipi + Öncelik **tam genişlik** — `grid-cols-2 gap-2` yerine alt alta `w-full Select`. Dialog'da daha okunabilir.
+- [ ] **Yeni Mesaj — hazır mesaj seçimi gözden geçirilecek.** Compose dialog header'ında `DropdownMenu` var ama akış kullanıcı için belirsiz olabilir; daha belirgin bir "Şablon Seç" butonu / sticky banner gerekebilir.
+- [ ] **Hazır mesaj tanımlanabilmeli (CRUD).** Şu an presetler statik `apps/web/src/lib/preset-messages.ts`'den geliyor. Kullanıcının panelden kendi şablonlarını ekleyip/düzenleyip/silebilmesi gerek. DB tablosu (`MessageTemplates`?), Hub içinde yönetim sayfası, mesaj compose'da hem statik hem kullanıcı şablonları birlikte gösterilsin.
+- [ ] **Gönderilen mesajlar listesi — filtreler eklenecek.** Şu an sadece arama var. Eklenmesi gereken filtreler: tarih aralığı (DatePicker, Date range), firma (multi-select Combobox), kullanıcı (search/select), konu (text contains), öncelik (toggle group: normal/yüksek/acil). URL query string'e aktarılırsa kalıcı/paylaşılabilir filtreler olur.
+- [ ] **Sunuculara mesaj gönderme — uçtan uca test.** Agent → WTS session injection → popup → okundu raporu → `MessageRecipients.readAt` ↔ Hub UI'da "okundu" işaretleme zinciri prod ortamda gerçek bir sunucuda doğrulanacak. Hata durumlarında (agent offline, session yok, kullanıcı popup'ı kapatmadı) UI'da net feedback.
+
+### Yapıldı
 
 ---
 
