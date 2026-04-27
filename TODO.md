@@ -43,6 +43,40 @@ _Şimdilik boş._
 - ✅ Hub layout.tsx SessionProvider tipinde cast lokal'de unutulmuştu, prod build'i patlatıyordu — `as unknown as Parameters<typeof SessionProvider>[0]["session"]` cast commit'lendi (`8dd5619`).
 - ✅ SpareFlow build için 4 paket eksikti — `@supabase/supabase-js`, `drizzle-orm@0.43.1-f677fb2` (canary, MSSQL desteği bu özel branch'te), `ssh2`, `@radix-ui/react-dialog` elle eklendi. Drizzle resmi 0.45.2'de bile `mssql-core`/`node-mssql` subpath'leri yok — kod sahibi commit'lerken `pnpm add` yapmamış, lokal canary versiyonuna güveniyordu.
 - ✅ PM2 boot startup (`pm2-startup install`) — Windows reboot sonrası 3 process otomatik kalkar.
+- ✅ **PM2 log capture sorunu çözüldü** (`945d52e`) — `cmd.exe /c pnpm start` wrapper'ı Windows'ta alt process stdout/stderr'ını PM2 log dosyalarına yazmıyordu (boş kalıyordu). Çözüm: PM2'ye `package.json` start script'inin gerçek karşılığını ver (`script: "server.ts", interpreter: "node", interpreter_args: "-r tsx/cjs"` Hub için; Switch için Next CLI direkt; SpareFlow için server.js). Wrapper yok → log dosyalarına timestamp'li yazıyor. `script: "pnpm" + interpreter:"none"` ara denemesi `spawn EINVAL` veriyor — Windows Node spawn() .cmd'leri shell'siz çağıramıyor.
+- ✅ **pm2-logrotate kuruldu** — 10 MB'da rotate, 30 dosya tut, gzip, her gece 00:00 günlük rotation.
+- ✅ **`ENCRYPTION_KEY` prod'a eklendi** — `setup-prod.ps1` rastgele key üretiyor ama prod'da boştu. Hub `[crypto.decrypt] çözme hatası: Unsupported state...` her 10sn `agent-poller.ts:309 → persistHeavyData → decrypt(srv.SqlPassword)`'da. Dev'deki key (`/+vkHi...`) prod'a UTF-8 BOM'suz yazıldı, hata kayboldu. — Not: `Add-Content` PS5 UTF-16 BOM yazıyor, dotenv parse edemiyor; `[IO.File]::WriteAllText(p,c,[UTF8Encoding]::new($false))` kullan.
+- ✅ **WinRM remote PowerShell** açıldı — sunucuda `Enable-PSRemoting -Force`, dev PC TrustedHosts'a `10.10.10.5` eklendi. Dev makineden `Invoke-Command -ComputerName 10.10.10.5 -Credential $cred {…}` ile log oku, restart at, build çek vs. — RDP gerekmez. Administrator parolası `Serv108Psl.*`.
+- ✅ **FortiClient VPN sunucuya kuruldu**, "Always Up / Auto Connect on Boot" aktif. LAN üzerinden 10.15.2.6 (Fastify) ve 192.168.169.203 (SFTP) erişilebilir. Bu VPN olmadan SpareFlow WAN fallback'e düşer ve dashboard yavaş yüklenir / boş gelir.
+- ✅ **Port 80 → 4000 portproxy** — `netsh interface portproxy add v4tov4 listenport=80 connectport=4000`. IIS Default Web Site stop edildi (`Stop-Website + serverAutoStart=$false`). Panel artık `http://10.10.10.5/` ve `app.pusulanet.net` üzerinden erişilebilir.
+
+---
+
+## TV Sayfası — Sparkline Performans Düzeltmesi (`328e7e5`)
+
+### Yapıldı
+
+- ✅ TV sayfası açılışında **`/api/monitoring?history=1`** fetch — Kuma DB'den son 100 beat'in ping değerleri başta `histories` state'ine yazılıyor. Önce sparkline'lar 60sn boyunca boş kalıyordu (lokal state sıfırdan başlıyor, line için min 2 nokta gerekli, 30sn refresh ile ancak 60sn'de 2'inci nokta).
+- ✅ MonitorTile artık parent'ın `histories` map'inden besleniyor (single source of truth). Lokal `[history, setHistory]` state kaldırıldı.
+- ✅ `kuma-history.ts` SQL'e **`WHERE time > datetime('now', '-7 days')`** eklendi. Heartbeat tablosu binlerce satır biriktiriyor; ROW_NUMBER OVER PARTITION tüm tabloyu okuyup sıralıyordu → yavaş. 7 günlük pencere yeterli (100 beat × 60sn = ~100dk), partition giriş kümesi küçülünce sorgu ~10x hızlanıyor.
+- ✅ Cache TTL 30s → 60s — TV 30sn refresh yapıyor zaten, her seferinde fresh SSH boşa.
+
+---
+
+## Mesajlar Sayfası — UI İyileştirmeleri
+
+### Yapıldı
+
+- ✅ "Hazır Mesaj" picker — Radix `Select` `value=""` ile uncontrolled davranamıyor, dropdown açılmıyordu. `DropdownMenu`'ye çevrildi (semantik olarak da doğru — değer seçmiyoruz, aksiyon tetikliyoruz). 10 preset şablon, 320px genişlik, 360px scroll.
+- ✅ Mesaj Tipi + Öncelik **tam genişlik** — `grid-cols-2 gap-2` yerine alt alta `w-full Select`. Dialog'da daha okunabilir.
+
+---
+
+## Hub-Watcher — Sonsuz Döngü Düzeltmesi
+
+### Yapıldı
+
+- ✅ `scripts/hub-watcher.mjs` — `pending` kuyruğu kaldırıldı, 5sn cooldown eklendi, tooling artifact filtresi (`.next`, `node_modules`, `.tsbuildinfo`, `.tmp`). Build/start sırasında oluşan dosya olayları sonsuz cycle tetikliyordu ("açılıp kapanıyor sanki"). Şimdi cycle koşarken gelen trigger'lar dropp'lanıyor, cycle bitince 5sn boyunca sessiz kalınıyor.
 
 ---
 
