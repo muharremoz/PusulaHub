@@ -46,9 +46,11 @@ export interface MonitorHistory {
 /** Kuma varsayılanı gibi 100 bar. */
 const BEAT_LIMIT = 100
 
-/* ── 30 sn cache ────────────────────────────────────────── */
+/* ── 60 sn cache ────────────────────────────────────────── */
+// TV sayfası 30sn'de bir refresh yapıyor; aynı veriyi her seferinde
+// SSH ile çekmek gereksiz. 60sn cache → her 2 refresh'ten birinde fresh.
 let cache: { at: number; data: Record<string, MonitorHistory> } | null = null
-const TTL_MS = 30 * 1000
+const TTL_MS = 60 * 1000
 
 /**
  * SSH ile uzaktan sqlite3 çalıştırıp CSV al.
@@ -92,6 +94,11 @@ export async function fetchKumaHistory(force = false): Promise<Record<string, Mo
   const now = Date.now()
   if (!force && cache && now - cache.at < TTL_MS) return cache.data
 
+  // PERF: heartbeat tablosu binlerce satır biriktiriyor (her monitor 60sn'de
+  // bir beat × günler). ROW_NUMBER OVER PARTITION tüm tabloyu okuyup
+  // sıralıyor → yavaş. WHERE time > -7 days ile partition giriş kümesini
+  // küçültüyoruz; 100 beat (×60sn = ~100dk) zaten son birkaç saatlik
+  // pencerede mevcut, 7 gün fazlasıyla yeterli.
   const sql = `
     SELECT name, status, time, ping FROM (
       SELECT m.name         AS name,
@@ -101,6 +108,7 @@ export async function fetchKumaHistory(force = false): Promise<Record<string, Mo
              ROW_NUMBER() OVER (PARTITION BY h.monitor_id ORDER BY h.time DESC) AS rn
         FROM heartbeat h
         JOIN monitor   m ON m.id = h.monitor_id
+       WHERE h.time > datetime('now', '-7 days')
     ) sub
     WHERE rn <= ${BEAT_LIMIT}
     ORDER BY name, time ASC

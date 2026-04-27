@@ -364,7 +364,7 @@ function LiveDot({ ui, size = "size-4", className }: { ui: UiStatus; size?: stri
 }
 
 /** Bir grup başlık + o grubun monitor kartları */
-function MonitorGroup({ title, count, monitors, tracker }: { title: string; count: number; monitors: KumaMonitor[]; tracker: Map<string, StatusTrack> }) {
+function MonitorGroup({ title, count, monitors, tracker, histories }: { title: string; count: number; monitors: KumaMonitor[]; tracker: Map<string, StatusTrack>; histories: Record<string, number[]> }) {
   const downCount = monitors.filter((m) => mapStatus(m.status) === "offline").length
   return (
     <div className="flex flex-col gap-2 min-w-0">
@@ -379,7 +379,14 @@ function MonitorGroup({ title, count, monitors, tracker }: { title: string; coun
         <div className="flex-1 h-px bg-gradient-to-r from-zinc-800 to-transparent" />
       </div>
       <div className="grid content-start gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
-        {monitors.map((m) => <MonitorTile key={m.name} m={m} since={tracker.get(m.name)?.since} />)}
+        {monitors.map((m) => (
+          <MonitorTile
+            key={m.name}
+            m={m}
+            since={tracker.get(m.name)?.since}
+            history={histories[m.name] ?? []}
+          />
+        ))}
       </div>
     </div>
   )
@@ -790,7 +797,7 @@ function Sparkline({ data, color, width = 200, height = 28 }: { data: number[]; 
   )
 }
 
-function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
+function MonitorTile({ m, since, history }: { m: KumaMonitor; since?: number; history: number[] }) {
   const ui  = mapStatus(m.status)
   const cfg = STATUS_CONFIG[ui]
   const now = useClock()
@@ -800,16 +807,8 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
     m.responseMs < 80     ? "text-amber-300" :
                             "text-red-300"
   const downDuration = ui === "offline" && since && now ? formatDuration(now.getTime() - since) : null
-
-  // Yanıt süresi geçmişi — son 40 ölçüm (canlı sparkline)
-  const [history, setHistory] = useState<number[]>([])
-  useEffect(() => {
-    if (m.responseMs === null) return
-    setHistory((h) => {
-      const next = [...h, m.responseMs as number]
-      return next.length > 40 ? next.slice(next.length - 40) : next
-    })
-  }, [m.responseMs])
+  // Yanıt süresi geçmişi — parent'ın yönettiği `histories` map'inden geliyor
+  // (sayfa açılışında Kuma DB'den 100 beat ile dolduruluyor, sonra canlı eklenir).
 
   // Dotted glow — tam doygun status rengi (alpha animasyonu component içinde)
   const glow =
@@ -1107,8 +1106,33 @@ export default function TvMonitoringPage() {
     [dataForRender],
   )
 
-  /* ── Tüm monitörler için yanıt geçmişi (spotlight + ileride başka kart için) ── */
+  /* ── Tüm monitörler için yanıt geçmişi (spotlight + ileride başka kart için) ──
+   *
+   * Sayfa açılışında Kuma'dan son 100 beat'in ping değerlerini çekiyoruz —
+   * sparkline'lar BOŞ değil, hemen dolu açılır. Sonra her render'da yeni
+   * gelen responseMs'i sona ekliyoruz (canlı).
+   */
   const [histories, setHistories] = useState<Record<string, number[]>>({})
+  // 1) Initial fetch — sayfa açılır açılmaz Kuma DB'den geçmiş ping'leri al
+  useEffect(() => {
+    let abort = false
+    fetch("/api/monitoring?history=1")
+      .then(r => r.json())
+      .then(d => {
+        if (abort || !d?.history) return
+        const initial: Record<string, number[]> = {}
+        for (const [name, h] of Object.entries(d.history as Record<string, { beats: { ping: number | null }[] }>)) {
+          // Son 40 nokta yeterli (sparkline'da gösterilen pencere)
+          const pings = h.beats.slice(-40).map(b => b.ping ?? 0)
+          if (pings.length > 0) initial[name] = pings
+        }
+        setHistories(prev => ({ ...initial, ...prev }))  // canlı eklenenler korunsun
+      })
+      .catch(() => { /* sessizce geç — sparkline normal akışla dolacak */ })
+    return () => { abort = true }
+  }, [])
+
+  // 2) Canlı ekleme — her refresh'te yeni responseMs'i sona ekle
   useEffect(() => {
     const monitors = dataForRender?.monitors
     if (!monitors) return
@@ -1295,10 +1319,10 @@ export default function TvMonitoringPage() {
         )}
         <div className="flex flex-col flex-1 gap-3 min-w-0">
           {serverMonitors.length > 0 && (
-            <MonitorGroup title="Sunucular" count={serverMonitors.length} monitors={serverMonitors} tracker={tracker} />
+            <MonitorGroup title="Sunucular" count={serverMonitors.length} monitors={serverMonitors} tracker={tracker} histories={histories} />
           )}
           {serviceMonitors.length > 0 && (
-            <MonitorGroup title="Servisler & Web" count={serviceMonitors.length} monitors={serviceMonitors} tracker={tracker} />
+            <MonitorGroup title="Servisler & Web" count={serviceMonitors.length} monitors={serviceMonitors} tracker={tracker} histories={histories} />
           )}
         </div>
       </div>
