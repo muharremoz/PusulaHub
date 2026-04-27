@@ -109,17 +109,17 @@ async function ensureSchema(): Promise<void> {
       EXEC sp_rename 'MessageRecipients', 'MessageRecipients_Legacy'
   `
 
-  // KRİTİK: MessageRecipients.MessageId'nin tipi Messages.Id ile EŞLEŞMELİ.
-  // Eski create.sql Messages.Id'yi NVARCHAR olarak oluşturmuş; UNIQUEIDENTIFIER
-  // beklersek FK kurulamaz ("Column ... is not the same data type" → 1750).
-  // NVARCHAR(36) UUID için yeterli (dash dahil 36 char). Constraint adlarını
-  // anonymous bırak — DB-wide name conflict riskini sıfıra indirir.
+  // KRİTİK: MessageRecipients.MessageId'nin tipi VE UZUNLUĞU Messages.Id
+  // ile birebir eşleşmeli. Eski create.sql Messages.Id'yi NVARCHAR(50) olarak
+  // oluşturmuş. NVARCHAR(36) yeterli görünse de FK için "same length and scale"
+  // şartı var (SQL Server FK kuralı) → 1750. NVARCHAR(50) yapalım.
+  // Constraint adlarını anonymous bırak — DB-wide name conflict riskini de sıfırlar.
   await execute`
     IF OBJECT_ID('MessageRecipients','U') IS NULL
     BEGIN
       CREATE TABLE MessageRecipients (
         Id            BIGINT           IDENTITY(1,1) PRIMARY KEY,
-        MessageId     NVARCHAR(36)     NOT NULL,
+        MessageId     NVARCHAR(50)     NOT NULL,
         ServerId      NVARCHAR(50)     NOT NULL,
         ServerName    NVARCHAR(200)    NULL,
         Username      NVARCHAR(200)    NOT NULL,
