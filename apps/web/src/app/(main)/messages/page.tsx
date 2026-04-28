@@ -929,74 +929,94 @@ export default function MessagesPage() {
                     Filtreleri temizle
                   </button>
                 )}
-                <Button
-                  size="sm"
-                  variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
-                  className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
-                  onClick={() => setFiltersOpen(v => !v)}
-                >
-                  <Search className="h-3 w-3" />
-                  Filtre
-                  {activeFilterCount > 0 && (
-                    <span className="ml-0.5 rounded-full bg-white/20 px-1 text-[9px] font-bold tabular-nums">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </Button>
+                {/*
+                  Filtre butonu — Popover olarak açılır. Inline expansion (mb-3 panel) yerine
+                  floating popover: liste yer kaybetmez, dış tıklamayla otomatik kapanır.
+                */}
+                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
+                      className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
+                    >
+                      <Search className="h-3 w-3" />
+                      Filtre
+                      {activeFilterCount > 0 && (
+                        <span className="ml-0.5 rounded-full bg-white/20 px-1 text-[9px] font-bold tabular-nums">
+                          {activeFilterCount}
+                        </span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    sideOffset={6}
+                    className="w-[560px] p-3"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Filtreler</span>
+                      {activeFilterCount > 0 && (
+                        <button
+                          onClick={clearFilters}
+                          className="text-[10px] text-muted-foreground hover:text-foreground underline"
+                        >
+                          Temizle ({activeFilterCount})
+                        </button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
+                        <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+                          className="h-7 text-[11px] rounded-[4px]" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
+                        <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+                          className="h-7 text-[11px] rounded-[4px]" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Öncelik</Label>
+                        <Select value={filterPriority || "all"} onValueChange={(v) => setFilterPriority(v === "all" ? "" : v)}>
+                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Hepsi</SelectItem>
+                            <SelectItem value="normal">Normal</SelectItem>
+                            <SelectItem value="high">Yüksek</SelectItem>
+                            <SelectItem value="urgent">Acil</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Firma</Label>
+                        <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
+                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Hepsi</SelectItem>
+                            {companies.map(c => (
+                              <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Kullanıcı</Label>
+                        <Input value={filterUser} onChange={(e) => setFilterUser(e.target.value)}
+                          placeholder="kullanıcı adı"
+                          className="h-7 text-[11px] rounded-[4px] font-mono" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground">Konu içerir</Label>
+                        <Input value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
+                          placeholder="konu kelimesi"
+                          className="h-7 text-[11px] rounded-[4px]" />
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
-
-            {/* Filtre paneli — açıldığında genişler, kapandığında gizli */}
-            {filtersOpen && (
-              <div className="rounded-[5px] border border-border/50 bg-muted/20 p-3 mb-3 grid grid-cols-2 lg:grid-cols-3 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
-                  <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-                    className="h-7 text-[11px] rounded-[4px]" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
-                  <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-                    className="h-7 text-[11px] rounded-[4px]" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Öncelik</Label>
-                  <Select value={filterPriority || "all"} onValueChange={(v) => setFilterPriority(v === "all" ? "" : v)}>
-                    <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Hepsi</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">Yüksek</SelectItem>
-                      <SelectItem value="urgent">Acil</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Firma</Label>
-                  <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
-                    <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Hepsi</SelectItem>
-                      {companies.map(c => (
-                        <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Kullanıcı</Label>
-                  <Input value={filterUser} onChange={(e) => setFilterUser(e.target.value)}
-                    placeholder="kullanıcı adı"
-                    className="h-7 text-[11px] rounded-[4px] font-mono" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Konu içerir</Label>
-                  <Input value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
-                    placeholder="konu kelimesi"
-                    className="h-7 text-[11px] rounded-[4px]" />
-                </div>
-              </div>
-            )}
 
             <div className="grid grid-cols-[0.4fr_2fr_0.7fr_0.7fr_0.8fr_0.6fr] gap-2 px-1 py-1.5 bg-muted/30 rounded-[4px] border-b">
               <span className="text-[11px] font-medium text-muted-foreground tracking-wide">ÖNCELİK</span>
