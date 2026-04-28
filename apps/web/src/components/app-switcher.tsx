@@ -92,11 +92,11 @@ export function AppSwitcher() {
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-64 rounded-[5px]"
+        className="w-64 rounded-[5px] bg-[#082c6b] border-[#0d3380] text-white"
         align="start"
         sideOffset={4}
       >
-        <DropdownMenuLabel className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+        <DropdownMenuLabel className="text-[10px] font-medium text-[#b4c8ff] tracking-wide uppercase">
           Pusula Uygulamaları
         </DropdownMenuLabel>
         {visibleApps.map((app) => {
@@ -106,7 +106,7 @@ export function AppSwitcher() {
             <DropdownMenuItem
               key={app.id}
               asChild
-              className="gap-2 p-2 cursor-pointer"
+              className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
             >
               <a href={`/apps/${app.id}`}>
                 <div
@@ -117,15 +117,15 @@ export function AppSwitcher() {
                 </div>
                 <div className="grid flex-1 leading-tight min-w-0">
                   <span className="truncate text-[12px] font-medium">{app.name}</span>
-                  <span className="truncate text-[10px] text-muted-foreground">{app.description}</span>
+                  <span className="truncate text-[10px] text-[#b4c8ff]">{app.description}</span>
                 </div>
-                {isActive && <Check className="size-3.5 text-emerald-600 shrink-0" />}
+                {isActive && <Check className="size-3.5 text-[#1d64ff] shrink-0" />}
               </a>
             </DropdownMenuItem>
           )
         })}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem asChild className="gap-2 p-2 cursor-pointer text-[11px] text-muted-foreground">
+        <DropdownMenuSeparator className="bg-[#0d3380]" />
+        <DropdownMenuItem asChild className="gap-2 p-2 cursor-pointer text-[11px] text-[#b4c8ff] focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]">
           <a href="/">
             Switch ekranına dön
           </a>
