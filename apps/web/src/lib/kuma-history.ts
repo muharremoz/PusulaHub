@@ -61,18 +61,26 @@ async function runRemoteSqlite(sql: string): Promise<string> {
   const password = process.env.KUMA_SSH_PASSWORD
   const dbPath   = process.env.KUMA_DB_PATH ?? "/opt/uptime-kuma/data/kuma.db"
   const plinkPath = process.env.KUMA_PLINK_PATH ?? "C:/Program Files/PuTTY/plink.exe"
+  // Host key fingerprint — opsiyonel ama prod'da ÖNERİLİR. Yeni sunucuda
+  // plink.exe ilk SSH bağlantısında interactive prompt ile host key onayı
+  // ister; -batch modunda bu prompt skip edildiği için "Cannot confirm a
+  // host key in batch mode" hatası alınır. -hostkey parametresi ile
+  // önceden bilinen fingerprint geçerse cache'e bakmadan kabul eder.
+  // Kuma host key SHA256 örneği: "SHA256:8PXjSE1MKhM00kv/8YDpiHfxzdW1VqkELwIHldcUIUo"
+  const hostKey  = process.env.KUMA_SSH_HOSTKEY
 
   if (!host || !user || !password) {
     throw new Error("KUMA_SSH_HOST/USER/PASSWORD env tanımlı değil.")
   }
 
   const remoteCmd = `sqlite3 -csv ${dbPath} "${sql.replace(/\n\s*/g, " ")}"`
+  const args = ["-ssh", "-l", user, "-pw", password, "-batch"]
+  if (hostKey) args.push("-hostkey", hostKey)
+  args.push(host, remoteCmd)
 
-  const { stdout } = await execFileAsync(
-    plinkPath,
-    ["-ssh", "-l", user, "-pw", password, host, remoteCmd],
-    { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 20_000, windowsHide: true }
-  )
+  const { stdout } = await execFileAsync(plinkPath, args, {
+    encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 20_000, windowsHide: true,
+  })
   return stdout
 }
 
