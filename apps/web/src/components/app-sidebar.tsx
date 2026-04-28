@@ -31,7 +31,7 @@ import { useRouter } from "next/navigation"
 import { LogOut, Shield, User as UserLucide } from "lucide-react"
 import { AppSwitcher } from "@/components/app-switcher"
 import type { PermissionLevel, PermissionMap } from "@/lib/permissions"
-import { RainbowButton } from "@/components/ui/rainbow-button"
+import { BorderBeam } from "border-beam"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -235,12 +235,12 @@ export function AppSidebar() {
           {canWriteCompanies && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href="/companies/setup" className="mb-2">
-                  <RainbowButton asChild size="icon" className="h-9 w-9">
-                    <span className="flex items-center justify-center">
+                <Link href="/companies/setup" className="mb-2 block">
+                  <BorderBeam size="sm" colorVariant="ocean" theme="dark" borderRadius={6}>
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-[#1d64ff] text-white hover:bg-[#1652d6] transition-colors">
                       <MagicStar size="16" color="currentColor" variant="Bold" />
                     </span>
-                  </RainbowButton>
+                  </BorderBeam>
                 </Link>
               </TooltipTrigger>
               <TooltipContent side="right" sideOffset={8}>Firma Kurulum Sihirbazı</TooltipContent>
