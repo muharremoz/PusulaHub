@@ -7,7 +7,7 @@
 
 import sql from "mssql"
 import { upsertAgentFromPoll, getAllAgents, markMessageRead, markAgentOffline } from "./agent-store"
-import { markReadByMsgId } from "./messages-db"
+import { markReadByMsgId, getPendingForServer, markRecipientDelivered, markServerFailed } from "./messages-db"
 import type { AgentReport } from "./agent-types"
 import { withSqlConnection } from "./sql-external"
 import { decrypt } from "./crypto"
@@ -420,6 +420,73 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
   }
 }
 
+/**
+ * Pending mesajları, kullanıcı şimdi Active session'da göründüyse agent'a iletir.
+ *
+ * Mesaj broadcast'inde offline olan hedefler MessageRecipients'ta `pending`
+ * kalır. Poller her cycle'da agent'tan rapor aldığında, sessions[].state ===
+ * "Active" olan kullanıcılar için bu sunucuda bekleyen mesaj var mı kontrol
+ * eder; varsa agent'a /api/notify (sadece o user için) yollar ve başarılıysa
+ * MessageRecipients.Status'u 'delivered' yapar.
+ *
+ * Aynı mesajın aynı user'a tekrar push edilmesini DB'deki Status='pending'
+ * filtresi engeller (delivered olduktan sonra tekrar gelmez).
+ */
+async function retryPendingForActiveUsers(server: ServerRow, port: number, report: AgentReport): Promise<void> {
+  if (!server.ApiKey) return
+  const sessions = report.sessions ?? []
+  const activeUsers = new Set(
+    sessions
+      .filter(s => s.username && s.state === "Active")
+      .map(s => s.username.toLowerCase())
+  )
+  if (activeUsers.size === 0) return
+
+  const pending = await getPendingForServer(server.Id)
+  if (pending.length === 0) return
+
+  // username bazında grupla — aynı user'a birden fazla pending varsa hepsini sırayla
+  // (her biri ayrı bir popup olarak gösterilsin)
+  const eligible = pending.filter(p => activeUsers.has(p.username.toLowerCase()))
+  if (eligible.length === 0) return
+
+  for (const p of eligible) {
+    try {
+      const ctrl  = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 12_000)
+      const res = await fetch(`http://${server.IP}:${port}/api/notify`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "X-Api-Key": server.ApiKey },
+        signal:  ctrl.signal,
+        body: JSON.stringify({
+          msgId:           p.messageId,
+          title:           p.subject,
+          body:            p.body,
+          type:            p.type,
+          from:            p.senderName,
+          sentAt:          p.sentAt,
+          targetUsernames: [p.username],
+        }),
+      })
+      clearTimeout(timer)
+      if (res.ok) {
+        await markRecipientDelivered(p.messageId, server.Id, p.username)
+        console.log(`[Poller] retry → ${server.Name}/${p.username} delivered (msg ${p.messageId.slice(0,8)})`)
+      } else {
+        // failed yapma — bir sonraki cycle'da tekrar denesin (ağ geçici sorunu olabilir)
+        console.log(`[Poller] retry HTTP ${res.status} (${server.Name}/${p.username})`)
+      }
+    } catch (err) {
+      // Sessizce geç — bir sonraki cycle yeniden denenir
+      void err
+    }
+  }
+}
+
+// ESLint: `markServerFailed` import edildi ama yukarıda kullanılmıyor — gelecekte
+// retry'da hata sayacı eklemek için reserved. (Şimdilik no-op tutalım.)
+void markServerFailed
+
 /* ── Tek bir agent'ı poll et ── */
 async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
   const port = server.AgentPort ?? 8585
@@ -496,6 +563,13 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
         try { await markReadByMsgId(ack.msgId, ack.username) } catch { /* ignore */ }
       }
     }
+
+    // Pending mesaj retry: kullanıcı offline iken gönderilmiş ama henüz iletilmemiş
+    // mesajları, kullanıcı şimdi Active session'da göründüyse agent'a yolla.
+    // Background — pollSingleAgent'ı geciktirmez.
+    void retryPendingForActiveUsers(server, port, report).catch(err =>
+      console.log(`[Poller] retryPending hata (${server.Name}):`, err instanceof Error ? err.message : err)
+    )
 
     return true
   } catch (err: unknown) {

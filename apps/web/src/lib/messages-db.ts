@@ -230,7 +230,12 @@ export async function addRecipient(r: AddRecipientInput): Promise<void> {
   `
 }
 
-/** Bir sunucuya inject sonrası — o sunucudaki tüm henüz teslim edilmemiş alıcıları "delivered" yap. */
+/** Bir sunucuya inject sonrası — o sunucudaki tüm henüz teslim edilmemiş alıcıları "delivered" yap.
+ *  Eski davranış: agent /api/notify çağrısı tüm pending recipientları delivered işaretliyordu.
+ *  Bu offline user'lar için yanlış (inject olmamasına rağmen delivered).
+ *  Yeni broadcast akışı `markRecipientDelivered` (kullanıcı bazlı) kullanır,
+ *  bu fonksiyon geriye dönük uyumluluk için duruyor.
+ */
 export async function markServerDelivered(messageId: string, serverId: string): Promise<void> {
   await ensureSchema()
   await execute`
@@ -238,6 +243,64 @@ export async function markServerDelivered(messageId: string, serverId: string): 
        SET Status = 'delivered', DeliveredAt = SYSUTCDATETIME()
      WHERE MessageId = ${messageId} AND ServerId = ${serverId} AND Status = 'pending'
   `
+}
+
+/** Tek bir alıcı (server+username) için delivered işaretle.
+ *  broadcast() agent.lastReport.sessions ile inject edilen kullanıcıları belirleyip
+ *  sadece onları işaretler — offline olanlar pending kalır, sonra Poller retry yapar. */
+export async function markRecipientDelivered(
+  messageId: string,
+  serverId: string,
+  username: string,
+): Promise<void> {
+  await ensureSchema()
+  await execute`
+    UPDATE MessageRecipients
+       SET Status = 'delivered', DeliveredAt = SYSUTCDATETIME()
+     WHERE MessageId = ${messageId}
+       AND ServerId  = ${serverId}
+       AND Username  = ${username}
+       AND Status    = 'pending'
+  `
+}
+
+/** Bir sunucudaki bekleyen (pending) alıcıların mesaj içeriğiyle birlikte listesi.
+ *  Poller her cycle'da agent'tan Active session listesi geldiğinde, bu listeden
+ *  yeni Active olan kullanıcılara karşılık gelen pending mesajları retry yapar.
+ *  7 günden eski mesajlar dahil edilmez (TTL). */
+export interface PendingForServerRow {
+  messageId:  string
+  username:   string
+  subject:    string
+  body:       string
+  type:       MessageType
+  priority:   MessagePriority
+  senderName: string
+  sentAt:     string
+}
+export async function getPendingForServer(serverId: string): Promise<PendingForServerRow[]> {
+  await ensureSchema()
+  interface Raw {
+    MessageId: string; Username: string; Subject: string; Body: string;
+    Type: MessageType; Priority: MessagePriority; SenderName: string; SentAt: string
+  }
+  const rows = await query<Raw[]>`
+    SELECT r.MessageId, r.Username, m.Subject, m.Body, m.Type, m.Priority,
+           m.SenderName,
+           CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt
+      FROM MessageRecipients r
+      JOIN Messages m ON m.Id = r.MessageId
+     WHERE r.ServerId = ${serverId}
+       AND r.Status   = 'pending'
+       AND r.ReadAt   IS NULL
+       AND m.SentAt   > DATEADD(day, -7, SYSUTCDATETIME())
+     ORDER BY m.SentAt
+  `
+  return rows.map(r => ({
+    messageId: r.MessageId, username: r.Username,
+    subject: r.Subject, body: r.Body, type: r.Type, priority: r.Priority,
+    senderName: r.SenderName, sentAt: r.SentAt,
+  }))
 }
 
 /** Bir sunucu fan-out'ta hata verirse — o sunucudaki alıcıları "failed" işaretle. */

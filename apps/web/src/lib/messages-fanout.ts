@@ -3,7 +3,7 @@ import { getAllAgents } from "./agent-store"
 import {
   createMessage,
   addRecipient,
-  markServerDelivered,
+  markRecipientDelivered,
   markServerFailed,
   type MessageType,
   type MessagePriority,
@@ -159,6 +159,12 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
   const errors: { serverId: string; error: string }[] = []
   let serversOk = 0
 
+  // Kullanıcının o anki Active session'larda olup olmadığını belirlemek için
+  // agent-store'dan agent.lastReport.sessions kullanırız. Online olmayan
+  // hedefler agent'a hiç gönderilmez (inject olmaz, sessions:0 sayılır),
+  // MessageRecipients'ta `pending` kalır → Poller sonradan retry yapar.
+  const allAgents = getAllAgents()
+
   await Promise.all(serverIds.map(async (serverId) => {
     const info = serverInfo.get(serverId)
     if (!info || !info.ApiKey || !info.AgentPort) {
@@ -167,11 +173,30 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
       errors.push({ serverId, error: err })
       return
     }
+
+    const groupUsers = groups.get(serverId) ?? []
+    // Bu sunucudaki o anki Active username set'i (agent.lastReport snapshot)
+    const agentEntry  = allAgents.find(a => a.agentId === serverId)
+    const activeSet   = new Set(
+      (agentEntry?.lastReport?.sessions ?? [])
+        .filter(s => s.username && s.state === "Active")
+        .map(s => s.username.toLowerCase())
+    )
+    // Online şimdi inject edilebilir, offline pending kalır
+    const onlineNow = groupUsers.filter(u => activeSet.has(u.toLowerCase()))
+
+    // "selected" mod'ta hedef belli olduğundan online filter uygula;
+    // "all" / "company" mod'ta zaten resolveTargets() Active filter'ı yapmıştı,
+    // yani groupUsers == onlineNow olur.
+    if (onlineNow.length === 0) {
+      // Hiçbir hedef şu an aktif değil — agent'a istek gönderme,
+      // tüm recipientlar `pending` olarak kalsın. Poller retry yapacak.
+      return
+    }
+
     try {
       const ctrl  = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 12000)
-      // "selected" modunda agent'a yalnızca seçili kullanıcılara inject etmesini söyle;
-      // diğer modlarda (all/company) tüm aktif oturumlara gönderilsin — alan yollanmaz.
       const payload: Record<string, unknown> = {
         msgId:  input.msgId,
         title:  input.subject,
@@ -179,12 +204,9 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
         type:   input.type,
         from:   input.senderName,
         sentAt,
-      }
-      if (input.recipientType === "selected") {
-        const serverUsernames = groups.get(serverId) ?? []
-        if (serverUsernames.length > 0) {
-          payload.targetUsernames = serverUsernames
-        }
+        // Agent'a SADECE şu an aktif olan target user'ları gönder; offline
+        // olanlar pending kalır, sonradan login olunca Poller iletir.
+        targetUsernames: onlineNow,
       }
 
       const res = await fetch(`http://${info.IP}:${info.AgentPort}/api/notify`, {
@@ -203,7 +225,10 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
         errors.push({ serverId, error: e })
         return
       }
-      await markServerDelivered(input.msgId, serverId)
+      // Agent yanıtı OK — inject edilenler için (=onlineNow) delivered işaretle
+      await Promise.all(onlineNow.map(u =>
+        markRecipientDelivered(input.msgId, serverId, u)
+      ))
       serversOk++
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
