@@ -237,7 +237,7 @@ export function AppSidebar() {
               <TooltipTrigger asChild>
                 <Link href="/companies/setup" className="mb-2 block">
                   <BorderBeam size="sm" colorVariant="ocean" theme="dark" borderRadius={6}>
-                    <span className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-[#1d64ff] text-white hover:bg-[#1652d6] transition-colors">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-[6px] bg-black text-white hover:bg-neutral-800 transition-colors">
                       <MagicStar size="16" color="currentColor" variant="Bold" />
                     </span>
                   </BorderBeam>
