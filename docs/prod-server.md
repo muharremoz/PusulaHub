@@ -197,6 +197,21 @@ ile reproduce et, gerçek mesajı oku. İki yaygın kök neden:
 `setup-prod.ps1` Node + Git'i `winget` ile kurmaya çalışır. Server 2019'da
 winget yok. Önce manuel MSI kur, sonra script idempotent şekilde devam eder.
 
+### `INTERNAL_APP_KEY` 3 envde aynı olmalı (SSO bridge)
+Switch → Hub/SpareFlow geçişinde session aktarımı bu key ile imzalı. Hub
+veya SpareFlow'da farklı/yoksa SSO bridge `HTTP 401` döner, kullanıcı sürekli
+login'e geri atılır. SpareFlow err log'unda `[module-registry] Hub reddetti
+HTTP 401` belirtisi.
+
+`setup-prod.ps1` Hub ve SpareFlow .env.production'larına bu key'i yazıyor
+ama **Switch'inkine yazmıyor (script bug)**. Yeni kurulumda 3 envi karşılaştır:
+```powershell
+Get-Content C:\PusulaProd\PusulaHub\apps\web\.env.production | Where {$_ -match "^INTERNAL_APP_KEY"}
+Get-Content C:\PusulaProd\SpareFlow\spare-flow-ui\.env.production | Where {$_ -match "^INTERNAL_APP_KEY"}
+Get-Content C:\PusulaProd\PusulaSwitch\.env.production | Where {$_ -match "^INTERNAL_APP_KEY"}
+```
+Üçü de aynı 64-byte hex değerini vermeli.
+
 ### IIS 80'i Default Web Site tutuyor
 Port 80'i Default Web Site dinliyordu, portproxy 80 → 4000 yapamadık. Çözüm:
 ```powershell
