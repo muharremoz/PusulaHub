@@ -131,7 +131,7 @@ function CompactUserAvatar() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-sky-900 transition-colors"
+          className="flex h-9 w-9 items-center justify-center rounded-[8px] hover:bg-[#0d3380] transition-colors"
           title={name}
         >
           <Avatar className="h-7 w-7 rounded-[6px]">
@@ -229,9 +229,9 @@ export function AppSidebar() {
 
   return (
     <>
-      <aside className="group/sidebar sticky top-0 flex h-svh w-[296px] shrink-0 self-stretch bg-[#082F49] text-sky-50">
+      <aside className="group/sidebar sticky top-0 flex h-svh w-[296px] shrink-0 self-stretch bg-[#061a48] text-[#eef3ff]">
         {/* -------- RAIL (sol) -------- */}
-        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-sky-900 py-3">
+        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-[#0d3380] py-3">
           {canWriteCompanies && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -256,8 +256,8 @@ export function AppSidebar() {
                       onClick={() => setActiveIdx(i)}
                       className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
                         active
-                          ? "bg-white text-sky-950"
-                          : "text-sky-200 hover:bg-sky-900 hover:text-white"
+                          ? "bg-white text-[#1d64ff]"
+                          : "text-[#b4c8ff] hover:bg-[#0d3380] hover:text-white"
                       }`}
                     >
                       <Ic I={g.railIcon} size={18} />
@@ -274,7 +274,7 @@ export function AppSidebar() {
               <TooltipTrigger asChild>
                 <Link
                   href="/settings"
-                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-sky-200 hover:bg-sky-900 hover:text-white transition-colors"
+                  className="flex h-9 w-9 items-center justify-center rounded-[8px] text-[#b4c8ff] hover:bg-[#0d3380] hover:text-white transition-colors"
                 >
                   <Ic I={Setting} size={18} />
                 </Link>
@@ -286,7 +286,7 @@ export function AppSidebar() {
         </nav>
 
         {/* -------- PANEL (sağ) -------- */}
-        <div className="flex min-w-0 flex-1 flex-col bg-[#F8FAFC]">
+        <div className="flex min-w-0 flex-1 flex-col bg-[#f7faff]">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
@@ -316,8 +316,8 @@ export function AppSidebar() {
                       style={{ animationDelay: `${idx * 30}ms`, animationFillMode: "both" }}
                       className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors animate-in slide-in-from-left-2 fade-in duration-300 ease-out ${
                         active
-                          ? "bg-sky-950 text-white"
-                          : "text-slate-700 hover:bg-sky-100 hover:text-sky-950"
+                          ? "bg-[#1d64ff] text-white"
+                          : "text-slate-700 hover:bg-[#d8e3ff] hover:text-[#1d64ff]"
                       }`}
                     >
                       <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
