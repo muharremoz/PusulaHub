@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Server, Package, ChevronsUpDown, Check } from "lucide-react"
+import { ChevronsUpDown, Check } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,24 +26,22 @@ interface AppEntry {
   id:          string
   name:        string
   description: string
-  icon:        React.ComponentType<{ className?: string }>
-  color:       string
+  logo:        string
 }
 
+// basePath /apps/hub altında sunulduğumuz için /apps/hub/logos/... ile başlatıyoruz.
 const APPS: AppEntry[] = [
   {
     id:          "hub",
     name:        "PusulaHub",
     description: "Sunucu yönetim paneli",
-    icon:        Server,
-    color:       "#061a48",
+    logo:        "/apps/hub/logos/hub.svg",
   },
   {
     id:          "spareflow",
     name:        "SpareFlow",
     description: "SpareBackup izleme uygulaması",
-    icon:        Package,
-    color:       "#1d64ff",
+    logo:        "/apps/hub/logos/spareflow.svg",
   },
 ]
 
@@ -69,7 +67,6 @@ export function AppSwitcher() {
   }, [accessibleApps])
 
   const current = APPS.find((a) => a.id === CURRENT_ID) ?? APPS[0]
-  const Icon    = current.icon
 
   return (
     <DropdownMenu>
@@ -78,11 +75,9 @@ export function AppSwitcher() {
           size="lg"
           className="bg-[#082c6b] border border-[#0d3380] hover:bg-[#0d3380] data-[state=open]:bg-[#0d3380] rounded-[6px] text-white"
         >
-          <div
-            className="flex aspect-square size-8 items-center justify-center rounded-lg"
-            style={{ background: current.color }}
-          >
-            <Icon className="size-4 text-white" />
+          <div className="flex aspect-square size-8 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={current.logo} alt={current.name} className="w-full h-full object-cover" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
             <span className="truncate font-medium text-white">{current.name}</span>
@@ -100,7 +95,6 @@ export function AppSwitcher() {
           Pusula Uygulamaları
         </DropdownMenuLabel>
         {visibleApps.map((app) => {
-          const ItemIcon = app.icon
           const isActive = app.id === CURRENT_ID
           return (
             <DropdownMenuItem
@@ -109,11 +103,9 @@ export function AppSwitcher() {
               className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
             >
               <a href={`/apps/${app.id}`}>
-                <div
-                  className="flex aspect-square size-7 items-center justify-center rounded-[5px] shrink-0"
-                  style={{ background: app.color }}
-                >
-                  <ItemIcon className="size-3.5 text-white" />
+                <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={app.logo} alt={app.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="grid flex-1 leading-tight min-w-0">
                   <span className="truncate text-[12px] font-medium">{app.name}</span>
