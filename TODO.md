@@ -67,18 +67,45 @@ _Şimdilik boş._
 
 ### Yapılacak
 
-- [ ] **Sunuculara mesaj gönderme — uçtan uca test.** Agent → WTS session injection → popup → okundu raporu → `MessageRecipients.readAt` ↔ Hub UI'da "okundu" işaretleme zinciri prod ortamda gerçek bir sunucuda doğrulanacak. Hata durumlarında (agent offline, session yok, kullanıcı popup'ı kapatmadı) UI'da net feedback.
+_Şimdilik boş._
 
 ### Yapıldı
 
 - ✅ **Hazır Mesaj seçimi gözden geçirildi** — sol panel'de "Yeni Şablon" butonu belirginleştirildi, kullanıcı şablonlarında MoreVertical (⋮) → Düzenle/Sil dropdown, built-in olanlarda gizli.
 - ✅ **Hazır mesaj CRUD** (`82385d1`) — `MessageTemplates` DB tablosu, `lib/templates-db.ts` (list/get/create/update/delete), 4 API route (`GET/POST /api/messages/templates`, `GET/PATCH/DELETE /api/messages/templates/[id]`). Statik PRESET_MESSAGES (`preset-messages.ts`) korundu, kullanıcı şablonları DB'den. API'de `builtIn: true|false` flag, sistem şablonları silinemez (403). UI: TemplateFormDialog (yeni/düzenle birleşik), validation, toast feedback.
-- ✅ **Liste filtreleri** (`82385d1`) — `messages-db.ts` ListFilter genişletildi: from/to/companyId/username/subject/priority. Tek SQL, NULL-safe parametreli, EXISTS subquery (username için). UI: filtre çubuğu açılır panel, aktif sayaç badge, "Filtreleri temizle", 250ms debounce.
+- ✅ **Liste filtreleri** (`82385d1`) — `messages-db.ts` ListFilter genişletildi: from/to/companyId/username/subject/priority. Tek SQL, NULL-safe parametreli, EXISTS subquery (username için). UI: filtre çubuğu (önce inline, sonra Popover'a taşındı `9aa731c`), aktif sayaç badge, "Filtreleri temizle", 250ms debounce.
 - ✅ **5 yeni hazır mesaj** seed — Yazılım Güncellemesi, VPN Sorunu, Disk Uyarısı, Veritabanı Bakımı, Toplantı Hatırlatması (DB MessageTemplates'e CreatedBy=`system-seed` ile).
+- ✅ **Sunuculara mesaj gönderme — uçtan uca test** — gerçek bir sunucuda (PUSULARDP/Terminal 1) doğrulandı. Agent → SessionInjector.Inject → WTS Active session → PusulaNotify.exe popup → kullanıcı "Okudum, anladım" → agent /api/ack → Hub Poller pendingAcks aldı → MessageRecipients.ReadAt yazıldı → UI okunma sayacı arttı.
+- ✅ **5 sunucuda agent recompile + reinstall** — eski PusulaAgent.exe `targetUsernames` filtresini görmezden geliyordu (kaynak güncellenmiş ama derlenmemiş). Hostname-username decrypt → nested WinRM (Mobil/SQL/Terminal 1) ve SMB+WMI (Active Directory/Depo) ile yeni exe push, KUR.bat inline. Tümünde sessions:0 → targetUsernames doğru filtreleniyor.
+- ✅ **Pending mesaj retry — kullanıcı login olunca otomatik iletilsin** (`a20a9fb`) — broadcast offline kullanıcılar için MessageRecipients'a `pending` yazıyor, agent'a göndermiyor; Poller her cycle'da agent.report.sessions Active user'larını DB pending recipientlarıyla kesiştiriyor, eşleşenler için agent'a /api/notify (single user) yolluyor, başarılıysa delivered. Idempotency: Status='pending' filtresi tekrar engeller. TTL: 7 gün. Agent kodu değişmez.
 
 ### Tuzaklar (yaşandı, çözüldü)
 
 - ⚠️ **SQL Server FK tip+uzunluk eşleşme zorunluluğu** (`5a9a84d`, `6ef941d`) — Eski `create.sql` `Messages.Id`'yi `NVARCHAR(50)` olarak oluşturmuş; yeni `messages-db.ts` migration `MessageRecipients.MessageId`'yi `UNIQUEIDENTIFIER` beklerken FK kuramıyor → SQL Server **error 1750** ("Could not create constraint or index"). Asıl hata mesajı **Hub log'unda gizleniyor**, sadece `precedingErrors: [Array]` yazıyor. Manuel SQL ile CREATE TABLE çalıştırırsan gerçek mesaj görünür: "Column 'Messages.Id' is not the same data type/length as referencing column". Çözüm: `MessageId NVARCHAR(50)` (Messages.Id ile birebir eşleş). Bonus: tüm named constraint'leri (`PK_MT`, `DF_MR_Status`, `FK_MR_Message`) **anonymous** yap — DB-wide name uniqueness yüzünden IF guard skip etse bile parser-time çakışma ihtimali sıfırlanır.
+
+---
+
+## SpareFlow — Kur Firmaları Müşteri Mesajı (sonra dönülecek)
+
+### Yapılacak
+
+- [ ] **Müşteri Bilgi Mesajı dialog UX iyileştirmesi.** Şu anki durumla:
+  yeni firma → password ile dolu, aksiyon menüsü → boş + inline "Şifre
+  Belirle" alanı. Geri dönüp gözden geçirilecek konular:
+  - Şifre üretici kalite (12 char yeterli mi, sembol eklensin mi)
+  - "Şifre Değiştir" yapıldığında müşteriye otomatik e-posta atılsın mı
+    (Supabase Auth recovery e-postası)
+  - Mevcut "Şifre" aksiyon menüsü item'ı vs dialog içindeki inline alan
+    duplikasyon — birini kaldırma kararı
+  - Mesaj şablonu özelleştirilebilir olsun mu (PusulaHub'taki gibi
+    MessageTemplates pattern)
+
+### Yapıldı
+
+- ✅ Müşteri Bilgi Mesajı dialogu — yeni firma sonrası otomatik açılır + aksiyon menüsünden tekrar açılabilir.
+- ✅ Plain şifre **DB'de tutulmuyor** (last_password_plain kolonu DROP edildi). Şifre yalnızca create/update anında dialog'da bir kez gösterilir.
+- ✅ Dialog içinde inline **"Yeni Şifre Belirle / Değiştir"** alanı — Üret butonu (12 char güvenli, ambiguous karakter hariç) + PATCH /api/kur/firmalar/:id/password.
+- ✅ **Clipboard fallback** (`13b16a6`) — `navigator.clipboard.writeText()` HTTPS/localhost dışında reject olur. textarea + `document.execCommand("copy")` fallback'i ile HTTP'de (app.pusulanet.net) çalışır.
 
 ---
 
