@@ -76,7 +76,7 @@ export function AppSwitcher() {
       <DropdownMenuTrigger asChild>
         <SidebarMenuButton
           size="lg"
-          className="bg-white border border-[#d8e3ff] hover:bg-[#eef3ff] data-[state=open]:bg-[#eef3ff] rounded-[6px]"
+          className="bg-[#082c6b] border border-[#0d3380] hover:bg-[#0d3380] data-[state=open]:bg-[#0d3380] rounded-[6px] text-white"
         >
           <div
             className="flex aspect-square size-8 items-center justify-center rounded-lg"
@@ -85,10 +85,10 @@ export function AppSwitcher() {
             <Icon className="size-4 text-white" />
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-medium text-[#061a48]">{current.name}</span>
-            <span className="truncate text-xs text-[#061a48]/60">{current.description}</span>
+            <span className="truncate font-medium text-white">{current.name}</span>
+            <span className="truncate text-xs text-[#b4c8ff]">{current.description}</span>
           </div>
-          <ChevronsUpDown className="ml-auto size-4 text-[#061a48]/60" />
+          <ChevronsUpDown className="ml-auto size-4 text-[#b4c8ff]" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent

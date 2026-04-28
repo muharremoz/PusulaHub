@@ -285,8 +285,8 @@ export function AppSidebar() {
           </div>
         </nav>
 
-        {/* -------- PANEL (sağ) -------- */}
-        <div className="flex min-w-0 flex-1 flex-col bg-[#eef3ff]">
+        {/* -------- PANEL (sağ) — rail ile aynı koyu navy -------- */}
+        <div className="flex min-w-0 flex-1 flex-col bg-[#061a48]">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
@@ -299,7 +299,7 @@ export function AppSidebar() {
           >
             {/* Group title */}
             <div className="px-3 pt-4 pb-2">
-              <h2 className="text-[15px] font-semibold text-neutral-900">
+              <h2 className="text-[15px] font-semibold text-[#b4c8ff]">
                 {activeGroup?.label ?? "Menü"}
               </h2>
             </div>
@@ -317,7 +317,7 @@ export function AppSidebar() {
                       className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors animate-in slide-in-from-left-2 fade-in duration-300 ease-out ${
                         active
                           ? "bg-[#1d64ff] text-white"
-                          : "text-slate-700 hover:bg-[#d8e3ff] hover:text-[#1d64ff]"
+                          : "text-[#b4c8ff] hover:bg-[#0d3380] hover:text-white"
                       }`}
                     >
                       <span className="inline-flex transition-transform duration-300 ease-out group-hover/navitem:scale-110">
