@@ -194,7 +194,7 @@ function MiniCalendar({
             {d ? (
               <button onClick={() => onSelect(d)} className={cn(
                 "size-6 rounded-full text-[10px] font-medium relative flex items-center justify-center transition-colors",
-                isSameDay(d, selected) ? "bg-foreground text-background" :
+                isSameDay(d, selected) ? "bg-[#1d64ff] text-white" :
                 isSameDay(d, new Date()) ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/60 text-foreground"
               )}>
                 {d.getDate()}
@@ -367,7 +367,7 @@ function MonthGrid({ year, month, events, selected, onSelectDay, onSelectEvent, 
               <div className="flex items-center justify-between px-0.5">
                 <span className={cn(
                   "size-6 flex items-center justify-center rounded-full text-[11px] font-medium",
-                  isToday ? "bg-foreground text-background" : !current ? "text-muted-foreground/40" : "text-foreground"
+                  isToday ? "bg-[#1d64ff] text-white" : !current ? "text-muted-foreground/40" : "text-foreground"
                 )}>
                   {date.getDate()}
                 </span>
@@ -409,7 +409,7 @@ function WeekGrid({ weekOf, events, onSelectEvent, onCreateOnDay }: {
           <div key={i} className={cn("text-center py-2 px-1 border-r border-border/25 last:border-r-0", isSameDay(d, today) && "bg-primary/5")}>
             <div className="text-[10px] font-medium text-muted-foreground">{TR_DAYS_SHORT[i]}</div>
             <div className={cn("mx-auto mt-0.5 size-7 flex items-center justify-center rounded-full text-[13px] font-semibold",
-              isSameDay(d, today) ? "bg-foreground text-background" : "text-foreground")}>
+              isSameDay(d, today) ? "bg-[#1d64ff] text-white" : "text-foreground")}>
               {d.getDate()}
             </div>
           </div>
@@ -583,7 +583,7 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
                       return (
                         <button key={t} onClick={() => setType(t)}
                           className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] text-[11px] font-medium border transition-colors",
-                            type === t ? "border-foreground/30 bg-foreground text-background" : "border-border/40 hover:bg-muted/50")}>
+                            type === t ? "border-foreground/30 bg-[#1d64ff] text-white" : "border-border/40 hover:bg-muted/50")}>
                           <m.icon className="size-3.5" />{m.label}
                         </button>
                       )
@@ -846,7 +846,7 @@ export default function CalendarPage() {
               onClick={() => setShowSearch(v => !v)}
               className={cn(
                 "w-full flex items-center gap-2 h-7 px-2.5 rounded-[5px] text-[11px] border transition-colors",
-                showSearch ? "bg-foreground text-background border-foreground" : "border-border/40 text-muted-foreground hover:bg-muted/50"
+                showSearch ? "bg-[#1d64ff] text-white border-foreground" : "border-border/40 text-muted-foreground hover:bg-muted/50"
               )}
             >
               <Search className="size-3.5" />Ara
@@ -902,11 +902,11 @@ export default function CalendarPage() {
             <button onClick={goToday} className="px-3 py-1 rounded-[5px] text-[11px] font-medium border border-border/50 hover:bg-muted/50 transition-colors">Bugün</button>
             <div className="flex items-center rounded-[5px] border border-border/50 overflow-hidden">
               <button onClick={() => setViewMode("month")} className={cn("flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors",
-                viewMode === "month" ? "bg-foreground text-background" : "hover:bg-muted/50 text-muted-foreground")}>
+                viewMode === "month" ? "bg-[#1d64ff] text-white" : "hover:bg-muted/50 text-muted-foreground")}>
                 <CalendarDays className="size-3.5" />Ay
               </button>
               <button onClick={() => setViewMode("week")} className={cn("flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-border/50",
-                viewMode === "week" ? "bg-foreground text-background" : "hover:bg-muted/50 text-muted-foreground")}>
+                viewMode === "week" ? "bg-[#1d64ff] text-white" : "hover:bg-muted/50 text-muted-foreground")}>
                 <CalendarRange className="size-3.5" />Hafta
               </button>
             </div>

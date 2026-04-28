@@ -127,7 +127,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
                   onClick={() => setStatusFilter(key)}
                   className={cn(
                     "rounded-[6px] text-[10px] px-2.5 py-1 font-medium transition-colors",
-                    statusFilter === key ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                    statusFilter === key ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {label}

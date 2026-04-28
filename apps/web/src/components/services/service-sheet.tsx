@@ -245,7 +245,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                       className={cn(
                         "flex items-center gap-2 px-3 py-2.5 rounded-[5px] border transition-colors text-[11px] font-medium",
                         active
-                          ? "border-foreground bg-foreground text-background"
+                          ? "border-foreground bg-[#1d64ff] text-white"
                           : "border-border/60 hover:border-foreground/40 hover:bg-muted/30",
                       )}
                     >
@@ -476,7 +476,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
               type="button"
               disabled={!canSave}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {isEdit ? "Kaydet" : "Hizmet Ekle"}

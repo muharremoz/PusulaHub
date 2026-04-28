@@ -401,7 +401,7 @@ export default function SQLPage() {
                   </p>
                   <a
                     href="/servers"
-                    className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                    className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
                   >
                     Sunuculara Git
                   </a>
@@ -590,7 +590,7 @@ export default function SQLPage() {
                       <button
                         onClick={handleRun}
                         disabled={!canRun}
-                        className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                       >
                         {isRunning
                           ? <Loader2 className="size-3 animate-spin" />

@@ -74,7 +74,7 @@ export function StepServer({
           </p>
           <a
             href="/servers"
-            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
           >
             Sunucu Ekle
           </a>

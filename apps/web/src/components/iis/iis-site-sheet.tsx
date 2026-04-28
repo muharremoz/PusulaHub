@@ -297,7 +297,7 @@ export function IISSiteSheet({ open, onOpenChange, onSaved }: IISSiteSheetProps)
             <button type="button" onClick={handleClose} className="flex-1 text-[11px] font-medium py-2 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground">
               İptal
             </button>
-            <button type="button" disabled={!canSave} className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none">
+            <button type="button" disabled={!canSave} className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none">
               Site Ekle
             </button>
           </div>

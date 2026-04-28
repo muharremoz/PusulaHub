@@ -479,7 +479,7 @@ export function WizardShell() {
                 onClick={() => !isFuture && go(idx)}
                 className={cn(
                   "flex items-center gap-2.5 px-2 py-2 rounded-[5px] text-left transition-colors w-full",
-                  isActive && "bg-foreground text-background",
+                  isActive && "bg-[#1d64ff] text-white",
                   isDone && "text-foreground hover:bg-muted/60",
                   isFuture && "text-muted-foreground opacity-40 cursor-default"
                 )}
@@ -668,7 +668,7 @@ export function WizardShell() {
                 <button
                   onClick={() => go(step + 1)}
                   disabled={!canProceed}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] transition-colors bg-foreground text-background hover:bg-foreground/90 disabled:opacity-30 disabled:pointer-events-none"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] transition-colors bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-30 disabled:pointer-events-none"
                 >
                   İleri
                   <ChevronRight className="size-3.5" />
@@ -676,7 +676,7 @@ export function WizardShell() {
               ) : (
                 <button
                   onClick={() => go(6)}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
                 >
                   <Sparkles className="size-3.5" />
                   Kurulumu Başlat

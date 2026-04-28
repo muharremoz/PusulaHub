@@ -310,7 +310,7 @@ export default function ServersPage() {
               onClick={() => setOsFilter(f)}
               className={cn(
                 "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                osFilter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                osFilter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f === "all" ? "Tümü" : f === "windows" ? "Windows" : "Ubuntu"}
@@ -326,7 +326,7 @@ export default function ServersPage() {
               onClick={() => setStatusFilter(f)}
               className={cn(
                 "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                statusFilter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                statusFilter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f === "all" ? "Tümü" : f === "online" ? "Aktif" : f === "warning" ? "Uyarı" : "Kapalı"}
@@ -341,7 +341,7 @@ export default function ServersPage() {
               onClick={() => setView("list")}
               className={cn(
                 "flex items-center justify-center h-7 w-7 rounded-[6px] transition-colors",
-                view === "list" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                view === "list" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               <Ic I={IsRowList} />
@@ -350,7 +350,7 @@ export default function ServersPage() {
               onClick={() => setView("card")}
               className={cn(
                 "flex items-center justify-center h-7 w-7 rounded-[6px] transition-colors",
-                view === "card" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                view === "card" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               <Ic I={IsGrid} />
@@ -385,7 +385,7 @@ export default function ServersPage() {
           {/* New server */}
           <button
             onClick={() => setSheetOpen(true)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
           >
             <Ic I={IsAdd} />
             Yeni Sunucu
@@ -439,7 +439,7 @@ export default function ServersPage() {
             </div>
             <button
               onClick={() => setSheetOpen(true)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors mt-1"
+              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors mt-1"
             >
               <Ic I={IsAdd} />
               Yeni Sunucu Ekle

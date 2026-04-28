@@ -361,7 +361,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
               type="button"
               disabled={!canSave}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {isEdit ? "Kaydet" : "Demo DB Ekle"}

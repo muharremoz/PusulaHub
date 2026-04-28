@@ -45,7 +45,7 @@ function OUTreeItem({
       <button
         className={cn(
           "w-full flex items-center gap-1.5 py-1.5 pr-2 text-left text-[11px] rounded-[4px] transition-colors",
-          isSelected ? "bg-foreground text-background" : "hover:bg-black/5"
+          isSelected ? "bg-[#1d64ff] text-white" : "hover:bg-black/5"
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         onClick={() => { onSelect(ou.path); if (hasChildren) setExpanded(!expanded); }}
@@ -202,7 +202,7 @@ export default function ADPage() {
             <div className="ml-auto">
               <button
                 onClick={() => setSheetOpen(true)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
               >
                 <UserPlus className="size-3.5" />
                 Yeni Kullanıcı

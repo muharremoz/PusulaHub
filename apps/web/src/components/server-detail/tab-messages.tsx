@@ -206,7 +206,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                       className={cn(
                         "rounded-[5px] text-[11px] font-medium px-3 py-1.5 transition-colors border",
                         activeTemplate === tpl.key
-                          ? "bg-foreground text-background border-foreground"
+                          ? "bg-[#1d64ff] text-white border-foreground"
                           : "border-border/60 hover:bg-muted/40 text-muted-foreground"
                       )}
                     >
@@ -257,7 +257,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                 <button
                   onClick={handleSend}
                   disabled={!title.trim() || !message.trim() || sending}
-                  className="w-full flex items-center justify-center gap-2 bg-foreground text-background hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="w-full flex items-center justify-center gap-2 bg-[#1d64ff] text-white hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <MessageSquare className="size-3.5" />
                   {sending ? "Gönderiliyor..." : "Mesajı Gönder"}

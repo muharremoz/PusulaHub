@@ -410,7 +410,7 @@ export default function ProjectBoardPage({ params }: { params: Promise<{ id: str
               İptal
             </button>
             <button onClick={handleAddColumn} disabled={!newColName.trim()}
-              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-50 transition-colors">
               Ekle
             </button>
           </div>

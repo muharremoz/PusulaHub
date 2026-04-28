@@ -506,7 +506,7 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleComment())}
                     className="h-7 text-[11px] rounded-[5px] flex-1" placeholder="Yorum yaz..." />
                   <button onClick={handleComment} disabled={!newComment.trim() || sendingComm}
-                    className="h-7 w-7 flex items-center justify-center rounded-[5px] bg-foreground text-background hover:bg-foreground/90 disabled:opacity-40 transition-colors">
+                    className="h-7 w-7 flex items-center justify-center rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-40 transition-colors">
                     <Send className="size-3" />
                   </button>
                 </div>
@@ -584,7 +584,7 @@ export function TaskSheet({ task, columns, projectId, open, onClose, onUpdated, 
               İptal
             </button>
             <button onClick={handleSave} disabled={saving}
-              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-50 transition-colors">
               {saving ? "Kaydediliyor..." : "Kaydet"}
             </button>
           </div>

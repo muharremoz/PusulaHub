@@ -74,7 +74,7 @@ function NoteList({
           </span>
           <button
             onClick={onCreate}
-            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] font-semibold bg-foreground text-background hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3" /> Yeni
           </button>

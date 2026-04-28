@@ -616,7 +616,7 @@ export default function MessagesPage() {
                           key={t}
                           onClick={() => { setRecipientType(t); clearSelection(); setComposeCompanies(new Set()) }}
                           className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                            recipientType === t ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                            recipientType === t ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {t === "all"      && <Users      className="h-3 w-3" />}
@@ -774,7 +774,7 @@ export default function MessagesPage() {
                                       key={key}
                                       onClick={() => toggleRecipient(key)}
                                       className={`w-full grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 text-left text-[11px] items-center transition-colors ${
-                                        isSel ? "bg-foreground text-background" : "hover:bg-muted/20"
+                                        isSel ? "bg-[#1d64ff] text-white" : "hover:bg-muted/20"
                                       }`}
                                     >
                                       <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${r.online ? "bg-emerald-500" : "bg-gray-300"}`} />
@@ -1094,7 +1094,7 @@ function LeftModeTabs({
       <button
         onClick={() => setLeftMode("compose")}
         className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-          leftMode === "compose" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+          leftMode === "compose" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <Send className="h-3 w-3" />
@@ -1103,7 +1103,7 @@ function LeftModeTabs({
       <button
         onClick={() => setLeftMode("templates")}
         className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-          leftMode === "templates" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+          leftMode === "templates" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <Sparkles className="h-3 w-3" />

@@ -2488,7 +2488,7 @@ tr:nth-child(even) td{background:#fafafa}
                                 >
                                   {cat}
                                   {count > 0 && (
-                                    <span className="size-4 rounded-full bg-foreground text-background text-[9px] flex items-center justify-center font-bold">{count}</span>
+                                    <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold">{count}</span>
                                   )}
                                 </button>
                               )

@@ -187,7 +187,7 @@ export default function ServicesPage() {
             onClick={() => setFilter("all")}
             className={cn(
               "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-              filter === "all" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+              filter === "all" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
             )}
           >
             Tümü
@@ -198,7 +198,7 @@ export default function ServicesPage() {
               onClick={() => setFilter(cat)}
               className={cn(
                 "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === cat ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                filter === cat ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {cat}
@@ -209,7 +209,7 @@ export default function ServicesPage() {
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={openCreate}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3.5" />
             Yeni Hizmet

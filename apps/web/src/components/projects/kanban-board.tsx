@@ -380,7 +380,7 @@ function AddTaskDialog({
             İptal
           </button>
           <button onClick={save} disabled={saving || !title.trim()}
-            className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+            className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-50 transition-colors">
             {saving ? "Kaydediliyor..." : "Görev Ekle"}
           </button>
         </div>
@@ -639,7 +639,7 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
           onClick={() => { setBulkMode(!bulkMode); setSelectedTasks(new Set()) }}
           className={cn(
             "flex items-center gap-1.5 px-2.5 py-1.5 rounded-[5px] text-[10px] font-medium transition-colors border",
-            bulkMode ? "bg-foreground text-background border-foreground" : "border-border/60 hover:bg-muted/40 text-muted-foreground"
+            bulkMode ? "bg-[#1d64ff] text-white border-foreground" : "border-border/60 hover:bg-muted/40 text-muted-foreground"
           )}
         >
           <CheckSquare className="size-3" />
@@ -773,7 +773,7 @@ export function KanbanBoard({ board, loading, onRefresh, taskSearch = "", priori
               İptal
             </button>
             <button onClick={handleSaveColumn} disabled={!editColName.trim()}
-              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-foreground text-background hover:bg-foreground/90 disabled:opacity-50 transition-colors">
+              className="px-4 py-1.5 rounded-[5px] text-[11px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-50 transition-colors">
               Kaydet
             </button>
           </div>

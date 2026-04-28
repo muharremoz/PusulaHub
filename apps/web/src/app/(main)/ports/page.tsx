@@ -180,7 +180,7 @@ export default function PortsPage() {
               onClick={() => setFilter(f)}
               className={cn(
                 "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === f ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+                filter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f === "all" ? "Tümü" : f === "active" ? "Aktif" : "Pasif"}
@@ -190,7 +190,7 @@ export default function PortsPage() {
         <div className="ml-auto">
           <button
             onClick={handleAdd}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3.5" />
             Aralık Ekle
@@ -241,7 +241,7 @@ export default function PortsPage() {
               </div>
               <button
                 onClick={handleAdd}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
               >
                 <Plus className="size-3.5" />
                 Aralık Ekle

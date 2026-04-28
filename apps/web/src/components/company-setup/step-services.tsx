@@ -160,7 +160,7 @@ export function StepServices({
             >
               {cat}
               {count > 0 && (
-                <span className="size-4 rounded-full bg-foreground text-background text-[9px] flex items-center justify-center font-bold">
+                <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold">
                   {count}
                 </span>
               )}
@@ -277,7 +277,7 @@ export function StepServices({
               </p>
               <a
                 href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
               >
                 Sunucu Ekle
               </a>
@@ -414,7 +414,7 @@ export function StepServices({
               </p>
               <a
                 href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
               >
                 Sunucu Ekle
               </a>

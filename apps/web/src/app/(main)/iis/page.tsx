@@ -125,7 +125,7 @@ export default function IISPage() {
         </button>
         <button
           onClick={() => setSheetOpen(true)}
-          className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-foreground text-background hover:bg-foreground/90 transition-colors"
+          className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
         >
           <Plus className="size-3.5" />
           Yeni Site

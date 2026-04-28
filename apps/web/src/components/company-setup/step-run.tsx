@@ -400,7 +400,7 @@ export function StepRun({
                 className={cn(
                   "flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] transition-colors",
                   meetsAdComplexity(newPw)
-                    ? "bg-foreground text-background hover:bg-foreground/90"
+                    ? "bg-[#1d64ff] text-white hover:bg-foreground/90"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >

@@ -244,7 +244,7 @@ export function TabFiles({ serverId }: Props) {
                     className={cn(
                       "flex items-center gap-1 px-2 py-1 rounded-[5px] text-[11px] font-medium transition-colors",
                       activeDrive === d
-                        ? "bg-foreground text-background"
+                        ? "bg-[#1d64ff] text-white"
                         : "bg-muted/60 text-muted-foreground hover:bg-muted"
                     )}
                   >

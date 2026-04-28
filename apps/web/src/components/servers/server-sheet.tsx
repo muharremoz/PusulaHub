@@ -468,7 +468,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
               type="button"
               onClick={handleSave}
               disabled={!canSave || saving}
-              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-foreground text-background hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving ? (isEdit ? "Kaydediliyor..." : "Ekleniyor...") : (isEdit ? "Kaydet" : "Sunucu Ekle")}
             </button>

@@ -165,7 +165,7 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                        <span className="size-4 rounded-full bg-foreground text-background text-[9px] flex items-center justify-center font-bold shrink-0">1</span>
+                        <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold shrink-0">1</span>
                         Authenticator uygulamanızla QR kodu tarayın
                       </p>
                       <div className="flex justify-center p-3 rounded-[6px] border border-border/40 bg-white w-fit">
@@ -175,7 +175,7 @@ export default function ProfilePage() {
 
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                        <span className="size-4 rounded-full bg-foreground text-background text-[9px] flex items-center justify-center font-bold shrink-0">2</span>
+                        <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold shrink-0">2</span>
                         Uygulamadaki 6 haneli kodu girin
                       </p>
                       <div className="flex gap-2">
