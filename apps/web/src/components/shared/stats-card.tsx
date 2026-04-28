@@ -13,7 +13,7 @@ export function StatsCard({ title, value, subtitle, icon, trend, className }: St
   return (
     <div
       className={cn("rounded-[8px] p-2 pb-0 flex flex-col", className)}
-      style={{ backgroundColor: "#F4F2F0" }}
+      style={{ backgroundColor: "#eef3ff" }}
     >
       <div
         className="rounded-[4px] px-4 py-3 flex-1"

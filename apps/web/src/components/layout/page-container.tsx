@@ -43,7 +43,7 @@ export function PageContainer({ title, description, children }: PageContainerPro
           </button>
         </div>
       </header>
-      <main className="flex-1 p-6 bg-[#F9F8F7]">
+      <main className="flex-1 p-6 bg-[#f7faff]">
         {children}
       </main>
     </>
