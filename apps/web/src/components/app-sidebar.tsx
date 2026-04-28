@@ -286,7 +286,7 @@ export function AppSidebar() {
         </nav>
 
         {/* -------- PANEL (sağ) -------- */}
-        <div className="flex min-w-0 flex-1 flex-col bg-[#f7faff]">
+        <div className="flex min-w-0 flex-1 flex-col bg-[#eef3ff]">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
