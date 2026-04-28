@@ -4,13 +4,14 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0);
+  /* Sidebar #1d64ff royal blue paletiyle uyumlu hafif blue tint */
+  --background: oklch(0.985 0.005 260);   /* #fafbff — saf beyaz değil hafif mavi */
   --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
+  --card: oklch(1 0 0);                   /* card içi temiz beyaz, page bg ile kontrast */
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.56 0.241 261);       /* #1d64ff — CTA/buton vurgusu */
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -20,9 +21,9 @@
   --accent-foreground: oklch(0.205 0 0);
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.92 0.012 260);        /* hafif blue tint border */
+  --input: oklch(0.92 0.012 260);
+  --ring: oklch(0.56 0.241 261);          /* focus ring #1d64ff */
   --radius: 0.625rem;
   --sidebar-background: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
