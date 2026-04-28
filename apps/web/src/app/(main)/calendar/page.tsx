@@ -833,10 +833,10 @@ export default function CalendarPage() {
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex h-[calc(100vh-0px)] overflow-hidden" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="flex h-[calc(100vh-0px)] overflow-hidden" style={{ backgroundColor: "#eef3ff" }}>
 
         {/* ── Sol panel ── */}
-        <div className="w-[220px] shrink-0 flex flex-col border-r border-border/40 bg-[#F4F2F0]">
+        <div className="w-[220px] shrink-0 flex flex-col border-r border-border/40 bg-[#eef3ff]">
           <div className="px-3 pt-4 pb-2 space-y-2">
             <Button onClick={() => openCreate()} className="w-full h-8 text-[11px] rounded-[5px] gap-1.5">
               <Plus className="size-3.5" />Yeni Etkinlik

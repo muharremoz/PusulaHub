@@ -160,7 +160,7 @@ function MonitorCard({ m, history }: { m: KumaMonitor; history: MonitorHistory |
   const cfg = STATUS_CONFIG[ui]
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+    <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
       <div
         className="rounded-[4px] bg-white overflow-hidden"
         style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -182,7 +182,7 @@ function MonitorCard({ m, history }: { m: KumaMonitor; history: MonitorHistory |
 
           {/* Metrikler */}
           <div className="grid grid-cols-2 gap-2 mb-3">
-            <div className="rounded-[8px] p-1.5 pb-0 bg-[#F4F2F0]">
+            <div className="rounded-[8px] p-1.5 pb-0 bg-[#eef3ff]">
               <div className="rounded-[4px] bg-white px-3 py-2" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Yanıt</p>
                 <div className="flex items-center gap-1.5">
@@ -208,7 +208,7 @@ function MonitorCard({ m, history }: { m: KumaMonitor; history: MonitorHistory |
               <div className="h-1.5" />
             </div>
 
-            <div className="rounded-[8px] p-1.5 pb-0 bg-[#F4F2F0]">
+            <div className="rounded-[8px] p-1.5 pb-0 bg-[#eef3ff]">
               <div className="rounded-[4px] bg-white px-3 py-2" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <p className="text-[9px] font-medium text-muted-foreground uppercase tracking-wide mb-1">Uptime (100 beat)</p>
                 <span className={cn(
@@ -288,7 +288,7 @@ function ExchangeCard({ monitors, histories }: {
   const warningSources = monitors.filter((m) => mapStatus(m.status) === "warning").map((m) => stripExchangePrefix(m.name))
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0] col-span-2 row-span-2">
+    <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff] col-span-2 row-span-2">
       <div
         className="rounded-[4px] bg-white overflow-hidden h-full"
         style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -431,7 +431,7 @@ export default function MonitoringPage() {
         </div>
         <div className="grid grid-cols-4 gap-0">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+            <div key={i} className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
               <Skeleton className="h-[180px] rounded-[4px]" />
               <div className="h-2" />
             </div>
@@ -445,7 +445,7 @@ export default function MonitoringPage() {
   if (error || !data) {
     return (
       <PageContainer title="İzleme" description="Sunucu uptime ve erişilebilirlik durumu">
-        <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+        <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
           <div className="rounded-[4px] bg-white p-8 text-center" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             <AlertTriangle className="size-10 text-amber-500 mx-auto mb-3" />
             <p className="text-[13px] font-semibold mb-1">Uptime Kuma'ya ulaşılamadı</p>
@@ -479,7 +479,7 @@ export default function MonitoringPage() {
   if (monitors.length === 0) {
     return (
       <PageContainer title="İzleme" description="Sunucu uptime ve erişilebilirlik durumu">
-        <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+        <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
           <div className="rounded-[4px] bg-white p-8 text-center" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             <Activity className="size-10 text-muted-foreground mx-auto mb-3" />
             <p className="text-[13px] font-semibold mb-1">Henüz monitör yok</p>

@@ -167,7 +167,7 @@ export default function ServerDetailPage({
   if (serverLoading) {
     return (
       <div className="p-4 md:p-6 space-y-3">
-        <div className="rounded-[8px] p-3" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-3" style={{ backgroundColor: "#eef3ff" }}>
           <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             <Skeleton className="h-6 w-48 rounded-[4px]" />
             <Skeleton className="h-4 w-32 rounded-[4px]" />
@@ -207,7 +207,7 @@ export default function ServerDetailPage({
   return (
     <div className="p-4 md:p-6 space-y-3">
       {/* Page Header */}
-      <div className="rounded-[8px] p-3" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-3" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] px-4 py-3"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -334,7 +334,7 @@ export default function ServerDetailPage({
       {/* Tab Content */}
       <div>
         {detailLoading && activeTab !== "overview" && activeTab !== "files" ? (
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div className="rounded-[4px] overflow-hidden space-y-px" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-3">

@@ -165,7 +165,7 @@ export default function ProjectBoardPage({ params }: { params: Promise<{ id: str
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] px-4 py-3"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div className="flex items-center gap-3">

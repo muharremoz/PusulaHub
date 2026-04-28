@@ -674,7 +674,7 @@ export default function UsersPage() {
   return (
     <div className="p-4 space-y-3">
       {/* Header */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
         <div className="bg-white rounded-[4px] px-4 py-3 flex items-center justify-between" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div>
             <h1 className="text-[13px] font-semibold">Kullanıcı Yönetimi</h1>
@@ -687,7 +687,7 @@ export default function UsersPage() {
       </div>
 
       {/* Tablo */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
         <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <Table>
             <TableHeader>

@@ -217,7 +217,7 @@ function DesktopFrame({ children }: { children: React.ReactNode }) {
 function SettingsWindowPreview({ onClose }: { onClose: () => void }) {
   return (
     <div
-      className="w-[400px] rounded-[8px] overflow-hidden bg-[#F4F2F0] border border-[#E5E7EB]"
+      className="w-[400px] rounded-[8px] overflow-hidden bg-[#eef3ff] border border-[#E5E7EB]"
       style={{ boxShadow: "0 8px 24px rgba(0,0,0,0.14)" }}
     >
       {/* Başlık çubuğu */}
@@ -308,7 +308,7 @@ export default function PreviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F2F0]">
+    <div className="min-h-screen bg-[#eef3ff]">
 
       {/* Sayfa başlığı */}
       <div className="bg-white border-b border-[#E5E7EB] px-6 py-4">
@@ -421,7 +421,7 @@ export default function PreviewPage() {
             {(["info", "warning", "urgent"] as MsgType[]).map((type) => {
               const t = TYPE[type]
               return (
-                <div key={type} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                <div key={type} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                   <div
                     className="rounded-[4px] overflow-hidden bg-white"
                     style={{ boxShadow: "0 2px 4px rgba(0,0,0,.06)" }}

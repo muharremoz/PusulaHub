@@ -303,7 +303,7 @@ export default function ServersPage() {
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* OS filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
           {(["all", "windows", "ubuntu"] as const).map((f) => (
             <button
               key={f}
@@ -319,7 +319,7 @@ export default function ServersPage() {
         </div>
 
         {/* Status filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
           {(["all", "online", "warning", "offline"] as const).map((f) => (
             <button
               key={f}
@@ -336,7 +336,7 @@ export default function ServersPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
             <button
               onClick={() => setView("list")}
               className={cn(
@@ -395,7 +395,7 @@ export default function ServersPage() {
 
       {/* ── SKELETON ── */}
       {loading && (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             {/* Header */}
             <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
@@ -427,7 +427,7 @@ export default function ServersPage() {
 
       {/* ── BOŞ DURUM ── */}
       {!loading && servers.length === 0 && (
-        <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -450,7 +450,7 @@ export default function ServersPage() {
 
       {/* ── LIST VIEW ── */}
       {view === "list" && servers.length > 0 && (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
             {/* Header */}
             <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
@@ -544,7 +544,7 @@ export default function ServersPage() {
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filtered.map((srv) => (
-              <div key={srv.id} className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+              <div key={srv.id} className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
                 <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 
                   {/* Card header */}

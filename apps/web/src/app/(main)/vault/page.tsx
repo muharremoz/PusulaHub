@@ -966,7 +966,7 @@ export default function VaultPage() {
 
         {/* ── Sol: Kategori Paneli ── */}
         <div className="w-52 shrink-0">
-          <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
             <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Kategoriler</p>
@@ -1002,7 +1002,7 @@ export default function VaultPage() {
           </div>
 
           {/* Güvenlik özeti */}
-          <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0] mt-0">
+          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff] mt-0">
             <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
                 <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Güvenlik</p>
@@ -1046,7 +1046,7 @@ export default function VaultPage() {
 
           {/* Favoriler */}
           {entries.filter((e) => e.isFavorite).length > 0 && (
-            <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0] mt-0">
+            <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff] mt-0">
               <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
@@ -1097,7 +1097,7 @@ export default function VaultPage() {
             </Button>
           </div>
 
-          <div className="rounded-[8px] p-2 pb-0 bg-[#F4F2F0]">
+          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
             <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 
               {/* Tablo başlığı — sıralanabilir */}

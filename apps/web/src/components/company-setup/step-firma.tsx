@@ -159,7 +159,7 @@ export function StepFirma({
           {/* Stats kartları */}
           <div className="grid grid-cols-4 gap-2">
             {/* E-posta */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#eef3ff" }}>
               <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">E-posta</p>
@@ -171,7 +171,7 @@ export function StepFirma({
             </div>
 
             {/* Telefon */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#eef3ff" }}>
               <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Telefon</p>
@@ -183,7 +183,7 @@ export function StepFirma({
             </div>
 
             {/* Kullanıcı Hakkı */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: (selectedCompany.userCount ?? 0) === 0 ? "#FEF3C7" : "#F4F2F0" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: (selectedCompany.userCount ?? 0) === 0 ? "#FEF3C7" : "#eef3ff" }}>
               <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Kullanıcı Hakkı</p>
@@ -199,7 +199,7 @@ export function StepFirma({
             </div>
 
             {/* Lisans Bitiş */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: isExpired(selectedCompany.lisansBitis) ? "#FEF2F2" : "#F4F2F0" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: isExpired(selectedCompany.lisansBitis) ? "#FEF2F2" : "#eef3ff" }}>
               <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Lisans Bitiş</p>

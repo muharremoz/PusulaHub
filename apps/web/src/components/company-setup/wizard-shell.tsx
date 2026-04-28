@@ -452,7 +452,7 @@ export function WizardShell() {
   }
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 max-w-[1400px] mx-auto w-full" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2 pb-0 max-w-[1400px] mx-auto w-full" style={{ backgroundColor: "#eef3ff" }}>
       <Confetti trigger={showConfetti} />
       <div
         className="rounded-[4px] overflow-hidden flex min-h-[600px]"

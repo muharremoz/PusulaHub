@@ -1144,7 +1144,7 @@ tr:nth-child(even) td{background:#fafafa}
       <div className="mb-6">
         {selectedFirma ? (
           /* Seçili firma: kompakt header bar */
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div className="rounded-[4px] px-4 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               <div className="flex items-center gap-3">
                 <button
@@ -1224,7 +1224,7 @@ tr:nth-child(even) td{background:#fafafa}
             {top5Loading ? (
               <div className="grid grid-cols-5 gap-2">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                  <div key={i} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                     <div className="rounded-[4px] px-3 py-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                       <Skeleton className="h-3 w-3/4 mb-3 rounded-[3px]" />
                       <div className="flex gap-1.5">
@@ -1253,7 +1253,7 @@ tr:nth-child(even) td{background:#fafafa}
                         setSelectedCompany(apiMatch?.id ?? null)
                       }}
                       className="rounded-[8px] p-2 pb-0 text-left transition-all flex flex-col hover:brightness-[0.97]"
-                      style={{ backgroundColor: "#F4F2F0" }}
+                      style={{ backgroundColor: "#eef3ff" }}
                     >
                       <div
                         className="rounded-[4px] px-3 py-3 w-full"
@@ -1296,7 +1296,7 @@ tr:nth-child(even) td{background:#fafafa}
           {/* Yoğunluk Skoru + Haftalık Kullanım */}
           <div className="grid grid-cols-[1fr_1fr] gap-3">
             {detailLoading ? (
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                 <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                   <Skeleton className="h-4 w-36 rounded-[3px]" />
                   <div className="flex gap-4 items-center">
@@ -1311,7 +1311,7 @@ tr:nth-child(even) td{background:#fafafa}
             ) : companyDetail ? (
               <YoğunlukKart key={selectedFirma.firkod} d={companyDetail} />
             ) : (
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                 <div className="rounded-[4px] px-4 py-8 flex items-center justify-center" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                   <p className="text-[12px] text-muted-foreground">Kullanım verisi bulunamadı</p>
                 </div>

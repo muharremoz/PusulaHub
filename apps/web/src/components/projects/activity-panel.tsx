@@ -45,7 +45,7 @@ export function ActivityPanel({ projectId, onClose }: Props) {
   useEffect(() => { load() }, [projectId])
 
   return (
-    <div className="w-[300px] shrink-0 rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="w-[300px] shrink-0 rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
       <div className="rounded-[4px] overflow-hidden flex flex-col h-[calc(100vh-280px)]"
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
         {/* Header */}

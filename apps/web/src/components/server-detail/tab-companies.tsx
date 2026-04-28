@@ -185,7 +185,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
   if (companies.length === 0) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] px-6 py-10 flex flex-col items-center gap-2"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -216,7 +216,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
             small: true,
           },
         ].map(({ label, value, sub, icon: Icon, small }) => (
-          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div
               className="rounded-[4px] px-3 py-3"
               style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -234,7 +234,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
       </div>
 
       {/* List */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] overflow-hidden"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

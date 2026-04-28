@@ -173,7 +173,7 @@ export default function PortsPage() {
 
       {/* ── Toolbar ── */}
       <div className="flex items-center gap-2 mb-4">
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
           {(["all", "active", "inactive"] as FilterStatus[]).map((f) => (
             <button
               key={f}
@@ -199,7 +199,7 @@ export default function PortsPage() {
       </div>
 
       {/* ── Tablo ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 
           {/* Header */}

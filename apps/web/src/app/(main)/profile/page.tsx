@@ -103,7 +103,7 @@ export default function ProfilePage() {
     <div className="p-4 max-w-[600px] space-y-3">
 
       {/* Kullanıcı kartı */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
         <div className="bg-white rounded-[4px] px-5 py-4 flex items-center gap-4" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div className="size-14 rounded-full flex items-center justify-center text-white text-[18px] font-bold shrink-0"
             style={{ backgroundColor: color }}>
@@ -123,7 +123,7 @@ export default function ProfilePage() {
       </div>
 
       {/* 2FA Bölümü */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
         <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div className="px-4 py-3 bg-muted/30 border-b border-border/40 flex items-center gap-2">
             <ShieldCheck className="size-3.5 text-muted-foreground" />
@@ -206,7 +206,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Şifre Değiştirme */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
         <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div className="px-4 py-3 bg-muted/30 border-b border-border/40 flex items-center gap-2">
             <KeyRound className="size-3.5 text-muted-foreground" />

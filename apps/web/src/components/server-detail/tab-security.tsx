@@ -12,7 +12,7 @@ interface Props {
 export function TabSecurity({ security, roles }: Props) {
   if (!security) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -32,7 +32,7 @@ export function TabSecurity({ security, roles }: Props) {
       {/* Firewall status + Roles — 2 column */}
       <div className="grid grid-cols-2 gap-3">
         {/* Firewall Status */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px]"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -67,7 +67,7 @@ export function TabSecurity({ security, roles }: Props) {
         </div>
 
         {/* Server Roles */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px]"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -104,7 +104,7 @@ export function TabSecurity({ security, roles }: Props) {
       {/* Adapters + Ports — 2 column */}
       <div className="grid grid-cols-2 gap-3">
         {/* Network Adapters */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px]"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -145,7 +145,7 @@ export function TabSecurity({ security, roles }: Props) {
         </div>
 
         {/* Open Ports */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px]"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -186,7 +186,7 @@ export function TabSecurity({ security, roles }: Props) {
       </div>
 
       {/* Shares — full width */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px]"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -225,7 +225,7 @@ export function TabSecurity({ security, roles }: Props) {
       </div>
 
       {/* Firewall Rules — full width */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px]"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

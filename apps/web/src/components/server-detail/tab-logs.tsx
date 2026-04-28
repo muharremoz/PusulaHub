@@ -44,7 +44,7 @@ export function TabLogs({ logs }: Props) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {/* Event Log */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px]"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -80,7 +80,7 @@ export function TabLogs({ logs }: Props) {
       </div>
 
       {/* Failed Logins */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px]"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

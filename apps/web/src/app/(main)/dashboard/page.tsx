@@ -115,7 +115,7 @@ export default function DashboardPage() {
   return (
     <PageContainer title="Kontrol Paneli" description="Sistem genel görünümü">
       {/* ─── KPI Kartları (4) ─── */}
-      <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#eef3ff" }}>
       <div className="grid grid-cols-4 gap-2">
         <KpiCard
           title="SUNUCULAR"
@@ -160,7 +160,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Orta Blok: 3 kolon ─── */}
-      <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#eef3ff" }}>
       <div className="grid grid-cols-3 gap-2">
         <PanelCard
           title="RDP Başarısız Denemeler"
@@ -291,7 +291,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ─── Alt Blok: 2 kolon (Projeler + Takvim) ─── */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
       <div className="grid grid-cols-2 gap-2">
         <PanelCard
           title="Aktif Projeler"
@@ -330,7 +330,7 @@ export default function DashboardPage() {
                     key={p.id}
                     href={`/projects/${p.id}`}
                     className="rounded-[8px] p-2 pb-0 flex flex-col hover:opacity-90 transition-opacity"
-                    style={{ backgroundColor: "#F4F2F0" }}
+                    style={{ backgroundColor: "#eef3ff" }}
                   >
                     <div
                       className="rounded-[4px] px-4 py-3 flex-1"

@@ -529,7 +529,7 @@ export default function NotesPage() {
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
       {/* Sol: Not listesi */}
-      <div className="shrink-0 h-full" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="shrink-0 h-full" style={{ backgroundColor: "#eef3ff" }}>
         <NoteList
           notes={notes}
           selected={selected}

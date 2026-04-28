@@ -55,7 +55,7 @@ export function ProjectCharts({ projectId }: Props) {
 
   if (loading) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] p-6 space-y-6"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <div className="grid grid-cols-3 gap-4">
@@ -72,7 +72,7 @@ export function ProjectCharts({ projectId }: Props) {
 
   if (!data) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] px-6 py-16 text-center"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <BarChart3 className="size-8 text-muted-foreground/40 mx-auto mb-3" />
@@ -100,7 +100,7 @@ export function ProjectCharts({ projectId }: Props) {
     : 0
 
   return (
-    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
       <div className="rounded-[4px] overflow-hidden"
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 

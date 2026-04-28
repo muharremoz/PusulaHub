@@ -71,7 +71,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
 
   if (allUsers.length === 0) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] px-3 py-12 text-center"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -102,7 +102,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
           { label: "Aktif", value: activeCount },
           { label: "Devre Dışı", value: disabledCount },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div className="rounded-[4px] px-3 py-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
               <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase block mb-1">{label}</span>
               <span className="text-2xl font-bold">{value}</span>
@@ -113,14 +113,14 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
       </div>
 
       {/* List */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px]" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           {/* Toolbar */}
           <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center gap-3">
             <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">
               {isAD ? "AD Kullanıcıları" : "Yerel Kullanıcılar"}
             </span>
-            <div className="flex items-center rounded-[8px] p-0.5" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="flex items-center rounded-[8px] p-0.5" style={{ backgroundColor: "#eef3ff" }}>
               {filters.map(({ key, label }) => (
                 <button
                   key={key}

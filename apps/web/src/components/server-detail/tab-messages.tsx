@@ -171,7 +171,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
     <div className="space-y-3">
       {/* ── Compose + Hedef ── */}
       {noSessions ? (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px] px-4 py-8 text-center"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -186,7 +186,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
       ) : (
         <div className="grid grid-cols-[1fr_280px] gap-3">
           {/* Compose area */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div
               className="rounded-[4px]"
               style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -268,7 +268,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
           </div>
 
           {/* Target selection */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div
               className="rounded-[4px]"
               style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -333,7 +333,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
       )}
 
       {/* ── Gönderilen Mesajlar Geçmişi ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div
           className="rounded-[4px] overflow-hidden"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

@@ -322,7 +322,7 @@ export default function SQLPage() {
       <Tabs defaultValue="databases">
 
         {/* ── Tab Başlıkları ── */}
-        <TabsList className="rounded-[8px] p-1 h-auto mb-4 gap-0" style={{ backgroundColor: "#F4F2F0" }}>
+        <TabsList className="rounded-[8px] p-1 h-auto mb-4 gap-0" style={{ backgroundColor: "#eef3ff" }}>
           <TabsTrigger
             value="databases"
             className="rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
@@ -341,7 +341,7 @@ export default function SQLPage() {
             TAB 1 — Veritabanları
         ══════════════════════════════════════ */}
         <TabsContent value="databases" className="mt-0">
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div
               className="rounded-[4px] overflow-hidden"
               style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -487,7 +487,7 @@ export default function SQLPage() {
           <div className="grid grid-cols-[220px_1fr] gap-3 items-start">
 
             {/* ── Sol: Kayıtlı Sorgular ── */}
-            <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
               <div
                 className="rounded-[4px] overflow-hidden"
                 style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -527,7 +527,7 @@ export default function SQLPage() {
             <div className="flex flex-col gap-3">
 
               {/* Editör Kartı */}
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                 <div
                   className="rounded-[4px] overflow-hidden"
                   style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -641,7 +641,7 @@ export default function SQLPage() {
 
               {/* Hata Mesajı */}
               {queryError && (
-                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                   <div
                     className="rounded-[4px] overflow-hidden"
                     style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -660,7 +660,7 @@ export default function SQLPage() {
 
               {/* Sonuçlar Kartı */}
               {result && (
-                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                   <div
                     className="rounded-[4px] overflow-hidden"
                     style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

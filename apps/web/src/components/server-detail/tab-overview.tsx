@@ -52,7 +52,7 @@ function LoadScoreCard({ cpu, ram, disk }: { cpu: number; ram: number; disk: num
   }, [score]);
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
       <div
         className="rounded-[4px] flex-1 flex flex-col"
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -94,7 +94,7 @@ export function TabOverview({ server, sessionCount, onRefresh, refreshing }: Pro
         {/* Left column */}
         <div className="flex flex-col gap-3">
           {/* Sunucu Bilgileri */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div
               className="rounded-[4px]"
               style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -136,7 +136,7 @@ export function TabOverview({ server, sessionCount, onRefresh, refreshing }: Pro
           {/* Anlık Durum + Sunucu Yük Skoru */}
           <div className="grid grid-cols-2 gap-3 items-stretch">
             {/* Anlık Durum */}
-            <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#F4F2F0" }}>
+            <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
               <div
                 className="rounded-[4px] flex-1 flex flex-col"
                 style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -190,7 +190,7 @@ export function TabOverview({ server, sessionCount, onRefresh, refreshing }: Pro
         </div>
 
         {/* Right column: Weekly Stats Chart */}
-        <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#F4F2F0" }}>
+        <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
           <div
             className="rounded-[4px] flex-1 flex flex-col overflow-hidden"
             style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

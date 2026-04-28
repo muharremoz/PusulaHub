@@ -22,7 +22,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
       <div
         className="rounded-[4px] overflow-hidden"
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
@@ -51,7 +51,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SkeletonSection() {
   return (
-    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
       <div
         className="rounded-[4px] overflow-hidden"
         style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}

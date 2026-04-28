@@ -176,7 +176,7 @@ export default function ProjectsPage() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] px-4 py-3 flex items-center gap-4"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           <FolderKanban className="size-5 text-muted-foreground shrink-0" />
@@ -211,7 +211,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Filtre çubuğu */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] px-4 py-2.5 flex items-center gap-3 flex-wrap"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
           {/* Arama */}
@@ -226,7 +226,7 @@ export default function ProjectsPage() {
           </div>
 
           {/* Durum filtresi */}
-          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#F4F2F0" }}>
+          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
             {(["all", "active", "completed", "archived"] as const).map((f) => (
               <button
                 key={f}
@@ -256,7 +256,7 @@ export default function ProjectsPage() {
       </div>
 
       {/* Proje listesi */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#F4F2F0" }}>
+      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
         <div className="rounded-[4px] overflow-hidden"
           style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
 

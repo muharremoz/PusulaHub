@@ -610,7 +610,7 @@ export default function MessagesPage() {
                   </div>
                   <div className="p-3 space-y-3">
                     {/* Alıcı tipi toggle */}
-                    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#F4F2F0" }}>
+                    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#eef3ff" }}>
                       {(["all", "company", "selected"] as const).map(t => (
                         <button
                           key={t}
@@ -695,7 +695,7 @@ export default function MessagesPage() {
 
                           {/* Seçilen firma chip'leri */}
                           {composeCompanies.size > 0 && (
-                            <div className="flex flex-wrap gap-1.5 rounded-[5px] border border-border/50 p-2" style={{ backgroundColor: "#F4F2F0" }}>
+                            <div className="flex flex-wrap gap-1.5 rounded-[5px] border border-border/50 p-2" style={{ backgroundColor: "#eef3ff" }}>
                               {[...composeCompanies].map(id => {
                                 const c = companies.find(x => x.id === id)
                                 if (!c) return null
@@ -1090,7 +1090,7 @@ function LeftModeTabs({
   templateCount: number
 }) {
   return (
-    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#F4F2F0" }}>
+    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#eef3ff" }}>
       <button
         onClick={() => setLeftMode("compose")}
         className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
@@ -1185,7 +1185,7 @@ function TemplateFormDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="sm:max-w-[520px] rounded-[8px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden"
-        style={{ backgroundColor: "#F4F2F0" }}
+        style={{ backgroundColor: "#eef3ff" }}
       >
         <DialogHeader className="px-5 py-4 border-b border-border/50 bg-white">
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
