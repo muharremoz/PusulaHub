@@ -148,6 +148,8 @@ export default function MessagesPage() {
   // Şablon CRUD dialog state — null = kapalı, "new" = yeni şablon, MessageTemplate = düzenle
   const [templateDialog, setTemplateDialog] = useState<MessageTemplate | "new" | null>(null)
 
+  // Sol panel modu — mesaj seçilirse detail otomatik kazanır.
+  const [leftMode,         setLeftMode]         = useState<"compose" | "templates">("compose")
   const [search,            setSearch]            = useState("")
   // Liste filtreleri
   const [filterFrom,        setFilterFrom]        = useState<string>("")  // yyyy-MM-dd
@@ -159,7 +161,6 @@ export default function MessagesPage() {
   const [filtersOpen,       setFiltersOpen]       = useState(false)
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [detailRecipients,  setDetailRecipients]  = useState<RecipientItem[]>([])
-  const [showCompose,       setShowCompose]       = useState(false)
 
   // Compose state
   const [recipientType,      setRecipientType]      = useState<RecipientKind>("all")
@@ -320,11 +321,11 @@ export default function MessagesPage() {
     setComposePriority(t.priority)
   }
 
-  /** Sol paneldeki şablon kartından tıklandığında dialog'u aç + şablonla doldur. */
+  /** Şablon listesinden bir şablon seçildiğinde — formu doldur ve compose mode'a dön. */
   const openComposeWithTemplate = (t: MessageTemplate) => {
     applyTemplate(t)
     setSelectedMessageId(null)
-    setShowCompose(true)
+    setLeftMode("compose")
     loadRecipients()  // taze alıcı listesi (online durum güncel olsun)
   }
 
@@ -391,7 +392,6 @@ export default function MessagesPage() {
           { description: `${totalRecipients} alıcıya iletildi (${serversOk}/${serversTargeted} sunucu)` },
         )
         resetCompose()
-        setShowCompose(false)
         loadList()
       }
     } catch {
@@ -412,16 +412,8 @@ export default function MessagesPage() {
         <StatsCard title="ALICI"      value={recipients.length}               icon={<Users            className="h-4 w-4" />} subtitle={`${companies.length} firma`} />
       </div>
 
-      {/* Action bar */}
+      {/* Action bar — sadece arama (Yeni Mesaj sol panele inline taşındı) */}
       <div className="flex items-center gap-3 mb-4">
-        <Button
-          size="sm"
-          className="rounded-[5px] text-xs gap-1.5 h-8"
-          onClick={() => { setShowCompose(true); setSelectedMessageId(null); loadRecipients() }}
-        >
-          <Plus className="h-3.5 w-3.5" />
-          Yeni Mesaj
-        </Button>
         <div className="relative ml-auto">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -435,10 +427,10 @@ export default function MessagesPage() {
 
       {/*
         2 sütun layout:
-          SOL  (~380px) — Hazır Mesajlar paneli (mesaj seçilince detay buraya geçer)
+          SOL  (~520px) — Compose form / Hazır Mesajlar / Detay (toggle veya selected'a göre)
           SAĞ  (1fr)    — Gönderilen mesajlar listesi
       */}
-      <div className="grid gap-3 grid-cols-[380px_1fr] items-start">
+      <div className="grid gap-3 grid-cols-[520px_1fr] items-start">
         {/* SOL SÜTUN — mesaj seçiliyse detay, değilse Hazır Mesajlar paneli */}
         {selected ? (
           <NestedCard>
@@ -509,17 +501,18 @@ export default function MessagesPage() {
               </div>
             </div>
           </NestedCard>
-        ) : (
+        ) : leftMode === "templates" ? (
           <NestedCard>
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="h-3.5 w-3.5 text-muted-foreground" />
-                <h3 className="text-sm font-semibold">Hazır Mesajlar</h3>
-              </div>
+            {/* Mode toggle — Compose ↔ Templates */}
+            <LeftModeTabs leftMode={leftMode} setLeftMode={setLeftMode} templateCount={templates.length} />
+            <div className="flex items-center justify-between gap-2 mb-3 mt-3">
+              <p className="text-[10px] text-muted-foreground">
+                Bir şablon seç — düzenleyip gönder. Sistem şablonları silinemez.
+              </p>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
+                className="h-7 rounded-[5px] text-[10px] gap-1 px-2 shrink-0"
                 onClick={() => setTemplateDialog("new")}
                 title="Yeni şablon ekle"
               >
@@ -527,9 +520,6 @@ export default function MessagesPage() {
                 Yeni Şablon
               </Button>
             </div>
-            <p className="text-[10px] text-muted-foreground mb-3">
-              Bir şablon seç — düzenleyip gönder. Sistem şablonları silinemez.
-            </p>
             <div className="grid grid-cols-2 gap-2">
               {templates.map(t => {
                 const badge =
@@ -588,23 +578,11 @@ export default function MessagesPage() {
               })}
             </div>
           </NestedCard>
-        )}
-
-        {/* Yeni mesaj dialog */}
-        <Dialog open={showCompose} onOpenChange={setShowCompose}>
-          <DialogContent
-            className="sm:max-w-[560px] rounded-[8px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden"
-            style={{ backgroundColor: "#F4F2F0" }}
-          >
-            <DialogHeader className="px-5 py-4 border-b border-border/50 bg-white">
-              <DialogTitle className="text-sm font-semibold flex items-center gap-2">
-                <Send className="h-3.5 w-3.5 text-muted-foreground" />
-                Yeni Mesaj
-              </DialogTitle>
-            </DialogHeader>
-
-            <ScrollArea className="flex-1">
-              <div className="px-4 py-4 space-y-3">
+        ) : (
+          /* COMPOSE mode — eski Dialog içeriği inline NestedCard'a */
+          <NestedCard>
+            <LeftModeTabs leftMode={leftMode} setLeftMode={setLeftMode} templateCount={templates.length} />
+            <div className="mt-3 space-y-3">
                 {/* Alıcılar bölümü */}
                 <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
                   <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
@@ -904,17 +882,16 @@ export default function MessagesPage() {
                   </div>
                 </div>
               </div>
-            </ScrollArea>
-
-            <DialogFooter className="px-5 py-3 border-t border-border/50 gap-2 sm:gap-2 bg-white">
-              <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]" onClick={() => setShowCompose(false)} disabled={sending}>İptal</Button>
+            {/* Compose footer — Sıfırla + Gönder */}
+            <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-border/40">
+              <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]" onClick={resetCompose} disabled={sending}>Sıfırla</Button>
               <Button size="sm" className="rounded-[5px] h-8 text-[11px] gap-1.5" onClick={sendMessage} disabled={sending}>
                 <Send className="h-3 w-3" />
                 {sending ? "Gönderiliyor..." : "Gönder"}
               </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+            </div>
+          </NestedCard>
+        )}
 
         {/* Mesaj listesi */}
         <NestedCard footer={<><Mail className="h-3 w-3" /><span>{filtered.length} mesaj</span></>}>
@@ -1046,7 +1023,7 @@ export default function MessagesPage() {
               return (
                 <div
                   key={msg.id}
-                  onClick={() => { setSelectedMessageId(msg.id); setShowCompose(false) }}
+                  onClick={() => setSelectedMessageId(msg.id)}
                   className={`grid grid-cols-[0.4fr_2fr_0.7fr_0.7fr_0.8fr_0.6fr] gap-2 px-1 py-2 border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer items-center ${
                     selectedMessageId === msg.id ? "bg-muted/30" : ""
                   }`}
@@ -1099,6 +1076,41 @@ export default function MessagesPage() {
         onSaved={() => { setTemplateDialog(null); loadTemplates() }}
       />
     </PageContainer>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LeftModeTabs — sol panel header'ında compose ↔ templates segmented toggle
+══════════════════════════════════════════════════════════════════════ */
+function LeftModeTabs({
+  leftMode, setLeftMode, templateCount,
+}: {
+  leftMode:      "compose" | "templates"
+  setLeftMode:   (m: "compose" | "templates") => void
+  templateCount: number
+}) {
+  return (
+    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#F4F2F0" }}>
+      <button
+        onClick={() => setLeftMode("compose")}
+        className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+          leftMode === "compose" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Send className="h-3 w-3" />
+        Yeni Mesaj
+      </button>
+      <button
+        onClick={() => setLeftMode("templates")}
+        className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+          leftMode === "templates" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"
+        }`}
+      >
+        <Sparkles className="h-3 w-3" />
+        Hazır Mesajlar
+        <span className="text-[9px] opacity-70 tabular-nums">({templateCount})</span>
+      </button>
+    </div>
   )
 }
 
