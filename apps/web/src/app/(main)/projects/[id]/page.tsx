@@ -80,19 +80,27 @@ export default function ProjectBoardPage({ params }: { params: Promise<{ id: str
   // Keyboard shortcuts
   useEffect(() => {
     function handleKeydown(e: KeyboardEvent) {
+      // Yazı yazılan alanlardayken (input, textarea, TipTap gibi contentEditable
+      // div'ler — açıklama editörü buna giriyor) shortcut'lar tetiklenmesin.
+      const t = e.target
+      const inEditableField =
+        t instanceof HTMLInputElement ||
+        t instanceof HTMLTextAreaElement ||
+        (t instanceof HTMLElement && t.isContentEditable)
+
       // N: new task (focus ilk kolonun add butonuna)
-      if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (e.key === "n" && !e.ctrlKey && !e.metaKey && !e.altKey && !inEditableField) {
         e.preventDefault()
         const btn = document.querySelector("[data-add-task-btn]") as HTMLButtonElement | null
         btn?.click()
       }
       // R: refresh
-      if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (e.key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey && !inEditableField) {
         e.preventDefault()
         handleRefresh()
       }
       // /: focus search
-      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (e.key === "/" && !e.ctrlKey && !e.metaKey && !inEditableField) {
         e.preventDefault()
         const input = document.querySelector("[data-task-search]") as HTMLInputElement | null
         input?.focus()
