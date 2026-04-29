@@ -378,7 +378,7 @@ function MonitorGroup({ title, count, monitors, tracker, histories }: { title: s
         )}
         <div className="flex-1 h-px bg-gradient-to-r from-zinc-800 to-transparent" />
       </div>
-      <div className="grid content-start gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid content-start gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5">
         {monitors.map((m) => (
           <MonitorTile
             key={m.name}
