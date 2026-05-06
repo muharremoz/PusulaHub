@@ -94,6 +94,7 @@ const EMPTY_DETAIL: ServerDetailData = {
   sql: null,
   iis: null,
   roles: [],
+  ram: null,
 };
 
 export default function ServerDetailPage({
