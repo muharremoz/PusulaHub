@@ -72,6 +72,7 @@ export async function GET(
     sql:        r.sql ?? null,
     iis:        r.iis ?? null,
     roles:      r.roles ?? [],
+    ram:        r.metrics?.ram ?? null,   // totalMB / usedMB / freeMB / cacheMB / realUsedMB
   })
   resp.headers.set("Cache-Control", "private, max-age=5, stale-while-revalidate=10")
   return resp

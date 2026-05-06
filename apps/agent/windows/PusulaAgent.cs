@@ -204,6 +204,22 @@ static class Metrics
         catch { }
         long usedMB = totalMB - freeMB;
 
+        // Standby + Modified = Windows file cache, "used" görünür ama serbest bırakılabilir.
+        // realUsedMB = uygulamaların+kernelin gerçekten tuttuğu RAM.
+        long cacheMB = 0;
+        try
+        {
+            using (var pcStandby = new PerformanceCounter("Memory", "Standby Cache Normal Priority Bytes"))
+            using (var pcModified = new PerformanceCounter("Memory", "Modified Page List Bytes"))
+            {
+                pcStandby.NextValue(); pcModified.NextValue();
+                cacheMB = (long)((pcStandby.NextValue() + pcModified.NextValue()) / (1024.0 * 1024.0));
+            }
+        }
+        catch { }
+        long realUsedMB = usedMB - cacheMB;
+        if (realUsedMB < 0) realUsedMB = 0;
+
         // --- DISK ---
         var disks = new List<Dictionary<string, object>>();
         try
@@ -280,6 +296,8 @@ static class Metrics
         ram["totalMB"] = totalMB;
         ram["usedMB"] = usedMB;
         ram["freeMB"] = freeMB;
+        ram["cacheMB"] = cacheMB;
+        ram["realUsedMB"] = realUsedMB;
         metrics["ram"] = ram;
         metrics["disks"] = disks;
         metrics["uptimeSeconds"] = uptimeSec;

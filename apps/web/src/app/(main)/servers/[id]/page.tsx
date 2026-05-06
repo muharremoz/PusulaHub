@@ -66,6 +66,7 @@ interface ServerDetailData {
   sql: AgentReport["sql"] | null;
   iis: AgentReport["iis"] | null;
   roles: string[];
+  ram: AgentReport["metrics"]["ram"] | null;
 }
 
 type TabId =
@@ -350,7 +351,7 @@ export default function ServerDetailPage({
         ) : (
           <>
             {activeTab === "overview" && (
-              <TabOverview server={server} sessionCount={sessionCount} onRefresh={handleRefresh} refreshing={refreshing} />
+              <TabOverview server={server} sessionCount={sessionCount} ram={detail.ram} onRefresh={handleRefresh} refreshing={refreshing} />
             )}
             {activeTab === "sessions" && (
               <TabSessions sessions={detail.sessions} serverId={server.id} />

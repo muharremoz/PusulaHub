@@ -29,9 +29,11 @@ export interface AgentReport {
   metrics: {
     cpu:     number           // %  0-100
     ram: {
-      totalMB: number
-      usedMB:  number
-      freeMB:  number
+      totalMB:     number
+      usedMB:      number
+      freeMB:      number
+      cacheMB?:    number   // Standby + Modified — Windows file cache (geri alınabilir)
+      realUsedMB?: number   // usedMB - cacheMB — uygulamaların+kernelin gerçek kullanımı
     }
     disks: {
       drive:   string         // "C:" veya "/dev/sda1"
