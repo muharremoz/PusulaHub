@@ -39,8 +39,9 @@ export async function GET(req: NextRequest) {
     }
 
     // refresh=true ise agent'tan canlı rapor çek (cache'i atla) — AD'den kullanıcı silmeden sonra güncel listeyi almak için.
+    // force=true: agent kendi 5dk AD cache'ini de bypass eder, AD'ye taze LDAP sorgusu atar.
     if (refresh) {
-      await pollSingleAgent(serverId)
+      await pollSingleAgent(serverId, true)
     }
 
     // Sunucu adını/IP'sini DB'den çek — agent-store'da eşleştirmek için
