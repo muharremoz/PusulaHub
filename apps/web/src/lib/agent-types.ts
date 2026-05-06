@@ -31,9 +31,10 @@ export interface AgentReport {
     ram: {
       totalMB:     number
       usedMB:      number
-      freeMB:      number
-      cacheMB?:    number   // Standby + Modified — Windows file cache (geri alınabilir)
-      realUsedMB?: number   // usedMB - cacheMB — uygulamaların+kernelin gerçek kullanımı
+      freeMB:      number   // WMI FreePhysicalMemory (bazı sürümlerde standby de dahil)
+      cacheMB?:    number   // Standby (Normal+Reserve+Core) + Modified — geri alınabilir
+      realUsedMB?: number   // total - pureFreeMB - cacheMB — uygulamaların+kernelin gerçek kullanımı
+      pureFreeMB?: number   // PerfCounter "Free & Zero Page List Bytes" — gerçek boş
     }
     disks: {
       drive:   string         // "C:" veya "/dev/sda1"

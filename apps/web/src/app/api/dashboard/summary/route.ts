@@ -98,14 +98,16 @@ export async function GET() {
       .map((a) => {
         const r = a.lastReport!.metrics.ram
         const cacheMB = r.cacheMB ?? 0
-        const realUsedMB = r.realUsedMB ?? Math.max(0, r.usedMB - cacheMB)
+        // Stack bar tutarsız olmasın diye total'a göre normalize et
+        const freeMB = r.pureFreeMB ?? r.freeMB
+        const realUsedMB = r.realUsedMB ?? Math.max(0, r.totalMB - freeMB - cacheMB)
         return {
           id:         a.agentId,
           name:       a.hostname,
           totalMB:    r.totalMB,
           realUsedMB,
           cacheMB,
-          freeMB:     r.freeMB,
+          freeMB,
         }
       })
       .sort((a, b) => b.cacheMB - a.cacheMB)

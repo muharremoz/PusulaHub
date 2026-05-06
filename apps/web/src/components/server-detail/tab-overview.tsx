@@ -97,9 +97,10 @@ function LoadScoreCard({ cpu, ram, disk }: { cpu: number; ram: number; disk: num
 function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
   const total = ram.totalMB || 1;
   const cache = ram.cacheMB ?? 0;
-  const free  = ram.freeMB;
+  // pureFreeMB varsa onu kullan — WMI freeMB bazı sürümlerde standby'ı da içeriyor
+  const free  = ram.pureFreeMB ?? ram.freeMB;
   // realUsedMB agent'tan gelmiyorsa client-side hesapla
-  const real  = ram.realUsedMB ?? Math.max(0, ram.usedMB - cache);
+  const real  = ram.realUsedMB ?? Math.max(0, ram.totalMB - free - cache);
 
   const realPct  = (real / total) * 100;
   const cachePct = (cache / total) * 100;

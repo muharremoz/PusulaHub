@@ -204,20 +204,30 @@ static class Metrics
         catch { }
         long usedMB = totalMB - freeMB;
 
-        // Standby + Modified = Windows file cache, "used" görünür ama serbest bırakılabilir.
-        // realUsedMB = uygulamaların+kernelin gerçekten tuttuğu RAM.
+        // Cache = Standby (Normal+Reserve+Core) + Modified pages.
+        // pureFreeMB = perfcounter "Free & Zero Page List Bytes" — gerçek boş RAM.
+        // WMI'nin FreePhysicalMemory'si bazı Windows sürümlerinde Standby'ı da
+        // "free" olarak bildirir; o yüzden gerçek "free" için perfcounter kullanılır.
         long cacheMB = 0;
+        long pureFreeMB = freeMB; // fallback
         try
         {
-            using (var pcStandby = new PerformanceCounter("Memory", "Standby Cache Normal Priority Bytes"))
-            using (var pcModified = new PerformanceCounter("Memory", "Modified Page List Bytes"))
+            using (var pcSbN = new PerformanceCounter("Memory", "Standby Cache Normal Priority Bytes"))
+            using (var pcSbR = new PerformanceCounter("Memory", "Standby Cache Reserve Bytes"))
+            using (var pcSbC = new PerformanceCounter("Memory", "Standby Cache Core Bytes"))
+            using (var pcMod = new PerformanceCounter("Memory", "Modified Page List Bytes"))
+            using (var pcFree = new PerformanceCounter("Memory", "Free & Zero Page List Bytes"))
             {
-                pcStandby.NextValue(); pcModified.NextValue();
-                cacheMB = (long)((pcStandby.NextValue() + pcModified.NextValue()) / (1024.0 * 1024.0));
+                pcSbN.NextValue(); pcSbR.NextValue(); pcSbC.NextValue(); pcMod.NextValue(); pcFree.NextValue();
+                double sb = pcSbN.NextValue() + pcSbR.NextValue() + pcSbC.NextValue();
+                double md = pcMod.NextValue();
+                double fr = pcFree.NextValue();
+                cacheMB = (long)((sb + md) / (1024.0 * 1024.0));
+                pureFreeMB = (long)(fr / (1024.0 * 1024.0));
             }
         }
         catch { }
-        long realUsedMB = usedMB - cacheMB;
+        long realUsedMB = totalMB - pureFreeMB - cacheMB;
         if (realUsedMB < 0) realUsedMB = 0;
 
         // --- DISK ---
@@ -298,6 +308,7 @@ static class Metrics
         ram["freeMB"] = freeMB;
         ram["cacheMB"] = cacheMB;
         ram["realUsedMB"] = realUsedMB;
+        ram["pureFreeMB"] = pureFreeMB;  // gerçek boş RAM (perfcounter Free & Zero Page List)
         metrics["ram"] = ram;
         metrics["disks"] = disks;
         metrics["uptimeSeconds"] = uptimeSec;
