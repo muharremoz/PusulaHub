@@ -15,14 +15,22 @@ $ErrorActionPreference = "Stop"
 
 $os         = Get-CimInstance Win32_OperatingSystem
 $totalKB    = [int64]$os.TotalVisibleMemorySize
-$freeKB     = [int64]$os.FreePhysicalMemory
 
-# Standby + Modified = cache (Windows raporunda "used" gorunur ama serbest birakilabilir)
-$standbyB   = (Get-Counter '\Memory\Standby Cache Normal Priority Bytes').CounterSamples[0].CookedValue
+# DOGRU MATEMATIK:
+# WMI'nin FreePhysicalMemory'si bazi Windows surumlerinde Available (Free+Standby)
+# donduruyor. Bu yuzden gercek bos icin perfcounter "Free & Zero Page List" okuyoruz.
+# Standby tum kategorilerden (Normal+Reserve+Core) toplanir + Modified eklenir.
+# realUsed = total - pureFree - cache  →  Task Manager "In use" rakamina denk gelir.
+$standbyN_B = (Get-Counter '\Memory\Standby Cache Normal Priority Bytes').CounterSamples[0].CookedValue
+$standbyR_B = (Get-Counter '\Memory\Standby Cache Reserve Bytes').CounterSamples[0].CookedValue
+$standbyC_B = (Get-Counter '\Memory\Standby Cache Core Bytes').CounterSamples[0].CookedValue
 $modifiedB  = (Get-Counter '\Memory\Modified Page List Bytes').CounterSamples[0].CookedValue
-$cacheKB    = [int64](($standbyB + $modifiedB) / 1024)
+$pureFreeB  = (Get-Counter '\Memory\Free & Zero Page List Bytes').CounterSamples[0].CookedValue
 
+$cacheKB    = [int64](($standbyN_B + $standbyR_B + $standbyC_B + $modifiedB) / 1024)
+$freeKB     = [int64]($pureFreeB / 1024)
 $realUsedKB = $totalKB - $freeKB - $cacheKB
+if ($realUsedKB -lt 0) { $realUsedKB = 0 }
 
 function FmtGB([int64]$kb) { "{0,7:N2} GB" -f ($kb / 1MB) }
 function Pct([int64]$part, [int64]$whole) { "{0,5:N1}%" -f (($part / $whole) * 100) }
