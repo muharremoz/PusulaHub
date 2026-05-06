@@ -45,6 +45,10 @@ interface DashboardData {
     }[]
   }
   disks: { id: string; name: string; drive: string; disk: number; totalGB: number; usedGB: number }[]
+  ramBreakdown: {
+    id: string; name: string
+    totalMB: number; realUsedMB: number; cacheMB: number; freeMB: number
+  }[]
   problemServers: {
     id: string; name: string; ip: string
     status: string; cpu: number; ram: number; disk: number
@@ -284,6 +288,64 @@ export default function DashboardPage() {
                   )}
                 </Link>
               ))}
+            </div>
+          )}
+        </PanelCard>
+      </div>
+
+      {/* ─── RAM Kırılımı (gerçek / cache / boş) ─── */}
+      <div className="grid grid-cols-1 gap-2 mt-2">
+        <PanelCard
+          title="RAM Kullanımı (gerçek vs cache)"
+          icon={<CardIcon Icon={IsMonitor} />}
+          footer={data ? `${data.ramBreakdown.length} sunucu · cache azalan sıralı` : undefined}
+        >
+          {loading ? (
+            <SkeletonList rows={5} />
+          ) : !data || data.ramBreakdown.length === 0 ? (
+            <EmptyState text="Henüz RAM verisi yok." />
+          ) : (
+            <div className="divide-y divide-border/40">
+              {data.ramBreakdown.map((r) => {
+                const total = r.totalMB || 1
+                const realPct  = (r.realUsedMB / total) * 100
+                const cachePct = (r.cacheMB / total) * 100
+                const freePct  = (r.freeMB / total) * 100
+                const fmtGB = (mb: number) => (mb / 1024).toFixed(1)
+                return (
+                  <Link
+                    key={r.id}
+                    href={`/servers/${r.id}`}
+                    className="block py-2 hover:bg-muted/20 -mx-1 px-1 rounded"
+                  >
+                    <div className="flex items-center justify-between mb-1 text-[11px]">
+                      <span className="font-medium truncate">{r.name}</span>
+                      <span className="tabular-nums text-muted-foreground text-[10px]">
+                        Toplam {fmtGB(r.totalMB)} GB
+                      </span>
+                    </div>
+                    <div className="h-2 w-full rounded-full overflow-hidden bg-muted/30 flex">
+                      <div style={{ width: `${realPct}%`,  backgroundColor: "#10b981" }} title={`Gerçek: ${fmtGB(r.realUsedMB)} GB`} />
+                      <div style={{ width: `${cachePct}%`, backgroundColor: "#94a3b8" }} title={`Cache: ${fmtGB(r.cacheMB)} GB`} />
+                      <div style={{ width: `${freePct}%`,  backgroundColor: "#e5e7eb" }} title={`Boş: ${fmtGB(r.freeMB)} GB`} />
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground tabular-nums">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="size-1.5 rounded-full" style={{ backgroundColor: "#10b981" }} />
+                        Gerçek {fmtGB(r.realUsedMB)} GB ({realPct.toFixed(0)}%)
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="size-1.5 rounded-full" style={{ backgroundColor: "#94a3b8" }} />
+                        Cache {fmtGB(r.cacheMB)} GB ({cachePct.toFixed(0)}%)
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="size-1.5 rounded-full bg-neutral-300" />
+                        Boş {fmtGB(r.freeMB)} GB ({freePct.toFixed(0)}%)
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
             </div>
           )}
         </PanelCard>

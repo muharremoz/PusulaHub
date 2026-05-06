@@ -92,6 +92,24 @@ export async function GET() {
       })
       .slice(0, 8)
 
+    // RAM kırılımı: online sunucuların gerçek/cache/boş ayrımı, cache MB'ına göre azalan
+    const ramBreakdown = agents
+      .filter((a) => a.status === "online" && a.lastReport?.metrics?.ram?.totalMB)
+      .map((a) => {
+        const r = a.lastReport!.metrics.ram
+        const cacheMB = r.cacheMB ?? 0
+        const realUsedMB = r.realUsedMB ?? Math.max(0, r.usedMB - cacheMB)
+        return {
+          id:         a.agentId,
+          name:       a.hostname,
+          totalMB:    r.totalMB,
+          realUsedMB,
+          cacheMB,
+          freeMB:     r.freeMB,
+        }
+      })
+      .sort((a, b) => b.cacheMB - a.cacheMB)
+
     // En dolu disk listesi (online olanlar, top 8)
     const diskList = agents
       .filter((a) => a.status === "online")
@@ -226,6 +244,7 @@ export async function GET() {
         })),
       },
       disks: diskList,
+      ramBreakdown,
       problemServers,
       projects: projectRows.map((p) => ({
         id:          p.Id,
