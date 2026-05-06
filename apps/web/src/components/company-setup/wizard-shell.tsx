@@ -637,6 +637,7 @@ export function WizardShell() {
                   serverId={selectedServerId ?? ""}
                   windowsServerId={selectedWindowsServerId ?? ""}
                   iisServerId={selectedIisServerId ?? ""}
+                  iisServerDns={apiIisServers.find((s) => s.id === selectedIisServerId)?.dns ?? ""}
                   depoServerId={selectedDepoServerId ?? ""}
                   firmaId={firmaId}
                   firmaName={selectedCompany?.firma ?? ""}

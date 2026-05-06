@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { WizardUser, BackupFile } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
+import type { CompanyServiceDto } from "@/app/api/companies/[firkod]/services/route"
 import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
@@ -101,6 +102,7 @@ interface Props {
   serverId:        string
   windowsServerId: string
   iisServerId:     string
+  iisServerDns?:   string
   depoServerId:    string
   firmaId:         string
   firmaName:       string
@@ -124,12 +126,13 @@ interface Props {
 }
 
 export function StepRun({
-  serverId, windowsServerId, iisServerId, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
+  serverId, windowsServerId, iisServerId, iisServerDns, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
   sqlServerId, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, addFirmaPrefix, addToSirketDb,
   onComplete, onReset, onConfetti,
 }: Props) {
   const [completed, setCompleted]   = useState(false)
   const [hasError, setHasError]     = useState(false)
+  const [iisAssignments, setIisAssignments] = useState<CompanyServiceDto[]>([])
   const [runKey, setRunKey]         = useState(0)
   const [localUsers, setLocalUsers] = useState<WizardUser[]>(users.map((u) => ({ ...u })))
   const [fwItems, setFwItems]       = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
@@ -175,6 +178,25 @@ export function StepRun({
 
   const fwDone = fwItems.filter((i) => i.checked).length
 
+  // Kurulum tamamlanınca müşteri mesajına IIS hizmet/port bilgisi de katılsın diye
+  // /api/companies/{firmaId}/services endpoint'inden iis-site atamalarını çek.
+  useEffect(() => {
+    if (!completed || !firmaId) return
+    let mounted = true
+    const load = async () => {
+      try {
+        const r = await fetch(`/api/companies/${encodeURIComponent(firmaId)}/services`, { cache: "no-store" })
+        if (!r.ok) return
+        const data = (await r.json()) as CompanyServiceDto[]
+        if (mounted && Array.isArray(data)) {
+          setIisAssignments(data.filter((s) => s.type === "iis-site" && s.port != null))
+        }
+      } catch { /* ignore */ }
+    }
+    load()
+    return () => { mounted = false }
+  }, [completed, firmaId])
+
   // Her kullanici icin structured kimlik bilgisi — modal'da her alan ayri kopyalanabilir
   const credentials = (() => {
     const domainShort = (serverDomain ?? "").split(".")[0]?.trim() ?? ""
@@ -218,6 +240,17 @@ export function StepRun({
         lines.push("")
       }
     })
+
+    // Web (IIS) hizmet erişim bilgileri
+    if (iisAssignments.length > 0) {
+      const iisHost = (iisServerDns && iisServerDns.trim()) || ""
+      lines.push("Web Hizmetleri:")
+      iisAssignments.forEach((s) => {
+        const url = iisHost ? `http://${iisHost}:${s.port}` : `Port: ${s.port}`
+        lines.push(`${s.name}: ${url}`)
+      })
+      lines.push("")
+    }
 
     lines.push("Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734")
     lines.push("")
