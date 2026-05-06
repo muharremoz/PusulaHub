@@ -116,6 +116,11 @@ interface RunBackupFile {
   fileName:     string
   /** Hedef DB adı — kullanıcı sheet'te düzenledi (firma prefix yok) */
   databaseName: string
+  /** Bu .bak hangi pusula-program servisine ait (sirket.guvenlik.prgtur için).
+   *  Birden fazla pusula programı seçildiğinde her .bak'ı bir programa bağlamak için
+   *  kullanıcı UI'da seçer. Tek program varsa wizard otomatik atar. null ise client
+   *  taraf eski olabilir → backend ilk pusula servisinin koduna fallback yapar. */
+  programServiceId?: number | null
 }
 
 interface RunPayload {
@@ -743,7 +748,13 @@ export async function POST(req: NextRequest) {
           const prefix = runAddPrefix ? `${payload.firmaId}_` : ""
 
           if (runSqlMode === 0) {
-            // Mod 0: seçili .bak dosyaları için backupFolderPath\fileName yolu
+            // Mod 0: her .bak için programServiceId → programCode lookup.
+            // programServiceId yoksa (eski client) ilk pusula servisinin koduna fallback.
+            const codeByServiceId = new Map<number, string | null>()
+            for (const s of pusulaServices) {
+              const cfg = s.config as PusulaProgramConfig | null
+              codeByServiceId.set(s.id, cfg?.programCode?.trim() || null)
+            }
             const firstPusulaProgramCode = pusulaServices
               .map((s) => (s.config as PusulaProgramConfig | null)?.programCode ?? null)
               .find((c) => !!c) ?? null
@@ -755,10 +766,13 @@ export async function POST(req: NextRequest) {
               const bakPath = runBackupFolder
                 ? `${runBackupFolder}\\${fileName}`
                 : fileName
+              const programCode = bf.programServiceId != null
+                ? (codeByServiceId.get(bf.programServiceId) ?? null)
+                : firstPusulaProgramCode
               tasks.push({
                 bakPath,
                 dbName:      `${prefix}${dbName}`,
-                programCode: firstPusulaProgramCode,
+                programCode,
               })
             }
           } else {

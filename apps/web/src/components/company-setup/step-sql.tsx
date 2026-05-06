@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { BackupFile } from "@/lib/setup-mock-data"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
+import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
 import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,6 +35,10 @@ interface Props {
   onSetBackupFolder: (path: string) => void
   onScanBackups: () => void
   onUpdateBackupDatabaseName: (id: number, name: string) => void
+  /** Hangi pusula programına bağlı olduğunu seçmek için. */
+  onUpdateBackupProgramServiceId: (id: number, serviceId: number | null) => void
+  /** Sihirbazda 3. adımda seçili pusula-program servisleri (1 ise auto-assign, 2+ ise dropdown çıkar). */
+  selectedPusulaServices: WizardServiceDto[]
   onToggleDemoDb: (id: number) => void
   onUpdateDemoDbDataName: (id: number, dataName: string) => void
   onSetAddFirmaPrefix: (v: boolean) => void
@@ -63,9 +68,11 @@ export function StepSql({
   selectedDemoDbIds, addFirmaPrefix, addToSirketDb, firmaId, isScanning,
   onSelectSqlServer, onSetSqlMode, onToggleBackup,
   onSetBackupFolder, onScanBackups, onUpdateBackupDatabaseName,
+  onUpdateBackupProgramServiceId, selectedPusulaServices,
   onToggleDemoDb, onUpdateDemoDbDataName,
   onSetAddFirmaPrefix, onSetAddToSirketDb,
 }: Props) {
+  const showProgramColumn = selectedPusulaServices.length >= 2
   const hasSelection =
     (sqlMode === 0 && backupFiles.some((f) => f.selected)) ||
     (sqlMode === 1 && selectedDemoDbIds.length > 0)
@@ -441,12 +448,16 @@ export function StepSql({
                   <div className="divide-y divide-border/40">
                     {backupFiles.map((f) => {
                       const showPrefix = addFirmaPrefix && !!firmaId
+                      const programMissing = showProgramColumn && f.selected && f.programServiceId == null
                       return (
                         <div
                           key={f.id}
                           onClick={() => onToggleBackup(f.id)}
                           className={cn(
-                            "w-full grid grid-cols-[20px_1fr_240px_70px_70px] gap-3 items-center px-3 py-2.5 text-left transition-colors cursor-pointer",
+                            "w-full grid gap-3 items-center px-3 py-2.5 text-left transition-colors cursor-pointer",
+                            showProgramColumn
+                              ? "grid-cols-[20px_1fr_200px_160px_70px_70px]"
+                              : "grid-cols-[20px_1fr_240px_70px_70px]",
                             f.selected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"
                           )}
                         >
@@ -478,6 +489,34 @@ export function StepSql({
                               />
                             </div>
                           </div>
+                          {/* Program seçimi — sadece 2+ pusula servisi seçildiyse görünür */}
+                          {showProgramColumn && (
+                            <div onClick={(e) => e.stopPropagation()}>
+                              <select
+                                value={f.programServiceId ?? ""}
+                                onChange={(e) => {
+                                  const v = e.target.value
+                                  onUpdateBackupProgramServiceId(f.id, v ? Number(v) : null)
+                                }}
+                                className={cn(
+                                  "w-full h-7 rounded-[4px] border bg-background px-2 text-[11px] outline-none",
+                                  programMissing
+                                    ? "border-amber-500/60 text-amber-700"
+                                    : "border-border/60 hover:border-border focus:border-foreground/50"
+                                )}
+                              >
+                                <option value="">— Program seç —</option>
+                                {selectedPusulaServices.map((s) => {
+                                  const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
+                                  return (
+                                    <option key={s.id} value={s.id}>
+                                      {s.name}{code ? ` (${code})` : ""}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                            </div>
+                          )}
                           <span className="text-[11px] text-muted-foreground tabular-nums text-right">
                             {formatSize(f.fileSizeMB)}
                           </span>

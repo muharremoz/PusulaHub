@@ -267,8 +267,9 @@ export function StepRun({
           backupFiles: (backupFiles ?? [])
             .filter((f) => f.selected)
             .map((f) => ({
-              fileName:     f.fileName,
-              databaseName: f.databaseName,
+              fileName:         f.fileName,
+              databaseName:     f.databaseName,
+              programServiceId: f.programServiceId,
             })),
           selectedDemoDbIds,
           addFirmaPrefix,

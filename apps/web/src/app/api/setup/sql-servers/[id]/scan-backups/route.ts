@@ -89,14 +89,15 @@ export async function POST(
     const raw: RawBackupItem[] = parseBackupListOutput(result.stdout)
 
     const files: BackupFile[] = raw.map((item, idx) => ({
-      id:           idx + 1,
-      fileName:     item.Name,
-      databaseName: parseDatabaseName(item.Name),
+      id:               idx + 1,
+      fileName:         item.Name,
+      databaseName:     parseDatabaseName(item.Name),
       // Byte → MB (float) — UI tarafında MB/GB dinamik formatlanır.
       // Math.round kullanmıyoruz çünkü < 0.5 MB dosyalar 0 görünüyordu.
-      fileSizeMB:   (item.Length || 0) / (1024 * 1024),
-      date:         toDateString(item.LastWriteTime),
-      selected:     false,
+      fileSizeMB:       (item.Length || 0) / (1024 * 1024),
+      date:             toDateString(item.LastWriteTime),
+      selected:         false,
+      programServiceId: null,
     }))
 
     const body_: ScanBackupsResponse = { files }

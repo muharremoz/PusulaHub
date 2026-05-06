@@ -374,9 +374,21 @@ export function WizardShell() {
   }, [apiServices])
 
   const toggleBackup = (id: number) =>
-    setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, selected: !f.selected } : f))
+    setBackupFiles((p) => p.map((f) => {
+      if (f.id !== id) return f
+      const nextSelected = !f.selected
+      // Seçilirken otomatik program ataması: tek pusula programı seçiliyse onu ata
+      let nextProgramServiceId = f.programServiceId
+      if (nextSelected && nextProgramServiceId == null) {
+        const selectedPusula = apiServices.filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))
+        if (selectedPusula.length === 1) nextProgramServiceId = selectedPusula[0].id
+      }
+      return { ...f, selected: nextSelected, programServiceId: nextProgramServiceId }
+    }))
   const updateBackupDatabaseName = (id: number, name: string) =>
     setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, databaseName: name } : f))
+  const updateBackupProgramServiceId = (id: number, serviceId: number | null) =>
+    setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, programServiceId: serviceId } : f))
   const toggleDemoDb = (id: number) =>
     setSelectedDemoDbIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
   const updateDemoDbDataName = (id: number, dataName: string) =>
@@ -603,6 +615,8 @@ export function WizardShell() {
                   onToggleBackup={toggleBackup} onSetBackupFolder={setBackupFolderPath}
                   onScanBackups={() => scanBackups()}
                   onUpdateBackupDatabaseName={updateBackupDatabaseName}
+                  onUpdateBackupProgramServiceId={updateBackupProgramServiceId}
+                  selectedPusulaServices={apiServices.filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))}
                   onToggleDemoDb={toggleDemoDb}
                   onUpdateDemoDbDataName={updateDemoDbDataName}
                   onSetAddFirmaPrefix={setAddFirmaPrefix}
