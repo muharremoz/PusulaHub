@@ -81,6 +81,7 @@ import {
   History,
   SlidersHorizontal,
   RefreshCw,
+  LogIn,
 } from "lucide-react"
 
 /* ══════════════════════════════════════════════════════════
@@ -94,6 +95,7 @@ const CATEGORIES = [
   { id: "app",      label: "Uygulamalar",     icon: AppWindow, color: "text-orange-600" },
   { id: "service",  label: "Servis Hesapları",icon: UserCog,   color: "text-rose-600"   },
   { id: "web",      label: "Web / Panel",     icon: Globe,     color: "text-sky-600"    },
+  { id: "login",    label: "Login",           icon: LogIn,     color: "text-amber-600"  },
 ] as const
 
 type CategoryId = typeof CATEGORIES[number]["id"]
@@ -442,6 +444,11 @@ function EntrySheet({
   const [accLoading, setAccLoading]     = useState(false)
 
   useEffect(() => {
+    // Sheet açılmadığında reset etme — kapalıyken state korumak gereksiz iş.
+    // Sheet açıldığında (open=true) form'u entry'ye göre seed et.
+    // Bug: editing null → null transition'ı reference değiştirmediği için
+    // önceki form state taşınıyordu; open dep'i bunu önler.
+    if (!open) return
     setForm(entry
       ? { category: entry.category, title: entry.title, username: entry.username,
           password: entry.password, host: entry.host, url: entry.url, notes: entry.notes }
@@ -454,7 +461,7 @@ function EntrySheet({
       setHistoryItems([])
       setAccessItems([])
     }
-  }, [entry])
+  }, [entry, open])
 
   async function loadHistory(id: string) {
     setHistLoading(true)
