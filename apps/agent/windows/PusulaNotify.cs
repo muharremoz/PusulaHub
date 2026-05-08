@@ -255,10 +255,8 @@ class NotifyForm : Form
         // Bunun yerine Windows 11'de DWM ile OS seviyesinde yumuşak köşe,
         // tüm sürümlerde CS_DROPSHADOW ile hafif gölge uyguluyoruz.
 
-        // Auto-close 5 min
-        var t = new System.Windows.Forms.Timer { Interval = 300000 };
-        t.Tick += (s, e) => { t.Stop(); Close(); };
-        t.Start();
+        // Auto-close YOK — popup yalnızca "Okudum, Anladım" butonuyla kapanır.
+        // (Logoff/reboot'ta oturumla birlikte zaten kapanır.)
     }
 
     // CS_DROPSHADOW — form gölgeli görünsün (Win 10 + 11)

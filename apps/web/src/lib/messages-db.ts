@@ -287,7 +287,7 @@ export async function getPendingForServer(serverId: string): Promise<PendingForS
   const rows = await query<Raw[]>`
     SELECT r.MessageId, r.Username, m.Subject, m.Body, m.Type, m.Priority,
            m.SenderName,
-           CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt
+           CONVERT(NVARCHAR(23), m.SentAt, 126) + 'Z' AS SentAt
       FROM MessageRecipients r
       JOIN Messages m ON m.Id = r.MessageId
      WHERE r.ServerId = ${serverId}
@@ -382,7 +382,7 @@ export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
   return query<MessageRow[]>`
     SELECT m.Id, m.Subject, m.Body, m.Type, m.Priority, m.RecipientType,
            m.CompanyId, m.CompanyName, m.SenderUserId, m.SenderName,
-           CONVERT(NVARCHAR(30), m.SentAt, 120) AS SentAt,
+           CONVERT(NVARCHAR(23), m.SentAt, 126) + 'Z' AS SentAt,
            m.TotalCount, m.ReadCount
       FROM Messages m
      WHERE (${search}    IS NULL OR m.Subject LIKE ${search} OR m.Body LIKE ${search})
@@ -408,7 +408,7 @@ export async function getMessage(id: string): Promise<MessageRow | null> {
   const rows = await query<MessageRow[]>`
     SELECT Id, Subject, Body, Type, Priority, RecipientType,
            CompanyId, CompanyName, SenderUserId, SenderName,
-           CONVERT(NVARCHAR(30), SentAt, 120) AS SentAt,
+           CONVERT(NVARCHAR(23), SentAt, 126) + 'Z' AS SentAt,
            TotalCount, ReadCount
       FROM Messages WHERE Id = ${id}
   `
@@ -419,8 +419,8 @@ export async function getRecipients(messageId: string): Promise<RecipientRow[]> 
   await ensureSchema()
   return query<RecipientRow[]>`
     SELECT Id, MessageId, ServerId, ServerName, Username, Status,
-           CONVERT(NVARCHAR(30), DeliveredAt, 120) AS DeliveredAt,
-           CONVERT(NVARCHAR(30), ReadAt,      120) AS ReadAt,
+           CONVERT(NVARCHAR(23), DeliveredAt, 126) + 'Z' AS DeliveredAt,
+           CONVERT(NVARCHAR(23), ReadAt,      126) + 'Z' AS ReadAt,
            ErrorMessage
       FROM MessageRecipients
      WHERE MessageId = ${messageId}
