@@ -33,6 +33,7 @@ import {
   CommandList,
 } from "@/components/ui/command"
 import { cn } from "@/lib/utils"
+import { copyToClipboard } from "@/lib/clipboard"
 import { Eye, EyeOff, Check, ChevronsUpDown, Copy, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 
@@ -373,10 +374,10 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (!password) return
-                      navigator.clipboard.writeText(password)
-                      toast.success("Şifre kopyalandı")
+                      const ok = await copyToClipboard(password)
+                      if (ok) toast.success("Şifre kopyalandı"); else toast.error("Kopyalanamadı")
                     }}
                     title="Kopyala"
                     className="flex items-center justify-center h-8 w-8 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground shrink-0"
@@ -436,10 +437,10 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!sqlPassword) return
-                        navigator.clipboard.writeText(sqlPassword)
-                        toast.success("Şifre kopyalandı")
+                        const ok = await copyToClipboard(sqlPassword)
+                        if (ok) toast.success("Şifre kopyalandı"); else toast.error("Kopyalanamadı")
                       }}
                       title="Kopyala"
                       className="flex items-center justify-center h-8 w-8 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground shrink-0"

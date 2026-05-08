@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
+import { copyToClipboard } from "@/lib/clipboard";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
@@ -2283,7 +2284,7 @@ tr:nth-child(even) td{background:#fafafa}
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={async () => { await navigator.clipboard.writeText(msg); setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) }}
+                          onClick={async () => { if (await copyToClipboard(msg)) { setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) } }}
                           className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
                         >
                           {newUserMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
@@ -2368,7 +2369,7 @@ tr:nth-child(even) td{background:#fafafa}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={async () => { await navigator.clipboard.writeText(msg); setPwResetMsgCopied(true); setTimeout(() => setPwResetMsgCopied(false), 2000) }}
+                        onClick={async () => { if (await copyToClipboard(msg)) { setPwResetMsgCopied(true); setTimeout(() => setPwResetMsgCopied(false), 2000) } }}
                         className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
                       >
                         {pwResetMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}

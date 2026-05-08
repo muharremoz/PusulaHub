@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Building2, Users, MoreVertical, ChevronUp, ChevronDown, ChevronsUpDown, UserCheck, UserX, KeyRound, Eye, EyeOff, Sparkles, Copy, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { copyToClipboard } from "@/lib/clipboard";
 import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -131,13 +132,10 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
   async function copyPassword() {
     if (!newPassword) return;
-    try {
-      await navigator.clipboard.writeText(newPassword);
-      setPasswordCopied(true);
-      setTimeout(() => setPasswordCopied(false), 1500);
-    } catch {
-      toast.error("Kopyalanamadı");
-    }
+    const ok = await copyToClipboard(newPassword);
+    if (!ok) { toast.error("Kopyalanamadı"); return; }
+    setPasswordCopied(true);
+    setTimeout(() => setPasswordCopied(false), 1500);
   }
 
   async function handleChangePassword() {

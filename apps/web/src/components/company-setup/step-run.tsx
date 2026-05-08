@@ -9,31 +9,7 @@ import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound,
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
-
-/** HTTPS / localhost dısında navigator.clipboard undefined — fallback */
-async function copyToClipboard(text: string): Promise<boolean> {
-  try {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-      return true
-    }
-  } catch { /* fallback altta */ }
-  try {
-    const ta = document.createElement("textarea")
-    ta.value = text
-    ta.style.position = "fixed"
-    ta.style.opacity = "0"
-    ta.style.left = "-9999px"
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    const ok = document.execCommand("copy")
-    document.body.removeChild(ta)
-    return ok
-  } catch {
-    return false
-  }
-}
+import { copyToClipboard } from "@/lib/clipboard"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 

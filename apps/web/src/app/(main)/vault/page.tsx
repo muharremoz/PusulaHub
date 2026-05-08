@@ -83,6 +83,7 @@ import {
   RefreshCw,
   LogIn,
 } from "lucide-react"
+import { copyToClipboard } from "@/lib/clipboard"
 
 /* ══════════════════════════════════════════════════════════
    Kategoriler
@@ -198,8 +199,9 @@ function PasswordAgeBadge({ changedAt }: { changedAt: string | null }) {
 ══════════════════════════════════════════════════════════ */
 function CopyButton({ value, label, entryId, action }: { value: string; label: string; entryId?: string; action?: string }) {
   const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(value)
+  const copy = async () => {
+    const ok = await copyToClipboard(value)
+    if (!ok) { toast.error("Kopyalanamadı"); return }
     setCopied(true)
     toast.success(`${label} kopyalandı`)
     setTimeout(() => setCopied(false), 2000)

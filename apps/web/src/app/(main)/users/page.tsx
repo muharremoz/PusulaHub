@@ -13,6 +13,7 @@ import { Button }       from "@/components/ui/button"
 import { Input }        from "@/components/ui/input"
 import { Label }        from "@/components/ui/label"
 import { Skeleton }     from "@/components/ui/skeleton"
+import { copyToClipboard } from "@/lib/clipboard"
 import { Switch }       from "@/components/ui/switch"
 import { ScrollArea }   from "@/components/ui/scroll-area"
 import {
@@ -407,12 +408,12 @@ function UserSheet({ open, user, onClose, onSaved }: {
                 </div>
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const p = generatePassword()
                     setPassword(p)
                     setShowPwd(true)
-                    try { navigator.clipboard.writeText(p); toast.success("Şifre üretildi ve panoya kopyalandı") }
-                    catch { toast.success("Şifre üretildi") }
+                    if (await copyToClipboard(p)) toast.success("Şifre üretildi ve panoya kopyalandı")
+                    else toast.success("Şifre üretildi")
                   }}
                   className="h-8 px-2 rounded-[5px] border border-border/60 bg-muted/30 hover:bg-muted/60 text-[11px] flex items-center gap-1.5 text-muted-foreground"
                   title="Güçlü şifre üret + panoya kopyala"
@@ -423,9 +424,9 @@ function UserSheet({ open, user, onClose, onSaved }: {
                 {password && (
                   <button
                     type="button"
-                    onClick={() => {
-                      try { navigator.clipboard.writeText(password); toast.success("Panoya kopyalandı") }
-                      catch { toast.error("Kopyalanamadı") }
+                    onClick={async () => {
+                      if (await copyToClipboard(password)) toast.success("Panoya kopyalandı")
+                      else toast.error("Kopyalanamadı")
                     }}
                     className="h-8 w-8 rounded-[5px] border border-border/60 bg-muted/30 hover:bg-muted/60 text-muted-foreground flex items-center justify-center"
                     title="Şifreyi kopyala"

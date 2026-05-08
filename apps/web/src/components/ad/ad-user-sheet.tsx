@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/command"
 import { Switch } from "@/components/ui/switch"
 import { companies } from "@/lib/mock-data"
+import { copyToClipboard } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 import {
   Eye, EyeOff, Copy, Check,
@@ -171,9 +172,10 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
     setPassword(p); setConfirm(p); setShowPass(true)
   }
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (!password) return
-    navigator.clipboard.writeText(password)
+    const ok = await copyToClipboard(password)
+    if (!ok) return
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
