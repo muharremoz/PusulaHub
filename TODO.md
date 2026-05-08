@@ -4,6 +4,26 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ---
 
+## HTTPS — `app.pusulanet.net` için Gerçek Sertifika
+
+### Yapılacak
+
+- [ ] **DNS'i Cloudflare'e taşı** — pusulanet.net domain kaydı TurkHost'ta kalsın, sadece nameserver'lar Cloudflare'e çevrilsin (TurkHost panel → NS değiştir, ~10 dk yayılır). Mevcut DNS kayıtları Cloudflare'e import edilir.
+- [ ] **Cloudflare API token oluştur** — sadece `pusulanet.net` zone'una `Zone:DNS:Edit` yetkili token. Caddy bu token ile DNS-01 challenge yapacak.
+- [ ] **Caddy kur** (10.10.10.5, Switch ile aynı host) — Caddy + cloudflare-dns plugin. `Caddyfile` ile `app.pusulanet.net` → Switch:4000 reverse proxy + otomatik Let's Encrypt cert.
+- [ ] **Test** — `https://app.pusulanet.net` uyarısız açılmalı. Switch / Hub / SpareFlow akışları doğrulanır.
+- [ ] **Cookie `secure: true` davranışı** — Hub/Switch login cookie'si zaten `x-forwarded-proto`'ya göre dinamik (CLAUDE.md'de yazılı), HTTPS'e geçince otomatik secure olur. Doğrula.
+- [ ] **HTTP → HTTPS redirect** — Caddy default'ta yapar, açıkça onayla.
+- [ ] **`navigator.clipboard` fallback'i koru** — secure context'te modern API tekrar devreye girer, `lib/clipboard.ts` zaten ikisini de destekliyor (kaldırma).
+
+**Neden Cloudflare?** TurkHost'un public DNS API'si yok → otomatik Let's Encrypt yenileme için DNS-01 challenge gerek. 10.10.10.5 internetten erişilemediği için HTTP-01 yapılamaz. Cloudflare'in API'si Caddy ile out-of-the-box çalışır, cert 90 günde bir otomatik yenilenir.
+
+### Yapıldı
+
+_Henüz başlanmadı._
+
+---
+
 ## İzleme (Uptime Kuma Entegrasyonu)
 
 ### Yapılacak
