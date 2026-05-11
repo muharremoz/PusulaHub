@@ -35,7 +35,7 @@ async function loadServerCreds(id: string | null | undefined): Promise<ServerCre
 }
 
 export async function GET() {
-  const gate = await requirePermission("companies", "read")
+  const gate = await requirePermission("aktarim", "read")
   if (gate) return gate
   try {
     const list = await listSessions()
@@ -46,7 +46,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requirePermission("companies", "write")
+  const gate = await requirePermission("aktarim", "write")
   if (gate) return gate
   const session = await auth()
   const createdBy = session?.user?.username ?? session?.user?.email ?? null

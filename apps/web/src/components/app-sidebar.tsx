@@ -77,7 +77,7 @@ const navGroups: NavGroupDef[] = [
       { title: "Sunucular",   url: "/servers",    icon: Monitor,   moduleKey: "servers" },
       { title: "İzleme",      url: "/monitoring", icon: Activity,  moduleKey: "monitoring" },
       { title: "Firmalar",    url: "/companies",  icon: Building,  moduleKey: "companies" },
-      { title: "Aktarım",     url: "/aktarim",    icon: Building,  moduleKey: "companies" },
+      { title: "Aktarım",     url: "/aktarim",    icon: Building,  moduleKey: "aktarim" },
       { title: "Mesajlar",    url: "/messages",   icon: Messages2, moduleKey: "messages" },
       { title: "Projeler",    url: "/projects",   icon: Kanban,    moduleKey: "projects" },
       { title: "Takvim",      url: "/calendar",   icon: Calendar,  moduleKey: "calendar" },

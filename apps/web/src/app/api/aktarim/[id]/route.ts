@@ -11,7 +11,7 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requirePermission("companies", "write")
+  const gate = await requirePermission("aktarim", "write")
   if (gate) return gate
   const { id } = await params
   try {
@@ -26,7 +26,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const gate = await requirePermission("companies", "write")
+  const gate = await requirePermission("aktarim", "write")
   if (gate) {
     console.error("[aktarim/DELETE] permission denied")
     return gate
