@@ -26,7 +26,7 @@ interface TransferSession {
   firmaName:           string
   sqlServerName:       string | null
   depoServerName:      string | null
-  status:              "pending" | "active" | "completed" | "cancelled" | "expired"
+  status:              "pending" | "active" | "pushing" | "push_failed" | "completed" | "cancelled" | "expired"
   createdBy:           string | null
   createdAt:           string
   expiresAt:           string
@@ -62,11 +62,13 @@ function formatRelative(iso: string): string {
 
 function statusBadge(s: TransferSession["status"]) {
   const map = {
-    pending:   { label: "Bekliyor",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    active:    { label: "Aktif",       cls: "bg-blue-50 text-blue-700 border-blue-200" },
-    completed: { label: "Tamamlandı",  cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    cancelled: { label: "İptal",       cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
-    expired:   { label: "Süresi Doldu", cls: "bg-red-50 text-red-700 border-red-200" },
+    pending:     { label: "Bekliyor",        cls: "bg-amber-50 text-amber-700 border-amber-200" },
+    active:      { label: "Aktif",           cls: "bg-blue-50 text-blue-700 border-blue-200" },
+    pushing:     { label: "Aktarılıyor",     cls: "bg-violet-50 text-violet-700 border-violet-200" },
+    push_failed: { label: "Aktarım Hatası",  cls: "bg-red-50 text-red-700 border-red-200" },
+    completed:   { label: "Tamamlandı",      cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    cancelled:   { label: "İptal",           cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
+    expired:     { label: "Süresi Doldu",    cls: "bg-red-50 text-red-700 border-red-200" },
   }[s]
   return (
     <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[4px] border", map.cls)}>
@@ -136,8 +138,8 @@ export default function AktarimPage() {
     }
   }
 
-  const active = items.filter((i) => i.status === "active" || i.status === "pending")
-  const past   = items.filter((i) => !["active", "pending"].includes(i.status))
+  const active = items.filter((i) => ["pending", "active", "pushing"].includes(i.status))
+  const past   = items.filter((i) => !["pending", "active", "pushing"].includes(i.status))
 
   return (
     <PageContainer

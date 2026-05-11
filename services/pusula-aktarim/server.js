@@ -26,10 +26,11 @@ import multipart from "@fastify/multipart"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
 import { dirname, join, normalize } from "path"
-import { mkdir, stat } from "fs/promises"
+import { mkdir, stat, readdir, rm } from "fs/promises"
 import { createWriteStream } from "fs"
 import { pipeline } from "stream/promises"
 import { randomBytes } from "crypto"
+import { spawn } from "child_process"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
@@ -73,15 +74,45 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_company ON sessions(companyId);
 `)
 
+// ── Migration: SMB push için sunucu credential'ları ──
+function ensureColumn(name, type) {
+  const cols = db.prepare("PRAGMA table_info(sessions)").all().map(c => c.name)
+  if (!cols.includes(name)) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN ${name} ${type}`)
+  }
+}
+ensureColumn("sqlServerIp",   "TEXT")
+ensureColumn("sqlUsername",   "TEXT")
+ensureColumn("sqlPassword",   "TEXT")
+ensureColumn("depoServerIp",  "TEXT")
+ensureColumn("depoUsername",  "TEXT")
+ensureColumn("depoPassword",  "TEXT")
+ensureColumn("pushProgress",  "INTEGER NOT NULL DEFAULT 0")   // 0-100 toplam
+ensureColumn("pushStage",     "TEXT")                          // 'data' | 'images' | null
+ensureColumn("pushError",     "TEXT")
+
 function newId()    { return randomBytes(8).toString("hex") }
 function newToken() { return randomBytes(18).toString("base64url") }
 
 const stmts = {
   insert: db.prepare(`
     INSERT INTO sessions (id, token, companyId, firmaName, sqlServerName, depoServerName,
+                          sqlServerIp, sqlUsername, sqlPassword,
+                          depoServerIp, depoUsername, depoPassword,
                           status, createdBy, expiresAt, notes)
     VALUES (@id, @token, @companyId, @firmaName, @sqlServerName, @depoServerName,
+            @sqlServerIp, @sqlUsername, @sqlPassword,
+            @depoServerIp, @depoUsername, @depoPassword,
             'pending', @createdBy, @expiresAt, @notes)
+  `),
+  updatePush: db.prepare(`
+    UPDATE sessions
+    SET pushProgress = @progress,
+        pushStage    = @stage,
+        pushError    = @error,
+        status       = COALESCE(@status, status),
+        completedAt  = CASE WHEN @status IN ('completed','push_failed') THEN datetime('now') ELSE completedAt END
+    WHERE token = @token
   `),
   byToken: db.prepare(`SELECT * FROM sessions WHERE token = ?`),
   byId:    db.prepare(`SELECT * FROM sessions WHERE id = ?`),
@@ -136,6 +167,10 @@ function getActiveSession(token) {
   if (!s) return { error: "not_found" }
   if (s.status === "cancelled" || s.status === "expired") return { error: s.status }
   if (s.status === "completed") return { error: "completed" }
+  // 'pushing' / 'push_failed' / 'active' upload aşamasında değil, info için OK
+  // ama upload endpoint'leri bunlara izin vermemeli
+  if (s.status === "pushing")     return { error: "pushing" }
+  if (s.status === "push_failed") return { error: "push_failed" }
   // Süresi geçtiyse otomatik expired
   if (new Date(s.expiresAt) < new Date()) {
     stmts.setStatus.run("expired", "expired", token)
@@ -170,6 +205,12 @@ fastify.post("/admin/sessions", async (req, reply) => {
     firmaName:      body.firmaName,
     sqlServerName:  body.sqlServerName  ?? null,
     depoServerName: body.depoServerName ?? null,
+    sqlServerIp:    body.sqlServerIp    ?? null,
+    sqlUsername:    body.sqlUsername    ?? null,
+    sqlPassword:    body.sqlPassword    ?? null,
+    depoServerIp:   body.depoServerIp   ?? null,
+    depoUsername:   body.depoUsername   ?? null,
+    depoPassword:   body.depoPassword   ?? null,
     createdBy:      body.createdBy ?? null,
     expiresAt,
     notes:          body.notes ?? null,
@@ -194,9 +235,22 @@ fastify.delete("/admin/sessions/:id", async (req, reply) => {
 // ─────────────────────────────────────────────────
 
 fastify.get("/api/info/:token", async (req, reply) => {
-  const v = getActiveSession(req.params.token)
-  if (v.error) return reply.code(v.error === "not_found" ? 404 : 410).send({ ok: false, reason: v.error })
-  const s = v.session
+  const s = stmts.byToken.get(req.params.token)
+  if (!s) return reply.code(404).send({ ok: false, reason: "not_found" })
+
+  // Süresi geçti mi (active aşamada)?
+  if (["pending","active"].includes(s.status) && new Date(s.expiresAt) < new Date()) {
+    stmts.setStatus.run("expired", "expired", req.params.token)
+    return reply.code(410).send({ ok: false, reason: "expired" })
+  }
+
+  // Cancelled, expired, completed → 410 ile durum bilgisini de göster (UI bekleyecek)
+  // ama 'pushing' ve 'push_failed' UI'a görünür şekilde dönsün
+  const visible = ["pending","active","pushing","push_failed","completed"].includes(s.status)
+  if (!visible) {
+    return reply.code(410).send({ ok: false, reason: s.status })
+  }
+
   return {
     ok: true,
     firmaId:             s.companyId,
@@ -204,12 +258,16 @@ fastify.get("/api/info/:token", async (req, reply) => {
     status:              s.status,
     createdAt:           s.createdAt,
     expiresAt:           s.expiresAt,
+    completedAt:         s.completedAt,
     dataBytesTotal:      s.dataBytesTotal,
     dataBytesReceived:   s.dataBytesReceived,
     imageFilesTotal:     s.imageFilesTotal,
     imageFilesReceived:  s.imageFilesReceived,
     imageBytesTotal:     s.imageBytesTotal,
     imageBytesReceived:  s.imageBytesReceived,
+    pushProgress:        s.pushProgress ?? 0,
+    pushStage:           s.pushStage,
+    pushError:           s.pushError,
     notes:               s.notes,
   }
 })
@@ -298,7 +356,20 @@ fastify.post("/api/upload/:token/images-done", async (req, reply) => {
 })
 
 fastify.post("/api/upload/:token/complete", async (req, reply) => {
-  stmts.setStatus.run("completed", "completed", req.params.token)
+  const { token } = req.params
+  const sess = stmts.byToken.get(token)
+  if (!sess) return reply.code(404).send({ error: "not_found" })
+
+  // 'pushing' statusüne geç ve push'u arkaplanda başlat
+  stmts.updatePush.run({
+    token, progress: 0, stage: "starting", error: null, status: "pushing",
+  })
+  startPushJob(token).catch((err) => {
+    fastify.log.error({ err, token }, "push job crashed")
+    stmts.updatePush.run({
+      token, progress: 0, stage: null, error: String(err?.message ?? err), status: "push_failed",
+    })
+  })
   return reply.send({ ok: true })
 })
 
@@ -499,6 +570,26 @@ function renderHtml(token) {
   .done-banner h2 { margin:0 0 2px 0; font-size:14px; font-weight:600 }
   .done-banner p { margin:0; font-size:12px; opacity:.85 }
 
+  .push-banner {
+    margin-top:18px; padding:18px 20px; border-radius:8px;
+    background:#eff6ff; border:1px solid #bfdbfe;
+  }
+  .spinner {
+    width:24px; height:24px; flex:0 0 24px;
+    border:3px solid #bfdbfe; border-top-color:#1d4ed8;
+    border-radius:50%; animation:spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg) } }
+
+  .push-fail-banner {
+    margin-top:18px; padding:18px 20px; border-radius:8px;
+    background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
+    display:flex; align-items:center; gap:12px;
+  }
+  .push-fail-banner .icon { width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center }
+  .push-fail-banner h2 { margin:0 0 2px 0; font-size:14px; font-weight:600 }
+  .push-fail-banner p { margin:0; font-size:12px; opacity:.85 }
+
   .footer-code { text-align:center; padding:18px 0 0 0; color:var(--muted); font-size:10px; font-family:ui-monospace,SFMono-Regular,monospace }
 
   .hidden { display:none !important }
@@ -616,11 +707,31 @@ function renderHtml(token) {
 
     </div>
 
+    <div id="pushBanner" class="push-banner hidden">
+      <div style="display:flex; align-items:center; gap:12px">
+        <div class="spinner"></div>
+        <div style="flex:1">
+          <h2 style="margin:0 0 4px 0; font-size:14px; font-weight:600; color:#1e40af">Sunucuya aktarılıyor</h2>
+          <p id="pushSubtext" style="margin:0; font-size:12px; color:#1e3a8a">Dosyalarınız hedef sunuculara taşınıyor — bu işlem birkaç dakika sürebilir, sayfayı kapatabilirsiniz.</p>
+        </div>
+        <div id="pushPctNum" style="font-size:18px; font-weight:600; color:#1e40af; tabular-nums:true">0%</div>
+      </div>
+      <div class="bar" style="margin-top:12px"><div id="pushBar" style="width:0%"></div></div>
+    </div>
+
     <div id="doneBanner" class="done-banner hidden">
       <span class="icon">${ICON_CHECK}</span>
       <div>
         <h2>Aktarım tamamlandı</h2>
-        <p>Ekibimiz devamını sağlayacak. Bu pencereyi kapatabilirsiniz.</p>
+        <p>Dosyalarınız sunuculara aktarıldı. Bu pencereyi kapatabilirsiniz.</p>
+      </div>
+    </div>
+
+    <div id="pushFailBanner" class="push-fail-banner hidden">
+      <span class="icon" style="color:#b91c1c">${ICON_WARN}</span>
+      <div>
+        <h2>Sunucuya aktarım hatası</h2>
+        <p id="pushFailMsg">Yükleme başarılı oldu ancak sunucuya aktarımda bir sorun oluştu. Ekibimiz inceliyor.</p>
       </div>
     </div>
 
@@ -648,12 +759,14 @@ function fmtBytes(b) {
 }
 
 // ── Info yükle ────────────────────────
+let pushPollInterval = null;
+
 async function loadInfo() {
   try {
     const r = await fetch("/api/info/" + TOKEN);
     const d = await r.json();
     if (!r.ok) {
-      const map = { not_found:"Bu aktarım linki bulunamadı.", expired:"Bu aktarımın süresi geçti.", cancelled:"Bu aktarım iptal edilmiş.", completed:"Bu aktarım daha önce tamamlandı." };
+      const map = { not_found:"Bu aktarım linki bulunamadı.", expired:"Bu aktarımın süresi geçti.", cancelled:"Bu aktarım iptal edilmiş." };
       $("error").textContent = map[d.reason] || ("Hata: " + (d.reason || "Bilinmiyor"));
       $("error").classList.remove("hidden");
       $("loading").classList.add("hidden");
@@ -663,11 +776,56 @@ async function loadInfo() {
     if (d.notes) { $("notes").textContent = d.notes; $("notes").classList.remove("hidden"); }
     $("loading").classList.add("hidden");
     $("main").classList.remove("hidden");
+    applyStatus(d);
   } catch (e) {
     $("error").textContent = "Bağlantı hatası: " + e.message;
     $("error").classList.remove("hidden");
     $("loading").classList.add("hidden");
   }
+}
+
+function applyStatus(d) {
+  if (d.status === "pushing") {
+    showPushBanner(d);
+    if (!pushPollInterval) pushPollInterval = setInterval(pollPush, 3000);
+  } else if (d.status === "completed") {
+    $("pushBanner").classList.add("hidden");
+    $("doneBanner").classList.remove("hidden");
+    $("startBtn").disabled = true;
+    stopPushPoll();
+  } else if (d.status === "push_failed") {
+    $("pushBanner").classList.add("hidden");
+    $("pushFailBanner").classList.remove("hidden");
+    if (d.pushError) $("pushFailMsg").textContent = "Hata: " + d.pushError;
+    $("startBtn").disabled = true;
+    stopPushPoll();
+  }
+}
+
+function showPushBanner(d) {
+  $("pushBanner").classList.remove("hidden");
+  // Drop alanlarını kalıcı kilitle
+  $("dataDrop").style.pointerEvents = "none"; $("dataDrop").style.opacity = ".5";
+  $("imgDrop").style.pointerEvents  = "none"; $("imgDrop").style.opacity = ".5";
+  $("startBtn").disabled = true;
+  const pct = Math.max(0, Math.min(100, d.pushProgress ?? 0));
+  $("pushPctNum").textContent = pct + "%";
+  $("pushBar").style.width = pct + "%";
+  if (d.pushStage === "data")   $("pushSubtext").textContent = "Veri dosyaları SQL sunucusuna aktarılıyor…";
+  else if (d.pushStage === "images") $("pushSubtext").textContent = "Resimler depo sunucusuna aktarılıyor…";
+}
+
+function stopPushPoll() {
+  if (pushPollInterval) { clearInterval(pushPollInterval); pushPollInterval = null; }
+}
+
+async function pollPush() {
+  try {
+    const r = await fetch("/api/info/" + TOKEN);
+    const d = await r.json();
+    if (!r.ok) { stopPushPoll(); return; }
+    applyStatus(d);
+  } catch {}
 }
 
 // ── State (yükleme öncesi) ────────────
@@ -877,9 +1035,11 @@ async function startUpload() {
     if (selectedDataFiles.length > 0) await uploadData();
     if (selectedImages.length > 0) await uploadImages();
     await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
-    $("doneBanner").classList.remove("hidden");
+    // Push job arkaplanda başladı — polling pollPush ile yönetilir
+    showPushBanner({ pushProgress: 0, pushStage: "starting" });
+    pushPollInterval = setInterval(pollPush, 3000);
   } catch (err) {
-    alert("Yükleme sırasında hata: " + err.message);
+    showToast("Yükleme sırasında hata: " + err.message);
     uploading = false;
     refreshStart();
   }
@@ -1011,6 +1171,104 @@ loadInfo();
 </body>
 </html>`
 }
+
+// ─────────────────────────────────────────────────
+// PUSH JOB — Staging'den hedef sunuculara SMB
+// ─────────────────────────────────────────────────
+
+function execCmd(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], ...opts })
+    let stdout = "", stderr = ""
+    p.stdout.on("data", (d) => stdout += d.toString())
+    p.stderr.on("data", (d) => stderr += d.toString())
+    p.on("error", reject)
+    p.on("close", (code) => {
+      if (code === 0) resolve({ stdout, stderr })
+      else reject(new Error(`Exit ${code}: ${stderr || stdout || cmd}`))
+    })
+  })
+}
+
+/** Bir klasördeki tüm dosyaları cifs mount edilmiş hedefe kopyalar.
+ *  Recursive cp; klasör ağacı korunur. */
+async function copyTreeRecursive(srcDir, dstDir) {
+  await mkdir(dstDir, { recursive: true })
+  await execCmd("cp", ["-r", srcDir + "/.", dstDir])
+}
+
+async function withCifsMount(ip, share, username, password, fn) {
+  const mountPoint = `/tmp/pusula-aktarim-mnt-${randomBytes(6).toString("hex")}`
+  await mkdir(mountPoint, { recursive: true })
+  // mount.cifs çağrısı — credential komut satırından geçer (kısa süreli, log'a düşmez)
+  const opts = `username=${username},password=${password},vers=3.0,uid=0,gid=0,file_mode=0664,dir_mode=0775`
+  try {
+    await execCmd("mount", ["-t", "cifs", `//${ip}/${share}`, mountPoint, "-o", opts])
+  } catch (err) {
+    // SMB 3.0 hata verirse 2.1/2.0 dene
+    try {
+      const fallback = opts.replace("vers=3.0", "vers=2.1")
+      await execCmd("mount", ["-t", "cifs", `//${ip}/${share}`, mountPoint, "-o", fallback])
+    } catch (err2) {
+      throw new Error(`SMB mount hatası: ${err2.message}`)
+    }
+  }
+  try {
+    return await fn(mountPoint)
+  } finally {
+    try { await execCmd("umount", [mountPoint]) } catch { /* ignore */ }
+    try { await rm(mountPoint, { recursive: true, force: true }) } catch { /* ignore */ }
+  }
+}
+
+async function startPushJob(token) {
+  const sess = stmts.byToken.get(token)
+  if (!sess) throw new Error("Session bulunamadı")
+
+  const stagingData   = join(STAGING_ROOT, token, "data")
+  const stagingImages = join(STAGING_ROOT, token, "images")
+
+  // ── 1) Veri dosyaları → SQL sunucusu D$\SQLData\{firmaId}\aktarim ──
+  const hasData = await safeReadDir(stagingData)
+  if (hasData.length > 0) {
+    if (!sess.sqlServerIp || !sess.sqlUsername || !sess.sqlPassword) {
+      throw new Error("SQL sunucusu credential'ları eksik")
+    }
+    stmts.updatePush.run({ token, progress: 5, stage: "data", error: null, status: "pushing" })
+    await withCifsMount(sess.sqlServerIp, "D$", sess.sqlUsername, sess.sqlPassword, async (mnt) => {
+      const dst = join(mnt, "SQLData", sess.companyId, "aktarim")
+      await mkdir(dst, { recursive: true })
+      await execCmd("cp", ["-r", stagingData + "/.", dst])
+    })
+    stmts.updatePush.run({ token, progress: 50, stage: "data", error: null, status: "pushing" })
+  }
+
+  // ── 2) Resimler → Depo sunucusu \\depo\Resimler\{firmaId}\... ──
+  const hasImg = await safeReadDir(stagingImages)
+  if (hasImg.length > 0) {
+    if (!sess.depoServerIp || !sess.depoUsername || !sess.depoPassword) {
+      throw new Error("Depo sunucusu credential'ları eksik")
+    }
+    stmts.updatePush.run({ token, progress: 55, stage: "images", error: null, status: "pushing" })
+    await withCifsMount(sess.depoServerIp, "Resimler", sess.depoUsername, sess.depoPassword, async (mnt) => {
+      const dst = join(mnt, sess.companyId)
+      await mkdir(dst, { recursive: true })
+      // Müşterinin webkitRelativePath ile yüklediği klasör ağacı korunur
+      await execCmd("cp", ["-r", stagingImages + "/.", dst])
+    })
+    stmts.updatePush.run({ token, progress: 95, stage: "images", error: null, status: "pushing" })
+  }
+
+  // ── 3) Bitir ──
+  stmts.updatePush.run({ token, progress: 100, stage: null, error: null, status: "completed" })
+}
+
+async function safeReadDir(p) {
+  try { return await readdir(p) } catch { return [] }
+}
+
+// info endpoint'ine push alanlarını ekle (zaten Object.spread değil — manuel sürdür)
+// Aşağıdaki override, müşterinin push progress'ini görebilmesini sağlar.
 
 try {
   await fastify.listen({ port: PORT, host: HOST })

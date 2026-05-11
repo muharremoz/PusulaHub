@@ -10,6 +10,29 @@ import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { listSessions, createSession, type CreateInput } from "@/lib/aktarim-proxy"
+import { query } from "@/lib/db"
+import { decrypt } from "@/lib/crypto"
+
+interface ServerCred {
+  Name:     string
+  IP:       string
+  Username: string | null
+  Password: string | null
+}
+
+async function loadServerCreds(id: string | null | undefined): Promise<ServerCred | null> {
+  if (!id) return null
+  const rows = await query<ServerCred[]>`
+    SELECT Name, IP, Username, Password FROM Servers WHERE Id = ${id}
+  `
+  if (!rows.length) return null
+  const r = rows[0]
+  let pw: string | null = r.Password ?? null
+  if (pw && pw.startsWith("enc:v1:")) {
+    try { const dec = decrypt(pw); if (dec) pw = dec } catch { /* plain bırak */ }
+  }
+  return { Name: r.Name, IP: r.IP, Username: r.Username, Password: pw }
+}
 
 export async function GET() {
   const gate = await requirePermission("companies", "read")
@@ -37,7 +60,25 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const sess = await createSession({ ...body, createdBy })
+    // SQL ve Depo sunucusu credential'larını çek
+    const [sqlSrv, depoSrv] = await Promise.all([
+      loadServerCreds(body.sqlServerId),
+      loadServerCreds(body.depoServerId),
+    ])
+
+    const payload: CreateInput = {
+      ...body,
+      createdBy,
+      sqlServerName:  sqlSrv?.Name      ?? null,
+      sqlServerIp:    sqlSrv?.IP        ?? null,
+      sqlUsername:    sqlSrv?.Username  ?? null,
+      sqlPassword:    sqlSrv?.Password  ?? null,
+      depoServerName: depoSrv?.Name     ?? null,
+      depoServerIp:   depoSrv?.IP       ?? null,
+      depoUsername:   depoSrv?.Username ?? null,
+      depoPassword:   depoSrv?.Password ?? null,
+    }
+    const sess = await createSession(payload)
     return NextResponse.json(sess)
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Hata" }, { status: 502 })

@@ -57,8 +57,18 @@ export async function listSessions(): Promise<AktarimSession[]> {
 export interface CreateInput {
   companyId:       string
   firmaName:       string
+  /** Hub Servers tablosundan ID — backend bunları credential'a açar */
+  sqlServerId?:    string | null
+  depoServerId?:   string | null
+  /** Ubuntu'ya geçen alanlar (Hub backend doldurur) */
   sqlServerName?:  string | null
+  sqlServerIp?:    string | null
+  sqlUsername?:    string | null
+  sqlPassword?:    string | null
   depoServerName?: string | null
+  depoServerIp?:   string | null
+  depoUsername?:   string | null
+  depoPassword?:   string | null
   expiresInDays?:  number
   createdBy?:      string | null
   notes?:          string | null
