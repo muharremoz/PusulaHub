@@ -406,7 +406,7 @@ function NewTransferDialog({
     setFirma(null); setSqlServerId(""); setDepoServerId("")
     setExpiresInDays(7); setNotes(""); setFirmaSearch("")
     Promise.all([
-      fetch("/api/companies").then(r => r.ok ? r.json() : []).catch(() => []),
+      fetch("/api/firma/companies").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/sql-servers").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/depo-servers").then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([cs, sql, depo]) => {
