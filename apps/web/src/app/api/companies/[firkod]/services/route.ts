@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * GET /api/companies/[firkod]/services
@@ -39,6 +40,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
+  const gate = await requirePermission("company-detail", "read")
+  if (gate) return gate
   const { firkod } = await params
   try {
     const rows = await query<Row[]>`

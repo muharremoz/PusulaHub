@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
 import { copyToClipboard } from "@/lib/clipboard";
 import { generateSafePassword } from "@/lib/password-gen";
+import { useSession } from "next-auth/react";
 import type { AccessInfoResponse } from "@/app/api/companies/[firkod]/access-info/route";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
@@ -371,6 +372,11 @@ export default function CompaniesPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
   const urlFirkod    = searchParams.get("firkod");
+  // Firma detay izni — admin veya 'company-detail' read varsa açılır.
+  const { data: session } = useSession();
+  const perms = (session?.user?.permissions ?? {}) as Record<string, string>;
+  const userRole = session?.user?.role;
+  const canViewCompanyDetail = userRole === "admin" || (perms["company-detail"] ?? "none") !== "none";
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
   const [top5, setTop5] = useState<Top5Company[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
@@ -953,6 +959,10 @@ tr:nth-child(even) td{background:#fafafa}
   }, [selectedFirma?.firkod])
 
   function selectFirma(f: FirmaCompany) {
+    if (!canViewCompanyDetail) {
+      toast.error("Firma detayını görme yetkiniz yok")
+      return
+    }
     setSelectedFirma(f)
     setSearchOpen(false)
     setSearchQuery("")
@@ -964,9 +974,14 @@ tr:nth-child(even) td{background:#fafafa}
     if (!urlFirkod) return
     if (selectedFirma?.firkod === urlFirkod) return
     if (!apiCompanies.length) return
+    if (!canViewCompanyDetail) {
+      // URL ile direkt detay açmaya çalışıyor — engelle, URL'i temizle
+      router.replace("/companies", { scroll: false })
+      return
+    }
     const match = apiCompanies.find((c) => c.firkod === urlFirkod)
     if (match) setSelectedFirma(match)
-  }, [urlFirkod, apiCompanies, selectedFirma?.firkod])
+  }, [urlFirkod, apiCompanies, selectedFirma?.firkod, canViewCompanyDetail, router])
 
   async function refreshIIS() {
     if (!selectedFirma) return

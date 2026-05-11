@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { pollSingleAgent } from "@/lib/agent-poller"
 import { query } from "@/lib/db"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * GET /api/companies/[firkod]/users
@@ -25,6 +26,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
+  const gate = await requirePermission("company-detail", "read")
+  if (gate) return gate
   const { firkod } = await params
   try {
     const refresh = req.nextUrl.searchParams.get("refresh") === "1"

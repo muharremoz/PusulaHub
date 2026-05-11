@@ -3,6 +3,7 @@ import { query, getPool } from "@/lib/db"
 import { withSqlConnection } from "@/lib/sql-external"
 import { decrypt } from "@/lib/crypto"
 import { pollSingleAgent } from "@/lib/agent-poller"
+import { requirePermission } from "@/lib/require-permission"
 
 interface CompanyRow {
   CompanyId:   string
@@ -45,6 +46,8 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
+  const gate = await requirePermission("company-detail", "read")
+  if (gate) return gate
   const { firkod } = await params
   try {
     const refresh = req.nextUrl.searchParams.get("refresh") === "1"

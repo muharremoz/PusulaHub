@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
 import { getAgentById } from "@/lib/agent-store"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * Firma yoğunluk hesaplaması — paylaşımlı sunucu modeli.
@@ -70,6 +71,8 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
+  const gate = await requirePermission("company-detail", "read")
+  if (gate) return gate
   const { firkod } = await params
   try {
     const compRows = await query<CompanyRow[]>`
