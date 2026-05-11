@@ -7,8 +7,13 @@
 import { config } from "dotenv"
 import { resolve } from "path"
 
-// .env.local'ı yükle (Next.js API route'larından önce)
-config({ path: resolve(__dirname, ".env.local") })
+// Env yükle (Next.js API route'larından önce):
+// 1) Önce .env.production (prod'da kaynak)
+// 2) Sonra .env.local (local override, prod'da genelde yok)
+// Convention: dotenv ilk yüklediği değerleri korur — .env.local override ediyorsa
+// override:true kullanmak gerek. Şu an .env.local local-only override sayıyoruz.
+config({ path: resolve(__dirname, ".env.production"), override: false })
+config({ path: resolve(__dirname, ".env.local"),      override: true })
 
 import { createServer } from "http"
 import { parse } from "url"
