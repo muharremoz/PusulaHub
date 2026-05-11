@@ -643,6 +643,15 @@ export async function POST(req: NextRequest) {
 
         // ── 6) IIS siteleri → IIS agent ─────────────────────────────
         if (iisServices.length > 0 && iisAgent) {
+          // 6a) Firma root klasörü — C:\Pusula\Service\<firmaKod>
+          const iisFirmaRoot = `C:\\Pusula\\Service\\${payload.firmaId}`
+          if (!(await runStep(
+            iisAgent,
+            "iis_firma_root",
+            `IIS firma klasörü oluşturuluyor: ${iisFirmaRoot}`,
+            buildCreateDir(iisFirmaRoot),
+          ))) { controller.close(); return }
+
           for (const s of iisServices) {
             const cfg = s.config as IisSiteConfig | null
             if (!cfg) {
@@ -656,8 +665,8 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            // IIS hedef yolu SABİT: C:\Pusula\Service\<serviceName>_<firmaKod>
-            const destPath = `C:\\Pusula\\Service\\${sanitizeWindowsName(s.name)}_${payload.firmaId}`
+            // IIS hedef yolu: C:\Pusula\Service\<firmaKod>\<serviceName>
+            const destPath = `${iisFirmaRoot}\\${sanitizeWindowsName(s.name)}`
             // siteNamePattern opsiyonel — yoksa servis adı + firmaId fallback
             const siteName = expandPattern(
               cfg.siteNamePattern && cfg.siteNamePattern.trim()
