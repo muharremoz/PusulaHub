@@ -686,6 +686,7 @@ function renderHtml(token) {
           <span class="drop-icon">${ICON_UPLOAD}</span>
           <strong>Klasörü buraya sürükleyin</strong>
           <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
+          <span style="display:block; margin-top:6px; font-size:10px; color:#a16207">⓵ Tarayıcı "N dosya yüklensin mi?" diye sorabilir → "Yükle" deyin</span>
         </label>
 
         <div id="imgSummary" class="summary hidden"></div>
@@ -798,6 +799,13 @@ function applyStatus(d) {
     $("pushFailBanner").classList.remove("hidden");
     if (d.pushError) $("pushFailMsg").textContent = "Hata: " + d.pushError;
     $("startBtn").disabled = true;
+    // Kart durumu da netleşsin — sadece yükleme tamamlandı ama aktarımda hata var
+    if ((d.dataBytesReceived ?? 0) > 0) {
+      $("dataBadge").textContent = "Yüklendi"; $("dataBadge").className = "status-badge done";
+    }
+    if ((d.imageFilesReceived ?? 0) > 0) {
+      $("imgBadge").textContent = "Yüklendi"; $("imgBadge").className = "status-badge done";
+    }
     stopPushPoll();
   }
 }
@@ -1086,7 +1094,7 @@ async function uploadData() {
     badge.textContent = "Hata"; badge.className = "status-badge err";
     throw new Error(failed + " dosya yüklenemedi");
   }
-  badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
+  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
 }
 
 async function reportData(totalBytes, uploadedBytes) {
@@ -1121,7 +1129,7 @@ async function uploadImages() {
       reportImgs(files.length, total, uploaded, uploadedBytes);
     }
   }
-  badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
+  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
 }
 
 async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
