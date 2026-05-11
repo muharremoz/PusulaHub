@@ -86,10 +86,11 @@ function Invoke-Sql($cs, $query) {
 }
 
 function Build-CS($srv, $usr, $pwd, $db) {
+  if (-not $db) { $db = 'master' }
   if ($usr) {
-    "Server=$srv;Database=$($db ?? 'master');User Id=$usr;Password=$pwd;TrustServerCertificate=True;Connect Timeout=8"
+    "Server=$srv;Database=$db;User Id=$usr;Password=$pwd;TrustServerCertificate=True;Connect Timeout=8"
   } else {
-    "Server=$srv;Database=$($db ?? 'master');Integrated Security=True;TrustServerCertificate=True;Connect Timeout=8"
+    "Server=$srv;Database=$db;Integrated Security=True;TrustServerCertificate=True;Connect Timeout=8"
   }
 }
 
