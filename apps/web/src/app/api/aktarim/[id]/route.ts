@@ -1,11 +1,11 @@
 /**
- * POST   /api/aktarim/[id]  → admin: iptal et (Status='cancelled')
- * DELETE /api/aktarim/[id]  → admin: sil
+ * POST   /api/aktarim/[id]   → admin: iptal (Ubuntu'ya proxy)
+ * DELETE /api/aktarim/[id]   → admin: sil (Ubuntu'ya proxy)
  */
 
 import { NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
-import { cancelTransferSession, deleteTransferSession } from "@/lib/transfer-sessions"
+import { cancelSession, deleteSession } from "@/lib/aktarim-proxy"
 
 export async function POST(
   _req: Request,
@@ -14,8 +14,12 @@ export async function POST(
   const gate = await requirePermission("companies", "write")
   if (gate) return gate
   const { id } = await params
-  await cancelTransferSession(id)
-  return NextResponse.json({ ok: true })
+  try {
+    await cancelSession(id)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Hata" }, { status: 502 })
+  }
 }
 
 export async function DELETE(
@@ -25,6 +29,10 @@ export async function DELETE(
   const gate = await requirePermission("companies", "write")
   if (gate) return gate
   const { id } = await params
-  await deleteTransferSession(id)
-  return NextResponse.json({ ok: true })
+  try {
+    await deleteSession(id)
+    return NextResponse.json({ ok: true })
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Hata" }, { status: 502 })
+  }
 }

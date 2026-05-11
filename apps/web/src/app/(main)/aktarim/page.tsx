@@ -20,24 +20,24 @@ import {
 import { cn } from "@/lib/utils"
 
 interface TransferSession {
-  Id:                  string
-  Token:               string
-  CompanyId:           string
-  FirmaName:           string
-  SqlServerId:         string | null
-  DepoServerId:        string | null
-  Status:              "pending" | "active" | "completed" | "cancelled" | "expired"
-  CreatedBy:           string | null
-  CreatedAt:           string
-  ExpiresAt:           string
-  CompletedAt:         string | null
-  DataBytesTotal:      number
-  DataBytesReceived:   number
-  ImageFilesTotal:     number
-  ImageFilesReceived:  number
-  ImageBytesTotal:     number
-  ImageBytesReceived:  number
-  Notes:               string | null
+  id:                  string
+  token:               string
+  companyId:           string
+  firmaName:           string
+  sqlServerName:       string | null
+  depoServerName:      string | null
+  status:              "pending" | "active" | "completed" | "cancelled" | "expired"
+  createdBy:           string | null
+  createdAt:           string
+  expiresAt:           string
+  completedAt:         string | null
+  dataBytesTotal:      number
+  dataBytesReceived:   number
+  imageFilesTotal:     number
+  imageFilesReceived:  number
+  imageBytesTotal:     number
+  imageBytesReceived:  number
+  notes:               string | null
 }
 
 interface FirmaItem { firkod: string; firma: string }
@@ -60,7 +60,7 @@ function formatRelative(iso: string): string {
   return new Date(iso).toLocaleString("tr-TR")
 }
 
-function statusBadge(s: TransferSession["Status"]) {
+function statusBadge(s: TransferSession["status"]) {
   const map = {
     pending:   { label: "Bekliyor",    cls: "bg-amber-50 text-amber-700 border-amber-200" },
     active:    { label: "Aktif",       cls: "bg-blue-50 text-blue-700 border-blue-200" },
@@ -76,10 +76,9 @@ function statusBadge(s: TransferSession["Status"]) {
 }
 
 function buildPublicUrl(token: string): string {
-  // V1: Hub doğrudan sunuyor — /t/{token} müşteri yükleme sayfası.
-  // V2'de aktarim.pusulanet.net DNS eklenince Ubuntu servisine yönlendirilecek.
-  const origin = typeof window !== "undefined" ? window.location.origin : "https://app.pusulanet.net"
-  return `${origin}/t/${token}`
+  // Müşteri linki — Ubuntu (10.15.2.6) üzerinde aktarim.pusulanet.net.
+  // Müşteri VPN üzerinden erişir.
+  return `http://aktarim.pusulanet.net/${token}`
 }
 
 export default function AktarimPage() {
@@ -137,8 +136,8 @@ export default function AktarimPage() {
     }
   }
 
-  const active = items.filter((i) => i.Status === "active" || i.Status === "pending")
-  const past   = items.filter((i) => !["active", "pending"].includes(i.Status))
+  const active = items.filter((i) => i.status === "active" || i.status === "pending")
+  const past   = items.filter((i) => !["active", "pending"].includes(i.status))
 
   return (
     <PageContainer
@@ -180,7 +179,7 @@ export default function AktarimPage() {
           <div className="space-y-2">
             {active.map((s) => (
               <SessionCard
-                key={s.Id}
+                key={s.id}
                 s={s}
                 onCancel={() => setCancelTarget(s)}
                 onDelete={() => setDeleteTarget(s)}
@@ -208,7 +207,7 @@ export default function AktarimPage() {
           <div className="space-y-2">
             {past.map((s) => (
               <SessionCard
-                key={s.Id}
+                key={s.id}
                 s={s}
                 onCancel={() => setCancelTarget(s)}
                 onDelete={() => setDeleteTarget(s)}
@@ -229,13 +228,13 @@ export default function AktarimPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Aktarımı iptal et</AlertDialogTitle>
             <AlertDialogDescription>
-              {cancelTarget?.FirmaName} firması için oluşturulan aktarım iptal edilecek. Müşteri linki artık çalışmayacak.
+              {cancelTarget?.firmaName} firması için oluşturulan aktarım iptal edilecek. Müşteri linki artık çalışmayacak.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => cancelTarget && handleCancel(cancelTarget.Id)}
+              onClick={() => cancelTarget && handleCancel(cancelTarget.id)}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               İptal Et
@@ -255,7 +254,7 @@ export default function AktarimPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteTarget && handleDelete(deleteTarget.Id)}
+              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
               className="bg-destructive text-white hover:bg-destructive/90"
             >
               Sil
@@ -275,17 +274,17 @@ function SessionCard({
   onDelete: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const url = buildPublicUrl(s.Token)
+  const url = buildPublicUrl(s.token)
 
-  const dataPct  = s.DataBytesTotal  > 0 ? Math.round((s.DataBytesReceived  / s.DataBytesTotal) * 100)  : 0
-  const imgPct   = s.ImageBytesTotal > 0 ? Math.round((s.ImageBytesReceived / s.ImageBytesTotal) * 100) : 0
+  const dataPct  = s.dataBytesTotal  > 0 ? Math.round((s.dataBytesReceived  / s.dataBytesTotal) * 100)  : 0
+  const imgPct   = s.imageBytesTotal > 0 ? Math.round((s.imageBytesReceived / s.imageBytesTotal) * 100) : 0
   const overallPct =
-    s.DataBytesTotal + s.ImageBytesTotal > 0
-      ? Math.round(((s.DataBytesReceived + s.ImageBytesReceived) / (s.DataBytesTotal + s.ImageBytesTotal)) * 100)
+    s.dataBytesTotal + s.imageBytesTotal > 0
+      ? Math.round(((s.dataBytesReceived + s.imageBytesReceived) / (s.dataBytesTotal + s.imageBytesTotal)) * 100)
       : 0
 
-  const isActive = s.Status === "active" || s.Status === "pending"
-  const expiresIn = new Date(s.ExpiresAt).getTime() - Date.now()
+  const isActive = s.status === "active" || s.status === "pending"
+  const expiresIn = new Date(s.expiresAt).getTime() - Date.now()
   const expiresInDays = Math.max(0, Math.ceil(expiresIn / 86400000))
 
   return (
@@ -294,13 +293,13 @@ function SessionCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="font-medium text-[12px] truncate">{s.FirmaName}</span>
-            <span className="text-[10px] text-muted-foreground font-mono">({s.CompanyId})</span>
-            {statusBadge(s.Status)}
+            <span className="font-medium text-[12px] truncate">{s.firmaName}</span>
+            <span className="text-[10px] text-muted-foreground font-mono">({s.companyId})</span>
+            {statusBadge(s.status)}
           </div>
           <div className="text-[10px] text-muted-foreground mt-1">
-            Oluşturuldu: {formatRelative(s.CreatedAt)}
-            {s.CreatedBy && ` · ${s.CreatedBy}`}
+            Oluşturuldu: {formatRelative(s.createdAt)}
+            {s.createdBy && ` · ${s.createdBy}`}
             {isActive && ` · ${expiresInDays} gün geçerli`}
           </div>
         </div>
@@ -346,7 +345,7 @@ function SessionCard({
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Database className="h-3 w-3" />
             <span>Veri (.bak)</span>
-            <span className="ml-auto tabular-nums">{formatBytes(s.DataBytesReceived)} / {formatBytes(s.DataBytesTotal)}</span>
+            <span className="ml-auto tabular-nums">{formatBytes(s.dataBytesReceived)} / {formatBytes(s.dataBytesTotal)}</span>
           </div>
           <ProgressBar pct={dataPct} />
         </div>
@@ -355,14 +354,14 @@ function SessionCard({
             <HardDrive className="h-3 w-3" />
             <span>Resimler</span>
             <span className="ml-auto tabular-nums">
-              {s.ImageFilesReceived} / {s.ImageFilesTotal} dosya · {formatBytes(s.ImageBytesReceived)} / {formatBytes(s.ImageBytesTotal)}
+              {s.imageFilesReceived} / {s.imageFilesTotal} dosya · {formatBytes(s.imageBytesReceived)} / {formatBytes(s.imageBytesTotal)}
             </span>
           </div>
           <ProgressBar pct={imgPct} />
         </div>
       </div>
 
-      {(s.DataBytesTotal + s.ImageBytesTotal > 0) && (
+      {(s.dataBytesTotal + s.imageBytesTotal > 0) && (
         <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
           <span>Toplam:</span>
           <span className="font-medium tabular-nums">{overallPct}%</span>
