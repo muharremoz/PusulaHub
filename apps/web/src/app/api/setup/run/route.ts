@@ -25,6 +25,7 @@ import {
   buildReplaceInFile,
   buildCreateIisSite,
   buildPatchWebConfig,
+  buildPatchUsersXml,
 } from "@/lib/setup-iisops"
 import {
   buildCreateShortcut,
@@ -643,6 +644,10 @@ export async function POST(req: NextRequest) {
         }
 
         // ── 6) IIS siteleri → IIS agent ─────────────────────────────
+        // Users.xml patch'i SQL restore'dan sonra çalışır — bu yüzden
+        // burada her başarılı IIS hizmetinin destPath'ini topluyoruz.
+        const installedIisServices: Array<{ id: number; name: string; destPath: string }> = []
+
         if (iisServices.length > 0 && iisAgent) {
           // 6a) Firma root klasörü — C:\Pusula\Service\<firmaKod>
           const iisFirmaRoot = `C:\\Pusula\\Service\\${payload.firmaId}`
@@ -761,6 +766,9 @@ export async function POST(req: NextRequest) {
               `IIS sitesi: ${siteName} (port ${alloc.port})`,
               buildCreateIisSite(siteName, destPath, alloc.port),
             ))) { controller.close(); return }
+
+            // Users.xml patch'i için listeye ekle — SQL restore sonrası işlenecek
+            installedIisServices.push({ id: s.id, name: s.name, destPath })
 
             servicesInstalled++
           }
@@ -924,6 +932,36 @@ export async function POST(req: NextRequest) {
                           },
                         )
                       }
+                    }
+                  }
+
+                  // ── IIS hizmetlerinin Users.xml'lerini güncelle ──
+                  // Restore edilen DB adlarını ve tüm firma kullanıcılarını
+                  // her IIS hizmetinin Config\Users.xml'ine yazar.
+                  if (
+                    iisAgent &&
+                    installedIisServices.length > 0 &&
+                    restoredDbNames.length > 0 &&
+                    payload.users.length > 0
+                  ) {
+                    const xmlUsers = payload.users
+                      .filter((u) => u.username && u.password)
+                      .map((u) => ({
+                        username: `${payload.firmaId}_${u.username}`,
+                        password: u.password,
+                      }))
+
+                    for (const svc of installedIisServices) {
+                      await runStep(
+                        iisAgent,
+                        `iis_usersxml_${svc.id}`,
+                        `Users.xml güncelleniyor: ${svc.name}`,
+                        buildPatchUsersXml({
+                          configPath: `${svc.destPath}\\Config\\Users.xml`,
+                          users:      xmlUsers,
+                          dbNames:    restoredDbNames,
+                        }),
+                      )
                     }
                   }
                 },

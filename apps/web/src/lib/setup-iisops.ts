@@ -108,6 +108,80 @@ export function buildPatchWebConfig(opts: {
   return lines.join("; ")
 }
 
+/* ── Users.xml — API uygulama-içi kullanıcı listesini güncelle ─────────
+ *
+ * Klasör kopyalandıktan sonra (SQL restore + login + mapping bittikten sonra)
+ * çağrılır. Mevcut <User> ve <DB><Data> node'ları silinir, sihirbazdaki
+ * kullanıcılar ve restore edilen DB'ler ile yeniden yazılır. XML kök yapısı
+ * (XML declaration, <Users> root) korunur.
+ *
+ *   <User><Username>{firmaId}_{username}</Username>
+ *         <Password>{password}</Password>
+ *         <Data><Data>db1</Data>...<Data>dbN</Data></Data></User>
+ *   ...
+ *   <DB><Data>db1</Data>...<Data>dbN</Data></DB>
+ *
+ * Her kullanıcı tüm firma DB'lerine erişebilir (Admin gibi).
+ * Dosya yoksa SKIP_NO_FILE döner. Kullanıcı/DB boşsa SKIP_EMPTY döner.
+ *
+ * NOT: PowerShell tarafında <User> tag adı PSObject property erişimi ile
+ * sembolik isim olarak kullanıldığında karışıklık olabiliyor; bu yüzden
+ * eski node'ları XPath ile bulup parent'tan RemoveChild ile siliyoruz.
+ */
+export function buildPatchUsersXml(opts: {
+  configPath: string
+  users:      Array<{ username: string; password: string }>
+  dbNames:    string[]
+}): string {
+  const f = psQuote(opts.configPath)
+  if (opts.users.length === 0 || opts.dbNames.length === 0) {
+    return [
+      `$f='${f}'`,
+      `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIP_NO_FILE'; return}`,
+      `Write-Output 'SKIP_EMPTY'`,
+    ].join("; ")
+  }
+
+  // Kullanıcı bloğu PS array literal'larıyla aktarılır — PS tarafında loop ile
+  // <User> node'ları kurulur. Her field psQuote'lanır.
+  const userLines = opts.users.map((u) =>
+    `[pscustomobject]@{ Username='${psQuote(u.username)}'; Password='${psQuote(u.password)}' }`,
+  ).join(", ")
+
+  const dbLines = opts.dbNames.map((d) => `'${psQuote(d)}'`).join(", ")
+
+  return [
+    `$f='${f}'`,
+    `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIP_NO_FILE'; return}`,
+    `$users = @(${userLines})`,
+    `$dbs   = @(${dbLines})`,
+    `[xml]$doc = Get-Content -LiteralPath $f -Raw -Encoding UTF8`,
+    // Root <Users> yoksa oluştur
+    `$root = $doc.SelectSingleNode('/Users')`,
+    `if($null -eq $root){ $root = $doc.AppendChild($doc.CreateElement('Users')) }`,
+    // Eski tüm child'ları temizle (User + DB)
+    `foreach($n in @($root.SelectNodes('User'))){ [void]$root.RemoveChild($n) }`,
+    `foreach($n in @($root.SelectNodes('DB'))){   [void]$root.RemoveChild($n) }`,
+    // Yeni <User> node'ları
+    `foreach($u in $users){` +
+      `$userEl = $doc.CreateElement('User'); ` +
+      `$un = $doc.CreateElement('Username'); $un.InnerText = $u.Username; [void]$userEl.AppendChild($un); ` +
+      `$pw = $doc.CreateElement('Password'); $pw.InnerText = $u.Password; [void]$userEl.AppendChild($pw); ` +
+      `$dWrap = $doc.CreateElement('Data'); ` +
+      `foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$dWrap.AppendChild($di) }; ` +
+      `[void]$userEl.AppendChild($dWrap); ` +
+      `[void]$root.AppendChild($userEl)` +
+    `}`,
+    // <DB> global liste
+    `$dbEl = $doc.CreateElement('DB')`,
+    `foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$dbEl.AppendChild($di) }`,
+    `[void]$root.AppendChild($dbEl)`,
+    // Kaydet — XML declaration korunur, UTF-8 (BOM'suz)
+    `$doc.Save($f)`,
+    `Write-Output ('UPDATED users=' + $users.Count + ' dbs=' + $dbs.Count)`,
+  ].join("; ")
+}
+
 /* ── IIS sitesi oluştur (idempotent) ─────────────────────────────────── */
 /**
  * WebAdministration modülü kullanır. Site varsa yeniden oluşturmaz, sadece

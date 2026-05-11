@@ -14,6 +14,7 @@ import { Input }        from "@/components/ui/input"
 import { Label }        from "@/components/ui/label"
 import { Skeleton }     from "@/components/ui/skeleton"
 import { copyToClipboard } from "@/lib/clipboard"
+import { generateSafePassword } from "@/lib/password-gen"
 import { Switch }       from "@/components/ui/switch"
 import { ScrollArea }   from "@/components/ui/scroll-area"
 import {
@@ -74,24 +75,8 @@ function FieldHint({ state, kind }: { state: FieldHintState; kind: "username" | 
   return <span className={cn("text-[10px]", map[state].cls)}>{map[state].text}</span>
 }
 
-/** Karışık-karakter 14 haneli şifre — benzer görünen karakterler (0/O, 1/l/I) hariç tutuldu. */
-function generatePassword(): string {
-  const lower = "abcdefghijkmnpqrstuvwxyz"
-  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-  const digit = "23456789"
-  const sym   = "!@#$%&*?-_"
-  const all   = lower + upper + digit + sym
-  const rand  = (s: string) => s[Math.floor(Math.random() * s.length)]
-  // Her karakter sınıfından en az 1 garanti
-  const base  = [rand(lower), rand(upper), rand(digit), rand(sym)]
-  for (let i = 0; i < 10; i++) base.push(rand(all))
-  // Fisher-Yates shuffle
-  for (let i = base.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[base[i], base[j]] = [base[j], base[i]]
-  }
-  return base.join("")
-}
+/** 14 haneli güvenli şifre — connection string / XML uyumlu set. */
+const generatePassword = () => generateSafePassword(14)
 
 function UserSheet({ open, user, onClose, onSaved }: {
   open: boolean; user: AppUser | null

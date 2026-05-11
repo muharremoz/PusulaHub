@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
 import { copyToClipboard } from "@/lib/clipboard";
+import { generateSafePassword } from "@/lib/password-gen";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
@@ -553,20 +554,8 @@ export default function CompaniesPage() {
   const [newSvcDone, setNewSvcDone]                   = useState(false);
   const [newSvcError, setNewSvcError]                 = useState<string | null>(null);
 
-  function generatePassword() {
-    const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-    const lower = "abcdefghijkmnpqrstuvwxyz"
-    const digit = "23456789"
-    const special = "!@#$%&*"
-    const all = upper + lower + digit + special
-    let pw = ""
-    pw += upper[Math.floor(Math.random() * upper.length)]
-    pw += lower[Math.floor(Math.random() * lower.length)]
-    pw += digit[Math.floor(Math.random() * digit.length)]
-    pw += special[Math.floor(Math.random() * special.length)]
-    for (let i = 0; i < 6; i++) pw += all[Math.floor(Math.random() * all.length)]
-    return pw.split("").sort(() => Math.random() - 0.5).join("")
-  }
+  // Şifre üretici — connection string / XML uyumlu karakter seti.
+  const generatePassword = () => generateSafePassword(10)
 
   async function openNewUserDialog() {
     if (!selectedFirma) return

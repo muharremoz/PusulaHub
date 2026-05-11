@@ -26,6 +26,7 @@ const StepRun      = dynamic(() => import("./step-run").then((m) => m.StepRun), 
 const Confetti     = dynamic(() => import("@/components/magicui/confetti").then((m) => m.Confetti), { ssr: false })
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { generateSafePassword } from "@/lib/password-gen"
 
 const STEPS = [
   { label: "Sunucu",       hint: "Active Directory sunucusunu seçin",                          icon: Server },
@@ -38,24 +39,7 @@ const STEPS = [
 ]
 
 let _uid = 2
-function generatePassword() {
-  // AD karmaşıklık kuralı: en az büyük + küçük + rakam + özel karakter
-  const upper   = "ABCDEFGHJKLMNPQRSTUVWXYZ"
-  const lower   = "abcdefghjkmnpqrstuvwxyz"
-  const digits  = "23456789"
-  const special = "!@#$%&*+-?"
-  const all     = upper + lower + digits + special
-  const rand    = (s: string) => s[Math.floor(Math.random() * s.length)]
-  // Garantili 4 kategori + 8 rastgele karakter = 12 toplam
-  const base = [rand(upper), rand(upper), rand(lower), rand(lower), rand(digits), rand(digits), rand(special), rand(special)]
-  for (let i = 0; i < 4; i++) base.push(rand(all))
-  // Fisher-Yates karıştır
-  for (let i = base.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [base[i], base[j]] = [base[j], base[i]]
-  }
-  return base.join("")
-}
+const generatePassword = () => generateSafePassword(12)
 function mkUser(): WizardUser {
   return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }
 }
