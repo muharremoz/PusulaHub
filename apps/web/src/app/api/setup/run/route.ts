@@ -24,6 +24,7 @@ import {
 import {
   buildReplaceInFile,
   buildCreateIisSite,
+  buildPatchWebConfig,
 } from "@/lib/setup-iisops"
 import {
   buildCreateShortcut,
@@ -726,6 +727,29 @@ export async function POST(req: NextRequest) {
                   "{firmaId}":  payload.firmaId,
                   "{port}":     String(alloc.port),
                   "{siteName}": siteName,
+                }),
+              ))) { controller.close(); return }
+            }
+
+            // iv.b) Web.config patch — connection string (SQL IP + firma user)
+            //       ve httpRuntime/@maxRequestLength = 51200.
+            //       SQL parametreleri varsa connection string güncellenir;
+            //       maxRequestLength her zaman uygulanır. Dosya yoksa SKIP.
+            {
+              const webCfgPath = `${destPath}\\Web.config`
+              const firstUser  = payload.users[0]
+              const hasSqlForCfg = !!sqlTarget && !!firstUser?.username && !!firstUser?.password
+              if (!(await runStep(
+                iisAgent,
+                `iis_webcfg_${s.id}`,
+                hasSqlForCfg
+                  ? `Web.config güncelleniyor: ${s.name} (SQL + maxRequestLength)`
+                  : `Web.config güncelleniyor: ${s.name} (maxRequestLength)`,
+                buildPatchWebConfig({
+                  configPath:  webCfgPath,
+                  sqlIp:       hasSqlForCfg ? sqlTarget!.ip : undefined,
+                  sqlUserId:   hasSqlForCfg ? `${payload.firmaId}_${firstUser!.username}` : undefined,
+                  sqlPassword: hasSqlForCfg ? firstUser!.password : undefined,
                 }),
               ))) { controller.close(); return }
             }

@@ -42,6 +42,72 @@ export function buildReplaceInFile(filePath: string, replacements: Record<string
   return lines.join("; ")
 }
 
+/* ── web.config — connection string + httpRuntime patch'i ──────────────
+ *
+ * API hizmet klasörü kopyalandıktan sonra çağrılır. Yaptığı işler:
+ *
+ *  1) <connectionStrings>/<add connectionString="..."> içindeki
+ *     - Data Source=...  → seçili SQL sunucusunun IP'si
+ *     - User Id=...      → firma 1. kullanıcısı (örn. 778_AsyaBurma23)
+ *     - Password=...     → kullanıcı şifresi
+ *     - Initial Catalog  → DOKUNULMAZ (özellikle [DB] placeholder ise XML
+ *       tarafında set ediliyor — onunla ayrı uğraşacağız)
+ *
+ *  2) <system.web>/<httpRuntime> üzerinde
+ *     - maxRequestLength="51200" set (varsa override, yoksa attribute ekle)
+ *
+ * SQL parametreleri opsiyonel — verilmezse sadece maxRequestLength fix
+ * çalışır. Dosya yoksa sessizce SKIP döner (hizmet web.config içermeyebilir).
+ */
+export function buildPatchWebConfig(opts: {
+  configPath:   string
+  sqlIp?:       string
+  sqlUserId?:   string
+  sqlPassword?: string
+}): string {
+  const f       = psQuote(opts.configPath)
+  const ip      = psQuote(opts.sqlIp      ?? "")
+  const u       = psQuote(opts.sqlUserId  ?? "")
+  const pw      = psQuote(opts.sqlPassword ?? "")
+  const hasSql  = !!(opts.sqlIp && opts.sqlUserId && opts.sqlPassword)
+
+  const lines: string[] = [
+    `$f='${f}'`,
+    `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIP_NO_FILE'; return}`,
+    `[xml]$doc = Get-Content -LiteralPath $f -Raw -Encoding UTF8`,
+  ]
+
+  if (hasSql) {
+    lines.push(
+      `$ip='${ip}'`,
+      `$u='${u}'`,
+      `$pw='${pw}'`,
+      `$adds = $doc.SelectNodes('//connectionStrings/add')`,
+      // Her <add> elementinin connectionString attribute'unu regex ile parçala-değiştir
+      `foreach($add in $adds){` +
+        `$cs = $add.GetAttribute('connectionString'); ` +
+        `if($cs){` +
+          `$cs = [System.Text.RegularExpressions.Regex]::Replace($cs, '(?i)Data\\s*Source\\s*=\\s*[^;]+', ('Data Source=' + $ip)); ` +
+          `$cs = [System.Text.RegularExpressions.Regex]::Replace($cs, '(?i)User\\s*Id\\s*=\\s*[^;]+', ('User Id=' + $u)); ` +
+          `$cs = [System.Text.RegularExpressions.Regex]::Replace($cs, '(?i)Password\\s*=\\s*[^;]+', ('Password=' + $pw)); ` +
+          `$add.SetAttribute('connectionString', $cs)` +
+        `}` +
+      `}`,
+    )
+  }
+
+  lines.push(
+    // httpRuntime/@maxRequestLength = 51200 (yoksa attribute eklenir)
+    `$hrs = $doc.SelectNodes('//system.web/httpRuntime')`,
+    `foreach($hr in $hrs){ $hr.SetAttribute('maxRequestLength', '51200') }`,
+    // Kaydet — XmlDocument.Save UTF-8 (BOM'suz) yazar, XML declaration korunur
+    `$doc.Save($f)`,
+    `Write-Output 'PATCHED'`,
+  )
+
+  return lines.join("; ")
+}
+
 /* ── IIS sitesi oluştur (idempotent) ─────────────────────────────────── */
 /**
  * WebAdministration modülü kullanır. Site varsa yeniden oluşturmaz, sadece
