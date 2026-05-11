@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { WizardUser, BackupFile } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
+import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
+import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { CompanyServiceDto } from "@/app/api/companies/[firkod]/services/route"
 import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -90,10 +92,14 @@ interface Props {
   services:        WizardServiceDto[]
   /* 4. adım: SQL */
   sqlServerId?:        string | null
+  /** SQL sunucusu nesnesi — müşteri mesajında IP göstermek için. */
+  sqlServer?:          SqlServerItem | null
   sqlMode?:            0 | 1
   backupFolderPath?:   string
   backupFiles?:        BackupFile[]
   selectedDemoDbIds?:  number[]
+  /** Mod 1 için demo veritabanı listesi (mesajda DB adı çözümlemek için). */
+  demoDatabases?:      DemoDatabaseDto[]
   addFirmaPrefix?:     boolean
   addToSirketDb?:      boolean
   onComplete:      () => void
@@ -103,7 +109,7 @@ interface Props {
 
 export function StepRun({
   serverId, windowsServerId, iisServerId, iisServerDns, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
-  sqlServerId, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, addFirmaPrefix, addToSirketDb,
+  sqlServerId, sqlServer, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, demoDatabases, addFirmaPrefix, addToSirketDb,
   onComplete, onReset, onConfetti,
 }: Props) {
   const [completed, setCompleted]   = useState(false)
@@ -191,6 +197,23 @@ export function StepRun({
     })
   })()
 
+  // Restore edilen hedef DB adları — addFirmaPrefix uygulanmış halleri.
+  const restoredDbNames = (() => {
+    if (!sqlServerId) return [] as string[]
+    const prefix = addFirmaPrefix && firmaId ? `${firmaId}_` : ""
+    if (sqlMode === 0) {
+      return (backupFiles ?? [])
+        .filter((f) => f.selected && f.databaseName?.trim())
+        .map((f) => `${prefix}${f.databaseName.trim()}`)
+    }
+    // Mod 1: demo DB → dataName
+    const ids = new Set(selectedDemoDbIds ?? [])
+    return (demoDatabases ?? [])
+      .filter((d) => ids.has(d.id))
+      .map((d) => `${prefix}${(d.dataName ?? d.name).trim()}`)
+      .filter((s) => s.length > prefix.length)
+  })()
+
   const customerMessage = (() => {
     const lines: string[] = [
       "Merhaba,",
@@ -211,13 +234,23 @@ export function StepRun({
       lines.push(`Şifre: ${c.password}`)
       lines.push("")
 
+      // API/Web uygulama kimlik bilgileri — Users.xml ile uyumlu
+      // Username: {firmaId}_{username} (alt çizgili)
+      if (iisAssignments.length > 0) {
+        const apiUser = `${firmaId}_${localUsers[i]?.username ?? ""}`
+        lines.push("API / Web Uygulama Bilgileri:")
+        lines.push(`Kullanıcı Adı: ${apiUser}`)
+        lines.push(`Şifre: ${c.password}`)
+        lines.push("")
+      }
+
       if (i < credentials.length - 1) {
         lines.push("—")
         lines.push("")
       }
     })
 
-    // Web (IIS) hizmet erişim bilgileri
+    // Web (IIS) hizmet URL'leri
     if (iisAssignments.length > 0) {
       const iisHost = (iisServerDns && iisServerDns.trim()) || ""
       lines.push("Web Hizmetleri:")
@@ -228,8 +261,19 @@ export function StepRun({
       lines.push("")
     }
 
-    lines.push("Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734")
-    lines.push("")
+    // SQL Veritabanı erişim bilgileri — yalnız 1. kullanıcı için login
+    // oluşturulduğu için aynı bilgi global tek blok olarak yazılır.
+    const firstUser = localUsers[0]
+    if (sqlServerId && firstUser?.username && firstUser.password && restoredDbNames.length > 0) {
+      lines.push("SQL Veritabanı Bilgileri:")
+      if (sqlServer?.ip) lines.push(`Sunucu: ${sqlServer.ip}`)
+      lines.push(`Kullanıcı Adı: ${firmaId}_${firstUser.username}`)
+      lines.push(`Şifre: ${firstUser.password}`)
+      lines.push("Veritabanları:")
+      restoredDbNames.forEach((db) => lines.push(`  • ${db}`))
+      lines.push("")
+    }
+
     lines.push("İyi çalışmalar.")
 
     return lines.join("\n")

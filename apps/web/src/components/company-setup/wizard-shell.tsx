@@ -632,10 +632,12 @@ export function WizardShell() {
                   users={users}
                   services={apiServices.filter((s) => selectedServiceIds.includes(s.id))}
                   sqlServerId={selectedSqlServerId}
+                  sqlServer={sqlServer}
                   sqlMode={sqlMode}
                   backupFolderPath={backupFolderPath}
                   backupFiles={backupFiles}
                   selectedDemoDbIds={selectedDemoDbIds}
+                  demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                   addToSirketDb={addToSirketDb}
                   onComplete={() => setSetupDone(true)}
