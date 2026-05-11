@@ -629,9 +629,10 @@ export async function POST(req: NextRequest) {
             )
           }
 
-          // Resimler kısayolu → Depo sunucusundaki resim klasörü
+          // Resimler kısayolu → Depo sunucusundaki Resimler SMB share'i
+          // (D$ admin share değil — paylaşılan klasör adı doğrudan 'Resimler')
           if (depoAgent) {
-            const resimlerTarget = `\\\\${depoAgent.ip}\\D$\\Resimler\\${payload.firmaId}`
+            const resimlerTarget = `\\\\${depoAgent.ip}\\Resimler\\${payload.firmaId}`
             const resimlerLnk    = `${mustelierSubdir}\\Resimler.lnk`
 
             await runStep(
