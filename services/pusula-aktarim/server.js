@@ -214,7 +214,7 @@ fastify.get("/api/info/:token", async (req, reply) => {
   }
 })
 
-const ALLOWED_DATA_EXT  = /\.(bak|rar|zip)$/i
+const ALLOWED_DATA_EXT  = /\.(bak|rar|zip|ldf|mdf)$/i
 const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i
 
 fastify.post("/api/upload/:token/data", async (req, reply) => {
@@ -424,6 +424,26 @@ function renderHtml(token) {
   }
   .clear-btn:hover { background:#f4f4f5; color:var(--text) }
 
+  /* ── Klasör ağacı ─────────────────────── */
+  .tree {
+    margin-top:12px; border:1px solid var(--border); border-radius:6px;
+    background:#fafafa; max-height:240px; overflow-y:auto;
+  }
+  .tree-hdr {
+    padding:8px 12px; font-size:10px; font-weight:600;
+    color:var(--muted); letter-spacing:.5px; text-transform:uppercase;
+    border-bottom:1px solid var(--border); background:#fff;
+    position:sticky; top:0;
+  }
+  .tree-row {
+    display:grid; grid-template-columns:1fr auto; gap:8px;
+    padding:6px 12px; font-size:11px; align-items:center;
+  }
+  .tree-row + .tree-row { border-top:1px solid #e4e4e7 }
+  .tree-path { font-family:ui-monospace,SFMono-Regular,monospace; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .tree-meta { color:var(--muted); font-family:ui-monospace,SFMono-Regular,monospace; tabular-nums:true; white-space:nowrap }
+  .tree-more { justify-content:center; color:var(--muted); font-style:italic; grid-template-columns:1fr }
+
   /* ── Sıkıştırma uyarısı ───────────────── */
   .compress-tip {
     margin-top:12px; padding:10px 12px; border-radius:5px;
@@ -528,13 +548,13 @@ function renderHtml(token) {
           <span class="icon">${ICON_DATABASE}</span>
           <div>
             <h2>Veri Dosyası</h2>
-            <div class="meta">.bak / .rar / .zip</div>
+            <div class="meta">.bak / .rar / .zip / .mdf / .ldf</div>
           </div>
           <span id="dataBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
         </div>
 
         <label class="drop" id="dataDrop">
-          <input type="file" id="dataInput" accept=".bak,.rar,.zip">
+          <input type="file" id="dataInput" accept=".bak,.rar,.zip,.ldf,.mdf">
           <span class="drop-icon">${ICON_UPLOAD}</span>
           <strong>Dosyayı buraya bırakın</strong>
           <span>veya tıklayıp seçin</span>
@@ -568,6 +588,7 @@ function renderHtml(token) {
         </label>
 
         <div id="imgSummary" class="summary hidden"></div>
+        <div id="imgTree" class="tree hidden"></div>
         <div id="imgCompressTip" class="compress-tip hidden">
           <span style="color:#9a3412">${ICON_WARN}</span>
           <div>
@@ -604,7 +625,7 @@ function renderHtml(token) {
 <script>
 const TOKEN = ${JSON.stringify(token)};
 const LARGE_THRESHOLD = 500 * 1024;   // 500 KB
-const DATA_EXT  = /\\.(bak|rar|zip)$/i;
+const DATA_EXT  = /\\.(bak|rar|zip|ldf|mdf)$/i;
 const IMAGE_EXT = /\\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i;
 const $ = (id) => document.getElementById(id);
 
@@ -665,7 +686,7 @@ $("dataInput").addEventListener("change", (e) => {
   const f = e.target.files[0];
   if (!f) return;
   if (!DATA_EXT.test(f.name)) {
-    showToast("Sadece .bak, .rar veya .zip dosyaları kabul edilir.");
+    showToast("Sadece .bak, .rar, .zip, .mdf veya .ldf dosyaları kabul edilir.");
     $("dataInput").value = "";
     return;
   }
@@ -729,13 +750,26 @@ function renderImgSummary() {
   if (selectedImages.length === 0) {
     s.classList.add("hidden");
     tip.classList.add("hidden");
+    $("imgTree").classList.add("hidden");
     $("imgClear").classList.add("hidden");
     $("imgBadge").hidden = true;
     return;
   }
+  // Klasör dağılımı — webkitRelativePath'i dir'e böl
+  const dirMap = new Map();
+  for (const f of selectedImages) {
+    const parts = (f.webkitRelativePath || f.name).split("/");
+    const dir = parts.slice(0, -1).join("/") || "(kök)";
+    let e = dirMap.get(dir);
+    if (!e) { e = { count: 0, bytes: 0 }; dirMap.set(dir, e); }
+    e.count++; e.bytes += f.size;
+  }
+  const dirs = Array.from(dirMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr"));
+
   let html = '' +
     '<div class="summary-row"><span class="l">Resim sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
-    '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>';
+    '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>' +
+    '<div class="summary-row"><span class="l">Klasör sayısı</span><span class="v">' + dirs.length.toLocaleString("tr") + '</span></div>';
   if (imgSkippedCount > 0) {
     html += '<div class="summary-row"><span class="l" style="color:#a16207">Atlanan (resim değil)</span><span class="v" style="color:#a16207">' + imgSkippedCount.toLocaleString("tr") + ' dosya</span></div>';
   }
@@ -743,6 +777,27 @@ function renderImgSummary() {
     html += '<div class="summary-row danger"><span class="l">500 KB üzeri</span><span class="v">' + imgLargeCount.toLocaleString("tr") + ' dosya · ' + fmtBytes(imgLargeBytes) + '</span></div>';
   }
   s.innerHTML = html;
+
+  // Klasör dağılımı listesi — birden fazla klasör varsa göster
+  const tree = $("imgTree");
+  if (dirs.length > 1) {
+    let treeHtml = '<div class="tree-hdr">KLASÖR DAĞILIMI</div>';
+    const maxShown = 50;
+    const shown = dirs.slice(0, maxShown);
+    for (const [dir, e] of shown) {
+      treeHtml += '<div class="tree-row">' +
+        '<span class="tree-path">' + escapeHtml(dir) + '</span>' +
+        '<span class="tree-meta">' + e.count.toLocaleString("tr") + ' dosya · ' + fmtBytes(e.bytes) + '</span>' +
+        '</div>';
+    }
+    if (dirs.length > maxShown) {
+      treeHtml += '<div class="tree-row tree-more">… ve ' + (dirs.length - maxShown).toLocaleString("tr") + ' klasör daha</div>';
+    }
+    tree.innerHTML = treeHtml;
+    tree.classList.remove("hidden");
+  } else {
+    tree.classList.add("hidden");
+  }
   s.classList.remove("hidden");
   $("imgClear").classList.remove("hidden");
   $("imgBadge").hidden = false;
