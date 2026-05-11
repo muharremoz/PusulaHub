@@ -26,7 +26,7 @@ import multipart from "@fastify/multipart"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
 import { dirname, join, normalize } from "path"
-import { mkdir, stat, readdir, rm } from "fs/promises"
+import { mkdir, stat, readdir, rm, readFile } from "fs/promises"
 import { createWriteStream } from "fs"
 import { pipeline } from "stream/promises"
 import { randomBytes } from "crypto"
@@ -385,6 +385,39 @@ fastify.post("/api/upload/:token/complete", async (req, reply) => {
 // ─────────────────────────────────────────────────
 // Müşteri HTML sayfası
 // ─────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────
+// HELPER PowerShell — token gömülü .ps1 indirme
+// ─────────────────────────────────────────────────
+fastify.get("/helper/:token", async (req, reply) => {
+  const { token } = req.params
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) {
+    return reply.code(404).send("Geçersiz token")
+  }
+  const sess = stmts.byToken.get(token)
+  if (!sess) return reply.code(404).send("Aktarım bulunamadı")
+  const isActive = ["pending", "active", "pushing", "push_failed"].includes(sess.status)
+  if (!isActive) return reply.code(410).send("Aktarım aktif değil")
+
+  let template
+  try {
+    template = await readFile(join(__dirname, "helper-template.ps1"), "utf8")
+  } catch (err) {
+    fastify.log.error({ err }, "helper template okunamadı")
+    return reply.code(500).send("Helper template bulunamadı")
+  }
+
+  const base = (req.headers["x-forwarded-proto"] || "http") + "://" + (req.headers.host || "aktarim.pusulanet.net")
+  const script = template
+    .replace("'__TOKEN_PLACEHOLDER__'",    JSON.stringify(token))
+    .replace("'__BASE_URL_PLACEHOLDER__'", JSON.stringify(base))
+    .replace("'__FIRMA_PLACEHOLDER__'",    JSON.stringify(sess.firmaName))
+
+  reply
+    .header("Content-Disposition", `attachment; filename="pusula-backup-${sess.companyId}.ps1"`)
+    .type("application/octet-stream")
+    .send(script)
+})
 
 fastify.get("/:token", async (req, reply) => {
   const { token } = req.params

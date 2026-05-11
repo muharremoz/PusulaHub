@@ -378,14 +378,24 @@ function SessionRow({
       {/* İşlem */}
       <div className="flex items-center justify-end gap-1">
         {isActiveTable && (
-          <button
-            onClick={handleCopyLink}
-            className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors"
-            title={url}
-          >
-            {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
-            {copied ? "Kopyalandı" : "Link"}
-          </button>
+          <>
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors"
+              title={url}
+            >
+              {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
+              {copied ? "Kopyalandı" : "Link"}
+            </button>
+            <a
+              href={`http://aktarim.pusulanet.net/helper/${s.token}`}
+              download
+              className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors"
+              title="SQL backup helper PowerShell script'ini indir"
+            >
+              ⬇ Helper
+            </a>
+          </>
         )}
         {isRowActive && (
           <button
