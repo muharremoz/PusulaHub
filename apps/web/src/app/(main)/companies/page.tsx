@@ -7,6 +7,7 @@ import { PageContainer } from "@/components/layout/page-container";
 import { NestedCard } from "@/components/shared/nested-card";
 import { copyToClipboard } from "@/lib/clipboard";
 import { generateSafePassword } from "@/lib/password-gen";
+import type { AccessInfoResponse } from "@/app/api/companies/[firkod]/access-info/route";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
@@ -139,6 +140,8 @@ import {
   Settings2,
   ToggleLeft,
   ToggleRight,
+  Copy,
+  CheckCheck,
   X,
   Bookmark,
   Trash,
@@ -383,6 +386,12 @@ export default function CompaniesPage() {
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
+  // Erişim Bilgileri modal'ı
+  const [accessOpen, setAccessOpen]         = useState(false);
+  const [accessLoading, setAccessLoading]   = useState(false);
+  const [accessError, setAccessError]       = useState<string | null>(null);
+  const [accessInfo, setAccessInfo]         = useState<AccessInfoResponse | null>(null);
+  const [accessCopied, setAccessCopied]     = useState(false);
   const [sqlRefreshing, setSqlRefreshing] = useState(false);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
@@ -1090,6 +1099,92 @@ tr:nth-child(even) td{background:#fafafa}
     router.replace(`/companies`, { scroll: false })
   }
 
+  // Erişim Bilgileri modal'ını aç + access-info fetch et
+  async function openAccessInfo() {
+    if (!selectedFirma) return
+    setAccessOpen(true)
+    setAccessError(null)
+    setAccessLoading(true)
+    setAccessInfo(null)
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/access-info`)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d?.error ?? "Erişim bilgileri alınamadı")
+      setAccessInfo(d as AccessInfoResponse)
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "İstek başarısız")
+    } finally {
+      setAccessLoading(false)
+    }
+  }
+
+  // Modal'daki bilgileri tek metin halinde derle — kopyalanabilir özet
+  function buildAccessText(): string {
+    if (!accessInfo || !selectedFirma) return ""
+    const firkod = selectedFirma.firkod
+    const lines: string[] = []
+    lines.push(`Firma: ${selectedFirma.firma} (${firkod})`)
+    lines.push("")
+
+    const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
+    const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
+    const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
+
+    if (tabUsers.length > 0) {
+      lines.push("Kullanıcılar:")
+      tabUsers.forEach((u) => {
+        const vpnUser = `${firkod}.${u.username}`
+        const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
+        const apiUser = `${firkod}_${u.username}`
+        lines.push(`  ${u.displayName || u.username}`)
+        lines.push(`    VPN: ${vpnUser}`)
+        if (rdpTarget) lines.push(`    RDP: ${rdpTarget}  (${fullUser})`)
+        if (tabIIS.length > 0) lines.push(`    API: ${apiUser}`)
+        lines.push("")
+      })
+    }
+
+    if (tabIIS.length > 0) {
+      lines.push("Web Hizmetleri:")
+      tabIIS.forEach((s) => {
+        const portMatch = (s.Binding || "").match(/:(\d+):/)
+        const port = portMatch?.[1]
+        const ip = s.ServerIP || ""
+        const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "")
+        lines.push(`  ${s.Name}: ${url}`)
+      })
+      lines.push("")
+    }
+
+    if (accessInfo.windows?.dns || accessInfo.windows?.ip) {
+      lines.push("Sunucular:")
+      if (accessInfo.ad)      lines.push(`  AD: ${accessInfo.ad.name} (${accessInfo.ad.ip})${accessInfo.ad.domain ? ` · ${accessInfo.ad.domain}` : ""}`)
+      if (accessInfo.windows) lines.push(`  RDP: ${accessInfo.windows.name} (${accessInfo.windows.ip}${accessInfo.windows.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""})`)
+      lines.push("")
+    }
+
+    if (tabSQL.length > 0) {
+      const sqlIp = tabSQL[0]?.ServerIP || ""
+      lines.push("SQL Veritabanı:")
+      if (sqlIp) lines.push(`  Sunucu: ${sqlIp}`)
+      if (tabUsers[0]) lines.push(`  Login: ${firkod}_${tabUsers[0].username}`)
+      lines.push(`  Veritabanları (${tabSQL.length}):`)
+      tabSQL.forEach((d) => lines.push(`    • ${d.Name}`))
+    }
+
+    return lines.join("\n")
+  }
+
+  async function handleCopyAccessText() {
+    const text = buildAccessText()
+    if (!text) return
+    const ok = await copyToClipboard(text)
+    if (ok) {
+      setAccessCopied(true)
+      setTimeout(() => setAccessCopied(false), 2000)
+    }
+  }
+
   const apiFiltered = searchQuery.trim()
     ? apiCompanies.filter((c) => c.firma.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
     : apiCompanies.slice(0, 50);
@@ -1165,6 +1260,15 @@ tr:nth-child(even) td{background:#fafafa}
                 </>
 
                 <div className="flex-1" />
+
+                <button
+                  onClick={() => openAccessInfo()}
+                  className="flex items-center gap-1.5 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 transition-colors"
+                  title="VPN / RDP / API / SQL erişim özetini göster"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Erişim Bilgileri
+                </button>
 
                 <Popover open={searchOpen} onOpenChange={(o) => { setSearchOpen(o); if (!o) setSearchQuery(""); }}>
                   <PopoverTrigger asChild>
@@ -2818,6 +2922,192 @@ tr:nth-child(even) td{background:#fafafa}
           </div>
         </NestedCard>
       )}
+
+      {/* Erişim Bilgileri Modal'ı — VPN/RDP/API/SQL kullanıcı + URL özetleri */}
+      <Dialog open={accessOpen} onOpenChange={setAccessOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-[14px]">
+              <KeyRound className="h-4 w-4" />
+              Erişim Bilgileri — {selectedFirma?.firma}
+            </DialogTitle>
+          </DialogHeader>
+
+          {accessLoading && (
+            <div className="space-y-2 py-2">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <Skeleton key={i} className="h-14 w-full rounded-[5px]" />
+              ))}
+            </div>
+          )}
+
+          {!accessLoading && accessError && (
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[12px] text-red-700">
+              {accessError}
+            </div>
+          )}
+
+          {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
+            const firkod = selectedFirma.firkod
+            const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
+            const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
+            const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
+            const sqlIp = tabSQL[0]?.ServerIP || ""
+
+            return (
+              <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3 text-[11px]">
+
+                {/* Sunucular özeti */}
+                <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                    Sunucular
+                  </div>
+                  <div className="divide-y divide-border/40">
+                    {accessInfo.ad && (
+                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
+                        <span className="text-muted-foreground">AD</span>
+                        <span className="font-mono">
+                          {accessInfo.ad.name} ({accessInfo.ad.ip})
+                          {accessInfo.ad.domain && <span className="text-muted-foreground"> · {accessInfo.ad.domain}</span>}
+                        </span>
+                      </div>
+                    )}
+                    {accessInfo.windows && (
+                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
+                        <span className="text-muted-foreground">RDP</span>
+                        <span className="font-mono">{rdpTarget || `${accessInfo.windows.name} (${accessInfo.windows.ip})`}</span>
+                      </div>
+                    )}
+                    {sqlIp && (
+                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
+                        <span className="text-muted-foreground">SQL</span>
+                        <span className="font-mono">{sqlIp}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Kullanıcılar */}
+                {tabUsers.length > 0 && (
+                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                      Kullanıcılar ({tabUsers.length})
+                    </div>
+                    <div className="divide-y divide-border/40">
+                      {tabUsers.map((u) => {
+                        const vpnUser = `${firkod}.${u.username}`
+                        const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
+                        const apiUser = `${firkod}_${u.username}`
+                        return (
+                          <div key={u.username} className="px-3 py-2 space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{u.displayName || u.username}</span>
+                              {!u.enabled && <span className="text-[9px] px-1.5 py-0.5 rounded-[3px] bg-red-50 text-red-700 border border-red-200">Pasif</span>}
+                            </div>
+                            <div className="grid grid-cols-[60px_1fr] gap-x-3 text-[11px]">
+                              <span className="text-muted-foreground">VPN</span>
+                              <span className="font-mono">{vpnUser}</span>
+                              {accessInfo.windows && (
+                                <>
+                                  <span className="text-muted-foreground">RDP</span>
+                                  <span className="font-mono">{fullUser}</span>
+                                </>
+                              )}
+                              {tabIIS.length > 0 && (
+                                <>
+                                  <span className="text-muted-foreground">API</span>
+                                  <span className="font-mono">{apiUser}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Web Hizmetleri */}
+                {tabIIS.length > 0 && (
+                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                      Web Hizmetleri ({tabIIS.length})
+                    </div>
+                    <div className="divide-y divide-border/40">
+                      {tabIIS.map((s) => {
+                        const portMatch = (s.Binding || "").match(/:(\d+):/)
+                        const port = portMatch?.[1]
+                        const ip = s.ServerIP || ""
+                        const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "—")
+                        return (
+                          <div key={s.Id} className="grid grid-cols-[1fr_auto] px-3 py-2 items-center gap-3">
+                            <span className="font-medium truncate">{s.Name}</span>
+                            <a
+                              href={url.startsWith("http") ? url : undefined}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="font-mono text-blue-600 hover:underline shrink-0"
+                            >
+                              {url}
+                            </a>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Veritabanları */}
+                {tabSQL.length > 0 && (
+                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                      Veritabanları ({tabSQL.length})
+                    </div>
+                    <div className="divide-y divide-border/40">
+                      {tabUsers[0] && (
+                        <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
+                          <span className="text-muted-foreground">SQL Login</span>
+                          <span className="font-mono">{firkod}_{tabUsers[0].username}</span>
+                        </div>
+                      )}
+                      {tabSQL.map((d) => (
+                        <div key={d.Id} className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
+                          <span className="text-muted-foreground">DB</span>
+                          <span className="font-mono">{d.Name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="text-[10px] text-muted-foreground italic px-1">
+                  Şifreler güvenlik gereği saklanmaz — kurulum sırasında kopyaladığınız mesajda mevcuttur.
+                </div>
+              </div>
+            )
+          })()}
+
+          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40 mt-2">
+            <button
+              onClick={() => setAccessOpen(false)}
+              className="px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 text-[11px] font-medium text-muted-foreground transition-colors"
+            >
+              Kapat
+            </button>
+            <button
+              onClick={handleCopyAccessText}
+              disabled={!accessInfo || accessLoading}
+              className={`px-3 py-1.5 rounded-[5px] text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
+                accessCopied
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : "bg-[#1d64ff] text-white hover:bg-[#1d64ff]/90 disabled:opacity-50"
+              }`}
+            >
+              {accessCopied ? (<><CheckCheck className="h-3.5 w-3.5" /> Kopyalandı</>) : (<><Copy className="h-3.5 w-3.5" /> Metin Olarak Kopyala</>)}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageContainer>
   );
 }
