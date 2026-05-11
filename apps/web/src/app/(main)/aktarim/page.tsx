@@ -107,8 +107,8 @@ export default function AktarimPage() {
 
   useEffect(() => {
     reload()
-    // Canlı progress için 5 sn polling
-    const id = setInterval(reload, 5000)
+    // Canlı progress için 2 sn polling
+    const id = setInterval(reload, 2000)
     return () => clearInterval(id)
   }, [reload])
 
@@ -341,23 +341,25 @@ function SessionCard({
         </div>
       </div>
 
-      {/* Progress */}
-      <div className="grid grid-cols-2 gap-3 text-[10px]">
-        <div className="space-y-0.5">
+      {/* Progress — alt alta */}
+      <div className="space-y-2 text-[10px]">
+        <div className="space-y-1">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <Database className="h-3 w-3" />
-            <span>Veri (.bak)</span>
+            <span className="font-medium">Veri</span>
             <span className="ml-auto tabular-nums">{formatBytes(s.dataBytesReceived)} / {formatBytes(s.dataBytesTotal)}</span>
+            <span className="tabular-nums font-medium text-foreground w-10 text-right">{dataPct}%</span>
           </div>
           <ProgressBar pct={dataPct} />
         </div>
-        <div className="space-y-0.5">
+        <div className="space-y-1">
           <div className="flex items-center gap-1.5 text-muted-foreground">
             <HardDrive className="h-3 w-3" />
-            <span>Resimler</span>
+            <span className="font-medium">Resimler</span>
             <span className="ml-auto tabular-nums">
-              {s.imageFilesReceived} / {s.imageFilesTotal} dosya · {formatBytes(s.imageBytesReceived)} / {formatBytes(s.imageBytesTotal)}
+              {s.imageFilesReceived.toLocaleString("tr")} / {s.imageFilesTotal.toLocaleString("tr")} · {formatBytes(s.imageBytesReceived)} / {formatBytes(s.imageBytesTotal)}
             </span>
+            <span className="tabular-nums font-medium text-foreground w-10 text-right">{imgPct}%</span>
           </div>
           <ProgressBar pct={imgPct} />
         </div>

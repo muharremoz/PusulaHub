@@ -1065,6 +1065,7 @@ async function uploadData() {
   let completedBytes = 0;
   let uploadedCount = 0;
   let failed = 0;
+  let lastReport = 0;   // throttled live-progress report
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
@@ -1076,6 +1077,12 @@ async function uploadData() {
         $("dataBar").style.width = totalPct + "%";
         $("dataPct").textContent = totalPct + "%";
         $("dataStat").textContent = (uploadedCount + 1) + " / " + files.length + " · " + f.name + " · " + fmtBytes(cur) + " / " + fmtBytes(total);
+        // Hub'ın canlı progress için her ~2 sn'de bir raporla
+        const now = Date.now();
+        if (now - lastReport > 2000) {
+          lastReport = now;
+          reportData(total, cur);
+        }
       });
       completedBytes += f.size;
       uploadedCount++;
@@ -1116,6 +1123,7 @@ async function uploadImages() {
   await reportImgs(files.length, total, 0, 0);
 
   let uploaded = 0, uploadedBytes = 0;
+  let lastReport = Date.now();
   for (const f of files) {
     const rel = f.webkitRelativePath || f.name;
     const fd = new FormData(); fd.append("relPath", rel); fd.append("file", f);
@@ -1125,7 +1133,9 @@ async function uploadImages() {
     $("imgBar").style.width = pct + "%";
     $("imgPct").textContent = pct + "%";
     $("imgStat").textContent = uploaded + " / " + files.length + " dosya · " + fmtBytes(uploadedBytes) + " / " + fmtBytes(total);
-    if (uploaded % 25 === 0 || uploaded === files.length) {
+    const now = Date.now();
+    if (now - lastReport > 2000 || uploaded === files.length) {
+      lastReport = now;
       reportImgs(files.length, total, uploaded, uploadedBytes);
     }
   }
