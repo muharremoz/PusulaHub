@@ -411,7 +411,8 @@ function NewTransferDialog({
     setFirma(null); setSqlServerId(""); setDepoServerId("")
     setExpiresInDays(7); setNotes(""); setFirmaSearch("")
     Promise.all([
-      fetch("/api/firma/companies").then(r => r.ok ? r.json() : []).catch(() => []),
+      // all=true → kurulumu olmayan firmalar da gelsin
+      fetch("/api/firma/companies?all=true").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/sql-servers").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/depo-servers").then(r => r.ok ? r.json() : []).catch(() => []),
     ]).then(([cs, sql, depo]) => {

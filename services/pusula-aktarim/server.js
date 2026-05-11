@@ -404,6 +404,7 @@ const ICON_DATABASE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="non
 const ICON_FOLDER   = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/></svg>`
 const ICON_UPLOAD   = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`
 const ICON_CHECK    = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+const ICON_CHECK_BIG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
 const ICON_X        = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
 const ICON_WARN     = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
 
@@ -594,6 +595,45 @@ function renderHtml(token) {
 
   .hidden { display:none !important }
 
+  /* ── Tamamlandı tam ekran ─────────────── */
+  .success-overlay {
+    position:fixed; inset:0; z-index:200;
+    background:linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+    display:flex; align-items:center; justify-content:center;
+    animation:fadeIn .4s ease-out;
+  }
+  @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
+  .success-card {
+    background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.15);
+    padding:48px 40px; max-width:520px; width:90%; text-align:center;
+    animation:popIn .5s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes popIn { from { opacity:0; transform:scale(.9) translateY(20px) } to { opacity:1; transform:scale(1) translateY(0) } }
+  .success-icon-wrap {
+    width:88px; height:88px; border-radius:50%; background:#ecfdf5;
+    margin:0 auto 20px auto; display:flex; align-items:center; justify-content:center;
+    color:#059669; animation:popCheck .6s .2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes popCheck { from { transform:scale(0); opacity:0 } to { transform:scale(1); opacity:1 } }
+  .success-icon-wrap svg { width:48px; height:48px }
+  .success-card h1 { margin:0 0 8px 0; font-size:24px; font-weight:600; color:#064e3b }
+  .success-card .sub { font-size:14px; color:#065f46; margin-bottom:24px; line-height:1.5 }
+  .success-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px }
+  .success-stat {
+    background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px 12px;
+    text-align:center;
+  }
+  .success-stat .v { font-size:20px; font-weight:600; color:#111827; tabular-nums:true }
+  .success-stat .l { font-size:11px; color:#6b7280; margin-top:2px; letter-spacing:.3px; text-transform:uppercase }
+  .success-foot { margin-top:20px; padding-top:20px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280 }
+
+  @media (max-width:480px) {
+    .success-card { padding:32px 24px }
+    .success-card h1 { font-size:20px }
+    .success-icon-wrap { width:72px; height:72px }
+    .success-icon-wrap svg { width:40px; height:40px }
+  }
+
   /* ── Toast ────────────────────────────── */
   .toast-wrap {
     position:fixed; top:80px; left:50%; transform:translateX(-50%);
@@ -614,6 +654,28 @@ function renderHtml(token) {
 <body>
 
 <div id="toastWrap" class="toast-wrap"></div>
+
+<!-- Tamamlandı tam ekran overlay -->
+<div id="successOverlay" class="success-overlay hidden">
+  <div class="success-card">
+    <div class="success-icon-wrap">${ICON_CHECK_BIG}</div>
+    <h1>Aktarım Tamamlandı</h1>
+    <p class="sub" id="successFirma">—</p>
+    <div class="success-stats">
+      <div class="success-stat">
+        <div class="v" id="successDataSize">—</div>
+        <div class="l">Veri</div>
+      </div>
+      <div class="success-stat">
+        <div class="v" id="successImgCount">—</div>
+        <div class="l">Resim</div>
+      </div>
+    </div>
+    <div class="success-foot">
+      Tüm dosyalarınız güvenli şekilde sunucularımıza aktarıldı. Bu pencereyi kapatabilirsiniz.
+    </div>
+  </div>
+</div>
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -686,7 +748,7 @@ function renderHtml(token) {
           <span class="drop-icon">${ICON_UPLOAD}</span>
           <strong>Klasörü buraya sürükleyin</strong>
           <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
-          <span style="display:block; margin-top:6px; font-size:10px; color:#a16207">⓵ Tarayıcı "N dosya yüklensin mi?" diye sorabilir → "Yükle" deyin</span>
+          <span style="display:block; margin-top:6px; font-size:10px; color:#a16207">⚠ Tarayıcı izin sorduğunda "Yükle" seçeneğine basınız</span>
         </label>
 
         <div id="imgSummary" class="summary hidden"></div>
@@ -791,8 +853,15 @@ function applyStatus(d) {
     if (!pushPollInterval) pushPollInterval = setInterval(pollPush, 3000);
   } else if (d.status === "completed") {
     $("pushBanner").classList.add("hidden");
-    $("doneBanner").classList.remove("hidden");
+    $("doneBanner").classList.add("hidden");
     $("startBtn").disabled = true;
+    // Fullscreen başarı ekranı
+    $("successFirma").textContent = d.firmaName + " (" + d.firmaId + ")";
+    $("successDataSize").textContent = (d.dataBytesReceived ?? 0) > 0 ? fmtBytes(d.dataBytesReceived) : "—";
+    $("successImgCount").textContent = (d.imageFilesReceived ?? 0) > 0
+      ? (d.imageFilesReceived.toLocaleString("tr") + " dosya")
+      : "—";
+    $("successOverlay").classList.remove("hidden");
     stopPushPoll();
   } else if (d.status === "push_failed") {
     $("pushBanner").classList.add("hidden");
