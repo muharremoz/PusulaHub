@@ -377,15 +377,14 @@ fastify.post("/api/upload/:token/images-done", async (req, reply) => {
 // müşteri credential girmez. SQL Auth bilgileri session'da hazır.
 // ─────────────────────────────────────────────────
 
-async function sqlPool(sess) {
-  if (!sess.sqlServerIp || !sess.sqlAuthUsername || !sess.sqlAuthPassword) {
-    throw new Error("SQL kaynağı tanımlı değil (Hub aktarımında SQL sunucusu seçilmemiş)")
+async function sqlPool(serverIp, port, user, password) {
+  if (!serverIp || !user || !password) {
+    throw new Error("SQL bağlantı bilgileri eksik")
   }
   const pool = new sql.ConnectionPool({
-    server:   sess.sqlServerIp,
-    port:     1433,
-    user:     sess.sqlAuthUsername,
-    password: sess.sqlAuthPassword,
+    server:   serverIp,
+    port:     port || 1433,
+    user, password,
     database: "master",
     options:  { trustServerCertificate: true, encrypt: false },
     connectionTimeout: 8000,
@@ -396,30 +395,30 @@ async function sqlPool(sess) {
   return pool
 }
 
-fastify.get("/api/sql/databases/:token", async (req, reply) => {
+// POST yerine GET kullanılıyordu — credential body için POST'a çevir
+fastify.post("/api/sql/databases/:token", async (req, reply) => {
   const v = getActiveSession(req.params.token)
   if (v.error) return reply.code(410).send({ error: v.error })
 
+  const body = req.body ?? {}
+  const { server, port, user, password } = body
+  if (!server || !user || !password) {
+    return reply.code(400).send({ error: "Sunucu, kullanıcı ve şifre zorunlu" })
+  }
+
   let pool
   try {
-    pool = await sqlPool(v.session)
+    pool = await sqlPool(server, port, user, password)
     const r = await pool.request().query(`
-      SELECT name, recovery_model_desc AS recoveryModel,
-             CAST(SUM(size * 8.0 / 1024) OVER (PARTITION BY name) AS DECIMAL(18,1)) AS sizeMB
+      SELECT d.name, d.recovery_model_desc AS recoveryModel,
+             CAST((SELECT SUM(size * 8.0 / 1024) FROM sys.master_files WHERE database_id = d.database_id) AS DECIMAL(18,1)) AS sizeMB
       FROM sys.databases d
-      INNER JOIN sys.master_files mf ON mf.database_id = d.database_id
       WHERE d.database_id > 4 AND d.state_desc = 'ONLINE'
-      GROUP BY name, recovery_model_desc, mf.size
-      ORDER BY name
+      ORDER BY d.name
     `)
-    // Aynı DB birden fazla dosya için tekrarlamasın
-    const seen = new Set()
-    const dbs = []
-    for (const row of r.recordset) {
-      if (seen.has(row.name)) continue
-      seen.add(row.name)
-      dbs.push({ name: row.name, sizeMB: Number(row.sizeMB) || 0, recoveryModel: row.recoveryModel })
-    }
+    const dbs = r.recordset.map(row => ({
+      name: row.name, sizeMB: Number(row.sizeMB) || 0, recoveryModel: row.recoveryModel,
+    }))
     return reply.send({ ok: true, databases: dbs })
   } catch (err) {
     return reply.code(500).send({ error: err.message })
@@ -437,8 +436,9 @@ fastify.post("/api/sql/backup/:token", async (req, reply) => {
   const dbs = Array.isArray(body.databases) ? body.databases.filter(d => typeof d === "string" && d.length > 0) : []
   if (dbs.length === 0) return reply.code(400).send({ error: "Yedeklenecek DB seçilmedi" })
 
-  if (!sess.sqlServerIp || !sess.sqlUsername || !sess.sqlPassword) {
-    return reply.code(400).send({ error: "Windows admin credential'ları eksik (SMB için gerekli)" })
+  const { server: srcServer, port: srcPort, user: srcUser, password: srcPassword } = body
+  if (!srcServer || !srcUser || !srcPassword) {
+    return reply.code(400).send({ error: "SQL bağlantı bilgileri eksik" })
   }
 
   // Async başlat — frontend polling ile takip eder
@@ -446,20 +446,17 @@ fastify.post("/api/sql/backup/:token", async (req, reply) => {
 
   ;(async () => {
     let pool
+    // Ubuntu'nun samba share path'i — SQL Server doğrudan buraya yazar (UNC)
+    // sql-inbox samba share = /opt/pusula-aktarim/sql-inbox/
+    const sambaInbox  = "/opt/pusula-aktarim/sql-inbox"
+    const tokenInbox  = join(sambaInbox, sess.token)
+    const stagingDir  = join(STAGING_ROOT, sess.token, "data")
+
     try {
-      pool = await sqlPool(sess)
-      const tempDir = "C:\\PusulaTempBackup\\" + sess.token
-      const stagingDir = join(STAGING_ROOT, sess.token, "data")
+      pool = await sqlPool(srcServer, srcPort, srcUser, srcPassword)
+      await mkdir(tokenInbox, { recursive: true })
       await mkdir(stagingDir, { recursive: true })
 
-      // 1) SQL Server'da temp klasör oluştur (xp_create_subdir)
-      await pool.request().input("p", sql.NVarChar, tempDir)
-        .query("EXEC master.dbo.xp_create_subdir @p")
-
-      // 2) Her DB için BACKUP
-      const totalDbs = dbs.length
-      let doneDbs = 0
-      // İlk progress raporu
       stmts.updateProgress.run({
         token: sess.token, status: "active",
         dataBytesTotal: 0, dataBytesReceived: 0,
@@ -467,42 +464,32 @@ fastify.post("/api/sql/backup/:token", async (req, reply) => {
         imageBytesTotal: null, imageBytesReceived: null,
       })
 
+      // SQL Server BACKUP UNC yola yazsın (Ubuntu samba share)
+      // \\10.15.2.6\sql-inbox\{token}\xxx.bak
+      const uncBase = `\\\\10.15.2.6\\sql-inbox\\${sess.token}`
       for (const db of dbs) {
         const safe = db.replace(/[^A-Za-z0-9_]/g, "_")
-        const bakPath = `${tempDir}\\${safe}.bak`
-        fastify.log.info({ db, bakPath }, "SQL backup başlıyor")
-        const bakSql = `BACKUP DATABASE [${db.replace(/]/g, "]]")}] TO DISK = N'${bakPath}'
+        const bakUnc = `${uncBase}\\${safe}.bak`
+        fastify.log.info({ db, bakUnc }, "SQL backup başlıyor (UNC)")
+        const bakSql = `BACKUP DATABASE [${db.replace(/]/g, "]]")}] TO DISK = N'${bakUnc}'
           WITH INIT, FORMAT, COMPRESSION, COPY_ONLY`
         await pool.request().query(bakSql)
-        doneDbs++
       }
 
-      // 3) SMB ile SQL Server'ın C$'ından staging'e çek
-      const mountPoint = `/tmp/pusula-sqlbackup-${randomBytes(6).toString("hex")}`
-      await mkdir(mountPoint, { recursive: true })
-      const opts = `username=${sess.sqlUsername},password=${sess.sqlPassword},vers=3.0,uid=0,gid=0,ro,file_mode=0664,dir_mode=0775`
-      try {
-        try {
-          await execCmd("mount", ["-t", "cifs", `//${sess.sqlServerIp}/C$`, mountPoint, "-o", opts])
-        } catch {
-          await execCmd("mount", ["-t", "cifs", `//${sess.sqlServerIp}/C$`, mountPoint, "-o", opts.replace("vers=3.0", "vers=2.1")])
-        }
-        const srcDir = join(mountPoint, "PusulaTempBackup", sess.token)
-        // Dosyaları kopyala
-        await execCmd("cp", ["-r", srcDir + "/.", stagingDir])
-      } finally {
-        try { await execCmd("umount", [mountPoint]) } catch {}
-        try { await rm(mountPoint, { recursive: true, force: true }) } catch {}
-      }
-
-      // 4) SQL Server'daki temp dosyaları sil (xp_cmdshell gerek — çoğu yerde kapalı)
-      // Bunun yerine RD/erase için sp_OACreate vs. karmaşık. Atlayalım, SQL admin
-      // ister manuel temizler. Veya BACKUP'tan sonra Ubuntu SMB write yetkisi olsa silebilirdi.
-
-      // 5) Staging boyutu sayım
-      let totalBytes = 0
-      const files = await readdir(stagingDir)
+      // BACKUP UNC'ye yazıldı — şimdi staging/data'ya taşı
+      const files = await readdir(tokenInbox)
       for (const f of files) {
+        const src = join(tokenInbox, f)
+        const dst = join(stagingDir, f)
+        await execCmd("mv", [src, dst])
+      }
+      // Boş inbox klasörünü temizle
+      try { await rm(tokenInbox, { recursive: true, force: true }) } catch {}
+
+      // Toplam boyutu hesapla
+      let totalBytes = 0
+      const stagingFiles = await readdir(stagingDir)
+      for (const f of stagingFiles) {
         const s = await stat(join(stagingDir, f))
         totalBytes += s.size
       }
@@ -512,9 +499,11 @@ fastify.post("/api/sql/backup/:token", async (req, reply) => {
         imageFilesTotal: null, imageFilesReceived: null,
         imageBytesTotal: null, imageBytesReceived: null,
       })
-      fastify.log.info({ token: sess.token, dbs: doneDbs, bytes: totalBytes }, "SQL backup tamamlandı")
+      fastify.log.info({ token: sess.token, dbs: dbs.length, bytes: totalBytes }, "SQL backup tamamlandı")
     } catch (err) {
       fastify.log.error({ err: err.message }, "SQL backup hatası")
+      // Yarıda kalan dosyaları temizleme — bir sonraki denemeyi engellemesin
+      try { await rm(tokenInbox, { recursive: true, force: true }) } catch {}
       stmts.updatePush.run({
         token: sess.token, progress: 0, stage: null, error: "SQL yedek: " + err.message, status: "push_failed",
       })
@@ -1018,12 +1007,24 @@ function renderHtml(token) {
           <span id="sqlBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
         </div>
 
-        <div id="sqlInit">
-          <button id="sqlListBtn" type="button" class="btn" style="width:auto; padding:8px 16px">
-            <span>Veritabanlarını Listele</span>
+        <div id="sqlInit" style="display:flex; flex-direction:column; gap:8px">
+          <div style="display:grid; grid-template-columns:1fr 80px; gap:8px">
+            <input id="sqlServer" type="text" placeholder="SQL sunucu adresi (örn. 10.15.2.5)"
+              style="height:34px; padding:0 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; outline:none">
+            <input id="sqlPort" type="number" placeholder="1433" value="1433"
+              style="height:34px; padding:0 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; outline:none; text-align:center">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px">
+            <input id="sqlUser" type="text" placeholder="Kullanıcı (örn. sa)"
+              style="height:34px; padding:0 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; outline:none">
+            <input id="sqlPass" type="password" placeholder="Şifre"
+              style="height:34px; padding:0 10px; border:1px solid var(--border); border-radius:5px; font-size:12px; outline:none">
+          </div>
+          <button id="sqlListBtn" type="button" class="btn" style="align-self:flex-start; padding:8px 16px">
+            <span>Bağlan ve Veritabanlarını Listele</span>
           </button>
-          <div style="margin-top:10px; font-size:11px; color:var(--muted)">
-            Hub yöneticisi tarafından tanımlanan SQL sunucusuna bağlanır.
+          <div style="font-size:11px; color:var(--muted)">
+            Şifreniz sadece yedek alma işlemi için kullanılır, kaydedilmez.
           </div>
         </div>
 
@@ -1416,16 +1417,35 @@ let sqlDbs = [];
 let selectedSqlDbs = new Set();
 let sqlListed = false;
 
+function getSqlCreds() {
+  return {
+    server:   $("sqlServer").value.trim(),
+    port:     parseInt($("sqlPort").value, 10) || 1433,
+    user:     $("sqlUser").value.trim(),
+    password: $("sqlPass").value,
+  };
+}
+
 $("sqlListBtn").addEventListener("click", async () => {
+  const creds = getSqlCreds();
+  if (!creds.server || !creds.user || !creds.password) {
+    showToast("Sunucu adresi, kullanıcı adı ve şifre zorunlu");
+    return;
+  }
   $("sqlListBtn").disabled = true;
+  const orig = $("sqlListBtn").innerHTML;
   $("sqlListBtn").textContent = "Bağlanılıyor...";
   try {
-    const r = await fetch("/api/sql/databases/" + TOKEN);
+    const r = await fetch("/api/sql/databases/" + TOKEN, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(creds),
+    });
     const d = await r.json();
     if (!r.ok) {
       showToast(d.error || "DB listesi alınamadı");
       $("sqlListBtn").disabled = false;
-      $("sqlListBtn").textContent = "Veritabanlarını Listele";
+      $("sqlListBtn").innerHTML = orig;
       return;
     }
     sqlDbs = d.databases || [];
@@ -1434,7 +1454,7 @@ $("sqlListBtn").addEventListener("click", async () => {
   } catch (err) {
     showToast("Hata: " + err.message);
     $("sqlListBtn").disabled = false;
-    $("sqlListBtn").textContent = "Veritabanlarını Listele";
+    $("sqlListBtn").innerHTML = orig;
   }
 });
 
@@ -1603,7 +1623,7 @@ async function runSqlBackup() {
 
   const r = await fetch("/api/sql/backup/" + TOKEN, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ databases: dbs }),
+    body: JSON.stringify({ databases: dbs, ...getSqlCreds() }),
   });
   if (!r.ok) {
     const d = await r.json().catch(() => ({}));

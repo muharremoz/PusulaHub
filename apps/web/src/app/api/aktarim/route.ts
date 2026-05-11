@@ -94,10 +94,6 @@ export async function POST(req: NextRequest) {
       depoUsername:     depoSrv?.Username   ?? null,
       depoPassword:     depoSrv?.Password   ?? null,
     }
-    console.log("[aktarim/POST] sending to Ubuntu — sqlAuthUsername:",
-      payload.sqlAuthUsername ? "DOLU" : "NULL",
-      "sqlAuthPassword:", payload.sqlAuthPassword ? "DOLU" : "NULL",
-      "sqlServerIp:", payload.sqlServerIp || "NULL")
     const sess = await createSession(payload)
     return NextResponse.json(sess)
   } catch (err) {
