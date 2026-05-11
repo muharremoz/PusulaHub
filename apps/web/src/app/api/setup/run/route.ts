@@ -4,6 +4,7 @@ import { execOnAgent } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer } from "@/lib/sql-restore"
+import { ensureSqlLogin, ensureDbUserMapping } from "@/lib/sql-firma-login"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import {
@@ -848,8 +849,9 @@ export async function POST(req: NextRequest) {
                   database: "master",
                 },
                 async (masterPool) => {
+                  const restoredDbNames: string[] = []
                   for (const t of tasks) {
-                    await runSqlStep(
+                    const ok = await runSqlStep(
                       `sql_restore_${t.dbName}`,
                       `Veritabanı restore ediliyor: ${t.dbName}`,
                       async () => {
@@ -858,6 +860,38 @@ export async function POST(req: NextRequest) {
                         return `${t.bakPath} → [${t.dbName}]`
                       },
                     )
+                    if (ok) restoredDbNames.push(t.dbName)
+                  }
+
+                  // ── Firma 1. kullanıcısı için SQL Authentication login + user mapping ──
+                  // Şart: en az 1 başarılı restore + payload.users[0] mevcut
+                  const firstUser = payload.users[0]
+                  if (restoredDbNames.length > 0 && firstUser && firstUser.username && firstUser.password) {
+                    const loginName = `${payload.firmaId}_${firstUser.username}`
+
+                    const loginOk = await runSqlStep(
+                      `sql_login_${loginName}`,
+                      `SQL login oluşturuluyor: ${loginName}`,
+                      async () => {
+                        const { created } = await ensureSqlLogin(masterPool, loginName, firstUser.password)
+                        return created
+                          ? `CREATE LOGIN [${loginName}]`
+                          : `ALTER LOGIN [${loginName}] (mevcut — şifre güncellendi)`
+                      },
+                    )
+
+                    if (loginOk) {
+                      for (const dbName of restoredDbNames) {
+                        await runSqlStep(
+                          `sql_usermap_${dbName}`,
+                          `User mapping: [${dbName}] → ${loginName}`,
+                          async () => {
+                            await ensureDbUserMapping(masterPool, dbName, loginName)
+                            return `db_owner + db_datareader + db_datawriter`
+                          },
+                        )
+                      }
+                    }
                   }
                 },
               )
