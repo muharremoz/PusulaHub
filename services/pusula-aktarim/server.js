@@ -382,10 +382,29 @@ fastify.post("/api/upload/:token/complete", async (req, reply) => {
 fastify.get("/:token", async (req, reply) => {
   const { token } = req.params
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) {
-    return reply.code(404).type("text/html").send("<h1>Geçersiz link</h1>")
+    return reply.code(404).type("text/html").send(notFoundHtml())
+  }
+  // DB'de aktif değilse (completed, cancelled, expired, not_found) → 404
+  // Link hiç yokmuş gibi davran
+  const sess = stmts.byToken.get(token)
+  if (!sess) {
+    return reply.code(404).type("text/html").send(notFoundHtml())
+  }
+  const isActive = ["pending", "active", "pushing", "push_failed"].includes(sess.status)
+  if (!isActive) {
+    return reply.code(404).type("text/html").send(notFoundHtml())
+  }
+  // Süresi dolmuş?
+  if (new Date(sess.expiresAt) < new Date()) {
+    stmts.setStatus.run("expired", "expired", token)
+    return reply.code(404).type("text/html").send(notFoundHtml())
   }
   reply.type("text/html").send(renderHtml(token))
 })
+
+function notFoundHtml() {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>404</title></head><body style="margin:0;font-family:system-ui,sans-serif;background:#fafaf9;color:#71717a;display:flex;align-items:center;justify-content:center;height:100vh"><div style="text-align:center"><div style="font-size:64px;font-weight:300;color:#a1a1aa">404</div><div style="font-size:14px;margin-top:8px">Sayfa bulunamadı</div></div></body></html>`
+}
 
 fastify.get("/", async (_req, reply) => {
   reply.type("text/html").send("<h1>Pusula Aktarım</h1><p>Geçerli bir aktarım linki gerekiyor.</p>")
