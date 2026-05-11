@@ -237,15 +237,9 @@ fastify.post("/api/upload/:token/data", async (req, reply) => {
 
   await pipeline(data.file, createWriteStream(targetPath))
   const s = await stat(targetPath)
-
-  stmts.updateProgress.run({
-    token: req.params.token,
-    status: "active",
-    dataBytesTotal: s.size,
-    dataBytesReceived: s.size,
-    imageFilesTotal: null, imageFilesReceived: null,
-    imageBytesTotal: null, imageBytesReceived: null,
-  })
+  // Cumulative progress için client /data-progress'i çağırır.
+  // Burada yalnız status'u active'e çek.
+  stmts.setStatus.run("active", "active", req.params.token)
   return reply.send({ ok: true, filename, size: s.size })
 })
 
@@ -270,6 +264,21 @@ fastify.post("/api/upload/:token/image", async (req, reply) => {
   await pipeline(data.file, createWriteStream(targetPath))
   const s = await stat(targetPath)
   return reply.send({ ok: true, path: safeRel, size: s.size })
+})
+
+fastify.post("/api/upload/:token/data-progress", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  const b = req.body ?? {}
+  stmts.updateProgress.run({
+    token: req.params.token,
+    status: "active",
+    dataBytesTotal:    b.totalBytes    ?? null,
+    dataBytesReceived: b.uploadedBytes ?? null,
+    imageFilesTotal: null, imageFilesReceived: null,
+    imageBytesTotal: null, imageBytesReceived: null,
+  })
+  return reply.send({ ok: true })
 })
 
 fastify.post("/api/upload/:token/images-done", async (req, reply) => {
@@ -554,14 +563,15 @@ function renderHtml(token) {
         </div>
 
         <label class="drop" id="dataDrop">
-          <input type="file" id="dataInput" accept=".bak,.rar,.zip,.ldf,.mdf">
+          <input type="file" id="dataInput" accept=".bak,.rar,.zip,.ldf,.mdf" multiple>
           <span class="drop-icon">${ICON_UPLOAD}</span>
-          <strong>Dosyayı buraya bırakın</strong>
-          <span>veya tıklayıp seçin</span>
+          <strong>Dosyaları buraya bırakın</strong>
+          <span>veya tıklayıp seçin · birden fazla dosya seçebilirsiniz</span>
         </label>
 
         <div id="dataSummary" class="summary hidden"></div>
-        <button id="dataClear" class="clear-btn hidden" type="button">Dosyayı kaldır</button>
+        <div id="dataTree" class="tree hidden"></div>
+        <button id="dataClear" class="clear-btn hidden" type="button">Dosyaları kaldır</button>
 
         <div id="dataProgress" class="progress hidden">
           <div class="bar"><div id="dataBar" style="width:0%"></div></div>
@@ -661,7 +671,8 @@ async function loadInfo() {
 }
 
 // ── State (yükleme öncesi) ────────────
-let selectedDataFile  = null;
+let selectedDataFiles = [];   // File[]
+let dataTotalBytes    = 0;
 let selectedImages    = [];   // File[]
 let imgTotalBytes     = 0;
 let imgLargeCount     = 0;
@@ -679,42 +690,65 @@ function setupDrop(zone, input) {
   });
 }
 
-// ── Veri dosyası seçimi ───────────────
+// ── Veri dosyaları seçimi ─────────────
 setupDrop($("dataDrop"), $("dataInput"));
 $("dataInput").addEventListener("change", (e) => {
   if (uploading) return;
-  const f = e.target.files[0];
-  if (!f) return;
-  if (!DATA_EXT.test(f.name)) {
-    showToast("Sadece .bak, .rar, .zip, .mdf veya .ldf dosyaları kabul edilir.");
+  const all = Array.from(e.target.files);
+  if (all.length === 0) return;
+  const valid = all.filter((f) => DATA_EXT.test(f.name));
+  const skipped = all.length - valid.length;
+  if (skipped > 0) {
+    showToast(skipped + " dosya geçersiz uzantı nedeniyle atlandı (yalnız .bak/.rar/.zip/.mdf/.ldf).");
+  }
+  if (valid.length === 0) {
     $("dataInput").value = "";
     return;
   }
-  selectedDataFile = f;
+  selectedDataFiles = valid;
+  dataTotalBytes = valid.reduce((s, f) => s + f.size, 0);
   renderDataSummary();
   refreshStart();
 });
 
 function renderDataSummary() {
   const s = $("dataSummary");
-  if (!selectedDataFile) {
+  if (selectedDataFiles.length === 0) {
     s.classList.add("hidden");
     $("dataClear").classList.add("hidden");
     $("dataBadge").hidden = true;
+    $("dataTree").classList.add("hidden");
     return;
   }
-  s.innerHTML = '' +
-    '<div class="summary-row"><span class="l">Dosya adı</span><span class="v" style="overflow:hidden;text-overflow:ellipsis;max-width:200px;white-space:nowrap">' + escapeHtml(selectedDataFile.name) + '</span></div>' +
-    '<div class="summary-row"><span class="l">Boyut</span><span class="v">' + fmtBytes(selectedDataFile.size) + '</span></div>';
+  let html = '' +
+    '<div class="summary-row"><span class="l">Dosya sayısı</span><span class="v">' + selectedDataFiles.length.toLocaleString("tr") + '</span></div>' +
+    '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(dataTotalBytes) + '</span></div>';
+  s.innerHTML = html;
   s.classList.remove("hidden");
   $("dataClear").classList.remove("hidden");
   $("dataBadge").hidden = false;
   $("dataBadge").textContent = "Hazır";
   $("dataBadge").className = "status-badge";
+
+  // Dosya listesi
+  const tree = $("dataTree");
+  if (selectedDataFiles.length > 0) {
+    let treeHtml = '<div class="tree-hdr">DOSYALAR</div>';
+    for (const f of selectedDataFiles) {
+      treeHtml += '<div class="tree-row">' +
+        '<span class="tree-path">' + escapeHtml(f.name) + '</span>' +
+        '<span class="tree-meta">' + fmtBytes(f.size) + '</span>' +
+        '</div>';
+    }
+    tree.innerHTML = treeHtml;
+    tree.classList.remove("hidden");
+  } else {
+    tree.classList.add("hidden");
+  }
 }
 $("dataClear").addEventListener("click", () => {
   if (uploading) return;
-  selectedDataFile = null;
+  selectedDataFiles = []; dataTotalBytes = 0;
   $("dataInput").value = "";
   renderDataSummary();
   refreshStart();
@@ -820,7 +854,7 @@ $("imgClear").addEventListener("click", () => {
 });
 
 function refreshStart() {
-  $("startBtn").disabled = uploading || (!selectedDataFile && selectedImages.length === 0);
+  $("startBtn").disabled = uploading || (selectedDataFiles.length === 0 && selectedImages.length === 0);
 }
 
 // ── Aktarımı başlat ───────────────────
@@ -840,7 +874,7 @@ async function startUpload() {
   $("imgDrop").style.opacity = ".5";
 
   try {
-    if (selectedDataFile) await uploadData();
+    if (selectedDataFiles.length > 0) await uploadData();
     if (selectedImages.length > 0) await uploadImages();
     await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
     $("doneBanner").classList.remove("hidden");
@@ -852,24 +886,56 @@ async function startUpload() {
 }
 
 async function uploadData() {
-  const f = selectedDataFile;
+  const files = selectedDataFiles;
+  const total = dataTotalBytes;
   const badge = $("dataBadge");
   badge.textContent = "Yükleniyor"; badge.className = "status-badge uploading";
   $("dataProgress").classList.remove("hidden");
-  $("dataStat").textContent = f.name + " · " + fmtBytes(f.size);
 
-  const fd = new FormData(); fd.append("file", f);
-  try {
-    await xhrUpload("/api/upload/" + TOKEN + "/data", fd, (pct, loaded) => {
-      $("dataBar").style.width = pct + "%";
-      $("dataPct").textContent = pct + "%";
-      $("dataStat").textContent = f.name + " · " + fmtBytes(loaded || 0) + " / " + fmtBytes(f.size);
-    });
-    badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
-  } catch (err) {
-    badge.textContent = "Hata"; badge.className = "status-badge err";
-    throw err;
+  await reportData(total, 0);
+
+  let completedBytes = 0;
+  let uploadedCount = 0;
+  let failed = 0;
+
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    const fd = new FormData(); fd.append("file", f);
+    try {
+      await xhrUpload("/api/upload/" + TOKEN + "/data", fd, (pct, loaded) => {
+        const cur = completedBytes + (loaded || 0);
+        const totalPct = total > 0 ? Math.round((cur / total) * 100) : 0;
+        $("dataBar").style.width = totalPct + "%";
+        $("dataPct").textContent = totalPct + "%";
+        $("dataStat").textContent = (uploadedCount + 1) + " / " + files.length + " · " + f.name + " · " + fmtBytes(cur) + " / " + fmtBytes(total);
+      });
+      completedBytes += f.size;
+      uploadedCount++;
+      reportData(total, completedBytes);
+    } catch (err) {
+      failed++;
+      console.error("data upload failed", f.name, err);
+    }
   }
+
+  $("dataBar").style.width = "100%";
+  $("dataPct").textContent = "100%";
+  $("dataStat").textContent = uploadedCount + " / " + files.length + " dosya · " + fmtBytes(completedBytes) + " / " + fmtBytes(total);
+
+  if (failed > 0) {
+    badge.textContent = "Hata"; badge.className = "status-badge err";
+    throw new Error(failed + " dosya yüklenemedi");
+  }
+  badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
+}
+
+async function reportData(totalBytes, uploadedBytes) {
+  try {
+    await fetch("/api/upload/" + TOKEN + "/data-progress", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ totalBytes, uploadedBytes }),
+    });
+  } catch {}
 }
 
 async function uploadImages() {
