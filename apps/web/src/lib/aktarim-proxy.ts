@@ -41,6 +41,12 @@ function headers(): Record<string, string> {
   }
 }
 
+/** Body içermeyen istekler (GET/DELETE) için — Content-Type olmadan.
+ *  Fastify boş JSON body'li istekleri FST_ERR_CTP_EMPTY_JSON_BODY ile reddediyor. */
+function headersNoBody(): Record<string, string> {
+  return { "X-Service-Key": KEY }
+}
+
 async function asJson<T>(r: Response): Promise<T> {
   const text = await r.text()
   try { return JSON.parse(text) as T } catch {
@@ -49,7 +55,7 @@ async function asJson<T>(r: Response): Promise<T> {
 }
 
 export async function listSessions(): Promise<AktarimSession[]> {
-  const r = await fetch(`${BASE}/admin/sessions`, { headers: headers(), cache: "no-store" })
+  const r = await fetch(`${BASE}/admin/sessions`, { headers: headersNoBody(), cache: "no-store" })
   if (!r.ok) throw new Error(`Ubuntu listSessions: HTTP ${r.status}`)
   return await asJson<AktarimSession[]>(r)
 }
@@ -88,15 +94,16 @@ export async function createSession(input: CreateInput): Promise<AktarimSession>
 }
 
 export async function cancelSession(id: string): Promise<void> {
+  // POST cancel — body içermez, Content-Type vermiyoruz
   const r = await fetch(`${BASE}/admin/sessions/${encodeURIComponent(id)}/cancel`, {
-    method: "POST", headers: headers(),
+    method: "POST", headers: headersNoBody(),
   })
   if (!r.ok) throw new Error(`Ubuntu cancelSession: HTTP ${r.status}`)
 }
 
 export async function deleteSession(id: string): Promise<void> {
   const r = await fetch(`${BASE}/admin/sessions/${encodeURIComponent(id)}`, {
-    method: "DELETE", headers: headers(),
+    method: "DELETE", headers: headersNoBody(),
   })
   if (!r.ok) throw new Error(`Ubuntu deleteSession: HTTP ${r.status}`)
 }
