@@ -244,10 +244,12 @@ fastify.get("/api/info/:token", async (req, reply) => {
     return reply.code(410).send({ ok: false, reason: "expired" })
   }
 
-  // Cancelled, expired, completed → 410 ile durum bilgisini de göster (UI bekleyecek)
-  // ama 'pushing' ve 'push_failed' UI'a görünür şekilde dönsün
-  const visible = ["pending","active","pushing","push_failed","completed"].includes(s.status)
-  if (!visible) {
+  // Completed link kullanım dışı — 410 dön, link erişilmesin
+  if (s.status === "completed") {
+    return reply.code(410).send({ ok: false, reason: "completed" })
+  }
+  // Cancelled, expired → 410
+  if (!["pending","active","pushing","push_failed"].includes(s.status)) {
     return reply.code(410).send({ ok: false, reason: s.status })
   }
 
@@ -823,18 +825,25 @@ function fmtBytes(b) {
 
 // ── Info yükle ────────────────────────
 let pushPollInterval = null;
+let lastInfo         = null;   // En son başarılı info — completed transition'ında kullanılır
 
 async function loadInfo() {
   try {
     const r = await fetch("/api/info/" + TOKEN);
     const d = await r.json();
     if (!r.ok) {
-      const map = { not_found:"Bu aktarım linki bulunamadı.", expired:"Bu aktarımın süresi geçti.", cancelled:"Bu aktarım iptal edilmiş." };
+      const map = {
+        not_found:"Bu aktarım linki bulunamadı.",
+        expired:  "Bu aktarımın süresi geçti.",
+        cancelled:"Bu aktarım iptal edilmiş.",
+        completed:"Bu aktarım daha önce tamamlandı. Link kullanım dışı.",
+      };
       $("error").textContent = map[d.reason] || ("Hata: " + (d.reason || "Bilinmiyor"));
       $("error").classList.remove("hidden");
       $("loading").classList.add("hidden");
       return;
     }
+    lastInfo = d;
     $("firmaName").textContent = d.firmaName;
     if (d.notes) { $("notes").textContent = d.notes; $("notes").classList.remove("hidden"); }
     $("loading").classList.add("hidden");
@@ -852,16 +861,8 @@ function applyStatus(d) {
     showPushBanner(d);
     if (!pushPollInterval) pushPollInterval = setInterval(pollPush, 3000);
   } else if (d.status === "completed") {
-    $("pushBanner").classList.add("hidden");
-    $("doneBanner").classList.add("hidden");
-    $("startBtn").disabled = true;
-    // Fullscreen başarı ekranı
-    $("successFirma").textContent = d.firmaName + " (" + d.firmaId + ")";
-    $("successDataSize").textContent = (d.dataBytesReceived ?? 0) > 0 ? fmtBytes(d.dataBytesReceived) : "—";
-    $("successImgCount").textContent = (d.imageFilesReceived ?? 0) > 0
-      ? (d.imageFilesReceived.toLocaleString("tr") + " dosya")
-      : "—";
-    $("successOverlay").classList.remove("hidden");
+    // Backend 410 dönmeden önce (extreme yarış durumu) buraya da gelebilir
+    showSuccessOverlay(d);
     stopPushPoll();
   } else if (d.status === "push_failed") {
     $("pushBanner").classList.add("hidden");
@@ -900,9 +901,27 @@ async function pollPush() {
   try {
     const r = await fetch("/api/info/" + TOKEN);
     const d = await r.json();
+    if (r.status === 410 && d.reason === "completed" && lastInfo) {
+      // Push tamamlandı, link artık erişilemez → client elinde son veri ile success göster
+      showSuccessOverlay(lastInfo);
+      stopPushPoll();
+      return;
+    }
     if (!r.ok) { stopPushPoll(); return; }
+    lastInfo = d;
     applyStatus(d);
   } catch {}
+}
+
+function showSuccessOverlay(d) {
+  $("pushBanner").classList.add("hidden");
+  $("startBtn").disabled = true;
+  $("successFirma").textContent = d.firmaName + " (" + d.firmaId + ")";
+  $("successDataSize").textContent = (d.dataBytesReceived ?? 0) > 0 ? fmtBytes(d.dataBytesReceived) : "—";
+  $("successImgCount").textContent = (d.imageFilesReceived ?? 0) > 0
+    ? (d.imageFilesReceived.toLocaleString("tr") + " dosya")
+    : "—";
+  $("successOverlay").classList.remove("hidden");
 }
 
 // ── State (yükleme öncesi) ────────────
