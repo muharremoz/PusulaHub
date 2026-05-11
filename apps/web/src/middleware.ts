@@ -28,6 +28,18 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Müşteri yükleme sayfası ve token-bazlı public endpoint'ler:
+  // - /t/{token}                                — HTML sayfa
+  // - /api/aktarim/by-token/{token}/info        — token bilgisi (auth'suz)
+  // - /api/aktarim/by-token/{token}/upload      — chunk receiver
+  // (validate/progress zaten X-Service-Key ile korunuyor.)
+  if (
+    pathname.startsWith("/t/") ||
+    pathname.startsWith("/api/aktarim/by-token/")
+  ) {
+    return NextResponse.next()
+  }
+
 const token   = req.cookies.get(COOKIE_NAME)?.value
   const payload = await verifyEdge(token)
 

@@ -76,8 +76,10 @@ function statusBadge(s: TransferSession["Status"]) {
 }
 
 function buildPublicUrl(token: string): string {
-  // VPN açıkken DNS LAN'a çözer; kapalıyken WAN proxy'sine. İki tarafta da çalışır.
-  return `https://aktarim.pusulanet.net/${token}`
+  // V1: Hub doğrudan sunuyor — /t/{token} müşteri yükleme sayfası.
+  // V2'de aktarim.pusulanet.net DNS eklenince Ubuntu servisine yönlendirilecek.
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://app.pusulanet.net"
+  return `${origin}/t/${token}`
 }
 
 export default function AktarimPage() {
@@ -577,8 +579,8 @@ function NewTransferDialog({
           <div className="flex items-start gap-2 px-3 py-2 rounded-[5px] bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
-              Link <span className="font-mono">aktarim.pusulanet.net/&lt;token&gt;</span> formatında üretilir.
-              VPN üzerinden müşteri direkt LAN'a yükler; VPN kapalıysa WAN proxy üzerinden yine çalışır.
+              Link <span className="font-mono">app.pusulanet.net/t/&lt;token&gt;</span> formatında üretilir.
+              Müşteri tarayıcıdan açıp veri + resim klasörünü yükler.
             </div>
           </div>
         </div>
