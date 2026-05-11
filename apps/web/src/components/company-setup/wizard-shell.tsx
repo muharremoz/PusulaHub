@@ -627,7 +627,7 @@ export function WizardShell() {
                 <StepSummary
                   adServer={adServer} windowsServer={windowsServer} company={selectedCompany}
                   users={users} services={apiServices} selectedServiceIds={selectedServiceIds}
-                  sqlServer={sqlServer} sqlMode={sqlMode} backupFiles={backupFiles}
+                  sqlServer={sqlServer} selectedSqlServerId={selectedSqlServerId} sqlMode={sqlMode} backupFiles={backupFiles}
                   selectedDemoDbIds={selectedDemoDbIds} demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                 />

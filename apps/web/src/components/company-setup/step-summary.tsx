@@ -17,6 +17,9 @@ interface Props {
   services: WizardServiceDto[]
   selectedServiceIds: number[]
   sqlServer: SqlServerItem | null
+  /** SQL sunucusu ID — apiSqlServers henüz yüklenmemişse sqlServer null olur,
+   *  ama selectedSqlServerId set olur. SQL bölümünü göstermek için bu kullanılır. */
+  selectedSqlServerId: string | null
   sqlMode: 0 | 1
   backupFiles: BackupFile[]
   selectedDemoDbIds: number[]
@@ -46,7 +49,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 
 export function StepSummary({
   adServer, windowsServer, company, users, services,
-  selectedServiceIds, sqlServer, sqlMode, backupFiles,
+  selectedServiceIds, sqlServer, selectedSqlServerId, sqlMode, backupFiles,
   selectedDemoDbIds, demoDatabases, addFirmaPrefix,
 }: Props) {
   const firmaId = company?.firkod ?? ""
@@ -56,6 +59,12 @@ export function StepSummary({
 
   const hasPusula = selectedServices.some((s) => s.type === "pusula-program")
   const firmaNameSafe = (company?.firma ?? firmaId).replace(/[\\/:*?"<>|]/g, "_").trim() || firmaId
+
+  // SQL aktif mi? — selectedSqlServerId set ise yeterli (sqlServer object henüz
+  // yüklenmemiş olabilir). Buna bağlı olarak işlemler ve SQL section gösterilir.
+  const hasSqlSelection = selectedSqlServerId !== null
+  const sqlDbCount = sqlMode === 0 ? selectedBackups.length : selectedDemos.length
+  const firstUser = users[0]
 
   const operations = [
     `AD'de Firmalar\\${firmaId} OU oluşturulacak`,
@@ -71,10 +80,16 @@ export function StepSummary({
       `Masaüstü MUSTERILER\\${firmaNameSafe} klasörü açılacak`,
       `Pusula exe kısayolları ve Resimler kısayolu oluşturulacak`,
     ] : []),
-    ...(sqlServer
+    ...(hasSqlSelection && sqlDbCount > 0
       ? sqlMode === 0
-        ? [`${selectedBackups.length} veritabanı restore edilecek`]
-        : [`${selectedDemos.length} demo veritabanı oluşturulacak`]
+        ? [`${sqlDbCount} veritabanı restore edilecek`]
+        : [`${sqlDbCount} demo veritabanı oluşturulacak`]
+      : []),
+    ...(hasSqlSelection && sqlDbCount > 0 && firstUser?.username
+      ? [
+          `SQL login oluşturulacak: ${firmaId}_${firstUser.username}`,
+          `${sqlDbCount} veritabanına kullanıcı yetkileri verilecek (db_owner, db_datareader, db_datawriter)`,
+        ]
       : []),
   ]
 
@@ -120,10 +135,13 @@ export function StepSummary({
       </Section>
 
       {/* SQL */}
-      {sqlServer && (
+      {hasSqlSelection && (
         <Section title="SQL Veritabanı">
-          <Row label="SQL Sunucusu" value={sqlServer.name} mono />
+          <Row label="SQL Sunucusu" value={sqlServer?.name ?? "(yükleniyor…)"} mono />
           <Row label="Mod" value={sqlMode === 0 ? "Yedekten Yükle" : "Demo Veritabanı"} />
+          {firstUser?.username && sqlDbCount > 0 && (
+            <Row label="SQL Login" value={`${firmaId}_${firstUser.username}`} mono />
+          )}
           {sqlMode === 0 && selectedBackups.map((f) => (
             <div key={f.id} className="flex items-center justify-between px-3 py-2">
               <span className="text-[11px] font-mono truncate">{f.fileName}</span>
