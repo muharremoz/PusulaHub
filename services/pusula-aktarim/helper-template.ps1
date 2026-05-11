@@ -65,7 +65,7 @@ $useWinAuth = $true
 $sqlUser = $null; $sqlPass = $null
 
 Write-Info "Windows kimlik doğrulaması ile bağlanmayı deniyorum..."
-$testQuery = "SELECT @@VERSION"
+$testQuery = "SELECT 1 AS ok"
 
 function Invoke-Sql($cs, $query) {
   $conn = New-Object System.Data.SqlClient.SqlConnection $cs
@@ -77,10 +77,18 @@ function Invoke-Sql($cs, $query) {
     $r = $cmd.ExecuteReader()
     $rows = @()
     while ($r.Read()) {
-      $row = @{}
-      for ($i = 0; $i -lt $r.FieldCount; $i++) { $row[$r.GetName($i)] = $r.GetValue($i) }
-      $rows += [pscustomobject]$row
+      $obj = New-Object PSObject
+      for ($i = 0; $i -lt $r.FieldCount; $i++) {
+        $col = $r.GetName($i)
+        if ([string]::IsNullOrWhiteSpace($col)) { $col = "col$i" }
+        # Aynı isim varsa override etmemek için kontrol
+        if (-not ($obj.PSObject.Properties.Name -contains $col)) {
+          $obj | Add-Member -MemberType NoteProperty -Name $col -Value $r.GetValue($i)
+        }
+      }
+      $rows += $obj
     }
+    $r.Close()
     return $rows
   } finally { $conn.Close() }
 }
