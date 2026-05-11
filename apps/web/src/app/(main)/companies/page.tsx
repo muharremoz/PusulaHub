@@ -1156,12 +1156,13 @@ tr:nth-child(even) td{background:#fafafa}
 
     if (tabIIS.length > 0) {
       lines.push("Web Hizmetleri:")
+      const iisHost = (accessInfo.iis?.dns?.trim()) || ""
       tabIIS.forEach((s) => {
         // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
-const portMatch = (s.Binding || "").match(/:(\d+)/)
+        const portMatch = (s.Binding || "").match(/:(\d+)/)
         const port = portMatch?.[1]
-        const ip = s.ServerIP || ""
-        const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "")
+        const host = iisHost || s.ServerIP || ""
+        const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "")
         lines.push(`  ${s.Name}: ${url}`)
       })
       lines.push("")
@@ -3046,10 +3047,11 @@ const portMatch = (s.Binding || "").match(/:(\d+)/)
                     <div className="divide-y divide-border/40">
                       {tabIIS.map((s) => {
                         // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
-const portMatch = (s.Binding || "").match(/:(\d+)/)
+                        const portMatch = (s.Binding || "").match(/:(\d+)/)
                         const port = portMatch?.[1]
-                        const ip = s.ServerIP || ""
-                        const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "—")
+                        // WAN'dan erişim için DNS tercih edilir, yoksa IP'ye düşer
+                        const host = (accessInfo.iis?.dns?.trim()) || s.ServerIP || ""
+                        const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "—")
                         return (
                           <div key={s.Id} className="grid grid-cols-[1fr_auto_24px] px-3 py-2 items-center gap-2">
                             <span className="font-medium truncate">{s.Name}</span>

@@ -29,6 +29,13 @@ export interface AccessInfoResponse {
     rdpPort: number | null
   } | null
 
+  /** IIS sunucusu — WAN'dan erişilebilen DNS için */
+  iis?: {
+    name: string
+    ip:   string
+    dns:  string | null
+  } | null
+
   /** Kullanıcı şifreleri — tam username ("2507.vefa1") → düz şifre.
    *  CompanyUserCredentials tablosundan decrypt edilir. */
   credentials: Record<string, string>
@@ -75,9 +82,26 @@ export async function GET(
       `
       return r[0] ?? null
     }
-    const [adRow, winRow, credentials] = await Promise.all([
+    // IIS sunucusu — firma'nın IIS sitelerinden ilkinin Server adını bul
+    const fetchIisServer = async (): Promise<ServerRow | null> => {
+      const r = await query<{ Server: string | null }[]>`
+        SELECT TOP 1 i.Server
+        FROM IISSites i
+        WHERE i.Firma = ${firkod} AND i.Server IS NOT NULL
+        ORDER BY i.Name
+      `
+      const name = r[0]?.Server
+      if (!name) return null
+      const s = await query<ServerRow[]>`
+        SELECT TOP 1 Id, Name, IP, DNS, Domain, RdpPort FROM Servers WHERE Name = ${name}
+      `
+      return s[0] ?? null
+    }
+
+    const [adRow, winRow, iisRow, credentials] = await Promise.all([
       fetchServer(c.AdServerId),
       fetchServer(c.WindowsServerId),
+      fetchIisServer(),
       getCompanyCredentials(firkod),
     ])
 
@@ -85,6 +109,7 @@ export async function GET(
       firmaId:   c.CompanyId,
       ad:       adRow  ? { name: adRow.Name,  ip: adRow.IP,  domain: adRow.Domain ?? null } : null,
       windows:  winRow ? { name: winRow.Name, ip: winRow.IP, dns: winRow.DNS ?? null, rdpPort: winRow.RdpPort ?? null } : null,
+      iis:      iisRow ? { name: iisRow.Name, ip: iisRow.IP, dns: iisRow.DNS ?? null } : null,
       credentials,
     }
     return NextResponse.json(response)
