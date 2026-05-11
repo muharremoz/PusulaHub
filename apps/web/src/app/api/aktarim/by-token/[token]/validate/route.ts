@@ -1,5 +1,5 @@
 /**
- * GET /api/aktarim/[token]/validate
+ * GET /api/aktarim/by-token/[token]/validate
  *
  * Ubuntu upload servisi tarafından çağrılır — token geçerli mi?
  * Auth: X-Service-Key header'ı + .env'deki TRANSFER_SERVICE_KEY ile eşleşmeli.

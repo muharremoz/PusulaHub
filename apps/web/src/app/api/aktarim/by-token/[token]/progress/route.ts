@@ -1,5 +1,5 @@
 /**
- * PATCH /api/aktarim/[token]/progress
+ * PATCH /api/aktarim/by-token/[token]/progress
  *
  * Ubuntu upload servisi periyodik olarak çağırır — byte sayaçlarını günceller.
  * Auth: X-Service-Key header.
