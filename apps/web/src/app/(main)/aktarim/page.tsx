@@ -476,7 +476,12 @@ function NewTransferDialog({
 
         <div className="space-y-3 py-2">
           <div className="space-y-1">
-            <Label className="text-[11px]">Firma</Label>
+            <Label className="text-[11px] flex items-center gap-2">
+              <span>Firma</span>
+              <span className="text-[10px] text-muted-foreground font-normal tabular-nums">
+                ({firmas.length.toLocaleString("tr")} toplam)
+              </span>
+            </Label>
             <Popover open={firmaPopOpen} onOpenChange={setFirmaPopOpen}>
               <PopoverTrigger asChild>
                 <button className="w-full h-8 px-2.5 rounded-[5px] border border-border text-[11px] text-left flex items-center justify-between hover:bg-muted/40 transition-colors">
@@ -524,50 +529,36 @@ function NewTransferDialog({
             </Popover>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-[11px]">SQL Sunucusu</Label>
-              <Select value={sqlServerId} onValueChange={setSqlServerId}>
-                <SelectTrigger className="h-8 text-[11px]">
-                  <SelectValue placeholder="Seçilmedi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sqlServers.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-[11px]">
-                      {s.name} ({s.ip})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-[11px]">Depo Sunucusu</Label>
-              <Select value={depoServerId} onValueChange={setDepoServerId}>
-                <SelectTrigger className="h-8 text-[11px]">
-                  <SelectValue placeholder="Seçilmedi" />
-                </SelectTrigger>
-                <SelectContent>
-                  {depoServers.map((s) => (
-                    <SelectItem key={s.id} value={s.id} className="text-[11px]">
-                      {s.name} ({s.ip})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1">
+            <Label className="text-[11px]">SQL Sunucusu</Label>
+            <Select value={sqlServerId} onValueChange={setSqlServerId}>
+              <SelectTrigger className="h-8 text-[11px] w-full">
+                <SelectValue placeholder="Seçilmedi" />
+              </SelectTrigger>
+              <SelectContent>
+                {sqlServers.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                    {s.name} ({s.ip})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px]">Geçerlilik (gün)</Label>
-            <Input
-              type="number"
-              min={1}
-              max={60}
-              value={expiresInDays}
-              onChange={(e) => setExpiresInDays(parseInt(e.target.value, 10) || 7)}
-              className="h-8 text-[11px]"
-            />
+            <Label className="text-[11px]">Depo Sunucusu</Label>
+            <Select value={depoServerId} onValueChange={setDepoServerId}>
+              <SelectTrigger className="h-8 text-[11px] w-full">
+                <SelectValue placeholder="Seçilmedi" />
+              </SelectTrigger>
+              <SelectContent>
+                {depoServers.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                    {s.name} ({s.ip})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1">
@@ -583,8 +574,8 @@ function NewTransferDialog({
           <div className="flex items-start gap-2 px-3 py-2 rounded-[5px] bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
-              Link <span className="font-mono">app.pusulanet.net/t/&lt;token&gt;</span> formatında üretilir.
-              Müşteri tarayıcıdan açıp veri + resim klasörünü yükler.
+              Link <span className="font-mono">aktarim.pusulanet.net/&lt;token&gt;</span> formatında üretilir.
+              Müşteri Pusula VPN ile bu adrese girip veri + resim klasörünü yükler.
             </div>
           </div>
         </div>
