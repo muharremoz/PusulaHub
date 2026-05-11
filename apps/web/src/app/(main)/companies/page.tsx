@@ -1157,7 +1157,8 @@ tr:nth-child(even) td{background:#fafafa}
     if (tabIIS.length > 0) {
       lines.push("Web Hizmetleri:")
       tabIIS.forEach((s) => {
-        const portMatch = (s.Binding || "").match(/:(\d+):/)
+        // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
+const portMatch = (s.Binding || "").match(/:(\d+)/)
         const port = portMatch?.[1]
         const ip = s.ServerIP || ""
         const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "")
@@ -3044,7 +3045,8 @@ tr:nth-child(even) td{background:#fafafa}
                     </div>
                     <div className="divide-y divide-border/40">
                       {tabIIS.map((s) => {
-                        const portMatch = (s.Binding || "").match(/:(\d+):/)
+                        // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
+const portMatch = (s.Binding || "").match(/:(\d+)/)
                         const port = portMatch?.[1]
                         const ip = s.ServerIP || ""
                         const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "—")
