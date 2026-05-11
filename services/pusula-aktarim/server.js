@@ -214,12 +214,21 @@ fastify.get("/api/info/:token", async (req, reply) => {
   }
 })
 
+const ALLOWED_DATA_EXT  = /\.(bak|rar|zip)$/i
+const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i
+
 fastify.post("/api/upload/:token/data", async (req, reply) => {
   const v = getActiveSession(req.params.token)
   if (v.error) return reply.code(410).send({ error: v.error })
 
   const data = await req.file()
   if (!data) return reply.code(400).send({ error: "Dosya yok" })
+
+  if (!ALLOWED_DATA_EXT.test(data.filename || "")) {
+    // İstemci validation atlatılmış — akışı tüket ve reddet
+    await data.toBuffer().catch(() => {})
+    return reply.code(400).send({ error: "Geçersiz dosya tipi. Sadece .bak/.rar/.zip kabul edilir." })
+  }
 
   const filename = sanitizeFilename(data.filename || "data.bak")
   const targetDir = join(STAGING_ROOT, req.params.token, "data")
@@ -250,6 +259,11 @@ fastify.post("/api/upload/:token/image", async (req, reply) => {
   const relPath = data.fields.relPath?.value ?? data.filename
   const safeRel = sanitizeRelPath(String(relPath))
   if (!safeRel) return reply.code(400).send({ error: "Geçersiz dosya yolu" })
+
+  if (!ALLOWED_IMAGE_EXT.test(safeRel)) {
+    await data.toBuffer().catch(() => {})
+    return reply.code(400).send({ error: "Geçersiz dosya tipi. Sadece resim dosyaları kabul edilir." })
+  }
 
   const targetPath = join(STAGING_ROOT, req.params.token, "images", safeRel)
   await mkdir(dirname(targetPath), { recursive: true })
@@ -459,9 +473,27 @@ function renderHtml(token) {
   .footer-code { text-align:center; padding:18px 0 0 0; color:var(--muted); font-size:10px; font-family:ui-monospace,SFMono-Regular,monospace }
 
   .hidden { display:none !important }
+
+  /* ── Toast ────────────────────────────── */
+  .toast-wrap {
+    position:fixed; top:80px; left:50%; transform:translateX(-50%);
+    display:flex; flex-direction:column; gap:8px; z-index:100;
+    pointer-events:none;
+  }
+  .toast {
+    pointer-events:auto;
+    padding:10px 16px; border-radius:6px; font-size:12px; font-weight:500;
+    background:#1f2937; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15);
+    animation: toastIn .2s ease-out;
+  }
+  .toast.err { background:#b91c1c }
+  .toast.info { background:#1e40af }
+  @keyframes toastIn { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:translateY(0) } }
 </style>
 </head>
 <body>
+
+<div id="toastWrap" class="toast-wrap"></div>
 
 <header class="topbar">
   <div class="topbar-inner">
@@ -529,10 +561,10 @@ function renderHtml(token) {
         </div>
 
         <label class="drop" id="imgDrop">
-          <input type="file" id="imgInput" webkitdirectory multiple>
+          <input type="file" id="imgInput" webkitdirectory multiple accept="image/*">
           <span class="drop-icon">${ICON_UPLOAD}</span>
           <strong>Klasörü buraya sürükleyin</strong>
-          <span>veya tıklayıp seçin</span>
+          <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
         </label>
 
         <div id="imgSummary" class="summary hidden"></div>
@@ -572,6 +604,8 @@ function renderHtml(token) {
 <script>
 const TOKEN = ${JSON.stringify(token)};
 const LARGE_THRESHOLD = 500 * 1024;   // 500 KB
+const DATA_EXT  = /\\.(bak|rar|zip)$/i;
+const IMAGE_EXT = /\\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i;
 const $ = (id) => document.getElementById(id);
 
 function fmtBytes(b) {
@@ -630,6 +664,11 @@ $("dataInput").addEventListener("change", (e) => {
   if (uploading) return;
   const f = e.target.files[0];
   if (!f) return;
+  if (!DATA_EXT.test(f.name)) {
+    showToast("Sadece .bak, .rar veya .zip dosyaları kabul edilir.");
+    $("dataInput").value = "";
+    return;
+  }
   selectedDataFile = f;
   renderDataSummary();
   refreshStart();
@@ -661,14 +700,25 @@ $("dataClear").addEventListener("click", () => {
 });
 
 // ── Resim klasörü seçimi ──────────────
+let imgSkippedCount = 0;   // resim olmayan, atlanan dosya sayısı
 setupDrop($("imgDrop"), $("imgInput"));
 $("imgInput").addEventListener("change", (e) => {
   if (uploading) return;
-  const files = Array.from(e.target.files);
-  selectedImages = files;
-  imgTotalBytes = files.reduce((s,f) => s+f.size, 0);
-  imgLargeCount = files.filter((f) => f.size > LARGE_THRESHOLD).length;
-  imgLargeBytes = files.filter((f) => f.size > LARGE_THRESHOLD).reduce((s,f) => s+f.size, 0);
+  const all = Array.from(e.target.files);
+  const images = all.filter((f) => IMAGE_EXT.test(f.name));
+  imgSkippedCount = all.length - images.length;
+  selectedImages = images;
+  imgTotalBytes = images.reduce((s,f) => s+f.size, 0);
+  imgLargeCount = images.filter((f) => f.size > LARGE_THRESHOLD).length;
+  imgLargeBytes = images.filter((f) => f.size > LARGE_THRESHOLD).reduce((s,f) => s+f.size, 0);
+  if (images.length === 0 && all.length > 0) {
+    showToast("Seçilen klasörde resim dosyası bulunamadı.");
+    $("imgInput").value = "";
+    return;
+  }
+  if (imgSkippedCount > 0) {
+    showToast(imgSkippedCount.toLocaleString("tr") + " resim olmayan dosya atlandı.", "info");
+  }
   renderImgSummary();
   refreshStart();
 });
@@ -684,8 +734,11 @@ function renderImgSummary() {
     return;
   }
   let html = '' +
-    '<div class="summary-row"><span class="l">Dosya sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
+    '<div class="summary-row"><span class="l">Resim sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
     '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>';
+  if (imgSkippedCount > 0) {
+    html += '<div class="summary-row"><span class="l" style="color:#a16207">Atlanan (resim değil)</span><span class="v" style="color:#a16207">' + imgSkippedCount.toLocaleString("tr") + ' dosya</span></div>';
+  }
   if (imgLargeCount > 0) {
     html += '<div class="summary-row danger"><span class="l">500 KB üzeri</span><span class="v">' + imgLargeCount.toLocaleString("tr") + ' dosya · ' + fmtBytes(imgLargeBytes) + '</span></div>';
   }
@@ -813,6 +866,14 @@ function xhrUpload(url, formData, onProgress) {
     xhr.open("POST", url);
     xhr.send(formData);
   });
+}
+
+function showToast(msg, type) {
+  const t = document.createElement("div");
+  t.className = "toast" + (type === "info" ? " info" : " err");
+  t.textContent = msg;
+  $("toastWrap").appendChild(t);
+  setTimeout(() => t.remove(), 4000);
 }
 
 function escapeHtml(s) {
