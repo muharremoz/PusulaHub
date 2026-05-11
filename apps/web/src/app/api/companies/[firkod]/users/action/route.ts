@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { execute, query } from "@/lib/db"
 import { execOnAgent } from "@/lib/agent-poller"
+import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 
 /**
  * POST /api/companies/[firkod]/users/action
@@ -87,6 +88,21 @@ export async function POST(
         stdout: res.stdout, stderr: res.stderr, exitCode: res.exitCode,
       }, { status: 500 })
     }
+
+    // Action başarılı — credential tablosunu güncelle
+    if (body.action === "reset-password" && body.password) {
+      try {
+        await saveCompanyUserPassword(firkod, body.username, body.password)
+      } catch { /* sessiz */ }
+    } else if (body.action === "delete") {
+      try {
+        await execute`
+          DELETE FROM CompanyUserCredentials
+          WHERE CompanyId = ${firkod} AND Username = ${body.username}
+        `
+      } catch { /* sessiz */ }
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })

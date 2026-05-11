@@ -1118,6 +1118,13 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
+  // Username'in firma prefix'inden sonraki kısa kısmını döner.
+  // "2507.vefa1" → "vefa1"  ·  "vefa1" → "vefa1"
+  function shortUsername(firkod: string, fullUsername: string): string {
+    const prefix = `${firkod}.`
+    return fullUsername.startsWith(prefix) ? fullUsername.slice(prefix.length) : fullUsername
+  }
+
   // Modal'daki bilgileri tek metin halinde derle — kopyalanabilir özet
   function buildAccessText(): string {
     if (!accessInfo || !selectedFirma) return ""
@@ -1133,11 +1140,14 @@ tr:nth-child(even) td{background:#fafafa}
     if (tabUsers.length > 0) {
       lines.push("Kullanıcılar:")
       tabUsers.forEach((u) => {
-        const vpnUser = `${firkod}.${u.username}`
+        // AD'den gelen username zaten "2507.vefa1" formatında
+        const vpnUser = u.username
         const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
-        const apiUser = `${firkod}_${u.username}`
+        const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
+        const pw = accessInfo.credentials?.[u.username] ?? ""
         lines.push(`  ${u.displayName || u.username}`)
         lines.push(`    VPN: ${vpnUser}`)
+        if (pw) lines.push(`    Şifre: ${pw}`)
         if (rdpTarget) lines.push(`    RDP: ${rdpTarget}  (${fullUser})`)
         if (tabIIS.length > 0) lines.push(`    API: ${apiUser}`)
         lines.push("")
@@ -1167,7 +1177,12 @@ tr:nth-child(even) td{background:#fafafa}
       const sqlIp = tabSQL[0]?.ServerIP || ""
       lines.push("SQL Veritabanı:")
       if (sqlIp) lines.push(`  Sunucu: ${sqlIp}`)
-      if (tabUsers[0]) lines.push(`  Login: ${firkod}_${tabUsers[0].username}`)
+      if (tabUsers[0]) {
+        const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
+        const sqlPw    = accessInfo.credentials?.[tabUsers[0].username] ?? ""
+        lines.push(`  Login: ${sqlLogin}`)
+        if (sqlPw) lines.push(`  Şifre: ${sqlPw}`)
+      }
       lines.push(`  Veritabanları (${tabSQL.length}):`)
       tabSQL.forEach((d) => lines.push(`    • ${d.Name}`))
     }
@@ -2366,8 +2381,6 @@ tr:nth-child(even) td{background:#fafafa}
                       `Kullanıcı Adı: ${fullUser}`,
                       `Şifre: ${newUserPassword}`,
                       "",
-                      "Bağlantı Rehberi: https://www.youtube.com/watch?v=sclrNkCJ734",
-                      "",
                       "İyi çalışmalar.",
                     ].join("\n")
                     return (
@@ -2953,6 +2966,8 @@ tr:nth-child(even) td{background:#fafafa}
             const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
             const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
             const sqlIp = tabSQL[0]?.ServerIP || ""
+            const credentials = accessInfo.credentials ?? {}
+            const hasAnyPassword = Object.keys(credentials).length > 0
 
             return (
               <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3 text-[11px]">
@@ -2964,26 +2979,20 @@ tr:nth-child(even) td{background:#fafafa}
                   </div>
                   <div className="divide-y divide-border/40">
                     {accessInfo.ad && (
-                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
-                        <span className="text-muted-foreground">AD</span>
-                        <span className="font-mono">
-                          {accessInfo.ad.name} ({accessInfo.ad.ip})
-                          {accessInfo.ad.domain && <span className="text-muted-foreground"> · {accessInfo.ad.domain}</span>}
-                        </span>
-                      </div>
+                      <CopyableRow
+                        label="AD"
+                        value={`${accessInfo.ad.name} (${accessInfo.ad.ip})${accessInfo.ad.domain ? ` · ${accessInfo.ad.domain}` : ""}`}
+                        copyValue={accessInfo.ad.ip}
+                      />
                     )}
                     {accessInfo.windows && (
-                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
-                        <span className="text-muted-foreground">RDP</span>
-                        <span className="font-mono">{rdpTarget || `${accessInfo.windows.name} (${accessInfo.windows.ip})`}</span>
-                      </div>
+                      <CopyableRow
+                        label="RDP"
+                        value={rdpTarget || `${accessInfo.windows.name} (${accessInfo.windows.ip})`}
+                        copyValue={rdpTarget || accessInfo.windows.ip}
+                      />
                     )}
-                    {sqlIp && (
-                      <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
-                        <span className="text-muted-foreground">SQL</span>
-                        <span className="font-mono">{sqlIp}</span>
-                      </div>
-                    )}
+                    {sqlIp && <CopyableRow label="SQL" value={sqlIp} copyValue={sqlIp} />}
                   </div>
                 </div>
 
@@ -2995,31 +3004,31 @@ tr:nth-child(even) td{background:#fafafa}
                     </div>
                     <div className="divide-y divide-border/40">
                       {tabUsers.map((u) => {
-                        const vpnUser = `${firkod}.${u.username}`
+                        const vpnUser = u.username  // AD'den zaten "2507.vefa1" formatında
                         const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
-                        const apiUser = `${firkod}_${u.username}`
+                        const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
+                        const pw = credentials[u.username] ?? ""
                         return (
-                          <div key={u.username} className="px-3 py-2 space-y-1">
+                          <div key={u.username} className="px-3 py-2 space-y-1.5">
                             <div className="flex items-center gap-2">
                               <span className="font-medium">{u.displayName || u.username}</span>
                               {!u.enabled && <span className="text-[9px] px-1.5 py-0.5 rounded-[3px] bg-red-50 text-red-700 border border-red-200">Pasif</span>}
                             </div>
-                            <div className="grid grid-cols-[60px_1fr] gap-x-3 text-[11px]">
-                              <span className="text-muted-foreground">VPN</span>
-                              <span className="font-mono">{vpnUser}</span>
-                              {accessInfo.windows && (
-                                <>
-                                  <span className="text-muted-foreground">RDP</span>
-                                  <span className="font-mono">{fullUser}</span>
-                                </>
-                              )}
-                              {tabIIS.length > 0 && (
-                                <>
-                                  <span className="text-muted-foreground">API</span>
-                                  <span className="font-mono">{apiUser}</span>
-                                </>
-                              )}
-                            </div>
+                            <CopyableRow label="VPN" value={vpnUser} copyValue={vpnUser} compact />
+                            {pw ? (
+                              <CopyablePasswordRow label="Şifre" value={pw} />
+                            ) : (
+                              <div className="grid grid-cols-[60px_1fr] gap-x-3">
+                                <span className="text-muted-foreground">Şifre</span>
+                                <span className="text-muted-foreground italic">(saklanmamış — wizard öncesi user)</span>
+                              </div>
+                            )}
+                            {accessInfo.windows && (
+                              <CopyableRow label="RDP" value={fullUser} copyValue={fullUser} compact />
+                            )}
+                            {tabIIS.length > 0 && (
+                              <CopyableRow label="API" value={apiUser} copyValue={apiUser} compact />
+                            )}
                           </div>
                         )
                       })}
@@ -3040,7 +3049,7 @@ tr:nth-child(even) td{background:#fafafa}
                         const ip = s.ServerIP || ""
                         const url = ip && port ? `http://${ip}:${port}` : (port ? `Port: ${port}` : "—")
                         return (
-                          <div key={s.Id} className="grid grid-cols-[1fr_auto] px-3 py-2 items-center gap-3">
+                          <div key={s.Id} className="grid grid-cols-[1fr_auto_24px] px-3 py-2 items-center gap-2">
                             <span className="font-medium truncate">{s.Name}</span>
                             <a
                               href={url.startsWith("http") ? url : undefined}
@@ -3050,6 +3059,7 @@ tr:nth-child(even) td{background:#fafafa}
                             >
                               {url}
                             </a>
+                            <CopyIconButton value={url} />
                           </div>
                         )
                       })}
@@ -3064,25 +3074,28 @@ tr:nth-child(even) td{background:#fafafa}
                       Veritabanları ({tabSQL.length})
                     </div>
                     <div className="divide-y divide-border/40">
-                      {tabUsers[0] && (
-                        <div className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
-                          <span className="text-muted-foreground">SQL Login</span>
-                          <span className="font-mono">{firkod}_{tabUsers[0].username}</span>
-                        </div>
-                      )}
+                      {tabUsers[0] && (() => {
+                        const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
+                        const sqlPw    = credentials[tabUsers[0].username] ?? ""
+                        return (
+                          <>
+                            <CopyableRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
+                            {sqlPw && <CopyablePasswordRow label="Şifre" value={sqlPw} />}
+                          </>
+                        )
+                      })()}
                       {tabSQL.map((d) => (
-                        <div key={d.Id} className="grid grid-cols-[100px_1fr] px-3 py-2 items-center">
-                          <span className="text-muted-foreground">DB</span>
-                          <span className="font-mono">{d.Name}</span>
-                        </div>
+                        <CopyableRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
                       ))}
                     </div>
                   </div>
                 )}
 
-                <div className="text-[10px] text-muted-foreground italic px-1">
-                  Şifreler güvenlik gereği saklanmaz — kurulum sırasında kopyaladığınız mesajda mevcuttur.
-                </div>
+                {!hasAnyPassword && (
+                  <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-[5px] px-3 py-2">
+                    Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının şifresini sıfırlama sonrası burada görünür.
+                  </div>
+                )}
               </div>
             )
           })()}
@@ -3111,3 +3124,62 @@ tr:nth-child(even) td{background:#fafafa}
     </PageContainer>
   );
 }
+
+/* ─── Erişim Bilgileri modal'ı için küçük helper component'ler ──────────── */
+
+function CopyIconButton({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={async (e) => {
+        e.stopPropagation()
+        if (!value) return
+        const ok = await copyToClipboard(value)
+        if (ok) {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        }
+      }}
+      disabled={!value}
+      className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+      title="Kopyala"
+    >
+      {copied
+        ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600" />
+        : <Copy className="h-3.5 w-3.5" />}
+    </button>
+  )
+}
+
+function CopyableRow({ label, value, copyValue, compact }: { label: string; value: string; copyValue: string; compact?: boolean }) {
+  return (
+    <div className={`grid ${compact ? "grid-cols-[60px_1fr_24px]" : "grid-cols-[100px_1fr_24px]"} px-3 py-1.5 items-center gap-2`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono truncate">{value}</span>
+      <CopyIconButton value={copyValue} />
+    </div>
+  )
+}
+
+function CopyablePasswordRow({ label, value }: { label: string; value: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div className="grid grid-cols-[60px_1fr_24px_24px] px-3 py-1.5 items-center gap-2">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-mono truncate select-all">
+        {show ? value : "•".repeat(Math.min(value.length, 12))}
+      </span>
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+        title={show ? "Gizle" : "Göster"}
+      >
+        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </button>
+      <CopyIconButton value={value} />
+    </div>
+  )
+}
+

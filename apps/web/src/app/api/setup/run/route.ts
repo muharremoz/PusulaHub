@@ -5,6 +5,7 @@ import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer } from "@/lib/sql-restore"
 import { ensureSqlLogin, ensureDbUserMapping } from "@/lib/sql-firma-login"
+import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import {
@@ -497,6 +498,20 @@ export async function POST(req: NextRequest) {
             buildAddGroupMember(payload.firmaId, fullUsername),
           )
           if (!memberOk) { controller.close(); return }
+
+          // Şifreyi encrypted olarak sakla — firma detayındaki "Erişim
+          // Bilgileri" modal'ında okunabilsin. Hata kurulumu bozmasın.
+          try {
+            await saveCompanyUserPassword(payload.firmaId, fullUsername, u.password)
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            send("step", {
+              stepId: `cred_save_${u.username}`,
+              label:  `Şifre saklama atlandı: ${fullUsername}`,
+              status: "error",
+              error:  msg,
+            })
+          }
 
           createdCount++
         }

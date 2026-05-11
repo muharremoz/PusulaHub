@@ -9,6 +9,7 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
 import { requirePermission } from "@/lib/require-permission"
+import { getCompanyCredentials } from "@/lib/firma-credentials"
 
 export interface AccessInfoResponse {
   firmaId:   string
@@ -27,6 +28,10 @@ export interface AccessInfoResponse {
     dns:     string | null
     rdpPort: number | null
   } | null
+
+  /** Kullanıcı şifreleri — tam username ("2507.vefa1") → düz şifre.
+   *  CompanyUserCredentials tablosundan decrypt edilir. */
+  credentials: Record<string, string>
 }
 
 interface CompanyRow {
@@ -70,15 +75,17 @@ export async function GET(
       `
       return r[0] ?? null
     }
-    const [adRow, winRow] = await Promise.all([
+    const [adRow, winRow, credentials] = await Promise.all([
       fetchServer(c.AdServerId),
       fetchServer(c.WindowsServerId),
+      getCompanyCredentials(firkod),
     ])
 
     const response: AccessInfoResponse = {
       firmaId:   c.CompanyId,
       ad:       adRow  ? { name: adRow.Name,  ip: adRow.IP,  domain: adRow.Domain ?? null } : null,
       windows:  winRow ? { name: winRow.Name, ip: winRow.IP, dns: winRow.DNS ?? null, rdpPort: winRow.RdpPort ?? null } : null,
+      credentials,
     }
     return NextResponse.json(response)
   } catch (err) {
