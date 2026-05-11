@@ -306,11 +306,12 @@ function sanitizeRelPath(s) {
   return normalize(cleaned)
 }
 
-const ICON_DATABASE = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>`
-const ICON_FOLDER   = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/></svg>`
-const ICON_FOLDER_OPEN = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 14L2.96 17.04A2 2 0 0 0 4.39 20H18a2 2 0 0 0 2-1.7l1.7-7A1 1 0 0 0 20.7 10H7.5a2 2 0 0 0-1.4.6L4 12.7"/><path d="M2 10V5a2 2 0 0 1 2-2h3.93a2 2 0 0 1 1.66.9l.82 1.2a2 2 0 0 0 1.66.9H18a2 2 0 0 1 2 2v2"/></svg>`
-const ICON_FILE     = `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`
+const ICON_DATABASE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>`
+const ICON_FOLDER   = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/></svg>`
+const ICON_UPLOAD   = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>`
 const ICON_CHECK    = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+const ICON_X        = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+const ICON_WARN     = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
 
 function renderHtml(token) {
   return `<!doctype html>
@@ -325,7 +326,7 @@ function renderHtml(token) {
     --pusula: #1d64ff;
     --pusula-soft: #eff5ff;
     --bg: #f4f2f0;
-    --card: #ffffff;
+    --card: #fff;
     --border: #e4e4e7;
     --text: #18181b;
     --muted: #71717a;
@@ -336,137 +337,232 @@ function renderHtml(token) {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     background: var(--bg); color: var(--text);
   }
-  .page { max-width: 720px; margin: 0 auto; padding: 32px 16px 48px }
-  .brand { display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:24px }
-  .brand img { height:32px; width:auto }
-  .brand-text { font-size:13px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; font-weight:500 }
+
+  /* ── Header ───────────────────────────── */
+  header.topbar {
+    background:#fff; border-bottom:1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    position:sticky; top:0; z-index:10;
+  }
+  .topbar-inner {
+    max-width:1080px; margin:0 auto; padding:14px 24px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .topbar-brand { display:flex; align-items:center; gap:10px }
+  .topbar-brand img { height:28px; width:auto }
+  .topbar-brand .sep { width:1px; height:20px; background:var(--border) }
+  .topbar-brand .label { font-size:12px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; font-weight:500 }
+  .topbar-firma { text-align:right }
+  .topbar-firma .l { font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase }
+  .topbar-firma .v { font-size:14px; font-weight:600; color:var(--text); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+  .page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 48px }
+
+  /* ── Cards ────────────────────────────── */
   .card {
     background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: var(--shadow); padding: 24px; margin-bottom: 14px;
+    box-shadow: var(--shadow); padding: 24px;
   }
+  .intro { margin-bottom:18px }
+  .intro p { margin:0; color:var(--muted); font-size:13px; line-height:1.5 }
+  .intro .note { margin-top:12px; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:5px; color:#78350f; font-size:12px }
+
+  /* ── 2 sütun grid ─────────────────────── */
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px }
+  @media (max-width:880px) { .grid { grid-template-columns:1fr } }
+
   .card-hdr { display:flex; align-items:center; gap:12px; margin-bottom: 16px }
   .card-hdr .icon {
-    flex: 0 0 36px; width:36px; height:36px; border-radius:8px;
+    flex: 0 0 40px; width:40px; height:40px; border-radius:8px;
     background: var(--pusula-soft); color: var(--pusula);
     display:flex; align-items:center; justify-content:center;
   }
-  .card-hdr h2 { margin:0; font-size:14px; font-weight:600; color:var(--text) }
+  .card-hdr h2 { margin:0; font-size:15px; font-weight:600; color:var(--text) }
   .card-hdr .meta { font-size:11px; color:var(--muted); margin-top:2px }
 
-  h1 { margin: 0 0 4px 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em }
-  .sub { color: var(--muted); font-size: 12px; line-height:1.5 }
-  .note { margin-top:12px; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:5px; color:#78350f; font-size:12px }
-
+  /* ── Drop zone ────────────────────────── */
   .drop {
     display:block; width:100%;
     border: 2px dashed #d4d4d8; border-radius: 6px;
-    padding: 32px 16px; text-align: center; background: #fafafa;
+    padding: 28px 16px; text-align: center; background: #fafafa;
     cursor: pointer; transition: all .15s; color: var(--muted);
-    font-size: 13px;
+    font-size: 12px;
   }
   .drop:hover, .drop.over { border-color: var(--pusula); background: var(--pusula-soft); color: var(--pusula) }
   .drop input { display: none }
-  .drop-icon { display:block; margin:0 auto 8px auto; opacity:.6 }
+  .drop-icon { display:block; margin:0 auto 8px auto; opacity:.55 }
   .drop strong { display:block; color:var(--text); font-weight:600; margin-bottom:4px; font-size:13px }
   .drop:hover strong, .drop.over strong { color: var(--pusula) }
 
-  .files { margin-top:14px; display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto; font-size:11px }
-  .file { display:grid; grid-template-columns:1fr 80px 60px; gap:8px; align-items:center; padding:8px 10px; background:#f9fafb; border:1px solid #f3f4f6; border-radius:5px; font-family:ui-monospace,SFMono-Regular,monospace }
-  .file .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .file .size { color:var(--muted); text-align:right; tabular-nums }
-  .file .pct  { text-align:right; tabular-nums; color:var(--muted) }
-  .file.ok    { background:#ecfdf5; border-color:#a7f3d0 }
-  .file.ok    .pct { color:#059669; font-weight:600 }
-  .file.err   { background:#fef2f2; border-color:#fecaca; color:#b91c1c }
+  /* ── Özet ─────────────────────────────── */
+  .summary { margin-top:14px; border:1px solid var(--border); border-radius:6px; overflow:hidden }
+  .summary-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 12px; align-items:center; font-size:12px }
+  .summary-row + .summary-row { border-top:1px solid var(--border) }
+  .summary-row .l { color:var(--muted) }
+  .summary-row .v { font-weight:600; font-family:ui-monospace,SFMono-Regular,monospace; tabular-nums:true }
+  .summary-row.danger { background:#fef2f2 }
+  .summary-row.danger .l { color:#991b1b }
+  .summary-row.danger .v { color:#991b1b }
 
-  .bar { height:6px; background:#e4e4e7; border-radius:3px; overflow:hidden; margin-top:14px }
+  .clear-btn {
+    margin-top:10px; width:100%; padding:6px; font-size:11px; color:var(--muted);
+    background:transparent; border:1px solid var(--border); border-radius:5px; cursor:pointer;
+  }
+  .clear-btn:hover { background:#f4f4f5; color:var(--text) }
+
+  /* ── Sıkıştırma uyarısı ───────────────── */
+  .compress-tip {
+    margin-top:12px; padding:10px 12px; border-radius:5px;
+    background:#fff7ed; border:1px solid #fed7aa; color:#9a3412;
+    font-size:11px; display:flex; gap:8px; align-items:flex-start;
+  }
+  .compress-tip strong { display:block; color:#7c2d12; margin-bottom:2px; font-size:12px }
+  .compress-tip a { color:#7c2d12; text-decoration:underline }
+
+  /* ── Progress (yükleme sırasında) ─────── */
+  .progress { margin-top:14px }
+  .bar { height:6px; background:#e4e4e7; border-radius:3px; overflow:hidden }
   .bar > div { height:100%; background: var(--pusula); transition:width .25s; border-radius:3px }
-  .stat { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:8px }
+  .stat { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:6px }
   .stat .pct { font-weight:600; color:var(--text) }
 
-  .actions { display:flex; justify-content:flex-end; margin-top:8px }
-  .btn { padding:10px 20px; border-radius:5px; border:0; background: var(--pusula); color:#fff; font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s }
+  /* ── Status durum rozeti ──────────────── */
+  .status-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    font-size:10px; font-weight:500; padding:3px 8px; border-radius:99px;
+    background:#f4f4f5; color:var(--muted);
+  }
+  .status-badge.uploading { background:var(--pusula-soft); color:var(--pusula) }
+  .status-badge.done      { background:#ecfdf5; color:#059669 }
+  .status-badge.err       { background:#fef2f2; color:#b91c1c }
+
+  /* ── Footer / Aksiyon ─────────────────── */
+  .actions { margin-top:24px; display:flex; justify-content:flex-end; gap:10px }
+  .btn { padding:10px 24px; border-radius:5px; border:0; background: var(--pusula); color:#fff; font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s; display:inline-flex; align-items:center; gap:6px }
   .btn:hover { opacity:.9 }
-  .btn:disabled { opacity:.5; cursor:not-allowed }
+  .btn:disabled { opacity:.4; cursor:not-allowed }
+  .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border) }
+  .btn-ghost:hover { background:#f4f4f5; opacity:1 }
 
   .alert { padding: 16px; border-radius:8px; border:1px solid; font-size:13px }
   .alert-err { background:#fef2f2; border-color:#fecaca; color:#991b1b }
-  .alert-ok  { background:#ecfdf5; border-color:#a7f3d0; color:#065f46 }
+
+  .done-banner {
+    margin-top:18px; padding:18px 20px; border-radius:8px;
+    background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;
+    display:flex; align-items:center; gap:12px;
+  }
+  .done-banner .icon { width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#fff; color:#059669; display:flex; align-items:center; justify-content:center }
+  .done-banner h2 { margin:0 0 2px 0; font-size:14px; font-weight:600 }
+  .done-banner p { margin:0; font-size:12px; opacity:.85 }
+
+  .footer-code { text-align:center; padding:18px 0 0 0; color:var(--muted); font-size:10px; font-family:ui-monospace,SFMono-Regular,monospace }
 
   .hidden { display:none !important }
-  .footer-code { text-align:center; padding:24px 0 8px 0; color:var(--muted); font-size:11px; font-family:ui-monospace,SFMono-Regular,monospace }
-
-  @media (max-width:480px) {
-    .page { padding: 20px 12px 40px }
-    .card { padding:18px }
-    .drop { padding:24px 12px }
-  }
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="brand">
-    <img src="https://pusulanet.net/img/logo.png" alt="Pusula" onerror="this.style.display='none'">
-    <span class="brand-text">Aktarım</span>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="topbar-brand">
+      <img src="https://pusulanet.net/img/logo.png" alt="Pusula" onerror="this.style.display='none'">
+      <span class="sep"></span>
+      <span class="label">Aktarım</span>
+    </div>
+    <div class="topbar-firma">
+      <div class="l">Firma</div>
+      <div class="v" id="firmaName">—</div>
+    </div>
   </div>
+</header>
 
-  <div id="loading" class="card"><div class="sub">Yükleniyor…</div></div>
-
+<div class="page">
+  <div id="loading" class="card"><div style="color:var(--muted);font-size:12px">Yükleniyor…</div></div>
   <div id="error" class="alert alert-err hidden"></div>
 
   <div id="main" class="hidden">
-    <div class="card">
-      <h1 id="firmaName">—</h1>
-      <p class="sub">Veritabanı (.bak) ve resim klasörlerinizi bu sayfa üzerinden güvenli şekilde aktarabilirsiniz. Ekibimiz devamını sağlayacak.</p>
+
+    <div class="intro card">
+      <p>Veritabanı (.bak) ve resim klasörlerinizi aşağıdaki alanlardan seçin. Seçim sonrası özet görüntülenir; <strong>"Aktarımı Başlat"</strong> butonuna basana kadar yükleme başlamaz.</p>
       <div id="notes" class="note hidden"></div>
     </div>
 
-    <div class="card">
-      <div class="card-hdr">
-        <span class="icon">${ICON_DATABASE}</span>
-        <div>
-          <h2>Veri Dosyası</h2>
-          <div class="meta">.bak / .rar / .zip</div>
+    <div class="grid">
+
+      <!-- Veri Dosyası -->
+      <div class="card">
+        <div class="card-hdr">
+          <span class="icon">${ICON_DATABASE}</span>
+          <div>
+            <h2>Veri Dosyası</h2>
+            <div class="meta">.bak / .rar / .zip</div>
+          </div>
+          <span id="dataBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+        </div>
+
+        <label class="drop" id="dataDrop">
+          <input type="file" id="dataInput" accept=".bak,.rar,.zip">
+          <span class="drop-icon">${ICON_UPLOAD}</span>
+          <strong>Dosyayı buraya bırakın</strong>
+          <span>veya tıklayıp seçin</span>
+        </label>
+
+        <div id="dataSummary" class="summary hidden"></div>
+        <button id="dataClear" class="clear-btn hidden" type="button">Dosyayı kaldır</button>
+
+        <div id="dataProgress" class="progress hidden">
+          <div class="bar"><div id="dataBar" style="width:0%"></div></div>
+          <div class="stat"><span id="dataStat">—</span><span id="dataPct" class="pct">0%</span></div>
         </div>
       </div>
-      <label class="drop" id="dataDrop">
-        <input type="file" id="dataInput" accept=".bak,.rar,.zip">
-        <span class="drop-icon">${ICON_FILE}</span>
-        <strong>Dosyayı buraya bırakın</strong>
-        <span>veya tıklayıp seçin</span>
-      </label>
-      <div id="dataFiles" class="files"></div>
-    </div>
 
-    <div class="card">
-      <div class="card-hdr">
-        <span class="icon">${ICON_FOLDER}</span>
-        <div>
-          <h2>Resim Klasörü</h2>
-          <div class="meta">Tüm alt klasörler dahil yüklenir</div>
+      <!-- Resim Klasörü -->
+      <div class="card">
+        <div class="card-hdr">
+          <span class="icon">${ICON_FOLDER}</span>
+          <div>
+            <h2>Resim Klasörü</h2>
+            <div class="meta">Alt klasörler dahil yüklenir</div>
+          </div>
+          <span id="imgBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+        </div>
+
+        <label class="drop" id="imgDrop">
+          <input type="file" id="imgInput" webkitdirectory multiple>
+          <span class="drop-icon">${ICON_UPLOAD}</span>
+          <strong>Klasörü buraya sürükleyin</strong>
+          <span>veya tıklayıp seçin</span>
+        </label>
+
+        <div id="imgSummary" class="summary hidden"></div>
+        <div id="imgCompressTip" class="compress-tip hidden">
+          <span style="color:#9a3412">${ICON_WARN}</span>
+          <div>
+            <strong>Sıkıştırma önerisi</strong>
+            <span id="compressMsg"></span>
+          </div>
+        </div>
+        <button id="imgClear" class="clear-btn hidden" type="button">Klasörü kaldır</button>
+
+        <div id="imgProgress" class="progress hidden">
+          <div class="bar"><div id="imgBar" style="width:0%"></div></div>
+          <div class="stat"><span id="imgStat">—</span><span id="imgPct" class="pct">0%</span></div>
         </div>
       </div>
-      <label class="drop" id="imgDrop">
-        <input type="file" id="imgInput" webkitdirectory multiple>
-        <span class="drop-icon">${ICON_FOLDER_OPEN}</span>
-        <strong>Klasörü buraya sürükleyin</strong>
-        <span>veya tıklayıp seçin</span>
-      </label>
-      <div id="imgFiles" class="files"></div>
-      <div class="bar"><div id="imgBar" style="width:0%"></div></div>
-      <div class="stat"><span id="imgStat">—</span><span id="imgPct" class="pct">0%</span></div>
+
     </div>
 
-    <div class="card alert-ok hidden" id="doneCard">
-      <div class="card-hdr">
-        <span class="icon" style="background:#ecfdf5;color:#059669">${ICON_CHECK}</span>
-        <h2 style="font-size:15px">Aktarım tamamlandı</h2>
+    <div id="doneBanner" class="done-banner hidden">
+      <span class="icon">${ICON_CHECK}</span>
+      <div>
+        <h2>Aktarım tamamlandı</h2>
+        <p>Ekibimiz devamını sağlayacak. Bu pencereyi kapatabilirsiniz.</p>
       </div>
-      <p class="sub" style="margin:0">Ekibimiz devamını sağlayacak. Bu pencereyi kapatabilirsiniz.</p>
     </div>
 
     <div class="actions">
-      <button id="finishBtn" class="btn" disabled>Aktarımı Tamamla</button>
+      <button id="startBtn" class="btn" disabled>${ICON_UPLOAD}<span>Aktarımı Başlat</span></button>
     </div>
 
     <div class="footer-code">Aktarım kodu: ${token}</div>
@@ -475,7 +571,9 @@ function renderHtml(token) {
 
 <script>
 const TOKEN = ${JSON.stringify(token)};
+const LARGE_THRESHOLD = 500 * 1024;   // 500 KB
 const $ = (id) => document.getElementById(id);
+
 function fmtBytes(b) {
   if (!b) return "0 B";
   if (b >= 1024**3) return (b/1024**3).toFixed(2) + " GB";
@@ -484,6 +582,7 @@ function fmtBytes(b) {
   return b + " B";
 }
 
+// ── Info yükle ────────────────────────
 async function loadInfo() {
   try {
     const r = await fetch("/api/info/" + TOKEN);
@@ -506,6 +605,14 @@ async function loadInfo() {
   }
 }
 
+// ── State (yükleme öncesi) ────────────
+let selectedDataFile  = null;
+let selectedImages    = [];   // File[]
+let imgTotalBytes     = 0;
+let imgLargeCount     = 0;
+let imgLargeBytes     = 0;
+let uploading         = false;
+
 function setupDrop(zone, input) {
   ["dragenter","dragover"].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over") }));
   ["dragleave","drop"].forEach(ev => zone.addEventListener(ev, () => zone.classList.remove("over")));
@@ -517,48 +624,171 @@ function setupDrop(zone, input) {
   });
 }
 
-let dataDone = false;
+// ── Veri dosyası seçimi ───────────────
 setupDrop($("dataDrop"), $("dataInput"));
-$("dataInput").addEventListener("change", async (e) => {
-  const f = e.target.files[0]; if (!f) return;
-  const row = document.createElement("div");
-  row.className = "file";
-  row.innerHTML = "<span class=\\"name\\"></span><span class=\\"size\\"></span><span class=\\"pct\\">0%</span>";
-  row.querySelector(".name").textContent = f.name;
-  row.querySelector(".size").textContent = fmtBytes(f.size);
-  $("dataFiles").innerHTML = ""; $("dataFiles").appendChild(row);
-  const fd = new FormData(); fd.append("file", f);
-  await xhrUpload("/api/upload/" + TOKEN + "/data", fd, (pct) => { row.querySelector(".pct").textContent = pct + "%" })
-    .then(() => { row.classList.add("ok"); dataDone = true; refreshFinish(); })
-    .catch((err) => { row.classList.add("err"); row.querySelector(".pct").textContent = "✗"; console.error(err); });
+$("dataInput").addEventListener("change", (e) => {
+  if (uploading) return;
+  const f = e.target.files[0];
+  if (!f) return;
+  selectedDataFile = f;
+  renderDataSummary();
+  refreshStart();
 });
 
-let imgUploaded=0, imgUploadedBytes=0, imgTotal=0;
+function renderDataSummary() {
+  const s = $("dataSummary");
+  if (!selectedDataFile) {
+    s.classList.add("hidden");
+    $("dataClear").classList.add("hidden");
+    $("dataBadge").hidden = true;
+    return;
+  }
+  s.innerHTML = '' +
+    '<div class="summary-row"><span class="l">Dosya adı</span><span class="v" style="overflow:hidden;text-overflow:ellipsis;max-width:200px;white-space:nowrap">' + escapeHtml(selectedDataFile.name) + '</span></div>' +
+    '<div class="summary-row"><span class="l">Boyut</span><span class="v">' + fmtBytes(selectedDataFile.size) + '</span></div>';
+  s.classList.remove("hidden");
+  $("dataClear").classList.remove("hidden");
+  $("dataBadge").hidden = false;
+  $("dataBadge").textContent = "Hazır";
+  $("dataBadge").className = "status-badge";
+}
+$("dataClear").addEventListener("click", () => {
+  if (uploading) return;
+  selectedDataFile = null;
+  $("dataInput").value = "";
+  renderDataSummary();
+  refreshStart();
+});
+
+// ── Resim klasörü seçimi ──────────────
 setupDrop($("imgDrop"), $("imgInput"));
-$("imgInput").addEventListener("change", async (e) => {
+$("imgInput").addEventListener("change", (e) => {
+  if (uploading) return;
   const files = Array.from(e.target.files);
-  imgTotal = files.reduce((s,f) => s+f.size, 0);
-  imgUploaded=0; imgUploadedBytes=0;
-  $("imgFiles").innerHTML = "";
-  $("imgStat").textContent = files.length + " dosya · " + fmtBytes(imgTotal);
-  $("imgPct").textContent = "0%"; $("imgBar").style.width = "0%";
+  selectedImages = files;
+  imgTotalBytes = files.reduce((s,f) => s+f.size, 0);
+  imgLargeCount = files.filter((f) => f.size > LARGE_THRESHOLD).length;
+  imgLargeBytes = files.filter((f) => f.size > LARGE_THRESHOLD).reduce((s,f) => s+f.size, 0);
+  renderImgSummary();
+  refreshStart();
+});
 
-  await reportImgs(files.length, imgTotal, 0, 0);
+function renderImgSummary() {
+  const s = $("imgSummary");
+  const tip = $("imgCompressTip");
+  if (selectedImages.length === 0) {
+    s.classList.add("hidden");
+    tip.classList.add("hidden");
+    $("imgClear").classList.add("hidden");
+    $("imgBadge").hidden = true;
+    return;
+  }
+  let html = '' +
+    '<div class="summary-row"><span class="l">Dosya sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
+    '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>';
+  if (imgLargeCount > 0) {
+    html += '<div class="summary-row danger"><span class="l">500 KB üzeri</span><span class="v">' + imgLargeCount.toLocaleString("tr") + ' dosya · ' + fmtBytes(imgLargeBytes) + '</span></div>';
+  }
+  s.innerHTML = html;
+  s.classList.remove("hidden");
+  $("imgClear").classList.remove("hidden");
+  $("imgBadge").hidden = false;
+  $("imgBadge").textContent = "Hazır";
+  $("imgBadge").className = "status-badge";
 
+  if (imgLargeCount > 0) {
+    $("compressMsg").textContent = imgLargeCount.toLocaleString("tr") + " adet resim 500 KB'tan büyük (toplam " + fmtBytes(imgLargeBytes) + "). Yükleme öncesi sıkıştırmanızı öneririz — yükleme süresi azalır ve depolama tasarrufu sağlanır.";
+    tip.classList.remove("hidden");
+  } else {
+    tip.classList.add("hidden");
+  }
+}
+$("imgClear").addEventListener("click", () => {
+  if (uploading) return;
+  selectedImages = []; imgTotalBytes = 0; imgLargeCount = 0; imgLargeBytes = 0;
+  $("imgInput").value = "";
+  renderImgSummary();
+  refreshStart();
+});
+
+function refreshStart() {
+  $("startBtn").disabled = uploading || (!selectedDataFile && selectedImages.length === 0);
+}
+
+// ── Aktarımı başlat ───────────────────
+$("startBtn").addEventListener("click", startUpload);
+
+async function startUpload() {
+  if (uploading) return;
+  uploading = true;
+  $("startBtn").disabled = true;
+  $("dataClear").classList.add("hidden");
+  $("imgClear").classList.add("hidden");
+
+  // Drop alanlarını kapat
+  $("dataDrop").style.pointerEvents = "none";
+  $("imgDrop").style.pointerEvents = "none";
+  $("dataDrop").style.opacity = ".5";
+  $("imgDrop").style.opacity = ".5";
+
+  try {
+    if (selectedDataFile) await uploadData();
+    if (selectedImages.length > 0) await uploadImages();
+    await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
+    $("doneBanner").classList.remove("hidden");
+  } catch (err) {
+    alert("Yükleme sırasında hata: " + err.message);
+    uploading = false;
+    refreshStart();
+  }
+}
+
+async function uploadData() {
+  const f = selectedDataFile;
+  const badge = $("dataBadge");
+  badge.textContent = "Yükleniyor"; badge.className = "status-badge uploading";
+  $("dataProgress").classList.remove("hidden");
+  $("dataStat").textContent = f.name + " · " + fmtBytes(f.size);
+
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    await xhrUpload("/api/upload/" + TOKEN + "/data", fd, (pct, loaded) => {
+      $("dataBar").style.width = pct + "%";
+      $("dataPct").textContent = pct + "%";
+      $("dataStat").textContent = f.name + " · " + fmtBytes(loaded || 0) + " / " + fmtBytes(f.size);
+    });
+    badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
+  } catch (err) {
+    badge.textContent = "Hata"; badge.className = "status-badge err";
+    throw err;
+  }
+}
+
+async function uploadImages() {
+  const files = selectedImages;
+  const total = imgTotalBytes;
+  const badge = $("imgBadge");
+  badge.textContent = "Yükleniyor"; badge.className = "status-badge uploading";
+  $("imgProgress").classList.remove("hidden");
+
+  await reportImgs(files.length, total, 0, 0);
+
+  let uploaded = 0, uploadedBytes = 0;
   for (const f of files) {
     const rel = f.webkitRelativePath || f.name;
     const fd = new FormData(); fd.append("relPath", rel); fd.append("file", f);
-    try { await xhrUpload("/api/upload/" + TOKEN + "/image", fd, () => {}); imgUploaded++; imgUploadedBytes += f.size }
+    try { await xhrUpload("/api/upload/" + TOKEN + "/image", fd, () => {}); uploaded++; uploadedBytes += f.size }
     catch (err) { console.error("img upload failed", rel, err) }
-    const pct = imgTotal > 0 ? Math.round((imgUploadedBytes / imgTotal) * 100) : 0;
-    $("imgBar").style.width = pct + "%"; $("imgPct").textContent = pct + "%";
-    $("imgStat").textContent = imgUploaded + " / " + files.length + " dosya · " + fmtBytes(imgUploadedBytes) + " / " + fmtBytes(imgTotal);
-    if (imgUploaded % 25 === 0 || imgUploaded === files.length) {
-      reportImgs(files.length, imgTotal, imgUploaded, imgUploadedBytes);
+    const pct = total > 0 ? Math.round((uploadedBytes / total) * 100) : 0;
+    $("imgBar").style.width = pct + "%";
+    $("imgPct").textContent = pct + "%";
+    $("imgStat").textContent = uploaded + " / " + files.length + " dosya · " + fmtBytes(uploadedBytes) + " / " + fmtBytes(total);
+    if (uploaded % 25 === 0 || uploaded === files.length) {
+      reportImgs(files.length, total, uploaded, uploadedBytes);
     }
   }
-  refreshFinish();
-});
+  badge.textContent = "Tamamlandı"; badge.className = "status-badge done";
+}
 
 async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
   try {
@@ -569,20 +799,12 @@ async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) 
   } catch {}
 }
 
-function refreshFinish() {
-  $("finishBtn").disabled = !(dataDone || imgUploaded > 0);
-}
-
-$("finishBtn").addEventListener("click", async () => {
-  $("finishBtn").disabled = true;
-  await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
-  $("doneCard").classList.remove("hidden");
-});
-
 function xhrUpload(url, formData, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
-    xhr.upload.addEventListener("progress", (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) });
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100), e.loaded);
+    });
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve(xhr.responseText);
       else reject(new Error("HTTP " + xhr.status + ": " + xhr.responseText));
@@ -591,6 +813,15 @@ function xhrUpload(url, formData, onProgress) {
     xhr.open("POST", url);
     xhr.send(formData);
   });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 loadInfo();
