@@ -226,7 +226,13 @@ fastify.post("/admin/sessions/:id/cancel", async (req, reply) => {
 
 fastify.delete("/admin/sessions/:id", async (req, reply) => {
   if (!checkAdmin(req, reply)) return
+  const sess = stmts.byId.get(req.params.id)
   stmts.remove.run(req.params.id)
+  // Staging klasörünü de temizle
+  if (sess?.token) {
+    try { await rm(join(STAGING_ROOT, sess.token), { recursive: true, force: true }) }
+    catch { /* ignore */ }
+  }
   return { ok: true }
 })
 
@@ -1386,6 +1392,13 @@ async function startPushJob(token) {
 
   // ── 3) Bitir ──
   stmts.updatePush.run({ token, progress: 100, stage: null, error: null, status: "completed" })
+
+  // ── 4) Staging temizliği — başarılı push sonrası dosyalar artık hedef sunucuda ──
+  try {
+    await rm(join(STAGING_ROOT, token), { recursive: true, force: true })
+  } catch (err) {
+    fastify.log.warn({ err, token }, "staging temizleme hatası (push yine de başarılı)")
+  }
 }
 
 async function safeReadDir(p) {
