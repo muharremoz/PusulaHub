@@ -31,6 +31,7 @@ import { createWriteStream } from "fs"
 import { pipeline } from "stream/promises"
 import { randomBytes } from "crypto"
 import { spawn } from "child_process"
+import sql from "mssql"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname  = dirname(__filename)
@@ -90,6 +91,8 @@ ensureColumn("depoPassword",  "TEXT")
 ensureColumn("pushProgress",  "INTEGER NOT NULL DEFAULT 0")   // 0-100 toplam
 ensureColumn("pushStage",     "TEXT")                          // 'data' | 'images' | null
 ensureColumn("pushError",     "TEXT")
+ensureColumn("sqlAuthUsername", "TEXT")    // SQL Auth (BACKUP DATABASE)
+ensureColumn("sqlAuthPassword", "TEXT")
 
 function newId()    { return randomBytes(8).toString("hex") }
 function newToken() { return randomBytes(18).toString("base64url") }
@@ -98,10 +101,12 @@ const stmts = {
   insert: db.prepare(`
     INSERT INTO sessions (id, token, companyId, firmaName, sqlServerName, depoServerName,
                           sqlServerIp, sqlUsername, sqlPassword,
+                          sqlAuthUsername, sqlAuthPassword,
                           depoServerIp, depoUsername, depoPassword,
                           status, createdBy, expiresAt, notes)
     VALUES (@id, @token, @companyId, @firmaName, @sqlServerName, @depoServerName,
             @sqlServerIp, @sqlUsername, @sqlPassword,
+            @sqlAuthUsername, @sqlAuthPassword,
             @depoServerIp, @depoUsername, @depoPassword,
             'pending', @createdBy, @expiresAt, @notes)
   `),
@@ -206,9 +211,11 @@ fastify.post("/admin/sessions", async (req, reply) => {
     firmaName:      body.firmaName,
     sqlServerName:  body.sqlServerName  ?? null,
     depoServerName: body.depoServerName ?? null,
-    sqlServerIp:    body.sqlServerIp    ?? null,
-    sqlUsername:    body.sqlUsername    ?? null,
-    sqlPassword:    body.sqlPassword    ?? null,
+    sqlServerIp:     body.sqlServerIp     ?? null,
+    sqlUsername:     body.sqlUsername     ?? null,
+    sqlPassword:     body.sqlPassword     ?? null,
+    sqlAuthUsername: body.sqlAuthUsername ?? null,
+    sqlAuthPassword: body.sqlAuthPassword ?? null,
     depoServerIp:   body.depoServerIp   ?? null,
     depoUsername:   body.depoUsername   ?? null,
     depoPassword:   body.depoPassword   ?? null,
@@ -362,6 +369,159 @@ fastify.post("/api/upload/:token/images-done", async (req, reply) => {
     imageBytesReceived: b.uploadedBytes ?? null,
   })
   return reply.send({ ok: true })
+})
+
+// ─────────────────────────────────────────────────
+// SQL'den otomatik yedek (müşteri sayfasından çağrılır)
+// Hub admin aktarım oluştururken seçilen SQL sunucusu kullanılır —
+// müşteri credential girmez. SQL Auth bilgileri session'da hazır.
+// ─────────────────────────────────────────────────
+
+async function sqlPool(sess) {
+  if (!sess.sqlServerIp || !sess.sqlAuthUsername || !sess.sqlAuthPassword) {
+    throw new Error("SQL kaynağı tanımlı değil (Hub aktarımında SQL sunucusu seçilmemiş)")
+  }
+  const pool = new sql.ConnectionPool({
+    server:   sess.sqlServerIp,
+    port:     1433,
+    user:     sess.sqlAuthUsername,
+    password: sess.sqlAuthPassword,
+    database: "master",
+    options:  { trustServerCertificate: true, encrypt: false },
+    connectionTimeout: 8000,
+    requestTimeout:    600000,
+    pool: { max: 2, min: 0, idleTimeoutMillis: 5000 },
+  })
+  await pool.connect()
+  return pool
+}
+
+fastify.get("/api/sql/databases/:token", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+
+  let pool
+  try {
+    pool = await sqlPool(v.session)
+    const r = await pool.request().query(`
+      SELECT name, recovery_model_desc AS recoveryModel,
+             CAST(SUM(size * 8.0 / 1024) OVER (PARTITION BY name) AS DECIMAL(18,1)) AS sizeMB
+      FROM sys.databases d
+      INNER JOIN sys.master_files mf ON mf.database_id = d.database_id
+      WHERE d.database_id > 4 AND d.state_desc = 'ONLINE'
+      GROUP BY name, recovery_model_desc, mf.size
+      ORDER BY name
+    `)
+    // Aynı DB birden fazla dosya için tekrarlamasın
+    const seen = new Set()
+    const dbs = []
+    for (const row of r.recordset) {
+      if (seen.has(row.name)) continue
+      seen.add(row.name)
+      dbs.push({ name: row.name, sizeMB: Number(row.sizeMB) || 0, recoveryModel: row.recoveryModel })
+    }
+    return reply.send({ ok: true, databases: dbs })
+  } catch (err) {
+    return reply.code(500).send({ error: err.message })
+  } finally {
+    if (pool) try { await pool.close() } catch {}
+  }
+})
+
+fastify.post("/api/sql/backup/:token", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  const sess = v.session
+
+  const body = req.body ?? {}
+  const dbs = Array.isArray(body.databases) ? body.databases.filter(d => typeof d === "string" && d.length > 0) : []
+  if (dbs.length === 0) return reply.code(400).send({ error: "Yedeklenecek DB seçilmedi" })
+
+  if (!sess.sqlServerIp || !sess.sqlUsername || !sess.sqlPassword) {
+    return reply.code(400).send({ error: "Windows admin credential'ları eksik (SMB için gerekli)" })
+  }
+
+  // Async başlat — frontend polling ile takip eder
+  reply.send({ ok: true, started: true })
+
+  ;(async () => {
+    let pool
+    try {
+      pool = await sqlPool(sess)
+      const tempDir = "C:\\PusulaTempBackup\\" + sess.token
+      const stagingDir = join(STAGING_ROOT, sess.token, "data")
+      await mkdir(stagingDir, { recursive: true })
+
+      // 1) SQL Server'da temp klasör oluştur (xp_create_subdir)
+      await pool.request().input("p", sql.NVarChar, tempDir)
+        .query("EXEC master.dbo.xp_create_subdir @p")
+
+      // 2) Her DB için BACKUP
+      const totalDbs = dbs.length
+      let doneDbs = 0
+      // İlk progress raporu
+      stmts.updateProgress.run({
+        token: sess.token, status: "active",
+        dataBytesTotal: 0, dataBytesReceived: 0,
+        imageFilesTotal: null, imageFilesReceived: null,
+        imageBytesTotal: null, imageBytesReceived: null,
+      })
+
+      for (const db of dbs) {
+        const safe = db.replace(/[^A-Za-z0-9_]/g, "_")
+        const bakPath = `${tempDir}\\${safe}.bak`
+        fastify.log.info({ db, bakPath }, "SQL backup başlıyor")
+        const bakSql = `BACKUP DATABASE [${db.replace(/]/g, "]]")}] TO DISK = N'${bakPath}'
+          WITH INIT, FORMAT, COMPRESSION, COPY_ONLY`
+        await pool.request().query(bakSql)
+        doneDbs++
+      }
+
+      // 3) SMB ile SQL Server'ın C$'ından staging'e çek
+      const mountPoint = `/tmp/pusula-sqlbackup-${randomBytes(6).toString("hex")}`
+      await mkdir(mountPoint, { recursive: true })
+      const opts = `username=${sess.sqlUsername},password=${sess.sqlPassword},vers=3.0,uid=0,gid=0,ro,file_mode=0664,dir_mode=0775`
+      try {
+        try {
+          await execCmd("mount", ["-t", "cifs", `//${sess.sqlServerIp}/C$`, mountPoint, "-o", opts])
+        } catch {
+          await execCmd("mount", ["-t", "cifs", `//${sess.sqlServerIp}/C$`, mountPoint, "-o", opts.replace("vers=3.0", "vers=2.1")])
+        }
+        const srcDir = join(mountPoint, "PusulaTempBackup", sess.token)
+        // Dosyaları kopyala
+        await execCmd("cp", ["-r", srcDir + "/.", stagingDir])
+      } finally {
+        try { await execCmd("umount", [mountPoint]) } catch {}
+        try { await rm(mountPoint, { recursive: true, force: true }) } catch {}
+      }
+
+      // 4) SQL Server'daki temp dosyaları sil (xp_cmdshell gerek — çoğu yerde kapalı)
+      // Bunun yerine RD/erase için sp_OACreate vs. karmaşık. Atlayalım, SQL admin
+      // ister manuel temizler. Veya BACKUP'tan sonra Ubuntu SMB write yetkisi olsa silebilirdi.
+
+      // 5) Staging boyutu sayım
+      let totalBytes = 0
+      const files = await readdir(stagingDir)
+      for (const f of files) {
+        const s = await stat(join(stagingDir, f))
+        totalBytes += s.size
+      }
+      stmts.updateProgress.run({
+        token: sess.token, status: "active",
+        dataBytesTotal: totalBytes, dataBytesReceived: totalBytes,
+        imageFilesTotal: null, imageFilesReceived: null,
+        imageBytesTotal: null, imageBytesReceived: null,
+      })
+      fastify.log.info({ token: sess.token, dbs: doneDbs, bytes: totalBytes }, "SQL backup tamamlandı")
+    } catch (err) {
+      fastify.log.error({ err: err.message }, "SQL backup hatası")
+      stmts.updatePush.run({
+        token: sess.token, progress: 0, stage: null, error: "SQL yedek: " + err.message, status: "push_failed",
+      })
+    } finally {
+      if (pool) try { await pool.close() } catch {}
+    }
+  })()
 })
 
 fastify.post("/api/upload/:token/complete", async (req, reply) => {
@@ -727,6 +887,23 @@ function renderHtml(token) {
     .success-icon-wrap svg { width:40px; height:40px }
   }
 
+  /* ── SQL DB liste ─────────────────────── */
+  .sql-db-list {
+    margin-top:12px; border:1px solid var(--border); border-radius:6px;
+    background:#fafafa; max-height:280px; overflow-y:auto;
+  }
+  .sql-db-row {
+    display:grid; grid-template-columns:24px 1fr 80px 80px; gap:8px;
+    padding:8px 12px; align-items:center; font-size:12px; cursor:pointer;
+    border-bottom:1px solid var(--border);
+  }
+  .sql-db-row:last-child { border-bottom:0 }
+  .sql-db-row:hover { background:#f4f4f5 }
+  .sql-db-row input[type=checkbox] { cursor:pointer }
+  .sql-db-name { font-family:ui-monospace,SFMono-Regular,monospace }
+  .sql-db-size { color:var(--muted); text-align:right; tabular-nums:true }
+  .sql-db-recovery { color:var(--muted); text-align:right; font-size:10px }
+
   /* ── Toast ────────────────────────────── */
   .toast-wrap {
     position:fixed; top:80px; left:50%; transform:translateX(-50%);
@@ -827,6 +1004,37 @@ function renderHtml(token) {
         <div id="dataProgress" class="progress hidden">
           <div class="bar"><div id="dataBar" style="width:0%"></div></div>
           <div class="stat"><span id="dataStat">—</span><span id="dataPct" class="pct">0%</span></div>
+        </div>
+      </div>
+
+      <!-- SQL'den Otomatik Yedek -->
+      <div class="card">
+        <div class="card-hdr">
+          <span class="icon">${ICON_DATABASE}</span>
+          <div>
+            <h2>SQL'den Otomatik Yedek</h2>
+            <div class="meta">Sunucudaki veritabanlarını seç, yedek otomatik alınır</div>
+          </div>
+          <span id="sqlBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+        </div>
+
+        <div id="sqlInit">
+          <button id="sqlListBtn" type="button" class="btn" style="width:auto; padding:8px 16px">
+            <span>Veritabanlarını Listele</span>
+          </button>
+          <div style="margin-top:10px; font-size:11px; color:var(--muted)">
+            Hub yöneticisi tarafından tanımlanan SQL sunucusuna bağlanır.
+          </div>
+        </div>
+
+        <div id="sqlList" class="hidden"></div>
+
+        <div id="sqlSummary" class="summary hidden"></div>
+        <button id="sqlClear" class="clear-btn hidden" type="button">Seçimi temizle</button>
+
+        <div id="sqlProgress" class="progress hidden">
+          <div style="font-size:11px; color:var(--muted); margin-bottom:6px" id="sqlStat">—</div>
+          <div class="bar"><div id="sqlBar" style="width:0%"></div></div>
         </div>
       </div>
 
@@ -1203,8 +1411,103 @@ $("imgClear").addEventListener("click", () => {
   refreshStart();
 });
 
+// ── SQL'den otomatik yedek ─────────────
+let sqlDbs = [];
+let selectedSqlDbs = new Set();
+let sqlListed = false;
+
+$("sqlListBtn").addEventListener("click", async () => {
+  $("sqlListBtn").disabled = true;
+  $("sqlListBtn").textContent = "Bağlanılıyor...";
+  try {
+    const r = await fetch("/api/sql/databases/" + TOKEN);
+    const d = await r.json();
+    if (!r.ok) {
+      showToast(d.error || "DB listesi alınamadı");
+      $("sqlListBtn").disabled = false;
+      $("sqlListBtn").textContent = "Veritabanlarını Listele";
+      return;
+    }
+    sqlDbs = d.databases || [];
+    sqlListed = true;
+    renderSqlList();
+  } catch (err) {
+    showToast("Hata: " + err.message);
+    $("sqlListBtn").disabled = false;
+    $("sqlListBtn").textContent = "Veritabanlarını Listele";
+  }
+});
+
+function renderSqlList() {
+  const wrap = $("sqlList");
+  wrap.classList.remove("hidden");
+  $("sqlInit").classList.add("hidden");
+
+  if (sqlDbs.length === 0) {
+    wrap.innerHTML = '<div style="padding:14px; color:#a16207; font-size:12px">Bu sunucuda kullanıcı veritabanı bulunamadı.</div>';
+    return;
+  }
+
+  let html = '<div class="sql-db-list">';
+  for (const d of sqlDbs) {
+    const checked = selectedSqlDbs.has(d.name) ? "checked" : "";
+    const sizeMB = d.sizeMB > 1024 ? (d.sizeMB / 1024).toFixed(1) + " GB" : d.sizeMB.toFixed(0) + " MB";
+    html += '<label class="sql-db-row">' +
+      '<input type="checkbox" data-db="' + escapeHtml(d.name) + '" ' + checked + '>' +
+      '<span class="sql-db-name">' + escapeHtml(d.name) + '</span>' +
+      '<span class="sql-db-size">' + sizeMB + '</span>' +
+      '<span class="sql-db-recovery">' + (d.recoveryModel || "") + '</span>' +
+      '</label>';
+  }
+  html += '</div>';
+  wrap.innerHTML = html;
+
+  wrap.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+    cb.addEventListener("change", (e) => {
+      const name = e.target.dataset.db;
+      if (e.target.checked) selectedSqlDbs.add(name);
+      else selectedSqlDbs.delete(name);
+      renderSqlSummary();
+      refreshStart();
+    });
+  });
+  renderSqlSummary();
+}
+
+function renderSqlSummary() {
+  const s = $("sqlSummary");
+  if (selectedSqlDbs.size === 0) {
+    s.classList.add("hidden");
+    $("sqlClear").classList.add("hidden");
+    $("sqlBadge").hidden = true;
+    return;
+  }
+  let total = 0;
+  for (const d of sqlDbs) if (selectedSqlDbs.has(d.name)) total += d.sizeMB;
+  const totalDisp = total > 1024 ? (total/1024).toFixed(1) + " GB" : total.toFixed(0) + " MB";
+  s.innerHTML =
+    '<div class="summary-row"><span class="l">Seçili veritabanı</span><span class="v">' + selectedSqlDbs.size + '</span></div>' +
+    '<div class="summary-row"><span class="l">Tahmini boyut</span><span class="v">' + totalDisp + '</span></div>';
+  s.classList.remove("hidden");
+  $("sqlClear").classList.remove("hidden");
+  $("sqlBadge").hidden = false;
+  $("sqlBadge").textContent = "Hazır";
+  $("sqlBadge").className = "status-badge";
+}
+
+$("sqlClear").addEventListener("click", () => {
+  if (uploading) return;
+  selectedSqlDbs.clear();
+  renderSqlList();
+  refreshStart();
+});
+
 function refreshStart() {
-  $("startBtn").disabled = uploading || (selectedDataFiles.length === 0 && selectedImages.length === 0);
+  $("startBtn").disabled = uploading || (
+    selectedDataFiles.length === 0 &&
+    selectedImages.length === 0 &&
+    selectedSqlDbs.size === 0
+  );
 }
 
 // ── Aktarımı başlat ───────────────────
@@ -1216,6 +1519,7 @@ async function startUpload() {
   $("startBtn").disabled = true;
   $("dataClear").classList.add("hidden");
   $("imgClear").classList.add("hidden");
+  $("sqlClear").classList.add("hidden");
 
   // Drop alanlarını kapat
   $("dataDrop").style.pointerEvents = "none";
@@ -1226,6 +1530,7 @@ async function startUpload() {
   try {
     if (selectedDataFiles.length > 0) await uploadData();
     if (selectedImages.length > 0) await uploadImages();
+    if (selectedSqlDbs.size > 0) await runSqlBackup();
     await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
     // Push job arkaplanda başladı — polling pollPush ile yönetilir
     showPushBanner({ pushProgress: 0, pushStage: "starting" });
@@ -1285,6 +1590,29 @@ async function uploadData() {
     badge.textContent = "Hata"; badge.className = "status-badge err";
     throw new Error(failed + " dosya yüklenemedi");
   }
+  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
+}
+
+async function runSqlBackup() {
+  const dbs = Array.from(selectedSqlDbs);
+  const badge = $("sqlBadge");
+  badge.textContent = "Yedek alınıyor..."; badge.className = "status-badge uploading";
+  $("sqlProgress").classList.remove("hidden");
+  $("sqlStat").textContent = dbs.length + " DB sunucuda yedekleniyor... bu işlem boyuta göre dakikalar sürebilir";
+  $("sqlBar").style.width = "40%";
+
+  const r = await fetch("/api/sql/backup/" + TOKEN, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ databases: dbs }),
+  });
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error("SQL yedek başlatılamadı: " + (d.error || r.statusText));
+  }
+  // Server async iş başlattı — info polling ile takip ederiz
+  // Status 'active'ten 'push_failed'a düşerse hata, 'completed'e geçerse OK
+  $("sqlBar").style.width = "100%";
+  $("sqlStat").textContent = "Sunucu işliyor — push aşamasında progress gösterilir";
   badge.textContent = "Yüklendi"; badge.className = "status-badge done";
 }
 
