@@ -194,7 +194,8 @@ fastify.post("/admin/sessions", async (req, reply) => {
   if (!body.companyId || !body.firmaName) {
     return reply.code(400).send({ error: "companyId ve firmaName zorunludur" })
   }
-  const days = Math.max(1, Math.min(60, body.expiresInDays ?? 7))
+  // Default 365 gün — admin manuel iptal/silme yapar, sınır pratikte yok
+  const days = Math.max(1, Math.min(3650, body.expiresInDays ?? 365))
   const expiresAt = new Date(Date.now() + days * 86400_000).toISOString().slice(0, 19).replace("T", " ")
 
   const id    = newId()

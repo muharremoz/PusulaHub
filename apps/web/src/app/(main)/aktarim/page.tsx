@@ -156,7 +156,7 @@ export default function AktarimPage() {
         </button>
       </div>
 
-      {/* Aktif Aktarımlar */}
+      {/* Aktif Aktarımlar — tablo */}
       <NestedCard>
         <div className="mb-2 flex items-center gap-2">
           <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
@@ -166,9 +166,9 @@ export default function AktarimPage() {
         </div>
 
         {loading ? (
-          <div className="space-y-2">
+          <div className="space-y-1">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-16 w-full rounded-[5px]" />
+              <Skeleton key={i} className="h-9 w-full rounded-[4px]" />
             ))}
           </div>
         ) : error ? (
@@ -178,20 +178,16 @@ export default function AktarimPage() {
             Aktif aktarım yok. "Yeni Aktarım" ile başlat.
           </div>
         ) : (
-          <div className="space-y-2">
-            {active.map((s) => (
-              <SessionCard
-                key={s.id}
-                s={s}
-                onCancel={() => setCancelTarget(s)}
-                onDelete={() => setDeleteTarget(s)}
-              />
-            ))}
-          </div>
+          <SessionTable
+            sessions={active}
+            onCancel={(s) => setCancelTarget(s)}
+            onDelete={(s) => setDeleteTarget(s)}
+            isActive
+          />
         )}
       </NestedCard>
 
-      {/* Geçmiş */}
+      {/* Geçmiş — tablo */}
       <div className="h-2" />
       <NestedCard>
         <div className="mb-2 flex items-center gap-2">
@@ -206,16 +202,12 @@ export default function AktarimPage() {
             Henüz tamamlanmış aktarım yok.
           </div>
         ) : (
-          <div className="space-y-2">
-            {past.map((s) => (
-              <SessionCard
-                key={s.id}
-                s={s}
-                onCancel={() => setCancelTarget(s)}
-                onDelete={() => setDeleteTarget(s)}
-              />
-            ))}
-          </div>
+          <SessionTable
+            sessions={past}
+            onCancel={(s) => setCancelTarget(s)}
+            onDelete={(s) => setDeleteTarget(s)}
+            isActive={false}
+          />
         )}
       </NestedCard>
 
@@ -268,12 +260,53 @@ export default function AktarimPage() {
   )
 }
 
-function SessionCard({
-  s, onCancel, onDelete,
+function SessionTable({
+  sessions, onCancel, onDelete, isActive,
+}: {
+  sessions: TransferSession[]
+  onCancel: (s: TransferSession) => void
+  onDelete: (s: TransferSession) => void
+  isActive: boolean
+}) {
+  return (
+    <div className="rounded-[4px] overflow-hidden border border-border/40">
+      {/* Header */}
+      <div className={cn(
+        "grid items-center px-3 py-1.5 bg-muted/30 border-b border-border/40",
+        isActive
+          ? "grid-cols-[1fr_90px_220px_220px_60px_140px]"
+          : "grid-cols-[1fr_90px_140px_140px_60px_100px]",
+      )}>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Firma</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veri</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Resimler</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">Toplam</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">İşlem</span>
+      </div>
+
+      <div className="divide-y divide-border/40">
+        {sessions.map((s) => (
+          <SessionRow
+            key={s.id}
+            s={s}
+            onCancel={onCancel}
+            onDelete={onDelete}
+            isActiveTable={isActive}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function SessionRow({
+  s, onCancel, onDelete, isActiveTable,
 }: {
   s: TransferSession
-  onCancel: () => void
-  onDelete: () => void
+  onCancel: (s: TransferSession) => void
+  onDelete: (s: TransferSession) => void
+  isActiveTable: boolean
 }) {
   const [copied, setCopied] = useState(false)
   const url = buildPublicUrl(s.token)
@@ -285,92 +318,92 @@ function SessionCard({
       ? Math.round(((s.dataBytesReceived + s.imageBytesReceived) / (s.dataBytesTotal + s.imageBytesTotal)) * 100)
       : 0
 
-  const isActive = s.status === "active" || s.status === "pending"
-  const expiresIn = new Date(s.expiresAt).getTime() - Date.now()
-  const expiresInDays = Math.max(0, Math.ceil(expiresIn / 86400000))
+  const isRowActive = ["pending", "active", "pushing"].includes(s.status)
+
+  async function handleCopyLink() {
+    const ok = await copyToClipboard(url)
+    if (ok) {
+      setCopied(true)
+      toast.success("Link kopyalandı")
+      setTimeout(() => setCopied(false), 1500)
+    }
+  }
 
   return (
-    <div className="rounded-[5px] border border-border/50 bg-background p-3 space-y-2">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="font-medium text-[12px] truncate">{s.firmaName}</span>
-            <span className="text-[10px] text-muted-foreground font-mono">({s.companyId})</span>
-            {statusBadge(s.status)}
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-1">
-            Oluşturuldu: {formatRelative(s.createdAt)}
-            {s.createdBy && ` · ${s.createdBy}`}
-            {isActive && ` · ${expiresInDays} gün geçerli`}
-          </div>
+    <div className={cn(
+      "grid items-center px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors",
+      isActiveTable
+        ? "grid-cols-[1fr_90px_220px_220px_60px_140px]"
+        : "grid-cols-[1fr_90px_140px_140px_60px_100px]",
+    )}>
+      {/* Firma */}
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="font-medium truncate">{s.firmaName}</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">({s.companyId})</span>
         </div>
+        <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+          {formatRelative(s.createdAt)}
+          {s.createdBy && ` · ${s.createdBy}`}
+        </div>
+      </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+      {/* Durum */}
+      <div>{statusBadge(s.status)}</div>
+
+      {/* Veri */}
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
+          <Database className="h-3 w-3 shrink-0" />
+          <span className="tabular-nums truncate">{formatBytes(s.dataBytesReceived)} / {formatBytes(s.dataBytesTotal)}</span>
+          <span className="ml-auto tabular-nums font-medium text-foreground">{dataPct}%</span>
+        </div>
+        <ProgressBar pct={dataPct} />
+      </div>
+
+      {/* Resimler */}
+      <div className="space-y-0.5">
+        <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
+          <HardDrive className="h-3 w-3 shrink-0" />
+          <span className="tabular-nums truncate">{s.imageFilesReceived.toLocaleString("tr")} / {s.imageFilesTotal.toLocaleString("tr")}</span>
+          <span className="ml-auto tabular-nums font-medium text-foreground">{imgPct}%</span>
+        </div>
+        <ProgressBar pct={imgPct} />
+      </div>
+
+      {/* Toplam */}
+      <div className="text-right tabular-nums font-medium">{overallPct}%</div>
+
+      {/* İşlem */}
+      <div className="flex items-center justify-end gap-1">
+        {isActiveTable && (
           <button
-            onClick={async () => {
-              const ok = await copyToClipboard(url)
-              if (ok) {
-                setCopied(true)
-                toast.success("Link kopyalandı")
-                setTimeout(() => setCopied(false), 1500)
-              }
-            }}
+            onClick={handleCopyLink}
             className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors"
             title={url}
           >
             {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
-            {copied ? "Kopyalandı" : "Linki Kopyala"}
+            {copied ? "Kopyalandı" : "Link"}
           </button>
-          {isActive && (
-            <button
-              onClick={onCancel}
-              className="flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-              title="İptal et"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
+        )}
+        {isRowActive && (
           <button
-            onClick={onDelete}
-            className="flex items-center justify-center size-6 rounded-[4px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
-            title="Sil"
+            onClick={() => onCancel(s)}
+            className="flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+            title="İptal et"
           >
-            <Trash2 className="h-3 w-3" />
+            <X className="h-3 w-3" />
           </button>
-        </div>
+        )}
+        <button
+          onClick={() => onDelete(s)}
+          className="flex items-center justify-center size-6 rounded-[4px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+          title="Sil"
+        >
+          <Trash2 className="h-3 w-3" />
+        </button>
       </div>
-
-      {/* Progress — alt alta */}
-      <div className="space-y-2 text-[10px]">
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Database className="h-3 w-3" />
-            <span className="font-medium">Veri</span>
-            <span className="ml-auto tabular-nums">{formatBytes(s.dataBytesReceived)} / {formatBytes(s.dataBytesTotal)}</span>
-            <span className="tabular-nums font-medium text-foreground w-10 text-right">{dataPct}%</span>
-          </div>
-          <ProgressBar pct={dataPct} />
-        </div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <HardDrive className="h-3 w-3" />
-            <span className="font-medium">Resimler</span>
-            <span className="ml-auto tabular-nums">
-              {s.imageFilesReceived.toLocaleString("tr")} / {s.imageFilesTotal.toLocaleString("tr")} · {formatBytes(s.imageBytesReceived)} / {formatBytes(s.imageBytesTotal)}
-            </span>
-            <span className="tabular-nums font-medium text-foreground w-10 text-right">{imgPct}%</span>
-          </div>
-          <ProgressBar pct={imgPct} />
-        </div>
-      </div>
-
-      {(s.dataBytesTotal + s.imageBytesTotal > 0) && (
-        <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-          <span>Toplam:</span>
-          <span className="font-medium tabular-nums">{overallPct}%</span>
-        </div>
-      )}
     </div>
   )
 }
