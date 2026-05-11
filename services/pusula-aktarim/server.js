@@ -387,8 +387,24 @@ fastify.post("/api/upload/:token/complete", async (req, reply) => {
 // ─────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────
-// HELPER PowerShell — token gömülü .ps1 indirme
+// HELPER — Çift tıkla çalışan .bat wrapper
+// /helper/:token         → .bat indirilir
+// /helper-script/:token  → ham .ps1 (bat içinden fetch edilir)
 // ─────────────────────────────────────────────────
+
+async function renderHelperScript(token, baseUrl) {
+  const sess = stmts.byToken.get(token)
+  if (!sess) return null
+  const isActive = ["pending", "active", "pushing", "push_failed"].includes(sess.status)
+  if (!isActive) return null
+
+  const template = await readFile(join(__dirname, "helper-template.ps1"), "utf8")
+  return template
+    .replace("'__TOKEN_PLACEHOLDER__'",    JSON.stringify(token))
+    .replace("'__BASE_URL_PLACEHOLDER__'", JSON.stringify(baseUrl))
+    .replace("'__FIRMA_PLACEHOLDER__'",    JSON.stringify(sess.firmaName))
+}
+
 fastify.get("/helper/:token", async (req, reply) => {
   const { token } = req.params
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) {
@@ -399,24 +415,40 @@ fastify.get("/helper/:token", async (req, reply) => {
   const isActive = ["pending", "active", "pushing", "push_failed"].includes(sess.status)
   if (!isActive) return reply.code(410).send("Aktarım aktif değil")
 
-  let template
-  try {
-    template = await readFile(join(__dirname, "helper-template.ps1"), "utf8")
-  } catch (err) {
-    fastify.log.error({ err }, "helper template okunamadı")
-    return reply.code(500).send("Helper template bulunamadı")
-  }
-
   const base = (req.headers["x-forwarded-proto"] || "http") + "://" + (req.headers.host || "aktarim.pusulanet.net")
-  const script = template
-    .replace("'__TOKEN_PLACEHOLDER__'",    JSON.stringify(token))
-    .replace("'__BASE_URL_PLACEHOLDER__'", JSON.stringify(base))
-    .replace("'__FIRMA_PLACEHOLDER__'",    JSON.stringify(sess.firmaName))
+
+  // .bat wrapper — PowerShell'i bypass ile başlatır, script'i Ubuntu'dan çekip çalıştırır
+  // CRLF satır sonu (Windows .bat için)
+  const bat = [
+    `@echo off`,
+    `chcp 65001 >nul`,
+    `title Pusula Backup Helper - ${sess.firmaName}`,
+    `echo.`,
+    `echo  Pusula Backup Helper`,
+    `echo  Firma: ${sess.firmaName}`,
+    `echo.`,
+    `echo  Yardimci script indiriliyor...`,
+    `echo.`,
+    `powershell -NoProfile -ExecutionPolicy Bypass -Command "$ErrorActionPreference='Stop'; try { Invoke-Expression ((Invoke-WebRequest '${base}/helper-script/${token}' -UseBasicParsing).Content) } catch { Write-Host ''; Write-Host ('HATA: ' + $_.Exception.Message) -ForegroundColor Red; Read-Host 'Cikmak icin Enter' }`,
+    ``,
+  ].join("\r\n")
 
   reply
-    .header("Content-Disposition", `attachment; filename="pusula-backup-${sess.companyId}.ps1"`)
+    .header("Content-Disposition", `attachment; filename="pusula-backup-${sess.companyId}.bat"`)
     .type("application/octet-stream")
-    .send(script)
+    .send(bat)
+})
+
+fastify.get("/helper-script/:token", async (req, reply) => {
+  const { token } = req.params
+  if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) {
+    return reply.code(404).send("# Geçersiz token")
+  }
+  const base = (req.headers["x-forwarded-proto"] || "http") + "://" + (req.headers.host || "aktarim.pusulanet.net")
+  const script = await renderHelperScript(token, base)
+  if (!script) return reply.code(410).send("# Aktarım aktif değil veya bulunamadı")
+
+  reply.type("text/plain; charset=utf-8").send(script)
 })
 
 fastify.get("/:token", async (req, reply) => {
@@ -760,6 +792,11 @@ function renderHtml(token) {
 
     <div class="intro card">
       <p>Veritabanı (.bak) ve resim klasörlerinizi aşağıdaki alanlardan seçin. Seçim sonrası özet görüntülenir; <strong>"Aktarımı Başlat"</strong> butonuna basana kadar yükleme başlamaz.</p>
+      <div style="margin-top:10px; padding:10px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:5px; font-size:12px; color:#1e3a8a; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+        <strong>SQL yedeği için yardımcı uygulama:</strong>
+        <span>SQL Server üzerinde manuel .bak almak istemiyorsanız, otomatik yardımcıyı indirip çalıştırın.</span>
+        <a href="/helper/${token}" download style="padding:6px 12px; border-radius:5px; background:#1d4ed8; color:#fff; text-decoration:none; font-weight:500; white-space:nowrap">⬇ Helper İndir</a>
+      </div>
       <div id="notes" class="note hidden"></div>
     </div>
 
