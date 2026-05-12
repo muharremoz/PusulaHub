@@ -2955,126 +2955,129 @@ tr:nth-child(even) td{background:#fafafa}
 
       {/* Erişim Bilgileri Modal'ı — VPN/RDP/API/SQL kullanıcı + URL özetleri */}
       <Dialog open={accessOpen} onOpenChange={setAccessOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-[14px]">
-              <KeyRound className="h-4 w-4" />
-              Erişim Bilgileri — {selectedFirma?.firma}
+        <DialogContent className="max-w-2xl p-0 gap-0">
+          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
+            <DialogTitle className="flex items-center gap-2 text-[13px]">
+              <KeyRound className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground font-normal">Erişim Bilgileri</span>
+              <span className="text-foreground">— {selectedFirma?.firma}</span>
             </DialogTitle>
           </DialogHeader>
 
-          {accessLoading && (
-            <div className="space-y-2 py-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-14 w-full rounded-[5px]" />
-              ))}
-            </div>
-          )}
+          <div className="px-5 py-4">
+            {accessLoading && (
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-16 w-full rounded-[6px]" />
+                ))}
+              </div>
+            )}
 
-          {!accessLoading && accessError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[12px] text-red-700">
-              {accessError}
-            </div>
-          )}
+            {!accessLoading && accessError && (
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-[6px] border border-red-200 bg-red-50 text-[12px] text-red-700">
+                {accessError}
+              </div>
+            )}
 
-          {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
-            const firkod = selectedFirma.firkod
-            const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
-            const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
-            const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
-            const sqlIp = tabSQL[0]?.ServerIP || ""
-            const credentials = accessInfo.credentials ?? {}
-            const hasAnyPassword = Object.keys(credentials).length > 0
+            {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
+              const firkod = selectedFirma.firkod
+              const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
+              const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
+              const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
+              const sqlIp = tabSQL[0]?.ServerIP || ""
+              const credentials = accessInfo.credentials ?? {}
+              const hasAnyPassword = Object.keys(credentials).length > 0
 
-            return (
-              <div className="max-h-[60vh] overflow-y-auto pr-1 space-y-3 text-[11px]">
+              return (
+                <div className="max-h-[62vh] overflow-y-auto pr-1 space-y-4">
 
-                {/* Sunucular özeti */}
-                <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-                    Sunucular
-                  </div>
-                  <div className="divide-y divide-border/40">
+                  {/* Sunucular özeti */}
+                  <AccessSection title="Sunucular">
                     {accessInfo.ad && (
-                      <CopyableRow
-                        label="AD"
-                        value={`${accessInfo.ad.name} (${accessInfo.ad.ip})${accessInfo.ad.domain ? ` · ${accessInfo.ad.domain}` : ""}`}
+                      <AccessRow
+                        label="AD Sunucusu"
+                        value={`${accessInfo.ad.domain || accessInfo.ad.name} · ${accessInfo.ad.ip}`}
                         copyValue={accessInfo.ad.ip}
                       />
                     )}
                     {accessInfo.windows && (
-                      <CopyableRow
+                      <AccessRow
                         label="RDP"
-                        value={rdpTarget || `${accessInfo.windows.name} (${accessInfo.windows.ip})`}
+                        value={rdpTarget || `${accessInfo.windows.name} · ${accessInfo.windows.ip}`}
                         copyValue={rdpTarget || accessInfo.windows.ip}
                       />
                     )}
-                    {sqlIp && <CopyableRow label="SQL" value={sqlIp} copyValue={sqlIp} />}
-                  </div>
-                </div>
+                    {sqlIp && <AccessRow label="SQL" value={sqlIp} copyValue={sqlIp} />}
+                  </AccessSection>
 
-                {/* Kullanıcılar */}
-                {tabUsers.length > 0 && (
-                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-                      Kullanıcılar ({tabUsers.length})
-                    </div>
-                    <div className="divide-y divide-border/40">
-                      {tabUsers.map((u) => {
-                        const vpnUser = u.username  // AD'den zaten "2507.vefa1" formatında
-                        const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
-                        const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
-                        const pw = credentials[u.username] ?? ""
-                        return (
-                          <div key={u.username} className="px-3 py-2 space-y-1.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{u.displayName || u.username}</span>
-                              {!u.enabled && <span className="text-[9px] px-1.5 py-0.5 rounded-[3px] bg-red-50 text-red-700 border border-red-200">Pasif</span>}
-                            </div>
-                            <CopyableRow label="VPN" value={vpnUser} copyValue={vpnUser} compact />
-                            {pw ? (
-                              <CopyablePasswordRow label="Şifre" value={pw} />
-                            ) : (
-                              <div className="grid grid-cols-[60px_1fr] gap-x-3">
-                                <span className="text-muted-foreground">Şifre</span>
-                                <span className="text-muted-foreground italic">(saklanmamış — wizard öncesi user)</span>
+                  {/* Kullanıcılar */}
+                  {tabUsers.length > 0 && (
+                    <AccessSection title={`Kullanıcılar (${tabUsers.length})`}>
+                      <div className="px-3 py-2 space-y-2">
+                        {tabUsers.map((u) => {
+                          const vpnUser = u.username  // AD'den zaten "2507.vefa1" formatında
+                          const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
+                          const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
+                          const pw = credentials[u.username] ?? ""
+                          return (
+                            <div
+                              key={u.username}
+                              className="rounded-[6px] border border-border/40 bg-white overflow-hidden"
+                            >
+                              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 border-b border-border/30">
+                                <span className="text-[12px] font-medium">{u.displayName || u.username}</span>
+                                {!u.enabled && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-[3px] bg-red-50 text-red-700 border border-red-200 uppercase tracking-wide">
+                                    Pasif
+                                  </span>
+                                )}
                               </div>
-                            )}
-                            {accessInfo.windows && (
-                              <CopyableRow label="RDP" value={fullUser} copyValue={fullUser} compact />
-                            )}
-                            {tabIIS.length > 0 && (
-                              <CopyableRow label="API" value={apiUser} copyValue={apiUser} compact />
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                              <div className="divide-y divide-border/30">
+                                <AccessRow label="VPN" value={vpnUser} copyValue={vpnUser} />
+                                {pw ? (
+                                  <AccessPasswordRow label="Şifre" value={pw} />
+                                ) : (
+                                  <div className="flex items-center gap-3 px-3 py-2">
+                                    <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">Şifre</span>
+                                    <span className="text-[11px] text-muted-foreground/70 italic">
+                                      Saklanmamış (sihirbaz öncesi kullanıcı)
+                                    </span>
+                                  </div>
+                                )}
+                                {accessInfo.windows && (
+                                  <AccessRow label="RDP" value={fullUser} copyValue={fullUser} />
+                                )}
+                                {tabIIS.length > 0 && (
+                                  <AccessRow label="API" value={apiUser} copyValue={apiUser} />
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </AccessSection>
+                  )}
 
-                {/* Web Hizmetleri */}
-                {tabIIS.length > 0 && (
-                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-                      Web Hizmetleri ({tabIIS.length})
-                    </div>
-                    <div className="divide-y divide-border/40">
+                  {/* Web Hizmetleri */}
+                  {tabIIS.length > 0 && (
+                    <AccessSection title={`Web Hizmetleri (${tabIIS.length})`}>
                       {tabIIS.map((s) => {
                         // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
                         const portMatch = (s.Binding || "").match(/:(\d+)/)
                         const port = portMatch?.[1]
-                        // WAN'dan erişim için DNS tercih edilir, yoksa IP'ye düşer
                         const host = (accessInfo.iis?.dns?.trim()) || s.ServerIP || ""
                         const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "—")
                         return (
-                          <div key={s.Id} className="grid grid-cols-[1fr_auto_24px] px-3 py-2 items-center gap-2">
-                            <span className="font-medium truncate">{s.Name}</span>
+                          <div
+                            key={s.Id}
+                            className="flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors"
+                          >
+                            <span className="text-[12px] font-medium flex-1 truncate">{s.Name}</span>
                             <a
                               href={url.startsWith("http") ? url : undefined}
                               target="_blank"
                               rel="noreferrer"
-                              className="font-mono text-blue-600 hover:underline shrink-0"
+                              className="text-[12px] text-blue-600 hover:underline shrink-0"
                             >
                               {url}
                             </a>
@@ -3082,44 +3085,39 @@ tr:nth-child(even) td{background:#fafafa}
                           </div>
                         )
                       })}
-                    </div>
-                  </div>
-                )}
+                    </AccessSection>
+                  )}
 
-                {/* Veritabanları */}
-                {tabSQL.length > 0 && (
-                  <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-                      Veritabanları ({tabSQL.length})
-                    </div>
-                    <div className="divide-y divide-border/40">
+                  {/* Veritabanları */}
+                  {tabSQL.length > 0 && (
+                    <AccessSection title={`Veritabanları (${tabSQL.length})`}>
                       {tabUsers[0] && (() => {
                         const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
                         const sqlPw    = credentials[tabUsers[0].username] ?? ""
                         return (
                           <>
-                            <CopyableRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
-                            {sqlPw && <CopyablePasswordRow label="Şifre" value={sqlPw} />}
+                            <AccessRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
+                            {sqlPw && <AccessPasswordRow label="Şifre" value={sqlPw} />}
                           </>
                         )
                       })()}
                       {tabSQL.map((d) => (
-                        <CopyableRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
+                        <AccessRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
                       ))}
+                    </AccessSection>
+                  )}
+
+                  {!hasAnyPassword && (
+                    <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[6px] px-3 py-2">
+                      Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının şifresini sıfırlama sonrası burada görünür.
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
+              )
+            })()}
+          </div>
 
-                {!hasAnyPassword && (
-                  <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-[5px] px-3 py-2">
-                    Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının şifresini sıfırlama sonrası burada görünür.
-                  </div>
-                )}
-              </div>
-            )
-          })()}
-
-          <div className="flex items-center justify-end gap-2 pt-3 border-t border-border/40 mt-2">
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/50 bg-muted/10">
             <button
               onClick={() => setAccessOpen(false)}
               className="px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 text-[11px] font-medium text-muted-foreground transition-colors"
@@ -3171,22 +3169,35 @@ function CopyIconButton({ value }: { value: string }) {
   )
 }
 
-function CopyableRow({ label, value, copyValue, compact }: { label: string; value: string; copyValue: string; compact?: boolean }) {
+function AccessSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className={`grid ${compact ? "grid-cols-[60px_1fr_24px]" : "grid-cols-[100px_1fr_24px]"} px-3 py-1.5 items-center gap-2`}>
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono truncate">{value}</span>
+    <div className="rounded-[6px] border border-border/50 overflow-hidden bg-white">
+      <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+        {title}
+      </div>
+      <div className="divide-y divide-border/40">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function AccessRow({ label, value, copyValue }: { label: string; value: string; copyValue: string }) {
+  return (
+    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors">
+      <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">{label}</span>
+      <span className="text-[12px] flex-1 truncate">{value}</span>
       <CopyIconButton value={copyValue} />
     </div>
   )
 }
 
-function CopyablePasswordRow({ label, value }: { label: string; value: string }) {
+function AccessPasswordRow({ label, value }: { label: string; value: string }) {
   const [show, setShow] = useState(false)
   return (
-    <div className="grid grid-cols-[60px_1fr_24px_24px] px-3 py-1.5 items-center gap-2">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-mono truncate select-all">
+    <div className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors">
+      <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">{label}</span>
+      <span className="text-[12px] flex-1 truncate select-all tracking-wider">
         {show ? value : "•".repeat(Math.min(value.length, 12))}
       </span>
       <button
