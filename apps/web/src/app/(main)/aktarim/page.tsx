@@ -14,7 +14,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { copyToClipboard } from "@/lib/clipboard"
 import { toast } from "sonner"
 import {
-  ArrowRightLeft, Plus, Copy, CheckCheck, Link2, X, Trash2,
+  ArrowRightLeft, Plus, CheckCheck, Link2, Trash2,
   Search, Database, HardDrive, Building2, Clock, AlertCircle,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -88,7 +88,6 @@ export default function AktarimPage() {
   const [loading, setLoading]           = useState(true)
   const [error, setError]               = useState<string | null>(null)
   const [newOpen, setNewOpen]           = useState(false)
-  const [cancelTarget, setCancelTarget] = useState<TransferSession | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<TransferSession | null>(null)
 
   const reload = useCallback(async () => {
@@ -111,19 +110,6 @@ export default function AktarimPage() {
     const id = setInterval(reload, 2000)
     return () => clearInterval(id)
   }, [reload])
-
-  async function handleCancel(id: string) {
-    try {
-      const r = await fetch(`/api/aktarim/${id}`, { method: "POST" })
-      if (!r.ok) throw new Error("İptal başarısız")
-      toast.success("Aktarım iptal edildi")
-      reload()
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Hata")
-    } finally {
-      setCancelTarget(null)
-    }
-  }
 
   async function handleDelete(id: string) {
     try {
@@ -180,7 +166,6 @@ export default function AktarimPage() {
         ) : (
           <SessionTable
             sessions={active}
-            onCancel={(s) => setCancelTarget(s)}
             onDelete={(s) => setDeleteTarget(s)}
             isActive
           />
@@ -204,7 +189,6 @@ export default function AktarimPage() {
         ) : (
           <SessionTable
             sessions={past}
-            onCancel={(s) => setCancelTarget(s)}
             onDelete={(s) => setDeleteTarget(s)}
             isActive={false}
           />
@@ -216,26 +200,6 @@ export default function AktarimPage() {
         onOpenChange={setNewOpen}
         onCreated={() => { reload(); setNewOpen(false) }}
       />
-
-      <AlertDialog open={!!cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Aktarımı iptal et</AlertDialogTitle>
-            <AlertDialogDescription>
-              {cancelTarget?.firmaName} firması için oluşturulan aktarım iptal edilecek. Müşteri linki artık çalışmayacak.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => cancelTarget && handleCancel(cancelTarget.id)}
-              className="bg-destructive text-white hover:bg-destructive/90"
-            >
-              İptal Et
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>
@@ -260,11 +224,13 @@ export default function AktarimPage() {
   )
 }
 
+const GRID_ACTIVE = "grid-cols-[minmax(180px,1fr)_90px_minmax(180px,1.2fr)_minmax(180px,1.2fr)_60px_90px_40px] gap-x-4"
+const GRID_PAST   = "grid-cols-[minmax(180px,1fr)_90px_minmax(140px,1fr)_minmax(140px,1fr)_60px_40px] gap-x-4"
+
 function SessionTable({
-  sessions, onCancel, onDelete, isActive,
+  sessions, onDelete, isActive,
 }: {
   sessions: TransferSession[]
-  onCancel: (s: TransferSession) => void
   onDelete: (s: TransferSession) => void
   isActive: boolean
 }) {
@@ -273,15 +239,16 @@ function SessionTable({
       {/* Header */}
       <div className={cn(
         "grid items-center px-3 py-1.5 bg-muted/30 border-b border-border/40",
-        isActive
-          ? "grid-cols-[1fr_90px_220px_220px_60px_140px]"
-          : "grid-cols-[1fr_90px_140px_140px_60px_100px]",
+        isActive ? GRID_ACTIVE : GRID_PAST,
       )}>
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Firma</span>
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veri</span>
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Resimler</span>
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">Toplam</span>
+        {isActive && (
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Link</span>
+        )}
         <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">İşlem</span>
       </div>
 
@@ -290,7 +257,6 @@ function SessionTable({
           <SessionRow
             key={s.id}
             s={s}
-            onCancel={onCancel}
             onDelete={onDelete}
             isActiveTable={isActive}
           />
@@ -301,10 +267,9 @@ function SessionTable({
 }
 
 function SessionRow({
-  s, onCancel, onDelete, isActiveTable,
+  s, onDelete, isActiveTable,
 }: {
   s: TransferSession
-  onCancel: (s: TransferSession) => void
   onDelete: (s: TransferSession) => void
   isActiveTable: boolean
 }) {
@@ -318,8 +283,6 @@ function SessionRow({
       ? Math.round(((s.dataBytesReceived + s.imageBytesReceived) / (s.dataBytesTotal + s.imageBytesTotal)) * 100)
       : 0
 
-  const isRowActive = ["pending", "active", "pushing"].includes(s.status)
-
   async function handleCopyLink() {
     const ok = await copyToClipboard(url)
     if (ok) {
@@ -332,9 +295,7 @@ function SessionRow({
   return (
     <div className={cn(
       "grid items-center px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors",
-      isActiveTable
-        ? "grid-cols-[1fr_90px_220px_220px_60px_140px]"
-        : "grid-cols-[1fr_90px_140px_140px_60px_100px]",
+      isActiveTable ? GRID_ACTIVE : GRID_PAST,
     )}>
       {/* Firma */}
       <div className="min-w-0">
@@ -353,7 +314,7 @@ function SessionRow({
       <div>{statusBadge(s.status)}</div>
 
       {/* Veri */}
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 min-w-0">
         <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
           <Database className="h-3 w-3 shrink-0" />
           <span className="tabular-nums truncate">{formatBytes(s.dataBytesReceived)} / {formatBytes(s.dataBytesTotal)}</span>
@@ -363,7 +324,7 @@ function SessionRow({
       </div>
 
       {/* Resimler */}
-      <div className="space-y-0.5">
+      <div className="space-y-0.5 min-w-0">
         <div className="flex items-center gap-1.5 text-muted-foreground text-[10px]">
           <HardDrive className="h-3 w-3 shrink-0" />
           <span className="tabular-nums truncate">{s.imageFilesReceived.toLocaleString("tr")} / {s.imageFilesTotal.toLocaleString("tr")}</span>
@@ -375,29 +336,22 @@ function SessionRow({
       {/* Toplam */}
       <div className="text-right tabular-nums font-medium">{overallPct}%</div>
 
-      {/* İşlem */}
-      <div className="flex items-center justify-end gap-1">
-        {isActiveTable && (
-          <>
-            <button
-              onClick={handleCopyLink}
-              className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors"
-              title={url}
-            >
-              {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
-              {copied ? "Kopyalandı" : "Link"}
-            </button>
-          </>
-        )}
-        {isRowActive && (
+      {/* Link — sadece aktif tabloda ayrı sütun */}
+      {isActiveTable && (
+        <div>
           <button
-            onClick={() => onCancel(s)}
-            className="flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-            title="İptal et"
+            onClick={handleCopyLink}
+            className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors w-full justify-center"
+            title={url}
           >
-            <X className="h-3 w-3" />
+            {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
+            {copied ? "Kopyalandı" : "Link"}
           </button>
-        )}
+        </div>
+      )}
+
+      {/* İşlem — sadece sil */}
+      <div className="flex items-center justify-end">
         <button
           onClick={() => onDelete(s)}
           className="flex items-center justify-center size-6 rounded-[4px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
