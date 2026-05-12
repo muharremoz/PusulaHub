@@ -14,38 +14,24 @@ import { query } from "@/lib/db"
 import { decrypt } from "@/lib/crypto"
 
 interface ServerCred {
-  Name:        string
-  IP:          string
-  Username:    string | null   // Windows admin (SMB için)
-  Password:    string | null
-  SqlUsername: string | null   // SQL Auth (BACKUP DATABASE için)
-  SqlPassword: string | null
-}
-
-function maybeDecrypt(s: string | null): string | null {
-  if (!s) return null
-  if (s.startsWith("enc:v1:")) {
-    try { const dec = decrypt(s); if (dec) return dec } catch { /* plain */ }
-  }
-  return s
+  Name:     string
+  IP:       string
+  Username: string | null   // Windows admin (push SMB için)
+  Password: string | null
 }
 
 async function loadServerCreds(id: string | null | undefined): Promise<ServerCred | null> {
   if (!id) return null
   const rows = await query<ServerCred[]>`
-    SELECT Name, IP, Username, Password, SqlUsername, SqlPassword
-    FROM Servers WHERE Id = ${id}
+    SELECT Name, IP, Username, Password FROM Servers WHERE Id = ${id}
   `
   if (!rows.length) return null
   const r = rows[0]
-  return {
-    Name:        r.Name,
-    IP:          r.IP,
-    Username:    r.Username,
-    Password:    maybeDecrypt(r.Password),
-    SqlUsername: r.SqlUsername,
-    SqlPassword: maybeDecrypt(r.SqlPassword),
+  let pw: string | null = r.Password ?? null
+  if (pw && pw.startsWith("enc:v1:")) {
+    try { const dec = decrypt(pw); if (dec) pw = dec } catch { /* plain */ }
   }
+  return { Name: r.Name, IP: r.IP, Username: r.Username, Password: pw }
 }
 
 export async function GET() {
@@ -83,16 +69,14 @@ export async function POST(req: NextRequest) {
     const payload: CreateInput = {
       ...body,
       createdBy,
-      sqlServerName:    sqlSrv?.Name        ?? null,
-      sqlServerIp:      sqlSrv?.IP          ?? null,
-      sqlUsername:      sqlSrv?.Username    ?? null,
-      sqlPassword:      sqlSrv?.Password    ?? null,
-      sqlAuthUsername:  sqlSrv?.SqlUsername ?? null,
-      sqlAuthPassword:  sqlSrv?.SqlPassword ?? null,
-      depoServerName:   depoSrv?.Name       ?? null,
-      depoServerIp:     depoSrv?.IP         ?? null,
-      depoUsername:     depoSrv?.Username   ?? null,
-      depoPassword:     depoSrv?.Password   ?? null,
+      sqlServerName:  sqlSrv?.Name      ?? null,
+      sqlServerIp:    sqlSrv?.IP        ?? null,
+      sqlUsername:    sqlSrv?.Username  ?? null,
+      sqlPassword:    sqlSrv?.Password  ?? null,
+      depoServerName: depoSrv?.Name     ?? null,
+      depoServerIp:   depoSrv?.IP       ?? null,
+      depoUsername:   depoSrv?.Username ?? null,
+      depoPassword:   depoSrv?.Password ?? null,
     }
     const sess = await createSession(payload)
     return NextResponse.json(sess)

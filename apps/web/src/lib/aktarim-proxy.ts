@@ -67,16 +67,14 @@ export interface CreateInput {
   sqlServerId?:    string | null
   depoServerId?:   string | null
   /** Ubuntu'ya geçen alanlar (Hub backend doldurur) */
-  sqlServerName?:   string | null
-  sqlServerIp?:     string | null
-  sqlUsername?:     string | null   // Windows admin (SMB)
-  sqlPassword?:     string | null
-  sqlAuthUsername?: string | null   // SQL Auth (BACKUP DATABASE)
-  sqlAuthPassword?: string | null
-  depoServerName?:  string | null
-  depoServerIp?:    string | null
-  depoUsername?:    string | null
-  depoPassword?:    string | null
+  sqlServerName?:  string | null
+  sqlServerIp?:    string | null
+  sqlUsername?:    string | null   // Windows admin (push SMB)
+  sqlPassword?:    string | null
+  depoServerName?: string | null
+  depoServerIp?:   string | null
+  depoUsername?:   string | null
+  depoPassword?:   string | null
   expiresInDays?:  number
   createdBy?:      string | null
   notes?:          string | null
