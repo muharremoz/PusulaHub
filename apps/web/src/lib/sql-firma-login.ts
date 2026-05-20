@@ -1,13 +1,21 @@
 /**
  * Firma kurulum sihirbazında 1. kullanıcı için SQL Authentication login
- * oluşturma ve restore edilen veritabanlarına user mapping verme yardımcısı.
+ * oluşturma + sunucu seviyesinde DENY VIEW ANY DATABASE + restore edilen
+ * her DB'nin owner'ını bu login'e devretme yardımcısı.
  *
  * Akış (run/route.ts içinden çağrılır):
- *  - ensureSqlLogin     → master DB'de CREATE/ALTER LOGIN
- *  - ensureDbUserMapping → her restore edilen DB'de CREATE USER + ALTER ROLE
+ *  - ensureSqlLogin         → master DB'de CREATE/ALTER LOGIN
+ *  - denyViewAnyDatabase    → master'da DENY VIEW ANY DATABASE
+ *                             (kullanıcı sadece kendi DB'lerini görür)
+ *  - setDbOwner             → her restore edilen DB'de ALTER AUTHORIZATION
+ *                             (login bu DB'nin dbo'su olur — tam yetki,
+ *                              ayrıca rol verilmesi gerekmez)
  *
  * Login adı formatı: `{firmaId}_{username}` (örn. "3844_AsyaBurma23")
- * Roller: db_owner, db_datareader, db_datawriter (public default'tur)
+ *
+ * Not: Eski `ensureDbUserMapping` (CREATE USER + 3 rol) yerine bu pattern'e
+ * geçildi. Owner zaten dbo yetkilerine sahip olduğu için ek rol gerekmez ve
+ * DENY VIEW ANY DATABASE ile diğer firma DB'leri görünmez kalır.
  */
 
 import sql from "mssql"
@@ -74,30 +82,66 @@ export async function ensureSqlLogin(
   return { created: true }
 }
 
-/** Verilen DB'de login için user oluşturup db_owner/datareader/datawriter rolleri verir. */
-export async function ensureDbUserMapping(
+/**
+ * Login'e sunucu seviyesinde `DENY VIEW ANY DATABASE` verir.
+ *
+ * Bu izin sayesinde kullanıcı SSMS / sqlcmd ile bağlandığında **sadece**
+ * owner'ı olduğu (veya kendine erişim verilmiş olan) DB'leri görür —
+ * diğer firmaların DB'leri "Databases" listesinde görünmez.
+ *
+ * DENY tekrar çalıştırıldığında hata vermez (idempotent).
+ *
+ * @param masterPool  master DB'sine bağlı mssql ConnectionPool
+ * @param loginName   "{firmaId}_{username}" formatında
+ */
+export async function denyViewAnyDatabase(
+  masterPool: sql.ConnectionPool,
+  loginName:  string,
+): Promise<void> {
+  const ident = escapeIdent(loginName)
+  await masterPool.request().batch(`
+    USE [master];
+    DENY VIEW ANY DATABASE TO [${ident}];
+  `)
+}
+
+/**
+ * Verilen DB'nin owner'ını (authorization) login'e devreder.
+ *
+ *  - Eğer DB'de aynı isimde bir user zaten varsa (örn. eski sihirbazın
+ *    CREATE USER FOR LOGIN ile bıraktığı kalıntı), ALTER AUTHORIZATION
+ *    *"The proposed new database owner is already a user or aliased in
+ *    the database"* hatası verir → önce DROP USER ile temizliyoruz.
+ *  - Sonra ALTER AUTHORIZATION ON DATABASE::[X] TO [login] ile owner set.
+ *
+ * Owner olan login otomatik olarak DB'nin `dbo`'su olur → tam yetki,
+ * ayrıca db_owner / db_datareader / db_datawriter eklemek gerekmez.
+ *
+ * @param masterPool  master DB'sine bağlı mssql ConnectionPool
+ * @param dbName      hedef veritabanı adı
+ * @param loginName   yeni owner login adı
+ */
+export async function setDbOwner(
   masterPool: sql.ConnectionPool,
   dbName:     string,
   loginName:  string,
 ): Promise<void> {
   const dbIdent    = escapeIdent(dbName)
   const loginIdent = escapeIdent(loginName)
+  const loginLit   = escapeString(loginName)
 
-  // USE + CREATE USER (idempotent) + 3 rol — tek batch
-  // Login adıyla aynı isimde user oluşturulur (SQL Server standart pratik).
   await masterPool.request().batch(`
     USE [${dbIdent}];
 
-    IF NOT EXISTS (
+    -- Eski kurulumdan kalma user varsa düşür (yoksa owner ataması patlar).
+    IF EXISTS (
       SELECT 1 FROM sys.database_principals
-      WHERE name = N'${escapeString(loginName)}'
+      WHERE name = N'${loginLit}' AND type IN ('S','U','G')
     )
     BEGIN
-      CREATE USER [${loginIdent}] FOR LOGIN [${loginIdent}];
+      DROP USER [${loginIdent}];
     END
 
-    ALTER ROLE db_owner      ADD MEMBER [${loginIdent}];
-    ALTER ROLE db_datareader ADD MEMBER [${loginIdent}];
-    ALTER ROLE db_datawriter ADD MEMBER [${loginIdent}];
+    ALTER AUTHORIZATION ON DATABASE::[${dbIdent}] TO [${loginIdent}];
   `)
 }

@@ -4,7 +4,7 @@ import { execOnAgent } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer } from "@/lib/sql-restore"
-import { ensureSqlLogin, ensureDbUserMapping } from "@/lib/sql-firma-login"
+import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner } from "@/lib/sql-firma-login"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
@@ -938,13 +938,26 @@ export async function POST(req: NextRequest) {
                     )
 
                     if (loginOk) {
+                      // Sunucu seviyesinde DENY VIEW ANY DATABASE → kullanıcı
+                      // sadece owner'ı olduğu DB'leri görür.
+                      await runSqlStep(
+                        `sql_deny_view_${loginName}`,
+                        `DENY VIEW ANY DATABASE: ${loginName}`,
+                        async () => {
+                          await denyViewAnyDatabase(masterPool, loginName)
+                          return `DENY VIEW ANY DATABASE TO [${loginName}]`
+                        },
+                      )
+
+                      // Restore edilen her DB'nin owner'ını bu login'e devret.
+                      // Owner otomatik olarak dbo olur → ayrıca rol vermeye gerek yok.
                       for (const dbName of restoredDbNames) {
                         await runSqlStep(
-                          `sql_usermap_${dbName}`,
-                          `User mapping: [${dbName}] → ${loginName}`,
+                          `sql_dbowner_${dbName}`,
+                          `DB owner ayarlanıyor: [${dbName}] → ${loginName}`,
                           async () => {
-                            await ensureDbUserMapping(masterPool, dbName, loginName)
-                            return `db_owner + db_datareader + db_datawriter`
+                            await setDbOwner(masterPool, dbName, loginName)
+                            return `ALTER AUTHORIZATION ON DATABASE::[${dbName}] TO [${loginName}]`
                           },
                         )
                       }
