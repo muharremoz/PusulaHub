@@ -938,6 +938,10 @@ tr:nth-child(even) td{background:#fafafa}
 
   useEffect(() => {
     if (!selectedFirma) return
+    // company-detail yetkisi olmayan kullanıcılar için detay tablarını fetch etme —
+    // hepsi 403 döner ve gereksiz yük olur. Bu kullanıcılar firmaya tıklayınca
+    // doğrudan Erişim Bilgileri modal'ı açılır (selectFirma içinde).
+    if (!canViewCompanyDetail) return
     const firkod = selectedFirma.firkod
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     setCompanyDetail(null)
@@ -958,9 +962,29 @@ tr:nth-child(even) td{background:#fafafa}
     }).catch(() => {}).finally(() => { setTabLoading(false); setDetailLoading(false) })
   }, [selectedFirma?.firkod])
 
-  function selectFirma(f: FirmaCompany) {
+  async function selectFirma(f: FirmaCompany) {
+    // company-detail yetkisi olmayan (rol: kullanıcı) için detay panelini açmak
+    // yerine doğrudan "Erişim Bilgileri" modal'ını göster. selectedFirma yine
+    // set edilir — modal başlığında firma adı, buildAccessText vs. ona bakar —
+    // ama yukarıdaki detay useEffect canViewCompanyDetail guard'ı ile skip eder.
     if (!canViewCompanyDetail) {
-      toast.error("Firma detayını görme yetkiniz yok")
+      setSelectedFirma(f)
+      setSearchOpen(false)
+      setSearchQuery("")
+      setAccessOpen(true)
+      setAccessError(null)
+      setAccessLoading(true)
+      setAccessInfo(null)
+      try {
+        const r = await fetch(`/api/companies/${encodeURIComponent(f.firkod)}/access-info`)
+        const d = await r.json()
+        if (!r.ok) throw new Error(d?.error ?? "Erişim bilgileri alınamadı")
+        setAccessInfo(d as AccessInfoResponse)
+      } catch (err) {
+        setAccessError(err instanceof Error ? err.message : "İstek başarısız")
+      } finally {
+        setAccessLoading(false)
+      }
       return
     }
     setSelectedFirma(f)
@@ -2954,7 +2978,20 @@ tr:nth-child(even) td{background:#fafafa}
       )}
 
       {/* Erişim Bilgileri Modal'ı — VPN/RDP/API/SQL kullanıcı + URL özetleri */}
-      <Dialog open={accessOpen} onOpenChange={setAccessOpen}>
+      <Dialog
+        open={accessOpen}
+        onOpenChange={(open) => {
+          setAccessOpen(open)
+          // company-detail yetkisi olmayan kullanıcı modal'ı kapattığında
+          // selectedFirma'yı da temizle — aksi halde sağ panel boş bir
+          // detay görünümü ile takılı kalır.
+          if (!open && !canViewCompanyDetail) {
+            setSelectedFirma(null)
+            setAccessInfo(null)
+            setAccessError(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-2xl p-0 gap-0">
           <DialogHeader className="px-5 py-3.5 border-b border-border/50">
             <DialogTitle className="flex items-center gap-2 text-[13px]">

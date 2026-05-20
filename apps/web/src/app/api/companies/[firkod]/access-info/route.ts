@@ -60,7 +60,11 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ firkod: string }> },
 ) {
-  const gate = await requirePermission("company-detail", "read")
+  // Erişim Bilgileri modal'ı: "company-detail" yetkisi olmayan ama
+  // "companies" yetkisi olan (rol: kullanıcı) kişilere de açık. Bu kişiler
+  // firma detayını göremez ama firmaya bağlanmak için gerekli credential'ları
+  // görebilirler.
+  const gate = await requirePermission("companies", "read")
   if (gate) return gate
 
   const { firkod } = await params
