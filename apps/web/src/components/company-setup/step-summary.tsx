@@ -88,7 +88,8 @@ export function StepSummary({
     ...(hasSqlSelection && sqlDbCount > 0 && firstUser?.username
       ? [
           `SQL login oluşturulacak: ${firmaId}_${firstUser.username}`,
-          `${sqlDbCount} veritabanına kullanıcı yetkileri verilecek (db_owner, db_datareader, db_datawriter)`,
+          `DENY VIEW ANY DATABASE verilecek (kullanıcı sadece kendi DB'lerini görür)`,
+          `${sqlDbCount} veritabanının owner'ı ${firmaId}_${firstUser.username} olarak ayarlanacak`,
         ]
       : []),
   ]
