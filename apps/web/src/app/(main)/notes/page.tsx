@@ -98,9 +98,9 @@ function NoteList({
         {/* Kullanıcı filtresi — varsayılan: oturum sahibinin notları.
             "all" seçilince herkesin notları gösterilir. */}
         <Select value={userFilter} onValueChange={onUserFilter}>
-          <SelectTrigger className="h-7 text-[11px] rounded-[5px] bg-muted/40 border-border/40">
-            <div className="flex items-center gap-1.5">
-              <User className="size-3 text-muted-foreground" />
+          <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-white border-border/40">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <User className="size-3 text-muted-foreground shrink-0" />
               <SelectValue />
             </div>
           </SelectTrigger>
@@ -118,7 +118,7 @@ function NoteList({
             value={search}
             onChange={e => onSearch(e.target.value)}
             placeholder="Ara..."
-            className="h-7 pl-7 text-[11px] rounded-[5px] bg-muted/40 border-border/40"
+            className="h-7 pl-7 text-[11px] rounded-[5px] bg-white border-border/40"
           />
           {search && (
             <button onClick={() => onSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
