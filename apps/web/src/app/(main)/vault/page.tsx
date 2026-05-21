@@ -508,7 +508,9 @@ function EntrySheet({
             <SheetTitle className="text-sm">{entry ? "Girişi Düzenle" : "Yeni Giriş Ekle"}</SheetTitle>
           </SheetHeader>
 
-          <ScrollArea className="flex-1">
+          {/* min-h-0: flex-1 child'ın içeriği uzun olunca viewport dışına
+              taşmasını engeller; aksi halde alttaki footer kayboluyor. */}
+          <ScrollArea className="flex-1 min-h-0">
             <div className="px-4 py-4 space-y-3">
 
               {/* Kategori */}
