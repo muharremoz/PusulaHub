@@ -975,11 +975,25 @@ tr:nth-child(even) td{background:#fafafa}
       setAccessError(null)
       setAccessLoading(true)
       setAccessInfo(null)
+      // Modal'ın admin görünümüyle aynı bilgileri göstermesi için tab
+      // array'lerini de doldur (Kullanıcılar / Web Hizmetleri / Veritabanları
+      // bölümleri bunlardan okuyor). Bu endpoint'ler de "companies" yetkisini
+      // kabul ediyor.
+      setTabUsers([]); setTabIIS([]); setTabSQL([])
+      const firkod = f.firkod
       try {
-        const r = await fetch(`/api/companies/${encodeURIComponent(f.firkod)}/access-info`)
-        const d = await r.json()
-        if (!r.ok) throw new Error(d?.error ?? "Erişim bilgileri alınamadı")
-        setAccessInfo(d as AccessInfoResponse)
+        const [accessRes, users, iis, sqlDbs] = await Promise.all([
+          fetch(`/api/companies/${encodeURIComponent(firkod)}/access-info`)
+            .then(async (r) => ({ ok: r.ok, data: await r.json() })),
+          fetch(`/api/companies/${encodeURIComponent(firkod)}/users`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/companies/${encodeURIComponent(firkod)}/iis`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/companies/${encodeURIComponent(firkod)}/sql`).then(r => r.ok ? r.json() : []),
+        ])
+        if (!accessRes.ok) throw new Error(accessRes.data?.error ?? "Erişim bilgileri alınamadı")
+        setAccessInfo(accessRes.data as AccessInfoResponse)
+        setTabUsers(Array.isArray(users)  ? users  : [])
+        setTabIIS(Array.isArray(iis)      ? iis    : [])
+        setTabSQL(Array.isArray(sqlDbs)   ? sqlDbs : [])
       } catch (err) {
         setAccessError(err instanceof Error ? err.message : "İstek başarısız")
       } finally {
@@ -2989,6 +3003,9 @@ tr:nth-child(even) td{background:#fafafa}
             setSelectedFirma(null)
             setAccessInfo(null)
             setAccessError(null)
+            // No-perm modunda tab array'lerini biz manuel doldurmuştuk —
+            // detay useEffect bizim için temizlemediği için burada sıfırla.
+            setTabUsers([]); setTabIIS([]); setTabSQL([])
           }
         }}
       >

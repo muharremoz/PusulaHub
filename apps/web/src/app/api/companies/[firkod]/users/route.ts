@@ -26,7 +26,10 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
-  const gate = await requirePermission("company-detail", "read")
+  // Erişim Bilgileri modal'ı bu endpoint'i çağırıyor — "company-detail"
+  // yetkisi olmayan ama "companies" yetkisi olan (rol: kullanıcı) kişilere
+  // de açık. Modal admin/kullanıcı arasında aynı görünmeli.
+  const gate = await requirePermission("companies", "read")
   if (gate) return gate
   const { firkod } = await params
   try {
