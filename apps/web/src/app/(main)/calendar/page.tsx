@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback, useRef } from "react"
 import {
   ChevronLeft, ChevronRight, Plus, X, Clock, CalendarDays,
   ListTodo, StickyNote, AlarmClock, Trash2, CalendarRange,
-  Search, RotateCcw,
+  Search, RotateCcw, User,
 } from "lucide-react"
+import { useSession } from "next-auth/react"
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
   type DragStartEvent, type DragEndEvent,
@@ -710,6 +711,9 @@ type ViewMode = "month" | "week"
 
 export default function CalendarPage() {
   const today   = new Date()
+  const { data: session } = useSession()
+  const currentUser = session?.user?.name?.trim() || "Admin"
+
   const [viewMode,   setViewMode]   = useState<ViewMode>("month")
   const [current,    setCurrent]    = useState(new Date(today.getFullYear(), today.getMonth(), 1))
   const [weekOf,     setWeekOf]     = useState(weekStart(today))
@@ -717,6 +721,21 @@ export default function CalendarPage() {
   const [events,     setEvents]     = useState<CalendarEvent[]>([])
   const [loading,    setLoading]    = useState(false)
   const [showSearch, setShowSearch] = useState(false)
+
+  // ── Kullanıcı filtresi — varsayılan oturumdaki kullanıcı ──────────────
+  // Server tüm etkinlikleri döner, client'ta CreatedBy ile filtreliyoruz.
+  // userTouched ref: kullanıcı dropdown'a dokunduysa session geç gelirse
+  // override etmeyiz.
+  const [userFilter, setUserFilter] = useState<string>(currentUser)
+  const userTouched = useRef(false)
+  useEffect(() => {
+    if (!userTouched.current) setUserFilter(currentUser)
+  }, [currentUser])
+
+  const userOptions = Array.from(new Set(events.map(e => e.createdBy).filter(Boolean))).sort((a, b) => a.localeCompare(b, "tr"))
+  const visibleEvents = userFilter === "all"
+    ? events
+    : events.filter(e => e.createdBy === userFilter)
 
   const [sheetOpen,  setSheetOpen]  = useState(false)
   const [sheetMode,  setSheetMode]  = useState<SheetMode>("create")
@@ -817,11 +836,12 @@ export default function CalendarPage() {
   }
 
   /* ── Lejant sayaçları ── */
+  // Sayaçlar filtreli görünüme göre — kullanıcı kendi etkinliklerinin sayısını görür.
   const counts = {
-    event:    events.filter(e => e.type === "event").length,
-    reminder: events.filter(e => e.type === "reminder").length,
-    task:     events.filter(e => e.type === "task").length,
-    note:     events.filter(e => e.type === "note").length,
+    event:    visibleEvents.filter(e => e.type === "event").length,
+    reminder: visibleEvents.filter(e => e.type === "reminder").length,
+    task:     visibleEvents.filter(e => e.type === "task").length,
+    note:     visibleEvents.filter(e => e.type === "note").length,
   }
 
   const periodLabel = viewMode === "month"
@@ -838,6 +858,25 @@ export default function CalendarPage() {
         {/* ── Sol panel ── */}
         <div className="w-[220px] shrink-0 flex flex-col border-r border-border/40 bg-[#eef3ff]">
           <div className="px-3 pt-4 pb-2 space-y-2">
+            {/* Kullanıcı filtresi — varsayılan: oturum sahibinin etkinlikleri.
+                "Tüm kullanıcılar" seçilirse herkesin etkinlikleri görünür. */}
+            <Select
+              value={userFilter}
+              onValueChange={(v) => { userTouched.current = true; setUserFilter(v) }}
+            >
+              <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-white border-border/40">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <User className="size-3 text-muted-foreground shrink-0" />
+                  <SelectValue />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-[11px]">Tüm kullanıcılar</SelectItem>
+                {userOptions.map(u => (
+                  <SelectItem key={u} value={u} className="text-[11px]">{u}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button onClick={() => openCreate()} className="w-full h-8 text-[11px] rounded-[5px] gap-1.5">
               <Plus className="size-3.5" />Yeni Etkinlik
             </Button>
@@ -856,7 +895,7 @@ export default function CalendarPage() {
           {/* Arama paneli */}
           {showSearch && (
             <div className="border-t border-border/30 pb-1">
-              <SearchPanel events={events} onSelect={handleSearchSelect} onClose={() => setShowSearch(false)} />
+              <SearchPanel events={visibleEvents} onSelect={handleSearchSelect} onClose={() => setShowSearch(false)} />
             </div>
           )}
 
@@ -864,7 +903,7 @@ export default function CalendarPage() {
           {!showSearch && (
             <>
               <MiniCalendar
-                current={current} selected={selected} events={events}
+                current={current} selected={selected} events={visibleEvents}
                 onSelect={d => { setSelected(d); setCurrent(new Date(d.getFullYear(), d.getMonth(), 1)) }}
                 onNavigate={d => setCurrent(d)}
               />
@@ -886,7 +925,7 @@ export default function CalendarPage() {
             </>
           )}
 
-          <DayEventList date={selected} events={events} onSelect={openView} onCreate={openCreate} />
+          <DayEventList date={selected} events={visibleEvents} onSelect={openView} onCreate={openCreate} />
         </div>
 
         {/* ── Ana alan ── */}
@@ -913,9 +952,9 @@ export default function CalendarPage() {
           </div>
 
           {viewMode === "month"
-            ? <MonthGrid year={current.getFullYear()} month={current.getMonth()} events={events} selected={selected}
+            ? <MonthGrid year={current.getFullYear()} month={current.getMonth()} events={visibleEvents} selected={selected}
                 onSelectDay={setSelected} onSelectEvent={openView} onCreateOnDay={openCreate} />
-            : <WeekGrid weekOf={weekOf} events={events} onSelectEvent={openView} onCreateOnDay={openCreate} />
+            : <WeekGrid weekOf={weekOf} events={visibleEvents} onSelectEvent={openView} onCreateOnDay={openCreate} />
           }
         </div>
       </div>

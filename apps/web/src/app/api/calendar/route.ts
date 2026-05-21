@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
+import { auth } from "@/auth"
 
 export interface CalendarEvent {
   id:             string
@@ -153,8 +154,13 @@ export async function GET(req: NextRequest) {
 // POST /api/calendar
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
-    const id   = crypto.randomUUID()
+    const body    = await req.json()
+    const session = await auth()
+    const id      = crypto.randomUUID()
+    // CreatedBy önceliği: body → session.user.name → "Admin". Default'u
+    // session'dan almak, kullanıcının kendi etkinliklerinin kendi filtresinde
+    // hemen görünmesini sağlıyor.
+    const createdBy = body.createdBy?.trim() || session?.user?.name?.trim() || "Admin"
 
     await execute`
       INSERT INTO CalendarEvents
@@ -168,7 +174,7 @@ export async function POST(req: NextRequest) {
         ${body.allDay ? 1 : 0},
         ${body.color  ?? "#3b82f6"},
         ${body.type   ?? "event"},
-        ${body.createdBy ?? "Admin"},
+        ${createdBy},
         ${body.recurrenceType ?? null},
         ${body.recurrenceEnd  ?? null}
       )
