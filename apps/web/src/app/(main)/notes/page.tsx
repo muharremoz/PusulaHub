@@ -13,6 +13,10 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
+import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import type { NoteItem } from "@/app/api/notes/route"
@@ -45,6 +49,7 @@ function formatDate(iso: string) {
 /* ── Sol panel: Not listesi ── */
 function NoteList({
   notes, selected, loading, search, onSearch, onSelect, onCreate, onPin,
+  userFilter, userOptions, onUserFilter,
 }: {
   notes: NoteItem[]
   selected: string | null
@@ -54,9 +59,20 @@ function NoteList({
   onSelect: (id: string) => void
   onCreate: () => void
   onPin: (id: string, pinned: boolean) => void
+  /** Seçili kullanıcı filtresi — "all" tüm kullanıcılar, aksi takdirde
+   *  CreatedBy değerine birebir eşleşme. */
+  userFilter: string
+  /** Dropdown'da gösterilecek kullanıcı adları (distinct, sıralı). */
+  userOptions: string[]
+  onUserFilter: (v: string) => void
 }) {
   const q = search.toLowerCase()
-  const filtered = notes.filter(n =>
+  // 1) Kullanıcı filtresi (server'dan tüm notlar gelir, client'ta filtreleriz)
+  // 2) Arama filtresi (başlık + içerik özeti + etiketler)
+  const byUser = userFilter === "all"
+    ? notes
+    : notes.filter(n => n.createdBy === userFilter)
+  const filtered = byUser.filter(n =>
     n.title.toLowerCase().includes(q) ||
     stripHtml(n.excerpt).toLowerCase().includes(q) ||
     n.tags.some(t => t.toLowerCase().includes(q))
@@ -79,6 +95,23 @@ function NoteList({
             <Plus className="size-3" /> Yeni
           </button>
         </div>
+        {/* Kullanıcı filtresi — varsayılan: oturum sahibinin notları.
+            "all" seçilince herkesin notları gösterilir. */}
+        <Select value={userFilter} onValueChange={onUserFilter}>
+          <SelectTrigger className="h-7 text-[11px] rounded-[5px] bg-muted/40 border-border/40">
+            <div className="flex items-center gap-1.5">
+              <User className="size-3 text-muted-foreground" />
+              <SelectValue />
+            </div>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all" className="text-[11px]">Tüm kullanıcılar</SelectItem>
+            {userOptions.map(u => (
+              <SelectItem key={u} value={u} className="text-[11px]">{u}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3 text-muted-foreground" />
           <Input
@@ -463,10 +496,26 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
 
 /* ── Ana sayfa ── */
 export default function NotesPage() {
-  const [notes,    setNotes]    = useState<NoteItem[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [selected, setSelected] = useState<string | null>(null)
-  const [search,   setSearch]   = useState("")
+  const { data: session } = useSession()
+  const currentUser = session?.user?.name?.trim() || "Admin"
+
+  const [notes,      setNotes]      = useState<NoteItem[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [selected,   setSelected]   = useState<string | null>(null)
+  const [search,     setSearch]     = useState("")
+  // Varsayılan: oturumdaki kullanıcının notları. Boş ise "all"'a düşmüyoruz —
+  // kullanıcı henüz not yazmadıysa boş liste göstermek istenen davranış,
+  // dropdown'dan "Tüm kullanıcılar" diyerek hepsini görebilir.
+  const [userFilter, setUserFilter] = useState<string>(currentUser)
+
+  // Oturum geç gelirse default filtreyi senkronla — kullanıcı henüz dokunmadıysa.
+  const userTouched = useRef(false)
+  useEffect(() => {
+    if (!userTouched.current) setUserFilter(currentUser)
+  }, [currentUser])
+
+  // Dropdown için distinct CreatedBy listesi (alfabetik).
+  const userOptions = Array.from(new Set(notes.map(n => n.createdBy).filter(Boolean))).sort((a, b) => a.localeCompare(b, "tr"))
 
   async function loadNotes() {
     try {
@@ -483,14 +532,16 @@ export default function NotesPage() {
     try {
       const r = await fetch("/api/notes", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        // createdBy'ı açıkça gönder — sunucu da session'dan default veriyor
+        // ama UI tarafında optimistic insert için doğru ad'ı kullanmalıyız.
+        body: JSON.stringify({ createdBy: currentUser }),
       })
       if (!r.ok) throw new Error()
       const { id } = await r.json()
       const newNote: NoteItem = {
         id, title: "Yeni Not", excerpt: "", tags: [],
         color: "#ffffff", pinned: false,
-        createdBy: "Admin",
+        createdBy: currentUser,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
@@ -539,6 +590,9 @@ export default function NotesPage() {
           onSelect={setSelected}
           onCreate={handleCreate}
           onPin={handlePin}
+          userFilter={userFilter}
+          userOptions={userOptions}
+          onUserFilter={(v) => { userTouched.current = true; setUserFilter(v) }}
         />
       </div>
 

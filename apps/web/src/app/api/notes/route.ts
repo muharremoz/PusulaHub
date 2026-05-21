@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { query, execute } from "@/lib/db"
+import { auth } from "@/auth"
 
 export interface NoteItem {
   id:        string
@@ -64,9 +65,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}))
+    const session = await auth()
     const id        = crypto.randomUUID()
     const title     = body.title?.trim() || "Yeni Not"
-    const createdBy = body.createdBy?.trim() || "Admin"
+    // CreatedBy önceliği: body → session.user.name → "Admin". Default'u
+    // session'dan almak, kullanıcının kendi notlarının kendi filtresinde
+    // hemen görünmesini sağlıyor.
+    const createdBy = body.createdBy?.trim() || session?.user?.name?.trim() || "Admin"
     await execute`
       INSERT INTO Notes (Id, Title, Content, Tags, Color, CreatedBy)
       VALUES (${id}, ${title}, ${body.content ?? null}, ${body.tags ?? null}, ${body.color ?? "#ffffff"}, ${createdBy})
