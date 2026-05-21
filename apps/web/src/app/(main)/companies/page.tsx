@@ -1297,7 +1297,9 @@ tr:nth-child(even) td{background:#fafafa}
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
       {/* Company Selector / Header Bar */}
       <div className="mb-6">
-        {selectedFirma ? (
+        {/* No-perm modunda selectedFirma yalnızca modal'ı beslemek için set
+            ediliyor — detay header'ını ve panelini render etme, liste görünür kalsın. */}
+        {selectedFirma && canViewCompanyDetail ? (
           /* Seçili firma: kompakt header bar */
           <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
             <div className="rounded-[4px] px-4 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
@@ -1455,7 +1457,7 @@ tr:nth-child(even) td{background:#fafafa}
       </div>
 
       {/* Company Detail */}
-      {selectedFirma ? (
+      {selectedFirma && canViewCompanyDetail ? (
         <div className="space-y-3">
           {/* Yoğunluk Skoru + Haftalık Kullanım */}
           <div className="grid grid-cols-[1fr_1fr] gap-3">
