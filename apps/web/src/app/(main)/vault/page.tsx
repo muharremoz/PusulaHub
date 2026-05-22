@@ -445,6 +445,12 @@ function EntrySheet({
   const [histLoading, setHistLoading]   = useState(false)
   const [accLoading, setAccLoading]     = useState(false)
 
+  // Veritabanları (sadece kategori = database) — bağlanıp sys.databases'tan çekilir
+  const [dbList,     setDbList]     = useState<string[] | null>(null)
+  const [dbLoading,  setDbLoading]  = useState(false)
+  const [dbError,    setDbError]    = useState<string | null>(null)
+  const [dbBusy,     setDbBusy]     = useState<string | null>(null)  // backup'ı süren DB adı
+
   useEffect(() => {
     // Sheet açılmadığında reset etme — kapalıyken state korumak gereksiz iş.
     // Sheet açıldığında (open=true) form'u entry'ye göre seed et.
@@ -463,6 +469,8 @@ function EntrySheet({
       setHistoryItems([])
       setAccessItems([])
     }
+    // Veritabanı listesini sheet her açılışta sıfırla — kullanıcı "Tara" basınca dolar.
+    setDbList(null); setDbError(null); setDbLoading(false); setDbBusy(null)
   }, [entry, open])
 
   async function loadHistory(id: string) {
@@ -479,6 +487,47 @@ function EntrySheet({
       const r = await fetch(`/api/vault/${id}/access`)
       if (r.ok) setAccessItems(await r.json())
     } catch { /* */ } finally { setAccLoading(false) }
+  }
+
+  // ── Veritabanı listesini canlı SQL bağlantısıyla çek ──
+  // Vault entry'sindeki host+user+password kullanılır. Kullanıcı düzenleme yaparsa
+  // önce kaydetmeli; biz fetch'i kayıtlı veriyle yapıyoruz (server'da DB'den okur).
+  async function loadDatabases() {
+    if (!entry) return
+    setDbLoading(true); setDbError(null); setDbList(null)
+    try {
+      const r = await fetch(`/api/vault/${entry.id}/databases`, { cache: "no-store" })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d?.error ?? "Bağlantı kurulamadı")
+      setDbList(Array.isArray(d.databases) ? d.databases : [])
+    } catch (err) {
+      setDbError(err instanceof Error ? err.message : "Hata")
+    } finally {
+      setDbLoading(false)
+    }
+  }
+
+  async function backupDatabase(dbName: string) {
+    if (!entry) return
+    setDbBusy(dbName)
+    const tid = toast.loading("Yedek alınıyor…", { description: dbName })
+    try {
+      const r = await fetch(`/api/vault/${entry.id}/backup`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ dbName }),
+      })
+      const d = await r.json()
+      if (!r.ok) {
+        toast.error("Yedek alınamadı", { id: tid, description: d?.error ?? "" })
+        return
+      }
+      toast.success("Yedek alındı", { id: tid, description: d.path })
+    } catch (e) {
+      toast.error("Yedek alınamadı", { id: tid, description: e instanceof Error ? e.message : "Bağlantı hatası" })
+    } finally {
+      setDbBusy(null)
+    }
   }
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }))
@@ -604,6 +653,78 @@ function EntrySheet({
                   </div>
                 </div>
               </div>
+
+              {/* Veritabanları — sadece düzenleme + kategori = "database" */}
+              {entry && form.category === "database" && (
+                <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+                      <Database className="size-3" /> Veritabanları
+                      {dbList && dbList.length > 0 && (
+                        <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[3px]">{dbList.length}</span>
+                      )}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={loadDatabases}
+                      disabled={dbLoading}
+                      className="h-6 text-[10px] gap-1 rounded-[5px] px-2"
+                    >
+                      <RefreshCw className={cn("size-2.5", dbLoading && "animate-spin")} />
+                      {dbList === null ? "Tara" : "Yenile"}
+                    </Button>
+                  </div>
+                  <div className="px-3 py-3">
+                    {dbLoading ? (
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-7 rounded-[3px]" />
+                        <Skeleton className="h-7 rounded-[3px]" />
+                      </div>
+                    ) : dbError ? (
+                      <p className="text-[10px] text-red-600">{dbError}</p>
+                    ) : dbList === null ? (
+                      <p className="text-[10px] text-muted-foreground text-center py-2">
+                        Listeyi getirmek için <strong>Tara</strong>&apos;ya basın
+                      </p>
+                    ) : dbList.length === 0 ? (
+                      <p className="text-[10px] text-muted-foreground text-center py-2">Bu kullanıcının erişebildiği DB yok</p>
+                    ) : (
+                      <div className="divide-y divide-border/40">
+                        {dbList.map((db) => (
+                          <div key={db} className="flex items-center gap-2 py-1.5 hover:bg-muted/20 px-1 rounded-[3px] transition-colors">
+                            <Database className="size-3 text-muted-foreground shrink-0" />
+                            <span className="text-[11px] font-mono flex-1 truncate">{db}</span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 w-6 p-0 rounded-[3px]"
+                                  disabled={dbBusy === db}
+                                >
+                                  <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  className="text-[11px] gap-2"
+                                  disabled={dbBusy === db}
+                                  onClick={() => backupDatabase(db)}
+                                >
+                                  <Database className="size-3" /> Yedek al
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Şifre Geçmişi (sadece düzenlemede) */}
               {entry && (
