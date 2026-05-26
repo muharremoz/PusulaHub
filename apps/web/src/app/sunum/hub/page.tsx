@@ -8,7 +8,7 @@
  * görünüme girer girmez fade + slide. Hero sticky parallax, kapanış için
  * büyük rakam ticker.
  *
- * Renk paleti: emerald (#34d399) — Hub'ın brand tonu.
+ * Renk paleti: blue (#34d399) — Hub'ın brand tonu.
  * Layout (sunum/layout.tsx) zaten karanlık tema + scroll-smooth sağlıyor.
  */
 
@@ -35,7 +35,7 @@ import {
 } from "lucide-react"
 
 /* ──────────────────────────────────────────────────────────────────
- * THEME — proje başına tek brand rengi. PusulaHub = emerald.
+ * THEME — proje başına tek brand rengi. PusulaHub = blue.
  *
  * Yeni bir proje sunum sayfası eklerken bu objeyi kopyalayıp
  * accent/text/ring/bg değerlerini değiştirmek yeterli; tüm bölümler
@@ -43,28 +43,30 @@ import {
  * Closing) buradan beslenir.
  * ────────────────────────────────────────────────────────────────── */
 const THEME = {
-  accent: "#34d399",
+  // Hub brand'i: #1d64ff royal blue. Sidebar (#061a48) + ışık tonu (#eef3ff)
+  // ve hover (#0d3380) gerektiğinde inline arbitrary değer olarak kullanılır.
+  accent: "#1d64ff",
   /** Sticky panel ve story ikonlarındaki gradient — text-300 + glow ile uyumlu */
-  gradient: "from-emerald-500/30 to-emerald-500/5",
-  ring:     "border-emerald-500/30",
-  text:     "text-emerald-300",
+  gradient: "from-blue-500/30 to-blue-500/5",
+  ring:     "border-blue-500/30",
+  text:     "text-blue-300",
   /** Pill/etiket arka planı (Hero kicker, "Modül" rozet) */
-  pillBg:   "bg-emerald-500/10",
-  pillRing: "border-emerald-500/30",
+  pillBg:   "bg-blue-500/10",
+  pillRing: "border-blue-500/30",
   /** Story bölümündeki bullet noktası */
-  dot:      "bg-emerald-400",
+  dot:      "bg-blue-400",
   /** Closing CTA */
-  ctaBg:    "bg-emerald-500/10 hover:bg-emerald-500/20",
-  ctaText:  "text-emerald-200",
-  ctaRing:  "border-emerald-500/30",
+  ctaBg:    "bg-blue-500/10 hover:bg-blue-500/20",
+  ctaText:  "text-blue-200",
+  ctaRing:  "border-blue-500/30",
   /** Tech rozet */
-  techRing: "border-emerald-500/20",
-  techBg:   "bg-emerald-500/5 hover:bg-emerald-500/10",
-  techText: "text-emerald-200",
+  techRing: "border-blue-500/20",
+  techBg:   "bg-blue-500/5 hover:bg-blue-500/10",
+  techText: "text-blue-200",
   /** Tek tek modül kicker'ları */
-  kicker:   "text-emerald-400",
+  kicker:   "text-blue-400",
   /** Architecture node ana ton (Hub kendisi) */
-  archMain: "from-emerald-500/30 to-emerald-500/0 text-emerald-300 border-emerald-500/30",
+  archMain: "from-blue-500/30 to-blue-500/0 text-blue-300 border-blue-500/30",
 } as const
 
 // Geriye uyumlu — bazı yerlerde inline radial gradient'lerde HEX gerek.
@@ -223,7 +225,7 @@ function Hero() {
 
       <motion.div style={{ y: titleY, opacity: titleOp }} className="relative z-10 text-center px-6">
         <FadeUp>
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[11px] font-medium mb-6">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-300 text-[11px] font-medium mb-6">
             <LayoutDashboard className="size-3.5" />
             Sunucu Yönetim Paneli
           </div>
@@ -231,7 +233,7 @@ function Hero() {
 
         <FadeUp delay={0.1}>
           <h1 className="text-6xl md:text-8xl font-black tracking-tight leading-[0.95]">
-            <span className="sunum-hero-gradient">Pusula</span>
+            <span className="hub-hero-gradient">Pusula</span>
             <span className="text-white">Hub</span>
           </h1>
         </FadeUp>
@@ -272,9 +274,9 @@ function Stats() {
     <section className="relative min-h-screen flex items-center justify-center px-6 py-24">
       <div className="max-w-6xl mx-auto w-full">
         <FadeUp>
-          <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Rakamlarla</p>
+          <p className="text-blue-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Rakamlarla</p>
           <h2 className="text-4xl md:text-6xl font-bold mb-16 leading-tight">
-            Tek noktadan <span className="text-emerald-400">bütün altyapı</span>.
+            Tek noktadan <span className="text-blue-400">bütün altyapı</span>.
           </h2>
         </FadeUp>
 
@@ -290,10 +292,10 @@ function Stats() {
             >
               <div className="text-5xl md:text-7xl font-black text-white tabular-nums leading-none">
                 <NumberTicker value={s.num} className="text-white" />
-                <span className="text-emerald-400">{s.suffix}</span>
+                <span className="text-blue-400">{s.suffix}</span>
               </div>
               <p className="mt-4 text-[12px] md:text-[13px] text-zinc-400 uppercase tracking-wider">{s.label}</p>
-              <BorderBeam size={120} duration={10 + i * 2} colorFrom={ACCENT} colorTo="#047857" />
+              <BorderBeam size={120} duration={10 + i * 2} colorFrom={ACCENT} colorTo="#0d3380" />
             </motion.div>
           ))}
         </div>
@@ -426,7 +428,7 @@ function Story({ s, index }: { s: FeatureStory; index: number }) {
         {/* Metin */}
         <div className={flip ? "md:order-2" : ""}>
           <FadeUp>
-            <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">{s.kicker}</p>
+            <p className="text-blue-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">{s.kicker}</p>
             <h2 className="text-4xl md:text-5xl font-bold leading-tight mb-5">{s.title}</h2>
             <p className="text-zinc-400 text-[15px] md:text-base leading-relaxed mb-7">{s.body}</p>
           </FadeUp>
@@ -441,7 +443,7 @@ function Story({ s, index }: { s: FeatureStory; index: number }) {
                 transition={{ duration: 0.5, delay: 0.15 + i * 0.08 }}
                 className="flex items-start gap-3 text-zinc-300 text-[13px] md:text-[14px]"
               >
-                <span className="mt-1.5 size-1.5 rounded-full bg-emerald-400 shrink-0" />
+                <span className="mt-1.5 size-1.5 rounded-full bg-blue-400 shrink-0" />
                 <span>{b}</span>
               </motion.li>
             ))}
@@ -455,11 +457,11 @@ function Story({ s, index }: { s: FeatureStory; index: number }) {
             whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
             viewport={{ once: true, amount: 0.4 }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-br from-emerald-500/15 via-zinc-900/40 to-emerald-500/5 flex items-center justify-center"
+            className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-br from-blue-500/15 via-zinc-900/40 to-blue-500/5 flex items-center justify-center"
           >
             <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${ACCENT}25, transparent 60%)` }} />
-            <Icon className="size-32 md:size-44 text-emerald-300/90 relative z-10" strokeWidth={1.2} />
-            <BorderBeam size={200} duration={12} colorFrom={ACCENT} colorTo="#047857" />
+            <Icon className="size-32 md:size-44 text-blue-300/90 relative z-10" strokeWidth={1.2} />
+            <BorderBeam size={200} duration={12} colorFrom={ACCENT} colorTo="#0d3380" />
 
             {/* Köşedeki indeks */}
             <div className="absolute top-4 left-4 text-[10px] font-mono text-zinc-500">
@@ -494,7 +496,7 @@ function Architecture() {
             const Icon = n.icon
             // Tek brand rengi — central=true olan (Hub) tam ton, diğerleri zayıf
             // ton + nötr renk; böylece görsel hiyerarşi korunur ama renk paleti
-            // saf emerald kalır.
+            // saf blue kalır.
             const cls = n.central
               ? `bg-gradient-to-br ${THEME.gradient} border ${THEME.ring} ${THEME.text}`
               : "bg-gradient-to-br from-zinc-700/30 to-zinc-700/5 border border-zinc-700/40 text-zinc-300"
@@ -549,7 +551,7 @@ function TechStack() {
     <section className="relative min-h-screen flex items-center px-6 py-24">
       <div className="max-w-6xl mx-auto w-full text-center">
         <FadeUp>
-          <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Teknoloji</p>
+          <p className="text-blue-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Teknoloji</p>
           <h2 className="text-4xl md:text-5xl font-bold mb-14">Modern stack üzerine kurulu.</h2>
         </FadeUp>
 
@@ -561,7 +563,7 @@ function TechStack() {
               whileInView={{ opacity: 1, scale: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.04 }}
-              className="px-4 py-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 text-emerald-200 text-[13px] font-medium hover:bg-emerald-500/10 transition-colors"
+              className="px-4 py-2 rounded-full border border-blue-500/20 bg-blue-500/5 text-blue-200 text-[13px] font-medium hover:bg-blue-500/10 transition-colors"
             >
               {t}
             </motion.span>
@@ -584,11 +586,11 @@ function Closing() {
 
       <div className="relative z-10 text-center max-w-3xl mx-auto">
         <FadeUp>
-          <Sparkles className="size-12 text-emerald-400 mx-auto mb-6" strokeWidth={1.5} />
+          <Sparkles className="size-12 text-blue-400 mx-auto mb-6" strokeWidth={1.5} />
         </FadeUp>
         <FadeUp delay={0.1}>
           <h2 className="text-5xl md:text-7xl font-black leading-tight mb-6">
-            Altyapı artık <span className="sunum-hero-gradient">tek panelde</span>.
+            Altyapı artık <span className="hub-hero-gradient">tek panelde</span>.
           </h2>
         </FadeUp>
         <FadeUp delay={0.2}>
@@ -601,7 +603,7 @@ function Closing() {
         <FadeUp delay={0.4}>
           <Link
             href="/sunum"
-            className="mt-10 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200 text-sm font-medium transition-colors"
+            className="mt-10 inline-flex items-center gap-2 px-6 py-3 rounded-full border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-200 text-sm font-medium transition-colors"
           >
             <ArrowLeft className="size-4" />
             Diğer uygulamalara dön
@@ -617,6 +619,25 @@ function Closing() {
 export default function SunumHubPage() {
   return (
     <main className="relative">
+      {/* Hub'a özel animasyonlu mavi gradient — Hero ve Closing'deki başlıklarda
+          .hub-hero-gradient class'ı ile tüketilir. Layout'taki sunum-hero-gradient
+          sky/yellow/emerald karışımı; Hub mavi paletinde kalsın diye burada
+          override ediyoruz. */}
+      <style>{`
+        @keyframes hub-hero-gradient-kf {
+          0%, 100% { background-position: 0% 50%; }
+          50%      { background-position: 100% 50%; }
+        }
+        .hub-hero-gradient {
+          background-image: linear-gradient(90deg, #1d64ff, #60a5fa, #93c5fd, #60a5fa, #1d64ff);
+          background-size: 200% 100%;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          animation: hub-hero-gradient-kf 6s ease-in-out infinite;
+        }
+      `}</style>
+
       {/* İlerleme çizgisi — scroll'a göre soldan sağa dolar */}
       <ScrollProgressBar />
 
@@ -638,7 +659,7 @@ function ScrollProgressBar() {
   return (
     <motion.div
       style={{ scaleX: scrollYProgress, transformOrigin: "0% 50%" }}
-      className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-500 via-emerald-300 to-emerald-500 z-50"
+      className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-blue-500 via-blue-300 to-blue-500 z-50"
     />
   )
 }
