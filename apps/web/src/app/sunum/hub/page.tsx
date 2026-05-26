@@ -13,8 +13,8 @@
  */
 
 import Link from "next/link"
-import { motion, useScroll, useTransform } from "motion/react"
-import { useRef } from "react"
+import { motion, useScroll, useTransform, AnimatePresence } from "motion/react"
+import { useRef, useState } from "react"
 import { NumberTicker } from "@/components/magicui/number-ticker"
 import { BorderBeam } from "@/components/magicui/border-beam"
 import { Meteors } from "@/components/ui/meteors"
@@ -268,6 +268,132 @@ function Stats() {
   )
 }
 
+/* ── Scrollytelling — sol sticky panel, sağ scroll'lu liste ─────────
+ *
+ * Apple/Stripe tarzı: kullanıcı scroll yaparken sağdaki kısa metin/özellik
+ * blokları geçerken, sol taraftaki büyük ikon + başlık o özelliğe göre
+ * değişir. Sticky panel viewport içinde sabit kalır, sağdaki içerikler
+ * sırayla yukarı kayar.
+ *
+ * Aktif item, her sağ bloğun `onViewportEnter` callback'i ile tetiklenir —
+ * `viewport.amount: 0.6` sayesinde blok yarısından fazlası göründüğünde
+ * aktif olur; iki blok arasındaki geçişler ortalanır.
+ */
+
+interface ScrollyItem {
+  icon:  React.ElementType
+  title: string
+  desc:  string
+  tone:  string  // "from-{color}/30 ..." hazır class — accent ring/glow için
+}
+
+const SCROLLY: ScrollyItem[] = [
+  { icon: LayoutDashboard, title: "Dashboard",     desc: "Tüm sistemin sağlık özeti — sunucu, izleme ve firma KPI'ları tek ekranda.",                tone: "emerald" },
+  { icon: Server,          title: "Sunucular",     desc: "Windows ve AD sunucularını liste, durum, disk ve servis detayıyla yönet.",                 tone: "sky" },
+  { icon: Radar,           title: "İzleme",        desc: "Uptime Kuma'dan canlı veri — DOWN tespitinde anlık Telegram bildirimi.",                   tone: "amber" },
+  { icon: Building2,       title: "Firmalar",      desc: "Kurulum sihirbazı, kullanıcı yönetimi, IIS hizmetleri ve veritabanları.",                  tone: "violet" },
+  { icon: MessageSquare,   title: "Mesajlar",      desc: "Sunucudaki kullanıcılara doğrudan popup — okundu takibi ile.",                             tone: "rose" },
+  { icon: DatabaseBackup,  title: "SQL & Yedek",   desc: "Firma başına yedek listeleme, tek tıkla restore, vault üzerinden direct backup.",          tone: "teal" },
+  { icon: KeyRound,        title: "Vault",         desc: "AES-256-GCM şifreli kasa — şifre yaşı, geçmiş ve erişim audit log'u dahil.",               tone: "cyan" },
+  { icon: Command,         title: "Komut Paleti",  desc: "Ctrl+K ile birleşik arama — sayfa, sunucu, firma tek listede.",                            tone: "fuchsia" },
+]
+
+const TONE_CLASS: Record<string, { bg: string; ring: string; text: string }> = {
+  emerald:  { bg: "from-emerald-500/30 to-emerald-500/5",   ring: "border-emerald-500/30",  text: "text-emerald-300"  },
+  sky:      { bg: "from-sky-500/30     to-sky-500/5",       ring: "border-sky-500/30",      text: "text-sky-300"      },
+  amber:    { bg: "from-amber-500/30   to-amber-500/5",     ring: "border-amber-500/30",    text: "text-amber-300"    },
+  violet:   { bg: "from-violet-500/30  to-violet-500/5",    ring: "border-violet-500/30",   text: "text-violet-300"   },
+  rose:     { bg: "from-rose-500/30    to-rose-500/5",      ring: "border-rose-500/30",     text: "text-rose-300"     },
+  teal:     { bg: "from-teal-500/30    to-teal-500/5",      ring: "border-teal-500/30",     text: "text-teal-300"     },
+  cyan:     { bg: "from-cyan-500/30    to-cyan-500/5",      ring: "border-cyan-500/30",     text: "text-cyan-300"     },
+  fuchsia:  { bg: "from-fuchsia-500/30 to-fuchsia-500/5",   ring: "border-fuchsia-500/30",  text: "text-fuchsia-300"  },
+}
+
+function Scrollytelling() {
+  const [active, setActive] = useState(0)
+  const current = SCROLLY[active]
+  const CurrentIcon = current.icon
+  const t = TONE_CLASS[current.tone]
+
+  return (
+    <section className="relative px-6 py-24">
+      <div className="max-w-6xl mx-auto">
+        <FadeUp>
+          <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Bir bakışta</p>
+          <h2 className="text-4xl md:text-5xl font-bold mb-16">
+            Scroll'la <span className="text-emerald-400">modülleri gez</span>.
+          </h2>
+        </FadeUp>
+
+        <div className="grid md:grid-cols-2 gap-10 md:gap-16">
+          {/* Sol — sticky görsel/başlık paneli */}
+          <div className="hidden md:block">
+            <div className="sticky top-1/4">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={current.title}
+                  initial={{ opacity: 0, y: 20, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.96 }}
+                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  className={`relative aspect-square rounded-3xl border ${t.ring} bg-gradient-to-br ${t.bg} flex flex-col items-center justify-center gap-6 overflow-hidden`}
+                >
+                  <CurrentIcon className={`size-32 ${t.text}`} strokeWidth={1.2} />
+                  <div className="text-center">
+                    <p className="text-[10px] font-mono text-zinc-500 mb-1">
+                      {String(active + 1).padStart(2, "0")} / {SCROLLY.length}
+                    </p>
+                    <h3 className="text-3xl font-bold text-white">{current.title}</h3>
+                  </div>
+
+                  {/* nokta göstergesi */}
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {SCROLLY.map((_, i) => (
+                      <span
+                        key={i}
+                        className={`h-1.5 rounded-full transition-all duration-300 ${
+                          i === active ? "w-6 bg-white" : "w-1.5 bg-white/30"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          </div>
+
+          {/* Sağ — scroll'lu içerik */}
+          <div className="space-y-24 md:space-y-32">
+            {SCROLLY.map((item, i) => {
+              const Icon = item.icon
+              return (
+                <motion.div
+                  key={item.title}
+                  // amount: 0.6 → blok yarısından fazlası viewport'taysa aktif olur
+                  onViewportEnter={() => setActive(i)}
+                  viewport={{ amount: 0.6 }}
+                  initial={{ opacity: 0, x: 30 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                  className="md:min-h-[40vh] flex flex-col justify-center"
+                >
+                  {/* Mobilde sol panel olmadığı için ikon burada inline gösterilir */}
+                  <Icon className={`md:hidden size-10 mb-4 ${TONE_CLASS[item.tone].text}`} strokeWidth={1.4} />
+                  <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 ${TONE_CLASS[item.tone].text}`}>
+                    {String(i + 1).padStart(2, "0")} · Modül
+                  </p>
+                  <h3 className="text-3xl md:text-4xl font-bold mb-4">{item.title}</h3>
+                  <p className="text-zinc-400 text-[15px] md:text-base leading-relaxed">{item.desc}</p>
+                </motion.div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 /* ── Tek özellik bölümü ──────────────────────────────────────────── */
 
 function Story({ s, index }: { s: FeatureStory; index: number }) {
@@ -470,6 +596,7 @@ export default function SunumHubPage() {
 
       <Hero />
       <Stats />
+      <Scrollytelling />
       {STORIES.map((s, i) => (
         <Story key={s.title} s={s} index={i} />
       ))}
