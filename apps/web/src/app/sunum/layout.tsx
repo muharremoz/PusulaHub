@@ -7,7 +7,7 @@
  */
 export default function SunumLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="dark min-h-screen w-full bg-zinc-950 text-zinc-100 antialiased">
+    <div className="dark min-h-screen w-full bg-zinc-950 text-zinc-100 antialiased scroll-smooth">
       <style>{`
         @keyframes sunum-hero-gradient {
           0%, 100% { background-position: 0% 50%; }
