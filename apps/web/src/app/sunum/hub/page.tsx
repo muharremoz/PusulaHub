@@ -34,7 +34,41 @@ import {
   Wrench,
 } from "lucide-react"
 
-const ACCENT = "#34d399"
+/* ──────────────────────────────────────────────────────────────────
+ * THEME — proje başına tek brand rengi. PusulaHub = emerald.
+ *
+ * Yeni bir proje sunum sayfası eklerken bu objeyi kopyalayıp
+ * accent/text/ring/bg değerlerini değiştirmek yeterli; tüm bölümler
+ * (Hero / Stats / Scrollytelling / Story / Architecture / TechStack /
+ * Closing) buradan beslenir.
+ * ────────────────────────────────────────────────────────────────── */
+const THEME = {
+  accent: "#34d399",
+  /** Sticky panel ve story ikonlarındaki gradient — text-300 + glow ile uyumlu */
+  gradient: "from-emerald-500/30 to-emerald-500/5",
+  ring:     "border-emerald-500/30",
+  text:     "text-emerald-300",
+  /** Pill/etiket arka planı (Hero kicker, "Modül" rozet) */
+  pillBg:   "bg-emerald-500/10",
+  pillRing: "border-emerald-500/30",
+  /** Story bölümündeki bullet noktası */
+  dot:      "bg-emerald-400",
+  /** Closing CTA */
+  ctaBg:    "bg-emerald-500/10 hover:bg-emerald-500/20",
+  ctaText:  "text-emerald-200",
+  ctaRing:  "border-emerald-500/30",
+  /** Tech rozet */
+  techRing: "border-emerald-500/20",
+  techBg:   "bg-emerald-500/5 hover:bg-emerald-500/10",
+  techText: "text-emerald-200",
+  /** Tek tek modül kicker'ları */
+  kicker:   "text-emerald-400",
+  /** Architecture node ana ton (Hub kendisi) */
+  archMain: "from-emerald-500/30 to-emerald-500/0 text-emerald-300 border-emerald-500/30",
+} as const
+
+// Geriye uyumlu — bazı yerlerde inline radial gradient'lerde HEX gerek.
+const ACCENT = THEME.accent
 
 /* ── Veriler ─────────────────────────────────────────────────────── */
 
@@ -259,7 +293,7 @@ function Stats() {
                 <span className="text-emerald-400">{s.suffix}</span>
               </div>
               <p className="mt-4 text-[12px] md:text-[13px] text-zinc-400 uppercase tracking-wider">{s.label}</p>
-              <BorderBeam size={120} duration={10 + i * 2} colorFrom={ACCENT} colorTo="#22d3ee" />
+              <BorderBeam size={120} duration={10 + i * 2} colorFrom={ACCENT} colorTo="#047857" />
             </motion.div>
           ))}
         </div>
@@ -284,49 +318,36 @@ interface ScrollyItem {
   icon:  React.ElementType
   title: string
   desc:  string
-  tone:  string  // "from-{color}/30 ..." hazır class — accent ring/glow için
 }
 
 const SCROLLY: ScrollyItem[] = [
-  { icon: LayoutDashboard, title: "Dashboard",     desc: "Tüm sistemin sağlık özeti — sunucu, izleme ve firma KPI'ları tek ekranda.",                tone: "emerald" },
-  { icon: Server,          title: "Sunucular",     desc: "Windows ve AD sunucularını liste, durum, disk ve servis detayıyla yönet.",                 tone: "sky" },
-  { icon: Radar,           title: "İzleme",        desc: "Uptime Kuma'dan canlı veri — DOWN tespitinde anlık Telegram bildirimi.",                   tone: "amber" },
-  { icon: Building2,       title: "Firmalar",      desc: "Kurulum sihirbazı, kullanıcı yönetimi, IIS hizmetleri ve veritabanları.",                  tone: "violet" },
-  { icon: MessageSquare,   title: "Mesajlar",      desc: "Sunucudaki kullanıcılara doğrudan popup — okundu takibi ile.",                             tone: "rose" },
-  { icon: DatabaseBackup,  title: "SQL & Yedek",   desc: "Firma başına yedek listeleme, tek tıkla restore, vault üzerinden direct backup.",          tone: "teal" },
-  { icon: KeyRound,        title: "Vault",         desc: "AES-256-GCM şifreli kasa — şifre yaşı, geçmiş ve erişim audit log'u dahil.",               tone: "cyan" },
-  { icon: Command,         title: "Komut Paleti",  desc: "Ctrl+K ile birleşik arama — sayfa, sunucu, firma tek listede.",                            tone: "fuchsia" },
+  { icon: LayoutDashboard, title: "Dashboard",     desc: "Tüm sistemin sağlık özeti — sunucu, izleme ve firma KPI'ları tek ekranda." },
+  { icon: Server,          title: "Sunucular",     desc: "Windows ve AD sunucularını liste, durum, disk ve servis detayıyla yönet." },
+  { icon: Radar,           title: "İzleme",        desc: "Uptime Kuma'dan canlı veri — DOWN tespitinde anlık Telegram bildirimi." },
+  { icon: Building2,       title: "Firmalar",      desc: "Kurulum sihirbazı, kullanıcı yönetimi, IIS hizmetleri ve veritabanları." },
+  { icon: MessageSquare,   title: "Mesajlar",      desc: "Sunucudaki kullanıcılara doğrudan popup — okundu takibi ile." },
+  { icon: DatabaseBackup,  title: "SQL & Yedek",   desc: "Firma başına yedek listeleme, tek tıkla restore, vault üzerinden direct backup." },
+  { icon: KeyRound,        title: "Vault",         desc: "AES-256-GCM şifreli kasa — şifre yaşı, geçmiş ve erişim audit log'u dahil." },
+  { icon: Command,         title: "Komut Paleti",  desc: "Ctrl+K ile birleşik arama — sayfa, sunucu, firma tek listede." },
 ]
-
-const TONE_CLASS: Record<string, { bg: string; ring: string; text: string }> = {
-  emerald:  { bg: "from-emerald-500/30 to-emerald-500/5",   ring: "border-emerald-500/30",  text: "text-emerald-300"  },
-  sky:      { bg: "from-sky-500/30     to-sky-500/5",       ring: "border-sky-500/30",      text: "text-sky-300"      },
-  amber:    { bg: "from-amber-500/30   to-amber-500/5",     ring: "border-amber-500/30",    text: "text-amber-300"    },
-  violet:   { bg: "from-violet-500/30  to-violet-500/5",    ring: "border-violet-500/30",   text: "text-violet-300"   },
-  rose:     { bg: "from-rose-500/30    to-rose-500/5",      ring: "border-rose-500/30",     text: "text-rose-300"     },
-  teal:     { bg: "from-teal-500/30    to-teal-500/5",      ring: "border-teal-500/30",     text: "text-teal-300"     },
-  cyan:     { bg: "from-cyan-500/30    to-cyan-500/5",      ring: "border-cyan-500/30",     text: "text-cyan-300"     },
-  fuchsia:  { bg: "from-fuchsia-500/30 to-fuchsia-500/5",   ring: "border-fuchsia-500/30",  text: "text-fuchsia-300"  },
-}
 
 function Scrollytelling() {
   const [active, setActive] = useState(0)
   const current = SCROLLY[active]
   const CurrentIcon = current.icon
-  const t = TONE_CLASS[current.tone]
 
   return (
     <section className="relative px-6 py-24">
       <div className="max-w-6xl mx-auto">
         <FadeUp>
-          <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Bir bakışta</p>
+          <p className={`${THEME.kicker} text-[11px] font-semibold uppercase tracking-[0.2em] mb-3`}>Bir bakışta</p>
           <h2 className="text-4xl md:text-5xl font-bold mb-16">
-            Scroll'la <span className="text-emerald-400">modülleri gez</span>.
+            Scroll'la <span className={THEME.kicker}>modülleri gez</span>.
           </h2>
         </FadeUp>
 
         <div className="grid md:grid-cols-2 gap-10 md:gap-16">
-          {/* Sol — sticky görsel/başlık paneli */}
+          {/* Sol — sticky görsel/başlık paneli (tek brand rengi — THEME) */}
           <div className="hidden md:block">
             <div className="sticky top-1/4">
               <AnimatePresence mode="wait">
@@ -336,9 +357,9 @@ function Scrollytelling() {
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: -20, scale: 0.96 }}
                   transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className={`relative aspect-square rounded-3xl border ${t.ring} bg-gradient-to-br ${t.bg} flex flex-col items-center justify-center gap-6 overflow-hidden`}
+                  className={`relative aspect-square rounded-3xl border ${THEME.ring} bg-gradient-to-br ${THEME.gradient} flex flex-col items-center justify-center gap-6 overflow-hidden`}
                 >
-                  <CurrentIcon className={`size-32 ${t.text}`} strokeWidth={1.2} />
+                  <CurrentIcon className={`size-32 ${THEME.text}`} strokeWidth={1.2} />
                   <div className="text-center">
                     <p className="text-[10px] font-mono text-zinc-500 mb-1">
                       {String(active + 1).padStart(2, "0")} / {SCROLLY.length}
@@ -378,8 +399,8 @@ function Scrollytelling() {
                   className="md:min-h-[40vh] flex flex-col justify-center"
                 >
                   {/* Mobilde sol panel olmadığı için ikon burada inline gösterilir */}
-                  <Icon className={`md:hidden size-10 mb-4 ${TONE_CLASS[item.tone].text}`} strokeWidth={1.4} />
-                  <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 ${TONE_CLASS[item.tone].text}`}>
+                  <Icon className={`md:hidden size-10 mb-4 ${THEME.text}`} strokeWidth={1.4} />
+                  <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 ${THEME.kicker}`}>
                     {String(i + 1).padStart(2, "0")} · Modül
                   </p>
                   <h3 className="text-3xl md:text-4xl font-bold mb-4">{item.title}</h3>
@@ -434,11 +455,11 @@ function Story({ s, index }: { s: FeatureStory; index: number }) {
             whileInView={{ opacity: 1, scale: 1, rotate: 0 }}
             viewport={{ once: true, amount: 0.4 }}
             transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-br from-emerald-500/10 via-zinc-900/40 to-cyan-500/10 flex items-center justify-center"
+            className="relative aspect-[4/3] rounded-3xl overflow-hidden border border-white/10 bg-gradient-to-br from-emerald-500/15 via-zinc-900/40 to-emerald-500/5 flex items-center justify-center"
           >
             <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 50% 50%, ${ACCENT}25, transparent 60%)` }} />
             <Icon className="size-32 md:size-44 text-emerald-300/90 relative z-10" strokeWidth={1.2} />
-            <BorderBeam size={200} duration={12} colorFrom={ACCENT} colorTo="#22d3ee" />
+            <BorderBeam size={200} duration={12} colorFrom={ACCENT} colorTo="#047857" />
 
             {/* Köşedeki indeks */}
             <div className="absolute top-4 left-4 text-[10px] font-mono text-zinc-500">
@@ -455,28 +476,28 @@ function Story({ s, index }: { s: FeatureStory; index: number }) {
 
 function Architecture() {
   const nodes = [
-    { icon: LayoutDashboard, label: "Hub",      tone: "emerald" },
-    { icon: Wrench,          label: "Agent",    tone: "sky" },
-    { icon: Radar,           label: "Kuma",     tone: "amber" },
-    { icon: Bell,            label: "Telegram", tone: "violet" },
+    { icon: LayoutDashboard, label: "Hub",      central: true  },
+    { icon: Wrench,          label: "Agent",    central: false },
+    { icon: Radar,           label: "Kuma",     central: false },
+    { icon: Bell,            label: "Telegram", central: false },
   ]
-  const toneClass: Record<string, string> = {
-    emerald: "from-emerald-500/30 to-emerald-500/0 text-emerald-300 border-emerald-500/30",
-    sky:     "from-sky-500/30     to-sky-500/0     text-sky-300     border-sky-500/30",
-    amber:   "from-amber-500/30   to-amber-500/0   text-amber-300   border-amber-500/30",
-    violet:  "from-violet-500/30  to-violet-500/0  text-violet-300  border-violet-500/30",
-  }
   return (
     <section className="relative min-h-screen flex items-center px-6 py-24 overflow-hidden">
       <div className="max-w-6xl mx-auto w-full">
         <FadeUp>
-          <p className="text-emerald-400 text-[11px] font-semibold uppercase tracking-[0.2em] mb-3">Mimari</p>
+          <p className={`${THEME.kicker} text-[11px] font-semibold uppercase tracking-[0.2em] mb-3`}>Mimari</p>
           <h2 className="text-4xl md:text-5xl font-bold mb-14">Bileşenler nasıl konuşuyor?</h2>
         </FadeUp>
 
         <div className="relative grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
           {nodes.map((n, i) => {
             const Icon = n.icon
+            // Tek brand rengi — central=true olan (Hub) tam ton, diğerleri zayıf
+            // ton + nötr renk; böylece görsel hiyerarşi korunur ama renk paleti
+            // saf emerald kalır.
+            const cls = n.central
+              ? `bg-gradient-to-br ${THEME.gradient} border ${THEME.ring} ${THEME.text}`
+              : "bg-gradient-to-br from-zinc-700/30 to-zinc-700/5 border border-zinc-700/40 text-zinc-300"
             return (
               <motion.div
                 key={n.label}
@@ -484,10 +505,15 @@ function Architecture() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.5, delay: i * 0.1 }}
-                className={`relative aspect-square rounded-2xl border bg-gradient-to-br ${toneClass[n.tone]} flex flex-col items-center justify-center gap-3`}
+                className={`relative aspect-square rounded-2xl ${cls} flex flex-col items-center justify-center gap-3`}
               >
                 <Icon className="size-12 md:size-16" strokeWidth={1.3} />
                 <span className="text-[14px] md:text-[16px] font-semibold">{n.label}</span>
+                {n.central && (
+                  <span className={`absolute top-3 right-3 text-[9px] font-mono uppercase tracking-wider ${THEME.text}`}>
+                    Merkez
+                  </span>
+                )}
               </motion.div>
             )
           })}
@@ -612,7 +638,7 @@ function ScrollProgressBar() {
   return (
     <motion.div
       style={{ scaleX: scrollYProgress, transformOrigin: "0% 50%" }}
-      className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-400 via-cyan-300 to-emerald-400 z-50"
+      className="fixed top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-emerald-500 via-emerald-300 to-emerald-500 z-50"
     />
   )
 }
