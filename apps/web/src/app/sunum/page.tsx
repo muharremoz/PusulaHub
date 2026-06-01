@@ -11,7 +11,6 @@
  * sunum sırasında bağlantı sorunlarından etkilenmesin.
  */
 
-import { useEffect, useState } from "react"
 import { motion } from "motion/react"
 import { NumberTicker } from "@/components/magicui/number-ticker"
 import { BorderBeam } from "@/components/magicui/border-beam"
@@ -47,7 +46,6 @@ import {
   FileText,
   Gauge,
   Gem,
-  GitBranch,
   Globe,
   HardDrive,
   Key,
@@ -152,7 +150,6 @@ const APPS: AppShowcase[] = [
       { icon: Boxes,            title: "Projeler (Kanban)",         desc: "Görev panosu, alt görevler, dosya ekleme, ekip atamaları." },
       { icon: FileSpreadsheet,  title: "Firma Aktarımı",            desc: "Müşteri tarafında SQL backup helper + Hub'a aktarım sihirbazı." },
       { icon: UserCog,          title: "Yetki Yönetimi",            desc: "Modül bazlı read/write izinleri, rol tabanlı erişim (admin / kullanıcı)." },
-      { icon: Command,          title: "Komut Paleti (Ctrl+K)",     desc: "Hızlı arama ve sayfa geçişi — her yerden, bir kısayolla." },
       { icon: Monitor,          title: "Dashboard KPI Kartları",    desc: "Canlı izleme durumu, sunucu sayısı, aktif kullanıcı özeti." },
       { icon: LineChart,        title: "Heartbeat Bar Grafiği",     desc: "Uptime Kuma tarzı son 100 beat — hover ile tarih/durum/ping." },
       { icon: Bell,             title: "Telegram Bildirimi",        desc: "DOWN/UP durum değişiminde anlık bot mesajı." },
@@ -173,7 +170,6 @@ const APPS: AppShowcase[] = [
       { icon: Cloud,           title: "Spare Cloud Yönetimi",      desc: "Bulut sunucu metrikleri, güvenlik, servisler, kullanıcı ve disk analizi." },
       { icon: Activity,        title: "Heartbeat Sistemi",         desc: "Kurulumlardan periyodik sinyalle çevrimiçi/sorunlu/çevrimdışı durum." },
       { icon: ShieldCheck,     title: "2FA & Güvenlik",            desc: "TOTP iki adımlı doğrulama, audit log ve Hub üzerinden SSO entegrasyonu." },
-      { icon: Receipt,         title: "Çağrı Durum Takibi",        desc: "Yedek görevlerinde başarı/başarısızlık detayı, hızlı filtre ve arama." },
       { icon: Boxes,           title: "Bridge Entegrasyonu",       desc: "Pusula Bridge kurulumları, Kur API, lisans yönetimi ve SQL sorgu havuzu." },
       { icon: Cable,           title: "API Yönetimi",              desc: "Özel API tanımı, token yönetimi ve telemetri ile dinamik API kataloğu." },
       { icon: Smartphone,      title: "Cihaz Kısıtlaması",         desc: "API key'leri cihaz parmak iziyle bağlayarak güvenli çok-cihaz yönetimi." },
@@ -271,82 +267,22 @@ const APPS: AppShowcase[] = [
       { icon: CalendarClock,   title: "Zamanlanmış Görevler",      desc: "node-cron tabanlı scheduler, görsel flow builder, yazıcı + mail." },
       { icon: DollarSign,      title: "Döviz Kurları",             desc: "Pars API + canlı DB senkronu, per-ürün kur takibi ve ekran." },
       { icon: Monitor,         title: "Fiyat Ekranı (TV)",         desc: "12-grid layout editör, 11 widget tipi, SSE ile canlı güncelleme." },
-      { icon: LayoutDashboard, title: "shadcn Dashboard",          desc: "Responsive UI, dark/light tema, Tailwind v4, tablet uyumlu." },
       { icon: Smartphone,      title: "Müşteri Tanı Formu",        desc: "Mobil-first QR form, kamera capture, dijital imza, PDF export." },
       { icon: Database,        title: "Tenant İzolasyonu",         desc: "Çoklu müşteri, tenant-scoped veri, f<firmaId> subdomain, Pars senkronu." },
       { icon: BarChart3,       title: "Konsolide Raporlama",       desc: "Çoklu SQL Server'dan sonuç birleştirme, Recharts grafikleri." },
       { icon: Settings,        title: "Konfigürasyon Paneli",      desc: "SMTP, SQL, lisans, güvenlik politikası, mail görselleri." },
-      { icon: Network,         title: "WAN Tüneli (frpc)",         desc: "Cloudflare Tunnel, heartbeat senkron, public form/display URL'leri." },
+      { icon: Network,         title: "WAN Tüneli (frpc)",         desc: "Pusula API sunucusundaki frps üzerinden f<firkod>.bridge.pusulayazilim.net." },
       { icon: Wrench,          title: "Windows Servisi & Tray",    desc: "NSSM otomatik servis, .NET tray, sistem tepsisi, Inno Setup installer." },
     ],
   },
 ]
 
-interface Milestone {
-  dateLabel: string
-  app:       "switch" | "hub" | "flow" | "import" | "fix" | "backup" | "bridge" | "all"
-  title:     string
-  desc:      string
-}
-
-const MILESTONES: Milestone[] = [
-  { dateLabel: "10 Mart",    app: "all",    title: "Proje başlangıcı",            desc: "Switch + Hub + Flow monorepo iskeleti kuruldu." },
-  { dateLabel: "14 Mart",    app: "fix",    title: "PusulaFix çekirdeği",         desc: "BT teşhis aracı — hosts, IP reset, servis yönetimi." },
-  { dateLabel: "15 Mart",    app: "switch", title: "Gateway & SSO köprüsü",       desc: "Tek oturum ile tüm uygulamalara erişim açıldı." },
-  { dateLabel: "19 Mart",    app: "import", title: "PusulaImport sihirbazı",      desc: "DBF/Excel/Access → Pusula SQL veri aktarımı." },
-  { dateLabel: "22 Mart",    app: "hub",    title: "Firma sihirbazı",             desc: "Firma kurulum akışı — sunucu/kullanıcı/yedek tek adımda." },
-  { dateLabel: "26 Mart",    app: "import", title: "Hesap Kartları aktarımı",     desc: "Staging tabloları, FirmaTipi eşleştirme, decimal fix." },
-  { dateLabel: "28 Mart",    app: "hub",    title: "Windows Agent (C# servis)",   desc: "Uzaktan komut, AD, IIS, yedek yönetimi." },
-  { dateLabel: "30 Mart",    app: "backup", title: "SpareBackup servisi",         desc: "Next.js UI + Windows Service — zamanlanmış SQL & dosya yedeği." },
-  { dateLabel: "2 Nisan",    app: "flow",   title: "Cihaz kısıtlaması + 2FA",     desc: "Tek API key tek cihaz, merkezi 2FA." },
-  { dateLabel: "5 Nisan",    app: "import", title: "Altın & Pırlanta Stok",       desc: "Grup/alt grup eşleştirme, prefix auto-generate." },
-  { dateLabel: "7 Nisan",    app: "flow",   title: "Cloud & SFTP",                desc: "Bulut sunucu yönetimi, SFTP kotalı aktarım." },
-  { dateLabel: "10 Nisan",   app: "backup", title: "İmzalı installer & OTA",      desc: "SHA256 imzalı .exe, SpareFlow'dan uzaktan sürüm yükseltme." },
-  { dateLabel: "12 Nisan",   app: "hub",    title: "Uptime Kuma entegrasyonu",    desc: "11 monitor, Telegram bildirimi, heartbeat geçmişi." },
-  { dateLabel: "16 Nisan",   app: "hub",    title: "Mesajlaşma sistemi",          desc: "WTS injection ile kullanıcıya popup + okundu takibi." },
-  { dateLabel: "20 Nisan",   app: "hub",    title: "Komut paleti (Ctrl+K)",       desc: "Her yerden anında sayfa geçişi ve arama." },
-  { dateLabel: "23 Nisan",   app: "hub",    title: "TV izleme ekranı",            desc: "55\" 4K TV için kiosk — DOWN alarmı, sesli uyarı, canlı." },
-  { dateLabel: "28 Nisan",   app: "hub",    title: "Projeler (Kanban)",           desc: "Görev panosu, alt görevler, dosya ekleme, ekip atamaları." },
-  { dateLabel: "5 Mayıs",    app: "hub",    title: "Not Defteri",                 desc: "Tiptap zengin metin editörü, etiket + sabitleme." },
-  { dateLabel: "10 Mayıs",   app: "hub",    title: "Takvim",                      desc: "Ay/hafta görünümü, tekrarlayan etkinlikler, drag-drop." },
-  { dateLabel: "16 Mayıs",   app: "hub",    title: "Vault — Şifre Kasası",        desc: "AES-256-GCM şifreli kasa, şifre geçmişi + erişim audit log'u." },
-  { dateLabel: "20 Mayıs",   app: "bridge", title: "Pusula Bridge başlangıcı",     desc: "PusulaX için raporlama + tray köprüsü uygulaması." },
-  { dateLabel: "22 Mayıs",   app: "hub",    title: "Yetki Yönetimi",              desc: "Modül bazlı read/write izinleri, rol tabanlı erişim." },
-  { dateLabel: "28 Mayıs",   app: "hub",    title: "Firma Aktarımı",              desc: "Müşteri tarafında SQL backup helper + Hub'a otomatik aktarım." },
-  { dateLabel: "1 Haziran",  app: "hub",    title: "SQL DENY VIEW + Owner",       desc: "Firma sihirbazında SQL login + DENY VIEW ANY DB + DB owner ataması." },
-  { dateLabel: "5 Haziran",  app: "hub",    title: "Vault'tan DB Yedek",          desc: "Vault entry'sindeki SQL credential'ı ile DB tarama + tek tık yedek." },
-  { dateLabel: "8 Haziran",  app: "hub",    title: "Erişim Bilgileri modal",      desc: "Kullanıcı rolü için credential modal'ı, company-detail yetkisiz erişim." },
-]
-
-/* ──────────────────────────────────────────────────────────────────────
- * Yardımcılar
- * ────────────────────────────────────────────────────────────────────── */
-
-function appTone(app: Milestone["app"]): { bg: string; ring: string; text: string; label: string } {
-  switch (app) {
-    case "switch": return { bg: "bg-sky-500/10",     ring: "ring-sky-500/40",     text: "text-sky-300",     label: "Switch" }
-    case "hub":    return { bg: "bg-emerald-500/10", ring: "ring-emerald-500/40", text: "text-emerald-300", label: "Hub" }
-    case "flow":   return { bg: "bg-amber-500/10",   ring: "ring-amber-500/40",   text: "text-amber-300",   label: "Flow" }
-    case "import": return { bg: "bg-violet-500/10",  ring: "ring-violet-500/40",  text: "text-violet-300",  label: "Import" }
-    case "fix":    return { bg: "bg-rose-500/10",    ring: "ring-rose-500/40",    text: "text-rose-300",    label: "Fix" }
-    case "backup": return { bg: "bg-teal-500/10",    ring: "ring-teal-500/40",    text: "text-teal-300",    label: "Backup" }
-    case "bridge": return { bg: "bg-indigo-500/10",  ring: "ring-indigo-500/40",  text: "text-indigo-300",  label: "Bridge" }
-    default:       return { bg: "bg-zinc-500/10",    ring: "ring-zinc-500/40",    text: "text-zinc-300",    label: "Hepsi" }
-  }
-}
 
 /* ──────────────────────────────────────────────────────────────────────
  * Sayfa
  * ────────────────────────────────────────────────────────────────────── */
 
 export default function SunumPage() {
-  const [now, setNow] = useState<Date | null>(null)
-  useEffect(() => {
-    setNow(new Date())
-    const t = setInterval(() => setNow(new Date()), 30_000)
-    return () => clearInterval(t)
-  }, [])
-
   return (
     <main className="relative overflow-x-hidden">
       {/* Arka plan dekor — büyük radial gradient'ler */}
@@ -369,16 +305,6 @@ export default function SunumPage() {
         {/* Meteor yağmuru — hero'ya canlılık katar */}
         <Meteors number={30} className="pointer-events-none" />
         <div className="relative mx-auto w-full max-w-6xl">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-zinc-400 backdrop-blur"
-          >
-            <GitBranch className="h-3.5 w-3.5" />
-            Son 45 Gün · {now ? now.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) : "—"}
-          </motion.div>
-
           <motion.h1
             initial={{ opacity: 0, y: 30, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
@@ -604,55 +530,6 @@ export default function SunumPage() {
       {APPS.map((app, idx) => (
         <AppSection key={app.key} app={app} idx={idx} />
       ))}
-
-      {/* ── ZAMAN ÇİZELGESİ ───────────────────────────────────────── */}
-      <section className="relative px-6 py-24">
-        <div className="mx-auto w-full max-w-5xl">
-          <SectionTitle kicker="Zaman Çizelgesi" title="90 günün kilometre taşları" />
-
-          <div className="relative mt-16">
-            {/* Dikey çizgi */}
-            <div
-              className="absolute left-[15px] top-2 bottom-2 w-px md:left-1/2 md:-translate-x-px"
-              style={{ backgroundImage: "linear-gradient(to bottom, rgba(56,189,248,0.5), rgba(52,211,153,0.5), rgba(251,191,36,0.5), rgba(167,139,250,0.5), rgba(251,113,133,0.5))" }}
-            />
-
-            <div className="space-y-8">
-              {MILESTONES.map((m, i) => {
-                const tone = appTone(m.app)
-                const left = i % 2 === 0
-                return (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: left ? -40 : 40 }}
-                    whileInView={{ opacity: 1, x: 0 }}
-                    viewport={{ once: true, margin: "-80px" }}
-                    transition={{ duration: 0.5, delay: i * 0.05 }}
-                    className={`relative flex items-start gap-4 md:gap-0 ${left ? "md:flex-row" : "md:flex-row-reverse"}`}
-                  >
-                    {/* Nokta */}
-                    <div className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full ring-4 ring-zinc-950 ${tone.bg} md:absolute md:left-1/2 md:-translate-x-1/2`}>
-                      <div className={`h-2.5 w-2.5 rounded-full ${tone.text.replace("text-", "bg-")}`} />
-                    </div>
-
-                    {/* Kart */}
-                    <div className={`flex-1 rounded-2xl border border-white/10 bg-white/[0.03] p-5 backdrop-blur md:max-w-[calc(50%-2rem)] ${left ? "md:mr-auto md:pr-8" : "md:ml-auto md:pl-8"}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-semibold text-zinc-300">{m.dateLabel}</span>
-                        <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ring-1 ${tone.bg} ${tone.ring} ${tone.text}`}>
-                          {tone.label}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 text-base font-semibold text-white">{m.title}</div>
-                      <div className="mt-1 text-sm text-zinc-400">{m.desc}</div>
-                    </div>
-                  </motion.div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
 
       {/* ── KAPANIŞ ───────────────────────────────────────────────── */}
       <section className="relative overflow-hidden px-6 py-32">
