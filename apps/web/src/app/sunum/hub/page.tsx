@@ -13,8 +13,8 @@
  */
 
 import Link from "next/link"
-import { motion, useScroll, useTransform, AnimatePresence } from "motion/react"
-import { useRef, useState } from "react"
+import { motion, useScroll, useTransform } from "motion/react"
+import { useRef } from "react"
 import { NumberTicker } from "@/components/magicui/number-ticker"
 import { BorderBeam } from "@/components/magicui/border-beam"
 import { Meteors } from "@/components/ui/meteors"
@@ -304,118 +304,6 @@ function Stats() {
   )
 }
 
-/* ── Scrollytelling — sol sticky panel, sağ scroll'lu liste ─────────
- *
- * Apple/Stripe tarzı: kullanıcı scroll yaparken sağdaki kısa metin/özellik
- * blokları geçerken, sol taraftaki büyük ikon + başlık o özelliğe göre
- * değişir. Sticky panel viewport içinde sabit kalır, sağdaki içerikler
- * sırayla yukarı kayar.
- *
- * Aktif item, her sağ bloğun `onViewportEnter` callback'i ile tetiklenir —
- * `viewport.amount: 0.6` sayesinde blok yarısından fazlası göründüğünde
- * aktif olur; iki blok arasındaki geçişler ortalanır.
- */
-
-interface ScrollyItem {
-  icon:  React.ElementType
-  title: string
-  desc:  string
-}
-
-const SCROLLY: ScrollyItem[] = [
-  { icon: LayoutDashboard, title: "Dashboard",     desc: "Tüm sistemin sağlık özeti — sunucu, izleme ve firma KPI'ları tek ekranda." },
-  { icon: Server,          title: "Sunucular",     desc: "Windows ve AD sunucularını liste, durum, disk ve servis detayıyla yönet." },
-  { icon: Radar,           title: "İzleme",        desc: "Uptime Kuma'dan canlı veri — DOWN tespitinde anlık Telegram bildirimi." },
-  { icon: Building2,       title: "Firmalar",      desc: "Kurulum sihirbazı, kullanıcı yönetimi, IIS hizmetleri ve veritabanları." },
-  { icon: MessageSquare,   title: "Mesajlar",      desc: "Sunucudaki kullanıcılara doğrudan popup — okundu takibi ile." },
-  { icon: DatabaseBackup,  title: "SQL & Yedek",   desc: "Firma başına yedek listeleme, tek tıkla restore, vault üzerinden direct backup." },
-  { icon: KeyRound,        title: "Vault",         desc: "AES-256-GCM şifreli kasa — şifre yaşı, geçmiş ve erişim audit log'u dahil." },
-  { icon: Command,         title: "Komut Paleti",  desc: "Ctrl+K ile birleşik arama — sayfa, sunucu, firma tek listede." },
-]
-
-function Scrollytelling() {
-  const [active, setActive] = useState(0)
-  const current = SCROLLY[active]
-  const CurrentIcon = current.icon
-
-  return (
-    <section className="relative px-6 py-24">
-      <div className="max-w-6xl mx-auto">
-        <FadeUp>
-          <p className={`${THEME.kicker} text-[11px] font-semibold uppercase tracking-[0.2em] mb-3`}>Bir bakışta</p>
-          <h2 className="text-4xl md:text-5xl font-bold mb-16">
-            Scroll'la <span className={THEME.kicker}>modülleri gez</span>.
-          </h2>
-        </FadeUp>
-
-        <div className="grid md:grid-cols-2 gap-10 md:gap-16">
-          {/* Sol — sticky görsel/başlık paneli (tek brand rengi — THEME) */}
-          <div className="hidden md:block">
-            <div className="sticky top-1/4">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={current.title}
-                  initial={{ opacity: 0, y: 20, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -20, scale: 0.96 }}
-                  transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                  className={`relative aspect-square rounded-3xl border ${THEME.ring} bg-gradient-to-br ${THEME.gradient} flex flex-col items-center justify-center gap-6 overflow-hidden`}
-                >
-                  <CurrentIcon className={`size-32 ${THEME.text}`} strokeWidth={1.2} />
-                  <div className="text-center">
-                    <p className="text-[10px] font-mono text-zinc-500 mb-1">
-                      {String(active + 1).padStart(2, "0")} / {SCROLLY.length}
-                    </p>
-                    <h3 className="text-3xl font-bold text-white">{current.title}</h3>
-                  </div>
-
-                  {/* nokta göstergesi */}
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5">
-                    {SCROLLY.map((_, i) => (
-                      <span
-                        key={i}
-                        className={`h-1.5 rounded-full transition-all duration-300 ${
-                          i === active ? "w-6 bg-white" : "w-1.5 bg-white/30"
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-
-          {/* Sağ — scroll'lu içerik */}
-          <div className="space-y-24 md:space-y-32">
-            {SCROLLY.map((item, i) => {
-              const Icon = item.icon
-              return (
-                <motion.div
-                  key={item.title}
-                  // amount: 0.6 → blok yarısından fazlası viewport'taysa aktif olur
-                  onViewportEnter={() => setActive(i)}
-                  viewport={{ amount: 0.6 }}
-                  initial={{ opacity: 0, x: 30 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-                  className="md:min-h-[40vh] flex flex-col justify-center"
-                >
-                  {/* Mobilde sol panel olmadığı için ikon burada inline gösterilir */}
-                  <Icon className={`md:hidden size-10 mb-4 ${THEME.text}`} strokeWidth={1.4} />
-                  <p className={`text-[11px] font-semibold uppercase tracking-[0.2em] mb-3 ${THEME.kicker}`}>
-                    {String(i + 1).padStart(2, "0")} · Modül
-                  </p>
-                  <h3 className="text-3xl md:text-4xl font-bold mb-4">{item.title}</h3>
-                  <p className="text-zinc-400 text-[15px] md:text-base leading-relaxed">{item.desc}</p>
-                </motion.div>
-              )
-            })}
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
 
 /* ── Tek özellik bölümü ──────────────────────────────────────────── */
 
@@ -643,7 +531,6 @@ export default function SunumHubPage() {
 
       <Hero />
       <Stats />
-      <Scrollytelling />
       {STORIES.map((s, i) => (
         <Story key={s.title} s={s} index={i} />
       ))}
