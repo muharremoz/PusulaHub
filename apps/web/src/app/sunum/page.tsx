@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * /sunum — Son 45 günde yapılanları özetleyen patron sunumu.
+ * /sunum — Son 90 günde yapılanları özetleyen patron sunumu.
  *
  * Üç uygulamanın (PusulaSwitch, PusulaHub, SpareFlow) yeteneklerini ve
  * 2026-03-10 → 2026-04-23 aralığında eklenen özellikleri tek sayfada
@@ -31,8 +31,6 @@ import {
   Cloud,
   CalendarClock,
   Mail,
-  Receipt,
-  Ticket,
   Command,
   Cpu,
   DatabaseBackup,
@@ -43,7 +41,6 @@ import {
   GitBranch,
   Globe,
   HardDrive,
-  Headset,
   KeyRound,
   LayoutDashboard,
   LineChart,
@@ -76,10 +73,10 @@ import {
  * ────────────────────────────────────────────────────────────────────── */
 
 const HERO_STATS: { label: string; num: number; suffix?: string; sub: string }[] = [
-  { label: "Gün",      num: 45,  sub: "10 Mart → 23 Nisan" },
-  { label: "Uygulama", num: 6,   sub: "Web · Masaüstü · Servis" },
-  { label: "Commit",   num: 210, suffix: "+", sub: "Altı repo toplam" },
-  { label: "Özellik",  num: 70,  suffix: "+", sub: "Yeni modül ve sayfa" },
+  { label: "Gün",      num: 90,  sub: "10 Mart → 8 Haziran" },
+  { label: "Uygulama", num: 7,   sub: "Web · Masaüstü · Servis" },
+  { label: "Commit",   num: 420, suffix: "+", sub: "Yedi repo toplam" },
+  { label: "Özellik",  num: 140, suffix: "+", sub: "Yeni modül ve sayfa" },
 ]
 
 interface AppShowcase {
@@ -118,16 +115,22 @@ const APPS: AppShowcase[] = [
     color:   "from-emerald-500/20 to-emerald-500/0",
     accent:  "#34d399",
     icon:    LayoutDashboard,
-    summary: "Sunucuları, firmaları, kullanıcıları ve izleme sistemini tek panelden yöneten ana kontrol merkezi. Windows agent ile sunucularda doğrudan komut çalıştırma, izleme ve bildirim altyapısını içerir.",
+    summary: "Sunucuları, firmaları, kullanıcıları, izleme sistemini, şifre kasasını ve ekip işbirliği araçlarını (notlar, takvim, projeler) tek panelden yöneten ana kontrol merkezi. Windows agent ile sunucularda doğrudan komut çalıştırma, izleme ve bildirim altyapısını içerir.",
     features: [
       { icon: Tv,               title: "TV İzleme Ekranı",          desc: "55\" 4K TV için kiosk tarzı canlı izleme — DOWN alarmı, sesli uyarı, 1 sn canlı." },
-      { icon: Radar,            title: "Uptime Kuma Entegrasyonu",  desc: "11 sunucu/servis izlemesi, heartbeat geçmişi, Telegram bildirimi." },
+      { icon: Radar,            title: "Uptime Kuma Entegrasyonu",  desc: "12+ sunucu/servis izlemesi, heartbeat geçmişi, Telegram bildirimi." },
       { icon: Siren,            title: "Alarm & Ses Uyarısı",       desc: "DOWN tespitinde ekranda flash + beep, DOWN süresi sayacı, olay log'u." },
-      { icon: Building2,        title: "Firma Kurulum Sihirbazı",   desc: "Sıfırdan firma kurulumu: sunucu, kullanıcı, yedek ve yetki tek akışta." },
+      { icon: Building2,        title: "Firma Kurulum Sihirbazı",   desc: "Sunucu, kullanıcı, yedek, SQL login + DENY VIEW + DB owner tek akışta." },
       { icon: Server,           title: "Sunucu Yönetimi",           desc: "Windows ve AD sunucularını liste, durum, disk, servis detayı." },
       { icon: Wrench,           title: "Windows Agent",             desc: "C# servis — uzaktan komut, Active Directory, IIS ve yedek işlemleri." },
       { icon: MessageSquare,    title: "Kullanıcı Mesajlaşma",      desc: "Oturuma popup gönderme, okundu takibi (WTS session injection)." },
       { icon: DatabaseBackup,   title: "SQL Yedek & Restore",       desc: "Firma başına yedek listeleme, tek tık geri yükleme (`D:\\SQLData\\{firmaId}`)." },
+      { icon: KeyRound,         title: "Vault — Şifre Kasası",      desc: "AES-256-GCM ile sunucu/DB/panel şifreleri, geçmiş + erişim audit log'u." },
+      { icon: FileText,         title: "Not Defteri",               desc: "Tiptap zengin metin editörü, etiket + sabitleme, kullanıcı bazlı filtre." },
+      { icon: CalendarClock,    title: "Takvim",                    desc: "Ay/hafta görünümü, tekrarlayan etkinlikler, drag-drop, kullanıcı filtresi." },
+      { icon: Boxes,            title: "Projeler (Kanban)",         desc: "Görev panosu, alt görevler, dosya ekleme, ekip atamaları." },
+      { icon: FileSpreadsheet,  title: "Firma Aktarımı",            desc: "Müşteri tarafında SQL backup helper + Hub'a aktarım sihirbazı." },
+      { icon: UserCog,          title: "Yetki Yönetimi",            desc: "Modül bazlı read/write izinleri, rol tabanlı erişim (admin / kullanıcı)." },
       { icon: Command,          title: "Komut Paleti (Ctrl+K)",     desc: "Hızlı arama ve sayfa geçişi — her yerden, bir kısayolla." },
       { icon: Monitor,          title: "Dashboard KPI Kartları",    desc: "Canlı izleme durumu, sunucu sayısı, aktif kullanıcı özeti." },
       { icon: LineChart,        title: "Heartbeat Bar Grafiği",     desc: "Uptime Kuma tarzı son 100 beat — hover ile tarih/durum/ping." },
@@ -212,56 +215,28 @@ const APPS: AppShowcase[] = [
       { icon: ShieldCheck,     title: "Elevated Runner",          desc: "UAC bilinciyle güvenli yükseltme, audit-friendly akış." },
     ],
   },
-]
-
-interface InProgressProject {
-  name:     string
-  tagline:  string
-  accent:   string
-  icon:     React.ElementType
-  progress: number
-  summary:  string
-  plan:     { icon: React.ElementType; title: string; desc: string }[]
-}
-
-const IN_PROGRESS: InProgressProject[] = [
   {
+    key:     "bridge",
     name:    "Pusula Bridge",
     tagline: "PusulaX için raporlama & tray köprüsü",
+    color:   "from-indigo-500/20 to-indigo-500/0",
     accent:  "#818cf8",
     icon:    Waypoints,
-    progress: 55,
     summary: "PusulaX kuyumcu otomasyonu için yardımcı web ve tray uygulaması. SQL Server üzerinde çalışan raporları zamanlanmış olarak çalıştırır, müşteri/yönetim mail'ine gönderir, döviz ve görev panelini tek yerde toplar.",
-    plan: [
-      { icon: FileText,      title: "SQL Rapor Motoru",    desc: "Manuel + API raporları SQL'de çalıştır, şablona dök." },
-      { icon: Mail,          title: "Mail ile Gönderim",   desc: "Rapor çıktısını PDF/Excel olarak abonelere yolla." },
-      { icon: CalendarClock, title: "Zamanlı Görevler",    desc: "Cron benzeri scheduler — günlük/haftalık rapor koşumu." },
-      { icon: LineChart,     title: "Döviz Kurları",       desc: "Fastify API'den canlı kur çekme ve panel gösterimi." },
-      { icon: Monitor,       title: "Tray Uygulaması",     desc: "Windows tray'de durum + hızlı erişim kısayolları." },
-      { icon: LayoutDashboard, title: "shadcn Dashboard",  desc: "5px radius temalı modern panel, Next.js App Router." },
-    ],
-  },
-  {
-    name:    "Pusula Connect",
-    tagline: "Müşteri portalı & destek talebi",
-    accent:  "#22d3ee",
-    icon:    Headset,
-    progress: 25,
-    summary: "Müşterinin Pusula ile olan ilişkilerini (abonelik, lisans, fatura, kurulu ürünler) görüp yönettiği ve destek talebi oluşturduğu müşteri portalı. Self-servis ile çağrı yükünü düşürür, tüm dokümantasyon tek yerde.",
-    plan: [
-      { icon: Users,         title: "Müşteri Hesabı",      desc: "Firma bazlı self-servis giriş, çoklu kullanıcı." },
-      { icon: Ticket,        title: "Destek Talebi",       desc: "Kategori + öncelik seçimli ticket açma, yanıtlaşma." },
-      { icon: Receipt,       title: "Fatura & Abonelik",   desc: "Geçmiş faturalar, aktif lisans/abonelik durumu." },
-      { icon: Boxes,         title: "Kurulu Ürünler",      desc: "Müşteride çalışan Pusula uygulamalarının görünümü." },
-      { icon: FileText,      title: "Döküman & Eğitim",    desc: "Kullanım kılavuzları, video eğitimler, SSS." },
-      { icon: Bell,          title: "Bildirimler",         desc: "Ticket yanıtı, güncelleme ve bakım duyuruları." },
+    features: [
+      { icon: FileText,        title: "SQL Rapor Motoru",          desc: "Manuel + API raporları SQL'de çalıştır, şablona dök." },
+      { icon: Mail,            title: "Mail ile Gönderim",         desc: "Rapor çıktısını PDF/Excel olarak abonelere yolla." },
+      { icon: CalendarClock,   title: "Zamanlı Görevler",          desc: "Cron benzeri scheduler — günlük/haftalık rapor koşumu." },
+      { icon: LineChart,       title: "Döviz Kurları",             desc: "Fastify API'den canlı kur çekme ve panel gösterimi." },
+      { icon: Monitor,         title: "Tray Uygulaması",           desc: "Windows tray'de durum + hızlı erişim kısayolları." },
+      { icon: LayoutDashboard, title: "shadcn Dashboard",          desc: "5px radius temalı modern panel, Next.js App Router." },
     ],
   },
 ]
 
 interface Milestone {
   dateLabel: string
-  app:       "switch" | "hub" | "flow" | "import" | "fix" | "backup" | "all"
+  app:       "switch" | "hub" | "flow" | "import" | "fix" | "backup" | "bridge" | "all"
   title:     string
   desc:      string
 }
@@ -283,6 +258,16 @@ const MILESTONES: Milestone[] = [
   { dateLabel: "16 Nisan",   app: "hub",    title: "Mesajlaşma sistemi",          desc: "WTS injection ile kullanıcıya popup + okundu takibi." },
   { dateLabel: "20 Nisan",   app: "hub",    title: "Komut paleti (Ctrl+K)",       desc: "Her yerden anında sayfa geçişi ve arama." },
   { dateLabel: "23 Nisan",   app: "hub",    title: "TV izleme ekranı",            desc: "55\" 4K TV için kiosk — DOWN alarmı, sesli uyarı, canlı." },
+  { dateLabel: "28 Nisan",   app: "hub",    title: "Projeler (Kanban)",           desc: "Görev panosu, alt görevler, dosya ekleme, ekip atamaları." },
+  { dateLabel: "5 Mayıs",    app: "hub",    title: "Not Defteri",                 desc: "Tiptap zengin metin editörü, etiket + sabitleme." },
+  { dateLabel: "10 Mayıs",   app: "hub",    title: "Takvim",                      desc: "Ay/hafta görünümü, tekrarlayan etkinlikler, drag-drop." },
+  { dateLabel: "16 Mayıs",   app: "hub",    title: "Vault — Şifre Kasası",        desc: "AES-256-GCM şifreli kasa, şifre geçmişi + erişim audit log'u." },
+  { dateLabel: "20 Mayıs",   app: "bridge", title: "Pusula Bridge başlangıcı",     desc: "PusulaX için raporlama + tray köprüsü uygulaması." },
+  { dateLabel: "22 Mayıs",   app: "hub",    title: "Yetki Yönetimi",              desc: "Modül bazlı read/write izinleri, rol tabanlı erişim." },
+  { dateLabel: "28 Mayıs",   app: "hub",    title: "Firma Aktarımı",              desc: "Müşteri tarafında SQL backup helper + Hub'a otomatik aktarım." },
+  { dateLabel: "1 Haziran",  app: "hub",    title: "SQL DENY VIEW + Owner",       desc: "Firma sihirbazında SQL login + DENY VIEW ANY DB + DB owner ataması." },
+  { dateLabel: "5 Haziran",  app: "hub",    title: "Vault'tan DB Yedek",          desc: "Vault entry'sindeki SQL credential'ı ile DB tarama + tek tık yedek." },
+  { dateLabel: "8 Haziran",  app: "hub",    title: "Erişim Bilgileri modal",      desc: "Kullanıcı rolü için credential modal'ı, company-detail yetkisiz erişim." },
 ]
 
 /* ──────────────────────────────────────────────────────────────────────
@@ -297,6 +282,7 @@ function appTone(app: Milestone["app"]): { bg: string; ring: string; text: strin
     case "import": return { bg: "bg-violet-500/10",  ring: "ring-violet-500/40",  text: "text-violet-300",  label: "Import" }
     case "fix":    return { bg: "bg-rose-500/10",    ring: "ring-rose-500/40",    text: "text-rose-300",    label: "Fix" }
     case "backup": return { bg: "bg-teal-500/10",    ring: "ring-teal-500/40",    text: "text-teal-300",    label: "Backup" }
+    case "bridge": return { bg: "bg-indigo-500/10",  ring: "ring-indigo-500/40",  text: "text-indigo-300",  label: "Bridge" }
     default:       return { bg: "bg-zinc-500/10",    ring: "ring-zinc-500/40",    text: "text-zinc-300",    label: "Hepsi" }
   }
 }
@@ -354,7 +340,7 @@ export default function SunumPage() {
             Pusula Yazılım Ekosistemi
             <br />
             <span className="sunum-hero-gradient bg-clip-text text-transparent">
-              45 günde inşa edildi.
+              90 günde inşa edildi.
             </span>
           </motion.h1>
 
@@ -571,111 +557,10 @@ export default function SunumPage() {
         <AppSection key={app.key} app={app} idx={idx} />
       ))}
 
-      {/* ── DEVAM EDEN PROJELER ───────────────────────────────────── */}
-      <section className="relative px-6 py-24">
-        <div className="mx-auto w-full max-w-6xl">
-          <SectionTitle kicker="Yakında" title="Devam eden projeler" />
-          <p className="mx-auto mt-4 max-w-2xl text-center text-base text-zinc-400">
-            Çatıları kuruldu, geliştirme aktif. Önümüzdeki haftalarda canlıya geçecek iki yeni uygulama.
-          </p>
-
-          <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {IN_PROGRESS.map((p, i) => {
-              const Icon = p.icon
-              const r = parseInt(p.accent.slice(1, 3), 16)
-              const g = parseInt(p.accent.slice(3, 5), 16)
-              const b = parseInt(p.accent.slice(5, 7), 16)
-              return (
-                <motion.div
-                  key={p.name}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-80px" }}
-                  transition={{ duration: 0.6, delay: i * 0.1 }}
-                  className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-7 backdrop-blur"
-                  style={{ boxShadow: `0 0 80px -30px ${p.accent}` }}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10"
-                        style={{ backgroundColor: `${p.accent}22`, boxShadow: `0 0 30px -8px ${p.accent}` }}
-                      >
-                        <Icon className="h-6 w-6" style={{ color: p.accent }} />
-                      </div>
-                      <div>
-                        <h3 className="text-2xl font-bold text-white">{p.name}</h3>
-                        <div className="text-sm text-zinc-400">{p.tagline}</div>
-                      </div>
-                    </div>
-                    <div
-                      className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]"
-                      style={{
-                        borderColor: `${p.accent}66`,
-                        backgroundColor: `${p.accent}1a`,
-                        color: p.accent,
-                      }}
-                    >
-                      <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ backgroundColor: p.accent }} />
-                      devam ediyor
-                    </div>
-                  </div>
-
-                  <p className="mt-5 text-sm leading-relaxed text-zinc-400">{p.summary}</p>
-
-                  {/* Progress */}
-                  <div className="mt-5">
-                    <div className="mb-1.5 flex items-center justify-between text-[10px] uppercase tracking-widest text-zinc-500">
-                      <span>ilerleme</span>
-                      <span style={{ color: p.accent }}>{p.progress}%</span>
-                    </div>
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        whileInView={{ width: `${p.progress}%` }}
-                        viewport={{ once: true }}
-                        transition={{ duration: 1.2, delay: 0.3 + i * 0.1, ease: "easeOut" }}
-                        className="h-full rounded-full"
-                        style={{
-                          background: `linear-gradient(90deg, ${p.accent}, ${p.accent}aa)`,
-                          boxShadow: `0 0 12px ${p.accent}`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Plan list */}
-                  <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {p.plan.map((pl) => {
-                      const PIcon = pl.icon
-                      return (
-                        <div key={pl.title} className="flex items-start gap-2.5 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
-                          <PIcon className="mt-0.5 h-4 w-4 shrink-0" style={{ color: p.accent }} />
-                          <div>
-                            <div className="text-[13px] font-semibold text-white">{pl.title}</div>
-                            <div className="text-[11px] text-zinc-500">{pl.desc}</div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  <BorderBeam size={220} duration={10 + i * 2} colorFrom={p.accent} colorTo="transparent" />
-                  <div
-                    className="pointer-events-none absolute -bottom-20 -right-20 h-60 w-60 rounded-full blur-3xl"
-                    style={{ backgroundColor: `rgba(${r},${g},${b},0.15)` }}
-                  />
-                </motion.div>
-              )
-            })}
-          </div>
-        </div>
-      </section>
-
       {/* ── ZAMAN ÇİZELGESİ ───────────────────────────────────────── */}
       <section className="relative px-6 py-24">
         <div className="mx-auto w-full max-w-5xl">
-          <SectionTitle kicker="Zaman Çizelgesi" title="45 günün kilometre taşları" />
+          <SectionTitle kicker="Zaman Çizelgesi" title="90 günün kilometre taşları" />
 
           <div className="relative mt-16">
             {/* Dikey çizgi */}
@@ -741,7 +626,7 @@ export default function SunumPage() {
             Ve devam ediyor…
           </div>
           <h2 className="sunum-hero-gradient bg-clip-text text-4xl font-bold leading-tight text-transparent md:text-6xl">
-            45 gün sadece başlangıç.
+            90 gün sadece başlangıç.
           </h2>
           <p className="mx-auto mt-6 max-w-2xl text-lg text-zinc-400">
             Altyapı kuruldu, iskelet ayakta. Bundan sonrası — daha fazla otomasyon, daha fazla
