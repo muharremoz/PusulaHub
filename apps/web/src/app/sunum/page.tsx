@@ -11,6 +11,7 @@
  * sunum sırasında bağlantı sorunlarından etkilenmesin.
  */
 
+import { Fragment } from "react"
 import { motion } from "motion/react"
 import { NumberTicker } from "@/components/magicui/number-ticker"
 import { BorderBeam } from "@/components/magicui/border-beam"
@@ -464,12 +465,15 @@ export default function SunumPage() {
       {/* ── MİMARİ DİYAGRAMI ──────────────────────────────────────── */}
       <EcosystemDiagram />
 
-      {/* ── BRIDGE TÜNEL DİYAGRAMI ────────────────────────────────── */}
-      <TunnelDiagram />
-
-      {/* ── UYGULAMALAR ───────────────────────────────────────────── */}
+      {/* ── UYGULAMALAR ─────────────────────────────────────────────
+          Pusula Bridge'in hemen altına Bridge Bağlantısı diyagramı
+          eklenir — kullanıcı "Bridge nedir" gördükten sonra "WAN'dan
+          nasıl erişilir" sorusunun cevabı bağlam içinde gelir. */}
       {APPS.map((app, idx) => (
-        <AppSection key={app.key} app={app} idx={idx} />
+        <Fragment key={app.key}>
+          <AppSection app={app} idx={idx} />
+          {app.key === "bridge" && <TunnelDiagram />}
+        </Fragment>
       ))}
 
       {/* ── KAPANIŞ ───────────────────────────────────────────────── */}
