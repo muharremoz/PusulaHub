@@ -885,12 +885,13 @@ function SecuritySection() {
       icon: Lock,
       accent: "#22d3ee",
       title: "Sunucu Erişimi",
-      desc: "API ve FTP sunucularına internet üzerinden doğrudan erişim YOK.",
+      desc: "Müşteri uygulamaları sadece belli portlardan, anahtarla bağlanır. Yönetim için VPN şart.",
       points: [
-        "VPN zorunlu (FortiClient) — şirket ağına girmeden hiçbir backend'e ulaşılmaz",
-        "IP whitelist — sadece 10.15.2.x LAN aralığı kabul edilir",
-        "Pusula API: her uygulamanın kendi X-API-Key header'ı",
-        "Cloud FTP: SSH key + şifre, sadece LAN'da port 22 açık",
+        "Müşteri uygulamaları (SpareBackup, Bridge, Kur) internetten sadece API portu (3000) ve SFTP portu (6598) üzerinden bağlanır",
+        "Pusula API: her uygulamanın kendi X-API-Key'i — port açık olsa bile anahtarsız geçilmez",
+        "Cloud SFTP: müşteri hesapları (sf<firkod>) için SSH public key zorunlu, parola kapalı",
+        "SSH yönetimi, Uptime Kuma ve admin endpoint'ler sadece LAN — uzaktan için VPN (FortiClient) zorunlu",
+        "10.15.2.x LAN aralığı whitelist'te — bu IP'lerden gelirsen anahtar kontrolü atlanır",
       ],
     },
     {
@@ -960,7 +961,8 @@ function SecuritySection() {
       <div className="mx-auto w-full max-w-6xl">
         <SectionTitle kicker="Güvenlik" title="Sistemin her katmanı korumalı" />
         <p className="mx-auto mt-4 max-w-2xl text-center text-base text-zinc-400">
-          API ve FTP sunucusu internete açık değil. VPN, IP whitelist, API key,
+          Sunuculara müşteri uygulamaları sadece belirli portlardan ve anahtarla
+          ulaşır; yönetim erişimi (SSH, Kuma, admin endpoint'ler) VPN'in arkasında.
           2FA, AES-256-GCM şifreleme ve audit log ile her aksiyon korunur ve izlenir.
         </p>
 
