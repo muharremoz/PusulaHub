@@ -476,6 +476,9 @@ export default function SunumPage() {
         </Fragment>
       ))}
 
+      {/* ── GÜVENLİK ─────────────────────────────────────────────── */}
+      <SecuritySection />
+
       {/* ── KAPANIŞ ───────────────────────────────────────────────── */}
       <section className="relative overflow-hidden px-6 py-32">
         <Ripple
@@ -862,6 +865,172 @@ function TunnelDiagram() {
             })}
           </div>
         </div>
+      </div>
+    </section>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+ * Güvenlik Bölümü
+ * ──────────────────────────────────────────────────────────────────────
+ * 6 katmanlı kart grid'i: Sunucu Erişimi (VPN + IP whitelist + API key),
+ * Kimlik Doğrulama (JWT/2FA/cihaz kilidi), Veri Şifreleme (AES-256-GCM),
+ * SQL İzolasyonu (DENY VIEW + DB owner), Tünel Güvenliği (token auth),
+ * İzleme & Alarm (Kuma + Telegram). Her kart belirgin bir accent renkle
+ * çerçevelenir ve maddeli liste içerir.
+ * ────────────────────────────────────────────────────────────────────── */
+function SecuritySection() {
+  const layers = [
+    {
+      icon: Lock,
+      accent: "#22d3ee",
+      title: "Sunucu Erişimi",
+      desc: "API ve FTP sunucularına internet üzerinden doğrudan erişim YOK.",
+      points: [
+        "VPN zorunlu (FortiClient) — şirket ağına girmeden hiçbir backend'e ulaşılmaz",
+        "IP whitelist — sadece 10.15.2.x LAN aralığı kabul edilir",
+        "Pusula API: her uygulamanın kendi X-API-Key header'ı",
+        "Cloud FTP: SSH key + şifre, sadece LAN'da port 22 açık",
+      ],
+    },
+    {
+      icon: KeyRound,
+      accent: "#1d64ff",
+      title: "Kimlik Doğrulama",
+      desc: "Her giriş çift adımlı, oturum şifreli.",
+      points: [
+        "JWT tabanlı oturum — Switch tek girişle tüm uygulamaları açar (SSO)",
+        "TOTP 2FA — kimlik doğrulama uygulaması ile ikinci adım",
+        "Cihaz kilidi — SpareBackup/Bridge API key ilk PC'ye bağlanır, başka cihaz reddedilir",
+        "Rate limit — şifre denemeleri IP bazlı sınırlı, brute-force engelli",
+      ],
+    },
+    {
+      icon: ShieldCheck,
+      accent: "#a78bfa",
+      title: "Veri Şifreleme",
+      desc: "Hassas her şey diskte şifreli durur.",
+      points: [
+        "Vault şifreleri AES-256-GCM ile şifreli — anahtar olmadan çözülemez",
+        "Agent kimlik bilgileri (sunucu şifreleri) DB'de şifreli",
+        "ENCRYPTION_KEY makineye özel — başka sunucuda DB çözülemez",
+        "Şifre geçmişi tutulur — sızıntıda eski şifreler revoke edilebilir",
+      ],
+    },
+    {
+      icon: Database,
+      accent: "#fbbf24",
+      title: "SQL İzolasyonu",
+      desc: "Firmalar birbirinin veritabanını göremez.",
+      points: [
+        "DENY VIEW ANY DATABASE — kullanıcı sadece kendi DB'lerini görür",
+        "Firma başına ayrı SQL login + DB owner ataması",
+        "Vault'tan tek tıkla yedek (BACKUP DATABASE WITH COMPRESSION + INIT)",
+        "sa şifresi sadece sunucuda — .env.production dosyasında",
+      ],
+    },
+    {
+      icon: Network,
+      accent: "#818cf8",
+      title: "Tünel Güvenliği (Bridge)",
+      desc: "Her firma kendi şifreli kapısından geçer.",
+      points: [
+        "Token tabanlı kimlik — her tenant'ın kendi anahtarı",
+        "TLS sertifikası Pusula sunucusunda — WAN'dan HTTPS, içeride güvenli kanal",
+        "Tenant izolasyonu — subdomain bazlı, başka firma'nın domain'ine sızılamaz",
+        "frps Pusula API sunucusunda — tüm trafik audit'e tabi",
+      ],
+    },
+    {
+      icon: Radar,
+      accent: "#f472b6",
+      title: "İzleme & Alarm",
+      desc: "Bir şey ters giderse saniyeler içinde haber gelir.",
+      points: [
+        "Uptime Kuma — 12+ sunucu/servis 24/7 izleniyor",
+        "DOWN tespitinde Telegram bildirimi (bot + chat)",
+        "TV ekranında DOWN alarmı + sesli uyarı (4K kiosk)",
+        "Audit log — kim/ne/nereden çağırdı, tüm kritik işlemler kayıt altında",
+      ],
+    },
+  ]
+
+  return (
+    <section className="relative px-6 py-24">
+      <div className="mx-auto w-full max-w-6xl">
+        <SectionTitle kicker="Güvenlik" title="Sistemin her katmanı korumalı" />
+        <p className="mx-auto mt-4 max-w-2xl text-center text-base text-zinc-400">
+          API ve FTP sunucusu internete açık değil. VPN, IP whitelist, API key,
+          2FA, AES-256-GCM şifreleme ve audit log ile her aksiyon korunur ve izlenir.
+        </p>
+
+        <div className="mt-12 grid gap-5 md:grid-cols-2">
+          {layers.map((l, i) => {
+            const LIcon = l.icon
+            return (
+              <motion.div
+                key={l.title}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.5, delay: i * 0.06 }}
+                className="relative overflow-hidden rounded-2xl border p-6 backdrop-blur"
+                style={{
+                  borderColor:     `${l.accent}40`,
+                  backgroundImage: `linear-gradient(135deg, ${l.accent}15, ${l.accent}03)`,
+                  boxShadow:       `0 0 60px -20px ${l.accent}66`,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border"
+                    style={{
+                      borderColor:     `${l.accent}50`,
+                      backgroundColor: `${l.accent}1a`,
+                    }}
+                  >
+                    <LIcon className="h-5 w-5" style={{ color: l.accent }} />
+                  </div>
+                  <div>
+                    <div className="text-[15px] font-bold text-white">{l.title}</div>
+                    <div className="text-[12px] text-zinc-400">{l.desc}</div>
+                  </div>
+                </div>
+
+                <ul className="mt-4 space-y-2">
+                  {l.points.map((p) => (
+                    <li key={p} className="flex items-start gap-2.5 text-[12px] text-zinc-300 leading-relaxed">
+                      <ShieldCheck className="mt-0.5 size-3.5 shrink-0" style={{ color: l.accent }} />
+                      <span>{p}</span>
+                    </li>
+                  ))}
+                </ul>
+              </motion.div>
+            )
+          })}
+        </div>
+
+        {/* Alt bilgi şeridi — kısa özet */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5 }}
+          className="mt-8 grid gap-3 md:grid-cols-3"
+        >
+          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-4 text-center">
+            <div className="text-2xl font-bold text-emerald-300 tabular-nums">3</div>
+            <div className="mt-1 text-[11px] text-zinc-400">Katman: VPN · IP · API Key</div>
+          </div>
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/5 px-4 py-4 text-center">
+            <div className="text-2xl font-bold text-blue-300 tabular-nums">AES-256</div>
+            <div className="mt-1 text-[11px] text-zinc-400">Vault + Agent şifreleri</div>
+          </div>
+          <div className="rounded-xl border border-pink-500/20 bg-pink-500/5 px-4 py-4 text-center">
+            <div className="text-2xl font-bold text-pink-300 tabular-nums">24/7</div>
+            <div className="mt-1 text-[11px] text-zinc-400">İzleme + Telegram alarm</div>
+          </div>
+        </motion.div>
       </div>
     </section>
   )
