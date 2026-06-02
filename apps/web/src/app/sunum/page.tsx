@@ -901,7 +901,7 @@ function SecuritySection() {
       points: [
         "JWT tabanlı oturum — Switch tek girişle tüm uygulamaları açar (SSO)",
         "TOTP 2FA — kimlik doğrulama uygulaması ile ikinci adım",
-        "Cihaz kilidi — SpareBackup/Bridge API key ilk PC'ye bağlanır, başka cihaz reddedilir",
+        "Cihaz kilidi — API key sadece kurulumun yapıldığı PC'de çalışır, kopyalansa bile başka cihazdan kullanılamaz",
         "Rate limit — şifre denemeleri IP bazlı sınırlı, brute-force engelli",
       ],
     },
