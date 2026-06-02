@@ -158,11 +158,11 @@ const APPS: AppShowcase[] = [
   {
     key:     "flow",
     name:    "SpareFlow",
-    tagline: "Saha ve cihaz yönetimi",
+    tagline: "Müşteri yedekleme yönetim merkezi",
     color:   "from-amber-500/20 to-amber-500/0",
     accent:  "#fbbf24",
     icon:    Boxes,
-    summary: "Saha cihazları, yedek parça akışı, müşteri çağrıları ve SpareBackup/Bridge kurulumlarının takip edildiği merkez. Bulut depolama, SFTP disk yönetimi, interaktif harita ve ayrıntılı audit log ile kurumsal kullanıma hazır.",
+    summary: "Müşterilere kurulu SpareBackup agent'larından gelen heartbeat, log ve yedekleme durumlarını izleyen merkezi panel. SFTP bulut sunucusunda yedeklerin doğrulanması, kota/disk takibi, başarı oranı ve çevrimdışı uyarıları; Spare Cloud sunucu yönetimi, Pusula Bridge ve Kur API entegrasyonu, müşteri başına API key + cihaz kısıtlaması ile çok-müşteri yönetimine hazır.",
     features: [
       { icon: Monitor,         title: "Kurulum Yönetimi",          desc: "SpareBackup ve Bridge kurulumlarına merkezi erişim ve durum takibi." },
       { icon: MapPin,          title: "İnteraktif Harita",         desc: "Tüm kurulumların coğrafi konumu, IP'ler ve durum filtreli görünüm." },
