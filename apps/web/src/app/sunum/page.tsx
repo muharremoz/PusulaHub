@@ -22,6 +22,7 @@ import { Marquee } from "@/components/ui/marquee"
 import { TypingAnimation } from "@/components/ui/typing-animation"
 import {
   ArrowDown,
+  ArrowUpDown,
   Activity,
   AlertCircle,
   BarChart3,
@@ -719,80 +720,73 @@ function EcosystemDiagram() {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
- * Bridge frpc Tüneli Diyagramı
+ * Bridge Bağlantı Akışı (sade anlatım)
  * ──────────────────────────────────────────────────────────────────────
- * Pusula Bridge müşteri PC'sinde localhost:58748'de çalışır. WAN'dan
- * (müşteri telefonu, harici TV, tablet vs.) erişim için **frp** (Fast
- * Reverse Proxy) ile multi-tenant tunnel kuruluyor:
+ * Bridge müşterinin lokal bilgisayarında çalışır; telefondan/tabletten
+ * erişebilmesi için Pusula sunucusu üzerinden bir köprü kuruluyor.
  *
- *   Browser → DNS (*.bridge.pusulayazilim.net) → frps (api.pusulanet.net:7000)
- *           → frpc (NSSM service, müşteri PC) → http://127.0.0.1:58748
- *
- * Her müşteri kendi `f<firkod>.bridge.pusulayazilim.net` subdomain'ini
- * alır; TEK frpc instance birden fazla tenant'ı barındırır (frpc.toml
- * `[[proxies]]` bloklarıyla). Setup'ta lisans girildiğinde Pusula API'den
- * `tunnel.provision` çağrılır, subdomain + token alınır, frpc.toml
- * üretilir ve NSSM ile servis başlar.
+ * Teknik isimler (frps/frpc/subdomain/port) sunum izleyicisini boğmamak
+ * için gizli — diagram dilini "köprü, kapı, bilgisayar" gibi günlük
+ * kavramlarla ifade ediyoruz. Çift yönlü oklar veriler her iki yönde
+ * de aynı köprüden geçtiğini gösterir.
  * ────────────────────────────────────────────────────────────────────── */
 function TunnelDiagram() {
-  /** Akış basamakları — her satır bir node + bir bağlantı etiketi. */
+  /** Bağlantı akışı — 4 sade node. */
   const steps = [
     {
-      icon: Users,    accent: "#e5e7eb",
-      title: "Müşteri Tarayıcısı",
-      sub:   "Telefon · Tablet · Harici TV",
-      arrow: "HTTPS · 443",
+      icon: Users,
+      accent: "#e5e7eb",
+      title: "Müşterinin Telefonu / Tableti",
+      sub:   "Bridge'e bağlanmak ister",
+      arrow: "İnternet üzerinden gidip gelir",
     },
     {
-      icon: Globe,    accent: "#22d3ee",
-      title: "f<firkod>.bridge.pusulayazilim.net",
-      sub:   "Pusula DNS · A kaydı · 185.130.59.123",
-      arrow: "TLS termination",
+      icon: Network,
+      accent: "#a3e635",
+      title: "Pusula Sunucusu",
+      sub:   "Köprü — isteği doğru bilgisayara yönlendirir, cevabı geri taşır",
+      arrow: "Doğru müşteriye iletilir",
     },
     {
-      icon: Network,  accent: "#a3e635",
-      title: "frps Sunucu (Pusula API)",
-      sub:   "api.pusulanet.net:7000 · Token doğrular, subdomain'i route eder",
-      arrow: "frp protokolü · TCP tunnel",
+      icon: Monitor,
+      accent: "#22d3ee",
+      title: "Müşteri Bilgisayarı",
+      sub:   "Bridge'in çalıştığı PC — bağlantıyı kabul eder",
+      arrow: "Yerel ağda Bridge'e ulaşır",
     },
     {
-      icon: Cable,    accent: "#818cf8",
-      title: "frpc İstemci (Müşteri PC)",
-      sub:   "NSSM Windows service · C:\\ProgramData\\Pusula Bridge\\frpc.toml",
-      arrow: "localhost · 127.0.0.1:58748",
-    },
-    {
-      icon: Waypoints, accent: "#818cf8",
+      icon: Waypoints,
+      accent: "#818cf8",
       title: "Pusula Bridge",
-      sub:   "Next.js standalone prod server · :58748",
+      sub:   "Müşterinin web arayüzü",
       arrow: undefined,
     },
   ]
 
-  /** Sağdaki özellik kartları — tünel sisteminin avantajları. */
+  /** Sağdaki özellik kartları — sade dilde 5 madde. */
   const features = [
-    { icon: Boxes,        title: "Multi-tenant",     desc: "Tek frpc instance birden fazla firmayı barındırır — frpc.toml'da [[proxies]] blokları otomatik üretilir." },
-    { icon: Sparkles,     title: "Otomatik Provision", desc: "Setup'ta lisans girince Pusula API'den subdomain + token alınır, frpc.toml + DB kaydı otomatik." },
-    { icon: ShieldCheck,  title: "NSSM Windows Service", desc: "Boot'ta otomatik bağlanır, çakılırsa restart eder. Müşteri PC'sini her açtığında tunnel hazır." },
-    { icon: KeyRound,     title: "Token Auth",        desc: "Her tenant kendi token'ıyla frps'e bağlanır — başka müşterinin subdomain'ine sızamaz." },
-    { icon: Lock,         title: "HTTPS Termination", desc: "TLS sertifikası frps tarafında — frpc düz HTTP konuşur, müşteri PC'sinde sertifika yönetimi yok." },
-    { icon: FileText,     title: "DB Senkron",        desc: "app_settings.tunnel.subdomain, public_url, provisioned_at — UI'da 'tunnel aktif' rozeti." },
+    { icon: Boxes,       title: "Çoklu Firma",       desc: "Tek altyapı tüm müşterilere aynı anda hizmet eder." },
+    { icon: Sparkles,    title: "Otomatik Kurulum",  desc: "Lisans girilince bağlantı kendi kendine kurulur, ek ayar gerekmez." },
+    { icon: ShieldCheck, title: "Her Zaman Hazır",   desc: "Bilgisayar her açıldığında bağlantı otomatik gelir." },
+    { icon: Lock,        title: "Güvenli Bağlantı",  desc: "Her firma kendi şifreli kapısından geçer; kimse başkasının verisine ulaşamaz." },
+    { icon: Activity,    title: "Panelden İzleme",   desc: "SpareFlow'da \"bağlı / bağlı değil\" durumu anında görünür." },
   ]
 
   return (
     <section className="relative px-6 py-24">
       <div className="mx-auto w-full max-w-6xl">
-        <SectionTitle kicker="Bridge frpc Tüneli" title="Müşteri PC'sine WAN'dan nasıl erişiyoruz?" />
+        <SectionTitle kicker="Bridge Bağlantısı" title="Bridge'e dışarıdan nasıl ulaşılıyor?" />
         <p className="mx-auto mt-4 max-w-2xl text-center text-base text-zinc-400">
-          Pusula Bridge müşterinin lokal PC'sinde çalışır. Telefon/tablet'ten
-          (WAN) erişim için Pusula API sunucusundaki <span className="font-semibold text-white">frps</span> ile
-          müşteri PC'deki <span className="font-semibold text-white">frpc</span> arasında ters tünel kurulur.
+          Bridge müşterinin lokal bilgisayarında çalışır. Telefonundan ya da
+          tabletinden uzaktan bağlanabilsin diye Pusula sunucusu üzerinden bir
+          <span className="font-semibold text-white"> köprü </span>
+          kuruyoruz.
         </p>
 
         <div className="mt-12 grid gap-6 md:grid-cols-5">
-          {/* SOL — Akış diyagramı (5 adım dikey) */}
+          {/* SOL — Akış diyagramı */}
           <div className="md:col-span-3 rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur md:p-8">
-            <LayerLabel>İstek Akışı</LayerLabel>
+            <LayerLabel>Bağlantı Akışı</LayerLabel>
             <div className="flex flex-col items-stretch gap-0">
               {steps.map((s, i) => (
                 <div key={s.title}>
@@ -806,8 +800,8 @@ function TunnelDiagram() {
                   </motion.div>
                   {s.arrow && (
                     <div className="flex items-center gap-3 pl-4 py-2.5">
-                      <ArrowDown className="size-3.5 text-zinc-600" />
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500">
+                      <ArrowUpDown className="size-3.5 text-zinc-500" />
+                      <span className="text-[11px] tracking-wide text-zinc-400">
                         {s.arrow}
                       </span>
                     </div>
@@ -815,11 +809,32 @@ function TunnelDiagram() {
                 </div>
               ))}
             </div>
+
+            {/* Çift yönlü akış açıklaması */}
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="mt-6 rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/10 to-amber-500/5 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <ArrowUpDown className="size-4 mt-0.5 text-amber-300 shrink-0" />
+                <div>
+                  <div className="text-[13px] font-semibold text-white">Veriler sürekli iki yönde geçer</div>
+                  <div className="mt-1 text-[12px] text-zinc-400 leading-relaxed">
+                    Müşterinin gördüğü her sayfa, tıkladığı her buton, doldurduğu her
+                    form aynı köprüden geri döner. Bu yüzden Pusula sunucusu sürekli
+                    açık olmalı — köprü kapanırsa müşteriler Bridge'e ulaşamaz.
+                  </div>
+                </div>
+              </div>
+            </motion.div>
           </div>
 
           {/* SAĞ — Özellik kartları */}
           <div className="md:col-span-2 grid gap-3 content-start">
-            <LayerLabel>Tünel Sisteminin Özellikleri</LayerLabel>
+            <LayerLabel>Özellikler</LayerLabel>
             {features.map((f, i) => {
               const FIcon = f.icon
               return (
@@ -843,30 +858,6 @@ function TunnelDiagram() {
             })}
           </div>
         </div>
-
-        {/* Alt bilgi şeridi — kritik dosya ve URL'ler */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
-          className="mt-6 grid gap-3 md:grid-cols-3"
-        >
-          <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3 text-[11px]">
-            <div className="text-zinc-500 uppercase tracking-wider text-[9px] mb-1">Config</div>
-            <div className="font-mono text-zinc-300 truncate" title="C:\ProgramData\Pusula Bridge\frpc.toml">
-              C:\ProgramData\Pusula Bridge\frpc.toml
-            </div>
-          </div>
-          <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3 text-[11px]">
-            <div className="text-zinc-500 uppercase tracking-wider text-[9px] mb-1">frps Sunucu</div>
-            <div className="font-mono text-zinc-300 truncate">api.pusulanet.net:7000</div>
-          </div>
-          <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3 text-[11px]">
-            <div className="text-zinc-500 uppercase tracking-wider text-[9px] mb-1">Bridge Local</div>
-            <div className="font-mono text-zinc-300 truncate">http://127.0.0.1:58748</div>
-          </div>
-        </motion.div>
       </div>
     </section>
   )
