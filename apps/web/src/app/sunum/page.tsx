@@ -275,6 +275,46 @@ const APPS: AppShowcase[] = [
       { icon: Wrench,          title: "Windows Servisi & Tray",    desc: "NSSM otomatik servis, .NET tray, sistem tepsisi, Inno Setup installer." },
     ],
   },
+  {
+    key:     "api",
+    name:    "Pusula API",
+    tagline: "Tüm uygulamaların ortak backend'i",
+    color:   "from-lime-500/20 to-lime-500/0",
+    accent:  "#a3e635",
+    icon:    Zap,
+    summary: "Ubuntu sunucuda (10.15.2.6) çalışan Fastify Node.js servisi. Döviz kurları, kur API entegrasyonu, müşteri kayıt sistemi, Bridge frps tüneli, mail göndericisi ve sağlık kontrolü gibi merkezi servisleri tüm Pusula uygulamalarına sunar. PM2 ile yönetilir, LAN/WAN failover ile her ortamdan erişilebilir.",
+    features: [
+      { icon: Zap,             title: "Fastify Node.js",           desc: "Yüksek performanslı HTTP API — PM2 yönetiminde, SQLite veritabanı." },
+      { icon: KeyRound,        title: "API Key + IP Whitelist",    desc: "10.15.2.x LAN whitelist + 127.0.0.1, header tabanlı X-API-Key kontrolü." },
+      { icon: DollarSign,      title: "Döviz Kur Servisi",         desc: "Pars API entegrasyonu, anlık döviz kurları (USD, EUR, altın, vs.)." },
+      { icon: Database,        title: "Kur API Entegrasyonu",      desc: "PusulaKur Supabase'i ile çift yönlü senkron — müşteri, parametre, hesaplama." },
+      { icon: Users,           title: "Customer Registry",         desc: "Firma kayıtları, abonelik durumu, lisans yönetimi merkezi." },
+      { icon: Network,         title: "Bridge frps Tüneli",        desc: "Müşteri Bridge frpc istemcilerine subdomain dağıtan reverse proxy sunucusu." },
+      { icon: Mail,            title: "SMTP Mail Servisi",         desc: "Şifre sıfırlama, rapor mailleri, sistem bildirimleri için merkezi SMTP." },
+      { icon: Activity,        title: "Health & Status",           desc: "/health endpoint, döviz kaynakları durumu, upstream sağlık kontrolü." },
+      { icon: Globe,           title: "LAN/WAN Failover",          desc: "LAN'da `10.15.2.6:3000`, WAN'da `api.pusulanet.net` — otomatik geçiş." },
+      { icon: FileCheck2,      title: "Audit Log",                 desc: "Her API çağrısının kim/ne/nereden detayı, debug ve güvenlik için." },
+    ],
+  },
+  {
+    key:     "cloud",
+    name:    "Cloud SFTP",
+    tagline: "Müşteri yedek depolama sunucusu",
+    color:   "from-cyan-500/20 to-cyan-500/0",
+    accent:  "#22d3ee",
+    icon:    Cloud,
+    summary: "SpareBackup agent'larının ürettiği yedek dosyalarını saklayan SFTP sunucusu. Firma başına izole klasör yapısı, kota takibi, otomatik temizlik ve SpareFlow paneline canlı raporlama ile bulut-disk hibrit depolama çözümü sunar.",
+    features: [
+      { icon: Cloud,           title: "SFTP Backup Storage",       desc: "OpenSSH/SFTP üzerinde güvenli yedek dosya depolama, dosya başına hash." },
+      { icon: Boxes,           title: "Firma Bazlı İzolasyon",     desc: "Her müşteri kendi klasöründe — başkasının dosyasına erişemez." },
+      { icon: Gauge,           title: "Kota & Disk Takibi",        desc: "Firma başına maks disk alanı, kullanım yüzdesi, SpareFlow'da canlı." },
+      { icon: HardDrive,       title: "Otomatik Temizlik",         desc: "Kota aşımında eski yedek dosyalarını LIFO/retention kuralıyla sil." },
+      { icon: Lock,            title: "LAN-Only Erişim",           desc: "VPN/LAN üzerinden 22 portu erişilebilir — internete açık değil." },
+      { icon: FileText,        title: "Manifest Tracking",         desc: "Her yedeğin dosya listesi, hash, boyut ve zaman damgası kaydı." },
+      { icon: Search,          title: "Tarama & Arama",            desc: "SpareFlow panelinden dosya listele, ara, indir veya sil." },
+      { icon: TrendingUp,      title: "Kullanım Trendleri",        desc: "Firma bazlı haftalık/aylık disk büyüme grafiği ve uyarıları." },
+    ],
+  },
 ]
 
 
@@ -421,110 +461,7 @@ export default function SunumPage() {
       </section>
 
       {/* ── MİMARİ DİYAGRAMI ──────────────────────────────────────── */}
-      <section className="relative px-6 py-24">
-        <div className="mx-auto w-full max-w-6xl">
-          <SectionTitle kicker="Mimari" title="Tek kapı, üç uygulama" />
-
-          <div className="mt-12 rounded-3xl border border-white/10 bg-white/[0.02] p-8 backdrop-blur md:p-12">
-            {/* Kullanıcı */}
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-6 py-4">
-                <Users className="h-6 w-6 text-zinc-300" />
-                <div>
-                  <div className="text-sm font-semibold">Kullanıcı</div>
-                  <div className="text-xs text-zinc-500">Tarayıcı · LAN / WAN</div>
-                </div>
-              </div>
-              <ArrowLine />
-              {/* Switch */}
-              <div className="relative overflow-hidden rounded-2xl border border-sky-400/30 bg-gradient-to-br from-sky-500/15 to-sky-500/5 px-8 py-5 shadow-[0_0_60px_-15px_rgba(56,189,248,0.4)]">
-                <div className="flex items-center gap-3">
-                  <Network className="h-7 w-7 text-sky-300" />
-                  <div>
-                    <div className="text-base font-bold text-white">PusulaSwitch</div>
-                    <div className="text-xs text-sky-200/80">Gateway · SSO · 2FA · :4000</div>
-                  </div>
-                </div>
-                <BorderBeam size={180} duration={6} colorFrom="#38bdf8" colorTo="transparent" />
-              </div>
-              <ArrowLine split />
-              {/* İki alt uygulama */}
-              <div className="grid w-full grid-cols-1 gap-6 md:grid-cols-2">
-                <MiniApp
-                  name="PusulaHub"
-                  port=":4242"
-                  icon={LayoutDashboard}
-                  color="emerald"
-                  items={["Sunucu yönetimi", "İzleme (Kuma)", "TV ekranı", "Firma sihirbazı", "Windows Agent"]}
-                />
-                <MiniApp
-                  name="SpareFlow"
-                  port=":4243"
-                  icon={Boxes}
-                  color="amber"
-                  items={["Çağrı takibi", "Cihaz yönetimi", "Cloud / SFTP", "Audit log", "Heartbeat"]}
-                />
-              </div>
-              <ArrowLine />
-              {/* Altyapı */}
-              <div className="grid w-full grid-cols-2 gap-4 md:grid-cols-4">
-                <InfraNode icon={Server}     label="Windows Sunucular" sub="Agent ile yönetilir" />
-                <InfraNode icon={Cpu}        label="Ubuntu 10.15.2.6"  sub="Fastify + Kuma" />
-                <InfraNode icon={HardDrive}  label="MSSQL + SQLite"    sub="Veritabanları" />
-                <InfraNode icon={Globe}      label="Telegram / Mail"   sub="Bildirim kanalları" />
-              </div>
-            </div>
-
-            {/* Masaüstü & Müşteri tarafı */}
-            <div className="mt-10 border-t border-white/10 pt-8">
-              <div className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                Masaüstü Araçlar · Müşteri Bilgisayarı
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <div className="relative overflow-hidden rounded-2xl border border-violet-400/30 bg-gradient-to-br from-violet-500/15 to-violet-500/5 p-5 shadow-[0_0_60px_-15px_rgba(167,139,250,0.4)]">
-                  <div className="flex items-center gap-3">
-                    <FileSpreadsheet className="h-6 w-6 text-violet-300" />
-                    <div>
-                      <div className="text-base font-bold text-white">PusulaImport</div>
-                      <div className="text-xs text-violet-200/80">.NET 8 WPF · ETL</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-zinc-400">
-                    Eski yazılım verilerini Pusula SQL'e taşır.
-                  </div>
-                  <BorderBeam size={150} duration={8} colorFrom="#a78bfa" colorTo="transparent" />
-                </div>
-                <div className="relative overflow-hidden rounded-2xl border border-rose-400/30 bg-gradient-to-br from-rose-500/15 to-rose-500/5 p-5 shadow-[0_0_60px_-15px_rgba(251,113,133,0.4)]">
-                  <div className="flex items-center gap-3">
-                    <Stethoscope className="h-6 w-6 text-rose-300" />
-                    <div>
-                      <div className="text-base font-bold text-white">PusulaFix</div>
-                      <div className="text-xs text-rose-200/80">.NET WPF · BT Teşhis</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-zinc-400">
-                    Sahada BT sorunlarını tek tıkla çözer.
-                  </div>
-                  <BorderBeam size={150} duration={10} colorFrom="#fb7185" colorTo="transparent" />
-                </div>
-                <div className="relative overflow-hidden rounded-2xl border border-teal-400/30 bg-gradient-to-br from-teal-500/15 to-teal-500/5 p-5 shadow-[0_0_60px_-15px_rgba(45,212,191,0.4)]">
-                  <div className="flex items-center gap-3">
-                    <DatabaseBackup className="h-6 w-6 text-teal-300" />
-                    <div>
-                      <div className="text-base font-bold text-white">SpareBackup</div>
-                      <div className="text-xs text-teal-200/80">Next.js + Windows Service</div>
-                    </div>
-                  </div>
-                  <div className="mt-3 text-xs text-zinc-400">
-                    Müşteri PC'sinde zamanlanmış SQL & dosya yedeği.
-                  </div>
-                  <BorderBeam size={150} duration={9} colorFrom="#2dd4bf" colorTo="transparent" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <EcosystemDiagram />
 
       {/* ── UYGULAMALAR ───────────────────────────────────────────── */}
       {APPS.map((app, idx) => (
@@ -640,42 +577,141 @@ function ArrowLine({ split = false }: { split?: boolean }) {
   )
 }
 
-function MiniApp({
-  name, port, icon: Icon, color, items,
+/* ──────────────────────────────────────────────────────────────────────
+ * Ekosistem Diyagramı
+ * ──────────────────────────────────────────────────────────────────────
+ * 5 katmanlı görsel: Kullanıcı → Gateway → Web Apps → Backend Servisler
+ * → Müşteri tarafı. Her node DiagramNode component'i ile çizilir,
+ * katmanlar arası bağlantı ArrowLine helper'ı ile gösterilir. Renkler
+ * her uygulamanın brand tonu (Hub mavi, Flow amber, vs.) ile eşleşir.
+ * ────────────────────────────────────────────────────────────────────── */
+function DiagramNode({
+  icon: Icon, name, sub, accent, size = "md",
 }: {
-  name: string; port: string; icon: React.ElementType; color: "emerald" | "amber"; items: string[]
+  icon: React.ElementType
+  name: string
+  sub?: string
+  /** hex renk — kart border, gradient ve glow için kullanılır */
+  accent: string
+  /** sm: müşteri tarafı kompakt | md: standart | lg: ana hub kartı */
+  size?: "sm" | "md" | "lg"
 }) {
-  const tone = color === "emerald"
-    ? { border: "border-emerald-400/30", bg: "from-emerald-500/15 to-emerald-500/5", text: "text-emerald-300", textSub: "text-emerald-200/80", glow: "shadow-[0_0_60px_-15px_rgba(52,211,153,0.4)]" }
-    : { border: "border-amber-400/30",   bg: "from-amber-500/15 to-amber-500/5",    text: "text-amber-300",   textSub: "text-amber-200/80",   glow: "shadow-[0_0_60px_-15px_rgba(251,191,36,0.4)]" }
+  const pad   = size === "sm" ? "px-3 py-2.5" : size === "lg" ? "px-6 py-4" : "px-4 py-3"
+  const iconSize = size === "sm" ? "h-4 w-4" : size === "lg" ? "h-7 w-7" : "h-5 w-5"
+  const nameSize = size === "sm" ? "text-[12px]" : size === "lg" ? "text-base" : "text-sm"
+  const subSize  = size === "sm" ? "text-[10px]" : size === "lg" ? "text-xs" : "text-[11px]"
   return (
-    <div className={`rounded-2xl border ${tone.border} bg-gradient-to-br ${tone.bg} p-5 ${tone.glow}`}>
-      <div className="flex items-center gap-3">
-        <Icon className={`h-6 w-6 ${tone.text}`} />
-        <div>
-          <div className="text-base font-bold text-white">{name}</div>
-          <div className={`text-xs ${tone.textSub}`}>{port}</div>
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-30px" }}
+      transition={{ duration: 0.4 }}
+      className={`relative overflow-hidden rounded-xl border ${pad} backdrop-blur`}
+      style={{
+        borderColor:     `${accent}55`,
+        backgroundImage: `linear-gradient(135deg, ${accent}22, ${accent}05)`,
+        boxShadow:       `0 0 40px -15px ${accent}66`,
+      }}
+    >
+      <div className="flex items-center gap-2.5">
+        <Icon className={iconSize} style={{ color: accent }} />
+        <div className="min-w-0">
+          <div className={`${nameSize} font-bold text-white truncate`}>{name}</div>
+          {sub && <div className={`${subSize} text-zinc-400 truncate`}>{sub}</div>}
         </div>
       </div>
-      <ul className="mt-4 space-y-1.5">
-        {items.map((it) => (
-          <li key={it} className="flex items-center gap-2 text-sm text-zinc-300">
-            <div className={`h-1 w-1 rounded-full ${tone.text.replace("text-", "bg-")}`} />
-            {it}
-          </li>
-        ))}
-      </ul>
+    </motion.div>
+  )
+}
+
+function LayerLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-3 text-center text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
+      {children}
     </div>
   )
 }
 
-function InfraNode({ icon: Icon, label, sub }: { icon: React.ElementType; label: string; sub: string }) {
+function EcosystemDiagram() {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-center">
-      <Icon className="mx-auto h-5 w-5 text-zinc-400" />
-      <div className="mt-1.5 text-xs font-semibold text-zinc-200">{label}</div>
-      <div className="text-[10px] text-zinc-500">{sub}</div>
-    </div>
+    <section className="relative px-6 py-24">
+      <div className="mx-auto w-full max-w-6xl">
+        <SectionTitle kicker="Ekosistem Mimarisi" title="Tüm parçalar nasıl konuşuyor?" />
+        <p className="mx-auto mt-4 max-w-2xl text-center text-base text-zinc-400">
+          Pusula sunucularındaki web uygulamaları, ortak Fastify API'si, müşteri
+          PC'lerine kurulu agent'lar ve bulut yedek depolama tek bir akışta birleşir.
+        </p>
+
+        <div className="mt-12 rounded-3xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur md:p-10">
+
+          {/* ── KATMAN 1 — Kullanıcı ──────────────────────────────── */}
+          <div className="flex flex-col items-center">
+            <DiagramNode icon={Users} name="Kullanıcı / Müşteri" sub="Tarayıcı · LAN / WAN" accent="#e5e7eb" />
+            <ArrowLine />
+
+            {/* ── KATMAN 2 — Gateway ────────────────────────────── */}
+            <DiagramNode icon={Network} name="PusulaSwitch" sub="Gateway · SSO · 2FA · :4000" accent="#38bdf8" size="lg" />
+            <ArrowLine split />
+
+            {/* ── KATMAN 3 — Web Uygulamaları ───────────────────── */}
+            <div className="w-full">
+              <LayerLabel>Pusula Sunucuları · Web Uygulamaları</LayerLabel>
+              <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-3">
+                <DiagramNode icon={LayoutDashboard} name="PusulaHub"    sub="Altyapı · Sunucular · İzleme · :4242" accent="#1d64ff" />
+                <DiagramNode icon={Boxes}           name="SpareFlow"    sub="Yedek yönetimi · :4243"               accent="#fbbf24" />
+                <DiagramNode icon={Waypoints}       name="Pusula Bridge" sub="Raporlama · Tray · :58748"           accent="#818cf8" />
+              </div>
+            </div>
+            <ArrowLine />
+
+            {/* ── KATMAN 4 — Backend / Altyapı ──────────────────── */}
+            <div className="w-full">
+              <LayerLabel>Pusula API Sunucusu · Bulut Altyapı</LayerLabel>
+              <div className="grid w-full grid-cols-1 gap-4 md:grid-cols-3">
+                <DiagramNode icon={Zap}   name="Pusula API (Fastify)" sub="10.15.2.6:3000 · Auth · Döviz · Kur · frps" accent="#a3e635" />
+                <DiagramNode icon={Cloud} name="Cloud SFTP"           sub="Yedek depolama · Kota · Manifest"          accent="#22d3ee" />
+                <DiagramNode icon={Radar} name="Uptime Kuma"          sub="İzleme · Telegram bildirimi · 3001"        accent="#f472b6" />
+              </div>
+            </div>
+
+            {/* VPN / Internet ayırıcı */}
+            <div className="my-6 flex w-full items-center gap-3">
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
+                VPN · Internet · WAN
+              </span>
+              <div className="h-px flex-1 bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+            </div>
+
+            {/* ── KATMAN 5 — Müşteri tarafı ─────────────────────── */}
+            <div className="w-full">
+              <LayerLabel>Müşteri Bilgisayarı · Agent ve Masaüstü Araçlar</LayerLabel>
+              <div className="grid w-full grid-cols-2 gap-3 md:grid-cols-5">
+                <DiagramNode icon={DatabaseBackup}  name="SpareBackup"   sub="Win servis + UI"   accent="#2dd4bf" size="sm" />
+                <DiagramNode icon={Waypoints}       name="Bridge frpc"   sub="Tunnel istemci"    accent="#818cf8" size="sm" />
+                <DiagramNode icon={Wrench}          name="Windows Agent" sub="Hub uzaktan komut" accent="#1d64ff" size="sm" />
+                <DiagramNode icon={Stethoscope}     name="PusulaFix"     sub=".NET WPF · BT"     accent="#fb7185" size="sm" />
+                <DiagramNode icon={FileSpreadsheet} name="PusulaImport"  sub=".NET 8 WPF · ETL"  accent="#a78bfa" size="sm" />
+              </div>
+            </div>
+
+            {/* Açıklayıcı alt metin — veri akışı kuralları */}
+            <div className="mt-10 grid w-full grid-cols-1 gap-3 text-[12px] text-zinc-400 md:grid-cols-3">
+              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3">
+                <span className="font-semibold text-white">Switch → Web App</span> · SSO oturumu reverse proxy ile aktarılır.
+              </div>
+              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3">
+                <span className="font-semibold text-white">Web App → API</span> · Fastify döviz, kur, tunnel, customer servisleri sunar.
+              </div>
+              <div className="rounded-lg border border-white/5 bg-white/[0.03] px-4 py-3">
+                <span className="font-semibold text-white">Agent → Cloud SFTP</span> · SpareBackup yedek dosyalarını şifreli yükler.
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
