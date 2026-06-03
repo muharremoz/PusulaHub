@@ -54,13 +54,13 @@ async function syncFirmalar(): Promise<void> {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 15000)
 
-    const res = await fetch(`${baseUrl}/Server/List`, {
-      method: "POST",
+    // API 2026-06'da değişti: POST /Server/List → GET /Account/ServerList.
+    // Response yapısı aynı (IsSuccess / Message / Param[] · UserCount, Lisans).
+    const res = await fetch(`${baseUrl}/Account/ServerList`, {
+      method: "GET",
       headers: {
         Authorization: "Basic " + Buffer.from(`${username}:${password}`).toString("base64"),
-        "Content-Type": "application/json",
       },
-      body: JSON.stringify({}),
       signal: controller.signal,
       cache: "no-store",
     })

@@ -64,14 +64,15 @@ interface WrappedResponse<T> {
   Param:     T
 }
 
-async function firmaFetchWrapped<T>(path: string): Promise<T> {
-  const res = await firmaFetch<WrappedResponse<T>>(path)
+async function firmaFetchWrapped<T>(path: string, method: "GET" | "POST" = "POST"): Promise<T> {
+  const res = await firmaFetch<WrappedResponse<T>>(path, method)
   if (!res.IsSuccess) throw new Error(res.Message || "Firma API başarısız döndü")
   return res.Param
 }
 
 export async function getFirmaServers(): Promise<FirmaServer[]> {
-  return firmaFetchWrapped<FirmaServer[]>("/Server/List")
+  // API 2026-06'da değişti: POST /Server/List → GET /Account/ServerList
+  return firmaFetchWrapped<FirmaServer[]>("/Account/ServerList", "GET")
 }
 
 export async function getFirmaCompanies(): Promise<FirmaCompany[]> {
