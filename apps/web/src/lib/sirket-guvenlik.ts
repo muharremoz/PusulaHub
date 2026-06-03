@@ -54,8 +54,11 @@ export function getGuvenlikTemplate(programCode: string | null | undefined): {
 }
 
 export interface InsertGuvenlikArgs {
-  /** Restore edilen hedef DB adı (srkadi + DataYolu kolonlarına yazılır) */
+  /** Restore edilen hedef DB adı (DataYolu kolonuna yazılır — firma prefix'li). */
   dbName:      string
+  /** guvenlik.srkadi kolonuna yazılacak şirket/data adı — firma prefix'i YOK.
+   *  Verilmezse geriye uyumluluk için dbName kullanılır. */
+  srkAdi?:     string
   /** Firma ID — KOD + PusulaFirmaId kolonlarına int olarak yazılır */
   firmaId:     string
   /** Pusula program kodu (011, 909, 111, 016…) — PrgTur kolonuna */
@@ -72,14 +75,15 @@ export async function insertGuvenlikRow(
   pool: sql.ConnectionPool,
   args: InsertGuvenlikArgs,
 ): Promise<void> {
-  const { dbName, firmaId, programCode } = args
+  const { dbName, srkAdi, firmaId, programCode } = args
   const { arkaplan, resim, baslik1 } = getGuvenlikTemplate(programCode)
   const firmaKod = Number.parseInt(firmaId, 10)
   const safeKod  = Number.isFinite(firmaKod) ? firmaKod : 0
   const resimyolu = `\\\\10.15.2.200\\Resimler\\${firmaId}`
 
   const req = pool.request()
-  req.input("srkadi",          sql.NVarChar, dbName)
+  // srkadi: firma prefix'siz şirket/data adı · DataYolu: prefix'li gerçek DB adı
+  req.input("srkadi",          sql.NVarChar, srkAdi ?? dbName)
   req.input("adres",           sql.NVarChar, "1")
   req.input("telefon",         sql.NVarChar, "1")
   req.input("faks",            sql.NVarChar, "1")

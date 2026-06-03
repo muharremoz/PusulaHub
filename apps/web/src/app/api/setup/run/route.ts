@@ -798,6 +798,8 @@ export async function POST(req: NextRequest) {
           interface RestoreTask {
             bakPath:      string
             dbName:       string
+            /** guvenlik.srkadi için firma prefix'siz ham data/şirket adı */
+            srkAdi:       string
             /** Bu DB için guvenlik kaydında kullanılacak program kodu (null → insert atlanır) */
             programCode:  string | null
           }
@@ -830,6 +832,7 @@ export async function POST(req: NextRequest) {
               tasks.push({
                 bakPath,
                 dbName:      `${prefix}${dbName}`,
+                srkAdi:      dbName,
                 programCode,
               })
             }
@@ -886,6 +889,7 @@ export async function POST(req: NextRequest) {
                 tasks.push({
                   bakPath,
                   dbName:      `${prefix}${rawName}`,
+                  srkAdi:      rawName,
                   programCode,
                 })
               }
@@ -1059,6 +1063,7 @@ export async function POST(req: NextRequest) {
                           async () => {
                             await insertGuvenlikRow(sirketPool, {
                               dbName:      t.dbName,
+                              srkAdi:      t.srkAdi,
                               firmaId:     payload.firmaId,
                               programCode: t.programCode!,
                             })
