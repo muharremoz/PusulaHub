@@ -4,7 +4,7 @@ import { execOnAgent } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer } from "@/lib/sql-restore"
-import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner } from "@/lib/sql-firma-login"
+import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
@@ -965,6 +965,20 @@ export async function POST(req: NextRequest) {
                           },
                         )
                       }
+
+                      // Paylaşımlı sirket DB'sine okuma+yazma erişimi — Pusula
+                      // programı açılırken sirket.dbo.guvenlik'i bu kullanıcıyla
+                      // okur. DENY VIEW ANY DATABASE diğer firma DB'lerini gizler;
+                      // sirket'te USER + db_datareader/datawriter olduğu için bu
+                      // paylaşımlı DB erişilebilir kalır (owner değil → şema güvenli).
+                      await runSqlStep(
+                        `sql_sirket_access_${loginName}`,
+                        `sirket DB erişimi: ${loginName} (okuma+yazma)`,
+                        async () => {
+                          await grantSirketAccess(masterPool, loginName)
+                          return `[sirket] db_datareader + db_datawriter → ${loginName}`
+                        },
+                      )
                     }
                   }
 

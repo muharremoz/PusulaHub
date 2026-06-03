@@ -145,3 +145,53 @@ export async function setDbOwner(
     ALTER AUTHORIZATION ON DATABASE::[${dbIdent}] TO [${loginIdent}];
   `)
 }
+
+/**
+ * Paylaşımlı `sirket` DB'sine firma login'i için okuma+yazma erişimi verir.
+ *
+ * Pusula programı açılırken `sirket.dbo.guvenlik` (ve diğer sirket tabloları)
+ * üzerinden hangi data DB'sine/yetkiye bağlanacağını okur. Firma kullanıcısı
+ * `DENY VIEW ANY DATABASE` ile diğer firma DB'lerini göremez ama `sirket`'te
+ * bir USER + db_datareader/db_datawriter üyeliği olduğu için bu paylaşımlı
+ * DB'yi görür ve içine okuyup yazabilir.
+ *
+ *  - CREATE USER (idempotent)
+ *  - db_datareader + db_datawriter rolleri (owner DEĞİL — şema değiştiremez,
+ *    başka firma DB'sine geçemez)
+ *
+ * `sirket` DB'si o sunucuda yoksa sessizce atlar (guvenlik insert'i hiç
+ * yapılmamış olabilir).
+ *
+ * @param masterPool  master DB'sine bağlı mssql ConnectionPool
+ * @param loginName   "{firmaId}_{username}" formatında
+ * @param sirketDb    sirket DB adı (varsayılan "sirket")
+ */
+export async function grantSirketAccess(
+  masterPool: sql.ConnectionPool,
+  loginName:  string,
+  sirketDb:   string = "sirket",
+): Promise<void> {
+  const dbIdent    = escapeIdent(sirketDb)
+  const loginIdent = escapeIdent(loginName)
+  const loginLit   = escapeString(loginName)
+
+  await masterPool.request().batch(`
+    IF DB_ID(N'${escapeString(sirketDb)}') IS NULL
+    BEGIN
+      RETURN;
+    END
+
+    USE [${dbIdent}];
+
+    IF NOT EXISTS (
+      SELECT 1 FROM sys.database_principals
+      WHERE name = N'${loginLit}'
+    )
+    BEGIN
+      CREATE USER [${loginIdent}] FOR LOGIN [${loginIdent}];
+    END
+
+    ALTER ROLE db_datareader ADD MEMBER [${loginIdent}];
+    ALTER ROLE db_datawriter ADD MEMBER [${loginIdent}];
+  `)
+}
