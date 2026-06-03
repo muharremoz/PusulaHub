@@ -88,17 +88,56 @@ export async function POST(
 
     const raw: RawBackupItem[] = parseBackupListOutput(result.stdout)
 
-    const files: BackupFile[] = raw.map((item, idx) => ({
-      id:               idx + 1,
-      fileName:         item.Name,
-      databaseName:     parseDatabaseName(item.Name),
-      // Byte → MB (float) — UI tarafında MB/GB dinamik formatlanır.
-      // Math.round kullanmıyoruz çünkü < 0.5 MB dosyalar 0 görünüyordu.
-      fileSizeMB:       (item.Length || 0) / (1024 * 1024),
-      date:             toDateString(item.LastWriteTime),
-      selected:         false,
-      programServiceId: null,
-    }))
+    // Uzantıya göre ayır. Eski agent çıktısında Extension yoksa dosya adından türet.
+    const ext = (it: RawBackupItem) =>
+      (it.Extension || (it.Name.match(/\.[^.]+$/)?.[0] ?? "")).toLowerCase()
+
+    const bakItems = raw.filter((it) => ext(it) === ".bak")
+    const mdfItems = raw.filter((it) => ext(it) === ".mdf")
+    const ldfItems = raw.filter((it) => ext(it) === ".ldf")
+
+    // .mdf/.ldf eşleştirmesi: aynı base ada sahip .ldf'yi bul (büyük/küçük harf duyarsız).
+    const ldfByBase = new Map<string, RawBackupItem>()
+    for (const l of ldfItems) {
+      const base = l.Name.replace(/\.ldf$/i, "").toLowerCase()
+      ldfByBase.set(base, l)
+    }
+
+    let idx = 0
+    const files: BackupFile[] = []
+
+    // 1) .bak dosyaları → RESTORE
+    for (const item of bakItems) {
+      files.push({
+        id:               ++idx,
+        fileName:         item.Name,
+        databaseName:     parseDatabaseName(item.Name),
+        // Byte → MB (float) — UI tarafında MB/GB dinamik formatlanır.
+        fileSizeMB:       (item.Length || 0) / (1024 * 1024),
+        date:             toDateString(item.LastWriteTime),
+        selected:         false,
+        programServiceId: null,
+        kind:             "bak",
+      })
+    }
+
+    // 2) .mdf dosyaları → ATTACH (varsa eşleşen .ldf ile). LDF boyutu da toplam'a eklenir.
+    for (const mdf of mdfItems) {
+      const base = mdf.Name.replace(/\.mdf$/i, "")
+      const ldf  = ldfByBase.get(base.toLowerCase())
+      files.push({
+        id:               ++idx,
+        fileName:         mdf.Name,
+        databaseName:     base.replace(/_\d{8}$/, "").trim() || base,
+        fileSizeMB:       ((mdf.Length || 0) + (ldf?.Length || 0)) / (1024 * 1024),
+        date:             toDateString(mdf.LastWriteTime),
+        selected:         false,
+        programServiceId: null,
+        kind:             "attach",
+        mdfFileName:      mdf.Name,
+        ldfFileName:      ldf?.Name,
+      })
+    }
 
     const body_: ScanBackupsResponse = { files }
     return NextResponse.json(body_)

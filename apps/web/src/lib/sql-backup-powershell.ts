@@ -27,8 +27,9 @@ export function buildListBackupFiles(folderPath: string): string {
   return [
     `$ErrorActionPreference = 'SilentlyContinue'`,
     `if (-not (Test-Path -LiteralPath '${p}')) { Write-Output '[]'; return }`,
-    `$items = Get-ChildItem -LiteralPath '${p}' -Filter '*.bak' -File -Force`,
-    `$arr = @($items | ForEach-Object { [PSCustomObject]@{ Name = $_.Name; Length = $_.Length; LastWriteTime = $_.LastWriteTime.ToString('o') } })`,
+    // .bak (restore) + .mdf/.ldf (attach) dosyalarını tara — Extension çıktıya eklenir.
+    `$items = Get-ChildItem -LiteralPath '${p}' -File -Force | Where-Object { @('.bak','.mdf','.ldf') -contains $_.Extension.ToLower() }`,
+    `$arr = @($items | ForEach-Object { [PSCustomObject]@{ Name = $_.Name; Length = $_.Length; LastWriteTime = $_.LastWriteTime.ToString('o'); Extension = $_.Extension.ToLower() } })`,
     `if ($arr.Count -eq 0) { Write-Output '[]' } else { $arr | ConvertTo-Json -Compress }`,
   ].join("; ")
 }
@@ -38,6 +39,8 @@ export interface RawBackupItem {
   Name:          string
   Length:        number
   LastWriteTime: string
+  /** ".bak" | ".mdf" | ".ldf" — eski agent çıktısında olmayabilir (undefined). */
+  Extension?:    string
 }
 
 export function parseBackupListOutput(stdout: string): RawBackupItem[] {
@@ -70,6 +73,44 @@ export function buildCheckFilesExist(paths: string[]): string {
     `$result = @($paths | ForEach-Object { $p = $_; if (Test-Path -LiteralPath $p -PathType Leaf) { $i = Get-Item -LiteralPath $p -Force; [PSCustomObject]@{ Path = $p; Exists = $true; Length = $i.Length } } else { [PSCustomObject]@{ Path = $p; Exists = $false; Length = 0 } } })`,
     `if ($result.Count -eq 0) { Write-Output '[]' } else { $result | ConvertTo-Json -Compress }`,
   ].join("; ")
+}
+
+/**
+ * ATTACH için ham .mdf (+ varsa .ldf) dosyalarını hedef klasöre yeni adla
+ * kopyalayan PowerShell. SQL Server'ın FOR ATTACH yapabilmesi için dosyaların
+ * `D:\SQLData\{firmaId}` altında, hedef DB adıyla durması gerekir.
+ *
+ *   srcMdf → destDir\{targetDb}.mdf
+ *   srcLdf → destDir\{targetDb}.ldf   (srcLdf verilmişse)
+ *
+ * Hedef klasör yoksa oluşturulur. Var olan hedef dosyaların üzerine yazar
+ * (-Force) — sihirbaz tekrar çalıştığında idempotent. Çıktı: 'OK' veya hata.
+ */
+export function buildCopyAttachFiles(opts: {
+  srcMdf:   string
+  srcLdf?:  string
+  destDir:  string
+  destMdf:  string   // sadece dosya adı (örn. 343_AsyaData.mdf)
+  destLdf?: string
+}): string {
+  const sm = psQuote(opts.srcMdf)
+  const dd = psQuote(opts.destDir)
+  const dm = psQuote(opts.destMdf)
+  const lines = [
+    `$ErrorActionPreference = 'Stop'`,
+    `if (-not (Test-Path -LiteralPath '${sm}')) { throw ('MDF bulunamadi: ' + '${sm}') }`,
+    `if (-not (Test-Path -LiteralPath '${dd}')) { New-Item -ItemType Directory -Path '${dd}' -Force | Out-Null }`,
+    `Copy-Item -LiteralPath '${sm}' -Destination (Join-Path '${dd}' '${dm}') -Force`,
+  ]
+  if (opts.srcLdf && opts.destLdf) {
+    const sl = psQuote(opts.srcLdf)
+    const dl = psQuote(opts.destLdf)
+    lines.push(
+      `if (Test-Path -LiteralPath '${sl}') { Copy-Item -LiteralPath '${sl}' -Destination (Join-Path '${dd}' '${dl}') -Force }`,
+    )
+  }
+  lines.push(`Write-Output 'OK'`)
+  return lines.join("; ")
 }
 
 export interface RawCheckPathItem {

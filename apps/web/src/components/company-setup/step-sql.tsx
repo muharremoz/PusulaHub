@@ -467,7 +467,17 @@ export function StepSql({
                           )}>
                             {f.selected && <Check className="size-2.5 text-background" strokeWidth={3} />}
                           </span>
-                          <span className="text-[11px] font-mono truncate">{f.fileName}</span>
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            {f.kind === "attach" && (
+                              <span
+                                className="shrink-0 rounded-[3px] bg-violet-100 text-violet-700 text-[9px] font-semibold px-1 py-0.5 leading-none"
+                                title={f.ldfFileName ? `${f.mdfFileName} + ${f.ldfFileName}` : `${f.mdfFileName} (log yeniden üretilecek)`}
+                              >
+                                ATTACH
+                              </span>
+                            )}
+                            <span className="text-[11px] font-mono truncate">{f.fileName}</span>
+                          </span>
                           {/* Düzenlenebilir DB adı — prefix ayrı lozenj, input sadece name'i değiştirir */}
                           <div
                             className="flex items-center gap-1 min-w-0"

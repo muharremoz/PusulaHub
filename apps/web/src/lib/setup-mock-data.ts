@@ -73,6 +73,13 @@ export interface BackupFile {
   /** Bu .bak hangi Pusula program servisine ait? (sirket.guvenlik.prgtur için)
    *  Tek pusula programı seçilmişse otomatik atanır. Birden fazla varsa kullanıcı seçer. */
   programServiceId: number | null
+  /** Dosya tipi: "bak" → RESTORE DATABASE · "attach" → CREATE DATABASE FOR ATTACH.
+   *  Eski client/cache uyumu için opsiyonel, default "bak". */
+  kind?: "bak" | "attach"
+  /** kind="attach" için ham .mdf dosya adı (klasör altında). */
+  mdfFileName?: string
+  /** kind="attach" için ham .ldf dosya adı — yoksa ATTACH_REBUILD_LOG kullanılır. */
+  ldfFileName?: string
 }
 
 export interface DemoDatabase {

@@ -137,3 +137,62 @@ export async function restoreBackupOnServer(
 
   await req.query(restoreSql)
 }
+
+/**
+ * Firma bazlı MDF/LDF hedef klasörünü (`D:\SQLData\{firmaId}`) döndürür.
+ * restoreBackupOnServer ile aynı kuralı kullanır; attach akışında dosyaları
+ * agent'la kopyalarken hedef klasörü belirlemek için dışarıdan da çağrılır.
+ */
+export function firmaDataDir(firmaId: string): string {
+  const safeFirma = (firmaId ?? "").trim().replace(/[\\/:*?"<>|]/g, "_")
+  return `${DEFAULT_FIRMA_DATA_ROOT}\\${safeFirma}`
+}
+
+/**
+ * `D:\SQLData\{firmaId}` altına önceden kopyalanmış .mdf (+ varsa .ldf)
+ * dosyalarından bir DB'yi `CREATE DATABASE ... FOR ATTACH` ile bağlar.
+ *
+ * Dosyaların fiziksel kopyalanması bu fonksiyondan ÖNCE agent ile yapılır
+ * (sql-backup-powershell.buildCopyAttachFiles). Burada yalnızca SQL tarafı:
+ *   - LDF varsa:  FOR ATTACH
+ *   - LDF yoksa:  FOR ATTACH_REBUILD_LOG (log otomatik üretilir)
+ *
+ * Hedef adda DB zaten varsa önce DROP edilir (REPLACE semantiği — restore ile
+ * tutarlı, sihirbaz tekrar çalıştığında idempotent).
+ *
+ * @param pool          master'a bağlı mssql ConnectionPool
+ * @param firmaId       D:\SQLData\{firmaId} klasörünü belirler
+ * @param targetDbName  oluşturulacak DB adı (kopyalanan dosyalar bu adla durur)
+ * @param hasLdf        eşleşen .ldf kopyalandı mı
+ */
+export async function attachDatabaseOnServer(
+  pool:         sql.ConnectionPool,
+  firmaId:      string,
+  targetDbName: string,
+  hasLdf:       boolean,
+): Promise<void> {
+  const dataDir   = firmaDataDir(firmaId)
+  const mdfPath   = `${dataDir}\\${targetDbName}.mdf`
+  const ldfPath   = `${dataDir}\\${targetDbName}.ldf`
+  const escapedDb = targetDbName.replace(/]/g, "]]")
+
+  const fileClause = hasLdf
+    ? `(FILENAME = @mdf), (FILENAME = @ldf) FOR ATTACH`
+    : `(FILENAME = @mdf) FOR ATTACH_REBUILD_LOG`
+
+  const req = pool.request()
+  req.input("mdf", sql.NVarChar, mdfPath)
+  if (hasLdf) req.input("ldf", sql.NVarChar, ldfPath)
+  ;(req as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
+
+  // Aynı adda DB varsa düşür (idempotent — restore REPLACE ile aynı davranış).
+  await req.batch(`
+    IF DB_ID(N'${targetDbName.replace(/'/g, "''")}') IS NOT NULL
+    BEGIN
+      ALTER DATABASE [${escapedDb}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+      DROP DATABASE [${escapedDb}];
+    END
+  `)
+
+  await req.query(`CREATE DATABASE [${escapedDb}] ON ${fileClause}`)
+}

@@ -3,7 +3,8 @@ import { query, execute } from "@/lib/db"
 import { execOnAgent } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
-import { restoreBackupOnServer } from "@/lib/sql-restore"
+import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
+import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
@@ -116,7 +117,7 @@ async function allocatePort(
 }
 
 interface RunBackupFile {
-  /** Kaynak .bak dosya adı (backupFolderPath altında) */
+  /** Kaynak .bak dosya adı (backupFolderPath altında) — kind="bak" için */
   fileName:     string
   /** Hedef DB adı — kullanıcı sheet'te düzenledi (firma prefix yok) */
   databaseName: string
@@ -125,6 +126,13 @@ interface RunBackupFile {
    *  kullanıcı UI'da seçer. Tek program varsa wizard otomatik atar. null ise client
    *  taraf eski olabilir → backend ilk pusula servisinin koduna fallback yapar. */
   programServiceId?: number | null
+  /** "bak" → RESTORE · "attach" → kopyala + CREATE DATABASE FOR ATTACH.
+   *  Eski client'larda olmayabilir → "bak" default. */
+  kind?:        "bak" | "attach"
+  /** kind="attach" için ham .mdf dosya adı (backupFolderPath altında). */
+  mdfFileName?: string
+  /** kind="attach" için ham .ldf dosya adı — yoksa ATTACH_REBUILD_LOG. */
+  ldfFileName?: string
 }
 
 interface RunPayload {
@@ -176,6 +184,8 @@ interface SqlServerRow {
   IP:          string
   SqlUsername: string | null
   SqlPassword: string | null
+  ApiKey:      string | null
+  AgentPort:   number | null
 }
 
 interface AgentTarget {
@@ -190,6 +200,8 @@ interface SqlTarget {
   ip:       string
   username: string
   password: string
+  /** SQL sunucusunun PusulaAgent'ı — ATTACH için .mdf/.ldf kopyalamada kullanılır. */
+  agent:    AgentTarget | null
 }
 
 /** Demo DB tablosundan run akışı için gerekli alanlar. */
@@ -333,7 +345,7 @@ export async function POST(req: NextRequest) {
 
   if (hasSqlWork) {
     const sqlRows = await query<SqlServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword
+      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword, s.ApiKey, s.AgentPort
       FROM Servers s
       INNER JOIN ServerRoles r ON r.ServerId = s.Id
       WHERE s.Id = ${payload.sqlServerId!} AND r.Role = 'SQL'
@@ -362,6 +374,11 @@ export async function POST(req: NextRequest) {
       ip:       row.IP,
       username: row.SqlUsername,
       password: decrypted,
+      // ATTACH akışı için SQL sunucusunun agent'ı (varsa). Yoksa attach
+      // adımında net hata verilir; .bak restore agent gerektirmez.
+      agent: (row.ApiKey && row.AgentPort)
+        ? { ip: row.IP, port: row.AgentPort, apiKey: row.ApiKey }
+        : null,
     }
 
     // Mode 1: demo DB bilgilerini DB'den çek (client'a güvenmiyoruz; kaynak/yol
@@ -796,7 +813,13 @@ export async function POST(req: NextRequest) {
         if (sqlTarget) {
           // Mod 0 veya 1'e göre restore edilecek (bakPath, targetDbName, programCode) listesi
           interface RestoreTask {
+            /** "bak" → RESTORE FROM DISK · "attach" → kopyala + CREATE DATABASE FOR ATTACH */
+            kind:         "bak" | "attach"
+            /** kind="bak": kaynak .bak yolu */
             bakPath:      string
+            /** kind="attach": kaynak .mdf yolu + (varsa) .ldf yolu */
+            srcMdf:       string
+            srcLdf:       string | null
             dbName:       string
             /** guvenlik.srkadi için firma prefix'siz ham data/şirket adı */
             srkAdi:       string
@@ -819,22 +842,43 @@ export async function POST(req: NextRequest) {
               .map((s) => (s.config as PusulaProgramConfig | null)?.programCode ?? null)
               .find((c) => !!c) ?? null
 
+            const joinFolder = (name: string) =>
+              runBackupFolder ? `${runBackupFolder}\\${name}` : name
+
             for (const bf of runBackupFiles) {
-              const fileName = (bf.fileName ?? "").trim()
-              const dbName   = (bf.databaseName ?? "").trim()
-              if (!fileName || !dbName) continue
-              const bakPath = runBackupFolder
-                ? `${runBackupFolder}\\${fileName}`
-                : fileName
+              const dbName = (bf.databaseName ?? "").trim()
+              if (!dbName) continue
               const programCode = bf.programServiceId != null
                 ? (codeByServiceId.get(bf.programServiceId) ?? null)
                 : firstPusulaProgramCode
-              tasks.push({
-                bakPath,
-                dbName:      `${prefix}${dbName}`,
-                srkAdi:      dbName,
-                programCode,
-              })
+
+              if (bf.kind === "attach") {
+                // ATTACH: ham .mdf (+ varsa .ldf) — kopyala + CREATE DATABASE FOR ATTACH
+                const mdf = (bf.mdfFileName ?? bf.fileName ?? "").trim()
+                if (!mdf) continue
+                const ldf = (bf.ldfFileName ?? "").trim()
+                tasks.push({
+                  kind:        "attach",
+                  bakPath:     "",
+                  srcMdf:      joinFolder(mdf),
+                  srcLdf:      ldf ? joinFolder(ldf) : null,
+                  dbName:      `${prefix}${dbName}`,
+                  srkAdi:      dbName,
+                  programCode,
+                })
+              } else {
+                const fileName = (bf.fileName ?? "").trim()
+                if (!fileName) continue
+                tasks.push({
+                  kind:        "bak",
+                  bakPath:     joinFolder(fileName),
+                  srcMdf:      "",
+                  srcLdf:      null,
+                  dbName:      `${prefix}${dbName}`,
+                  srkAdi:      dbName,
+                  programCode,
+                })
+              }
             }
           } else {
             // Mod 1: demo DB'lerin locationPath'inden .bak restore; programCode
@@ -887,7 +931,10 @@ export async function POST(req: NextRequest) {
                 }
                 const rawName = deriveDataName(demo.Name) || demo.DataName || demo.Name
                 tasks.push({
+                  kind:        "bak",
                   bakPath,
+                  srcMdf:      "",
+                  srcLdf:      null,
                   dbName:      `${prefix}${rawName}`,
                   srkAdi:      rawName,
                   programCode,
@@ -912,16 +959,48 @@ export async function POST(req: NextRequest) {
                 async (masterPool) => {
                   const restoredDbNames: string[] = []
                   for (const t of tasks) {
-                    const ok = await runSqlStep(
-                      `sql_restore_${t.dbName}`,
-                      `Veritabanı restore ediliyor: ${t.dbName}`,
-                      async () => {
-                        await restoreBackupOnServer(masterPool, t.bakPath, t.dbName, { firmaId: payload.firmaId })
-                        sqlRestored++
-                        return `${t.bakPath} → [${t.dbName}]`
-                      },
-                    )
-                    if (ok) restoredDbNames.push(t.dbName)
+                    if (t.kind === "attach") {
+                      // ATTACH: ham .mdf/.ldf → D:\SQLData\{firmaId}'ye agent ile
+                      // kopyala, sonra CREATE DATABASE FOR ATTACH.
+                      const ok = await runSqlStep(
+                        `sql_attach_${t.dbName}`,
+                        `Veritabanı attach ediliyor: ${t.dbName}`,
+                        async () => {
+                          if (!sqlTarget!.agent) {
+                            throw new Error("ATTACH için SQL sunucusunda PusulaAgent gerekli (ApiKey/AgentPort eksik)")
+                          }
+                          const destDir = firmaDataDir(payload.firmaId)
+                          const copyCmd = buildCopyAttachFiles({
+                            srcMdf:  t.srcMdf,
+                            srcLdf:  t.srcLdf ?? undefined,
+                            destDir,
+                            destMdf: `${t.dbName}.mdf`,
+                            destLdf: t.srcLdf ? `${t.dbName}.ldf` : undefined,
+                          })
+                          const cp = await execOnAgent(
+                            sqlTarget!.agent.ip, sqlTarget!.agent.port, sqlTarget!.agent.apiKey, copyCmd, 600,
+                          )
+                          if (cp.exitCode !== 0) {
+                            throw new Error(cp.stderr?.trim() || `Dosya kopyalama başarısız (exit=${cp.exitCode})`)
+                          }
+                          await attachDatabaseOnServer(masterPool, payload.firmaId, t.dbName, !!t.srcLdf)
+                          sqlRestored++
+                          return `${t.srcMdf}${t.srcLdf ? " + .ldf" : ""} → [${t.dbName}] (ATTACH)`
+                        },
+                      )
+                      if (ok) restoredDbNames.push(t.dbName)
+                    } else {
+                      const ok = await runSqlStep(
+                        `sql_restore_${t.dbName}`,
+                        `Veritabanı restore ediliyor: ${t.dbName}`,
+                        async () => {
+                          await restoreBackupOnServer(masterPool, t.bakPath, t.dbName, { firmaId: payload.firmaId })
+                          sqlRestored++
+                          return `${t.bakPath} → [${t.dbName}]`
+                        },
+                      )
+                      if (ok) restoredDbNames.push(t.dbName)
+                    }
                   }
 
                   // ── Firma 1. kullanıcısı için SQL Authentication login + user mapping ──
