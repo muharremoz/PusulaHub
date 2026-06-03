@@ -129,11 +129,19 @@ export async function GET() {
       .sort((a, b) => b.disk - a.disk)
       .slice(0, 8)
 
-    /* ── KPI 2: Firma sayısı + toplam kullanıcı sayısı (AD kurulmuş firmalar) ── */
+    /* ── KPI 2: Firma sayısı + toplam kullanıcı sayısı (AD kurulmuş firmalar) ──
+     * UserSum: Companies.UserCount kolonu lisans-bazlı ve genelde 0 (güncel
+     * değil). Gerçek kullanıcı sayısı, kurulu firmaların OU'su altındaki
+     * ADUsers kayıtlarıdır — companies sayfasıyla aynı mantık (ADUsers.OU =
+     * Companies.CompanyId). SUM içinde subquery yasak olduğu için iki ayrı
+     * scalar subquery ile tek round-trip'te alıyoruz. */
     const companyRows = await query<{ Count: number; UserSum: number }[]>`
-      SELECT COUNT(*) AS Count, ISNULL(SUM(UserCount), 0) AS UserSum
-      FROM Companies
-      WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL
+      SELECT
+        (SELECT COUNT(*) FROM Companies
+          WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL) AS Count,
+        (SELECT COUNT(*) FROM ADUsers a
+          JOIN Companies c ON a.OU = c.CompanyId
+          WHERE c.AdServerId IS NOT NULL) AS UserSum
     `
     const totalCompanies     = companyRows[0]?.Count   ?? 0
     const totalCompanyUsers  = companyRows[0]?.UserSum ?? 0

@@ -4,6 +4,47 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ---
 
+## Firma Kurulum Sihirbazı — Sağlamlaştırma (kod incelemesi bulguları)
+
+> Kaynak: 2026-06 firma sihirbazı + aktarım modülü kod incelemesi. Temel akış
+> çalışıyor (parametreli SQL, idempotent AD/dosya komutları, slug-routing temiz),
+> aşağıdakiler gerçek boyutlu verilerde / hata senaryolarında riskli.
+
+### Yapılacak
+
+- [ ] 🔴 **SQL restore timeout** — `run/route.ts:900` `withSqlConnection` çağrısı `requestTimeout` geçmiyor → pool default **10sn**. `sql-restore.ts:136`'daki `(req as ...).timeout = 10*60*1000` hack'i mssql'de güvenilir değil (cast ile yazılı). Demo/küçük DB'lerde sorun yok ama **gerçek müşteri yedeği (yüzlerce MB) 10sn'yi aşıp `RequestError: Timeout` ile patlayabilir** → yarım kurulum. Çözüm: `withSqlConnection`'a `requestTimeout: 10*60*1000` açıkça geçir, `sql-restore.ts`'deki hack'i kaldır.
+- [ ] 🔴 **Agent kopya/restore 60sn sabit timeout** — `run/route.ts:401` `runStep` her agent komutunu `execOnAgent(..., 60)` ile çağırıyor. `buildCopyFolder` (robocopy ile koca program klasörü) büyük programlarda 60sn'yi aşar → abort → yarım kurulum. Çözüm: `runStep`'e opsiyonel `timeoutSec` parametresi, kopya/restore adımlarına ~600sn ver.
+- [ ] 🔴 **Rollback / yarım kurulum** — Her adım `if (!runStep) { close; return }` ile kesiliyor, önceki adımlar geri alınmıyor (AD kullanıcı oluştu + gruba eklenemedi gibi). Minimum: hata anında "şu ana kadar yapılanlar" + manuel temizlik yolu; ideal: idempotency'yi tüm adımlarda garanti et veya rollback ekle.
+- [ ] 🟡 **Username trim tutarsızlığı** — AD SamAccountName `.trim()`'li (`run/route.ts:477`), ama SQL login (`:927`), Web.config User Id (`:772`), Users.xml (`:979`) **trim'siz**. Kullanıcı adında baş/son boşluk varsa müşteri SQL + web'e bağlanamaz. Çözüm: payload oluştururken tek noktada normalize et.
+- [ ] 🟡 **AD `-Description` alanında düz şifre** — `ad-powershell.ts:105` `New-ADUser ... -Description '${pw}'` kullanıcının düz şifresini AD description attribute'una yazıyor (domaindeki authenticated user'lar okuyabilir). Şifre zaten `CompanyUserCredentials`'da encrypted; `-Description`'dan kaldır.
+- [ ] 🟢 **`runStep` stderr=fatal false-positive** — `run/route.ts:405` `if (exitCode !== 0 || stderr)`. PowerShell warning / native exe stderr'i (icacls, AD modül import) exit 0 olsa bile adımı hata sayar. `buildCreateIisSite` `$Error.Clear()` ile korunuyor ama AD/icacls komutları korunmuyor.
+- [ ] 🟢 **`Companies` UPDATE sessiz yutuluyor** — `run/route.ts:1086` sunucu atama UPDATE'i `catch {}` ile sessiz; satır/kolon yoksa atama kaybolur, kullanıcı bilmez.
+
+---
+
+## Aktarım Modülü — Sağlamlaştırma (kod incelemesi bulguları)
+
+> `services/pusula-aktarim/server.js` (Fastify, SMB push) + Hub `/api/aktarim`.
+> Temel akış sağlam (parametreli SQLite, WAL, stream upload, path traversal kapalı).
+
+### Yapılacak
+
+- [ ] 🔴 **`complete` status guard yok** — `server.js:367` `complete` endpoint'i status doğrulamıyor; müşteri çift tıklar/sekme yenilerse iki paralel `startPushJob` → aynı hedefe iki SMB mount + cp → bozuk kopya. Çözüm: atomik `UPDATE ... SET status='pushing' WHERE token=? AND status IN ('active','pending')`, etkilenen satır 0 ise başlatma. (En kolay + yüksek etkili.)
+- [ ] 🔴 **Push retry mekanizması yok** — Veri SQL'e kopyalandı ama resim aşaması SMB hatası verirse `push_failed` kalır; hiçbir endpoint retry tetikleyemiyor → müşteri **tüm dosyaları baştan yükler** (oysa staging duruyor). Çözüm: `POST /admin/sessions/:id/retry-push` ekle; aşama bazlı "yapıldı mı" işareti tutup kaldığı yerden devam et.
+- [ ] 🟡 **Credential plaintext + müşteriye sızma** — `sqlPassword`/`depoPassword` `aktarim.db`'de şifresiz (`server.js:84`). Ayrıca mount hata mesajı `pushError` kolonuna yazılıp `/api/info/:token` ile **müşteriye plaintext dönebiliyor** (`:279,:379`). Çözüm: (a) push hatasını müşteriye generic mesaja indir, ham hatayı sadece admin'e; (b) mount'u `credentials=` dosyasıyla (0600) yap, argv'den çıkar; (c) `completed`/`push_failed` olunca credential kolonlarını NULL'a çek.
+- [ ] 🟡 **Staging cleanup eksik** — `cancel`/`expired` yollarında `staging/{token}` silinmiyor (`server.js:120,175`), sadece `DELETE` ve `completed` temizliyor. 365 gün default expiry ile GB'larca .bak birikir. Çözüm: cancel + expire'da `rm staging/{token}`; periyodik temizlik job'ı.
+- [ ] 🟡 **`complete` upload tamamlık doğrulaması yok** — Müşteri tek resim yüklemeden `complete` çağırabilir; server "beklenen dosya = staging'deki dosya" kontrolü yapmıyor, yarım yükleme `completed` olur. `dataBytesReceived` client raporuna güveniyor. Çözüm: `complete`'te staging'i tarayıp gerçek byte/dosya sayısını DB'ye yaz, uyumsuzsa reddet.
+- [ ] 🟡 **DELETE `pushing` sırasında çalışırsa** — `DELETE /admin/sessions/:id` her status'ta çalışır; push job `cp -r` yaparken kaynağı `rm -rf` eder → yarım kopya, mount sızıntısı. Çözüm: `if (sess.status === 'pushing') return 409`.
+- [ ] 🟢 **`aktarim-proxy.ts` tipi eski** — `AktarimSession` tipi `pushing`/`push_failed` status + `pushProgress`/`pushStage`/`pushError` alanlarını içermiyor (UI biliyor ama proxy tipi değil).
+- [ ] 🟢 **Debug logları** — `api/aktarim/[id]/route.ts:31-42` `console.log/error` debug satırları prod'da kalmış (sadece id loglıyor, hassas değil ama temizlenmeli).
+- [ ] 🟢 **Resim upload sessiz hata toleransı** — `server.js` client `uploadImages` başarısız dosyaları sadece `console.error`'a yazar, akış devam eder → eksik resimle `completed`. Veri tarafında `failed>0` throw var, resimde yok.
+
+### Yapıldı
+
+_Henüz başlanmadı._
+
+---
+
 ## HTTPS — `app.pusulanet.net` için Gerçek Sertifika
 
 ### Yapılacak
