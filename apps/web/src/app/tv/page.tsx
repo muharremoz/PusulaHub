@@ -6,6 +6,7 @@ import { Activity, AlertTriangle, CheckCircle2, WifiOff, Volume2, VolumeX } from
 import { DottedGlowBackground } from "@/components/ui/dotted-glow-background"
 import { HyperText } from "@/components/ui/hyper-text"
 import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
+import type { DomainExpiry } from "@/lib/domain-expiry"
 
 /* ══════════════════════════════════════════════════════════
    Proje stili — Dark varyantı
@@ -1132,6 +1133,94 @@ function OfflineFirmsTile({ data }: { data: SpareBackupOffline | null }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   Domain Yenileme Tile — sol panel (RDAP expiry)
+══════════════════════════════════════════════════════════ */
+/** daysLeft → durum: <30 kritik (offline), <90 uyarı, else ok (online) */
+function domainUi(daysLeft: number | null): UiStatus {
+  if (daysLeft === null) return "warning"
+  if (daysLeft < 30) return "offline"
+  if (daysLeft < 90) return "warning"
+  return "online"
+}
+
+function DomainExpiryTile({ data }: { data: DomainExpiry[] | null }) {
+  const list  = data ?? []
+  // En kritik (en az gün kalan) genel durumu belirler
+  const worst = list.reduce<UiStatus>((acc, d) => {
+    const u = domainUi(d.daysLeft)
+    if (u === "offline") return "offline"
+    if (u === "warning" && acc !== "offline") return "warning"
+    return acc
+  }, "online")
+  const ui: UiStatus = !data ? "warning" : list.length === 0 ? "online" : worst
+
+  const cfg = STATUS_CONFIG[ui]
+  const glow =
+    ui === "online"  ? { dot: "rgb(52,211,153)", speed: 0.8 } :
+    ui === "warning" ? { dot: "rgb(251,191,36)", speed: 1.4 } :
+                       { dot: "rgb(239,68,68)",  speed: 1.8 }
+
+  return (
+    <div
+      className={cn("rounded-[5px] relative overflow-hidden p-2 flex flex-col", cfg.bg, cfg.ring)}
+      style={INNER_SHADOW}
+    >
+      <DottedGlowBackground
+        gap={14} radius={1.5}
+        color={glow.dot} darkColor={glow.dot} glowColor={glow.dot} darkGlowColor={glow.dot}
+        opacity={0.3} speedScale={glow.speed}
+        className="pointer-events-none"
+      />
+      <div
+        className="relative z-10 rounded-[4px] overflow-hidden border border-white/5 backdrop-blur-[4px] flex flex-col"
+        style={{
+          background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
+        <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-white/5">
+          <LiveDot ui={ui} size="size-2.5" />
+          <h3 className="text-[13px] font-bold leading-none flex-1 truncate text-zinc-100">Domain Yenileme</h3>
+          <span className="text-[8px] font-bold uppercase tracking-wider shrink-0 text-zinc-400">
+            {data ? `${list.length}` : "—"}
+          </span>
+        </div>
+
+        <div className="p-2 flex flex-col gap-1.5 max-h-[40vh] overflow-y-auto">
+          {!data ? (
+            <p className="text-[11px] text-zinc-500 text-center py-3">Sorgulanıyor…</p>
+          ) : list.length === 0 ? (
+            <p className="text-[11px] text-zinc-500 text-center py-3">Domain bulunamadı</p>
+          ) : (
+            list.map((d) => {
+              const u = domainUi(d.daysLeft)
+              const tone =
+                u === "offline" ? { txt: "text-red-300",     bd: "border-red-400/20",    bg: "rgba(239,68,68,0.12)" } :
+                u === "warning" ? { txt: "text-amber-300",   bd: "border-amber-400/20",  bg: "rgba(251,191,36,0.10)" } :
+                                  { txt: "text-emerald-300", bd: "border-emerald-400/15", bg: "rgba(52,211,153,0.08)" }
+              return (
+                <div
+                  key={d.domain}
+                  className={cn("flex items-center gap-2 rounded-[4px] px-2 py-1.5 border", tone.bd)}
+                  style={{ background: `linear-gradient(135deg, ${tone.bg}, rgba(255,255,255,0.01))` }}
+                >
+                  <span className="text-[12px] font-mono font-semibold text-zinc-100 leading-tight flex-1 truncate" title={d.domain}>
+                    {d.domain}
+                  </span>
+                  <span className={cn("text-[12px] font-black tabular-nums shrink-0", tone.txt)}>
+                    {d.daysLeft === null ? "?" : `${d.daysLeft} g`}
+                  </span>
+                </div>
+              )
+            })
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
    Ana Sayfa
 ══════════════════════════════════════════════════════════ */
 export default function TvMonitoringPage() {
@@ -1144,6 +1233,8 @@ export default function TvMonitoringPage() {
 
   // SpareBackup offline firma özeti (sol panel kartı) — Kuma'dan bağımsız
   const [offlineFirms, setOfflineFirms] = useState<SpareBackupOffline | null>(null)
+  // Domain yenileme (RDAP) — sol panel kartı
+  const [domains, setDomains] = useState<DomainExpiry[] | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -1163,6 +1254,16 @@ export default function TvMonitoringPage() {
       setOfflineFirms(json.ok ? json : null)
     } catch {
       setOfflineFirms(null)
+    }
+  }, [])
+
+  const loadDomains = useCallback(async () => {
+    try {
+      const res  = await fetch(`/api/domains/expiry`, { cache: "no-store" })
+      const json = await res.json()
+      setDomains(json.ok ? json.domains : null)
+    } catch {
+      setDomains(null)
     }
   }, [])
 
@@ -1187,10 +1288,12 @@ export default function TvMonitoringPage() {
   useEffect(() => {
     load()
     loadOfflineFirms()
+    loadDomains()
     const t  = setInterval(load, 1_000)
     const t2 = setInterval(loadOfflineFirms, 60_000)
-    return () => { clearInterval(t); clearInterval(t2) }
-  }, [load, loadOfflineFirms])
+    const t3 = setInterval(loadDomains, 60 * 60_000) // saatte bir (lib 12h cache)
+    return () => { clearInterval(t); clearInterval(t2); clearInterval(t3) }
+  }, [load, loadOfflineFirms, loadDomains])
 
   const { exchangeMonitors, regularMonitors } = useMemo(() => {
     if (!dataForRender) return { exchangeMonitors: [], regularMonitors: [] as KumaMonitor[] }
@@ -1433,6 +1536,7 @@ export default function TvMonitoringPage() {
             <ExchangeTile monitors={exchangeMonitors} health={(dataForRender ?? data).exchangeHealth} />
           )}
           <OfflineFirmsTile data={offlineFirms} />
+          <DomainExpiryTile data={domains} />
         </div>
         <div className="flex flex-col flex-1 gap-3 min-w-0">
           {serverMonitors.length > 0 && (
