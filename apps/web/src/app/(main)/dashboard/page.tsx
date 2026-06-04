@@ -6,7 +6,12 @@ import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 import {
   CheckCircle2, XCircle, Clock, Pin, User, Tag, AlertTriangle, Activity,
+  DatabaseBackup, WifiOff,
 } from "lucide-react"
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
+import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
 import {
   Monitor as IsMonitor,
   Building as IsBuilding,
@@ -98,6 +103,9 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [monitoring, setMonitoring] = useState<MonitoringSummary | null>(null)
   const [monitoringLoading, setMonitoringLoading] = useState(true)
+  const [spareBackup, setSpareBackup] = useState<SpareBackupOffline | null>(null)
+  const [spareBackupLoading, setSpareBackupLoading] = useState(true)
+  const [sbDialogOpen, setSbDialogOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
@@ -124,18 +132,31 @@ export default function DashboardPage() {
         if (mounted) setMonitoringLoading(false)
       }
     }
+    const loadSpareBackup = async () => {
+      try {
+        const r = await fetch("/api/sparebackup/offline", { cache: "no-store" })
+        const j = await r.json()
+        if (mounted) setSpareBackup(j.ok ? j : null)
+      } catch {
+        if (mounted) setSpareBackup(null)
+      } finally {
+        if (mounted) setSpareBackupLoading(false)
+      }
+    }
     load()
     loadMonitoring()
+    loadSpareBackup()
     const iv  = setInterval(load, 30_000)
     const iv2 = setInterval(loadMonitoring, 30_000)
-    return () => { mounted = false; clearInterval(iv); clearInterval(iv2) }
+    const iv3 = setInterval(loadSpareBackup, 60_000)
+    return () => { mounted = false; clearInterval(iv); clearInterval(iv2); clearInterval(iv3) }
   }, [])
 
   return (
     <PageContainer title="Kontrol Paneli" description="Sistem genel görünümü">
-      {/* ─── KPI Kartları (4) ─── */}
+      {/* ─── KPI Kartları (5) ─── */}
       <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#eef3ff" }}>
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-5 gap-2">
         <KpiCard
           title="SUNUCULAR"
           icon={<CardIcon Icon={IsMonitor} />}
@@ -175,8 +196,16 @@ export default function DashboardPage() {
           value={data ? data.kpi.activeProjects : 0}
           extra={<span className="text-[11px] text-muted-foreground">devam eden proje</span>}
         />
+        <SpareBackupKpi
+          loading={spareBackupLoading}
+          data={spareBackup}
+          onClick={() => setSbDialogOpen(true)}
+        />
       </div>
       </div>
+
+      <SpareBackupDialog open={sbDialogOpen} onOpenChange={setSbDialogOpen} data={spareBackup} />
+
 
       {/* ─── Orta Blok: 3 kolon ─── */}
       <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "#eef3ff" }}>
@@ -718,6 +747,140 @@ function MonitoringKpi({
         </>
       )}
     </Link>
+  )
+}
+
+/* ── SpareBackup offline KPI kartı ── */
+/** minutesAgo → okunur Türkçe ("20 sa önce", "3 g önce") */
+function formatMinutesAgo(mins: number): string {
+  if (mins < 60)     return `${mins} dk önce`
+  if (mins < 1440)   return `${Math.floor(mins / 60)} sa önce`
+  return `${Math.floor(mins / 1440)} g önce`
+}
+
+function SpareBackupKpi({
+  loading, data, onClick,
+}: {
+  loading: boolean
+  data: SpareBackupOffline | null
+  onClick: () => void
+}) {
+  const hasOffline = !!data && data.offlineCount > 0
+  const allOnline  = !!data && data.offlineCount === 0 && data.totalActive > 0
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="bg-white rounded-[4px] p-3 hover:opacity-95 transition-opacity block text-left w-full"
+      style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+    >
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          YEDEKLEME
+        </span>
+        <span className={hasOffline ? "text-destructive" : "text-muted-foreground"}>
+          <DatabaseBackup className="size-3.5" />
+        </span>
+      </div>
+      {loading ? (
+        <>
+          <Skeleton className="h-7 w-20 mb-1.5" />
+          <Skeleton className="h-3 w-32" />
+        </>
+      ) : !data ? (
+        <>
+          <div className="text-2xl font-bold tabular-nums leading-tight text-muted-foreground">—</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">Servise ulaşılamadı</div>
+        </>
+      ) : (
+        <>
+          <div className="text-2xl font-bold tabular-nums leading-tight">
+            <span className={allOnline ? "text-emerald-600" : "text-destructive"}>
+              {data.onlineCount}
+            </span>
+            <span className="text-muted-foreground">/{data.totalActive}</span>
+          </div>
+          <div className="mt-1 flex items-center gap-3 text-[11px]">
+            {hasOffline ? (
+              <span className="inline-flex items-center gap-1 text-destructive">
+                <WifiOff className="size-3 shrink-0" />
+                {data.offlineCount} çevrimdışı
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1 text-emerald-600">
+                <CheckCircle2 className="size-3" /> tümü çevrimiçi
+              </span>
+            )}
+          </div>
+        </>
+      )}
+    </button>
+  )
+}
+
+/* ── SpareBackup offline firma listesi dialog'u ── */
+function SpareBackupDialog({
+  open, onOpenChange, data,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  data: SpareBackupOffline | null
+}) {
+  const offline = data?.offline ?? []
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg p-0 gap-0">
+        <DialogHeader className="px-5 py-4 border-b border-border/50">
+          <DialogTitle className="flex items-center gap-2 text-sm">
+            <DatabaseBackup className="size-4 text-destructive" />
+            Çevrimdışı Yedekleme
+            {data && (
+              <span className="text-[11px] font-normal text-muted-foreground">
+                ({data.offlineCount}/{data.totalActive})
+              </span>
+            )}
+          </DialogTitle>
+          <DialogDescription className="text-[11px]">
+            {data
+              ? `${data.thresholdMins} dk'dan uzun süredir sinyal göndermeyen SpareBackup kurulumları`
+              : "SpareBackup servisine ulaşılamadı"}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[55vh] overflow-y-auto px-4 py-3">
+          {offline.length === 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 py-10 text-muted-foreground">
+              <CheckCircle2 className="size-8 text-emerald-500 opacity-60" />
+              <p className="text-[12px]">Tüm yedeklemeler çevrimiçi</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/40">
+              {offline.map((f) => (
+                <div key={f.firkod} className="flex items-center gap-3 py-2.5">
+                  <WifiOff className="size-4 text-destructive shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[12px] font-medium truncate">{f.firma}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">#{f.firkod}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-0.5">
+                      <span className="inline-flex items-center gap-0.5">
+                        <Clock className="size-2.5" /> {formatMinutesAgo(f.minutesAgo)}
+                      </span>
+                      <span className="font-mono">{f.lastIp}</span>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-mono text-muted-foreground bg-muted/60 px-1.5 py-0.5 rounded-[3px] shrink-0">
+                    v{f.version}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
