@@ -79,8 +79,9 @@ function statusBadge(s: TransferSession["status"]) {
 
 function buildPublicUrl(token: string): string {
   // Müşteri linki — Ubuntu (10.15.2.6) üzerinde aktarim.pusulanet.net.
-  // Müşteri VPN üzerinden erişir.
-  return `http://aktarim.pusulanet.net/${token}`
+  // 2026-06: WAN'a açıldı + Let's Encrypt HTTPS (nginx 443, HTTP→HTTPS
+  // redirect). Müşteri internetten doğrudan erişir, VPN gerekmez.
+  return `https://aktarim.pusulanet.net/${token}`
 }
 
 export default function AktarimPage() {
@@ -563,8 +564,8 @@ function NewTransferDialog({
           <div className="flex items-start gap-2 px-3 py-2 rounded-[5px] bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
-              Link <span className="font-mono">aktarim.pusulanet.net/&lt;token&gt;</span> formatında üretilir.
-              Müşteri Pusula VPN ile bu adrese girip veri + resim klasörünü yükler.
+              Link <span className="font-mono">https://aktarim.pusulanet.net/&lt;token&gt;</span> formatında üretilir.
+              Müşteri internetten (HTTPS) bu adrese girip veri + resim klasörünü yükler — VPN gerekmez.
             </div>
           </div>
         </div>
