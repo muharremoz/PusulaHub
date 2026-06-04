@@ -81,7 +81,9 @@ interface MonitoringResponse {
 /** Birkaç saniye önce / dakika önce / saat önce formatı */
 function formatAgo(iso: string, now: Date): string {
   const diff = Math.max(0, (now.getTime() - new Date(iso).getTime()) / 1000)
-  if (diff < 60)    return `${Math.round(diff)} sn önce`
+  // Saniye saymayı gösterme — döviz canlı güncellendiği için "2/3/4 sn önce"
+  // sürekli oynayıp dikkat dağıtıyordu. 60 sn altı sabit "az önce".
+  if (diff < 60)    return "az önce"
   if (diff < 3600)  return `${Math.round(diff / 60)} dk önce`
   if (diff < 86400) return `${Math.round(diff / 3600)} sa önce`
   return `${Math.round(diff / 86400)} gün önce`
