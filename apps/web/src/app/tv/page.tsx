@@ -50,6 +50,17 @@ interface KumaMonitor {
   responseMs: number | null
 }
 
+/**
+ * SpareBackup "offline firmalar" bilgi monitörü mü? Bu monitör offline firma
+ * olduğunda DOWN olur ama bir sunucu arızası değildir → /tv'de tam ekran
+ * alarm (DownSpotlight/Banner/beep) açmamalı, sadece grid'de görünmeli.
+ * URL'inde "offline-firms" geçen veya adı "spare backup offline" olan monitör.
+ */
+function isInfoMonitor(m: { name: string; url: string | null }): boolean {
+  if (m.url && m.url.toLowerCase().includes("offline-firms")) return true
+  return /spare\s*backup\s*offline/i.test(m.name)
+}
+
 interface ExchangeHealthEntry {
   status:        string
   state:         string
@@ -1101,8 +1112,11 @@ export default function TvMonitoringPage() {
 
   /* ── Alarm tracker (DOWN süresi + olay log) ── */
   const { tracker, events, lastDownAt } = useStatusTracker(dataForRender?.monitors ?? null)
+  // SpareBackup "offline firmalar" monitörü (offline firma varsa DOWN olur) bir
+  // ARIZA değil, bilgi monitörüdür → tam ekran alarm/spotlight/banner/beep
+  // tetiklemesin. Grid'de normal görünmeye devam eder.
   const downMonitors = useMemo(
-    () => (dataForRender?.monitors ?? []).filter((m) => m.status === "down"),
+    () => (dataForRender?.monitors ?? []).filter((m) => m.status === "down" && !isInfoMonitor(m)),
     [dataForRender],
   )
 
