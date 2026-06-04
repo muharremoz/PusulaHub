@@ -40,6 +40,8 @@ export function StepFirma({
   companies,
   companiesLoading,
   companiesError,
+  companiesRefreshing = false,
+  onRefreshCompanies,
   rdpServers,
   rdpServersLoading,
   rdpServersError,
@@ -55,6 +57,8 @@ export function StepFirma({
   companies: Company[]
   companiesLoading?: boolean
   companiesError?: string | null
+  companiesRefreshing?: boolean
+  onRefreshCompanies?: () => void
   rdpServers: RdpServerItem[]
   rdpServersLoading?: boolean
   rdpServersError?: string | null
@@ -81,19 +85,33 @@ export function StepFirma({
   return (
     <div className="space-y-4">
 
-      {/* Arama */}
-      <div className="relative">
-        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-        <input
-          type="text"
-          placeholder="Firma adı veya kodu ile arayın..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          disabled={companiesLoading}
-          className="w-full pl-8 pr-8 py-1.5 text-[11px] rounded-[5px] border border-border/60 bg-background outline-none focus:border-foreground/30 transition-colors disabled:opacity-50"
-        />
-        {companiesLoading && (
-          <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin" />
+      {/* Arama + Yenile */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Firma adı veya kodu ile arayın..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            disabled={companiesLoading}
+            className="w-full pl-8 pr-8 py-1.5 text-[11px] rounded-[5px] border border-border/60 bg-background outline-none focus:border-foreground/30 transition-colors disabled:opacity-50"
+          />
+          {companiesLoading && (
+            <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin" />
+          )}
+        </div>
+        {onRefreshCompanies && (
+          <button
+            type="button"
+            onClick={onRefreshCompanies}
+            disabled={companiesLoading || companiesRefreshing}
+            title="Firma listesini yenile (güncel lisans/kullanıcı bilgisi)"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[5px] border border-border/60 bg-background text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors disabled:opacity-50 shrink-0"
+          >
+            <RefreshCw className={`size-3.5 ${companiesRefreshing ? "animate-spin" : ""}`} />
+            Yenile
+          </button>
         )}
       </div>
 

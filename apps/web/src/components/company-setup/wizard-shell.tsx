@@ -115,6 +115,27 @@ export function WizardShell() {
     return () => { cancelled = true }
   }, [step])
 
+  // Firma adımındaki "Yenile" butonu — dış API'den taze sync + listeyi güncelle.
+  const refreshCompanies = useCallback(async () => {
+    setCompaniesSyncing(true)
+    setCompaniesError(null)
+    try {
+      const r = await fetch("/api/firma/companies?sync=true&all=true", { cache: "no-store" })
+      const d = await r.json()
+      if (Array.isArray(d)) {
+        const fresh = d as Company[]
+        setApiCompanies(fresh)
+        setSelectedCompany((prev) => prev ? (fresh.find((c) => c.firkod === prev.firkod) ?? prev) : prev)
+      } else {
+        setCompaniesError((d as { error?: string })?.error ?? "Firmalar alınamadı")
+      }
+    } catch {
+      setCompaniesError("Firma listesi alınamadı")
+    } finally {
+      setCompaniesSyncing(false)
+    }
+  }, [])
+
   // RDP Sunucuları API (step 1)
   const [apiRdpServers, setApiRdpServers]       = useState<RdpServerItem[]>([])
   const [rdpServersLoading, setRdpServersLoading] = useState(false)
@@ -525,6 +546,8 @@ export function WizardShell() {
                   companies={apiCompanies}
                   companiesLoading={companiesLoading}
                   companiesError={companiesError}
+                  companiesRefreshing={companiesSyncing}
+                  onRefreshCompanies={refreshCompanies}
                   rdpServers={apiRdpServers}
                   rdpServersLoading={rdpServersLoading}
                   rdpServersError={rdpServersError}
