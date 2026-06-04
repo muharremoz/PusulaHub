@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Activity, AlertTriangle, CheckCircle2, WifiOff, Volume2, VolumeX } from "lucide-react"
 import { DottedGlowBackground } from "@/components/ui/dotted-glow-background"
 import { HyperText } from "@/components/ui/hyper-text"
+import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
 
 /* ══════════════════════════════════════════════════════════
    Proje stili — Dark varyantı
@@ -955,7 +956,7 @@ function ExchangeTile({ monitors, health }: { monitors: KumaMonitor[]; health?: 
                        { dot: "rgb(239,68,68)",   speed: 2.2 }
 
   return (
-    <div className="flex flex-col shrink-0 w-full lg:w-[260px] xl:w-[300px]">
+    <div className="flex flex-col w-full">
       {/* Dış kart — dotted glow (monitör kartlarıyla aynı dil) */}
       <div
         className={cn("rounded-[5px] relative overflow-hidden p-2 flex flex-col flex-1", cfg.bg, cfg.ring)}
@@ -1052,6 +1053,85 @@ function ExchangeTile({ monitors, health }: { monitors: KumaMonitor[]; health?: 
 }
 
 /* ══════════════════════════════════════════════════════════
+   SpareBackup Çevrimdışı Yedekler Tile — sol panel (Döviz altı)
+══════════════════════════════════════════════════════════ */
+/** minutesAgo → kısa Türkçe süre ("20 sa", "3 g", "45 dk") */
+function formatMinutesAgo(mins: number): string {
+  if (mins < 60)   return `${mins} dk`
+  if (mins < 1440) return `${Math.floor(mins / 60)} sa`
+  return `${Math.floor(mins / 1440)} g`
+}
+
+function OfflineFirmsTile({ data }: { data: SpareBackupOffline | null }) {
+  const offline = data?.offline ?? []
+  const count   = offline.length
+  const allOk   = !!data && count === 0
+  const ui: UiStatus = !data ? "warning" : count > 0 ? "offline" : "online"
+
+  const cfg = STATUS_CONFIG[ui]
+  const glow =
+    ui === "online"  ? { dot: "rgb(52,211,153)", speed: 0.8 } :
+    ui === "warning" ? { dot: "rgb(251,191,36)", speed: 1.4 } :
+                       { dot: "rgb(239,68,68)",  speed: 1.8 }
+
+  return (
+    <div
+      className={cn("rounded-[5px] relative overflow-hidden p-2 flex flex-col", cfg.bg, cfg.ring)}
+      style={INNER_SHADOW}
+    >
+      <DottedGlowBackground
+        gap={14} radius={1.5}
+        color={glow.dot} darkColor={glow.dot} glowColor={glow.dot} darkGlowColor={glow.dot}
+        opacity={0.3} speedScale={glow.speed}
+        className="pointer-events-none"
+      />
+      <div
+        className="relative z-10 rounded-[4px] overflow-hidden border border-white/5 backdrop-blur-[4px] flex flex-col"
+        style={{
+          background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
+        {/* Başlık */}
+        <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-white/5">
+          <LiveDot ui={ui} size="size-2.5" />
+          <h3 className="text-[13px] font-bold leading-none flex-1 truncate text-zinc-100">Çevrimdışı Yedekler</h3>
+          <span className={cn("text-[8px] font-bold uppercase tracking-wider shrink-0",
+            ui === "online" ? "text-emerald-300" : ui === "warning" ? "text-amber-300" : "text-red-300")}>
+            {!data ? "—" : allOk ? `0/${data.totalActive}` : `${count} DOWN`}
+          </span>
+        </div>
+
+        {/* Liste */}
+        <div className="p-2 flex flex-col gap-1.5 max-h-[40vh] overflow-y-auto">
+          {!data ? (
+            <p className="text-[11px] text-zinc-500 text-center py-3">Servise ulaşılamadı</p>
+          ) : count === 0 ? (
+            <p className="text-[11px] text-emerald-300/80 text-center py-3">Tüm yedeklemeler çevrimiçi</p>
+          ) : (
+            offline.map((f) => (
+              <div
+                key={f.firkod}
+                className="flex items-center gap-2 rounded-[4px] px-2 py-1.5 border border-red-400/20"
+                style={{ background: "linear-gradient(135deg, rgba(239,68,68,0.14), rgba(239,68,68,0.03))" }}
+              >
+                <WifiOff className="size-3.5 text-red-300 shrink-0" />
+                <span className="text-[12px] font-semibold text-zinc-100 leading-tight flex-1 truncate" title={f.firma}>
+                  {f.firma}
+                </span>
+                <span className="text-[12px] font-black tabular-nums text-red-300 shrink-0">
+                  {formatMinutesAgo(f.minutesAgo)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
    Ana Sayfa
 ══════════════════════════════════════════════════════════ */
 export default function TvMonitoringPage() {
@@ -1061,6 +1141,9 @@ export default function TvMonitoringPage() {
   /* ── Test modu: fake DOWN monitor enjekte et (Active Directory'yi yapay DOWN göster) ── */
   const [testDown, setTestDown] = useState(false)
   const testDownUntilRef = useRef<number>(0)
+
+  // SpareBackup offline firma özeti (sol panel kartı) — Kuma'dan bağımsız
+  const [offlineFirms, setOfflineFirms] = useState<SpareBackupOffline | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -1073,25 +1156,41 @@ export default function TvMonitoringPage() {
     }
   }, [])
 
-  // Test butonu aktifken data'yı mutasyona uğrat — Active Directory'yi DOWN yap
+  const loadOfflineFirms = useCallback(async () => {
+    try {
+      const res  = await fetch(`/api/sparebackup/offline`, { cache: "no-store" })
+      const json = await res.json()
+      setOfflineFirms(json.ok ? json : null)
+    } catch {
+      setOfflineFirms(null)
+    }
+  }, [])
+
+  // SpareBackup "offline firmalar" bilgi monitörünü grid + KPI sayımından çıkar
+  // (ayrı kart olarak gösteriliyor). testDown aktifken AD'yi yapay DOWN yap.
   const dataForRender = useMemo<MonitoringResponse | null>(() => {
-    if (!data || !testDown) return data
-    const mutated = data.monitors.map((m) =>
-      m.name === "Active Directory"
-        ? { ...m, status: "down" as KumaStatus, responseMs: null }
-        : m,
-    )
-    const online  = mutated.filter((m) => m.status === "up").length
-    const warning = mutated.filter((m) => m.status === "pending" || m.status === "maintenance").length
-    const offline = mutated.filter((m) => m.status === "down").length
-    return { ...data, monitors: mutated, counts: { total: mutated.length, online, warning, offline } }
+    if (!data) return data
+    let mons = data.monitors.filter((m) => !isInfoMonitor(m))
+    if (testDown) {
+      mons = mons.map((m) =>
+        m.name === "Active Directory"
+          ? { ...m, status: "down" as KumaStatus, responseMs: null }
+          : m,
+      )
+    }
+    const online  = mons.filter((m) => m.status === "up").length
+    const warning = mons.filter((m) => m.status === "pending" || m.status === "maintenance").length
+    const offline = mons.filter((m) => m.status === "down").length
+    return { ...data, monitors: mons, counts: { total: mons.length, online, warning, offline } }
   }, [data, testDown])
 
   useEffect(() => {
     load()
-    const t = setInterval(load, 1_000)
-    return () => clearInterval(t)
-  }, [load])
+    loadOfflineFirms()
+    const t  = setInterval(load, 1_000)
+    const t2 = setInterval(loadOfflineFirms, 60_000)
+    return () => { clearInterval(t); clearInterval(t2) }
+  }, [load, loadOfflineFirms])
 
   const { exchangeMonitors, regularMonitors } = useMemo(() => {
     if (!dataForRender) return { exchangeMonitors: [], regularMonitors: [] as KumaMonitor[] }
@@ -1328,9 +1427,13 @@ export default function TvMonitoringPage() {
 
       {/* ── İçerik: mobilde üstte Döviz + altta gruplar; lg+ solda sidebar + sağda gruplar ── */}
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-3">
-        {exchangeMonitors.length > 0 && (
-          <ExchangeTile monitors={exchangeMonitors} health={(dataForRender ?? data).exchangeHealth} />
-        )}
+        {/* Sol kolon: Döviz Kurları + Çevrimdışı Yedekler kartı alt alta */}
+        <div className="flex flex-col gap-3 shrink-0 w-full lg:w-[260px] xl:w-[300px]">
+          {exchangeMonitors.length > 0 && (
+            <ExchangeTile monitors={exchangeMonitors} health={(dataForRender ?? data).exchangeHealth} />
+          )}
+          <OfflineFirmsTile data={offlineFirms} />
+        </div>
         <div className="flex flex-col flex-1 gap-3 min-w-0">
           {serverMonitors.length > 0 && (
             <MonitorGroup title="Sunucular" count={serverMonitors.length} monitors={serverMonitors} tracker={tracker} histories={histories} />

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { requireAuth } from "@/lib/require-permission"
 import { getSpareBackupOffline } from "@/lib/sparebackup-offline"
 
 /**
@@ -7,13 +6,13 @@ import { getSpareBackupOffline } from "@/lib/sparebackup-offline"
  *
  * SpareBackup offline firma özetini (10.15.2.6:3000/offline-firms) proxy'ler.
  * Token Hub env'inde gizli; client doğrudan LAN'a erişemez. 60 sn cache
- * (lib/sparebackup-offline). Upstream'e ulaşılamazsa `ok:false` döner —
- * dashboard kartı "ulaşılamadı" durumunu gösterir.
+ * (lib/sparebackup-offline). Upstream'e ulaşılamazsa `ok:false` döner.
+ *
+ * Auth yok — /api/monitoring ile aynı: /tv kiosk ekranı (oturumsuz) da bu
+ * veriyi çeker. Token zaten server-side gizli, dönen veri offline firma adı
+ * + IP (LAN izleme kapsamında).
  */
 export async function GET() {
-  const gate = await requireAuth()
-  if (gate) return gate
-
   const data = await getSpareBackupOffline()
   if (!data) {
     return NextResponse.json(
