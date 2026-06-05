@@ -105,6 +105,22 @@ function firmaIsActive(f: FirmaCompany): boolean {
   }
   return new Date(f.lisansBitis) >= new Date()
 }
+// Etiket metninden deterministik renk seç (her etiket hep aynı renk)
+const TAG_PALETTE = [
+  "bg-blue-50 text-blue-700 border-blue-200",
+  "bg-violet-50 text-violet-700 border-violet-200",
+  "bg-amber-50 text-amber-700 border-amber-200",
+  "bg-teal-50 text-teal-700 border-teal-200",
+  "bg-rose-50 text-rose-700 border-rose-200",
+  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-cyan-50 text-cyan-700 border-cyan-200",
+  "bg-orange-50 text-orange-700 border-orange-200",
+]
+function tagColor(tag: string): string {
+  let h = 0
+  for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
+  return TAG_PALETTE[h % TAG_PALETTE.length]
+}
 import {
   Building2,
   Users,
@@ -156,6 +172,7 @@ import {
   UserPlus,
   ArrowUp,
   ArrowDown,
+  Tag as TagIcon,
 } from "lucide-react";
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
@@ -381,6 +398,12 @@ export default function CompaniesPage() {
   const [top5, setTop5] = useState<Top5Company[]>([]);
   const [top5Loading, setTop5Loading] = useState(true);
   const [selectedFirma, setSelectedFirma] = useState<FirmaCompany | null>(null);
+  // Firma etiketleri
+  const [firmaTags, setFirmaTags] = useState<string[]>([]);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+  const [tagBusy, setTagBusy] = useState(false);
   const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -962,6 +985,55 @@ tr:nth-child(even) td{background:#fafafa}
     }).catch(() => {}).finally(() => { setTabLoading(false); setDetailLoading(false) })
   }, [selectedFirma?.firkod])
 
+  // Firma etiketlerini yükle
+  useEffect(() => {
+    if (!selectedFirma || !canViewCompanyDetail) { setFirmaTags([]); return }
+    let alive = true
+    fetch(`/api/companies/${selectedFirma.firkod}/tags`)
+      .then(r => r.ok ? r.json() : { tags: [], allTags: [] })
+      .then((d: { tags?: string[]; allTags?: string[] }) => {
+        if (!alive) return
+        setFirmaTags(Array.isArray(d.tags) ? d.tags : [])
+        setAllTags(Array.isArray(d.allTags) ? d.allTags : [])
+      })
+      .catch(() => { if (alive) setFirmaTags([]) })
+    return () => { alive = false }
+  }, [selectedFirma?.firkod, canViewCompanyDetail])
+
+  async function addTag(raw: string) {
+    if (!selectedFirma) return
+    const tag = raw.trim()
+    if (!tag) return
+    if (firmaTags.some(t => t.toLowerCase() === tag.toLowerCase())) { setTagInput(""); return }
+    setTagBusy(true)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/tags`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag }),
+      })
+      if (!r.ok) { toast.error("Etiket eklenemedi"); return }
+      const d = await r.json() as { tag: string }
+      setFirmaTags(prev => [...prev, d.tag].sort((a, b) => a.localeCompare(b, "tr")))
+      setAllTags(prev => prev.includes(d.tag) ? prev : [...prev, d.tag].sort((a, b) => a.localeCompare(b, "tr")))
+      setTagInput("")
+    } catch {
+      toast.error("Etiket eklenemedi")
+    } finally {
+      setTagBusy(false)
+    }
+  }
+
+  async function removeTag(tag: string) {
+    if (!selectedFirma) return
+    setFirmaTags(prev => prev.filter(t => t !== tag)) // optimistic
+    try {
+      await fetch(`/api/companies/${selectedFirma.firkod}/tags?tag=${encodeURIComponent(tag)}`, { method: "DELETE" })
+    } catch {
+      toast.error("Etiket silinemedi")
+    }
+  }
+
   async function selectFirma(f: FirmaCompany) {
     // company-detail yetkisi olmayan (rol: kullanıcı) için detay panelini açmak
     // yerine doğrudan "Erişim Bilgileri" modal'ını göster. selectedFirma yine
@@ -1329,6 +1401,86 @@ tr:nth-child(even) td{background:#fafafa}
                   }`}>
                     {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
                   </span>
+
+                  {/* Firma etiketleri */}
+                  {canViewCompanyDetail && (
+                    <div className="flex items-center gap-1.5">
+                      {firmaTags.map((tag) => (
+                        <span
+                          key={tag}
+                          className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
+                        >
+                          {tag}
+                          <button
+                            onClick={() => removeTag(tag)}
+                            className="opacity-50 hover:opacity-100 transition-opacity"
+                            title="Etiketi kaldır"
+                          >
+                            <X className="h-2.5 w-2.5" />
+                          </button>
+                        </span>
+                      ))}
+
+                      <Popover open={tagPopoverOpen} onOpenChange={(o) => { setTagPopoverOpen(o); if (!o) setTagInput(""); }}>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-[4px] border border-dashed border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                            title="Etiket ekle"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-56 p-0 rounded-[5px]" align="start">
+                          <div className="p-2 border-b border-border/40">
+                            <div className="flex items-center gap-1.5">
+                              <Input
+                                value={tagInput}
+                                onChange={(e) => setTagInput(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                                placeholder="Yeni etiket yaz..."
+                                maxLength={50}
+                                className="h-7 text-[11px] rounded-[5px]"
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                disabled={tagBusy || !tagInput.trim()}
+                                onClick={() => addTag(tagInput)}
+                                className="h-7 px-2 rounded-[5px] text-[11px] shrink-0"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+                            {(() => {
+                              const suggestions = allTags.filter(
+                                (t) => !firmaTags.some((ft) => ft.toLowerCase() === t.toLowerCase())
+                              )
+                              if (suggestions.length === 0) {
+                                return <p className="text-[10px] text-muted-foreground text-center py-3">Mevcut etiket yok — yukarıdan yeni ekleyin</p>
+                              }
+                              return (
+                                <>
+                                  <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase px-1.5 py-1">Mevcut Etiketler</p>
+                                  {suggestions.map((t) => (
+                                    <button
+                                      key={t}
+                                      onClick={() => addTag(t)}
+                                      disabled={tagBusy}
+                                      className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[4px] hover:bg-muted/50 transition-colors text-left"
+                                    >
+                                      <span className={`inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
+                                    </button>
+                                  ))}
+                                </>
+                              )
+                            })()}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  )}
                 </>
 
                 <div className="flex-1" />
