@@ -352,10 +352,10 @@ export function WizardShell() {
   const canProceed =
     step === 0 ? selectedServerId !== null :
     step === 1 ? selectedCompany !== null
-                && (selectedCompany.userCount ?? 0) > 0
+                && (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0) > 0
                 && existingUsersKey === `${selectedServerId}|${selectedCompany.firkod}`
                 && !existingUsersLoading
-                && apiExistingUsers.length < (selectedCompany.userCount ?? 0)
+                && apiExistingUsers.length < (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0)
                 && selectedWindowsServerId !== null :
     step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
     step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!hasPusulaSelected || selectedDepoServerId !== null) :
@@ -572,7 +572,7 @@ export function WizardShell() {
                   users={users} firmaId={firmaId}
                   firmaName={selectedCompany?.firma ?? ""}
                   serverId={selectedServerId ?? ""}
-                  userLimit={selectedCompany?.userCount ?? 0}
+                  userLimit={selectedCompany?.licenseCount ?? selectedCompany?.userCount ?? 0}
                   existingUsers={apiExistingUsers}
                   existingUsersLoading={existingUsersLoading}
                   existingUsersError={existingUsersError}

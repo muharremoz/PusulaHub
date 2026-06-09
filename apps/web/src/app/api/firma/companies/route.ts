@@ -9,6 +9,10 @@ export interface FirmaCompany {
   email:       string
   phone:       string
   userCount:   number
+  /** Lisanstan gelen kullanıcı hakkı (Pusula API · Companies.UserCount).
+   *  userCount kurulu firmalarda AD kullanıcı sayısını gösterir; sihirbaz
+   *  "Kullanıcı Hakkı" limiti için bu lisans değerini kullanmalı. */
+  licenseCount: number
   lisansBitis: string
 }
 
@@ -18,6 +22,7 @@ interface CompanyRow {
   ContactEmail: string | null
   ContactPhone: string | null
   UserCount:   number
+  LicenseCount: number
   ContractEnd: string | null
 }
 
@@ -42,6 +47,7 @@ export async function GET(req: NextRequest) {
                 THEN ISNULL((SELECT COUNT(*) FROM ADUsers a WHERE a.OU = c.CompanyId), 0)
               ELSE c.UserCount
             END AS UserCount,
+            ISNULL(c.UserCount, 0) AS LicenseCount,
             CONVERT(NVARCHAR(20), c.ContractEnd, 23) AS ContractEnd
           FROM Companies c
           WHERE c.CompanyId IS NOT NULL
@@ -51,6 +57,7 @@ export async function GET(req: NextRequest) {
           SELECT
             c.CompanyId, c.Name, c.ContactEmail, c.ContactPhone,
             ISNULL((SELECT COUNT(*) FROM ADUsers a WHERE a.OU = c.CompanyId), 0) AS UserCount,
+            ISNULL(c.UserCount, 0) AS LicenseCount,
             CONVERT(NVARCHAR(20), c.ContractEnd, 23) AS ContractEnd
           FROM Companies c
           WHERE c.CompanyId IS NOT NULL AND c.AdServerId IS NOT NULL
@@ -64,6 +71,7 @@ export async function GET(req: NextRequest) {
       email:       r.ContactEmail ?? "",
       phone:       r.ContactPhone ?? "",
       userCount:   r.UserCount,
+      licenseCount: r.LicenseCount ?? 0,
       lisansBitis: r.ContractEnd ?? "",
     }))
 

@@ -35,6 +35,8 @@ export interface Company {
   phone?: string
   pcName?: string
   userCount?: number
+  /** Lisans kullanıcı hakkı (Pusula API). Sihirbaz limiti bunu kullanır. */
+  licenseCount?: number
   lastLogin?: string
   lisansBitis?: string
   city?: string

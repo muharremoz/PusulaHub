@@ -71,7 +71,10 @@ export function StepFirma({
   existingUsersLoading?: boolean
   onRefreshExistingUsers?: () => void
 }) {
-  const userLimit = selectedCompany?.userCount ?? 0
+  // "Kullanıcı Hakkı" = lisans hakkı (Pusula API · licenseCount). Kurulu
+  // firmalarda userCount AD kullanıcı sayısını taşır; limit için lisans şart.
+  const licenseSeats = selectedCompany?.licenseCount ?? selectedCompany?.userCount ?? 0
+  const userLimit = licenseSeats
   const licenseFull = userLimit > 0 && existingUserCount >= userLimit
   const [search, setSearch] = useState("")
 
@@ -201,18 +204,18 @@ export function StepFirma({
             </div>
 
             {/* Kullanıcı Hakkı */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: (selectedCompany.userCount ?? 0) === 0 ? "#FEF3C7" : "#eef3ff" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: licenseSeats === 0 ? "#FEF3C7" : "#eef3ff" }}>
               <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Kullanıcı Hakkı</p>
                   <Users className="size-3 text-muted-foreground" />
                 </div>
-                <p className={cn("text-[13px] font-bold tracking-tight", (selectedCompany.userCount ?? 0) === 0 && "text-amber-500")}>
-                  {selectedCompany.userCount ?? 0}
+                <p className={cn("text-[13px] font-bold tracking-tight", licenseSeats === 0 && "text-amber-500")}>
+                  {licenseSeats}
                 </p>
               </div>
               <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">
-                {(selectedCompany.userCount ?? 0) === 0 ? "Lisans güncellenmeli" : "Aktif kullanıcı limiti"}
+                {licenseSeats === 0 ? "Lisans güncellenmeli" : "Aktif kullanıcı limiti"}
               </p>
             </div>
 
@@ -236,7 +239,7 @@ export function StepFirma({
           <Separator />
 
           {/* Kullanıcı hakkı 0 — sunucu seçimi engellendi */}
-          {(selectedCompany.userCount ?? 0) === 0 && (
+          {licenseSeats === 0 && (
             <div className="rounded-[5px] border border-amber-200 bg-amber-50 overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-4">
                 <div className="size-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -255,7 +258,7 @@ export function StepFirma({
           )}
 
           {/* Lisans dolu uyarısı — sistemdeki mevcut kullanıcı sayısı lisansa ulaşmış */}
-          {(selectedCompany.userCount ?? 0) > 0 && licenseFull && (
+          {licenseSeats > 0 && licenseFull && (
             <div className="rounded-[5px] border border-red-200 bg-red-50 overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-4">
                 <div className="size-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
@@ -285,7 +288,7 @@ export function StepFirma({
           )}
 
           {/* Bağlantı sunucusu (RDP) seçimi — sadece kullanıcı hakkı > 0 ve lisans doluysa gizle */}
-          {(selectedCompany.userCount ?? 0) > 0 && !licenseFull && <div>
+          {licenseSeats > 0 && !licenseFull && <div>
             <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
               Bağlantı Sunucusu
             </p>
