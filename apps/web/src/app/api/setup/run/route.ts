@@ -21,6 +21,7 @@ import {
   buildCopyFolder,
   buildSetNtfsPermissions,
   buildUpdateParamTxt,
+  buildUpdateDataKoduXml,
   buildWriteDesktopIni,
 } from "@/lib/setup-fileops"
 import {
@@ -611,12 +612,19 @@ export async function POST(req: NextRequest) {
 
             if (cfg.paramFileName && cfg.paramFileName.trim()) {
               const paramFile = `${hizmetPath}\\${cfg.paramFileName.trim()}`
+              // Perakende (programCode 909) istisnası: data kodu [DATA KODU]
+              // satırı yerine <DATAKODU> bloğuyla yazılır. Değer yine firmaId.
+              const isPerakende = (cfg.programCode ?? "").trim() === "909"
               // Parametre TXT adımı kritik değil — hata devam ettirir
               await runStep(
                 winAgent,
                 `svc_param_${s.id}`,
-                `Parametre güncelleniyor: ${cfg.paramFileName}`,
-                buildUpdateParamTxt(paramFile, payload.firmaId),
+                isPerakende
+                  ? `Parametre güncelleniyor (Perakende · DATAKODU): ${cfg.paramFileName}`
+                  : `Parametre güncelleniyor: ${cfg.paramFileName}`,
+                isPerakende
+                  ? buildUpdateDataKoduXml(paramFile, payload.firmaId)
+                  : buildUpdateParamTxt(paramFile, payload.firmaId),
               )
             }
 

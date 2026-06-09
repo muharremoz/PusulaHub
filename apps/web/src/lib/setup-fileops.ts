@@ -123,3 +123,39 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
     `}`,
   ].join("; ")
 }
+
+/* ── Perakende parametre dosyası — <DATAKODU> bloğu (istisnai biçim) ──── */
+/**
+ * Perakende (programCode 909) programının parametre dosyasında data kodu,
+ * diğer programlardaki `[DATA KODU] <id>` satırı yerine XML-tarzı bir blokla
+ * tutulur:
+ *
+ *   <DATAKODU>
+ *   <firmaId>
+ *   </DATAKODU>
+ *
+ * Değer yine firmaId'dir (diğer programlarla aynı kaynak). Yalnızca BİÇİM
+ * farklıdır. Dosyada var olan blok güncellenir; yoksa dosya sonuna eklenir.
+ * Çift tırnak yasak → satır sonu için [char]13/[char]10 kullanılır.
+ */
+export function buildUpdateDataKoduXml(paramFilePath: string, firmaId: string): string {
+  const f = psQuote(paramFilePath)
+  const id = psQuote(firmaId)
+  return [
+    `$f='${f}'`,
+    `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIPPED'} else {` +
+      `$nl = [string]([char]13) + [string]([char]10); ` +
+      `$blk = '<DATAKODU>' + $nl + '${id}' + $nl + '</DATAKODU>'; ` +
+      `$c = Get-Content -LiteralPath $f -Raw -Encoding UTF8; ` +
+      `if($c -match '(?si)<DATAKODU>.*?</DATAKODU>'){` +
+        `$c = [regex]::Replace($c, '(?si)<DATAKODU>.*?</DATAKODU>', $blk); ` +
+        `Set-Content -LiteralPath $f -Value $c -NoNewline -Encoding UTF8; ` +
+        `Write-Output 'UPDATED'` +
+      `} else {` +
+        `$c = $c.TrimEnd() + $nl + $blk + $nl; ` +
+        `Set-Content -LiteralPath $f -Value $c -NoNewline -Encoding UTF8; ` +
+        `Write-Output 'ADDED'` +
+      `}` +
+    `}`,
+  ].join("; ")
+}
