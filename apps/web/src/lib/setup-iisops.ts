@@ -182,6 +182,30 @@ export function buildPatchUsersXml(opts: {
   ].join("; ")
 }
 
+/* ── IIS'te kullanılan portları listele ──────────────────────────────── */
+/**
+ * Sunucudaki TÜM IIS sitelerinin binding'lerinden port numaralarını toplar.
+ * Sihirbaz port tahsisinde WizardPortAssignments sayacının dışında elle
+ * kurulmuş siteler de olabilir (örn. 778_RFID → 26003) — canlı envanter
+ * olmadan tahsis edilen port IIS'te çakışıp site start'ı patlatıyor.
+ *
+ * Çıktı: `PORTS:80,443,21001,26003` (binding'i olmayan sunucuda `PORTS:`)
+ */
+export function buildListIisUsedPorts(): string {
+  return [
+    `Import-Module WebAdministration -ErrorAction Stop`,
+    `$ports = @()`,
+    `foreach($s in (Get-Website)){` +
+      `foreach($b in $s.bindings.Collection){` +
+        `$bi = [string]$b.bindingInformation; ` +
+        `foreach($seg in $bi.Split(':')){ if($seg -match '^[0-9]+$'){ $ports += [int]$seg } }` +
+      `}` +
+    `}`,
+    `$ports = $ports | Sort-Object -Unique`,
+    `Write-Output ('PORTS:' + ($ports -join ','))`,
+  ].join("; ")
+}
+
 /* ── IIS sitesi oluştur (idempotent) ─────────────────────────────────── */
 /**
  * WebAdministration modülü kullanır. Site varsa yeniden oluşturmaz, sadece

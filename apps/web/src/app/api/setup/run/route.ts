@@ -29,6 +29,7 @@ import {
   buildCreateIisSite,
   buildPatchWebConfig,
   buildPatchUsersXml,
+  buildListIisUsedPorts,
 } from "@/lib/setup-iisops"
 import {
   buildCreateShortcut,
@@ -89,6 +90,9 @@ async function allocatePort(
   serviceId: number,
   companyId: string,
   siteName:  string,
+  /** IIS'te canlı olarak kullanılan portlar — sayaç (WizardPortAssignments)
+   *  dışında elle kurulmuş siteleri de dışlamak için. Bkz: 26003 çakışması. */
+  liveUsedPorts?: ReadonlySet<number>,
 ): Promise<{ ok: true; port: number } | { ok: false; error: string }> {
   const ranges = await query<{ PortStart: number; PortEnd: number; IsActive: boolean }[]>`
     SELECT PortStart, PortEnd, IsActive FROM WizardPortRanges WHERE Id = ${rangeId}
@@ -103,6 +107,7 @@ async function allocatePort(
 
   for (let p = ranges[0].PortStart; p <= ranges[0].PortEnd; p++) {
     if (usedSet.has(p)) continue
+    if (liveUsedPorts?.has(p)) continue
     try {
       await execute`
         INSERT INTO WizardPortAssignments (PortRangeId, ServiceId, CompanyId, Port, SiteName)
@@ -699,6 +704,40 @@ export async function POST(req: NextRequest) {
             buildCreateDir(iisFirmaRoot),
           ))) { controller.close(); return }
 
+          // 6a.5) Canlı IIS port envanteri — sayaç (WizardPortAssignments)
+          // dışında elle kurulmuş siteler de port kullanıyor olabilir.
+          // Tahsis edilen portun IIS'te gerçekten boş olduğunu garantiler.
+          const liveUsedPorts = new Set<number>()
+          {
+            send("step", { stepId: "iis_ports_scan", label: "IIS port envanteri alınıyor", status: "running" })
+            const portRes = await execOnAgent(
+              iisAgent.ip, iisAgent.port, iisAgent.apiKey,
+              buildListIisUsedPorts(), 60,
+            )
+            const m = (portRes.stdout ?? "").match(/PORTS:([\d,]*)/)
+            if (portRes.exitCode === 0 && m) {
+              for (const seg of m[1].split(",")) {
+                const n = parseInt(seg, 10)
+                if (Number.isFinite(n)) liveUsedPorts.add(n)
+              }
+              send("step", {
+                stepId: "iis_ports_scan",
+                label:  "IIS port envanteri alınıyor",
+                status: "done",
+                output: `${liveUsedPorts.size} port kullanımda: ${[...liveUsedPorts].sort((a, b) => a - b).join(", ")}`,
+              })
+            } else {
+              // Canlı envanter alınamadı — kurulumu kesme ama net uyar.
+              // Sayaç (WizardPortAssignments) yine de devrede.
+              send("step", {
+                stepId: "iis_ports_scan",
+                label:  "IIS port envanteri alınamadı — yalnızca sayaç kullanılacak",
+                status: "done",
+                output: (portRes.stderr || portRes.stdout || `exit ${portRes.exitCode}`).slice(0, 200),
+              })
+            }
+          }
+
           for (const s of iisServices) {
             const cfg = s.config as IisSiteConfig | null
             if (!cfg) {
@@ -744,7 +783,7 @@ export async function POST(req: NextRequest) {
               label:  `Port atanıyor: ${siteName}`,
               status: "running",
             })
-            const alloc = await allocatePort(cfg.portRangeId, s.id, payload.firmaId, siteName)
+            const alloc = await allocatePort(cfg.portRangeId, s.id, payload.firmaId, siteName, liveUsedPorts)
             if (!alloc.ok) {
               send("step", {
                 stepId: `iis_port_${s.id}`,
