@@ -1165,32 +1165,85 @@ static class Metrics
     }
 
     /* --- KULLANICI PROCESS KULLANIMI (5 dk heavy cycle) ---
-       Win32_Process: PID -> owner eslestirmesi + CPU ticks
+       Win32_Process: SessionId -> kullanici eslestirmesi + CPU ticks
        Win32_PerfFormattedData_PerfProc_Process: WorkingSetPrivate (Task Manager Memory ile ayni)
-       Fallback: perf counter yoksa WorkingSetSize kullanilir. */
+       Fallback: perf counter yoksa WorkingSetSize kullanilir.
+
+       NOT: Eskiden her process icin Win32_Process.GetOwner (ExecMethod)
+       cagiriliyordu. Terminal sunucuda 400+ process oldugunda bu, her heavy
+       dongusunde 400+ WMI ExecMethod demekti ve WmiPrvSE (CIMWin32) surekli
+       %50-85 CPU yiyordu. RDS'te bir oturumdaki processlerin sahibi oturumun
+       kullanicisidir; tek bir quser cagrisiyla SessionId -> kullanici haritasi
+       kurup GetOwner'i tamamen kaldirdik. Oturum icindeki sistem processleri
+       (csrss, winlogon, dwm vb.) ad bazinda dislanir. */
+
+    /** quser ciktisindan SessionId -> kullanici adi haritasi. */
+    private static Dictionary<int, string> GetSessionUserMap()
+    {
+        var map = new Dictionary<int, string>();
+        try
+        {
+            var psi = new ProcessStartInfo("quser")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.GetEncoding(850)
+            };
+            var proc = Process.Start(psi);
+            string output = proc.StandardOutput.ReadToEnd();
+            proc.WaitForExit(5000);
+
+            var lines = output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 1; i < lines.Length; i++) // basligi atla
+            {
+                string trimmed = lines[i].TrimStart('>').TrimStart();
+                var parts = Regex.Split(trimmed, "\\s{2,}");
+                if (parts.Length < 3) continue;
+
+                string uname = parts[0].Trim();
+                int sessionId = -1;
+                // Aktif oturum: [user, sessionName, id, ...] — Disc: [user, id, state, ...]
+                if (IsAllDigits(parts[1].Trim()))
+                    int.TryParse(parts[1].Trim(), out sessionId);
+                else if (parts.Length >= 3 && IsAllDigits(parts[2].Trim()))
+                    int.TryParse(parts[2].Trim(), out sessionId);
+
+                if (sessionId >= 0 && !string.IsNullOrEmpty(uname))
+                    map[sessionId] = uname.ToLower();
+            }
+        }
+        catch { }
+        return map;
+    }
+
     private static List<Dictionary<string, object>> CollectUserProcesses()
     {
         var userCpu        = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var userRamFallback = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         var pidOwner       = new Dictionary<int, string>();
 
-        // 1) Win32_Process: PID -> owner, CPU ticks, WorkingSetSize (fallback RAM)
+        // 1) SessionId -> kullanici haritasi (tek quser cagrisi, GetOwner YOK)
+        var sessionUser = GetSessionUserMap();
+
+        // 2) Win32_Process: tek enumerasyon — PID/CPU/RAM + SessionId
         using (var searcher = new ManagementObjectSearcher(
-            "SELECT Handle, WorkingSetSize, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
+            "SELECT Handle, Name, SessionId, WorkingSetSize, UserModeTime, KernelModeTime FROM Win32_Process WHERE SessionId > 0"))
         {
             foreach (ManagementObject proc in searcher.Get())
             {
                 try
                 {
-                    var ownerArgs = new string[2];
-                    proc.InvokeMethod("GetOwner", ownerArgs);
-                    string uname = ownerArgs[0];
-                    if (string.IsNullOrEmpty(uname)) continue;
-                    uname = uname.ToLower();
+                    int sid = proc["SessionId"] != null ? Convert.ToInt32(proc["SessionId"]) : -1;
+                    string uname;
+                    if (sid < 0 || !sessionUser.TryGetValue(sid, out uname)) continue;
 
-                    // Sistem hesaplarini atla
-                    if (uname == "system" || uname == "local service" || uname == "network service") continue;
-                    if (uname.StartsWith("dwm-") || uname.StartsWith("umfd-")) continue;
+                    // Oturum icinde SYSTEM/WindowManager altinda kosan processler
+                    // kullaniciya sayilmasin (GetOwner'in eski filtresine denk)
+                    string pname = proc["Name"] != null ? proc["Name"].ToString().ToLower() : "";
+                    if (pname == "csrss.exe" || pname == "winlogon.exe" || pname == "dwm.exe" ||
+                        pname == "logonui.exe" || pname == "fontdrvhost.exe" || pname == "userinit.exe") continue;
 
                     int pid = Convert.ToInt32(proc["Handle"]);
                     pidOwner[pid] = uname;
@@ -1209,7 +1262,7 @@ static class Metrics
             }
         }
 
-        // 2) Perf counter: WorkingSetPrivate = Task Manager "Memory" (private fiziksel RAM)
+        // 3) Perf counter: WorkingSetPrivate = Task Manager "Memory" (private fiziksel RAM)
         var userRam = new Dictionary<string, long>(StringComparer.OrdinalIgnoreCase);
         bool perfOk = false;
         try
