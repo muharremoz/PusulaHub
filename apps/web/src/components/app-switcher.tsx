@@ -46,11 +46,12 @@ const APPS: AppEntry[] = [
     logo:        "/apps/hub/logos/spareflow.svg",
   },
   {
+    // Cloud uygulaması — gateway'de /apps/crm sayfasında iframe ile gömülü.
+    // Internal link → gateway URL'i korunur (hub/spare gibi aynı sekme).
     id:          "crm",
     name:        "Pusula CRM",
     description: "Müşteri ilişkileri yönetimi",
     logo:        "/apps/hub/logos/crm.svg",
-    externalUrl: "https://crm.pusulanet.net",
   },
 ]
 
