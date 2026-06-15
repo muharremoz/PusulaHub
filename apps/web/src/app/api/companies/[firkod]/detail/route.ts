@@ -37,6 +37,16 @@ export interface CompanyDetail {
   dbTotalMB:    number  // MB — sunucudaki tüm DB'lerin toplam boyutu (hassas)
   weeklyUsage:  { day: string; cpu: number; ram: number; disk: number }[]
   history30d?:  CompanyUsageHistory
+  /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
+   *  → bar paylaşımlı-sunucu oranı/varsayılan kotaya göre gösterilir. Manuel
+   *  değer varsa bar o kotaya göre dolar ve "kullanım / kota" gösterilir.
+   *  CPU: % limiti · RAM/Disk/DB: GB. */
+  manualQuota?: {
+    cpuPct: number | null
+    ramGB:  number | null
+    diskGB: number | null
+    dbGB:   number | null
+  }
 }
 
 export interface CompanyUsageHistory {
@@ -61,6 +71,8 @@ interface CompanyRow {
   FileStorageMB:   number | null
   DbQuota:         number | null
   QuotaDisk:       number | null
+  QuotaCpu:        number | null
+  QuotaRam:        number | null
 }
 
 interface DbSumRow {
@@ -78,7 +90,7 @@ export async function GET(
   try {
     const compRows = await query<CompanyRow[]>`
       SELECT CompanyId, WindowsServerId, SqlServerId,
-             FileServerId, FileStorageMB, DbQuota, QuotaDisk
+             FileServerId, FileStorageMB, DbQuota, QuotaDisk, QuotaCpu, QuotaRam
       FROM Companies WHERE CompanyId = ${firkod}
     `
     if (!compRows.length) {
@@ -167,6 +179,16 @@ export async function GET(
       dbQuota:      dbQuotaGB,
       dbTotalMB:    Math.max(1, dbQuotaMB),  // "payda" artık kota (1 GB)
       weeklyUsage:  [],
+    }
+
+    // Manuel kota: Companies kolonları default'tan farklıysa "elle atanmış" say.
+    // Default'lar: DB=1 GB, Disk=25 GB, CPU/RAM=0 (atanmamış). Manuel değer
+    // varsa bar o kotaya göre dolar ve "kullanım / kota" gösterilir.
+    detail.manualQuota = {
+      cpuPct: (c.QuotaCpu ?? 0) > 0                          ? c.QuotaCpu!  : null,
+      ramGB:  (c.QuotaRam ?? 0) > 0                          ? c.QuotaRam!  : null,
+      diskGB: (c.QuotaDisk != null && c.QuotaDisk > 0 && c.QuotaDisk !== 25) ? c.QuotaDisk : null,
+      dbGB:   (c.DbQuota   != null && c.DbQuota   > 0 && c.DbQuota   !== 1)   ? c.DbQuota   : null,
     }
 
     // Haftalık kullanım grafiği — CompanyUsageDaily'den son 7 gün, yüzde bazlı.

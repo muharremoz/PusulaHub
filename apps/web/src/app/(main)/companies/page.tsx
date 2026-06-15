@@ -203,10 +203,13 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
   const avgDbMB     = h ? (h.dbStartMB + h.dbEndMB) / 2 : d.dbSizeMB;
   const avgCpuValue = h ? h.avgCpu : d.usageCpu;
 
-  const cpuPct  = pctCpu(avgCpuValue);
-  const ramPct  = pctMB(avgRamMB,       d.quotaRamMB);
-  const diskPct = pctMB(d.usageDiskMB,  d.quotaDiskMB);
-  const dbPct   = pctMB(avgDbMB,        d.dbTotalMB);
+  // Manuel kota verildiyse bar o kotaya göre hesaplanır; yoksa mevcut davranış
+  // (paylaşımlı sunucu oranı / varsayılan kota).
+  const mq = d.manualQuota;
+  const cpuPct  = mq?.cpuPct ? pctMB(avgCpuValue,    mq.cpuPct)         : pctCpu(avgCpuValue);
+  const ramPct  = mq?.ramGB  ? pctMB(avgRamMB,       mq.ramGB  * 1024)  : pctMB(avgRamMB,      d.quotaRamMB);
+  const diskPct = mq?.diskGB ? pctMB(d.usageDiskMB,  mq.diskGB * 1024)  : pctMB(d.usageDiskMB, d.quotaDiskMB);
+  const dbPct   = mq?.dbGB   ? pctMB(avgDbMB,        mq.dbGB   * 1024)  : pctMB(avgDbMB,       d.dbTotalMB);
 
   // Yoğunluk: CPU + RAM + Disk + DB yüzdelerinin ortalaması (User kaldırıldı)
   const active = [d.quotaCpu > 0, d.quotaRam > 0, d.quotaDisk > 0, d.dbQuota > 0].filter(Boolean).length;
@@ -227,10 +230,10 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
                      { text: "text-emerald-600", primary: "#10b981" };
 
   const metrics = [
-    { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  val: `${d.usageCpu} / ${d.quotaCpu} vCPU` },
-    { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  val: `${d.usageRam} / ${d.quotaRam} GB` },
-    { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, val: `${d.usageDisk} / ${d.quotaDisk} GB` },
-    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   val: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },
+    { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  quota: mq?.cpuPct ? `%${mq.cpuPct}`   : null },
+    { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  quota: mq?.ramGB  ? `${mq.ramGB} GB`  : null },
+    { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, quota: mq?.diskGB ? `${mq.diskGB} GB` : null },
+    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   quota: mq?.dbGB   ? `${mq.dbGB} GB`   : null },
   ];
 
   return (
@@ -287,7 +290,12 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
                 <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                   <div className={`h-full rounded-full ${barColor}`} style={{ width: `${m.pct}%` }} />
                 </div>
-                <span className="text-[10px] font-medium tabular-nums w-8 text-right">{m.pct}%</span>
+                <span className="text-[10px] font-medium tabular-nums text-right whitespace-nowrap">
+                  {m.pct}%
+                  {m.quota && (
+                    <span className="text-muted-foreground font-normal" title="Manuel kota"> / {m.quota}</span>
+                  )}
+                </span>
               </div>
             );
           })}
