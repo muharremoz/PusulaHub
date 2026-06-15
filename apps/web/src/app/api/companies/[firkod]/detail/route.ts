@@ -208,9 +208,13 @@ export async function GET(
         WHERE CompanyId = ${firkod}
         ORDER BY Date DESC
       `
-      // Son 7 gün aralığını (bugün-6 → bugün) Map'e koy
-      const ramQuota  = Math.max(1, quotaRamMB)
-      const diskQuota = Math.max(1, quotaDiskMB)
+      // Son 7 gün aralığını (bugün-6 → bugün) Map'e koy.
+      // Manuel kota varsa payda olarak onu kullan (density barlarıyla tutarlı) —
+      // aksi halde RAM, paylaşımlı sunucunun toplamına (örn. 128GB) oranlanıp
+      // küçük firmalarda hep ~%0/%1 görünür. CPU manuel limit varsa ona oranlanır.
+      const mq        = detail.manualQuota
+      const ramQuota  = mq?.ramGB ? mq.ramGB * 1024 : Math.max(1, quotaRamMB)
+      const diskQuota = Math.max(1, quotaDiskMB)  // quotaDiskMB zaten manuel-veya-25GB
       const pct = (u: number, q: number): number => {
         if (!q || q <= 0 || u <= 0) return 0
         const p = (u / q) * 100
@@ -236,11 +240,14 @@ export async function GET(
         const diskMB = row?.DiskMB ?? fallbackDiskMB
         out.push({
           day:  trNames[d.getDay()],
-          cpu:  row?.AvgCpu != null ? Math.min(100, Math.round(row.AvgCpu)) : 0,
-          // RAM% yalnızca sunucu toplam RAM'i (quotaRamMB) BİLİNİYORSA hesaplanır.
-          // Bilinmiyorsa (firma o an çevrimdışı / sunucu çözülemedi) sahte %100
-          // yerine 0 göster — yoksa AvgRamMB/1 = %100 garbage çıkıyordu.
-          ram:  (row?.AvgRamMB != null && quotaRamMB > 0) ? pct(row.AvgRamMB, ramQuota) : 0,
+          // CPU: manuel limit varsa ona oranla, yoksa ham ortalama % (0-100).
+          cpu:  row?.AvgCpu != null
+                  ? (mq?.cpuPct ? pct(row.AvgCpu, mq.cpuPct) : Math.min(100, Math.round(row.AvgCpu)))
+                  : 0,
+          // RAM: manuel kota varsa ona oranla; yoksa sunucu toplam RAM'i BİLİNİYORSA
+          // ona oranla. İkisi de yoksa sahte %100 yerine 0 göster.
+          ram:  row?.AvgRamMB != null && (mq?.ramGB || quotaRamMB > 0)
+                  ? pct(row.AvgRamMB, ramQuota) : 0,
           disk: pct(diskMB, diskQuota),
         })
       }
