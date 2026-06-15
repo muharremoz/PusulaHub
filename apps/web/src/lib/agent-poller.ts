@@ -729,6 +729,21 @@ async function updateCompanyUsage(): Promise<void> {
         AND c.AdServerId IS NOT NULL AND c.AdServerId <> ''
     `)
 
+    // 0.6 — SqlServerId backfill: yalnızca sistemde TEK SQL-rollü sunucu varken
+    // (belirsizlik yok) atanmamış firmalara onu ata. Birden fazla SQL sunucusu
+    // olduğunda otomatik atama yapılmaz (hangi firma hangisinde belirsiz).
+    await pool.request().query(`
+      UPDATE c
+      SET c.SqlServerId = (
+        SELECT TOP 1 s.Id FROM Servers s
+        INNER JOIN ServerRoles r ON r.ServerId = s.Id WHERE r.Role = 'SQL'
+      )
+      FROM Companies c
+      WHERE (c.SqlServerId IS NULL OR c.SqlServerId = '')
+        AND c.AdServerId IS NOT NULL AND c.AdServerId <> ''
+        AND (SELECT COUNT(*) FROM Servers s INNER JOIN ServerRoles r ON r.ServerId = s.Id WHERE r.Role = 'SQL') = 1
+    `)
+
     // 1 — UserCount: AD'deki OU = CompanyId olan kullanıcı sayısı
     await pool.request().query(`
       UPDATE c
