@@ -27,6 +27,8 @@ interface AppEntry {
   name:        string
   description: string
   logo:        string
+  /** Cloud uygulaması — verilirse /apps/<id> proxy yerine doğrudan bu adrese gider. */
+  externalUrl?: string
 }
 
 // basePath /apps/hub altında sunulduğumuz için /apps/hub/logos/... ile başlatıyoruz.
@@ -42,6 +44,13 @@ const APPS: AppEntry[] = [
     name:        "SpareFlow",
     description: "SpareBackup izleme uygulaması",
     logo:        "/apps/hub/logos/spareflow.svg",
+  },
+  {
+    id:          "crm",
+    name:        "Pusula CRM",
+    description: "Müşteri ilişkileri yönetimi",
+    logo:        "/apps/hub/logos/crm.svg",
+    externalUrl: "https://crm.bilkar.net",
   },
 ]
 
@@ -102,7 +111,7 @@ export function AppSwitcher() {
               asChild
               className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
             >
-              <a href={`/apps/${app.id}`}>
+              <a href={app.externalUrl ?? `/apps/${app.id}`}>
                 <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={app.logo} alt={app.name} className="w-full h-full object-cover" />

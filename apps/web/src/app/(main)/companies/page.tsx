@@ -1811,7 +1811,7 @@ tr:nth-child(even) td{background:#fafafa}
                   </Button>
                 </div>
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Ad Soyad</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">CPU</span>
