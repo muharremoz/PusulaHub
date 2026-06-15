@@ -180,7 +180,7 @@ const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-pr
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
 
-function YoğunlukKart({ d }: { d: CompanyDetail }) {
+function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
   const pctMB = (use: number | undefined, quota: number | undefined): number => {
     const q = quota ?? 0;
@@ -219,6 +219,44 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
 
   const [animValue, setAnimValue] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
+  // Kota düzenleme
+  const [quotaOpen, setQuotaOpen]   = useState(false);
+  const [quotaSaving, setQuotaSaving] = useState(false);
+  const [qCpu,  setQCpu]  = useState("");
+  const [qRam,  setQRam]  = useState("");
+  const [qDisk, setQDisk] = useState("");
+  const [qDb,   setQDb]   = useState("");
+  const openQuota = () => {
+    // Mevcut manuel kotaları doldur; yoksa boş bırak (placeholder default gösterir)
+    setQCpu(d.manualQuota?.cpuPct ? String(d.manualQuota.cpuPct) : "");
+    setQRam(d.manualQuota?.ramGB  ? String(d.manualQuota.ramGB)  : "");
+    setQDisk(d.manualQuota?.diskGB ? String(d.manualQuota.diskGB) : "");
+    setQDb(d.manualQuota?.dbGB   ? String(d.manualQuota.dbGB)   : "");
+    setQuotaOpen(true);
+  };
+  async function saveQuota() {
+    setQuotaSaving(true);
+    try {
+      const r = await fetch(`/api/companies/${firkod}/quota`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cpuPct: Number(qCpu)  || 0,
+          ramGB:  Number(qRam)  || 0,
+          diskGB: Number(qDisk) || 25,
+          dbGB:   Number(qDb)   || 1,
+        }),
+      });
+      if (!r.ok) { toast.error("Kota kaydedilemedi"); return; }
+      toast.success("Kota güncellendi");
+      setQuotaOpen(false);
+      onSaved();
+    } catch {
+      toast.error("Kota kaydedilemedi");
+    } finally {
+      setQuotaSaving(false);
+    }
+  }
   useEffect(() => {
     const t = setTimeout(() => setAnimValue(yogunluk), 50);
     return () => clearTimeout(t);
@@ -257,7 +295,17 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
         </div>
       }
     >
-      <h3 className="text-sm font-semibold mb-4">Kullanım Yoğunluğu</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold">Kullanım Yoğunluğu</h3>
+        <button
+          onClick={openQuota}
+          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-[5px] px-2 py-1"
+          title="Firma için manuel kota ayarla"
+        >
+          <Settings2 className="h-3 w-3" />
+          Kota Ayarla
+        </button>
+      </div>
 
       <div className="flex items-stretch gap-0">
         <div className="flex flex-col items-center justify-center pr-4 shrink-0">
@@ -381,6 +429,47 @@ function YoğunlukKart({ d }: { d: CompanyDetail }) {
               yogunluk >= 80 ? "text-red-600" : yogunluk >= 60 ? "text-amber-600" : "text-emerald-600"
             }`}>= %{yogunluk}</span>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Kota Ayarla */}
+    <Dialog open={quotaOpen} onOpenChange={(o) => { if (!quotaSaving) setQuotaOpen(o); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-sm font-semibold">Manuel Kota Ayarla</DialogTitle>
+        </DialogHeader>
+        <p className="text-[11px] text-muted-foreground leading-relaxed -mt-1">
+          Boş bırakılan alan varsayılana döner (kota kaldırılır). Density barında
+          kullanım, girilen kotaya oranlanarak gösterilir.
+        </p>
+        <div className="space-y-2.5 mt-1">
+          {[
+            { lbl: "CPU limiti (%)", val: qCpu,  set: setQCpu,  ph: "Kota yok",  unit: "%"  },
+            { lbl: "RAM (GB)",       val: qRam,  set: setQRam,  ph: "Kota yok",  unit: "GB" },
+            { lbl: "Disk (GB)",      val: qDisk, set: setQDisk, ph: "25 (varsayılan)", unit: "GB" },
+            { lbl: "Veritabanı (GB)",val: qDb,   set: setQDb,   ph: "1 (varsayılan)",  unit: "GB" },
+          ].map((f) => (
+            <div key={f.lbl} className="flex items-center gap-2">
+              <Label className="text-[11px] text-muted-foreground w-32 shrink-0">{f.lbl}</Label>
+              <div className="flex items-center gap-1.5 flex-1">
+                <Input
+                  type="number" min="0" step="any"
+                  value={f.val}
+                  onChange={(e) => f.set(e.target.value)}
+                  placeholder={f.ph}
+                  className="h-8 rounded-[5px] text-[11px]"
+                />
+                <span className="text-[10px] text-muted-foreground w-5">{f.unit}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end gap-2 mt-3">
+          <Button variant="outline" size="sm" onClick={() => setQuotaOpen(false)} disabled={quotaSaving} className="rounded-[5px] h-8 text-[11px]">İptal</Button>
+          <Button size="sm" onClick={saveQuota} disabled={quotaSaving} className="rounded-[5px] h-8 text-[11px]">
+            {quotaSaving ? "Kaydediliyor…" : "Kaydet"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -1637,7 +1726,17 @@ tr:nth-child(even) td{background:#fafafa}
                 <div className="h-2" />
               </div>
             ) : companyDetail ? (
-              <YoğunlukKart key={selectedFirma.firkod} d={companyDetail} />
+              <YoğunlukKart
+                key={selectedFirma.firkod}
+                d={companyDetail}
+                firkod={selectedFirma.firkod}
+                onSaved={async () => {
+                  try {
+                    const r = await fetch(`/api/companies/${selectedFirma.firkod}/detail`)
+                    if (r.ok) { const dt = await r.json(); if (dt && !dt.error) setCompanyDetail(dt) }
+                  } catch { /* sessiz */ }
+                }}
+              />
             ) : (
               <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                 <div className="rounded-[4px] px-4 py-8 flex items-center justify-center" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
