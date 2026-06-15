@@ -45,14 +45,10 @@ const APPS: AppEntry[] = [
     description: "SpareBackup izleme uygulaması",
     logo:        "/apps/hub/logos/spareflow.svg",
   },
-  {
-    // Cloud uygulaması — gateway'de /apps/crm sayfasında iframe ile gömülü.
-    // Internal link → gateway URL'i korunur (hub/spare gibi aynı sekme).
-    id:          "crm",
-    name:        "Pusula CRM",
-    description: "Müşteri ilişkileri yönetimi",
-    logo:        "/apps/hub/logos/crm.svg",
-  },
+  // Pusula CRM geçici olarak kaldırıldı — gateway HTTPS olunca geri eklenecek
+  // (iframe + same-site cookie için). Logo /apps/hub/logos/crm.svg duruyor.
+  // { id:"crm", name:"Pusula CRM", description:"Müşteri ilişkileri yönetimi",
+  //   logo:"/apps/hub/logos/crm.svg" }
 ]
 
 const CURRENT_ID = "hub"
