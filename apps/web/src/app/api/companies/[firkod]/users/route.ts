@@ -20,6 +20,11 @@ export interface CompanyUserDto {
   lastLogin:   string
   server:      string
   groups:      string[]
+  /** Kullanıcının kaynak kullanımı (UserDailyUsage — en güncel gün).
+   *  null = ölçüm yok (hiç oturum açmamış / veri toplanmamış). */
+  usageCpu?:   number | null   // ortalama CPU %
+  usageRamMB?: number | null   // ortalama RAM (MB)
+  usageDate?:  string | null   // ölçümün ait olduğu gün (YYYY-MM-DD)
 }
 
 export async function GET(
@@ -72,6 +77,32 @@ export async function GET(
         })
       }
     }
+
+    // Kaynak kullanımı — UserDailyUsage'dan her kullanıcının EN GÜNCEL gününü çek.
+    // username case-insensitive + DOMAIN\ prefix'i tolere edilerek eşleştirilir.
+    const bareName = (u: string) => (u.includes("\\") ? u.split("\\").pop()! : u).toLowerCase()
+    try {
+      const usageRows = await query<{ Username: string; AvgCpu: number | null; AvgRamMB: number | null; Date: string }[]>`
+        SELECT u.Username, u.AvgCpu, u.AvgRamMB, CONVERT(NVARCHAR(10), u.Date, 23) AS Date
+        FROM UserDailyUsage u
+        INNER JOIN (
+          SELECT Username, MAX(Date) AS MaxD
+          FROM UserDailyUsage WHERE FirmaNo = ${firkod}
+          GROUP BY Username
+        ) m ON m.Username = u.Username AND m.MaxD = u.Date
+        WHERE u.FirmaNo = ${firkod}
+      `
+      const usageMap = new Map<string, { cpu: number | null; ram: number | null; date: string }>()
+      for (const r of usageRows) {
+        usageMap.set(bareName(r.Username), { cpu: r.AvgCpu, ram: r.AvgRamMB, date: r.Date })
+      }
+      for (const dto of seen.values()) {
+        const u = usageMap.get(bareName(dto.username))
+        dto.usageCpu   = u ? u.cpu : null
+        dto.usageRamMB = u ? u.ram : null
+        dto.usageDate  = u ? u.date : null
+      }
+    } catch { /* UserDailyUsage yoksa kaynak kolonları boş kalır */ }
 
     const users = Array.from(seen.values()).sort((a, b) => a.username.localeCompare(b.username))
     const resp = NextResponse.json(users)

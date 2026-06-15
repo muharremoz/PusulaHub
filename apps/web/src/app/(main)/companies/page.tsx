@@ -51,6 +51,9 @@ interface TabUser {
   enabled:     boolean
   lastLogin:   string
   groups:      string[]
+  usageCpu?:   number | null
+  usageRamMB?: number | null
+  usageDate?:  string | null
 }
 
 interface TabIISSite {
@@ -1808,9 +1811,11 @@ tr:nth-child(even) td{background:#fafafa}
                   </Button>
                 </div>
                 <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
+                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Ad Soyad</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">CPU</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">RAM</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Giriş</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
                     <span />
@@ -1818,9 +1823,11 @@ tr:nth-child(even) td{background:#fafafa}
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-2.5 items-center gap-3">
+                        <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-2.5 items-center gap-3">
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-3/4" />
+                          <Skeleton className="h-3 rounded-[3px]" />
+                          <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px]" />
                           <Skeleton className="h-3 rounded-[3px] w-12" />
                         </div>
@@ -1830,9 +1837,17 @@ tr:nth-child(even) td{background:#fafafa}
                         <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
                       </div>
                     ) : tabUsers.map((usr) => (
-                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
                         <span className="text-[11px] font-mono truncate">{usr.username}</span>
                         <span className="text-[11px] truncate">{usr.displayName}</span>
+                        <span
+                          className="text-[10px] tabular-nums text-muted-foreground text-right"
+                          title={usr.usageDate ? `Son ölçüm: ${usr.usageDate}` : "Ölçüm yok"}
+                        >{usr.usageCpu != null ? `%${usr.usageCpu}` : "—"}</span>
+                        <span
+                          className="text-[10px] tabular-nums text-muted-foreground text-right"
+                          title={usr.usageDate ? `Son ölçüm: ${usr.usageDate}` : "Ölçüm yok"}
+                        >{usr.usageRamMB != null ? (usr.usageRamMB >= 1024 ? `${(usr.usageRamMB / 1024).toFixed(1)} GB` : `${Math.round(usr.usageRamMB)} MB`) : "—"}</span>
                         <span className="text-[10px] tabular-nums text-muted-foreground">{usr.lastLogin || "—"}</span>
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${usr.enabled ? "bg-emerald-500" : "bg-gray-300"}`} />
