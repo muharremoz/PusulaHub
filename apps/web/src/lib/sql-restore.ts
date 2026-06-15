@@ -29,6 +29,23 @@ export interface RestoreOptions {
    * Boş bırakılırsa SQL Server'ın InstanceDefaultDataPath'i kullanılır.
    */
   firmaId?: string
+  /**
+   * RESTORE ilerleme yüzdesi (STATS = 5) geri çağrısı. SQL Server'ın
+   * "N percent processed" info mesajlarından parse edilir; UI'da adım
+   * satırını canlı güncellemek için kullanılır. Aynı yüzde tekrar
+   * gelirse çağrılmaz (monoton artan).
+   */
+  onProgress?: (percent: number) => void
+}
+
+/** SQL Server RESTORE STATS info mesajından yüzde çıkar (TR + EN locale). */
+function parseRestorePercent(message: string): number | null {
+  // "10 percent processed." / "10% processed" / TR: "yüzde 10 ... işlendi"
+  let m = message.match(/(\d+)\s*(?:percent|%)/i)
+  if (!m) m = message.match(/y[üu]zde\s*(\d+)/i)
+  if (!m) return null
+  const pct = parseInt(m[1], 10)
+  return Number.isFinite(pct) && pct >= 0 && pct <= 100 ? pct : null
 }
 
 /**
@@ -129,11 +146,31 @@ export async function restoreBackupOnServer(
   const restoreSql = `
     RESTORE DATABASE [${escapedDbName}]
     FROM DISK = @bak
-    WITH ${moveClauses.join(", ")}, REPLACE, STATS = 10
+    WITH ${moveClauses.join(", ")}, REPLACE, STATS = 5
   `
 
   // Restore uzun sürebilir — request timeout'u 10 dk
   ;(req as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
+
+  // STATS = 5 → SQL Server her %5'te "N percent processed" info mesajı yollar.
+  // mssql Request 'info' event'i ile yakalanır; UI'da canlı yüzde gösterilir.
+  if (options.onProgress) {
+    let lastPct = -1
+    const reqWithEvents = req as unknown as {
+      on: (ev: string, cb: (info: { message?: string }) => void) => void
+    }
+    try {
+      reqWithEvents.on("info", (info) => {
+        const pct = info?.message ? parseRestorePercent(info.message) : null
+        if (pct !== null && pct > lastPct) {
+          lastPct = pct
+          options.onProgress!(pct)
+        }
+      })
+    } catch {
+      // 'info' event desteklenmiyorsa sessizce geç — restore yine çalışır.
+    }
+  }
 
   await req.query(restoreSql)
 }

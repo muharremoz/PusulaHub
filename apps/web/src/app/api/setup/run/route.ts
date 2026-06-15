@@ -1037,11 +1037,21 @@ export async function POST(req: NextRequest) {
                       )
                       if (ok) restoredDbNames.push(t.dbName)
                     } else {
+                      const restoreStepId = `sql_restore_${t.dbName}`
+                      const restoreLabel  = `Veritabanı restore ediliyor: ${t.dbName}`
                       const ok = await runSqlStep(
-                        `sql_restore_${t.dbName}`,
-                        `Veritabanı restore ediliyor: ${t.dbName}`,
+                        restoreStepId,
+                        restoreLabel,
                         async () => {
-                          await restoreBackupOnServer(masterPool, t.bakPath, t.dbName, { firmaId: payload.firmaId })
+                          await restoreBackupOnServer(masterPool, t.bakPath, t.dbName, {
+                            firmaId: payload.firmaId,
+                            // Canlı yüzde — aynı stepId ile "running" güncellemesi gönder,
+                            // frontend label'ı upsert eder. Büyük DB'lerde adımın
+                            // arka planda ilerlediği net görünür.
+                            onProgress: (pct) => {
+                              send("step", { stepId: restoreStepId, label: `${restoreLabel} — %${pct}`, status: "running" })
+                            },
+                          })
                           sqlRestored++
                           return `${t.bakPath} → [${t.dbName}]`
                         },
