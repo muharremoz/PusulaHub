@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server"
 import { query } from "@/lib/db"
-import { getAgentById } from "@/lib/agent-store"
+import { getAgentById, getAllAgents } from "@/lib/agent-store"
 import { requirePermission } from "@/lib/require-permission"
+import type { AgentReport } from "@/lib/agent-types"
 
 /**
  * Firma yoğunluk hesaplaması — paylaşımlı sunucu modeli.
@@ -94,26 +95,41 @@ export async function GET(
     }
 
     // ── Windows (RDP) sunucusundan CPU / RAM / User ──
+    // Firmanın RDP sunucusunu çöz: önce WindowsServerId, raporsuz/boşsa TÜM
+    // agent'ları tara ve firma kullanıcılarının (prefix eşleşen) bulunduğu
+    // sunucuyu kullan. Böylece WindowsServerId atanmamış firmalarda da CPU/RAM/
+    // User metrikleri ve RAM yüzdesinin paydası (sunucu toplam RAM) doğru çıkar.
     let usageCpu     = 0      // % toplam
     let usageRamMB   = 0
     let quotaRamMB   = 0
     let userCount    = 0
     let userCapacity = 0
-    if (c.WindowsServerId) {
-      const winAgent = getAgentById(c.WindowsServerId)
-      const r = winAgent?.lastReport
-      if (r) {
-        quotaRamMB   = r.metrics?.ram?.totalMB ?? 0
-        userCapacity = r.sessions?.length ?? 0
 
-        const procs = r.userProcesses ?? []
-        for (const p of procs) {
-          if (!matchesFirma(p.username)) continue
-          usageCpu   += p.cpuPercent ?? 0
-          usageRamMB += p.ramMB ?? 0
-        }
-        userCount = (r.sessions ?? []).filter((s) => matchesFirma(s.username)).length
+    let winReport: AgentReport | null = null
+    if (c.WindowsServerId) {
+      const a = getAgentById(c.WindowsServerId)
+      if (a?.lastReport) winReport = a.lastReport
+    }
+    if (!winReport) {
+      for (const a of getAllAgents()) {
+        const r = a.lastReport
+        if (!r) continue
+        const hit =
+          (r.userProcesses ?? []).some((p) => matchesFirma(p.username)) ||
+          (r.sessions ?? []).some((s) => matchesFirma(s.username))
+        if (hit) { winReport = r; break }
       }
+    }
+    if (winReport) {
+      quotaRamMB   = winReport.metrics?.ram?.totalMB ?? 0
+      userCapacity = winReport.sessions?.length ?? 0
+
+      for (const p of winReport.userProcesses ?? []) {
+        if (!matchesFirma(p.username)) continue
+        usageCpu   += p.cpuPercent ?? 0
+        usageRamMB += p.ramMB ?? 0
+      }
+      userCount = (winReport.sessions ?? []).filter((s) => matchesFirma(s.username)).length
     }
 
     // ── Firma DB toplamı ──
@@ -199,7 +215,10 @@ export async function GET(
         out.push({
           day:  trNames[d.getDay()],
           cpu:  row?.AvgCpu != null ? Math.min(100, Math.round(row.AvgCpu)) : 0,
-          ram:  row?.AvgRamMB != null ? pct(row.AvgRamMB, ramQuota) : 0,
+          // RAM% yalnızca sunucu toplam RAM'i (quotaRamMB) BİLİNİYORSA hesaplanır.
+          // Bilinmiyorsa (firma o an çevrimdışı / sunucu çözülemedi) sahte %100
+          // yerine 0 göster — yoksa AvgRamMB/1 = %100 garbage çıkıyordu.
+          ram:  (row?.AvgRamMB != null && quotaRamMB > 0) ? pct(row.AvgRamMB, ramQuota) : 0,
           disk: pct(diskMB, diskQuota),
         })
       }
@@ -227,8 +246,12 @@ export async function GET(
         const rams = rows.map((r) => r.AvgRamMB ?? 0)
         const peakCpuRow = rows.reduce((best, r) => ((r.PeakCpu ?? 0) > (best.PeakCpu ?? 0) ? r : best), rows[0])
         const peakRamRow = rows.reduce((best, r) => ((r.PeakRamMB ?? 0) > (best.PeakRamMB ?? 0) ? r : best), rows[0])
-        const dbStart = rows[0].DbMB ?? 0
-        const dbEnd   = rows[rows.length - 1].DbMB ?? 0
+        // DB büyüme: DbMB kolonunda veri yazılmamış günler 0 olarak duruyor;
+        // bunlar büyüme oranını bozar. İlk ve son SIFIR-OLMAYAN DbMB değerlerini
+        // baz al (gerçek başlangıç → bugünkü boyut).
+        const nonZeroDb = rows.filter((r) => (r.DbMB ?? 0) > 0)
+        const dbStart = nonZeroDb.length ? (nonZeroDb[0].DbMB ?? 0) : 0
+        const dbEnd   = nonZeroDb.length ? (nonZeroDb[nonZeroDb.length - 1].DbMB ?? 0) : 0
         detail.history30d = {
           avgCpu:      Math.round((cpus.reduce((a, v) => a + v, 0) / cpus.length) * 10) / 10,
           peakCpu:     peakCpuRow.PeakCpu ?? 0,
