@@ -102,26 +102,25 @@ export async function restoreBackupOnServer(
     }
   }
 
-  // 3) MOVE clause — her logical file için hedef fiziksel yol üret
-  //    Not: targetDbName + dbName parametre olarak gönderilemiyor çünkü
-  //    T-SQL `RESTORE DATABASE [name]` identifier'ı değişken kabul etmiyor.
-  //    Bu yüzden identifier'ı escape edip string olarak gömüyoruz; bak/dataDir
-  //    ise parametre ile gidiyor.
+  // 3) MOVE clause — her logical file için hedef fiziksel yol üret.
+  //
+  //    KRİTİK: RESTORE, parametreli `query()` (sp_executesql/RPC) ile
+  //    çalıştırıldığında, STATS info akışının final DONE token'ı ile araya
+  //    girmesi tedious'ta nadiren promise'i çözmeden takılmaya yol açıyor
+  //    (DB ONLINE olur ama `await` hiç dönmez → sihirbaz %100'de asılı kalır).
+  //    Çözüm: BACKUP/RESTORE için yerleşik desen olan `batch()` (parametresiz,
+  //    ham T-SQL batch). Tüm değerler tek tırnak escape edilip N'...' olarak
+  //    gömülür — DB adı zaten bu dosyada böyle gömülüyordu.
+  const escSql = (s: string) => s.replace(/'/g, "''")
   const escapedDbName = targetDbName.replace(/]/g, "]]")
 
   const moveClauses: string[] = []
-  const req = pool.request()
-  req.input("bak", sql.NVarChar, bakPath)
 
   // Data file sayacı — birden fazla .mdf varsa 2.'si .ndf olur
   let dataIdx = 0
   let logIdx  = 0
 
-  files.forEach((f, i) => {
-    const logicalKey  = `logical${i}`
-    const physicalKey = `physical${i}`
-    moveClauses.push(`MOVE @${logicalKey} TO @${physicalKey}`)
-
+  files.forEach((f) => {
     let finalPath: string
     if (f.Type === "L") {
       // Log file
@@ -138,14 +137,14 @@ export async function restoreBackupOnServer(
           : `${dataDir}\\${targetDbName}_${dataIdx}.ndf`
       dataIdx++
     }
-
-    req.input(logicalKey,  sql.NVarChar, f.LogicalName)
-    req.input(physicalKey, sql.NVarChar, finalPath)
+    moveClauses.push(`MOVE N'${escSql(f.LogicalName)}' TO N'${escSql(finalPath)}'`)
   })
+
+  const req = pool.request()
 
   const restoreSql = `
     RESTORE DATABASE [${escapedDbName}]
-    FROM DISK = @bak
+    FROM DISK = N'${escSql(bakPath)}'
     WITH ${moveClauses.join(", ")}, REPLACE, STATS = 5
   `
 
@@ -172,7 +171,8 @@ export async function restoreBackupOnServer(
     }
   }
 
-  await req.query(restoreSql)
+  // batch() → ham SQL batch; parametre yok, RESTORE DONE token'ı temiz işlenir.
+  await req.batch(restoreSql)
 }
 
 /**

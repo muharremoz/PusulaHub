@@ -34,6 +34,15 @@ async function collectSqlFromServer(serverIp: string, user: string, password: st
       { server: serverIp, user, password, database: "master", requestTimeout: 15000 },
       async (pool) => {
         const res = await pool.request().query<SqlDbRow>(`
+          -- KRİTİK: Bu monitoring sorgusu msdb.dbo.backupset'ten son yedek
+          -- tarihlerini okur ve poller her 10 sn'de çalışır. Varsayılan
+          -- READ COMMITTED'da backupset üzerinde shared kilit tutar; bu da
+          -- BACKUP/RESTORE'un msdb history INSERT'ini (LCK_M_IX) starve edip
+          -- yedeklerin dakikalarca bloke olmasına (ve sihirbaz restore'unun
+          -- %100'de takılmasına) yol açıyordu. READ UNCOMMITTED ile artık
+          -- kilit almadan okur — birkaç sn eski yedek tarihi monitoring için
+          -- önemsiz, ama yedekleri asla bloklamaz.
+          SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
           SELECT
             d.name                                                                                                           AS name,
             CAST(ISNULL((SELECT SUM(CAST(f.size AS BIGINT) * 8 / 1024) FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0), 0) AS INT) AS sizeMB,
