@@ -208,13 +208,19 @@ export async function GET(
         WHERE CompanyId = ${firkod}
         ORDER BY Date DESC
       `
-      // Son 7 gün aralığını (bugün-6 → bugün) Map'e koy.
-      // Manuel kota varsa payda olarak onu kullan (density barlarıyla tutarlı) —
-      // aksi halde RAM, paylaşımlı sunucunun toplamına (örn. 128GB) oranlanıp
-      // küçük firmalarda hep ~%0/%1 görünür. CPU manuel limit varsa ona oranlanır.
-      const mq        = detail.manualQuota
-      const ramQuota  = mq?.ramGB ? mq.ramGB * 1024 : Math.max(1, quotaRamMB)
-      const diskQuota = Math.max(1, quotaDiskMB)  // quotaDiskMB zaten manuel-veya-25GB
+      // Haftalık grafik = firmanın sunucuya GERÇEK yükü. Manuel kotaya DEĞİL,
+      // sunucu KAPASİTESİNE oranlanır (amaç: "bu firma sunucuya haftalık ne
+      // kadar yük oldu" — ne kullandıysa o). RAM → resolve edilen RDP sunucusu
+      // toplam RAM; Disk → dosya (Depo) sunucusu toplam disk; CPU → ham % (zaten
+      // sunucu CPU yükü).
+      const ramQuota = Math.max(1, quotaRamMB)
+      let fileDiskTotalMB = 0
+      if (c.FileServerId) {
+        const fa = getAgentById(c.FileServerId)
+        const disks = fa?.lastReport?.metrics?.disks ?? []
+        fileDiskTotalMB = disks.reduce((mx, dsk) => Math.max(mx, (dsk.totalGB ?? 0) * 1024), 0)
+      }
+      const diskQuota = Math.max(1, fileDiskTotalMB)
       const pct = (u: number, q: number): number => {
         if (!q || q <= 0 || u <= 0) return 0
         const p = (u / q) * 100
@@ -240,15 +246,14 @@ export async function GET(
         const diskMB = row?.DiskMB ?? fallbackDiskMB
         out.push({
           day:  trNames[d.getDay()],
-          // CPU: manuel limit varsa ona oranla, yoksa ham ortalama % (0-100).
-          cpu:  row?.AvgCpu != null
-                  ? (mq?.cpuPct ? pct(row.AvgCpu, mq.cpuPct) : Math.min(100, Math.round(row.AvgCpu)))
-                  : 0,
-          // RAM: manuel kota varsa ona oranla; yoksa sunucu toplam RAM'i BİLİNİYORSA
-          // ona oranla. İkisi de yoksa sahte %100 yerine 0 göster.
-          ram:  row?.AvgRamMB != null && (mq?.ramGB || quotaRamMB > 0)
-                  ? pct(row.AvgRamMB, ramQuota) : 0,
-          disk: pct(diskMB, diskQuota),
+          // CPU: ham kullanım % (firmanın sunucudaki gerçek CPU yükü).
+          cpu:  row?.AvgCpu != null ? Math.min(100, Math.round(row.AvgCpu)) : 0,
+          // RAM: firma RAM'i / sunucu toplam RAM. Sunucu çözülemezse (quotaRamMB=0)
+          // sahte %100 yerine 0.
+          ram:  (row?.AvgRamMB != null && quotaRamMB > 0) ? pct(row.AvgRamMB, ramQuota) : 0,
+          // Disk: firma görsel klasörü / dosya sunucusu toplam disk. Disk
+          // kapasitesi bilinmiyorsa 0.
+          disk: fileDiskTotalMB > 0 ? pct(diskMB, diskQuota) : 0,
         })
       }
       detail.weeklyUsage = out
