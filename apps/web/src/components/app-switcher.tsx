@@ -50,7 +50,7 @@ const APPS: AppEntry[] = [
     name:        "Pusula CRM",
     description: "Müşteri ilişkileri yönetimi",
     logo:        "/apps/hub/logos/crm.svg",
-    externalUrl: "https://crm.bilkar.net",
+    externalUrl: "https://crm.pusulanet.net",
   },
 ]
 
