@@ -708,6 +708,27 @@ async function updateCompanyUsage(): Promise<void> {
         AND EXISTS (SELECT 1 FROM Servers s INNER JOIN ServerRoles r ON r.ServerId = s.Id WHERE r.Role = 'File')
     `)
 
+    // 0.5 — WindowsServerId backfill: atanmamış firmalar için, kullanıcılarının
+    // gerçekte göründüğü RDP sunucusunu (UserDailyUsage.Server) ata. Böylece
+    // firma detayındaki canlı CPU/RAM/User + haftalık RAM% (sunucu RAM paydası)
+    // doğru hesaplanır. En güncel + en çok kayıtlı, Servers'da VAR olan sunucu
+    // seçilir (silinmiş "Terminal 2" gibi eski sunucu adları atlanır).
+    await pool.request().query(`
+      UPDATE c
+      SET c.WindowsServerId = best.Id
+      FROM Companies c
+      CROSS APPLY (
+        SELECT TOP 1 s.Id
+        FROM UserDailyUsage u
+        JOIN Servers s ON s.Name = u.Server
+        WHERE u.FirmaNo = c.CompanyId
+        GROUP BY s.Id
+        ORDER BY MAX(u.Date) DESC, COUNT(*) DESC
+      ) best
+      WHERE (c.WindowsServerId IS NULL OR c.WindowsServerId = '')
+        AND c.AdServerId IS NOT NULL AND c.AdServerId <> ''
+    `)
+
     // 1 — UserCount: AD'deki OU = CompanyId olan kullanıcı sayısı
     await pool.request().query(`
       UPDATE c
