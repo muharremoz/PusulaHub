@@ -144,20 +144,26 @@ export function buildPullBakFromDepo(opts: {
   // PS literal'da \\{ip}\d$ üretmek için TS template'te \\\\ ve \\
   const share = `\\\\${ip}\\d$`
   const src   = `\\\\${ip}\\d$\\Eski Datalar\\${fid}\\${fn}`
+  // ÖNEMLİ: net use'un stderr'ini PS seviyesinde 2>$null ile değil, cmd
+  // içinde '>nul 2>&1' ile bastır — aksi halde ErrorActionPreference='Stop'
+  // mount edilmemiş share'i silmeye çalışırken native stderr'i terminating
+  // hataya çevirip akışı patlatır. Genel tercih SilentlyContinue; fail-fast
+  // istediğimiz cmdlet'lere açık -ErrorAction Stop; net use'da $LASTEXITCODE
+  // kontrolü + manuel throw (throw her zaman terminating).
   return [
-    `$ErrorActionPreference='Stop'`,
+    `$ErrorActionPreference='SilentlyContinue'`,
     `$share='${share}'`,
-    `cmd /c ('net use ' + $share + ' /delete') 2>$null | Out-Null`,
+    `cmd /c ('net use ' + $share + ' /delete >nul 2>&1') | Out-Null`,
     `$mt = (net use $share '${pass}' /user:'${user}' 2>&1 | Out-String)`,
     `if ($LASTEXITCODE -ne 0) { throw ('Depo baglanti hatasi: ' + $mt.Trim()) }`,
     `try {`,
     `  $src='${src}'`,
     `  if (-not (Test-Path -LiteralPath $src)) { throw ('Yedek bulunamadi: ' + $src) }`,
-    `  if (-not (Test-Path -LiteralPath '${dd}')) { New-Item -ItemType Directory -Path '${dd}' -Force | Out-Null }`,
-    `  Copy-Item -LiteralPath $src -Destination (Join-Path '${dd}' '${fn}') -Force`,
+    `  if (-not (Test-Path -LiteralPath '${dd}')) { New-Item -ItemType Directory -Path '${dd}' -Force -ErrorAction Stop | Out-Null }`,
+    `  Copy-Item -LiteralPath $src -Destination (Join-Path '${dd}' '${fn}') -Force -ErrorAction Stop`,
     `  Write-Output 'OK'`,
     `} finally {`,
-    `  cmd /c ('net use ' + $share + ' /delete') 2>$null | Out-Null`,
+    `  cmd /c ('net use ' + $share + ' /delete >nul 2>&1') | Out-Null`,
     `}`,
   ].join("; ")
 }

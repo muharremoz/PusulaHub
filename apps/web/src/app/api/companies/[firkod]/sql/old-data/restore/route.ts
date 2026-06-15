@@ -108,12 +108,15 @@ export async function POST(
             firmaLogin = lg.recordset[0]?.name ?? null
 
             if (!firmaLogin) {
-              step("login_check", "Firma SQL login'i bulunamadı — önce sihirbazdan kurulum yapın", "error", {
-                error: `sys.sql_logins içinde '${firkod}_*' formatında login yok.`,
+              // Login yoksa restore'u İPTAL ETME — DB'ler yine yüklensin, sadece
+              // owner/sirket adımları atlanır (uyarı). Login sonradan oluşturulup
+              // owner manuel atanabilir. (Örn. sihirbazı SQL adımında yarıda kalan firma.)
+              step("login_check", `Firma SQL login'i (${firkod}_*) bulunamadı — DB owner/sirket adımları atlanacak`, "error", {
+                error: "DB'ler restore edilecek ama owner firma login'ine devredilmeyecek. Login'i sihirbaz kullanıcı akışından veya manuel oluşturup owner'ı atayın.",
               })
-              return
+            } else {
+              step("login_check", `Firma SQL login'i: ${firmaLogin}`, "done")
             }
-            step("login_check", `Firma SQL login'i: ${firmaLogin}`, "done")
 
             const hasSirket = await masterPool.request()
               .query<{ c: number }>(`SELECT COUNT(*) c FROM sys.databases WHERE name = 'sirket'`)
@@ -152,20 +155,22 @@ export async function POST(
                 continue
               }
 
-              // 3) DB owner = firma login
-              step(`owner_${targetDb}`, `DB owner ayarlanıyor: [${targetDb}] → ${firmaLogin}`, "running")
-              try {
-                await setDbOwner(masterPool, targetDb, firmaLogin!)
-                step(`owner_${targetDb}`, `DB owner: [${targetDb}] → ${firmaLogin}`, "done")
-              } catch (err) {
-                step(`owner_${targetDb}`, `DB owner ayarlanamadı: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
-              }
+              // 3) DB owner = firma login (login varsa)
+              if (firmaLogin) {
+                step(`owner_${targetDb}`, `DB owner ayarlanıyor: [${targetDb}] → ${firmaLogin}`, "running")
+                try {
+                  await setDbOwner(masterPool, targetDb, firmaLogin)
+                  step(`owner_${targetDb}`, `DB owner: [${targetDb}] → ${firmaLogin}`, "done")
+                } catch (err) {
+                  step(`owner_${targetDb}`, `DB owner ayarlanamadı: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
+                }
 
-              // 4) sirket erişimi (idempotent)
-              try {
-                await grantSirketAccess(masterPool, firmaLogin!)
-                step(`sirket_${targetDb}`, `sirket erişimi doğrulandı: ${firmaLogin}`, "done")
-              } catch { /* sirket yoksa atla */ }
+                // 4) sirket erişimi (idempotent)
+                try {
+                  await grantSirketAccess(masterPool, firmaLogin)
+                  step(`sirket_${targetDb}`, `sirket erişimi doğrulandı: ${firmaLogin}`, "done")
+                } catch { /* sirket yoksa atla */ }
+              }
 
               // 5) sirket.dbo.guvenlik kaydı
               if (sirketExists) {
