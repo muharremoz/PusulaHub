@@ -113,6 +113,64 @@ export function buildCopyAttachFiles(opts: {
   return lines.join("; ")
 }
 
+/**
+ * "Eski Datalar" restore'u için: Depo sunucusundaki bir .bak dosyasını SQL
+ * sunucusunun yerel diskine kimlik-doğrulamalı kopyalar.
+ *
+ * SQL sunucusunun agent'ı (LocalSystem) Depo admin share'ine doğrudan
+ * erişemiyor → önce Depo'nun Windows credential'ı ile `net use` mount edilir,
+ * .bak yerele kopyalanır, mount kaldırılır. RESTORE bu yerel kopyadan yapılır
+ * (SQL servis hesabı yereli her zaman okuyabilir; UNC'yi okuyamaz).
+ *
+ *   \\{depoIp}\d$\Eski Datalar\{firmaId}\{fileName}  →  {destDir}\{fileName}
+ *
+ * Çift tırnak yasak (agent JSON parser) → tek tırnak + concat. Backslash'ler
+ * tek; execOnAgent JSON.stringify ile escape eder.
+ */
+export function buildPullBakFromDepo(opts: {
+  depoIp:   string
+  depoUser: string
+  depoPass: string
+  firmaId:  string
+  fileName: string
+  destDir:  string
+}): string {
+  const ip   = psQuote(opts.depoIp)
+  const user = psQuote(opts.depoUser)
+  const pass = psQuote(opts.depoPass)
+  const fid  = psQuote(opts.firmaId)
+  const fn   = psQuote(opts.fileName)
+  const dd   = psQuote(opts.destDir)
+  // PS literal'da \\{ip}\d$ üretmek için TS template'te \\\\ ve \\
+  const share = `\\\\${ip}\\d$`
+  const src   = `\\\\${ip}\\d$\\Eski Datalar\\${fid}\\${fn}`
+  return [
+    `$ErrorActionPreference='Stop'`,
+    `$share='${share}'`,
+    `cmd /c ('net use ' + $share + ' /delete') 2>$null | Out-Null`,
+    `$mt = (net use $share '${pass}' /user:'${user}' 2>&1 | Out-String)`,
+    `if ($LASTEXITCODE -ne 0) { throw ('Depo baglanti hatasi: ' + $mt.Trim()) }`,
+    `try {`,
+    `  $src='${src}'`,
+    `  if (-not (Test-Path -LiteralPath $src)) { throw ('Yedek bulunamadi: ' + $src) }`,
+    `  if (-not (Test-Path -LiteralPath '${dd}')) { New-Item -ItemType Directory -Path '${dd}' -Force | Out-Null }`,
+    `  Copy-Item -LiteralPath $src -Destination (Join-Path '${dd}' '${fn}') -Force`,
+    `  Write-Output 'OK'`,
+    `} finally {`,
+    `  cmd /c ('net use ' + $share + ' /delete') 2>$null | Out-Null`,
+    `}`,
+  ].join("; ")
+}
+
+/** Kopyalanan geçici .bak dosyasını siler (restore sonrası temizlik). */
+export function buildDeleteFile(filePath: string): string {
+  const p = psQuote(filePath)
+  return [
+    `if (Test-Path -LiteralPath '${p}') { Remove-Item -LiteralPath '${p}' -Force -ErrorAction SilentlyContinue }`,
+    `Write-Output 'OK'`,
+  ].join("; ")
+}
+
 export interface RawCheckPathItem {
   Path:   string
   Exists: boolean

@@ -31,6 +31,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import type { Top5Company } from "@/app/api/companies/top5/route";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
+const OldDataRestoreSheet = dynamic(() => import("@/components/companies/old-data-restore-sheet").then((m) => m.OldDataRestoreSheet), { ssr: false });
 
 interface FirmaCompany {
   id: string
@@ -454,6 +455,7 @@ export default function CompaniesPage() {
   const [debugServerId, setDebugServerId]         = useState<string>("");
 
   // Yeni Kullanıcı dialog
+  const [oldDataOpen, setOldDataOpen]             = useState(false);
   const [newUserOpen, setNewUserOpen]             = useState(false);
   const [newUserAdServers, setNewUserAdServers]   = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
   const [newUserRdpServers, setNewUserRdpServers] = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
@@ -1847,7 +1849,14 @@ tr:nth-child(even) td{background:#fafafa}
 
               {/* Veritabanları */}
               <TabsContent value="databases" className="mt-0">
-                <div className="flex justify-end mb-2">
+                <div className="flex justify-end gap-2 mb-2">
+                  <Button
+                    size="sm"
+                    onClick={() => setOldDataOpen(true)}
+                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Yeni Veritabanı Ekle
+                  </Button>
                   <button
                     onClick={async () => {
                       if (!selectedFirma || sqlRefreshing) return
@@ -2105,6 +2114,24 @@ tr:nth-child(even) td{background:#fafafa}
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Yeni Veritabanı Ekle — Eski Datalar restore sheet */}
+          {selectedFirma && (
+            <OldDataRestoreSheet
+              open={oldDataOpen}
+              onOpenChange={setOldDataOpen}
+              firkod={selectedFirma.firkod}
+              firma={selectedFirma.firma}
+              onComplete={async () => {
+                if (!selectedFirma) return
+                try {
+                  const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql?refresh=1`)
+                  const data = r.ok ? await r.json() : []
+                  setTabSQL(Array.isArray(data) ? data : [])
+                } catch { /* sessiz */ }
+              }}
+            />
+          )}
 
           {/* SQL Query Console */}
           <Dialog open={queryTarget !== null} onOpenChange={(o) => { if (!o) setQueryTarget(null) }}>
