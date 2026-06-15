@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -502,29 +503,29 @@ export function StepSql({
                           {/* Program seçimi — sadece 2+ pusula servisi seçildiyse görünür */}
                           {showProgramColumn && (
                             <div onClick={(e) => e.stopPropagation()}>
-                              <select
-                                value={f.programServiceId ?? ""}
-                                onChange={(e) => {
-                                  const v = e.target.value
-                                  onUpdateBackupProgramServiceId(f.id, v ? Number(v) : null)
-                                }}
-                                className={cn(
-                                  "w-full h-7 rounded-[4px] border bg-background px-2 text-[11px] outline-none",
-                                  programMissing
-                                    ? "border-amber-500/60 text-amber-700"
-                                    : "border-border/60 hover:border-border focus:border-foreground/50"
-                                )}
+                              <Select
+                                value={f.programServiceId != null ? String(f.programServiceId) : undefined}
+                                onValueChange={(v) => onUpdateBackupProgramServiceId(f.id, v ? Number(v) : null)}
                               >
-                                <option value="">— Program seç —</option>
-                                {selectedPusulaServices.map((s) => {
-                                  const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
-                                  return (
-                                    <option key={s.id} value={s.id}>
-                                      {s.name}{code ? ` (${code})` : ""}
-                                    </option>
-                                  )
-                                })}
-                              </select>
+                                <SelectTrigger
+                                  className={cn(
+                                    "w-full h-7 rounded-[5px] px-2 text-[11px]",
+                                    programMissing && "border-amber-500/60 text-amber-700"
+                                  )}
+                                >
+                                  <SelectValue placeholder="— Program seç —" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {selectedPusulaServices.map((s) => {
+                                    const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
+                                    return (
+                                      <SelectItem key={s.id} value={String(s.id)} className="text-[11px]">
+                                        {s.name}{code ? ` (${code})` : ""}
+                                      </SelectItem>
+                                    )
+                                  })}
+                                </SelectContent>
+                              </Select>
                             </div>
                           )}
                           <span className="text-[11px] text-muted-foreground tabular-nums text-right">
