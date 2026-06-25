@@ -2,11 +2,12 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react"
 import { cn } from "@/lib/utils"
-import { Activity, AlertTriangle, CheckCircle2, WifiOff, Volume2, VolumeX } from "lucide-react"
+import { Activity, AlertTriangle, CheckCircle2, WifiOff, Volume2, VolumeX, ArrowDown, ArrowUp } from "lucide-react"
 import { DottedGlowBackground } from "@/components/ui/dotted-glow-background"
 import { HyperText } from "@/components/ui/hyper-text"
 import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
 import type { DomainExpiry } from "@/lib/domain-expiry"
+import type { BandwidthData } from "@/lib/bandwidth"
 
 /* ══════════════════════════════════════════════════════════
    Proje stili — Dark varyantı
@@ -1223,6 +1224,131 @@ function DomainExpiryTile({ data }: { data: DomainExpiry[] | null }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   Bant Genişliği Tile — API sunucusu (ens192) canlı internet trafiği
+══════════════════════════════════════════════════════════ */
+function formatMbps(v: number): string {
+  if (!isFinite(v) || v < 0) return "0"
+  return v < 10 ? v.toFixed(1) : Math.round(v).toString()
+}
+/** GB → 1000+ ise TB, küçükse 1 ondalık GB */
+function formatTraffic(gb: number): string {
+  if (!isFinite(gb)) return "—"
+  if (gb >= 1000) return `${(gb / 1000).toFixed(2)} TB`
+  if (gb < 100)   return `${gb.toFixed(1)} GB`
+  return `${Math.round(gb)} GB`
+}
+
+function BandwidthTile({ data }: { data: BandwidthData | null }) {
+  // Sparkline için yerel hız geçmişi (indirme + yükleme toplamı Mbps)
+  const [hist, setHist] = useState<number[]>([])
+  useEffect(() => {
+    if (!data) return
+    setHist((prev) => {
+      const next = [...prev, data.live.rxMbps + data.live.txMbps]
+      if (next.length > 40) next.splice(0, next.length - 40)
+      return next
+    })
+  }, [data])
+
+  // Bilgi kartı — alarm yok; veri yoksa uyarı tonu
+  const ui: UiStatus = data ? "online" : "warning"
+  const cfg  = STATUS_CONFIG[ui]
+  const glow = { dot: "rgb(125,211,252)", speed: 1.0 }
+
+  return (
+    <div className={cn("rounded-[5px] relative overflow-hidden p-2 flex flex-col", cfg.bg)} style={INNER_SHADOW}>
+      <DottedGlowBackground
+        gap={14} radius={1.5}
+        color={glow.dot} darkColor={glow.dot} glowColor={glow.dot} darkGlowColor={glow.dot}
+        opacity={0.3} speedScale={glow.speed}
+        className="pointer-events-none"
+      />
+      <div
+        className="relative z-10 rounded-[4px] overflow-hidden border border-white/5 backdrop-blur-[4px] flex flex-col"
+        style={{
+          background: "linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02))",
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08)",
+        }}
+      >
+        {/* Başlık */}
+        <div className="px-3 pt-2.5 pb-2 flex items-center gap-2 border-b border-white/5">
+          <LiveDot ui={ui} size="size-2.5" />
+          <h3 className="text-[13px] font-bold leading-none flex-1 truncate text-zinc-100">İnternet Trafiği</h3>
+          <span className="text-[8px] font-bold uppercase tracking-wider shrink-0 text-zinc-400 font-mono">
+            {data?.interface ?? "—"}
+          </span>
+        </div>
+
+        <div className="p-2 flex flex-col gap-2">
+          {/* Canlı hız — indirme / yükleme */}
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className="rounded-[5px] border border-emerald-400/20 px-2.5 py-2"
+              style={{ background: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(52,211,153,0.02))" }}
+            >
+              <div className="flex items-center gap-1 text-emerald-300">
+                <ArrowDown className="size-3" />
+                <span className="text-[9px] font-bold uppercase tracking-widest">İndirme</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="font-mono text-[26px] font-black tabular-nums leading-none text-emerald-300">
+                  {data ? formatMbps(data.live.rxMbps) : "—"}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Mbps</span>
+              </div>
+            </div>
+            <div
+              className="rounded-[5px] border border-sky-400/20 px-2.5 py-2"
+              style={{ background: "linear-gradient(135deg, rgba(125,211,252,0.12), rgba(125,211,252,0.02))" }}
+            >
+              <div className="flex items-center gap-1 text-sky-300">
+                <ArrowUp className="size-3" />
+                <span className="text-[9px] font-bold uppercase tracking-widest">Yükleme</span>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="font-mono text-[26px] font-black tabular-nums leading-none text-sky-300">
+                  {data ? formatMbps(data.live.txMbps) : "—"}
+                </span>
+                <span className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">Mbps</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Canlı hız grafiği (toplam Mbps) */}
+          <div className="px-0.5">
+            <Sparkline data={hist} color="rgb(125,211,252)" height={36} />
+          </div>
+
+          {/* Günlük / Aylık toplam */}
+          <div className="grid grid-cols-2 gap-2">
+            <div
+              className="rounded-[5px] border border-white/10 px-2.5 py-1.5"
+              style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))" }}
+            >
+              <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-500">Bugün</div>
+              <div className="font-mono text-[16px] font-bold tabular-nums text-zinc-100 leading-tight">
+                {data ? formatTraffic(data.daily.totalGB) : "—"}
+              </div>
+            </div>
+            <div
+              className="rounded-[5px] border border-white/10 px-2.5 py-1.5"
+              style={{ background: "linear-gradient(135deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01))" }}
+            >
+              <div className="text-[8px] font-bold uppercase tracking-widest text-zinc-500">Bu Ay</div>
+              <div className="font-mono text-[16px] font-bold tabular-nums text-zinc-100 leading-tight">
+                {data ? formatTraffic(data.monthly.totalGB) : "—"}
+              </div>
+            </div>
+          </div>
+
+          {!data && <p className="text-[11px] text-zinc-500 text-center py-1">Servise ulaşılamadı</p>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
    Ana Sayfa
 ══════════════════════════════════════════════════════════ */
 export default function TvMonitoringPage() {
@@ -1237,6 +1363,8 @@ export default function TvMonitoringPage() {
   const [offlineFirms, setOfflineFirms] = useState<SpareBackupOffline | null>(null)
   // Domain yenileme (RDAP) — sol panel kartı
   const [domains, setDomains] = useState<DomainExpiry[] | null>(null)
+  // API sunucusu bant genişliği — sol panel kartı (canlı)
+  const [bandwidth, setBandwidth] = useState<BandwidthData | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -1269,6 +1397,16 @@ export default function TvMonitoringPage() {
     }
   }, [])
 
+  const loadBandwidth = useCallback(async () => {
+    try {
+      const res  = await fetch(`/api/tv/bandwidth`, { cache: "no-store" })
+      const json = await res.json()
+      setBandwidth(json.ok ? json : null)
+    } catch {
+      setBandwidth(null)
+    }
+  }, [])
+
   // SpareBackup "offline firmalar" bilgi monitörünü grid + KPI sayımından çıkar
   // (ayrı kart olarak gösteriliyor). testDown aktifken AD'yi yapay DOWN yap.
   const dataForRender = useMemo<MonitoringResponse | null>(() => {
@@ -1291,11 +1429,13 @@ export default function TvMonitoringPage() {
     load()
     loadOfflineFirms()
     loadDomains()
+    loadBandwidth()
     const t  = setInterval(load, 1_000)
     const t2 = setInterval(loadOfflineFirms, 60_000)
     const t3 = setInterval(loadDomains, 60 * 60_000) // saatte bir (lib 12h cache)
-    return () => { clearInterval(t); clearInterval(t2); clearInterval(t3) }
-  }, [load, loadOfflineFirms, loadDomains])
+    const t4 = setInterval(loadBandwidth, 3_000)     // canlı hız (lib 2sn cache)
+    return () => { clearInterval(t); clearInterval(t2); clearInterval(t3); clearInterval(t4) }
+  }, [load, loadOfflineFirms, loadDomains, loadBandwidth])
 
   const { exchangeMonitors, regularMonitors } = useMemo(() => {
     if (!dataForRender) return { exchangeMonitors: [], regularMonitors: [] as KumaMonitor[] }
@@ -1534,6 +1674,7 @@ export default function TvMonitoringPage() {
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 gap-3">
         {/* Sol kolon: Döviz Kurları + Çevrimdışı Yedekler kartı alt alta */}
         <div className="flex flex-col gap-3 shrink-0 w-full lg:w-[260px] xl:w-[300px]">
+          <BandwidthTile data={bandwidth} />
           {exchangeMonitors.length > 0 && (
             <ExchangeTile monitors={exchangeMonitors} health={(dataForRender ?? data).exchangeHealth} />
           )}
