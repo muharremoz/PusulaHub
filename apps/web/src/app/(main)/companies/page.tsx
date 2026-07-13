@@ -486,6 +486,19 @@ const statusConfig = {
   trial:     { label: "Deneme",         variant: "warning" as const, color: "bg-amber-50 text-amber-700 border-amber-200/60" },
 };
 
+/**
+ * Türkçe-duyarlı, diakritik-bağımsız arama normalizasyonu.
+ * "FRANSA ELİT" ile "elit" eşleşsin diye: İ/I/ı → i, ş→s, ç→c, ğ→g, ö→o, ü→u.
+ * (JS toLowerCase() "İ"yi "i̇" = i + combining dot yapıp aramayı bozuyordu.)
+ */
+function foldTr(s: string): string {
+  return (s ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ı/g, "i");
+}
+
 export default function CompaniesPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -1182,9 +1195,13 @@ tr:nth-child(even) td{background:#fafafa}
   }
 
   // URL'deki firkod → firma otomatik seçimi (F5 / direkt link)
+  // NOT: selectedFirma dependency'DEN ÇIKARILDI. Aksi halde "Geri"de
+  // setSelectedFirma(null) yapıldığında, router.replace URL'i güncellemeden
+  // önce effect eski urlFirkod ile tekrar çalışıp firmayı geri seçiyordu
+  // (2 tık gerektiren bug). Functional update ile zaten seçiliyse tekrar set
+  // edilmez; URL temizlenince (urlFirkod=null) effect erken döner.
   useEffect(() => {
     if (!urlFirkod) return
-    if (selectedFirma?.firkod === urlFirkod) return
     if (!apiCompanies.length) return
     if (!canViewCompanyDetail) {
       // URL ile direkt detay açmaya çalışıyor — engelle, URL'i temizle
@@ -1192,8 +1209,8 @@ tr:nth-child(even) td{background:#fafafa}
       return
     }
     const match = apiCompanies.find((c) => c.firkod === urlFirkod)
-    if (match) setSelectedFirma(match)
-  }, [urlFirkod, apiCompanies, selectedFirma?.firkod, canViewCompanyDetail, router])
+    if (match) setSelectedFirma((prev) => (prev?.firkod === urlFirkod ? prev : match))
+  }, [urlFirkod, apiCompanies, canViewCompanyDetail, router])
 
   async function refreshIIS() {
     if (!selectedFirma) return
@@ -1447,7 +1464,7 @@ tr:nth-child(even) td{background:#fafafa}
   }
 
   const apiFiltered = searchQuery.trim()
-    ? apiCompanies.filter((c) => c.firma.toLowerCase().includes(searchQuery.toLowerCase())).slice(0, 50)
+    ? apiCompanies.filter((c) => foldTr(c.firma).includes(foldTr(searchQuery))).slice(0, 50)
     : apiCompanies.slice(0, 50);
 
   // Firma listesi (empty-state) için arama + sıralama
@@ -1463,8 +1480,8 @@ tr:nth-child(even) td{background:#fafafa}
   }
   const listFiltered = listSearch.trim()
     ? apiCompanies.filter((c) => {
-        const q = listSearch.toLowerCase();
-        return c.firma.toLowerCase().includes(q) || (c.firkod || "").toLowerCase().includes(q);
+        const q = foldTr(listSearch);
+        return foldTr(c.firma).includes(q) || foldTr(c.firkod || "").includes(q);
       })
     : apiCompanies.slice();
   const listSorted = listFiltered.slice().sort((a, b) => {
