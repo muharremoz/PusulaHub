@@ -1352,69 +1352,86 @@ tr:nth-child(even) td{background:#fafafa}
     return fullUsername.startsWith(prefix) ? fullUsername.slice(prefix.length) : fullUsername
   }
 
-  // Modal'daki bilgileri tek metin halinde derle — kopyalanabilir özet
+  // Modal'daki bilgileri tek metin halinde derle — sihirbazdaki (step-run.tsx)
+  // "customerMessage" ile BİREBİR aynı müşteri mesajı formatı.
   function buildAccessText(): string {
     if (!accessInfo || !selectedFirma) return ""
     const firkod = selectedFirma.firkod
-    const lines: string[] = []
-    lines.push(`Firma: ${selectedFirma.firma} (${firkod})`)
-    lines.push("")
-
     const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
     const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
     const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
+    const credentials = accessInfo.credentials ?? {}
 
-    if (tabUsers.length > 0) {
-      lines.push("Kullanıcılar:")
-      tabUsers.forEach((u) => {
-        // AD'den gelen username zaten "2507.vefa1" formatında
-        const vpnUser = u.username
-        const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
+    const lines: string[] = [
+      "Merhaba,",
+      "",
+      "Sunucu erişim bilgileriniz aşağıdadır.",
+      "Öncesinde Forticlient uygulaması ile VPN bağlantısını sağlamanız gerekiyor.",
+      "",
+    ]
+
+    tabUsers.forEach((u, i) => {
+      // AD'den gelen username zaten "2507.vefa1" formatında
+      const vpnUser = u.username
+      const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
+      const pw = credentials[u.username] ?? ""
+
+      lines.push("VPN Bilgileri:")
+      lines.push(`Kullanıcı Adı: ${vpnUser}`)
+      lines.push(`Şifre: ${pw}`)
+      lines.push("")
+      lines.push("RDP Bilgileri:")
+      lines.push(`Sunucu: ${rdpTarget}`)
+      lines.push(`Kullanıcı Adı: ${fullUser}`)
+      lines.push(`Şifre: ${pw}`)
+      lines.push("")
+
+      // API / Web uygulama kimlik bilgileri — Users.xml ile uyumlu ({firmaId}_{kısa})
+      if (tabIIS.length > 0) {
         const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
-        const pw = accessInfo.credentials?.[u.username] ?? ""
-        lines.push(`  ${u.displayName || u.username}`)
-        lines.push(`    VPN: ${vpnUser}`)
-        if (pw) lines.push(`    Şifre: ${pw}`)
-        if (rdpTarget) lines.push(`    RDP: ${rdpTarget}  (${fullUser})`)
-        if (tabIIS.length > 0) lines.push(`    API: ${apiUser}`)
+        lines.push("API / Web Uygulama Bilgileri:")
+        lines.push(`Kullanıcı Adı: ${apiUser}`)
+        lines.push(`Şifre: ${pw}`)
         lines.push("")
-      })
-    }
+      }
 
+      if (i < tabUsers.length - 1) {
+        lines.push("—")
+        lines.push("")
+      }
+    })
+
+    // Web (IIS) hizmet URL'leri
     if (tabIIS.length > 0) {
-      lines.push("Web Hizmetleri:")
       const iisHost = (accessInfo.iis?.dns?.trim()) || ""
+      lines.push("Web Hizmetleri:")
       tabIIS.forEach((s) => {
         // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
         const portMatch = (s.Binding || "").match(/:(\d+)/)
         const port = portMatch?.[1]
         const host = iisHost || s.ServerIP || ""
         const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "")
-        lines.push(`  ${s.Name}: ${url}`)
+        lines.push(`${s.Name}: ${url}`)
       })
       lines.push("")
     }
 
-    if (accessInfo.windows?.dns || accessInfo.windows?.ip) {
-      lines.push("Sunucular:")
-      if (accessInfo.ad)      lines.push(`  AD: ${accessInfo.ad.name} (${accessInfo.ad.ip})${accessInfo.ad.domain ? ` · ${accessInfo.ad.domain}` : ""}`)
-      if (accessInfo.windows) lines.push(`  RDP: ${accessInfo.windows.name} (${accessInfo.windows.ip}${accessInfo.windows.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""})`)
+    // SQL Veritabanı — login yalnız 1. kullanıcı için oluşturulur (tek blok)
+    if (tabSQL.length > 0 && tabUsers[0]) {
+      const firstUser = tabUsers[0]
+      const sqlIp = tabSQL[0]?.ServerIP || ""
+      const sqlLogin = `${firkod}_${shortUsername(firkod, firstUser.username)}`
+      const sqlPw = credentials[firstUser.username] ?? ""
+      lines.push("SQL Veritabanı Bilgileri:")
+      if (sqlIp) lines.push(`Sunucu: ${sqlIp}`)
+      lines.push(`Kullanıcı Adı: ${sqlLogin}`)
+      if (sqlPw) lines.push(`Şifre: ${sqlPw}`)
+      lines.push("Veritabanları:")
+      tabSQL.forEach((d) => lines.push(`  • ${d.Name}`))
       lines.push("")
     }
 
-    if (tabSQL.length > 0) {
-      const sqlIp = tabSQL[0]?.ServerIP || ""
-      lines.push("SQL Veritabanı:")
-      if (sqlIp) lines.push(`  Sunucu: ${sqlIp}`)
-      if (tabUsers[0]) {
-        const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
-        const sqlPw    = accessInfo.credentials?.[tabUsers[0].username] ?? ""
-        lines.push(`  Login: ${sqlLogin}`)
-        if (sqlPw) lines.push(`  Şifre: ${sqlPw}`)
-      }
-      lines.push(`  Veritabanları (${tabSQL.length}):`)
-      tabSQL.forEach((d) => lines.push(`    • ${d.Name}`))
-    }
+    lines.push("İyi çalışmalar.")
 
     return lines.join("\n")
   }

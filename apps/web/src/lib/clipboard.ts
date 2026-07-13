@@ -44,12 +44,36 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     ta.style.outline    = "none"
     ta.style.boxShadow  = "none"
     ta.style.background = "transparent"
+    ta.style.opacity    = "0"
     ta.setAttribute("readonly", "")
-    document.body.appendChild(ta)
+
+    // Radix Dialog gibi focus-trap eden bir container açıksa, textarea'yı
+    // document.body'ye eklersek FocusScope focus'u anında geri çalar → seçim
+    // boşalır → execCommand boş kopyalar ("kopyalandı" der ama pano boş).
+    // Çözüm: açık dialog varsa textarea'yı ONUN İÇİNE ekle (aynı focus scope),
+    // yoksa body'ye. Böylece focus() seçimde kalır.
+    const openDialog = document.querySelector(
+      "[role='dialog'][data-state='open']",
+    ) as HTMLElement | null
+    const host = openDialog ?? document.body
+    host.appendChild(ta)
+
+    // Kullanıcının mevcut metin seçimini koru
+    const selection  = document.getSelection()
+    const savedRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+
+    ta.focus({ preventScroll: true })
     ta.select()
     ta.setSelectionRange(0, text.length)
     const ok = document.execCommand("copy")
-    document.body.removeChild(ta)
+
+    host.removeChild(ta)
+
+    // Önceki seçimi geri yükle
+    if (savedRange && selection) {
+      selection.removeAllRanges()
+      selection.addRange(savedRange)
+    }
     return ok
   } catch {
     return false
