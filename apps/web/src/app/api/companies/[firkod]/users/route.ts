@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { pollSingleAgent } from "@/lib/agent-poller"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
 
 /**
@@ -38,16 +38,12 @@ export async function GET(
   if (gate) return gate
   const { firkod } = await params
   try {
+    const sb = await getSupabaseServer()
     const refresh = req.nextUrl.searchParams.get("refresh") === "1"
     if (refresh) {
-      // Firma'nın AD sunucusunu bul ve anlık poll et — agent-store'daki rapor tazelensin
-      const adRows = await query<{ AdServerId: string | null }[]>`
-        SELECT AdServerId FROM Companies WHERE CompanyId = ${firkod}
-      `
-      const adId = adRows[0]?.AdServerId
-      if (adId) {
-        try { await pollSingleAgent(adId) } catch {}
-      }
+      const { data: comp } = await sb.schema("hub").from("companies").select("ad_server_id").eq("company_id", firkod).maybeSingle()
+      const adId = (comp as { ad_server_id: string | null } | null)?.ad_server_id
+      if (adId) { try { await pollSingleAgent(adId) } catch {} }
     }
     const agents = getAllAgents()
     const seen = new Map<string, CompanyUserDto>()
@@ -82,19 +78,14 @@ export async function GET(
     // username case-insensitive + DOMAIN\ prefix'i tolere edilerek eşleştirilir.
     const bareName = (u: string) => (u.includes("\\") ? u.split("\\").pop()! : u).toLowerCase()
     try {
-      const usageRows = await query<{ Username: string; AvgCpu: number | null; AvgRamMB: number | null; Date: string }[]>`
-        SELECT u.Username, u.AvgCpu, u.AvgRamMB, CONVERT(NVARCHAR(10), u.Date, 23) AS Date
-        FROM UserDailyUsage u
-        INNER JOIN (
-          SELECT Username, MAX(Date) AS MaxD
-          FROM UserDailyUsage WHERE FirmaNo = ${firkod}
-          GROUP BY Username
-        ) m ON m.Username = u.Username AND m.MaxD = u.Date
-        WHERE u.FirmaNo = ${firkod}
-      `
+      // Her kullanıcının EN GÜNCEL günü (max date per username) — JS'te grupla
+      const { data: usageRows } = await sb.schema("hub").from("user_daily_usage")
+        .select("username, avg_cpu, avg_ram_mb, date").eq("firma_no", firkod)
       const usageMap = new Map<string, { cpu: number | null; ram: number | null; date: string }>()
-      for (const r of usageRows) {
-        usageMap.set(bareName(r.Username), { cpu: r.AvgCpu, ram: r.AvgRamMB, date: r.Date })
+      for (const r of (usageRows ?? []) as { username: string; avg_cpu: number | null; avg_ram_mb: number | null; date: string }[]) {
+        const k = bareName(r.username)
+        const cur = usageMap.get(k)
+        if (!cur || r.date > cur.date) usageMap.set(k, { cpu: r.avg_cpu, ram: r.avg_ram_mb, date: r.date })
       }
       for (const dto of seen.values()) {
         const u = usageMap.get(bareName(dto.username))
