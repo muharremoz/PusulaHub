@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { sqlServerById } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 
@@ -10,14 +10,6 @@ import { withSqlConnection } from "@/lib/sql-external"
  * ve `sys.databases` üzerinden kullanıcı veritabanlarının listesini döndürür.
  * Sistem veritabanları (master, tempdb, model, msdb) hariç tutulur.
  */
-
-interface ServerRow {
-  Id:          string
-  Name:        string
-  IP:          string
-  SqlUsername: string | null
-  SqlPassword: string | null
-}
 
 interface DbRow {
   Name:       string
@@ -46,19 +38,11 @@ export async function GET(
   try {
     const { id } = await params
 
-    const rows = await query<ServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${id} AND r.Role = 'SQL'
-    `
-    if (rows.length === 0) {
+    const server = await sqlServerById(id)
+    if (!server) {
       return NextResponse.json({ error: "SQL sunucusu bulunamadı" }, { status: 404 })
     }
-
-    const server = rows[0]
-
-    if (!server.SqlUsername || !server.SqlPassword) {
+    if (!server.sql_username || !server.sql_password) {
       return NextResponse.json(
         { error: "Bu SQL sunucusu için SA kullanıcı adı/şifresi tanımlanmamış. Sunucu ayarlarından ekleyin." },
         { status: 400 },
@@ -66,7 +50,7 @@ export async function GET(
     }
 
     // DB'de şifreli olarak saklanır — bağlantıdan önce decrypt
-    const decryptedPassword = decrypt(server.SqlPassword)
+    const decryptedPassword = decrypt(server.sql_password)
     if (!decryptedPassword) {
       return NextResponse.json(
         { error: "SA şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin veya şifreyi sunucu ayarlarından yeniden girin." },
@@ -76,9 +60,9 @@ export async function GET(
 
     const result = await withSqlConnection(
       {
-        server:   server.IP,
+        server:   server.ip,
         port:     1433,
-        user:     server.SqlUsername,
+        user:     server.sql_username,
         password: decryptedPassword,
       },
       async (pool) => {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { sqlServerById } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer } from "@/lib/sql-restore"
@@ -23,14 +23,6 @@ import { restoreBackupOnServer } from "@/lib/sql-restore"
  *   results: Array<{ bakPath, targetDbName, ok, error?, durationMs }>
  * }
  */
-
-interface ServerRow {
-  Id:          string
-  Name:        string
-  IP:          string
-  SqlUsername: string | null
-  SqlPassword: string | null
-}
 
 interface TaskIn {
   bakPath:      string
@@ -70,23 +62,17 @@ export async function POST(
       return NextResponse.json({ error: "Test edilecek görev yok" }, { status: 400 })
     }
 
-    const rows = await query<ServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${id} AND r.Role = 'SQL'
-    `
-    if (!rows.length) {
+    const srv = await sqlServerById(id)
+    if (!srv) {
       return NextResponse.json({ error: "SQL sunucusu bulunamadı" }, { status: 404 })
     }
-    const srv = rows[0]
-    if (!srv.SqlUsername || !srv.SqlPassword) {
+    if (!srv.sql_username || !srv.sql_password) {
       return NextResponse.json(
-        { error: `${srv.Name} için SA kullanıcı adı/şifresi tanımlı değil` },
+        { error: `${srv.name} için SA kullanıcı adı/şifresi tanımlı değil` },
         { status: 400 },
       )
     }
-    const password = decrypt(srv.SqlPassword)
+    const password = decrypt(srv.sql_password)
     if (!password) {
       return NextResponse.json(
         { error: "SA şifresi çözülemedi (ENCRYPTION_KEY sorunu)" },
@@ -98,9 +84,9 @@ export async function POST(
 
     await withSqlConnection(
       {
-        server:   srv.IP,
+        server:   srv.ip,
         port:     1433,
-        user:     srv.SqlUsername,
+        user:     srv.sql_username,
         password,
         database: "master",
       },

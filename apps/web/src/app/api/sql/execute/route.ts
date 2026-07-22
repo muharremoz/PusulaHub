@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { sqlServerById } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { requirePermission } from "@/lib/require-permission"
@@ -12,14 +12,6 @@ import { requirePermission } from "@/lib/require-permission"
  *
  * Body: { serverId: string; database: string; sql: string }
  */
-
-interface ServerRow {
-  Id:          string
-  Name:        string
-  IP:          string
-  SqlUsername: string | null
-  SqlPassword: string | null
-}
 
 export interface ExecuteResponse {
   columns:     string[]
@@ -49,26 +41,19 @@ export async function POST(req: NextRequest) {
     if (!database) return NextResponse.json({ error: "database zorunlu" }, { status: 400 })
     if (!sqlText)  return NextResponse.json({ error: "sql zorunlu" },      { status: 400 })
 
-    // Sunucuyu DB'den çek (SQL rolü kontrolü dahil)
-    const srvRows = await query<ServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${serverId} AND r.Role = 'SQL'
-    `
-    if (!srvRows.length) {
+    // Sunucuyu hub'dan çek (SQL rolü kontrolü dahil)
+    const server = await sqlServerById(serverId)
+    if (!server) {
       return NextResponse.json({ error: "SQL sunucusu bulunamadı" }, { status: 404 })
     }
-
-    const server = srvRows[0]
-    if (!server.SqlUsername || !server.SqlPassword) {
+    if (!server.sql_username || !server.sql_password) {
       return NextResponse.json(
         { error: "Bu sunucu için SA kimlik bilgisi tanımlı değil. Sunucu ayarlarından ekleyin." },
         { status: 400 },
       )
     }
 
-    const decrypted = decrypt(server.SqlPassword)
+    const decrypted = decrypt(server.sql_password)
     if (!decrypted) {
       return NextResponse.json(
         { error: "SA şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin." },
@@ -80,9 +65,9 @@ export async function POST(req: NextRequest) {
 
     const recordset = await withSqlConnection(
       {
-        server:          server.IP,
+        server:          server.ip,
         port:            1433,
-        user:            server.SqlUsername,
+        user:            server.sql_username,
         password:        decrypted,
         database,
         requestTimeout:  30_000,  // 30 sn sorgu zaman aşımı

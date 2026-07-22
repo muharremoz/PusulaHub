@@ -10,7 +10,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { serverAgentById } from "@/lib/hub-servers"
 import { requirePermission } from "@/lib/require-permission"
 import { execOnAgent } from "@/lib/agent-poller"
 import { buildListBackupFiles, parseBackupListOutput, type RawBackupItem } from "@/lib/sql-backup-powershell"
@@ -50,23 +51,20 @@ export async function POST(
   const { firkod } = await params
 
   try {
-    // Firma'nın Depo sunucusu (FileServerId)
-    const rows = await query<{ IP: string; ApiKey: string | null; AgentPort: number | null }[]>`
-      SELECT s.IP, s.ApiKey, s.AgentPort
-      FROM Companies c
-      INNER JOIN Servers s ON s.Id = c.FileServerId
-      WHERE c.CompanyId = ${firkod}
-    `
-    if (!rows.length) {
+    // Firma'nın Depo sunucusu (file_server_id)
+    const sb = await getSupabaseServer()
+    const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id").eq("company_id", firkod).maybeSingle()
+    const fsid = (comp as { file_server_id: string | null } | null)?.file_server_id
+    if (!fsid) {
       return NextResponse.json({ error: "Firmaya tanımlı Depo sunucusu yok (FileServerId boş)." }, { status: 400 })
     }
-    const depo = rows[0]
-    if (!depo.ApiKey || !depo.AgentPort) {
+    const depo = await serverAgentById(fsid)
+    if (!depo || !depo.api_key || !depo.agent_port) {
       return NextResponse.json({ error: "Depo sunucusunda PusulaAgent yapılandırılmamış." }, { status: 400 })
     }
 
     const folder = `D:\\Eski Datalar\\${firkod}`
-    const result = await execOnAgent(depo.IP, depo.AgentPort, depo.ApiKey, buildListBackupFiles(folder), 30)
+    const result = await execOnAgent(depo.ip, depo.agent_port, depo.api_key, buildListBackupFiles(folder), 30)
     if (result.exitCode !== 0) {
       const msg = result.stderr?.trim() || `Agent exec başarısız (exit=${result.exitCode})`
       return NextResponse.json({ error: msg }, { status: 502 })

@@ -17,7 +17,8 @@
  */
 
 import { NextRequest } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { serverAgentById } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
 import { execOnAgent } from "@/lib/agent-poller"
@@ -56,27 +57,25 @@ export async function POST(
   // SQL sunucusunun agent'ı (kopya işlemi için) + Depo sunucusu + Windows creds.
   // Firma SQL login'i Hub DB'sinden DEĞİL, aşağıda canlı firma SQL sunucusundan
   // (sys.sql_logins) çekilir — doğru sunucu odur.
-  const [sqlAgentRows, depoRows] = await Promise.all([
-    query<{ ApiKey: string | null; AgentPort: number | null }[]>`
-      SELECT ApiKey, AgentPort FROM Servers WHERE Id = ${sqlTarget.serverId}
-    `,
-    query<{ IP: string; Username: string | null; Password: string | null }[]>`
-      SELECT s.IP, s.Username, s.Password
-      FROM Companies c INNER JOIN Servers s ON s.Id = c.FileServerId
-      WHERE c.CompanyId = ${firkod}
-    `,
+  const sb = await getSupabaseServer()
+  const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id").eq("company_id", firkod).maybeSingle()
+  const fsid = (comp as { file_server_id: string | null } | null)?.file_server_id
+  const [sqlAgentRow, depoRow] = await Promise.all([
+    serverAgentById(sqlTarget.serverId),
+    fsid
+      ? sb.schema("hub").from("servers").select("ip, username, password").eq("id", fsid).maybeSingle().then((r) => r.data as { ip: string; username: string | null; password: string | null } | null)
+      : Promise.resolve(null),
   ])
 
-  const sqlAgentRow = sqlAgentRows[0]
-  if (!sqlAgentRow?.ApiKey || !sqlAgentRow?.AgentPort) {
+  if (!sqlAgentRow?.api_key || !sqlAgentRow?.agent_port) {
     return json({ error: "SQL sunucusunda PusulaAgent yapılandırılmamış (kopya için gerekli)" }, 400)
   }
-  const sqlAgent: AgentInfo = { ip: sqlTarget.ip, port: sqlAgentRow.AgentPort, apiKey: sqlAgentRow.ApiKey }
+  const sqlAgent: AgentInfo = { ip: sqlTarget.ip, port: sqlAgentRow.agent_port, apiKey: sqlAgentRow.api_key }
 
-  const depo = depoRows[0]
+  const depo = depoRow
   if (!depo) return json({ error: "Firmaya tanımlı Depo sunucusu yok (FileServerId boş)" }, 400)
-  const depoUser = depo.Username ?? ""
-  const depoPass = depo.Password ? (decrypt(depo.Password) ?? "") : ""
+  const depoUser = depo.username ?? ""
+  const depoPass = depo.password ? (decrypt(depo.password) ?? "") : ""
   if (!depoUser || !depoPass) {
     return json({ error: "Depo sunucusunun Windows credential'ı (Username/Password) tanımlı değil" }, 400)
   }
@@ -130,7 +129,7 @@ export async function POST(
               step(`copy_${f.fileName}`, `Depo'dan kopyalanıyor: ${f.fileName}`, "running")
               const cp = await execOnAgent(
                 sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey,
-                buildPullBakFromDepo({ depoIp: depo.IP, depoUser, depoPass, firmaId: firkod, fileName: f.fileName, destDir: localDir }),
+                buildPullBakFromDepo({ depoIp: depo.ip, depoUser, depoPass, firmaId: firkod, fileName: f.fileName, destDir: localDir }),
                 600,
               )
               if (cp.exitCode !== 0 || (cp.stderr ?? "").trim()) {

@@ -14,6 +14,28 @@ export async function findServerBy(idOrName: string, cols: string): Promise<Reco
   return (byName as unknown as Record<string, unknown>) ?? null
 }
 
+interface SqlSrv {
+  id: string; name: string; ip: string
+  sql_username: string | null; sql_password: string | null
+  agent_port: number | null; api_key: string | null
+}
+/** SQL-rollü sunucuyu id ile getir (SQL + agent creds). Rol yoksa null. */
+export async function sqlServerById(id: string): Promise<SqlSrv | null> {
+  const sb = await getSupabaseServer()
+  const { data: role } = await sb.schema("hub").from("server_roles").select("role").eq("server_id", id).eq("role", "SQL").maybeSingle()
+  if (!role) return null
+  const { data } = await sb.schema("hub").from("servers")
+    .select("id, name, ip, sql_username, sql_password, agent_port, api_key").eq("id", id).maybeSingle()
+  return (data as unknown as SqlSrv) ?? null
+}
+
+/** Sunucunun agent bağlantı bilgileri (rol kontrolü yok). */
+export async function serverAgentById(id: string): Promise<{ ip: string; agent_port: number | null; api_key: string | null } | null> {
+  const sb = await getSupabaseServer()
+  const { data } = await sb.schema("hub").from("servers").select("ip, agent_port, api_key").eq("id", id).maybeSingle()
+  return (data as unknown as { ip: string; agent_port: number | null; api_key: string | null }) ?? null
+}
+
 /** Belirli role sahip sunucular (eski `JOIN ServerRoles WHERE Role=X` deseni). */
 export async function serversWithRole(role: string, cols: string): Promise<Record<string, unknown>[]> {
   const sb = await getSupabaseServer()

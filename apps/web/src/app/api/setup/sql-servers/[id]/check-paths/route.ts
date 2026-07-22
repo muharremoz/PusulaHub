@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { sqlServerById } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 import {
   buildCheckFilesExist,
@@ -20,13 +20,6 @@ import {
  * doğrulamak için kullanılır.
  */
 
-interface ServerRow {
-  Id:        string
-  Name:      string
-  IP:        string
-  ApiKey:    string | null
-  AgentPort: number | null
-}
 
 export interface CheckPathsResponse {
   results: Array<{
@@ -53,18 +46,11 @@ export async function POST(
       return NextResponse.json({ results: [] } satisfies CheckPathsResponse)
     }
 
-    const rows = await query<ServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.ApiKey, s.AgentPort
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${id} AND r.Role = 'SQL'
-    `
-    if (rows.length === 0) {
+    const server = await sqlServerById(id)
+    if (!server) {
       return NextResponse.json({ error: "SQL sunucusu bulunamadı" }, { status: 404 })
     }
-
-    const server = rows[0]
-    if (!server.ApiKey || !server.AgentPort) {
+    if (!server.api_key || !server.agent_port) {
       return NextResponse.json(
         { error: "Bu sunucuda PusulaAgent yapılandırılmamış (ApiKey/AgentPort eksik)." },
         { status: 400 },
@@ -72,7 +58,7 @@ export async function POST(
     }
 
     const command = buildCheckFilesExist(paths)
-    const result = await execOnAgent(server.IP, server.AgentPort, server.ApiKey, command, 30)
+    const result = await execOnAgent(server.ip, server.agent_port, server.api_key, command, 30)
 
     if (result.exitCode !== 0) {
       const msg = result.stderr?.trim() || `Agent exec başarısız (exit=${result.exitCode})`
