@@ -90,7 +90,16 @@ export async function middleware(req: NextRequest) {
     (await supabase.auth.getSession()).data.session?.access_token,
   )
   if (appAccess && !("hub" in appAccess)) {
-    return NextResponse.redirect(`${switchBase}/?error=unauthorized`)
+    // Claim BAYAT olabilir: grant token üretildikten sonra eklendiyse ve token
+    // henüz expire olmadıysa `getUser` refresh etmez → claim'de hub görünmez.
+    // Zorla refresh et (custom_access_token_hook yeniden çalışır); yenide de hub
+    // yoksa kullanıcı gerçekten yetkisiz → Switch'e dön. Aksi halde erişime izin ver
+    // (yeni cookie'ler `response`'a yazıldı).
+    const { data: refreshed } = await supabase.auth.refreshSession()
+    const refreshedAccess = decodeAppAccess(refreshed.session?.access_token)
+    if (refreshedAccess && !("hub" in refreshedAccess)) {
+      return NextResponse.redirect(`${switchBase}/?error=unauthorized`)
+    }
   }
 
   return response
