@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/crypto"
 
 /* GET /api/vault/[id]/history — şifre geçmişi */
@@ -9,18 +9,12 @@ export async function GET(
 ) {
   const { id } = await params
   try {
-    interface HistoryRow { Id: string; Password: string; ChangedAt: string }
-    const rows = await query<HistoryRow[]>`
-      SELECT Id, Password,
-             CONVERT(NVARCHAR(30), ChangedAt, 120) AS ChangedAt
-      FROM VaultPasswordHistory
-      WHERE VaultEntryId = ${id}
-      ORDER BY ChangedAt DESC
-    `
-    return NextResponse.json(rows.map((r) => ({
-      id:        r.Id,
-      password:  decrypt(r.Password) ?? "***",
-      changedAt: r.ChangedAt,
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("vault_password_history")
+      .select("id, password, changed_at").eq("vault_entry_id", id).order("changed_at", { ascending: false })
+    if (error) throw error
+    return NextResponse.json(((data ?? []) as { id: string; password: string; changed_at: string }[]).map(r => ({
+      id: r.id, password: decrypt(r.password) ?? "***", changedAt: r.changed_at,
     })))
   } catch (err) {
     console.error("[GET /api/vault/[id]/history]", err)

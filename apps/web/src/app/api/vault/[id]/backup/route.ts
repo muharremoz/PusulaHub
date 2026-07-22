@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
 import { withSqlConnection } from "@/lib/sql-external"
@@ -32,14 +32,13 @@ export async function POST(
       return NextResponse.json({ error: "dbName zorunlu" }, { status: 400 })
     }
 
-    interface Row { Host: string | null; Username: string; Password: string }
-    const rows = await query<Row[]>`
-      SELECT Host, Username, Password FROM VaultEntries WHERE Id = ${id}
-    `
-    if (rows.length === 0) {
+    const sb = await getSupabaseServer()
+    const { data: entry } = await sb.schema("hub").from("vault_entries")
+      .select("host, username, password").eq("id", id).maybeSingle()
+    if (!entry) {
       return NextResponse.json({ error: "Giriş bulunamadı" }, { status: 404 })
     }
-    const { Host, Username, Password } = rows[0]
+    const { host: Host, username: Username, password: Password } = entry as { host: string | null; username: string; password: string }
     if (!Host) {
       return NextResponse.json({ error: "Host/IP boş" }, { status: 400 })
     }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 /* POST /api/vault/[id]/access — erişim logu kaydet */
 export async function POST(
@@ -9,10 +9,10 @@ export async function POST(
   const { id } = await params
   try {
     const { action } = await req.json()
-    await execute`
-      INSERT INTO VaultAccessLog (Id, VaultEntryId, Action)
-      VALUES (${crypto.randomUUID()}, ${id}, ${action ?? "view"})
-    `
+    const sb = await getSupabaseServer()
+    const { error } = await sb.schema("hub").from("vault_access_log")
+      .insert({ vault_entry_id: id, action: action ?? "view" })
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[POST /api/vault/[id]/access]", err)
@@ -20,23 +20,20 @@ export async function POST(
   }
 }
 
-/* GET /api/vault/[id]/access — erişim logları */
+/* GET /api/vault/[id]/access — erişim logları (son 50) */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   try {
-    interface LogRow { Id: string; Action: string; CreatedAt: string }
-    const rows = await query<LogRow[]>`
-      SELECT TOP (50) Id, Action,
-             CONVERT(NVARCHAR(30), CreatedAt, 120) AS CreatedAt
-      FROM VaultAccessLog
-      WHERE VaultEntryId = ${id}
-      ORDER BY CreatedAt DESC
-    `
-    return NextResponse.json(rows.map((r) => ({
-      id: r.Id, action: r.Action, createdAt: r.CreatedAt,
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("vault_access_log")
+      .select("id, action, created_at").eq("vault_entry_id", id)
+      .order("created_at", { ascending: false }).limit(50)
+    if (error) throw error
+    return NextResponse.json(((data ?? []) as { id: string; action: string; created_at: string }[]).map(r => ({
+      id: r.id, action: r.action, createdAt: r.created_at,
     })))
   } catch (err) {
     console.error("[GET /api/vault/[id]/access]", err)

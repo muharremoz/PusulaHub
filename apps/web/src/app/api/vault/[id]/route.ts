@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { encrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
 
-/* PATCH /api/vault/[id] — giriş güncelle */
+/* PATCH /api/vault/[id] — güncelle (şifre değişince history + PasswordChangedAt) */
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -13,51 +13,31 @@ export async function PATCH(
   const { id } = await params
   try {
     const { category, title, username, password, host, url, notes } = await req.json()
+    const sb = await getSupabaseServer()
 
-    // Şifre değiştiyse eski şifreyi history'ye kaydet
+    // Şifre değiştiyse eski şifreyi history'ye
     if (password) {
-      interface OldRow { Password: string }
-      const oldRows = await query<OldRow[]>`SELECT Password FROM VaultEntries WHERE Id = ${id}`
-      if (oldRows.length > 0 && oldRows[0].Password) {
-        await execute`
-          INSERT INTO VaultPasswordHistory (Id, VaultEntryId, Password)
-          VALUES (${crypto.randomUUID()}, ${id}, ${oldRows[0].Password})
-        `
+      const { data: old } = await sb.schema("hub").from("vault_entries").select("password").eq("id", id).maybeSingle()
+      const oldPwd = (old as { password: string } | null)?.password
+      if (oldPwd) {
+        await sb.schema("hub").from("vault_password_history").insert({ vault_entry_id: id, password: oldPwd })
       }
     }
 
-    const encPwd = password ? encrypt(password) : null
-
-    // Şifre güncelleniyorsa PasswordChangedAt'ı da güncelle
-    if (encPwd) {
-      await execute`
-        UPDATE VaultEntries
-        SET
-          Category          = COALESCE(${category ?? null}, Category),
-          Title             = COALESCE(${title    ?? null}, Title),
-          Username          = COALESCE(${username ?? null}, Username),
-          Password          = ${encPwd},
-          Host              = ${host  || null},
-          Url               = ${url   || null},
-          Notes             = ${notes || null},
-          PasswordChangedAt = GETDATE(),
-          UpdatedAt         = GETDATE()
-        WHERE Id = ${id}
-      `
-    } else {
-      await execute`
-        UPDATE VaultEntries
-        SET
-          Category  = COALESCE(${category ?? null}, Category),
-          Title     = COALESCE(${title    ?? null}, Title),
-          Username  = COALESCE(${username ?? null}, Username),
-          Host      = ${host  || null},
-          Url       = ${url   || null},
-          Notes     = ${notes || null},
-          UpdatedAt = GETDATE()
-        WHERE Id = ${id}
-      `
+    const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (category != null) patch.category = category
+    if (title    != null) patch.title    = title
+    if (username != null) patch.username = username
+    patch.host  = host  || null
+    patch.url   = url   || null
+    patch.notes = notes || null
+    if (password) {
+      patch.password = encrypt(password)
+      patch.password_changed_at = new Date().toISOString()
     }
+
+    const { error } = await sb.schema("hub").from("vault_entries").update(patch).eq("id", id)
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[PATCH /api/vault/[id]]", err)
@@ -65,7 +45,7 @@ export async function PATCH(
   }
 }
 
-/* DELETE /api/vault/[id] — giriş sil */
+/* DELETE /api/vault/[id] */
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -74,7 +54,10 @@ export async function DELETE(
   if (gate) return gate
   const { id } = await params
   try {
-    await execute`DELETE FROM VaultEntries WHERE Id = ${id}`
+    // hub FK on delete cascade → history + access log otomatik silinir.
+    const sb = await getSupabaseServer()
+    const { error } = await sb.schema("hub").from("vault_entries").delete().eq("id", id)
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[DELETE /api/vault/[id]]", err)
