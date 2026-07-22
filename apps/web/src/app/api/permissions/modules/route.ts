@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { MODULES, HUB_APP_ID, type ModuleDef } from "@/lib/permissions"
 import { requireAuth } from "@/lib/require-permission"
 
@@ -19,18 +19,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(MODULES)
   }
 
-  const rows = await query<{ ModulesJson: string | null }[]>`
-    SELECT ModulesJson FROM dbo.Apps WHERE Id = ${appId}
-  `
-  if (!rows.length) return NextResponse.json([], { status: 200 })
+  const sb = await getSupabaseServer()
+  const { data } = await sb.from("apps").select("modules").eq("id", appId).maybeSingle()
+  const modules = (data as { modules: unknown } | null)?.modules
+  if (!modules) return NextResponse.json([])
 
-  const raw = rows[0].ModulesJson
-  if (!raw) return NextResponse.json([])
-
-  try {
-    const parsed = JSON.parse(raw) as ModuleDef[]
-    return NextResponse.json(parsed)
-  } catch {
-    return NextResponse.json([])
+  // public.apps.modules jsonb — string ise parse et, array ise doğrudan
+  if (Array.isArray(modules)) return NextResponse.json(modules as ModuleDef[])
+  if (typeof modules === "string") {
+    try { return NextResponse.json(JSON.parse(modules) as ModuleDef[]) } catch { return NextResponse.json([]) }
   }
+  return NextResponse.json([])
 }

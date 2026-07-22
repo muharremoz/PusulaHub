@@ -1,18 +1,13 @@
 /**
- * Node runtime `auth()` — Birleşik platform (Supabase Auth) köprüsü.
+ * Node runtime `auth()` — Birleşik platform (Supabase Auth).
  *
- * Kimlik: Supabase `auth.users` (email+şifre, alt-domain SSO cookie `.pusulanet.net`).
- * Ama Hub'ın ~16 dosyası `session.user.id === AppUsers.Id` (mssql GUID) sözleşmesine
- * bağlı → email köprüsü: Supabase email → `AppUsers.Id`. Bu köprü Faz 4'te
- * (Hub DB → Postgres) tamamen kalkacak.
- *
- * Yetki:
- *  - apps[] + hub rolü: `public.user_apps` (RLS — kullanıcı kendi grant'lerini görür)
- *  - modül izinleri: mssql `getUserPermissions` (AppUsers.Id ile) — Faz 4'e kadar korunur
+ * Kimlik TAMAMEN Supabase: `auth.users` (email+şifre, alt-domain SSO cookie).
+ * `user.id` = auth.users uuid (eski mssql AppUsers.Id köprüsü KALDIRILDI — Faz 4 bitti).
+ * Profil (ad/rol): `public.users`. Yetki: `public.user_apps` (apps+hub rolü) +
+ * `public.user_permissions` (modül izinleri, permissions.ts).
  */
 import { cache } from "react"
 import { getSupabaseServer } from "@/lib/supabase/server"
-import { query } from "@/lib/db"
 import { getUserPermissions, HUB_APP_ID, type PermissionMap } from "@/lib/permissions"
 
 export type Level = "read" | "write"
@@ -21,58 +16,31 @@ export type Level = "read" | "write"
 export interface AppGrant {
   id:   string
   role: "admin" | "user"
-  /** Module-level perms — bu modelde app içinde taze okunur, burada doldurulmaz. */
   perms?: Record<string, Level>
 }
 
 export interface HubSession {
   user: {
     id:          string
-    /** Supabase auth.users uuid — yeni domain kayıtlarında `created_by` için.
-     *  (`id` mssql AppUsers.Id sözleşmesini korur; bu ayrı alan Faz 4 yazımları için.) */
+    /** = id (auth.users uuid). Geriye dönük uyum için ayrı alan olarak korunuyor. */
     authUserId:  string
     username:    string
     email:       string | undefined
     fullName:    string
     name:        string
-    /** Hub-özel rol (user_apps.role @ hub). AppUsers.Role fallback. */
+    /** Hub-özel rol (user_apps.role @ hub). public.users.role fallback. */
     role:        string
-    /** Hub modül izinleri */
     permissions: PermissionMap
-    /** Kullanıcının erişebileceği app'ler + her biri için rol */
     apps:        AppGrant[]
   }
 }
 
-interface AppUserRow {
-  Id:       string
-  Username: string
-  FullName: string | null
-  Role:     string | null
-}
-
-/**
- * Email → AppUsers kimliği (Faz 4'te kalkacak köprü).
- *
- * NOT: Supabase `auth.users` email'i ile Hub `AppUsers.Email` birebir eşleşmeli.
- * Göç sırasında düzeltilen yazım hataları (ör. `ediz@pusuanet.net` → `ediz@pusulanet.net`)
- * Hub DB'de de güncellenmiş olmalı; aksi halde o kullanıcı için köprü boş döner.
- */
-const bridgeAppUser = cache(async (email: string): Promise<AppUserRow | null> => {
-  const rows = await query<AppUserRow[]>`
-    SELECT Id, Username, FullName, Role
-    FROM AppUsers
-    WHERE Email = ${email} AND IsActive = 1
-  `
-  return rows[0] ?? null
-})
-
-// Aynı request içinde DB'ye tekrar gidilmesin
+// Aynı request içinde tekrar hesaplanmasın
 const getPerms = cache((id: string, appId: string, role: string) =>
   getUserPermissions(id, appId, role),
 )
 
-/** NextAuth `auth()` drop-in replacement — Supabase session + AppUsers köprüsü. */
+/** NextAuth `auth()` drop-in — Supabase auth.users + public identity. */
 export async function auth(): Promise<HubSession | null> {
   const sb = await getSupabaseServer()
   const {
@@ -80,28 +48,29 @@ export async function auth(): Promise<HubSession | null> {
   } = await sb.auth.getUser()
   if (!user?.email) return null
 
-  // Kimlik köprüsü: Supabase email → AppUsers.Id (16 dosyanın bağlı olduğu sözleşme).
-  const appUser = await bridgeAppUser(user.email)
-  if (!appUser) return null // Supabase kullanıcısı var ama Hub AppUsers'da karşılığı yok
+  const [{ data: profile }, { data: grants }] = await Promise.all([
+    sb.from("users").select("name, role").eq("id", user.id).maybeSingle(),
+    sb.from("user_apps").select("app_id, role"),
+  ])
 
-  // Yetki: user_apps (RLS → yalnız kendi grant'leri)
-  const { data: grants } = await sb.from("user_apps").select("app_id, role")
   const apps: AppGrant[] = ((grants ?? []) as { app_id: string; role: string }[]).map((g) => ({
     id:   g.app_id,
     role: g.role === "admin" ? "admin" : "user",
   }))
 
+  const prof = profile as { name: string | null; role: string | null } | null
   const hubGrant = apps.find((a) => a.id === HUB_APP_ID)
-  const hubRole  = hubGrant?.role ?? appUser.Role ?? "user"
-  const permissions = await getPerms(appUser.Id, HUB_APP_ID, hubRole)
+  const hubRole  = hubGrant?.role ?? prof?.role ?? "user"
+  const permissions = await getPerms(user.id, HUB_APP_ID, hubRole)
 
-  const fullName = appUser.FullName || appUser.Username
+  const emailLocal = user.email.split("@")[0]
+  const fullName = prof?.name || emailLocal
 
   return {
     user: {
-      id:          appUser.Id,
+      id:          user.id,
       authUserId:  user.id,
-      username:    appUser.Username,
+      username:    emailLocal,
       email:       user.email,
       fullName,
       name:        fullName,

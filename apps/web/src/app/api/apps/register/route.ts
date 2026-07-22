@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { execute } from "@/lib/db";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
  * POST /api/apps/register
@@ -77,18 +77,15 @@ export async function POST(req: NextRequest) {
   }
 
   const name = (payload.name?.trim()) || appId;
-  const modulesJson = JSON.stringify(cleaned);
 
-  // 3) Apps tablosuna MERGE
-  await execute`
-    MERGE dbo.Apps AS target
-    USING (SELECT ${appId} AS Id, ${name} AS Name, ${modulesJson} AS ModulesJson) AS src
-    ON target.Id = src.Id
-    WHEN MATCHED THEN
-      UPDATE SET Name = src.Name, ModulesJson = src.ModulesJson
-    WHEN NOT MATCHED THEN
-      INSERT (Id, Name, ModulesJson) VALUES (src.Id, src.Name, src.ModulesJson);
-  `;
+  // 3) public.apps upsert (modules = jsonb). Service-role: session yok (x-internal-key auth).
+  const { error } = await getSupabaseAdmin().from("apps").upsert(
+    { id: appId, name, modules: cleaned },
+    { onConflict: "id" },
+  );
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, appId, count: cleaned.length });
 }

@@ -10,7 +10,7 @@
  * saklanır. Her app kendi modül kataloğunu getirir ve kendi AppId'siyle okur.
  */
 
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export type PermissionLevel = "none" | "read" | "write"
 
@@ -54,18 +54,14 @@ export const HUB_APP_ID = "hub"
 
 export type PermissionMap = Record<string, PermissionLevel>
 
-interface PermRow { ModuleKey: string; Level: string }
-
 /**
- * Bir kullanıcının belirtilen uygulamadaki modül izinlerini döner.
- * Admin → tüm modüllerde "write"
- * Diğerleri → DB'den, yoksa "none"
+ * Bir kullanıcının belirtilen uygulamadaki modül izinlerini döner (public.user_permissions).
+ * Admin → tüm modüllerde "write"; diğerleri → DB'den, yoksa "none".
  *
- * @param userId  AppUsers.Id
- * @param appId   Apps.Id  (örn. "hub", "spareflow")
- * @param role    UserApps.Role (bu app için kullanıcının rolü)
- * @param modules İzin haritasında key olarak kullanılacak modül listesi
- *                (varsayılan: Hub modülleri)
+ * @param userId  auth.users uuid (public.user_permissions.user_id)
+ * @param appId   public.apps.id (örn. "hub", "spareflow")
+ * @param role    user_apps.role (bu app için kullanıcının rolü)
+ * @param modules İzin haritası anahtarları (varsayılan: Hub modülleri)
  */
 export async function getUserPermissions(
   userId:  string,
@@ -80,21 +76,18 @@ export async function getUserPermissions(
     return map
   }
 
-  // Default: hepsi none
   for (const m of modules) map[m.key] = "none"
 
   try {
-    const rows = await query<PermRow[]>`
-      SELECT ModuleKey, [Level] FROM UserPermissions
-      WHERE UserId = ${userId} AND AppId = ${appId}
-    `
-    for (const r of rows) {
-      if (r.Level === "read" || r.Level === "write") {
-        map[r.ModuleKey] = r.Level as PermissionLevel
+    const sb = await getSupabaseServer()
+    const { data } = await sb.from("user_permissions").select("module_key, level").eq("user_id", userId).eq("app_id", appId)
+    for (const r of (data ?? []) as { module_key: string; level: string }[]) {
+      if (r.level === "read" || r.level === "write") {
+        map[r.module_key] = r.level as PermissionLevel
       }
     }
   } catch {
-    /* tablo henüz yoksa — hepsi none kalır */
+    /* okunamadıysa — hepsi none kalır */
   }
 
   return map
