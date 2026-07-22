@@ -1,10 +1,11 @@
 /* ══════════════════════════════════════════════════════════
    PusulaHub — Firma Cache Sync
-   Firma API'yi 5 dakikada bir çeker, FirmaCache tablosuna yazar.
-   Uygulama içi tüm firma sorguları bu tablodan yapılır.
+   Firma API'yi 5 dakikada bir çeker, hub.companies'e senkronize eder
+   (firkod bazlı partial upsert — hub.sync_firmalar RPC).
+   Poller/sync Coolify'da çalışır (session yok) → service-role.
 ══════════════════════════════════════════════════════════ */
 
-import sql from "mssql"
+import { getSupabaseAdmin } from "./supabase/admin"
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000 // 5 dakika
 
@@ -18,25 +19,9 @@ interface FirmaApiItem {
 }
 
 interface FirmaApiResponse {
-  IsSuccess:    boolean
-  Message:      string
-  Param:        FirmaApiItem[]
-}
-
-let _pool: sql.ConnectionPool | null = null
-async function getSyncPool(): Promise<sql.ConnectionPool> {
-  if (_pool && _pool.connected) return _pool
-  _pool = new sql.ConnectionPool({
-    server:   process.env.DB_SERVER ?? "localhost",
-    database: process.env.DB_NAME ?? "PusulaHub",
-    user:     process.env.DB_USER ?? "SA",
-    password: process.env.DB_PASSWORD ?? "",
-    port:     parseInt(process.env.DB_PORT ?? "1433"),
-    options:  { trustServerCertificate: true, encrypt: false },
-    pool:     { max: 3, min: 0, idleTimeoutMillis: 60000 },
-  })
-  await _pool.connect()
-  return _pool
+  IsSuccess: boolean
+  Message:   string
+  Param:     FirmaApiItem[]
 }
 
 export async function syncFirmalarNow(): Promise<void> {
@@ -55,7 +40,6 @@ async function syncFirmalar(): Promise<void> {
     const timer = setTimeout(() => controller.abort(), 15000)
 
     // API 2026-06'da değişti: POST /Server/List → GET /Account/ServerList.
-    // Response yapısı aynı (IsSuccess / Message / Param[] · UserCount, Lisans).
     const res = await fetch(`${baseUrl}/Account/ServerList`, {
       method: "GET",
       headers: {
@@ -77,34 +61,23 @@ async function syncFirmalar(): Promise<void> {
       return
     }
 
-    const pool = await getSyncPool()
-    for (const item of json.Param) {
-      const firkod    = String(item.Firkod)
-      const firma     = item.Firma?.trim() ?? ""
-      const email     = item.EMail === "X" ? "" : (item.EMail ?? "")
-      const phone     = item.Mobile === "X" ? "" : (item.Mobile ?? "")
-      const userCount = item.UserCount ?? 0
-      const lisans    = item.Lisans ?? ""
+    // API çıktısını normalize et → tek RPC çağrısı (hub.sync_firmalar)
+    const payload = json.Param.map((item) => ({
+      firkod:    String(item.Firkod),
+      firma:     item.Firma?.trim() ?? "",
+      email:     item.EMail === "X" ? "" : (item.EMail ?? ""),
+      phone:     item.Mobile === "X" ? "" : (item.Mobile ?? ""),
+      userCount: item.UserCount ?? 0,
+      lisans:    item.Lisans ?? "",
+    }))
 
-      await pool.request()
-        .input("firkod",    sql.NVarChar(20),  firkod)
-        .input("firma",     sql.NVarChar(200), firma)
-        .input("email",     sql.NVarChar(200), email)
-        .input("phone",     sql.NVarChar(100), phone)
-        .input("userCount", sql.Int,           userCount)
-        .input("lisans",    sql.NVarChar(50),  lisans)
-        .query(`
-          MERGE Companies AS target
-          USING (SELECT @firkod AS CompanyId) AS source ON target.CompanyId = source.CompanyId
-          WHEN MATCHED THEN
-            UPDATE SET Name=@firma, ContactEmail=@email, ContactPhone=@phone, UserCount=@userCount, ContractEnd=CASE WHEN @lisans='' THEN target.ContractEnd ELSE TRY_CAST(@lisans AS DATE) END
-          WHEN NOT MATCHED THEN
-            INSERT (Id, CompanyId, Name, Sector, ContactPerson, ContactEmail, ContactPhone, UserCount, UserCapacity, Status, ContractStart, ContractEnd, CreatedAt)
-            VALUES (NEWID(), @firkod, @firma, '', '', @email, @phone, @userCount, 0, 'active', GETDATE(), CASE WHEN @lisans='' THEN DATEADD(YEAR,1,GETDATE()) ELSE TRY_CAST(@lisans AS DATE) END, GETDATE());
-        `)
+    const { error } = await getSupabaseAdmin().schema("hub").rpc("sync_firmalar", { p: payload })
+    if (error) {
+      console.log(`[FirmaSync] RPC hatası: ${error.message}`)
+      return
     }
 
-    console.log(`[FirmaSync] ${json.Param.length} firma senkronize edildi.`)
+    console.log(`[FirmaSync] ${payload.length} firma senkronize edildi.`)
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
     if (!msg.includes("abort")) {
@@ -118,7 +91,6 @@ let _timer: ReturnType<typeof setInterval> | null = null
 export function startFirmaSync(): void {
   if (_timer) return
   console.log("[FirmaSync] Başlatıldı — 5 dk aralıkla")
-  // İlk sync 10 saniye sonra (uygulama yüklenmesini bekle)
   setTimeout(syncFirmalar, 10000)
   _timer = setInterval(syncFirmalar, SYNC_INTERVAL_MS)
 }
