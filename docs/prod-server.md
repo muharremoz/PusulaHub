@@ -1,4 +1,8 @@
-# Üretim Sunucusu — 10.10.10.5
+> ⚠️ **ESKİ PROD — EMEKLİYE AYRILIYOR.** Yeni sistem (Supabase + Coolify, otomatik deploy) için:
+> **[YENI-SISTEM.md](YENI-SISTEM.md)**. Bu dosya yalnız eski prod'a erişim (WinRM/RDP/SQL — delta,
+> emeklilik) için referanstır. Yeni geliştirmede kullanma.
+
+# Üretim Sunucusu — 10.10.10.5 (ESKİ)
 
 **Tek başvuru noktası**: tüm prod ortam bilgileri, erişim kimlikleri,
 yönetim komutları, deploy akışı ve yaşanmış tuzaklar bu dosyada.
