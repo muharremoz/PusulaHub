@@ -1,0 +1,24 @@
+name: Deploy Hub to Coolify
+
+# main'e push olunca VPS'teki self-hosted runner Coolify deploy'unu tetikler.
+# Runner dışa-doğru GitHub'a bağlanır; sunucuda inbound port/expose gerekmez.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "apps/agent/**"
+      - "mobile/**"
+      - "**.md"
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, hub]
+    steps:
+      - name: Trigger Coolify deploy
+        run: |
+          curl -sf --max-time 60 -X POST \
+            -H "Authorization: Bearer $(cat /root/.coolify_token)" \
+            -H "Content-Type: application/json" \
+            "http://localhost:8000/api/v1/deploy" \
+            -d '{"uuid":"wizev44qqhe5njtzqweoe37x","force":false}'
