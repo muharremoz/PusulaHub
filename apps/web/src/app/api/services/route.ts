@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
 
 /**
@@ -48,28 +48,30 @@ export interface WizardServiceDto {
 }
 
 interface Row {
-  Id:           number
-  Name:         string
-  Category:     string
-  Type:         string
-  Config:       string | null
-  DisplayOrder: number
-  IsActive:     boolean
+  id:            number
+  name:          string
+  category:      string
+  type:          string
+  config:        string | null
+  display_order: number
+  is_active:     boolean
 }
+
+const SVC_COLS = "id, name, category, type, config, display_order, is_active"
 
 function rowToDto(r: Row): WizardServiceDto {
   let parsed: ServiceConfig | null = null
-  if (r.Config) {
-    try { parsed = JSON.parse(r.Config) as ServiceConfig } catch { parsed = null }
+  if (r.config) {
+    try { parsed = JSON.parse(r.config) as ServiceConfig } catch { parsed = null }
   }
   return {
-    id:           r.Id,
-    name:         r.Name,
-    category:     r.Category,
-    type:         (r.Type as ServiceType) ?? "pusula-program",
+    id:           r.id,
+    name:         r.name,
+    category:     r.category,
+    type:         (r.type as ServiceType) ?? "pusula-program",
     config:       parsed,
-    displayOrder: r.DisplayOrder,
-    isActive:     !!r.IsActive,
+    displayOrder: r.display_order,
+    isActive:     !!r.is_active,
   }
 }
 
@@ -124,21 +126,13 @@ export async function GET(req: NextRequest) {
   if (gate) return gate
   try {
     const onlyActive = req.nextUrl.searchParams.get("onlyActive") === "true"
+    const sb = await getSupabaseServer()
+    let rq = sb.schema("hub").from("wizard_services").select(SVC_COLS)
+      .order("display_order", { ascending: true }).order("name", { ascending: true })
+    if (onlyActive) rq = rq.eq("is_active", true)
+    const { data: rows } = await rq
 
-    const rows = onlyActive
-      ? await query<Row[]>`
-          SELECT Id, Name, Category, Type, Config, DisplayOrder, IsActive
-          FROM WizardServices
-          WHERE IsActive = 1
-          ORDER BY DisplayOrder ASC, Name ASC
-        `
-      : await query<Row[]>`
-          SELECT Id, Name, Category, Type, Config, DisplayOrder, IsActive
-          FROM WizardServices
-          ORDER BY DisplayOrder ASC, Name ASC
-        `
-
-    return NextResponse.json(rows.map(rowToDto))
+    return NextResponse.json(((rows ?? []) as unknown as Row[]).map(rowToDto))
   } catch (err) {
     console.error("[GET /api/services]", err)
     return NextResponse.json({ error: "Hizmetler alınamadı" }, { status: 500 })
@@ -177,16 +171,12 @@ export async function POST(req: NextRequest) {
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
 
     const configJson = JSON.stringify(v.config)
-
-    const result = await execute`
-      INSERT INTO WizardServices (Name, Category, Type, Config, DisplayOrder, IsActive)
-      OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Category, INSERTED.Type, INSERTED.Config,
-             INSERTED.DisplayOrder, INSERTED.IsActive
-      VALUES (${name}, ${category}, ${type}, ${configJson}, ${displayOrder}, ${isActive ? 1 : 0})
-    `
-
-    const created = (result.recordset as Row[])[0]
-    return NextResponse.json(rowToDto(created), { status: 201 })
+    const sb = await getSupabaseServer()
+    const { data: created, error } = await sb.schema("hub").from("wizard_services").insert({
+      name, category, type, config: configJson, display_order: displayOrder, is_active: isActive,
+    }).select(SVC_COLS).single()
+    if (error) throw error
+    return NextResponse.json(rowToDto(created as unknown as Row), { status: 201 })
   } catch (err) {
     console.error("[POST /api/services]", err)
     return NextResponse.json({ error: "Hizmet eklenemedi" }, { status: 500 })

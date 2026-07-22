@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { deriveDataName } from "@/lib/demo-database-naming"
 
 /**
@@ -27,65 +27,51 @@ export interface DemoDatabaseDto {
 }
 
 interface Row {
-  Id:           number
-  Name:         string
-  DataName:     string
-  LocationType: string
-  LocationPath: string | null
-  Description:  string | null
-  DisplayOrder: number
-  IsActive:     boolean
-}
-
-interface JunctionRow {
-  DemoDatabaseId: number
-  ServiceId:      number
+  id:            number
+  name:          string
+  data_name:     string
+  location_type: string
+  location_path: string | null
+  description:   string | null
+  display_order: number
+  is_active:     boolean
 }
 
 function rowToDto(r: Row, serviceIds: number[]): DemoDatabaseDto {
   return {
-    id:           r.Id,
-    name:         r.Name,
-    dataName:     r.DataName,
-    locationType: r.LocationType,
-    locationPath: r.LocationPath,
-    description:  r.Description,
-    displayOrder: r.DisplayOrder,
-    isActive:     !!r.IsActive,
+    id:           r.id,
+    name:         r.name,
+    dataName:     r.data_name,
+    locationType: r.location_type,
+    locationPath: r.location_path,
+    description:  r.description,
+    displayOrder: r.display_order,
+    isActive:     !!r.is_active,
     serviceIds,
   }
 }
+
+const DEMO_COLS = "id, name, data_name, location_type, location_path, description, display_order, is_active"
 
 /* ── GET ──────────────────────────────────────────────── */
 export async function GET(req: NextRequest) {
   try {
     const onlyActive = req.nextUrl.searchParams.get("onlyActive") === "true"
+    const sb = await getSupabaseServer()
 
-    const rows = onlyActive
-      ? await query<Row[]>`
-          SELECT Id, Name, DataName, LocationType, LocationPath, Description, DisplayOrder, IsActive
-          FROM DemoDatabases
-          WHERE IsActive = 1
-          ORDER BY DisplayOrder ASC, Name ASC
-        `
-      : await query<Row[]>`
-          SELECT Id, Name, DataName, LocationType, LocationPath, Description, DisplayOrder, IsActive
-          FROM DemoDatabases
-          ORDER BY DisplayOrder ASC, Name ASC
-        `
+    let rq = sb.schema("hub").from("demo_databases").select(DEMO_COLS)
+      .order("display_order", { ascending: true }).order("name", { ascending: true })
+    if (onlyActive) rq = rq.eq("is_active", true)
+    const { data: rows } = await rq
 
-    // Junction'ları tek sorguda çek, map'le
-    const junction = await query<JunctionRow[]>`
-      SELECT DemoDatabaseId, ServiceId FROM DemoDatabaseServices
-    `
+    const { data: junction } = await sb.schema("hub").from("demo_database_services").select("demo_database_id, service_id")
     const serviceMap = new Map<number, number[]>()
-    for (const j of junction) {
-      const list = serviceMap.get(j.DemoDatabaseId) ?? []
-      list.push(j.ServiceId)
-      serviceMap.set(j.DemoDatabaseId, list)
+    for (const j of (junction ?? []) as { demo_database_id: number; service_id: number }[]) {
+      const list = serviceMap.get(j.demo_database_id) ?? []
+      list.push(j.service_id); serviceMap.set(j.demo_database_id, list)
     }
 
-    return NextResponse.json(rows.map((r) => rowToDto(r, serviceMap.get(r.Id) ?? [])))
+    return NextResponse.json(((rows ?? []) as unknown as Row[]).map((r) => rowToDto(r, serviceMap.get(r.id) ?? [])))
   } catch (err) {
     console.error("[GET /api/demo-databases]", err)
     return NextResponse.json({ error: "Demo veritabanları alınamadı" }, { status: 500 })
@@ -136,29 +122,21 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const result = await execute`
-      INSERT INTO DemoDatabases (Name, DataName, LocationType, LocationPath, Description, DisplayOrder, IsActive)
-      OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.DataName, INSERTED.LocationType,
-             INSERTED.LocationPath, INSERTED.Description, INSERTED.DisplayOrder, INSERTED.IsActive
-      VALUES (${name}, ${dataName}, ${locationType}, ${locationPath}, ${description}, ${displayOrder}, ${isActive ? 1 : 0})
-    `
+    const sb = await getSupabaseServer()
+    const { data: created, error } = await sb.schema("hub").from("demo_databases").insert({
+      name, data_name: dataName, location_type: locationType, location_path: locationPath,
+      description, display_order: displayOrder, is_active: isActive,
+    }).select(DEMO_COLS).single()
+    if (error) throw error
+    const row = created as unknown as Row
 
-    const created = (result.recordset as Row[])[0]
-
-    // Junction ekle
-    for (const sid of serviceIds) {
-      try {
-        await execute`
-          INSERT INTO DemoDatabaseServices (DemoDatabaseId, ServiceId)
-          VALUES (${created.Id}, ${sid})
-        `
-      } catch (e) {
-        // FK hatası veya duplicate → sessiz geç
-        console.warn("[POST /api/demo-databases] junction insert hatası", e)
-      }
+    if (serviceIds.length) {
+      const { error: jErr } = await sb.schema("hub").from("demo_database_services")
+        .insert(serviceIds.map((sid) => ({ demo_database_id: row.id, service_id: sid })))
+      if (jErr) console.warn("[POST /api/demo-databases] junction insert hatası", jErr)
     }
 
-    return NextResponse.json(rowToDto(created, serviceIds), { status: 201 })
+    return NextResponse.json(rowToDto(row, serviceIds), { status: 201 })
   } catch (err) {
     console.error("[POST /api/demo-databases]", err)
     return NextResponse.json({ error: "Demo veritabanı eklenemedi" }, { status: 500 })

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 /**
  * GET /api/ad/ous
@@ -16,28 +16,21 @@ export interface ADOUDto {
   children:  ADOUDto[]
 }
 
-interface Row {
-  CompanyId: string
-  Name:      string
-  UserCount: number
-}
-
 export async function GET() {
   try {
-    const rows = await query<Row[]>`
-      SELECT
-        c.CompanyId,
-        c.Name,
-        ISNULL((SELECT COUNT(*) FROM ADUsers a WHERE a.OU = c.CompanyId), 0) AS UserCount
-      FROM Companies c
-      WHERE c.CompanyId IS NOT NULL AND c.AdServerId IS NOT NULL
-      ORDER BY c.CompanyId
-    `
+    const sb = await getSupabaseServer()
+    const [{ data: comps }, { data: adu }] = await Promise.all([
+      sb.schema("hub").from("companies").select("company_id, name")
+        .not("company_id", "is", null).not("ad_server_id", "is", null).order("company_id"),
+      sb.schema("hub").from("ad_users").select("ou"),
+    ])
+    const cnt = new Map<string, number>()
+    for (const a of (adu ?? []) as { ou: string }[]) cnt.set(a.ou, (cnt.get(a.ou) ?? 0) + 1)
 
-    const children: ADOUDto[] = rows.map((r) => ({
-      name:      `${r.CompanyId} — ${r.Name}`,
-      path:      r.CompanyId,
-      userCount: r.UserCount,
+    const children: ADOUDto[] = ((comps ?? []) as { company_id: string; name: string }[]).map((c) => ({
+      name:      `${c.company_id} — ${c.name}`,
+      path:      c.company_id,
+      userCount: cnt.get(c.company_id) ?? 0,
       children:  [],
     }))
 
