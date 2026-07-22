@@ -50,7 +50,10 @@ export async function auth(): Promise<HubSession | null> {
 
   const [{ data: profile }, { data: grants }] = await Promise.all([
     sb.from("users").select("name, role").eq("id", user.id).maybeSingle(),
-    sb.from("user_apps").select("app_id, role"),
+    // user_id ile FİLTRELE — RLS'e güvenme: platform admin'lerde `is_platform_admin()`
+    // politikası TÜM kullanıcıların grant'lerini döndürür, filtresiz `.find(hub)` yanlış
+    // kullanıcının rolünü yakalar (admin kendini "user" görüp /unauthorized'a düşer).
+    sb.from("user_apps").select("app_id, role").eq("user_id", user.id),
   ])
 
   const apps: AppGrant[] = ((grants ?? []) as { app_id: string; role: string }[]).map((g) => ({
