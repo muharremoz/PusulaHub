@@ -1,61 +1,28 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { serversWithRole } from "@/lib/hub-servers"
 import { getAllAgents } from "@/lib/agent-store"
 
-/**
- * GET /api/setup/iis-servers
- * Firma kurulum sihirbazı 4. adım "IIS Sunucusu" listesi için:
- * sistemde Role='IIS' rolüne sahip tüm Windows sunucularını döndürür.
- * Agent-store'dan canlı RAM kapasitesi ve online durumu ile zenginleştirilir.
- */
+/** GET /api/setup/iis-servers — Role='IIS' sunucular + agent-store zenginleştirme. */
 
-interface Row {
-  Id:     string
-  Name:   string
-  IP:     string
-  DNS:    string | null
-  Status: string
-}
+interface Row { id: string; name: string; ip: string; dns: string | null; status: string }
 
 export interface IisServerItem {
-  id:         string
-  name:       string
-  ip:         string
-  dns:        string
-  type:       string
-  userCount:  number
-  totalRamGB: number
-  isOnline:   boolean
+  id: string; name: string; ip: string; dns: string; type: string
+  userCount: number; totalRamGB: number; isOnline: boolean
 }
 
 export async function GET() {
   try {
-    const rows = await query<Row[]>`
-      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.Status
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE r.Role = 'IIS'
-      ORDER BY s.Name
-    `
-
+    const rows = await serversWithRole("IIS", "id, name, ip, dns, status") as unknown as Row[]
     const agents = getAllAgents()
 
     const servers: IisServerItem[] = rows.map((r) => {
-      const agent = agents.find(
-        (a) => a.agentId === r.Id || a.hostname === r.Name || a.ip === r.IP
-      )
-      const report  = agent?.lastReport
-      const totalMB = report?.metrics?.ram?.totalMB ?? 0
-
+      const agent = agents.find((a) => a.agentId === r.id || a.hostname === r.name || a.ip === r.ip)
+      const totalMB = agent?.lastReport?.metrics?.ram?.totalMB ?? 0
       return {
-        id:         r.Id,
-        name:       r.Name,
-        ip:         r.IP,
-        dns:        r.DNS ?? "",
-        type:       "IIS Web Server",
-        userCount:  0,
-        totalRamGB: Math.round(totalMB / 1024),
-        isOnline:   agent ? agent.status === "online" : r.Status === "online",
+        id: r.id, name: r.name, ip: r.ip, dns: r.dns ?? "", type: "IIS Web Server",
+        userCount: 0, totalRamGB: Math.round(totalMB / 1024),
+        isOnline: agent ? agent.status === "online" : r.status === "online",
       }
     })
 

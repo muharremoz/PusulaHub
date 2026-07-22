@@ -1,71 +1,38 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { serversWithRole } from "@/lib/hub-servers"
 import { getAllAgents } from "@/lib/agent-store"
 
-/**
- * GET /api/setup/ad-servers
- * Firma kurulum sihirbazı 1. adım için: sistemde Role='AD' rolüne sahip
- * tüm sunucuları döndürür. Her kayıtta agent-store'dan canlı durum,
- * kullanıcı sayısı ve firma sayısı zenginleştirilir.
- */
+/** GET /api/setup/ad-servers — Role='AD' sunucular + agent-store zenginleştirme. */
 
 interface Row {
-  Id:     string
-  Name:   string
-  IP:     string
-  DNS:    string | null
-  Domain: string | null
-  RdpPort: number | null
-  Status: string
+  id: string; name: string; ip: string; dns: string | null; domain: string | null; rdp_port: number | null; status: string
 }
 
 export interface AdServerDto {
-  id:           string
-  name:         string
-  ip:           string
-  dns:          string
-  domain:       string
-  rdpPort:      number | null
-  isOnline:     boolean
-  userCount:    number
-  companyCount: number
+  id: string; name: string; ip: string; dns: string; domain: string
+  rdpPort: number | null; isOnline: boolean; userCount: number; companyCount: number
 }
 
-/** "dc1.sirket.local" → "sirket.local"  /  "dc1" → "" */
 function domainFromDns(dns: string | null): string {
   if (!dns) return ""
   const idx = dns.indexOf(".")
-  if (idx === -1) return ""
-  return dns.slice(idx + 1)
+  return idx === -1 ? "" : dns.slice(idx + 1)
 }
 
 export async function GET() {
   try {
-    const rows = await query<Row[]>`
-      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.Domain, s.RdpPort, s.Status
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE r.Role = 'AD'
-      ORDER BY s.Name
-    `
-
+    const rows = await serversWithRole("AD", "id, name, ip, dns, domain, rdp_port, status") as unknown as Row[]
     const agents = getAllAgents()
 
     const servers: AdServerDto[] = rows.map((r) => {
-      const agent = agents.find(
-        (a) => a.agentId === r.Id || a.hostname === r.Name || a.ip === r.IP
-      )
+      const agent = agents.find((a) => a.agentId === r.id || a.hostname === r.name || a.ip === r.ip)
       const ad = agent?.lastReport?.ad
       return {
-        id:           r.Id,
-        name:         r.Name,
-        ip:           r.IP,
-        dns:          r.DNS ?? "",
-        // Önce Servers.Domain kolonu (ör. "pusuladc.local"); yoksa DNS'ten türet
-        domain:       (r.Domain && r.Domain.trim()) ? r.Domain.trim() : domainFromDns(r.DNS),
-        rdpPort:      r.RdpPort,
-        isOnline:     agent ? agent.status === "online" : r.Status === "online",
-        userCount:    ad?.users?.length ?? 0,
+        id: r.id, name: r.name, ip: r.ip, dns: r.dns ?? "",
+        domain: (r.domain && r.domain.trim()) ? r.domain.trim() : domainFromDns(r.dns),
+        rdpPort: r.rdp_port,
+        isOnline: agent ? agent.status === "online" : r.status === "online",
+        userCount: ad?.users?.length ?? 0,
         companyCount: ad?.companies?.length ?? 0,
       }
     })

@@ -13,3 +13,13 @@ export async function findServerBy(idOrName: string, cols: string): Promise<Reco
   const { data: byName } = await sb.schema("hub").from("servers").select(cols).ilike("name", idOrName).limit(1).maybeSingle()
   return (byName as unknown as Record<string, unknown>) ?? null
 }
+
+/** Belirli role sahip sunucular (eski `JOIN ServerRoles WHERE Role=X` deseni). */
+export async function serversWithRole(role: string, cols: string): Promise<Record<string, unknown>[]> {
+  const sb = await getSupabaseServer()
+  const { data: roleRows } = await sb.schema("hub").from("server_roles").select("server_id").eq("role", role)
+  const ids = [...new Set(((roleRows ?? []) as { server_id: string }[]).map((r) => r.server_id))]
+  if (!ids.length) return []
+  const { data } = await sb.schema("hub").from("servers").select(cols).in("id", ids).order("name")
+  return (data ?? []) as unknown as Record<string, unknown>[]
+}

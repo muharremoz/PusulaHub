@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 /**
  * GET /api/ad/users
@@ -20,44 +20,35 @@ export interface ADUserDto {
 }
 
 interface Row {
-  Id:          string
-  Server:      string | null
-  Username:    string
-  DisplayName: string
-  Email:       string
-  OU:          string
-  Enabled:     boolean
-  LastLogin:   string | null
-  CreatedAt:   string
+  id:           string
+  server:       string | null
+  username:     string
+  display_name: string
+  email:        string
+  ou:           string
+  enabled:      boolean
+  last_login:   string | null
+  created_at:   string
 }
 
 export async function GET() {
   try {
-    const rows = await query<Row[]>`
-      SELECT
-        Id,
-        Server,
-        Username,
-        DisplayName,
-        Email,
-        OU,
-        Enabled,
-        CONVERT(NVARCHAR(16), LastLogin, 120) AS LastLogin,
-        CONVERT(NVARCHAR(10), CreatedAt, 23)  AS CreatedAt
-      FROM ADUsers
-      ORDER BY DisplayName
-    `
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("ad_users")
+      .select("id, server, username, display_name, email, ou, enabled, last_login, created_at")
+      .order("display_name")
+    if (error) throw error
 
-    const users: ADUserDto[] = rows.map((r) => ({
-      id:          r.Id,
-      username:    r.Username,
-      displayName: r.DisplayName,
-      email:       r.Email,
-      ou:          r.OU,
-      enabled:     !!r.Enabled,
-      lastLogin:   r.LastLogin ?? "",
-      createdAt:   r.CreatedAt,
-      server:      r.Server ?? "",
+    const users: ADUserDto[] = ((data ?? []) as Row[]).map((r) => ({
+      id:          r.id,
+      username:    r.username,
+      displayName: r.display_name,
+      email:       r.email,
+      ou:          r.ou,
+      enabled:     !!r.enabled,
+      lastLogin:   r.last_login ? r.last_login.slice(0, 16).replace("T", " ") : "",
+      createdAt:   r.created_at ? r.created_at.slice(0, 10) : "",
+      server:      r.server ?? "",
     }))
 
     const resp = NextResponse.json(users)

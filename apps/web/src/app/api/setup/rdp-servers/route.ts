@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { serversWithRole } from "@/lib/hub-servers"
 import { getAllAgents } from "@/lib/agent-store"
 
 /**
@@ -11,12 +11,12 @@ import { getAllAgents } from "@/lib/agent-store"
  */
 
 interface Row {
-  Id:    string
-  Name:  string
-  IP:    string
-  DNS:   string | null
-  RdpPort: number | null
-  Status: string
+  id:    string
+  name:  string
+  ip:    string
+  dns:   string | null
+  rdp_port: number | null
+  status: string
 }
 
 export interface RdpServerItem {
@@ -33,19 +33,13 @@ export interface RdpServerItem {
 
 export async function GET() {
   try {
-    const rows = await query<Row[]>`
-      SELECT DISTINCT s.Id, s.Name, s.IP, s.DNS, s.RdpPort, s.Status
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE r.Role = 'RDP'
-      ORDER BY s.Name
-    `
+    const rows = await serversWithRole("RDP", "id, name, ip, dns, rdp_port, status") as unknown as Row[]
 
     const agents = getAllAgents()
 
     const servers: RdpServerItem[] = rows.map((r) => {
       const agent = agents.find(
-        (a) => a.agentId === r.Id || a.hostname === r.Name || a.ip === r.IP
+        (a) => a.agentId === r.id || a.hostname === r.name || a.ip === r.ip
       )
       const report  = agent?.lastReport
       const totalMB = report?.metrics?.ram?.totalMB ?? 0
@@ -56,15 +50,15 @@ export async function GET() {
       ).length
 
       return {
-        id:         r.Id,
-        name:       r.Name,
-        ip:         r.IP,
-        dns:        r.DNS ?? "",
-        rdpPort:    r.RdpPort,
+        id:         r.id,
+        name:       r.name,
+        ip:         r.ip,
+        dns:        r.dns ?? "",
+        rdpPort:    r.rdp_port,
         type:       "Terminal Server",
         userCount:  activeSessions,
         totalRamGB: Math.round(totalMB / 1024),
-        isOnline:   agent ? agent.status === "online" : r.Status === "online",
+        isOnline:   agent ? agent.status === "online" : r.status === "online",
       }
     })
 
