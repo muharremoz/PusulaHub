@@ -52,6 +52,14 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  // Dışarı kapatma: WEB_GIRIS_KAPALI=1 iken yalnız masaüstü agent (PusulaCRM-Agent
+  // UA imzalı) açabilir. Servis/agent uçları (yukarıda) muaf; UI + korumalı sayfalar
+  // imzasız (normal tarayıcı) → sessiz 404 (site yokmuş gibi). Agent dağıtıldıktan
+  // SONRA env açılır.
+  if (process.env.WEB_GIRIS_KAPALI === "1" && !(req.headers.get("user-agent") ?? "").includes("PusulaCRM-Agent")) {
+    return new NextResponse("Not Found", { status: 404 })
+  }
+
   let response = NextResponse.next({ request: req })
   const supabase = createServerClient(url, anonKey, {
     cookies: {
