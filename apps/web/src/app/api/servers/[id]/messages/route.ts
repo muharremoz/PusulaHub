@@ -1,15 +1,8 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { findServerBy } from "@/lib/hub-servers"
 import { requirePermission } from "@/lib/require-permission"
 import { listMessages, getRecipients } from "@/lib/messages-db"
 import { markReadByMsgId } from "@/lib/messages-db"
-
-interface ServerRow {
-  Id:        string
-  IP:        string
-  ApiKey:    string | null
-  AgentPort: number | null
-}
 
 /**
  * GET /api/servers/[id]/messages
@@ -26,17 +19,15 @@ export async function GET(
   const { id } = await params
 
   // Önce sunucu kaydını çöz (Id veya Name)
-  const serverRows = await query<ServerRow[]>`
-    SELECT Id, IP, ApiKey, AgentPort FROM Servers
-    WHERE Id = ${id} OR LOWER(Name) = ${id.toLowerCase()}
-  `
-  if (!serverRows.length) {
+  const server = await findServerBy(id, "id, ip, api_key, agent_port") as
+    { id: string; ip: string; api_key: string | null; agent_port: number | null } | null
+  if (!server) {
     return NextResponse.json({ messages: [] })
   }
-  const serverId = serverRows[0].Id
+  const serverId = server.id
 
   // Agent'ı poll et — pendingAcks varsa DB'ye işle
-  const { ApiKey, AgentPort, IP } = serverRows[0]
+  const { api_key: ApiKey, agent_port: AgentPort, ip: IP } = server
   if (ApiKey && AgentPort) {
     try {
       const ctrl  = new AbortController()

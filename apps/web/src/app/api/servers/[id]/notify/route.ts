@@ -1,15 +1,10 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { findServerBy } from "@/lib/hub-servers"
 import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { broadcast } from "@/lib/messages-fanout"
 import { getAllAgents } from "@/lib/agent-store"
 import { randomUUID } from "crypto"
-
-interface ServerRow {
-  Id:   string
-  Name: string
-}
 
 /**
  * POST /api/servers/[id]/notify
@@ -30,14 +25,11 @@ export async function POST(
     return NextResponse.json({ error: "Başlık ve mesaj zorunlu" }, { status: 400 })
   }
 
-  const rows = await query<ServerRow[]>`
-    SELECT Id, Name FROM Servers
-    WHERE Id = ${id} OR LOWER(Name) = ${id.toLowerCase()}
-  `
-  if (!rows.length) {
+  const server = await findServerBy(id, "id, name") as { id: string; name: string } | null
+  if (!server) {
     return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
   }
-  const serverId = rows[0].Id
+  const serverId = server.id
 
   // Sunucuda aktif WTS oturumu var mı? — yoksa yine de gönder ama "0 alıcı" döner
   const agent = getAllAgents().find(a => a.agentId === serverId)

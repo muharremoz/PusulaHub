@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { findServerBy } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 
 export interface FileItem {
@@ -13,12 +13,6 @@ export interface FilesResponse {
   path:   string
   items:  FileItem[]
   drives: string[]
-}
-
-interface ServerRow {
-  IP:        string
-  AgentPort: number | null
-  ApiKey:    string | null
 }
 
 // Güvenli path: sadece mutlak yol, ".." yok, agent injection yok
@@ -48,14 +42,13 @@ export async function GET(
   }
 
   try {
-    const rows = await query<ServerRow[]>`
-      SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${id}
-    `
-    if (!rows.length || !rows[0].AgentPort || !rows[0].ApiKey) {
+    const srv = await findServerBy(id, "ip, agent_port, api_key") as
+      { ip: string; agent_port: number | null; api_key: string | null } | null
+    if (!srv || !srv.agent_port || !srv.api_key) {
       return NextResponse.json({ error: "Sunucu bulunamadı veya agent tanımlı değil" }, { status: 404 })
     }
 
-    const { IP, AgentPort, ApiKey } = rows[0]
+    const { ip: IP, agent_port: AgentPort, api_key: ApiKey } = srv
     const safePath = psEscape(rawPath)
 
     // Klasör listesi — pipe-separated: name|isDir|size|modified

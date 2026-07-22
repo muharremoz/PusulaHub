@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { findServerBy } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 
 const MAX_PREVIEW_BYTES  = 5  * 1024 * 1024  // 5 MB
@@ -18,12 +18,6 @@ const MIME: Record<string, string> = {
   cs: "text/plain", ps1: "text/plain", bat: "text/plain",
   cmd: "text/plain", sql: "text/plain",
   yaml: "text/plain", yml: "text/plain", config: "text/plain",
-}
-
-interface ServerRow {
-  IP: string
-  AgentPort: number | null
-  ApiKey: string | null
 }
 
 function validatePath(p: string): boolean {
@@ -50,14 +44,13 @@ export async function GET(
   }
 
   try {
-    const rows = await query<ServerRow[]>`
-      SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${id}
-    `
-    if (!rows.length || !rows[0].AgentPort || !rows[0].ApiKey) {
+    const srv = await findServerBy(id, "ip, agent_port, api_key") as
+      { ip: string; agent_port: number | null; api_key: string | null } | null
+    if (!srv || !srv.agent_port || !srv.api_key) {
       return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
     }
 
-    const { IP, AgentPort, ApiKey } = rows[0]
+    const { ip: IP, agent_port: AgentPort, api_key: ApiKey } = srv
     const safePath = psEscape(rawPath)
     const maxBytes = mode === "preview" ? MAX_PREVIEW_BYTES : MAX_DOWNLOAD_BYTES
 

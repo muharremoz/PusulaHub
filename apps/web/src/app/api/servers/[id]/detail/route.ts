@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 function slugify(name: string): string {
   return name
@@ -22,23 +22,17 @@ export async function GET(
 ) {
   const { id } = await params
 
-  // Önce Id ile dene
-  let rows = await query<{ Id: string; IP: string; Name: string }[]>`
-    SELECT Id, IP, Name FROM Servers WHERE Id = ${id}
-  `
-
-  // Bulunamazsa tüm sunucuları çekip slug ile eşleştir
-  if (!rows.length) {
-    const all = await query<{ Id: string; IP: string; Name: string }[]>`
-      SELECT Id, IP, Name FROM Servers
-    `
-    const match = all.find((s) => slugify(s.Name) === id)
-    if (match) rows = [match]
+  const sb = await getSupabaseServer()
+  let srv = (await sb.schema("hub").from("servers").select("id, ip, name").eq("id", id).maybeSingle()).data as
+    { id: string; ip: string; name: string } | null
+  if (!srv) {
+    const { data: all } = await sb.schema("hub").from("servers").select("id, ip, name")
+    srv = ((all ?? []) as { id: string; ip: string; name: string }[]).find((s) => slugify(s.name) === id) ?? null
   }
 
-  const serverId = rows[0]?.Id
-  const serverIp = rows[0]?.IP
-  const serverName = rows[0]?.Name
+  const serverId = srv?.id
+  const serverIp = srv?.ip
+  const serverName = srv?.name
 
   if (!serverId) {
     return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })

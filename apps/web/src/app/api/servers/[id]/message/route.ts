@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { findServerBy } from "@/lib/hub-servers"
 import { queueMessage } from "@/lib/agent-store"
 
 export async function POST(
@@ -13,10 +13,8 @@ export async function POST(
     return NextResponse.json({ error: "Başlık ve mesaj zorunlu" }, { status: 400 })
   }
 
-  const rows = await query<{ Id: string }[]>`
-    SELECT Id FROM Servers WHERE Id = ${id} OR LOWER(Name) = ${id.toLowerCase()}
-  `
-  const serverId = rows[0]?.Id
+  const server = await findServerBy(id, "id") as { id: string } | null
+  const serverId = server?.id
   if (!serverId) {
     return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
   }
