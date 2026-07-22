@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server"
-import { execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
 
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v))
@@ -34,11 +34,10 @@ export async function PUT(
   const db   = clamp(Math.round(Number(body.dbGB)   || 1),  1, 100000)
 
   try {
-    await execute`
-      UPDATE Companies
-      SET QuotaCpu = ${cpu}, QuotaRam = ${ram}, QuotaDisk = ${disk}, DbQuota = ${db}
-      WHERE CompanyId = ${firkod}
-    `
+    const sb = await getSupabaseServer()
+    await sb.schema("hub").from("companies")
+      .update({ quota_cpu: cpu, quota_ram: ram, quota_disk: disk, db_quota: db })
+      .eq("company_id", firkod)
     return NextResponse.json({ ok: true, quota: { cpuPct: cpu, ramGB: ram, diskGB: disk, dbGB: db } })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Hata" }, { status: 500 })
