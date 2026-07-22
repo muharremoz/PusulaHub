@@ -1,77 +1,97 @@
 import { NextResponse, type NextRequest } from "next/server"
-import { verifyEdge, COOKIE_NAME }         from "@/lib/pusula-session-edge"
+import { createServerClient } from "@supabase/ssr"
+import { stripPersistence } from "@/lib/supabase/session-cookies"
 
 /**
- * Hub middleware: pusula_session cookie'sini doğrular.
- * Session yoksa gateway /login'e (basePath dışı) yönlendirir.
+ * Hub middleware — Birleşik platform (Supabase Auth).
  *
- * NOT: basePath = /apps/hub. Browser gateway:4000 üzerinden erişir,
- * /login path'i gateway'e gider (Hub'ın kendi /login sayfası kaldırıldı).
+ * Kimlik: Supabase session cookie (`.pusulanet.net` alt-domain SSO). Oturum yoksa
+ * Switch (login+launcher) `/login`'e döner. Hub erişimi JWT `app_access` claim'inden
+ * okunur (custom_access_token_hook doldurur) — DB sorgusu yok. Modül izinleri app
+ * içinde `auth()` ile taze okunur.
+ *
+ * basePath kaldırıldı → Hub kendi alt-domain'inin (hub.pusulanet.net) kökünde sunulur.
  */
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+// Switch (login+launcher) origin. Prod: https://app.pusulanet.net. Boşsa same-origin fallback.
+const SWITCH_URL = process.env.NEXT_PUBLIC_SWITCH_URL || ""
+
+/** JWT payload'ından `app_access` claim'ini çöz (getUser zaten doğruladı → yalnız decode). */
+function decodeAppAccess(token: string | undefined): Record<string, string> | null {
+  if (!token) return null
+  const part = token.split(".")[1]
+  if (!part) return null
+  try {
+    const json = atob(part.replace(/-/g, "+").replace(/_/g, "/"))
+    const claims = JSON.parse(json) as { app_access?: Record<string, string> }
+    return claims.app_access ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
-  // Static asset & public API
-  if (pathname.startsWith("/_next") || pathname.includes(".")) {
-    return NextResponse.next()
-  }
+  // Static asset & auth endpoint'leri geç
+  if (pathname.startsWith("/_next") || pathname.includes(".")) return NextResponse.next()
+  if (pathname.startsWith("/api/auth/")) return NextResponse.next()
 
   // Internal service-to-service endpoint — x-internal-key ile kendini koruyor.
-  // Module registry push'u (instrumentation.ts içinden) session olmadan çağırır.
-  if (pathname.startsWith("/api/apps/register")) {
+  if (pathname.startsWith("/api/apps/register")) return NextResponse.next()
+  // Alt uygulamaların Hub'a proxy'lediği istekler (kendi x-internal-key kontrolleri var).
+  if (pathname.startsWith("/api/hub/")) return NextResponse.next()
+  // Token-bazlı public müşteri yükleme akışı.
+  if (pathname.startsWith("/t/") || pathname.startsWith("/api/aktarim/by-token/")) {
     return NextResponse.next()
   }
 
-  // Alt uygulamaların Hub'a proxy'lediği istekler (örn. 2FA doğrulama).
-  // Endpoint'ler kendi x-internal-key kontrollerini yapar.
-  if (pathname.startsWith("/api/hub/")) {
-    return NextResponse.next()
-  }
+  let response = NextResponse.next({ request: req })
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return req.cookies.getAll()
+      },
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
+        response = NextResponse.next({ request: req })
+        cookiesToSet.forEach(({ name, value, options }) =>
+          response.cookies.set(name, value, stripPersistence(value, options)),
+        )
+      },
+    },
+  })
 
-  // Müşteri yükleme sayfası ve token-bazlı public endpoint'ler:
-  // - /t/{token}                                — HTML sayfa
-  // - /api/aktarim/by-token/{token}/info        — token bilgisi (auth'suz)
-  // - /api/aktarim/by-token/{token}/upload      — chunk receiver
-  // (validate/progress zaten X-Service-Key ile korunuyor.)
-  if (
-    pathname.startsWith("/t/") ||
-    pathname.startsWith("/api/aktarim/by-token/")
-  ) {
-    return NextResponse.next()
-  }
+  // Oturumu tazele (token refresh) + kullanıcıyı doğrula
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-const token   = req.cookies.get(COOKIE_NAME)?.value
-  const payload = await verifyEdge(token)
-
-  // NOT: Next 15 edge adapter (adapter.js:318) Location header'ını NextURL
-  // ile parse ediyor → relative URL "Invalid URL" atıyor.
-  // Origin'i browser'ın gördüğü host'tan (gateway: :4000) alıyoruz ki 307
-  // doğru yere gitsin; gateway proxy x-forwarded-* header'larını setliyor.
+  // Browser'ın gördüğü origin (proxy x-forwarded-* header'ları) — 307 hedefi için.
   const fwdProto = req.headers.get("x-forwarded-proto")
   const fwdHost  = req.headers.get("x-forwarded-host")
-  const origin   = fwdHost ? `${fwdProto ?? "http"}://${fwdHost}` : req.nextUrl.origin
+  const origin   = fwdHost ? `${fwdProto ?? "https"}://${fwdHost}` : req.nextUrl.origin
+  const switchBase = SWITCH_URL || origin
 
-  if (!payload) {
-    // Session yok → gateway /login'e (basePath YOK).
-    const next = `/apps/hub${pathname}`
-    return new NextResponse(null, {
-      status:  307,
-      headers: { Location: `${origin}/login?next=${encodeURIComponent(next)}` },
-    })
+  if (!user) {
+    const returnTo = `${origin}${pathname}${req.nextUrl.search}`
+    return NextResponse.redirect(`${switchBase}/login?next=${encodeURIComponent(returnTo)}`)
   }
 
-  // Hub'a erişim: kullanıcının apps listesinde "hub" var mı?
-  const allowed = (payload.apps ?? []).some((a) => a.id === "hub")
-  if (!allowed) {
-    return new NextResponse(null, {
-      status:  307,
-      headers: { Location: `${origin}/?error=unauthorized` },
-    })
+  // Hub erişimi: app_access claim (kaba kontrol). Claim yoksa (eski token / hook devre dışı)
+  // fail-open — getUser zaten platform kullanıcısını doğruladı, auth() kimliği çözer.
+  const appAccess = decodeAppAccess(
+    (await supabase.auth.getSession()).data.session?.access_token,
+  )
+  if (appAccess && !("hub" in appAccess)) {
+    return NextResponse.redirect(`${switchBase}/?error=unauthorized`)
   }
 
-  return NextResponse.next()
+  return response
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$|api/auth).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.png$).*)"],
 }

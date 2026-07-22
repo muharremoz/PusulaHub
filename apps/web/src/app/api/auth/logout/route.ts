@@ -1,19 +1,14 @@
 /**
- * POST /api/auth/logout
- * pusula_session cookie'sini siler. Path=/ olduğu için 3 uygulama da
- * aynı cookie'yi paylaşır; buradan silmek yeterli.
+ * POST /api/auth/logout — Supabase signOut.
+ *
+ * `.pusulanet.net` alt-domain cookie'sini temizler (session-cookies withDomain).
+ * Tek Supabase oturumu olduğundan buradan çıkış tüm platform uygulamalarını kapsar.
  */
 import { NextResponse } from "next/server"
-import { COOKIE_NAME }  from "@/lib/pusula-session"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function POST() {
-  const res = NextResponse.json({ success: true })
-  res.cookies.set(COOKIE_NAME, "", {
-    httpOnly: true,
-    sameSite: "lax",
-    secure:   process.env.NODE_ENV === "production",
-    path:     "/",
-    maxAge:   0,
-  })
-  return res
+  const sb = await getSupabaseServer()
+  await sb.auth.signOut()
+  return NextResponse.json({ success: true })
 }

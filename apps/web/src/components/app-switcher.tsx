@@ -31,27 +31,36 @@ interface AppEntry {
   externalUrl?: string
 }
 
-// basePath /apps/hub altında sunulduğumuz için /apps/hub/logos/... ile başlatıyoruz.
+// Birleşik platform: her uygulama kendi alt-domain'inde, tek Supabase cookie'sini
+// (`.pusulanet.net`) paylaşır → externalUrl ile doğrudan gidilir (SSO). basePath yok.
 const APPS: AppEntry[] = [
   {
     id:          "hub",
     name:        "PusulaHub",
     description: "Sunucu yönetim paneli",
-    logo:        "/apps/hub/logos/hub.svg",
+    logo:        "/logos/hub.svg",
+    externalUrl: "https://hub.pusulanet.net/",
   },
   {
     id:          "spareflow",
     name:        "SpareFlow",
     description: "SpareBackup izleme uygulaması",
-    logo:        "/apps/hub/logos/spareflow.svg",
+    logo:        "/logos/spareflow.svg",
+    externalUrl: "https://spareflow.pusulanet.net/",
   },
-  // Pusula CRM geçici olarak kaldırıldı — gateway HTTPS olunca geri eklenecek
-  // (iframe + same-site cookie için). Logo /apps/hub/logos/crm.svg duruyor.
-  // { id:"crm", name:"Pusula CRM", description:"Müşteri ilişkileri yönetimi",
-  //   logo:"/apps/hub/logos/crm.svg" }
+  {
+    id:          "crm",
+    name:        "Pusula CRM",
+    description: "Müşteri ilişkileri yönetimi",
+    logo:        "/logos/crm.svg",
+    externalUrl: "https://crm.pusulanet.net/",
+  },
 ]
 
 const CURRENT_ID = "hub"
+
+// Switch (launcher) origin — "Switch ekranına dön" hedefi. Prod: https://app.pusulanet.net.
+const SWITCH_URL = process.env.NEXT_PUBLIC_SWITCH_URL || "/"
 
 export function AppSwitcher() {
   const [accessibleApps, setAccessibleApps] = React.useState<string[] | null>(null)
@@ -124,7 +133,7 @@ export function AppSwitcher() {
         })}
         <DropdownMenuSeparator className="bg-[#0d3380]" />
         <DropdownMenuItem asChild className="gap-2 p-2 cursor-pointer text-[11px] text-[#b4c8ff] focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]">
-          <a href="/">
+          <a href={SWITCH_URL}>
             Switch ekranına dön
           </a>
         </DropdownMenuItem>

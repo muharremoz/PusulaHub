@@ -1,15 +1,12 @@
 import type { NextConfig } from "next";
 
 /**
- * basePath: PusulaHub, Pusula Switch gateway altında "/apps/hub" path'inde sunulur.
- * Browser hep gateway origin'ini (localhost:4000) görür → cookie/session paylaşımı.
- * Direkt port (localhost:4242) erişiminde de aynı path geçerli olur.
- *
- * Client-side fetch çağrıları otomatik basePath kazanmaz; root layout'taki
- * <FetchBasePath /> bileşeni window.fetch'i wrap edip /api/* çağrılarına prefix ekler.
+ * Birleşik platform: Hub kendi alt-domain'inde (hub.pusulanet.net) sunulur.
+ * Eski basePath="/apps/hub" (Switch gateway proxy modeli) kaldırıldı → tüm iç
+ * link/asset/fetch artık kökten çözülür. Alt-domain'ler tek Supabase cookie'sini
+ * (`.pusulanet.net`) paylaşır → SSO.
  */
 const nextConfig: NextConfig = {
-  basePath: "/apps/hub",
   serverExternalPackages: ["qrcode", "otplib", "bcryptjs", "mssql"],
 };
 
