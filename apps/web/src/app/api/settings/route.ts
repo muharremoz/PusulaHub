@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/db"
-
-interface SettingRow { Key: string; Value: string | null }
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function GET() {
   try {
-    const rows = await query<SettingRow[]>`SELECT [Key], [Value] FROM Settings`
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("settings").select("key, value")
+    if (error) throw error
+
     const settings: Record<string, string> = {}
-    for (const r of rows) {
-      settings[r.Key] = r.Value ?? ""
+    for (const r of (data ?? []) as { key: string; value: string | null }[]) {
+      settings[r.key] = r.value ?? ""
     }
     return NextResponse.json(settings)
   } catch (err) {
@@ -20,10 +21,15 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body: Record<string, string> = await req.json()
-    for (const [key, value] of Object.entries(body)) {
-      await execute`
-        UPDATE Settings SET [Value] = ${value} WHERE [Key] = ${key}
-      `
+    const rows = Object.entries(body).map(([key, value]) => ({
+      key,
+      value,
+      updated_at: new Date().toISOString(),
+    }))
+    if (rows.length) {
+      const sb = await getSupabaseServer()
+      const { error } = await sb.schema("hub").from("settings").upsert(rows, { onConflict: "key" })
+      if (error) throw error
     }
     return NextResponse.json({ success: true })
   } catch (err) {
