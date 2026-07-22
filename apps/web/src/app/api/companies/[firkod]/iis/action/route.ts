@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { findServerBy } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 
 /**
@@ -17,12 +18,6 @@ interface Body {
   server:   string
   siteName: string
   action:   "start" | "stop" | "restart" | "remove"
-}
-
-interface ServerRow {
-  IP:        string
-  AgentPort: number
-  ApiKey:    string
 }
 
 function psQuote(s: string): string {
@@ -58,25 +53,17 @@ export async function POST(
     }
 
     // Site gerçekten bu firmaya mı ait? (güvenlik — çapraz firma saldırısını engelle)
-    const siteCheck = await query<{ Cnt: number }[]>`
-      SELECT COUNT(*) AS Cnt FROM IISSites
-      WHERE Name = ${body.siteName} AND Server = ${body.server} AND Firma = ${firkod}
-    `
-    if (!siteCheck[0] || siteCheck[0].Cnt === 0) {
-      return NextResponse.json({ error: "Site bu firmaya ait değil" }, { status: 403 })
-    }
+    const sb = await getSupabaseServer()
+    const { count } = await sb.schema("hub").from("iis_sites").select("id", { count: "exact", head: true })
+      .eq("name", body.siteName).eq("server", body.server).eq("firma", firkod)
+    if (!count) return NextResponse.json({ error: "Site bu firmaya ait değil" }, { status: 403 })
 
     // Agent bilgilerini sunucu adından çek
-    const rows = await query<ServerRow[]>`
-      SELECT IP, AgentPort, ApiKey FROM Servers WHERE Name = ${body.server}
-    `
-    if (!rows.length) {
-      return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
-    }
-    const { IP, AgentPort, ApiKey } = rows[0]
+    const srv = await findServerBy(body.server, "ip, agent_port, api_key") as { ip: string; agent_port: number | null; api_key: string | null } | null
+    if (!srv) return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
 
     const command = buildCommand(body.siteName, body.action)
-    const result  = await execOnAgent(IP, AgentPort, ApiKey, command, 30)
+    const result  = await execOnAgent(srv.ip, srv.agent_port ?? 8585, srv.api_key ?? "", command, 30)
 
     if (result.exitCode !== 0) {
       return NextResponse.json(

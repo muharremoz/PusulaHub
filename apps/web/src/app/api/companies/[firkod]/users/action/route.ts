@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { execOnAgent } from "@/lib/agent-poller"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 
@@ -18,8 +18,6 @@ interface Body {
   action:   "reset-password" | "disable" | "enable" | "delete"
   password?: string
 }
-
-interface ServerRow { IP: string; AgentPort: number; ApiKey: string }
 
 function psQuote(s: string): string {
   return (s ?? "").replace(/'/g, "''")
@@ -55,14 +53,16 @@ export async function POST(
       }
     }
 
-    // AD agent bilgisi — Companies.AdServerId
-    const rows = await query<ServerRow[]>`
-      SELECT s.IP, s.AgentPort, s.ApiKey
-      FROM Companies c
-      JOIN Servers s ON s.Id = c.AdServerId
-      WHERE c.CompanyId = ${firkod} AND s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL
-    `
-    const agent = rows[0]
+    // AD agent bilgisi — Companies.AdServerId → Servers
+    const sb = await getSupabaseServer()
+    const { data: comp } = await sb.schema("hub").from("companies").select("ad_server_id").eq("company_id", firkod).maybeSingle()
+    const adId = (comp as { ad_server_id: string | null } | null)?.ad_server_id
+    let agent: { IP: string; AgentPort: number; ApiKey: string } | null = null
+    if (adId) {
+      const { data: srv } = await sb.schema("hub").from("servers").select("ip, agent_port, api_key").eq("id", adId).maybeSingle()
+      const s = srv as { ip: string; agent_port: number | null; api_key: string | null } | null
+      if (s?.agent_port && s?.api_key) agent = { IP: s.ip, AgentPort: s.agent_port, ApiKey: s.api_key }
+    }
     if (!agent) return NextResponse.json({ error: "AD sunucusu tanımsız" }, { status: 404 })
 
     const u = psQuote(body.username)
@@ -96,10 +96,7 @@ export async function POST(
       } catch { /* sessiz */ }
     } else if (body.action === "delete") {
       try {
-        await execute`
-          DELETE FROM CompanyUserCredentials
-          WHERE CompanyId = ${firkod} AND Username = ${body.username}
-        `
+        await sb.schema("hub").from("company_user_credentials").delete().eq("company_id", firkod).eq("username", body.username)
       } catch { /* sessiz */ }
     }
 

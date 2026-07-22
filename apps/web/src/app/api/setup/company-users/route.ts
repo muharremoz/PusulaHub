@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { pollSingleAgent } from "@/lib/agent-poller"
 
@@ -11,11 +11,6 @@ import { pollSingleAgent } from "@/lib/agent-poller"
  *
  * Agent raporu `ad.companies[].users` yapısıyla gelir; firmaNo = firkod eşlenir.
  */
-
-interface ServerRow {
-  Name: string
-  IP:   string
-}
 
 export interface ExistingAdUserDto {
   username:    string
@@ -44,14 +39,11 @@ export async function GET(req: NextRequest) {
       await pollSingleAgent(serverId, true)
     }
 
-    // Sunucu adını/IP'sini DB'den çek — agent-store'da eşleştirmek için
-    const rows = await query<ServerRow[]>`
-      SELECT Name, IP FROM Servers WHERE Id = ${serverId}
-    `
-    if (!rows.length) {
-      return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
-    }
-    const { Name, IP } = rows[0]
+    // Sunucu adını/IP'sini hub'dan çek — agent-store'da eşleştirmek için
+    const sb = await getSupabaseServer()
+    const { data: srv } = await sb.schema("hub").from("servers").select("name, ip").eq("id", serverId).maybeSingle()
+    if (!srv) return NextResponse.json({ error: "Sunucu bulunamadı" }, { status: 404 })
+    const { name: Name, ip: IP } = srv as { name: string; ip: string }
 
     // Agent raporundan firmayı bul
     const agents = getAllAgents()
