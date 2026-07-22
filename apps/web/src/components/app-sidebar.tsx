@@ -227,12 +227,17 @@ export function AppSidebar() {
 
   const activeGroup = visibleGroups[activeIdx] ?? visibleGroups[0]
   const canWriteCompanies = isAdmin || (perms["companies"] ?? "none") === "write"
+  const [panelOpen, setPanelOpen] = React.useState(true)
+  const openGroup = (i: number) => {
+    if (i === activeIdx) setPanelOpen((o) => !o)
+    else { setActiveIdx(i); setPanelOpen(true) }
+  }
 
   return (
     <>
-      <aside className="group/sidebar sticky top-0 flex h-svh w-[296px] shrink-0 self-stretch bg-[#061a48] text-[#eef3ff]">
-        {/* -------- RAIL (sol) -------- */}
-        <nav className="flex w-[56px] shrink-0 flex-col items-center gap-1 border-r border-[#0d3380] py-3">
+      <aside className="group/sidebar sticky top-0 flex h-svh shrink-0 self-stretch bg-[#061a48] text-[#eef3ff]">
+        {/* -------- RAIL (sol) — ikon + altında isim -------- */}
+        <nav className="flex w-[64px] shrink-0 flex-col items-center gap-1 border-r border-[#0d3380] py-3">
           {canWriteCompanies && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -249,23 +254,19 @@ export function AppSidebar() {
           )}
           <div className="flex flex-col gap-1">
             {visibleGroups.map((g, i) => {
-              const active = i === activeIdx
+              const active = i === activeIdx && panelOpen
               return (
-                <Tooltip key={g.key}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => setActiveIdx(i)}
-                      className={`flex h-9 w-9 items-center justify-center rounded-[8px] transition-colors ${
-                        active
-                          ? "bg-white text-[#1d64ff]"
-                          : "text-[#b4c8ff] hover:bg-[#0d3380] hover:text-white"
-                      }`}
-                    >
-                      <Ic I={g.railIcon} size={18} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" sideOffset={8}>{g.label}</TooltipContent>
-                </Tooltip>
+                <button
+                  key={g.key}
+                  onClick={() => openGroup(i)}
+                  title={g.label}
+                  className={`flex w-14 flex-col items-center gap-1 rounded-[8px] px-1 py-1.5 transition-colors ${
+                    active ? "bg-white text-[#1d64ff]" : "text-[#b4c8ff] hover:bg-[#0d3380] hover:text-white"
+                  }`}
+                >
+                  <Ic I={g.railIcon} size={18} />
+                  <span className="w-full truncate text-center text-[9px] leading-tight">{g.label}</span>
+                </button>
               )
             })}
           </div>
@@ -286,8 +287,9 @@ export function AppSidebar() {
           </div>
         </nav>
 
-        {/* -------- PANEL (sağ) — rail ile aynı koyu navy -------- */}
-        <div className="flex min-w-0 flex-1 flex-col bg-[#061a48]">
+        {/* -------- PANEL (sağ) — seçim yapılınca gizlenir -------- */}
+        {panelOpen && (
+        <div className="flex w-[232px] min-w-0 flex-col bg-[#061a48]">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
@@ -314,6 +316,7 @@ export function AppSidebar() {
                     <Link
                       key={it.url}
                       href={it.url}
+                      onClick={() => setPanelOpen(false)}
                       style={{ animationDelay: `${idx * 30}ms`, animationFillMode: "both" }}
                       className={`group/navitem flex items-center gap-2.5 rounded-[6px] px-2.5 py-2 text-[13px] transition-colors animate-in slide-in-from-left-2 fade-in duration-300 ease-out ${
                         active
@@ -332,6 +335,7 @@ export function AppSidebar() {
             </nav>
           </div>
         </div>
+        )}
       </aside>
     </>
   )
