@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
 import { getAllAgents } from "@/lib/agent-store"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { resolveCreators } from "@/lib/hub-users"
@@ -14,7 +13,6 @@ import { resolveCompanyNames } from "@/lib/hub-companies"
 const DONE_COLUMNS = new Set(["Tamamlandı", "Done", "Bitti"])
 
 interface FailedLogonRow { Timestamp: string; ServerName: string; Username: string; ClientIp: string }
-interface CompanyCountRow { Count: number }
 
 /** hub timestamptz → "YYYY-MM-DD HH:MM[:SS]" (client parity). */
 function fmt(ts: string | null, len = 19): string {
@@ -67,41 +65,32 @@ export async function GET() {
       .sort((a, b) => b.disk - a.disk)
       .slice(0, 8)
 
-    /* ── KPI 2: Firma + kullanıcı sayıları (mssql — Companies/ADUsers taşınmadı) ── */
-    const companyRows = await query<{ Count: number; UserSum: number }[]>`
-      SELECT
-        (SELECT COUNT(*) FROM Companies
-          WHERE CompanyId IS NOT NULL AND AdServerId IS NOT NULL) AS Count,
-        (SELECT COUNT(*) FROM ADUsers a
-          JOIN Companies c ON a.OU = c.CompanyId
-          WHERE c.AdServerId IS NOT NULL) AS UserSum
-    `
-    const totalCompanies    = companyRows[0]?.Count   ?? 0
-    const totalCompanyUsers = companyRows[0]?.UserSum ?? 0
+    const sb = await getSupabaseServer()
 
-    /* ── Son 24 saat failed RDP (mssql — FailedLogonAttempts taşınmadı) ── */
-    let failedLogons: FailedLogonRow[] = []
-    try {
-      failedLogons = await query<FailedLogonRow[]>`
-        SELECT TOP 15
-          CONVERT(NVARCHAR(30), [Timestamp], 120) AS Timestamp, ServerName, Username, ClientIp
-        FROM FailedLogonAttempts
-        WHERE [Timestamp] >= DATEADD(hour, -24, SYSUTCDATETIME())
-        ORDER BY [Timestamp] DESC
-      `
-    } catch { failedLogons = [] }
+    /* ── KPI 2: Firma + kullanıcı sayıları (hub) ── */
+    const { count: totalCompanies } = await sb.schema("hub").from("companies")
+      .select("id", { count: "exact", head: true }).not("company_id", "is", null).not("ad_server_id", "is", null)
+    // AD kurulu firmaların OU'su altındaki ad_users sayısı
+    const { data: adFirms } = await sb.schema("hub").from("companies")
+      .select("company_id").not("ad_server_id", "is", null).not("company_id", "is", null)
+    const adOus = [...new Set(((adFirms ?? []) as { company_id: string }[]).map((c) => c.company_id))]
+    let totalCompanyUsers = 0
+    if (adOus.length) {
+      const { count } = await sb.schema("hub").from("ad_users").select("id", { count: "exact", head: true }).in("ou", adOus)
+      totalCompanyUsers = count ?? 0
+    }
 
-    let failedLogonTotal24h = 0
-    try {
-      const countRows = await query<CompanyCountRow[]>`
-        SELECT COUNT(*) AS Count FROM FailedLogonAttempts
-        WHERE [Timestamp] >= DATEADD(hour, -24, SYSUTCDATETIME())
-      `
-      failedLogonTotal24h = countRows[0]?.Count ?? 0
-    } catch { /* ignore */ }
+    /* ── Son 24 saat failed RDP (hub) ── */
+    const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
+    const { data: flData } = await sb.schema("hub").from("failed_logon_attempts")
+      .select("server_name, username, client_ip, timestamp").gte("timestamp", since24h)
+      .order("timestamp", { ascending: false }).limit(15)
+    const failedLogons: FailedLogonRow[] = ((flData ?? []) as { server_name: string; username: string | null; client_ip: string | null; timestamp: string }[])
+      .map((f) => ({ Timestamp: f.timestamp, ServerName: f.server_name, Username: f.username ?? "", ClientIp: f.client_ip ?? "" }))
+    const { count: failedLogonTotal24h } = await sb.schema("hub").from("failed_logon_attempts")
+      .select("id", { count: "exact", head: true }).gte("timestamp", since24h)
 
     /* ── Projeler / Takvim / Notlar (hub) ── */
-    const sb = await getSupabaseServer()
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
     const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999)
     const todayDate  = todayStart.toISOString().slice(0, 10)
@@ -168,9 +157,9 @@ export async function GET() {
     }))
 
     return NextResponse.json({
-      kpi: { totalServers, onlineServers, offlineServers, totalCompanies, totalCompanyUsers, activeProjects },
+      kpi: { totalServers, onlineServers, offlineServers, totalCompanies: totalCompanies ?? 0, totalCompanyUsers, activeProjects },
       failedLogons: {
-        total24h: failedLogonTotal24h,
+        total24h: failedLogonTotal24h ?? 0,
         recent: failedLogons.map((f) => ({ timestamp: f.Timestamp, serverName: f.ServerName, username: f.Username, clientIp: f.ClientIp })),
       },
       disks: diskList,
