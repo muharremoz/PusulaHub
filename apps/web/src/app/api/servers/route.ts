@@ -1,32 +1,19 @@
 import { NextResponse } from "next/server"
-import { query, execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { encrypt } from "@/lib/crypto"
 import { getAllAgents } from "@/lib/agent-store"
 import { requirePermission } from "@/lib/require-permission"
 import type { Server } from "@/types"
 
 function slugify(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i")
-    .replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "")
+  return name.toLowerCase()
+    .replace(/ç/g, "c").replace(/ğ/g, "g").replace(/ı/g, "i").replace(/ö/g, "o").replace(/ş/g, "s").replace(/ü/g, "u")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
 }
 
-interface ServerRow {
-  Id: string
-  Name: string
-  IP: string
-  DNS: string | null
-  OS: string
-  Status: string
-  CPU: number
-  RAM: number
-  Disk: number
-  Uptime: string | null
-  LastChecked: string | null
-  Roles: string | null
+interface SrvRow {
+  id: string; name: string; ip: string; dns: string | null; os: string; status: string
+  cpu: number; ram: number; disk: number; uptime: string | null; last_checked: string | null
 }
 
 function formatUptime(seconds: number): string {
@@ -42,41 +29,32 @@ export async function GET() {
   const gate = await requirePermission("servers", "read")
   if (gate) return gate
   try {
-    const rows = await query<ServerRow[]>`
-      SELECT
-        s.Id, s.Name, s.IP, s.DNS, s.OS, s.Status,
-        s.CPU, s.RAM, s.Disk, s.Uptime, s.LastChecked,
-        STRING_AGG(r.Role, ',') AS Roles
-      FROM Servers s
-      LEFT JOIN ServerRoles r ON r.ServerId = s.Id
-      GROUP BY s.Id, s.Name, s.IP, s.DNS, s.OS, s.Status,
-               s.CPU, s.RAM, s.Disk, s.Uptime, s.LastChecked, s.CreatedAt
-      ORDER BY s.Name
-    `
+    const sb = await getSupabaseServer()
+    const [{ data: srvData, error }, { data: roleData }] = await Promise.all([
+      sb.schema("hub").from("servers").select("id, name, ip, dns, os, status, cpu, ram, disk, uptime, last_checked").order("name"),
+      sb.schema("hub").from("server_roles").select("server_id, role"),
+    ])
+    if (error) throw error
+
+    const roleMap = new Map<string, string[]>()
+    for (const r of (roleData ?? []) as { server_id: string; role: string }[]) {
+      const arr = roleMap.get(r.server_id) ?? []; arr.push(r.role); roleMap.set(r.server_id, arr)
+    }
 
     const agents = getAllAgents()
-
-    const servers: Server[] = rows.map((r) => {
-      // Pull modelde agentId = serverId, fallback: hostname/IP eşleştirme
-      const agent = agents.find(
-        (a) => a.agentId === r.Id || a.hostname === r.Name || a.ip === r.IP
-      )
+    const servers: Server[] = ((srvData ?? []) as SrvRow[]).map((r) => {
+      const agent = agents.find((a) => a.agentId === r.id || a.hostname === r.name || a.ip === r.ip)
       const m = agent?.lastReport?.metrics
-
       return {
-        id:          r.Id,
-        slug:        slugify(r.Name),
-        name:        r.Name,
-        ip:          r.IP,
-        dns:         r.DNS ?? undefined,
-        os:          r.OS as Server["os"],
-        status:      agent ? (agent.status as Server["status"]) : (r.Status as Server["status"]),
-        cpu:         m ? m.cpu : r.CPU,
-        ram:         m ? Math.round((m.ram.usedMB / m.ram.totalMB) * 100) : r.RAM,
-        disk:        m?.disks?.[0]?.percent ?? r.Disk,
-        uptime:      m ? formatUptime(m.uptimeSeconds) : (r.Uptime ?? "—"),
-        lastChecked: agent ? agent.lastSeen : (r.LastChecked ?? "—"),
-        roles:       r.Roles ? (r.Roles.split(",") as Server["roles"]) : [],
+        id: r.id, slug: slugify(r.name), name: r.name, ip: r.ip, dns: r.dns ?? undefined,
+        os: r.os as Server["os"],
+        status: agent ? (agent.status as Server["status"]) : (r.status as Server["status"]),
+        cpu: m ? m.cpu : r.cpu,
+        ram: m ? Math.round((m.ram.usedMB / m.ram.totalMB) * 100) : r.ram,
+        disk: m?.disks?.[0]?.percent ?? r.disk,
+        uptime: m ? formatUptime(m.uptimeSeconds) : (r.uptime ?? "—"),
+        lastChecked: agent ? agent.lastSeen : (r.last_checked ?? "—"),
+        roles: (roleMap.get(r.id) ?? []) as Server["roles"],
       }
     })
 
@@ -94,42 +72,29 @@ export async function POST(req: Request) {
   if (gate) return gate
   try {
     const body = await req.json()
-    const {
-      name, ip, dns, domain, os, status, cpu, ram, disk, uptime, lastChecked,
-      roles, apiKey, agentPort, rdpPort, username, password,
-      sqlUsername, sqlPassword,
-    } = body
+    const { name, ip, dns, domain, os, status, cpu, ram, disk, uptime, lastChecked,
+            roles, apiKey, agentPort, rdpPort, username, password, sqlUsername, sqlPassword } = body
 
     const id = `srv-${Date.now()}`
+    const sb = await getSupabaseServer()
 
-    // Hassas alanlar AES-256-GCM ile şifrelenir
-    const encryptedPassword    = encrypt(password ?? null)
-    const encryptedSqlPassword = encrypt(sqlPassword ?? null)
+    const { error } = await sb.schema("hub").from("servers").insert({
+      id, name, ip, dns: dns ?? null, domain: domain ?? null, os,
+      status: status ?? "offline", cpu: cpu ?? 0, ram: ram ?? 0, disk: disk ?? 0,
+      uptime: uptime ?? null, last_checked: lastChecked ?? null,
+      api_key: apiKey ?? null, agent_port: agentPort ?? 8585, rdp_port: rdpPort ?? null,
+      username: username ?? null, password: encrypt(password ?? null),
+      sql_username: sqlUsername ?? null, sql_password: encrypt(sqlPassword ?? null),
+    })
+    if (error) throw error
 
-    await execute`
-      INSERT INTO Servers (Id, Name, IP, DNS, Domain, OS, Status, CPU, RAM, Disk, Uptime, LastChecked, ApiKey, AgentPort, RdpPort, Username, Password, SqlUsername, SqlPassword)
-      VALUES (
-        ${id}, ${name}, ${ip}, ${dns ?? null}, ${domain ?? null}, ${os},
-        ${status ?? "offline"}, ${cpu ?? 0}, ${ram ?? 0}, ${disk ?? 0},
-        ${uptime ?? null}, ${lastChecked ?? null},
-        ${apiKey ?? null}, ${agentPort ?? 8585}, ${rdpPort ?? null}, ${username ?? null}, ${encryptedPassword},
-        ${sqlUsername ?? null}, ${encryptedSqlPassword}
-      )
-    `
-
-    if (Array.isArray(roles)) {
-      for (const role of roles) {
-        await execute`INSERT INTO ServerRoles (ServerId, Role) VALUES (${id}, ${role})`
-      }
+    if (Array.isArray(roles) && roles.length) {
+      await sb.schema("hub").from("server_roles").insert(roles.map((role: string) => ({ server_id: id, role })))
     }
 
-    // Kuma'da otomatik ping monitor'ü oluştur — hata olursa sessizce logla,
-    // Hub tarafındaki insert başarılıysa response'u bozma.
     if (name && ip) {
       const { createKumaMonitor, kumaSafeCall } = await import("@/lib/kuma-client")
-      void kumaSafeCall(`createMonitor(${name})`, () =>
-        createKumaMonitor({ name, hostname: ip, type: "ping" })
-      )
+      void kumaSafeCall(`createMonitor(${name})`, () => createKumaMonitor({ name, hostname: ip, type: "ping" }))
     }
 
     return NextResponse.json({ id }, { status: 201 })

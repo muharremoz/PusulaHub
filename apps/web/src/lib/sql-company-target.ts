@@ -1,4 +1,4 @@
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/crypto"
 
 export interface SqlCompanyTarget {
@@ -9,45 +9,33 @@ export interface SqlCompanyTarget {
   password:   string
 }
 
+interface SrvRow { id: string; name: string; ip: string; sql_username: string | null; sql_password: string | null }
+
 /**
- * Firma'nın SQL sunucusu credentials'ını resolve eder.
- * Öncelik: Companies.SqlServerId → yoksa SQLDatabases.Server üzerinden eşleşme.
+ * Firma'nın SQL sunucusu credentials'ını resolve eder (hub).
+ * Öncelik: serverName eşleşmesi → yoksa companies.sql_server_id → servers.
  */
-export async function resolveFirmaSqlTarget(
-  firkod: string,
-  serverName?: string,
-): Promise<SqlCompanyTarget | null> {
-  interface Row {
-    Id: string; Name: string; IP: string; SqlUsername: string | null; SqlPassword: string | null
-  }
+export async function resolveFirmaSqlTarget(firkod: string, serverName?: string): Promise<SqlCompanyTarget | null> {
+  const sb = await getSupabaseServer()
+  const cols = "id, name, ip, sql_username, sql_password"
 
-  let rows: Row[] = []
-
+  let row: SrvRow | null = null
   if (serverName) {
-    rows = await query<Row[]>`
-      SELECT Id, Name, IP, SqlUsername, SqlPassword FROM Servers WHERE Name = ${serverName}
-    `
+    const { data } = await sb.schema("hub").from("servers").select(cols).eq("name", serverName).limit(1).maybeSingle()
+    row = (data as SrvRow | null) ?? null
   }
-
-  if (!rows.length) {
-    const c = await query<{ SqlServerId: string | null }[]>`
-      SELECT SqlServerId FROM Companies WHERE CompanyId = ${firkod}
-    `
-    if (c[0]?.SqlServerId) {
-      rows = await query<Row[]>`
-        SELECT Id, Name, IP, SqlUsername, SqlPassword FROM Servers WHERE Id = ${c[0].SqlServerId}
-      `
+  if (!row) {
+    const { data: c } = await sb.schema("hub").from("companies").select("sql_server_id").eq("company_id", firkod).maybeSingle()
+    const sqlServerId = (c as { sql_server_id: string | null } | null)?.sql_server_id
+    if (sqlServerId) {
+      const { data } = await sb.schema("hub").from("servers").select(cols).eq("id", sqlServerId).maybeSingle()
+      row = (data as SrvRow | null) ?? null
     }
   }
 
-  if (!rows.length || !rows[0].SqlUsername || !rows[0].SqlPassword) return null
-
-  const r = rows[0]
+  if (!row || !row.sql_username || !row.sql_password) return null
   return {
-    serverId:   r.Id,
-    serverName: r.Name,
-    ip:         r.IP,
-    username:   r.SqlUsername!,
-    password:   decrypt(r.SqlPassword!) ?? "",
+    serverId: row.id, serverName: row.name, ip: row.ip,
+    username: row.sql_username, password: decrypt(row.sql_password) ?? "",
   }
 }
