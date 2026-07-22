@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query, execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import type { WizardServiceDto, ServiceType, ServiceConfig } from "../route"
 
 /**
@@ -11,28 +11,20 @@ import type { WizardServiceDto, ServiceType, ServiceConfig } from "../route"
  */
 
 interface Row {
-  Id:           number
-  Name:         string
-  Category:     string
-  Type:         string
-  Config:       string | null
-  DisplayOrder: number
-  IsActive:     boolean
+  id: number; name: string; category: string; type: string
+  config: string | null; display_order: number; is_active: boolean
 }
+const SVC_COLS = "id, name, category, type, config, display_order, is_active"
 
 function rowToDto(r: Row): WizardServiceDto {
   let parsed: ServiceConfig | null = null
-  if (r.Config) {
-    try { parsed = JSON.parse(r.Config) as ServiceConfig } catch { parsed = null }
+  if (r.config) {
+    try { parsed = JSON.parse(r.config) as ServiceConfig } catch { parsed = null }
   }
   return {
-    id:           r.Id,
-    name:         r.Name,
-    category:     r.Category,
-    type:         (r.Type as ServiceType) ?? "pusula-program",
-    config:       parsed,
-    displayOrder: r.DisplayOrder,
-    isActive:     !!r.IsActive,
+    id: r.id, name: r.name, category: r.category,
+    type: (r.type as ServiceType) ?? "pusula-program",
+    config: parsed, displayOrder: r.display_order, isActive: !!r.is_active,
   }
 }
 
@@ -99,21 +91,17 @@ export async function PATCH(
     }
 
     const body = (await req.json()) as PatchPayload
+    const sb = await getSupabaseServer()
 
-    const current = await query<Row[]>`
-      SELECT Id, Name, Category, Type, Config, DisplayOrder, IsActive
-      FROM WizardServices WHERE Id = ${numericId}
-    `
-    if (!current.length) {
-      return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
-    }
-    const cur = current[0]
+    const { data: current } = await sb.schema("hub").from("wizard_services").select(SVC_COLS).eq("id", numericId).maybeSingle()
+    if (!current) return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
+    const cur = current as unknown as Row
 
-    const nextName     = body.name     !== undefined ? body.name.trim()     : cur.Name
-    const nextCategory = body.category !== undefined ? body.category.trim() : cur.Category
-    const nextType: ServiceType = (body.type ?? (cur.Type as ServiceType))
-    const nextDisplayOrder = body.displayOrder !== undefined ? Number(body.displayOrder) : cur.DisplayOrder
-    const nextIsActive = body.isActive !== undefined ? (body.isActive ? 1 : 0) : (cur.IsActive ? 1 : 0)
+    const nextName     = body.name     !== undefined ? body.name.trim()     : cur.name
+    const nextCategory = body.category !== undefined ? body.category.trim() : cur.category
+    const nextType: ServiceType = (body.type ?? (cur.type as ServiceType))
+    const nextDisplayOrder = body.displayOrder !== undefined ? Number(body.displayOrder) : cur.display_order
+    const nextIsActive = body.isActive !== undefined ? body.isActive : cur.is_active
 
     if (!nextName)     return NextResponse.json({ error: "name boş olamaz" },     { status: 400 })
     if (!nextCategory) return NextResponse.json({ error: "category boş olamaz" }, { status: 400 })
@@ -129,7 +117,7 @@ export async function PATCH(
       if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
       nextConfigJson = JSON.stringify(v.config)
     } else {
-      if (body.type && body.type !== cur.Type) {
+      if (body.type && body.type !== cur.type) {
         return NextResponse.json(
           { error: "type değiştiğinde config payload da gönderilmeli" },
           { status: 400 },
@@ -137,7 +125,7 @@ export async function PATCH(
       }
       // Mevcut config'i parse + re-validate (eski şema kalıntısı için).
       let curConfig: unknown = null
-      if (cur.Config) { try { curConfig = JSON.parse(cur.Config) } catch { /* yok say */ } }
+      if (cur.config) { try { curConfig = JSON.parse(cur.config) } catch { /* yok say */ } }
       const v = validateConfig(nextType, curConfig)
       if (!v.ok) {
         return NextResponse.json(
@@ -148,22 +136,12 @@ export async function PATCH(
       nextConfigJson = JSON.stringify(v.config)
     }
 
-    const result = await execute`
-      UPDATE WizardServices SET
-        Name         = ${nextName},
-        Category     = ${nextCategory},
-        Type         = ${nextType},
-        Config       = ${nextConfigJson},
-        DisplayOrder = ${nextDisplayOrder},
-        IsActive     = ${nextIsActive},
-        UpdatedAt    = SYSDATETIME()
-      OUTPUT INSERTED.Id, INSERTED.Name, INSERTED.Category, INSERTED.Type, INSERTED.Config,
-             INSERTED.DisplayOrder, INSERTED.IsActive
-      WHERE Id = ${numericId}
-    `
-
-    const rows = result.recordset as Row[]
-    return NextResponse.json(rowToDto(rows[0]))
+    const { data: updated, error } = await sb.schema("hub").from("wizard_services").update({
+      name: nextName, category: nextCategory, type: nextType, config: nextConfigJson,
+      display_order: nextDisplayOrder, is_active: nextIsActive, updated_at: new Date().toISOString(),
+    }).eq("id", numericId).select(SVC_COLS).single()
+    if (error) throw error
+    return NextResponse.json(rowToDto(updated as unknown as Row))
   } catch (err) {
     console.error("[PATCH /api/services/[id]]", err)
     return NextResponse.json({ error: "Hizmet güncellenemedi" }, { status: 500 })
@@ -181,10 +159,10 @@ export async function DELETE(
       return NextResponse.json({ error: "Geçersiz id" }, { status: 400 })
     }
 
-    const result = await execute`DELETE FROM WizardServices WHERE Id = ${numericId}`
-    if (result.rowsAffected[0] === 0) {
-      return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
-    }
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("wizard_services").delete().eq("id", numericId).select("id")
+    if (error) throw error
+    if (!data?.length) return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[DELETE /api/services/[id]]", err)
