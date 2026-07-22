@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { asUuidOrNull } from "@/lib/hub-users"
 
 export async function POST(
   req: NextRequest,
@@ -12,23 +13,25 @@ export async function POST(
       return NextResponse.json({ error: "columnId ve title zorunlu" }, { status: 400 })
     }
 
-    // Kolon son position'ını al
-    interface PosRow { MaxPos: number | null }
-    const posRows = await query<PosRow[]>`
-      SELECT MAX(Position) AS MaxPos FROM ProjectTasks WHERE ColumnId = ${columnId}
-    `
-    const nextPos = (posRows[0]?.MaxPos ?? -1) + 1
-    const taskId = crypto.randomUUID()
+    const sb = await getSupabaseServer()
+    const { data: last } = await sb.schema("hub").from("project_tasks")
+      .select("position").eq("column_id", columnId).order("position", { ascending: false }).limit(1).maybeSingle()
+    const nextPos = ((last as { position: number } | null)?.position ?? -1) + 1
 
-    await execute`
-      INSERT INTO ProjectTasks (Id, ProjectId, ColumnId, Title, Description, Priority, AssignedTo, StartDate, DueDate, Labels, Position)
-      VALUES (
-        ${taskId}, ${projectId}, ${columnId}, ${title.trim()},
-        ${description ?? null}, ${priority}, ${assignedTo ?? null},
-        ${startDate ?? null}, ${dueDate ?? null}, ${labels ? labels.join(",") : null}, ${nextPos}
-      )
-    `
-    return NextResponse.json({ id: taskId }, { status: 201 })
+    const { data, error } = await sb.schema("hub").from("project_tasks").insert({
+      project_id:  projectId,
+      column_id:   columnId,
+      title:       title.trim(),
+      description: description ?? null,
+      priority,
+      assigned_to: asUuidOrNull(assignedTo),
+      start_date:  startDate ?? null,
+      due_date:    dueDate ?? null,
+      labels:      Array.isArray(labels) ? labels.join(",") : (labels ?? null),
+      position:    nextPos,
+    }).select("id").single()
+    if (error) throw error
+    return NextResponse.json({ id: data.id }, { status: 201 })
   } catch (err) {
     console.error("[POST /api/projects/[id]/tasks]", err)
     return NextResponse.json({ error: "Görev oluşturulamadı" }, { status: 500 })

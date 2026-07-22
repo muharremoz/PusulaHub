@@ -1,18 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 /* GET /api/projects/[id]/charts — grafik verileri (burndown + velocity) */
 
-interface TaskDateRow {
-  CreatedAt: string
-  CompletedAt: string | null
-  ColumnName: string
-}
+const DONE_COLUMNS = new Set(["Tamamlandı", "Done", "Bitti"])
 
-interface ActivityCountRow {
-  WeekStart: string
-  TasksCreated: number
-  TasksCompleted: number
+/** Verilen tarihin (YYYY-MM-DD) haftasının Pazar başlangıcı (mssql DATEFIRST=7 ile aynı). */
+function weekStartSunday(d: string): string {
+  const dt = new Date(d + "T00:00:00Z")
+  dt.setUTCDate(dt.getUTCDate() - dt.getUTCDay())
+  return dt.toISOString().slice(0, 10)
 }
 
 export async function GET(
@@ -21,76 +18,59 @@ export async function GET(
 ) {
   const { id } = await params
   try {
-    // 1) Tüm görevlerin oluşturma tarihi ve kolon bilgisi
-    const tasks = await query<TaskDateRow[]>`
-      SELECT CONVERT(NVARCHAR(10), t.CreatedAt, 23) AS CreatedAt,
-             CASE WHEN c.Name IN ('Tamamland'+NCHAR(305), 'Done', 'Bitti')
-                  THEN CONVERT(NVARCHAR(10), t.UpdatedAt, 23)
-                  ELSE NULL END AS CompletedAt,
-             c.Name AS ColumnName
-      FROM ProjectTasks t
-      JOIN ProjectColumns c ON c.Id = t.ColumnId
-      WHERE t.ProjectId = ${id}
-      ORDER BY t.CreatedAt
-    `
+    const sb = await getSupabaseServer()
+    const [{ data: taskData, error: tErr }, { data: colData }] = await Promise.all([
+      sb.schema("hub").from("project_tasks").select("created_at, updated_at, column_id").eq("project_id", id).order("created_at"),
+      sb.schema("hub").from("project_columns").select("id, name").eq("project_id", id),
+    ])
+    if (tErr) throw tErr
 
-    // 2) Haftalık velocity: her hafta oluşturulan ve tamamlanan görev sayısı
-    const velocity = await query<ActivityCountRow[]>`
-      SELECT CONVERT(NVARCHAR(10), DATEADD(DAY, 1-DATEPART(WEEKDAY, t.CreatedAt), t.CreatedAt), 23) AS WeekStart,
-             COUNT(*) AS TasksCreated,
-             SUM(CASE WHEN c.Name IN ('Tamamland'+NCHAR(305), 'Done', 'Bitti') THEN 1 ELSE 0 END) AS TasksCompleted
-      FROM ProjectTasks t
-      JOIN ProjectColumns c ON c.Id = t.ColumnId
-      WHERE t.ProjectId = ${id}
-      GROUP BY CONVERT(NVARCHAR(10), DATEADD(DAY, 1-DATEPART(WEEKDAY, t.CreatedAt), t.CreatedAt), 23)
-      ORDER BY WeekStart
-    `
+    const colName = new Map(((colData ?? []) as { id: string; name: string }[]).map(c => [c.id, c.name]))
+    const tasks = ((taskData ?? []) as { created_at: string | null; updated_at: string | null; column_id: string }[]).map(t => {
+      const cn = colName.get(t.column_id) ?? ""
+      return {
+        CreatedAt:   (t.created_at ?? "").slice(0, 10),
+        CompletedAt: DONE_COLUMNS.has(cn) ? (t.updated_at ?? "").slice(0, 10) : null,
+        ColumnName:  cn,
+      }
+    })
 
-    // --- Burndown hesaplama ---
-    // Her gün için toplam açık görev sayısını hesapla
     const totalTasks = tasks.length
-    const completedNames = ["Tamamlandı", "Done", "Bitti"]
-    const doneTasks = tasks.filter((t) => completedNames.includes(t.ColumnName)).length
+    const doneTasks = tasks.filter(t => DONE_COLUMNS.has(t.ColumnName)).length
 
-    // Tüm tarihleri topla
+    // Burndown — her tarih için kümülatif kalan
     const dateSet = new Set<string>()
     for (const t of tasks) {
       if (t.CreatedAt) dateSet.add(t.CreatedAt)
       if (t.CompletedAt) dateSet.add(t.CompletedAt)
     }
     const allDates = [...dateSet].sort()
-
-    // Her tarih için kümülatif oluşturulan ve tamamlanan sayısı
-    let cumCreated = 0
-    let cumCompleted = 0
+    let cumCreated = 0, cumCompleted = 0
     const burndown = allDates.map((date) => {
-      cumCreated += tasks.filter((t) => t.CreatedAt === date).length
-      cumCompleted += tasks.filter((t) => t.CompletedAt === date).length
-      return {
-        date,
-        remaining: cumCreated - cumCompleted,
-        ideal: 0, // sonra hesaplanacak
-      }
+      cumCreated   += tasks.filter(t => t.CreatedAt === date).length
+      cumCompleted += tasks.filter(t => t.CompletedAt === date).length
+      return { date, remaining: cumCreated - cumCompleted, ideal: 0 }
     })
-
-    // İdeal çizgi: ilk günden son güne doğrusal düşüş
     if (burndown.length > 1) {
       const maxRemaining = burndown[0].remaining
       const steps = burndown.length - 1
-      burndown.forEach((b, i) => {
-        b.ideal = Math.round(maxRemaining - (maxRemaining / steps) * i)
-      })
+      burndown.forEach((b, i) => { b.ideal = Math.round(maxRemaining - (maxRemaining / steps) * i) })
     }
 
-    return NextResponse.json({
-      summary: { totalTasks, doneTasks },
-      burndown,
-      velocity: velocity.map((v) => ({
-        week: v.WeekStart,
-        created: v.TasksCreated,
-        completed: v.TasksCompleted,
-      })),
-    })
+    // Velocity — haftalık oluşturulan/tamamlanan
+    const weekMap = new Map<string, { created: number; completed: number }>()
+    for (const t of tasks) {
+      if (!t.CreatedAt) continue
+      const ws = weekStartSunday(t.CreatedAt)
+      const w = weekMap.get(ws) ?? { created: 0, completed: 0 }
+      w.created++
+      if (DONE_COLUMNS.has(t.ColumnName)) w.completed++
+      weekMap.set(ws, w)
+    }
+    const velocity = [...weekMap.entries()].sort(([a], [b]) => a.localeCompare(b))
+      .map(([week, v]) => ({ week, created: v.created, completed: v.completed }))
+
+    return NextResponse.json({ summary: { totalTasks, doneTasks }, burndown, velocity })
   } catch (err) {
     console.error("[GET /api/projects/[id]/charts]", err)
     return NextResponse.json({ error: "Grafik verileri alınamadı" }, { status: 500 })

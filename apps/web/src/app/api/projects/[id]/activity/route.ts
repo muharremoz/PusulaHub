@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { asUuidOrNull } from "@/lib/hub-users"
 
 interface ActivityRow {
-  Id: string
-  TaskId: string | null
-  UserId: string | null
-  UserName: string | null
-  Action: string
-  Detail: string | null
-  CreatedAt: string
+  id: string; task_id: string | null; user_id: string | null; user_name: string | null
+  action: string; detail: string | null; created_at: string
 }
 
 export async function GET(
@@ -17,44 +13,24 @@ export async function GET(
 ) {
   const { id: projectId } = await params
   const { searchParams } = req.nextUrl
-  const taskId = searchParams.get("taskId") ?? null
+  const taskId = searchParams.get("taskId")
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 500)
 
   try {
-    let rows: ActivityRow[]
+    const sb = await getSupabaseServer()
+    let q = sb.schema("hub").from("project_activity_log")
+      .select("id, task_id, user_id, user_name, action, detail, created_at")
+      .eq("project_id", projectId)
+      .order("created_at", { ascending: false })
+      .limit(limit)
+    if (taskId) q = q.eq("task_id", taskId)
 
-    if (taskId) {
-      rows = await query<ActivityRow[]>`
-        SELECT TOP (${limit})
-          Id, TaskId, UserId, UserName, Action, Detail,
-          CONVERT(NVARCHAR(30), CreatedAt, 120) AS CreatedAt
-        FROM ProjectActivityLog
-        WHERE ProjectId = ${projectId}
-          AND TaskId = ${taskId}
-        ORDER BY CreatedAt DESC
-      `
-    } else {
-      rows = await query<ActivityRow[]>`
-        SELECT TOP (${limit})
-          Id, TaskId, UserId, UserName, Action, Detail,
-          CONVERT(NVARCHAR(30), CreatedAt, 120) AS CreatedAt
-        FROM ProjectActivityLog
-        WHERE ProjectId = ${projectId}
-        ORDER BY CreatedAt DESC
-      `
-    }
-
-    return NextResponse.json(
-      rows.map((r) => ({
-        id: r.Id,
-        taskId: r.TaskId,
-        userId: r.UserId,
-        userName: r.UserName,
-        action: r.Action,
-        detail: r.Detail,
-        createdAt: r.CreatedAt,
-      }))
-    )
+    const { data, error } = await q
+    if (error) throw error
+    return NextResponse.json(((data ?? []) as ActivityRow[]).map(r => ({
+      id: r.id, taskId: r.task_id, userId: r.user_id, userName: r.user_name,
+      action: r.action, detail: r.detail, createdAt: r.created_at,
+    })))
   } catch (err) {
     console.error("[GET /api/projects/[id]/activity]", err)
     return NextResponse.json({ error: "Aktivite listesi alınamadı" }, { status: 500 })
@@ -68,27 +44,19 @@ export async function POST(
   const { id: projectId } = await params
   try {
     const { taskId, userId, userName, action, detail } = await req.json()
+    if (!action?.trim()) return NextResponse.json({ error: "action zorunlu" }, { status: 400 })
 
-    if (!action?.trim()) {
-      return NextResponse.json({ error: "action zorunlu" }, { status: 400 })
-    }
-
-    const id = crypto.randomUUID()
-
-    await execute`
-      INSERT INTO ProjectActivityLog (Id, ProjectId, TaskId, UserId, UserName, Action, Detail)
-      VALUES (
-        ${id},
-        ${projectId},
-        ${taskId ?? null},
-        ${userId ?? null},
-        ${userName ?? null},
-        ${action.trim()},
-        ${detail ?? null}
-      )
-    `
-
-    return NextResponse.json({ id }, { status: 201 })
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("project_activity_log").insert({
+      project_id: projectId,
+      task_id:    taskId ?? null,
+      user_id:    asUuidOrNull(userId),
+      user_name:  userName ?? "Sistem",
+      action:     action.trim(),
+      detail:     detail ?? null,
+    }).select("id").single()
+    if (error) throw error
+    return NextResponse.json({ id: data.id }, { status: 201 })
   } catch (err) {
     console.error("[POST /api/projects/[id]/activity]", err)
     return NextResponse.json({ error: "Aktivite kaydedilemedi" }, { status: 500 })

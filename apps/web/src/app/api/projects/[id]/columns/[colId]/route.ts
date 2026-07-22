@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function PATCH(
   req: NextRequest,
@@ -10,23 +10,16 @@ export async function PATCH(
     const body = await req.json()
     const { name, color, wipLimit, position } = body
 
-    if (position !== undefined) {
-      await execute`
-        UPDATE ProjectColumns
-        SET Position = ${position}
-        WHERE Id = ${colId} AND ProjectId = ${projectId}
-      `
-      return NextResponse.json({ ok: true })
-    }
+    const patch: Record<string, unknown> = {}
+    if (position !== undefined) patch.position = position
+    if (name     != null)       patch.name     = name
+    if (color    != null)       patch.color    = color
+    if (wipLimit != null)       patch.wip_limit = wipLimit
 
-    await execute`
-      UPDATE ProjectColumns
-      SET
-        Name     = COALESCE(${name     ?? null}, Name),
-        Color    = COALESCE(${color    ?? null}, Color),
-        WipLimit = COALESCE(${wipLimit ?? null}, WipLimit)
-      WHERE Id = ${colId} AND ProjectId = ${projectId}
-    `
+    const sb = await getSupabaseServer()
+    const { error } = await sb.schema("hub").from("project_columns")
+      .update(patch).eq("id", colId).eq("project_id", projectId)
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[PATCH /api/projects/[id]/columns/[colId]]", err)
@@ -34,34 +27,30 @@ export async function PATCH(
   }
 }
 
-interface FirstColRow { Id: string }
-
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string; colId: string }> }
 ) {
   const { id: projectId, colId } = await params
   try {
-    const firstCols = await query<FirstColRow[]>`
-      SELECT TOP 1 Id
-      FROM ProjectColumns
-      WHERE ProjectId = ${projectId} AND Id != ${colId}
-      ORDER BY Position ASC
-    `
+    const sb = await getSupabaseServer()
 
-    if (firstCols.length > 0) {
-      await execute`
-        UPDATE ProjectTasks
-        SET ColumnId = ${firstCols[0].Id}
-        WHERE ColumnId = ${colId} AND ProjectId = ${projectId}
-      `
+    // Görevleri kaybetme: başka kolon varsa görevleri oraya taşı, sonra kolonu sil.
+    // (hub FK on delete cascade — taşımadan silinirse görevler de silinirdi.)
+    const { data: firstCol } = await sb.schema("hub").from("project_columns")
+      .select("id").eq("project_id", projectId).neq("id", colId)
+      .order("position", { ascending: true }).limit(1).maybeSingle()
+
+    if (firstCol) {
+      const { error: mvErr } = await sb.schema("hub").from("project_tasks")
+        .update({ column_id: (firstCol as { id: string }).id })
+        .eq("column_id", colId).eq("project_id", projectId)
+      if (mvErr) throw mvErr
     }
 
-    await execute`
-      DELETE FROM ProjectColumns
-      WHERE Id = ${colId} AND ProjectId = ${projectId}
-    `
-
+    const { error } = await sb.schema("hub").from("project_columns")
+      .delete().eq("id", colId).eq("project_id", projectId)
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[DELETE /api/projects/[id]/columns/[colId]]", err)

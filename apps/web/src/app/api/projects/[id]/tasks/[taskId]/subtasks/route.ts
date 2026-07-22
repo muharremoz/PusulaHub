@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { execute, query } from "@/lib/db"
-
-interface SubtaskRow { Id: string; Title: string; Completed: boolean; Position: number }
+import { getSupabaseServer } from "@/lib/supabase/server"
 
 export async function GET(
   _req: NextRequest,
@@ -9,15 +7,12 @@ export async function GET(
 ) {
   const { taskId } = await params
   try {
-    const rows = await query<SubtaskRow[]>`
-      SELECT Id, Title, Completed, Position
-      FROM ProjectSubtasks WHERE TaskId = ${taskId} ORDER BY Position
-    `
-    return NextResponse.json(rows.map((r) => ({
-      id: r.Id,
-      title: r.Title,
-      completed: !!r.Completed,
-      position: r.Position,
+    const sb = await getSupabaseServer()
+    const { data, error } = await sb.schema("hub").from("project_subtasks")
+      .select("id, title, completed, position").eq("task_id", taskId).order("position")
+    if (error) throw error
+    return NextResponse.json(((data ?? []) as { id: string; title: string; completed: boolean; position: number }[]).map(r => ({
+      id: r.id, title: r.title, completed: !!r.completed, position: r.position,
     })))
   } catch (err) {
     console.error("[GET subtasks]", err)
@@ -36,18 +31,16 @@ export async function POST(
       return NextResponse.json({ error: "Başlık gerekli" }, { status: 400 })
     }
 
-    interface MaxRow { MaxPos: number | null }
-    const [maxRow] = await query<MaxRow[]>`
-      SELECT MAX(Position) AS MaxPos FROM ProjectSubtasks WHERE TaskId = ${taskId}
-    `
-    const nextPos = (maxRow?.MaxPos ?? -1) + 1
-    const newId = crypto.randomUUID()
+    const sb = await getSupabaseServer()
+    const { data: last } = await sb.schema("hub").from("project_subtasks")
+      .select("position").eq("task_id", taskId).order("position", { ascending: false }).limit(1).maybeSingle()
+    const nextPos = ((last as { position: number } | null)?.position ?? -1) + 1
 
-    await execute`
-      INSERT INTO ProjectSubtasks (Id, TaskId, Title, Position)
-      VALUES (${newId}, ${taskId}, ${String(title).trim()}, ${nextPos})
-    `
-    return NextResponse.json({ id: newId }, { status: 201 })
+    const { data, error } = await sb.schema("hub").from("project_subtasks")
+      .insert({ task_id: taskId, title: String(title).trim(), position: nextPos })
+      .select("id").single()
+    if (error) throw error
+    return NextResponse.json({ id: data.id }, { status: 201 })
   } catch (err) {
     console.error("[POST subtask]", err)
     return NextResponse.json({ error: "Alt görev oluşturulamadı" }, { status: 500 })
@@ -67,16 +60,16 @@ export async function PATCH(
       return NextResponse.json({ error: "subtasks dizisi gerekli" }, { status: 400 })
     }
 
+    const sb = await getSupabaseServer()
     for (const s of subtasks) {
       if (!s.id) continue
-      await execute`
-        UPDATE ProjectSubtasks
-        SET
-          Title     = COALESCE(${s.title     !== undefined ? String(s.title).trim() : null}, Title),
-          Completed = COALESCE(${s.completed !== undefined ? (s.completed ? 1 : 0) : null}, Completed),
-          Position  = COALESCE(${s.position  !== undefined ? s.position : null}, Position)
-        WHERE Id = ${s.id}
-      `
+      const patch: Record<string, unknown> = {}
+      if (s.title     !== undefined) patch.title     = String(s.title).trim()
+      if (s.completed !== undefined) patch.completed = !!s.completed
+      if (s.position  !== undefined) patch.position  = s.position
+      if (!Object.keys(patch).length) continue
+      const { error } = await sb.schema("hub").from("project_subtasks").update(patch).eq("id", s.id)
+      if (error) throw error
     }
     return NextResponse.json({ ok: true })
   } catch (err) {
@@ -92,10 +85,10 @@ export async function DELETE(
   await params
   try {
     const { subtaskId } = await req.json()
-    if (!subtaskId) {
-      return NextResponse.json({ error: "subtaskId gerekli" }, { status: 400 })
-    }
-    await execute`DELETE FROM ProjectSubtasks WHERE Id = ${subtaskId}`
+    if (!subtaskId) return NextResponse.json({ error: "subtaskId gerekli" }, { status: 400 })
+    const sb = await getSupabaseServer()
+    const { error } = await sb.schema("hub").from("project_subtasks").delete().eq("id", subtaskId)
+    if (error) throw error
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error("[DELETE subtask]", err)
