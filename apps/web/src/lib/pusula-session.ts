@@ -28,6 +28,9 @@ export interface AppGrant {
 export interface HubSession {
   user: {
     id:          string
+    /** Supabase auth.users uuid — yeni domain kayıtlarında `created_by` için.
+     *  (`id` mssql AppUsers.Id sözleşmesini korur; bu ayrı alan Faz 4 yazımları için.) */
+    authUserId:  string
     username:    string
     email:       string | undefined
     fullName:    string
@@ -97,6 +100,7 @@ export async function auth(): Promise<HubSession | null> {
   return {
     user: {
       id:          appUser.Id,
+      authUserId:  user.id,
       username:    appUser.Username,
       email:       user.email,
       fullName,
