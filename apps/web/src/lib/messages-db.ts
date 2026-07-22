@@ -1,19 +1,17 @@
-import { query, execute } from "./db"
+import { getSupabaseAdmin } from "./supabase/admin"
 
 /**
- * Mesaj sistemi veri katmanı.
+ * Mesaj sistemi veri katmanı — Supabase `hub` schema (service-role).
  *
- * İki tablo kullanır:
- *   Messages            — gönderilen mesajın metadata'sı
- *   MessageRecipients   — mesajın her bir alıcı (sunucu+kullanıcı) satırı
- *
- * İlk çağrıda tablolar yoksa oluşturulur (idempotent).
+ * hub.messages / hub.message_recipients.
+ * Service-role: bu katman session'sız bağlamlardan da çağrılır (agent-poller,
+ * /api/agent/* token-auth route'ları) → authenticated RLS yerine RLS bypass.
  */
 
-export type MessageType         = "info" | "warning" | "urgent"
-export type MessagePriority     = "normal" | "high" | "urgent"
-export type RecipientKind       = "all" | "company" | "selected"
-export type RecipientStatus     = "pending" | "delivered" | "read" | "failed"
+export type MessageType     = "info" | "warning" | "urgent"
+export type MessagePriority = "normal" | "high" | "urgent"
+export type RecipientKind   = "all" | "company" | "selected"
+export type RecipientStatus = "pending" | "delivered" | "read" | "failed"
 
 export interface MessageRow {
   Id:            string
@@ -43,138 +41,27 @@ export interface RecipientRow {
   ErrorMessage: string | null
 }
 
-let _schemaReady = false
-async function ensureSchema(): Promise<void> {
-  if (_schemaReady) return
-  await execute`
-    IF OBJECT_ID('Messages','U') IS NULL
-    BEGIN
-      CREATE TABLE Messages (
-        Id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY,
-        Subject       NVARCHAR(300)    NOT NULL,
-        Body          NVARCHAR(MAX)    NOT NULL,
-        Type          NVARCHAR(20)     NOT NULL CONSTRAINT DF_Messages_Type     DEFAULT 'info',
-        Priority      NVARCHAR(20)     NOT NULL CONSTRAINT DF_Messages_Priority DEFAULT 'normal',
-        RecipientType NVARCHAR(20)     NOT NULL,
-        CompanyId     UNIQUEIDENTIFIER NULL,
-        CompanyName   NVARCHAR(200)    NULL,
-        SenderUserId  UNIQUEIDENTIFIER NULL,
-        SenderName    NVARCHAR(200)    NOT NULL,
-        SentAt        DATETIME2        NOT NULL CONSTRAINT DF_Messages_SentAt   DEFAULT SYSUTCDATETIME(),
-        TotalCount    INT              NOT NULL CONSTRAINT DF_Messages_Total    DEFAULT 0,
-        ReadCount     INT              NOT NULL CONSTRAINT DF_Messages_Read     DEFAULT 0
-      )
-      CREATE INDEX IX_Messages_SentAt ON Messages (SentAt DESC)
-    END
-  `
-  // Eski create.sql ile oluşmuş Messages tablosunu yeni şemaya hizala.
-  // Her ALTER idempotent — kolon yoksa ekle, eski 'Sender' varsa 'SenderName'e yeniden adlandır.
-  await execute`
-    IF COL_LENGTH('Messages','SenderName') IS NULL AND COL_LENGTH('Messages','Sender') IS NOT NULL
-      EXEC sp_rename 'Messages.Sender', 'SenderName', 'COLUMN'
-  `
-  await execute`
-    IF COL_LENGTH('Messages','SenderName') IS NULL
-      ALTER TABLE Messages ADD SenderName NVARCHAR(200) NOT NULL CONSTRAINT DF_Messages_SenderName DEFAULT ''
-  `
-  await execute`
-    IF COL_LENGTH('Messages','Type') IS NULL
-      ALTER TABLE Messages ADD Type NVARCHAR(20) NOT NULL CONSTRAINT DF_Messages_Type DEFAULT 'info'
-  `
-  await execute`
-    IF COL_LENGTH('Messages','CompanyId') IS NULL
-      ALTER TABLE Messages ADD CompanyId UNIQUEIDENTIFIER NULL
-  `
-  await execute`
-    IF COL_LENGTH('Messages','CompanyName') IS NULL
-      ALTER TABLE Messages ADD CompanyName NVARCHAR(200) NULL
-  `
-  await execute`
-    IF COL_LENGTH('Messages','SenderUserId') IS NULL
-      ALTER TABLE Messages ADD SenderUserId UNIQUEIDENTIFIER NULL
-  `
-  // Eski 'Company' kolonu varsa değerini CompanyName'e taşı (bir defa).
-  await execute`
-    IF COL_LENGTH('Messages','Company') IS NOT NULL AND COL_LENGTH('Messages','CompanyName') IS NOT NULL
-    BEGIN
-      UPDATE Messages SET CompanyName = Company WHERE CompanyName IS NULL AND Company IS NOT NULL
-    END
-  `
-  // Eski create.sql Messages.Status'u NOT NULL/default'suz oluşturmuş; yeni
-  // INSERT'ler bu kolona değer göndermediği için "Cannot insert NULL into
-  // column 'Status'" hatası veriyor. Nullable yap (idempotent).
-  await execute`
-    IF EXISTS (
-      SELECT 1 FROM sys.columns
-       WHERE object_id = OBJECT_ID('Messages') AND name = 'Status' AND is_nullable = 0
-    )
-      ALTER TABLE Messages ALTER COLUMN Status NVARCHAR(50) NULL
-  `
-
-  // Eski create.sql MessageRecipients tablosu (user directory şeması) varsa
-  // yeniden adlandır — doğru şemayla yeniden oluşturulacak.
-  await execute`
-    IF OBJECT_ID('MessageRecipients','U') IS NOT NULL
-       AND COL_LENGTH('MessageRecipients','MessageId') IS NULL
-      EXEC sp_rename 'MessageRecipients', 'MessageRecipients_Legacy'
-  `
-
-  // KRİTİK: MessageRecipients.MessageId'nin tipi VE UZUNLUĞU Messages.Id
-  // ile birebir eşleşmeli. Eski create.sql Messages.Id'yi NVARCHAR(50) olarak
-  // oluşturmuş. NVARCHAR(36) yeterli görünse de FK için "same length and scale"
-  // şartı var (SQL Server FK kuralı) → 1750. NVARCHAR(50) yapalım.
-  // Constraint adlarını anonymous bırak — DB-wide name conflict riskini de sıfırlar.
-  await execute`
-    IF OBJECT_ID('MessageRecipients','U') IS NULL
-    BEGIN
-      CREATE TABLE MessageRecipients (
-        Id            BIGINT           IDENTITY(1,1) PRIMARY KEY,
-        MessageId     NVARCHAR(50)     NOT NULL,
-        ServerId      NVARCHAR(50)     NOT NULL,
-        ServerName    NVARCHAR(200)    NULL,
-        Username      NVARCHAR(200)    NOT NULL,
-        Status        NVARCHAR(20)     NOT NULL DEFAULT 'pending',
-        DeliveredAt   DATETIME2        NULL,
-        ReadAt        DATETIME2        NULL,
-        ErrorMessage  NVARCHAR(500)    NULL,
-        FOREIGN KEY (MessageId) REFERENCES Messages(Id) ON DELETE CASCADE
-      )
-      CREATE INDEX IX_MR_MessageId ON MessageRecipients (MessageId)
-      CREATE INDEX IX_MR_Lookup    ON MessageRecipients (MessageId, Username)
-    END
-  `
-
-  // MessageTemplates — kullanıcının kendi hazır mesaj şablonları.
-  // Statik PRESET_MESSAGES (apps/web/src/lib/preset-messages.ts) korunur,
-  // bu tablo SADECE kullanıcının eklediği şablonları tutar. API GET
-  // sırasında ikisi merge edilir (statik = built-in, DB = user).
-  //
-  // KRİTİK — anonymous constraint: PK/DEFAULT adlarını NAMED bırakmak
-  // SQL Server'ın DB-wide constraint name uniqueness'ı yüzünden IF guard
-  // false olsa bile re-execution sırasında "Could not create constraint
-  // or index" (1750) hatası veriyor. Adsız bırak, SQL Server otomatik
-  // benzersiz ad üretir.
-  await execute`
-    IF OBJECT_ID('MessageTemplates','U') IS NULL
-    BEGIN
-      CREATE TABLE MessageTemplates (
-        Id          UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        Title       NVARCHAR(100)    NOT NULL,
-        Description NVARCHAR(255)    NULL,
-        Subject     NVARCHAR(200)    NOT NULL,
-        Body        NVARCHAR(MAX)    NOT NULL,
-        Type        NVARCHAR(20)     NOT NULL DEFAULT 'info',
-        Priority    NVARCHAR(20)     NOT NULL DEFAULT 'normal',
-        CreatedBy   NVARCHAR(100)    NULL,
-        CreatedAt   DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        UpdatedAt   DATETIME2        NULL
-      )
-    END
-  `
-  _schemaReady = true
+interface MsgDbRow {
+  id: string; subject: string; body: string; type: MessageType; priority: MessagePriority
+  recipient_type: RecipientKind; company_id: string | null; company_name: string | null
+  sender_user_id: string | null; sender_name: string; sent_at: string
+  total_count: number; read_count: number
 }
 
-export { ensureSchema }
+const sb = () => getSupabaseAdmin().schema("hub")
+const toZ = (ts: string | null): string => (ts ? new Date(ts).toISOString() : "")
+
+function toMessageRow(r: MsgDbRow): MessageRow {
+  return {
+    Id: r.id, Subject: r.subject, Body: r.body, Type: r.type, Priority: r.priority,
+    RecipientType: r.recipient_type, CompanyId: r.company_id, CompanyName: r.company_name,
+    SenderUserId: r.sender_user_id, SenderName: r.sender_name, SentAt: toZ(r.sent_at),
+    TotalCount: r.total_count, ReadCount: r.read_count,
+  }
+}
+
+/** Şema migration ile kurulu — geriye dönük uyum için noop. */
+export async function ensureSchema(): Promise<void> { /* noop (hub schema migration) */ }
 
 /* ── Create ───────────────────────────────────────────── */
 
@@ -193,20 +80,13 @@ export interface CreateMessageInput {
 }
 
 export async function createMessage(m: CreateMessageInput): Promise<void> {
-  await ensureSchema()
-  // Eski create.sql Messages.SentAt'a default tanımı bırakmamış (nullable=false,
-  // default=null) → SentAt göndermezsek "Cannot insert NULL". SYSUTCDATETIME()
-  // ile explicit doldur — yeni şemada zaten default vardı, eski tabloyla
-  // hizalanmak için INSERT'te de explicit veriyoruz.
-  await execute`
-    INSERT INTO Messages
-      (Id, Subject, Body, Type, Priority, RecipientType, CompanyId, CompanyName,
-       SenderUserId, SenderName, SentAt, TotalCount, ReadCount)
-    VALUES
-      (${m.id}, ${m.subject}, ${m.body}, ${m.type}, ${m.priority}, ${m.recipientType},
-       ${m.companyId ?? null}, ${m.companyName ?? null},
-       ${m.senderUserId ?? null}, ${m.senderName}, SYSUTCDATETIME(), ${m.totalCount}, 0)
-  `
+  const { error } = await sb().from("messages").insert({
+    id: m.id, subject: m.subject, body: m.body, type: m.type, priority: m.priority,
+    recipient_type: m.recipientType, company_id: m.companyId ?? null, company_name: m.companyName ?? null,
+    sender_user_id: m.senderUserId ?? null, sender_name: m.senderName,
+    total_count: m.totalCount, read_count: 0,
+  })
+  if (error) throw error
 }
 
 export interface AddRecipientInput {
@@ -220,54 +100,29 @@ export interface AddRecipientInput {
 }
 
 export async function addRecipient(r: AddRecipientInput): Promise<void> {
-  await ensureSchema()
-  await execute`
-    INSERT INTO MessageRecipients
-      (MessageId, ServerId, ServerName, Username, Status, DeliveredAt, ErrorMessage)
-    VALUES
-      (${r.messageId}, ${r.serverId}, ${r.serverName ?? null}, ${r.username},
-       ${r.status ?? "pending"}, ${r.deliveredAt ?? null}, ${r.errorMessage ?? null})
-  `
+  const { error } = await sb().from("message_recipients").insert({
+    message_id: r.messageId, server_id: r.serverId, server_name: r.serverName ?? null,
+    username: r.username, status: r.status ?? "pending",
+    delivered_at: r.deliveredAt ? r.deliveredAt.toISOString() : null,
+    error_message: r.errorMessage ?? null,
+  })
+  if (error) throw error
 }
 
-/** Bir sunucuya inject sonrası — o sunucudaki tüm henüz teslim edilmemiş alıcıları "delivered" yap.
- *  Eski davranış: agent /api/notify çağrısı tüm pending recipientları delivered işaretliyordu.
- *  Bu offline user'lar için yanlış (inject olmamasına rağmen delivered).
- *  Yeni broadcast akışı `markRecipientDelivered` (kullanıcı bazlı) kullanır,
- *  bu fonksiyon geriye dönük uyumluluk için duruyor.
- */
+/** Sunucudaki tüm pending alıcıları delivered yap (geriye dönük). */
 export async function markServerDelivered(messageId: string, serverId: string): Promise<void> {
-  await ensureSchema()
-  await execute`
-    UPDATE MessageRecipients
-       SET Status = 'delivered', DeliveredAt = SYSUTCDATETIME()
-     WHERE MessageId = ${messageId} AND ServerId = ${serverId} AND Status = 'pending'
-  `
+  await sb().from("message_recipients")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("message_id", messageId).eq("server_id", serverId).eq("status", "pending")
 }
 
-/** Tek bir alıcı (server+username) için delivered işaretle.
- *  broadcast() agent.lastReport.sessions ile inject edilen kullanıcıları belirleyip
- *  sadece onları işaretler — offline olanlar pending kalır, sonra Poller retry yapar. */
-export async function markRecipientDelivered(
-  messageId: string,
-  serverId: string,
-  username: string,
-): Promise<void> {
-  await ensureSchema()
-  await execute`
-    UPDATE MessageRecipients
-       SET Status = 'delivered', DeliveredAt = SYSUTCDATETIME()
-     WHERE MessageId = ${messageId}
-       AND ServerId  = ${serverId}
-       AND Username  = ${username}
-       AND Status    = 'pending'
-  `
+/** Tek alıcı (server+username) için delivered. */
+export async function markRecipientDelivered(messageId: string, serverId: string, username: string): Promise<void> {
+  await sb().from("message_recipients")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("message_id", messageId).eq("server_id", serverId).eq("username", username).eq("status", "pending")
 }
 
-/** Bir sunucudaki bekleyen (pending) alıcıların mesaj içeriğiyle birlikte listesi.
- *  Poller her cycle'da agent'tan Active session listesi geldiğinde, bu listeden
- *  yeni Active olan kullanıcılara karşılık gelen pending mesajları retry yapar.
- *  7 günden eski mesajlar dahil edilmez (TTL). */
 export interface PendingForServerRow {
   messageId:  string
   username:   string
@@ -278,152 +133,136 @@ export interface PendingForServerRow {
   senderName: string
   sentAt:     string
 }
+
+/** Sunucudaki pending alıcılar + mesaj içeriği (7 gün TTL). */
 export async function getPendingForServer(serverId: string): Promise<PendingForServerRow[]> {
-  await ensureSchema()
-  interface Raw {
-    MessageId: string; Username: string; Subject: string; Body: string;
-    Type: MessageType; Priority: MessagePriority; SenderName: string; SentAt: string
-  }
-  const rows = await query<Raw[]>`
-    SELECT r.MessageId, r.Username, m.Subject, m.Body, m.Type, m.Priority,
-           m.SenderName,
-           CONVERT(NVARCHAR(23), m.SentAt, 126) + 'Z' AS SentAt
-      FROM MessageRecipients r
-      JOIN Messages m ON m.Id = r.MessageId
-     WHERE r.ServerId = ${serverId}
-       AND r.Status   = 'pending'
-       AND r.ReadAt   IS NULL
-       AND m.SentAt   > DATEADD(day, -7, SYSUTCDATETIME())
-     ORDER BY m.SentAt
-  `
-  return rows.map(r => ({
-    messageId: r.MessageId, username: r.Username,
-    subject: r.Subject, body: r.Body, type: r.Type, priority: r.Priority,
-    senderName: r.SenderName, sentAt: r.SentAt,
-  }))
+  const { data: recips } = await sb().from("message_recipients")
+    .select("message_id, username")
+    .eq("server_id", serverId).eq("status", "pending").is("read_at", null)
+  const rlist = (recips ?? []) as { message_id: string; username: string }[]
+  if (!rlist.length) return []
+
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
+  const msgIds = [...new Set(rlist.map(r => r.message_id))]
+  const { data: msgs } = await sb().from("messages")
+    .select("id, subject, body, type, priority, sender_name, sent_at")
+    .in("id", msgIds).gte("sent_at", sevenDaysAgo)
+  const mmap = new Map(((msgs ?? []) as {
+    id: string; subject: string; body: string; type: MessageType; priority: MessagePriority; sender_name: string; sent_at: string
+  }[]).map(m => [m.id, m]))
+
+  return rlist
+    .filter(r => mmap.has(r.message_id))
+    .map(r => {
+      const m = mmap.get(r.message_id)!
+      return { messageId: r.message_id, username: r.username, subject: m.subject, body: m.body,
+               type: m.type, priority: m.priority, senderName: m.sender_name, sentAt: toZ(m.sent_at) }
+    })
+    .sort((a, b) => a.sentAt.localeCompare(b.sentAt))
 }
 
-/** Bir sunucu fan-out'ta hata verirse — o sunucudaki alıcıları "failed" işaretle. */
+/** Sunucu fan-out hatası → alıcıları failed. */
 export async function markServerFailed(messageId: string, serverId: string, error: string): Promise<void> {
-  await ensureSchema()
-  await execute`
-    UPDATE MessageRecipients
-       SET Status = 'failed', ErrorMessage = ${error.slice(0, 500)}
-     WHERE MessageId = ${messageId} AND ServerId = ${serverId} AND Status = 'pending'
-  `
+  await sb().from("message_recipients")
+    .update({ status: "failed", error_message: error.slice(0, 500) })
+    .eq("message_id", messageId).eq("server_id", serverId).eq("status", "pending")
 }
 
-/** ACK geldiğinde kullanıcıyı okundu işaretle ve mesajın ReadCount'unu güncelle. */
+/** ACK → kullanıcı okundu + ReadCount atomik artış. */
 export async function markRead(messageId: string, serverId: string, username: string): Promise<void> {
-  await ensureSchema()
-  // İdempotent: yalnızca daha önce okunmamış satırı işaretle
-  const result = await execute`
-    UPDATE MessageRecipients
-       SET Status = 'read', ReadAt = SYSUTCDATETIME()
-     WHERE MessageId = ${messageId} AND ServerId = ${serverId}
-       AND Username = ${username} AND Status <> 'read'
-  `
-  const updated = (result?.rowsAffected?.[0] ?? 0) > 0
-  if (updated) {
-    await execute`
-      UPDATE Messages SET ReadCount = ReadCount + 1 WHERE Id = ${messageId}
-    `
+  const { data } = await sb().from("message_recipients")
+    .update({ status: "read", read_at: new Date().toISOString() })
+    .eq("message_id", messageId).eq("server_id", serverId).eq("username", username).neq("status", "read")
+    .select("id")
+  if ((data?.length ?? 0) > 0) {
+    await getSupabaseAdmin().schema("hub").rpc("inc_message_read", { p_id: messageId, p_n: 1 })
   }
 }
 
-/** ACK geldi ama mesaj/sunucu/kullanıcı bilinmiyorsa kayıt eksik olabilir. msgId üzerinden lookup eder. */
+/** ACK ama server/username bilinmiyorsa msgId üzerinden. */
 export async function markReadByMsgId(msgId: string, username: string): Promise<void> {
-  await ensureSchema()
-  // Hangi sunucularda bu kullanıcı için pending/delivered satır var → hepsi read
-  const result = await execute`
-    UPDATE MessageRecipients
-       SET Status = 'read', ReadAt = SYSUTCDATETIME()
-     WHERE MessageId = ${msgId} AND Username = ${username} AND Status <> 'read'
-  `
-  const n = result?.rowsAffected?.[0] ?? 0
+  const { data } = await sb().from("message_recipients")
+    .update({ status: "read", read_at: new Date().toISOString() })
+    .eq("message_id", msgId).eq("username", username).neq("status", "read")
+    .select("id")
+  const n = data?.length ?? 0
   if (n > 0) {
-    await execute`
-      UPDATE Messages SET ReadCount = ReadCount + ${n} WHERE Id = ${msgId}
-    `
+    await getSupabaseAdmin().schema("hub").rpc("inc_message_read", { p_id: msgId, p_n: n })
   }
 }
 
 /* ── Read ─────────────────────────────────────────────── */
 
 export interface ListFilter {
-  search?:    string             // Subject veya Body içinde geçen
-  subject?:   string             // sadece Subject — search'ten ayrı, filtre çubuğunda "Konu" alanı
+  search?:    string
+  subject?:   string
   type?:      MessageType
   priority?:  MessagePriority
-  agentId?:   string             // sadece bu sunucuya gönderilenler
-  companyId?: string             // sadece bu firmaya gönderilenler (m.CompanyId)
-  username?:  string             // alıcı kullanıcısı (MessageRecipients.Username) bu kişiyi içerenler
-  from?:      string             // ISO tarih (yyyy-MM-dd) — bu tarih dahil
-  to?:        string             // ISO tarih (yyyy-MM-dd) — bu tarih dahil
+  agentId?:   string
+  companyId?: string
+  username?:  string
+  from?:      string
+  to?:        string
   limit?:     number
   offset?:    number
 }
 
 export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
-  await ensureSchema()
-  const limit   = Math.min(f.limit ?? 100, 500)
-  const offset  = f.offset ?? 0
-  const search  = f.search?.trim()  ? `%${f.search.trim()}%`  : null
-  const subject = f.subject?.trim() ? `%${f.subject.trim()}%` : null
-  // SQL Server NULL safety + parametreli filtreleme — NULL ise filtre uygulanmaz.
-  const type      = f.type      ?? null
-  const priority  = f.priority  ?? null
-  const agentId   = f.agentId   ?? null
-  const companyId = f.companyId ?? null
-  const username  = f.username  ?? null
-  const from      = f.from      ?? null
-  const to        = f.to        ?? null
+  const limit  = Math.min(f.limit ?? 100, 500)
+  const offset = f.offset ?? 0
 
-  return query<MessageRow[]>`
-    SELECT m.Id, m.Subject, m.Body, m.Type, m.Priority, m.RecipientType,
-           m.CompanyId, m.CompanyName, m.SenderUserId, m.SenderName,
-           CONVERT(NVARCHAR(23), m.SentAt, 126) + 'Z' AS SentAt,
-           m.TotalCount, m.ReadCount
-      FROM Messages m
-     WHERE (${search}    IS NULL OR m.Subject LIKE ${search} OR m.Body LIKE ${search})
-       AND (${subject}   IS NULL OR m.Subject LIKE ${subject})
-       AND (${type}      IS NULL OR m.Type     = ${type})
-       AND (${priority}  IS NULL OR m.Priority = ${priority})
-       AND (${companyId} IS NULL OR m.CompanyId = ${companyId})
-       AND (${from}      IS NULL OR m.SentAt >= ${from})
-       AND (${to}        IS NULL OR m.SentAt <  DATEADD(day, 1, CAST(${to} AS DATE)))
-       AND (${agentId}   IS NULL OR EXISTS (
-         SELECT 1 FROM MessageRecipients r
-          WHERE r.MessageId = m.Id AND r.ServerId = ${agentId}))
-       AND (${username}  IS NULL OR EXISTS (
-         SELECT 1 FROM MessageRecipients r
-          WHERE r.MessageId = m.Id AND r.Username = ${username}))
-     ORDER BY m.SentAt DESC
-     OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY
-  `
+  // agentId / username filtreleri: önce ilgili message_id'leri recipients'tan çek
+  let restrictIds: string[] | null = null
+  if (f.agentId || f.username) {
+    let rq = sb().from("message_recipients").select("message_id")
+    if (f.agentId)  rq = rq.eq("server_id", f.agentId)
+    if (f.username) rq = rq.eq("username", f.username)
+    const { data } = await rq
+    restrictIds = [...new Set(((data ?? []) as { message_id: string }[]).map(r => r.message_id))]
+    if (!restrictIds.length) return []
+  }
+
+  let q = sb().from("messages")
+    .select("id, subject, body, type, priority, recipient_type, company_id, company_name, sender_user_id, sender_name, sent_at, total_count, read_count")
+    .order("sent_at", { ascending: false })
+  if (f.type)      q = q.eq("type", f.type)
+  if (f.priority)  q = q.eq("priority", f.priority)
+  if (f.companyId) q = q.eq("company_id", f.companyId)
+  if (f.subject?.trim()) q = q.ilike("subject", `%${f.subject.trim()}%`)
+  if (f.search?.trim())  q = q.or(`subject.ilike.%${f.search.trim()}%,body.ilike.%${f.search.trim()}%`)
+  if (f.from) q = q.gte("sent_at", f.from)
+  if (f.to) {
+    const toNext = new Date(f.to); toNext.setDate(toNext.getDate() + 1)
+    q = q.lt("sent_at", toNext.toISOString().slice(0, 10))
+  }
+  if (restrictIds) q = q.in("id", restrictIds)
+  q = q.range(offset, offset + limit - 1)
+
+  const { data, error } = await q
+  if (error) throw error
+  return ((data ?? []) as MsgDbRow[]).map(toMessageRow)
 }
 
 export async function getMessage(id: string): Promise<MessageRow | null> {
-  await ensureSchema()
-  const rows = await query<MessageRow[]>`
-    SELECT Id, Subject, Body, Type, Priority, RecipientType,
-           CompanyId, CompanyName, SenderUserId, SenderName,
-           CONVERT(NVARCHAR(23), SentAt, 126) + 'Z' AS SentAt,
-           TotalCount, ReadCount
-      FROM Messages WHERE Id = ${id}
-  `
-  return rows[0] ?? null
+  const { data } = await sb().from("messages")
+    .select("id, subject, body, type, priority, recipient_type, company_id, company_name, sender_user_id, sender_name, sent_at, total_count, read_count")
+    .eq("id", id).maybeSingle()
+  return data ? toMessageRow(data as MsgDbRow) : null
 }
 
 export async function getRecipients(messageId: string): Promise<RecipientRow[]> {
-  await ensureSchema()
-  return query<RecipientRow[]>`
-    SELECT Id, MessageId, ServerId, ServerName, Username, Status,
-           CONVERT(NVARCHAR(23), DeliveredAt, 126) + 'Z' AS DeliveredAt,
-           CONVERT(NVARCHAR(23), ReadAt,      126) + 'Z' AS ReadAt,
-           ErrorMessage
-      FROM MessageRecipients
-     WHERE MessageId = ${messageId}
-     ORDER BY Status DESC, ServerName, Username
-  `
+  const { data } = await sb().from("message_recipients")
+    .select("id, message_id, server_id, server_name, username, status, delivered_at, read_at, error_message")
+    .eq("message_id", messageId)
+    .order("status", { ascending: false }).order("server_name").order("username")
+  return ((data ?? []) as {
+    id: number; message_id: string; server_id: string; server_name: string | null; username: string
+    status: RecipientStatus; delivered_at: string | null; read_at: string | null; error_message: string | null
+  }[]).map(r => ({
+    Id: r.id, MessageId: r.message_id, ServerId: r.server_id, ServerName: r.server_name,
+    Username: r.username, Status: r.status,
+    DeliveredAt: r.delivered_at ? toZ(r.delivered_at) : null,
+    ReadAt: r.read_at ? toZ(r.read_at) : null,
+    ErrorMessage: r.error_message,
+  }))
 }

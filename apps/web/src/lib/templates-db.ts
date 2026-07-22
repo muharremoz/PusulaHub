@@ -1,16 +1,9 @@
-import { query, execute } from "./db"
-import { ensureSchema } from "./messages-db"
+import { getSupabaseAdmin } from "./supabase/admin"
 import { PRESET_MESSAGES, type PresetMessage } from "./preset-messages"
 
 /**
- * Mesaj şablonları (hazır mesajlar) veri katmanı.
- *
- * İki kaynaklı:
- *   - PRESET_MESSAGES (statik dosya): built-in şablonlar, silinemez/düzenlenemez
- *   - MessageTemplates (DB tablosu): kullanıcının eklediği şablonlar, full CRUD
- *
- * `listTemplates()` ikisini birleştirir, her biri `builtIn: true|false`
- * flag'i ile döner. UI built-in olanlarda edit/delete butonu göstermez.
+ * Mesaj şablonları veri katmanı — Supabase `hub.message_templates` (service-role).
+ * İki kaynaklı: PRESET_MESSAGES (statik, built-in) + DB (kullanıcı şablonları).
  */
 
 export type TplType     = "info" | "warning" | "urgent"
@@ -30,77 +23,43 @@ export interface MessageTemplate {
   updatedAt?:  string | null
 }
 
-interface TemplateRow {
-  Id:          string
-  Title:       string
-  Description: string | null
-  Subject:     string
-  Body:        string
-  Type:        TplType
-  Priority:    TplPriority
-  CreatedBy:   string | null
-  CreatedAt:   string
-  UpdatedAt:   string | null
+interface TplDbRow {
+  id: string; title: string; description: string | null; subject: string; body: string
+  type: TplType; priority: TplPriority; created_by: string | null; created_at: string; updated_at: string | null
 }
+
+const sb = () => getSupabaseAdmin().schema("hub")
+const COLS = "id, title, description, subject, body, type, priority, created_by, created_at, updated_at"
 
 function presetToTemplate(p: PresetMessage): MessageTemplate {
-  return {
-    id:          p.id,
-    title:       p.title,
-    description: p.description,
-    subject:     p.subject,
-    body:        p.body,
-    type:        p.type,
-    priority:    p.priority,
-    builtIn:     true,
-  }
+  return { id: p.id, title: p.title, description: p.description, subject: p.subject,
+           body: p.body, type: p.type, priority: p.priority, builtIn: true }
 }
 
-function rowToTemplate(r: TemplateRow): MessageTemplate {
+function rowToTemplate(r: TplDbRow): MessageTemplate {
   return {
-    id:          r.Id,
-    title:       r.Title,
-    description: r.Description ?? "",
-    subject:     r.Subject,
-    body:        r.Body,
-    type:        r.Type,
-    priority:    r.Priority,
-    builtIn:     false,
-    createdBy:   r.CreatedBy,
-    createdAt:   r.CreatedAt,
-    updatedAt:   r.UpdatedAt,
+    id: r.id, title: r.title, description: r.description ?? "", subject: r.subject, body: r.body,
+    type: r.type, priority: r.priority, builtIn: false,
+    createdBy: r.created_by, createdAt: r.created_at, updatedAt: r.updated_at,
   }
 }
 
 /* ── List ──────────────────────────────────────────────── */
 export async function listTemplates(): Promise<MessageTemplate[]> {
-  await ensureSchema()
-  const rows = await query<TemplateRow[]>`
-    SELECT Id, Title, Description, Subject, Body, Type, Priority,
-           CreatedBy, CreatedAt, UpdatedAt
-      FROM MessageTemplates
-     ORDER BY UpdatedAt DESC, CreatedAt DESC
-  `
-  const userTemplates = rows.map(rowToTemplate)
-  const builtIn       = PRESET_MESSAGES.map(presetToTemplate)
-  // Kullanıcı şablonları üstte (en yeni en başta), sonra built-in'ler
+  const { data } = await sb().from("message_templates").select(COLS)
+    .order("updated_at", { ascending: false, nullsFirst: false }).order("created_at", { ascending: false })
+  const userTemplates = ((data ?? []) as TplDbRow[]).map(rowToTemplate)
+  const builtIn = PRESET_MESSAGES.map(presetToTemplate)
   return [...userTemplates, ...builtIn]
 }
 
 /* ── Get by id ─────────────────────────────────────────── */
 export async function getTemplate(id: string): Promise<MessageTemplate | null> {
-  // Built-in mi kontrol et
   const builtIn = PRESET_MESSAGES.find(p => p.id === id)
   if (builtIn) return presetToTemplate(builtIn)
 
-  await ensureSchema()
-  const rows = await query<TemplateRow[]>`
-    SELECT Id, Title, Description, Subject, Body, Type, Priority,
-           CreatedBy, CreatedAt, UpdatedAt
-      FROM MessageTemplates
-     WHERE Id = ${id}
-  `
-  return rows[0] ? rowToTemplate(rows[0]) : null
+  const { data } = await sb().from("message_templates").select(COLS).eq("id", id).maybeSingle()
+  return data ? rowToTemplate(data as TplDbRow) : null
 }
 
 /* ── Create ────────────────────────────────────────────── */
@@ -115,19 +74,12 @@ export interface CreateTemplateInput {
 }
 
 export async function createTemplate(input: CreateTemplateInput): Promise<string> {
-  await ensureSchema()
-  const rows = await query<{ Id: string }[]>`
-    INSERT INTO MessageTemplates (Title, Description, Subject, Body, Type, Priority, CreatedBy)
-    OUTPUT INSERTED.Id
-    VALUES (${input.title},
-            ${input.description ?? null},
-            ${input.subject},
-            ${input.body},
-            ${input.type},
-            ${input.priority},
-            ${input.createdBy ?? null})
-  `
-  return rows[0].Id
+  const { data, error } = await sb().from("message_templates").insert({
+    title: input.title, description: input.description ?? null, subject: input.subject,
+    body: input.body, type: input.type, priority: input.priority, created_by: input.createdBy ?? null,
+  }).select("id").single()
+  if (error) throw error
+  return data.id as string
 }
 
 /* ── Update ────────────────────────────────────────────── */
@@ -141,29 +93,23 @@ export interface UpdateTemplateInput {
 }
 
 export async function updateTemplate(id: string, input: UpdateTemplateInput): Promise<boolean> {
-  // Built-in'ler güncellenemez
-  if (PRESET_MESSAGES.some(p => p.id === id)) return false
+  if (PRESET_MESSAGES.some(p => p.id === id)) return false // built-in düzenlenemez
 
-  await ensureSchema()
-  // Her alan opsiyonel — COALESCE ile gönderilen değerlerle güncelle, gönderilmeyenler aynen kalsın.
-  const result = await execute`
-    UPDATE MessageTemplates
-       SET Title       = COALESCE(${input.title       ?? null}, Title),
-           Description = COALESCE(${input.description ?? null}, Description),
-           Subject     = COALESCE(${input.subject     ?? null}, Subject),
-           Body        = COALESCE(${input.body        ?? null}, Body),
-           Type        = COALESCE(${input.type        ?? null}, Type),
-           Priority    = COALESCE(${input.priority    ?? null}, Priority),
-           UpdatedAt   = SYSUTCDATETIME()
-     WHERE Id = ${id}
-  `
-  return (result.rowsAffected[0] ?? 0) > 0
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (input.title       != null) patch.title       = input.title
+  if (input.description != null) patch.description = input.description
+  if (input.subject     != null) patch.subject     = input.subject
+  if (input.body        != null) patch.body        = input.body
+  if (input.type        != null) patch.type        = input.type
+  if (input.priority    != null) patch.priority    = input.priority
+
+  const { data } = await sb().from("message_templates").update(patch).eq("id", id).select("id")
+  return (data?.length ?? 0) > 0
 }
 
 /* ── Delete ────────────────────────────────────────────── */
 export async function deleteTemplate(id: string): Promise<boolean> {
-  if (PRESET_MESSAGES.some(p => p.id === id)) return false  // built-in silinemez
-  await ensureSchema()
-  const result = await execute`DELETE FROM MessageTemplates WHERE Id = ${id}`
-  return (result.rowsAffected[0] ?? 0) > 0
+  if (PRESET_MESSAGES.some(p => p.id === id)) return false // built-in silinemez
+  const { data } = await sb().from("message_templates").delete().eq("id", id).select("id")
+  return (data?.length ?? 0) > 0
 }

@@ -39,6 +39,10 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith("/_next") || pathname.includes(".")) return NextResponse.next()
   if (pathname.startsWith("/api/auth/")) return NextResponse.next()
 
+  // Agent-facing endpoint'ler: Notifier/agent kendi token'ıyla (agent-store)
+  // doğrular — Supabase user session'ı YOK, gate'lenmemeli.
+  if (pathname.startsWith("/api/agent/")) return NextResponse.next()
+
   // Internal service-to-service endpoint — x-internal-key ile kendini koruyor.
   if (pathname.startsWith("/api/apps/register")) return NextResponse.next()
   // Alt uygulamaların Hub'a proxy'lediği istekler (kendi x-internal-key kontrolleri var).
