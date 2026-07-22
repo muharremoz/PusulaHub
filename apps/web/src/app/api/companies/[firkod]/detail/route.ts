@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { getAgentById, getAllAgents } from "@/lib/agent-store"
 import { requirePermission } from "@/lib/require-permission"
 import type { AgentReport } from "@/lib/agent-types"
@@ -64,20 +64,15 @@ export interface CompanyUsageHistory {
 }
 
 interface CompanyRow {
-  CompanyId:       string
-  WindowsServerId: string | null
-  SqlServerId:     string | null
-  FileServerId:    string | null
-  FileStorageMB:   number | null
-  DbQuota:         number | null
-  QuotaDisk:       number | null
-  QuotaCpu:        number | null
-  QuotaRam:        number | null
-}
-
-interface DbSumRow {
-  FirmaDbMB:  number
-  ServerDbMB: number
+  company_id:        string
+  windows_server_id: string | null
+  sql_server_id:     string | null
+  file_server_id:    string | null
+  file_storage_mb:   number | null
+  db_quota:          number | null
+  quota_disk:        number | null
+  quota_cpu:         number | null
+  quota_ram:         number | null
 }
 
 export async function GET(
@@ -88,15 +83,12 @@ export async function GET(
   if (gate) return gate
   const { firkod } = await params
   try {
-    const compRows = await query<CompanyRow[]>`
-      SELECT CompanyId, WindowsServerId, SqlServerId,
-             FileServerId, FileStorageMB, DbQuota, QuotaDisk, QuotaCpu, QuotaRam
-      FROM Companies WHERE CompanyId = ${firkod}
-    `
-    if (!compRows.length) {
-      return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
-    }
-    const c = compRows[0]
+    const sb = await getSupabaseServer()
+    const { data: comp } = await sb.schema("hub").from("companies")
+      .select("company_id, windows_server_id, sql_server_id, file_server_id, file_storage_mb, db_quota, quota_disk, quota_cpu, quota_ram")
+      .eq("company_id", firkod).maybeSingle()
+    if (!comp) return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
+    const c = comp as unknown as CompanyRow
 
     // Firma kullanıcıları "firkod.xxx" ön ekine sahip
     const prefix = `${firkod.toLowerCase()}.`
@@ -118,8 +110,8 @@ export async function GET(
     let userCapacity = 0
 
     let winReport: AgentReport | null = null
-    if (c.WindowsServerId) {
-      const a = getAgentById(c.WindowsServerId)
+    if (c.windows_server_id) {
+      const a = getAgentById(c.windows_server_id)
       if (a?.lastReport) winReport = a.lastReport
     }
     if (!winReport) {
@@ -145,21 +137,17 @@ export async function GET(
     }
 
     // ── Firma DB toplamı ──
-    const dbSumRows = await query<DbSumRow[]>`
-      SELECT
-        ISNULL((SELECT SUM(SizeMB) FROM SQLDatabases WHERE FirmaNo = ${firkod}), 0) AS FirmaDbMB,
-        0 AS ServerDbMB
-    `
-    const firmaDbMB  = dbSumRows[0]?.FirmaDbMB  ?? 0
+    const { data: firmaDbs } = await sb.schema("hub").from("sql_databases").select("size_mb").eq("firma_no", firkod)
+    const firmaDbMB = ((firmaDbs ?? []) as { size_mb: number }[]).reduce((s, d) => s + (d.size_mb ?? 0), 0)
 
     // Disk = firma'nın file sunucusundaki D:\Resimler\<firkod> klasörü
     // Kota = Companies.QuotaDisk (varsayılan 25 GB)
-    const fileStorageMB = c.FileStorageMB ?? 0
-    const quotaDiskGB   = c.QuotaDisk ?? 25
+    const fileStorageMB = c.file_storage_mb ?? 0
+    const quotaDiskGB   = c.quota_disk ?? 25
     const quotaDiskMB   = quotaDiskGB * 1024
 
     // DB kotası = Companies.DbQuota (varsayılan 1 GB)
-    const dbQuotaGB = c.DbQuota ?? 1
+    const dbQuotaGB = c.db_quota ?? 1
     const dbQuotaMB = dbQuotaGB * 1024
 
     const detail: CompanyDetail = {
@@ -185,29 +173,24 @@ export async function GET(
     // Default'lar: DB=1 GB, Disk=25 GB, CPU/RAM=0 (atanmamış). Manuel değer
     // varsa bar o kotaya göre dolar ve "kullanım / kota" gösterilir.
     detail.manualQuota = {
-      cpuPct: (c.QuotaCpu ?? 0) > 0                          ? c.QuotaCpu!  : null,
-      ramGB:  (c.QuotaRam ?? 0) > 0                          ? c.QuotaRam!  : null,
-      diskGB: (c.QuotaDisk != null && c.QuotaDisk > 0 && c.QuotaDisk !== 25) ? c.QuotaDisk : null,
-      dbGB:   (c.DbQuota   != null && c.DbQuota   > 0 && c.DbQuota   !== 1)   ? c.DbQuota   : null,
+      cpuPct: (c.quota_cpu ?? 0) > 0                          ? c.quota_cpu!  : null,
+      ramGB:  (c.quota_ram ?? 0) > 0                          ? c.quota_ram!  : null,
+      diskGB: (c.quota_disk != null && c.quota_disk > 0 && c.quota_disk !== 25) ? c.quota_disk : null,
+      dbGB:   (c.db_quota   != null && c.db_quota   > 0 && c.db_quota   !== 1)   ? c.db_quota   : null,
     }
 
     // Haftalık kullanım grafiği — CompanyUsageDaily'den son 7 gün, yüzde bazlı.
     // RAM/Disk mutlak değerleri firma kotasına oranlanıp 0-100 arası yüzde döner.
     try {
       interface WeekDailyRow {
-        Date: string
-        AvgCpu: number | null
-        AvgRamMB: number | null
-        DiskMB: number | null
+        date: string
+        avg_cpu: number | null
+        avg_ram_mb: number | null
+        disk_mb: number | null
       }
-      const weekDaily = await query<WeekDailyRow[]>`
-        SELECT TOP 7
-          CONVERT(NVARCHAR(10), Date, 23) AS Date,
-          AvgCpu, AvgRamMB, DiskMB
-        FROM CompanyUsageDaily
-        WHERE CompanyId = ${firkod}
-        ORDER BY Date DESC
-      `
+      const { data: weekDailyRaw } = await sb.schema("hub").from("company_usage_daily")
+        .select("date, avg_cpu, avg_ram_mb, disk_mb").eq("company_id", firkod).order("date", { ascending: false }).limit(7)
+      const weekDaily = (weekDailyRaw ?? []) as WeekDailyRow[]
       // Haftalık grafik = firmanın sunucuya GERÇEK yükü. Manuel kotaya DEĞİL,
       // sunucu KAPASİTESİNE oranlanır (amaç: "bu firma sunucuya haftalık ne
       // kadar yük oldu" — ne kullandıysa o). RAM → resolve edilen RDP sunucusu
@@ -215,8 +198,8 @@ export async function GET(
       // sunucu CPU yükü).
       const ramQuota = Math.max(1, quotaRamMB)
       let fileDiskTotalMB = 0
-      if (c.FileServerId) {
-        const fa = getAgentById(c.FileServerId)
+      if (c.file_server_id) {
+        const fa = getAgentById(c.file_server_id)
         const disks = fa?.lastReport?.metrics?.disks ?? []
         fileDiskTotalMB = disks.reduce((mx, dsk) => Math.max(mx, (dsk.totalGB ?? 0) * 1024), 0)
       }
@@ -228,7 +211,7 @@ export async function GET(
         return Math.min(100, Math.round(p))
       }
       const dayMap = new Map<string, WeekDailyRow>()
-      for (const r of weekDaily) dayMap.set(r.Date, r)
+      for (const r of weekDaily) dayMap.set(r.date, r)
 
       // Disk fallback: geçmiş günlerde DiskMB henüz yazılmamış olabilir
       // (kolon sonradan eklendi). Null ise son bilinen değere (bugünkü
@@ -243,14 +226,14 @@ export async function GET(
         d.setDate(today.getDate() - i)
         const iso = d.toISOString().slice(0, 10)
         const row = dayMap.get(iso)
-        const diskMB = row?.DiskMB ?? fallbackDiskMB
+        const diskMB = row?.disk_mb ?? fallbackDiskMB
         out.push({
           day:  trNames[d.getDay()],
           // CPU: ham kullanım % (firmanın sunucudaki gerçek CPU yükü).
-          cpu:  row?.AvgCpu != null ? Math.min(100, Math.round(row.AvgCpu)) : 0,
+          cpu:  row?.avg_cpu != null ? Math.min(100, Math.round(row.avg_cpu)) : 0,
           // RAM: firma RAM'i / sunucu toplam RAM. Sunucu çözülemezse (quotaRamMB=0)
           // sahte %100 yerine 0.
-          ram:  (row?.AvgRamMB != null && quotaRamMB > 0) ? pct(row.AvgRamMB, ramQuota) : 0,
+          ram:  (row?.avg_ram_mb != null && quotaRamMB > 0) ? pct(row.avg_ram_mb, ramQuota) : 0,
           // Disk: firma görsel klasörü / dosya sunucusu toplam disk. Disk
           // kapasitesi bilinmiyorsa 0.
           disk: fileDiskTotalMB > 0 ? pct(diskMB, diskQuota) : 0,
@@ -262,46 +245,39 @@ export async function GET(
     // 30 günlük geçmiş özeti (CompanyUsageDaily) — satış için
     try {
       interface DailyRow {
-        Date: string; AvgCpu: number | null; PeakCpu: number | null
-        AvgRamMB: number | null; PeakRamMB: number | null
-        UserCount: number | null; DbMB: number | null
+        date: string; avg_cpu: number | null; peak_cpu: number | null
+        avg_ram_mb: number | null; peak_ram_mb: number | null
+        user_count: number | null; db_mb: number | null
       }
-      const dailyRows = await query<DailyRow[]>`
-        SELECT TOP 30
-          CONVERT(NVARCHAR(10), Date, 23) AS Date,
-          AvgCpu, PeakCpu, AvgRamMB, PeakRamMB, UserCount, DbMB
-        FROM CompanyUsageDaily
-        WHERE CompanyId = ${firkod}
-        ORDER BY Date DESC
-      `
+      const { data: dailyRaw } = await sb.schema("hub").from("company_usage_daily")
+        .select("date, avg_cpu, peak_cpu, avg_ram_mb, peak_ram_mb, user_count, db_mb")
+        .eq("company_id", firkod).order("date", { ascending: false }).limit(30)
+      const dailyRows = (dailyRaw ?? []) as DailyRow[]
       if (dailyRows.length) {
         const rows = dailyRows.slice().reverse() // eskiden yeniye
-        const cpus = rows.map((r) => r.AvgCpu ?? 0)
-        const rams = rows.map((r) => r.AvgRamMB ?? 0)
-        const peakCpuRow = rows.reduce((best, r) => ((r.PeakCpu ?? 0) > (best.PeakCpu ?? 0) ? r : best), rows[0])
-        const peakRamRow = rows.reduce((best, r) => ((r.PeakRamMB ?? 0) > (best.PeakRamMB ?? 0) ? r : best), rows[0])
-        // DB büyüme: DbMB kolonunda veri yazılmamış günler 0 olarak duruyor;
-        // bunlar büyüme oranını bozar. İlk ve son SIFIR-OLMAYAN DbMB değerlerini
-        // baz al (gerçek başlangıç → bugünkü boyut).
-        const nonZeroDb = rows.filter((r) => (r.DbMB ?? 0) > 0)
-        const dbStart = nonZeroDb.length ? (nonZeroDb[0].DbMB ?? 0) : 0
-        const dbEnd   = nonZeroDb.length ? (nonZeroDb[nonZeroDb.length - 1].DbMB ?? 0) : 0
+        const cpus = rows.map((r) => r.avg_cpu ?? 0)
+        const rams = rows.map((r) => r.avg_ram_mb ?? 0)
+        const peakCpuRow = rows.reduce((best, r) => ((r.peak_cpu ?? 0) > (best.peak_cpu ?? 0) ? r : best), rows[0])
+        const peakRamRow = rows.reduce((best, r) => ((r.peak_ram_mb ?? 0) > (best.peak_ram_mb ?? 0) ? r : best), rows[0])
+        const nonZeroDb = rows.filter((r) => (r.db_mb ?? 0) > 0)
+        const dbStart = nonZeroDb.length ? (nonZeroDb[0].db_mb ?? 0) : 0
+        const dbEnd   = nonZeroDb.length ? (nonZeroDb[nonZeroDb.length - 1].db_mb ?? 0) : 0
         detail.history30d = {
           avgCpu:      Math.round((cpus.reduce((a, v) => a + v, 0) / cpus.length) * 10) / 10,
-          peakCpu:     peakCpuRow.PeakCpu ?? 0,
-          peakCpuDate: peakCpuRow.Date,
+          peakCpu:     peakCpuRow.peak_cpu ?? 0,
+          peakCpuDate: peakCpuRow.date,
           avgRamGB:    Math.round((rams.reduce((a, v) => a + v, 0) / rams.length / 1024) * 10) / 10,
-          peakRamGB:   Math.round(((peakRamRow.PeakRamMB ?? 0) / 1024) * 10) / 10,
-          peakRamDate: peakRamRow.Date,
-          maxUsers:    rows.reduce((m, r) => Math.max(m, r.UserCount ?? 0), 0),
+          peakRamGB:   Math.round(((peakRamRow.peak_ram_mb ?? 0) / 1024) * 10) / 10,
+          peakRamDate: peakRamRow.date,
+          maxUsers:    rows.reduce((m, r) => Math.max(m, r.user_count ?? 0), 0),
           dbStartMB:   dbStart,
           dbEndMB:     dbEnd,
           dbGrowthPct: dbStart > 0 ? Math.round(((dbEnd - dbStart) / dbStart) * 100) : 0,
           dailyPoints: rows.map((r) => ({
-            date:  r.Date,
-            cpu:   r.AvgCpu ?? 0,
-            ramMB: r.AvgRamMB ?? 0,
-            dbMB:  r.DbMB ?? 0,
+            date:  r.date,
+            cpu:   r.avg_cpu ?? 0,
+            ramMB: r.avg_ram_mb ?? 0,
+            dbMB:  r.db_mb ?? 0,
           })),
         }
       }
