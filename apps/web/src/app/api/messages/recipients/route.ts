@@ -1,117 +1,68 @@
 import { NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
 import { getAllAgents } from "@/lib/agent-store"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
-/**
- * GET /api/messages/recipients
- * Compose ekranı için: tüm online sunuculardaki aktif WTS oturumlarını
- * birleşik liste halinde döndürür. Her satır: (agentId, serverName, username,
- * companyName, online, sessionType, state).
- */
-interface ServerCompanyRow {
-  Id:          string
-  Name:        string
-  CompanyName: string | null
-}
+/** GET /api/messages/recipients — online sunucuların aktif WTS oturumları + firma eşlemesi. */
 
 export async function GET() {
   const gate = await requirePermission("messages", "read")
   if (gate) return gate
-
   try {
     const agents = getAllAgents()
+    const sb = await getSupabaseServer()
 
-    // Sunucu bazlı fallback firma (AD sunucusu, tek-firma sunucusu için).
-    const ids = agents.map(a => a.agentId)
-    const serverCompany = new Map<string, string | null>()
-    if (ids.length > 0) {
-      const rows = await query<ServerCompanyRow[]>`
-        SELECT s.Id, s.Name,
-               (SELECT TOP 1 c.Name
-                  FROM Companies c
-                 WHERE c.WindowsServerId = s.Id OR c.AdServerId = s.Id
-                 ORDER BY c.Name) AS CompanyName
-          FROM Servers s
-      `
-      for (const r of rows) serverCompany.set(r.Id, r.CompanyName)
+    // Kurulu firmalar (sunucu atanmış) — server→company eşlemesi + seçilebilir firma listesi
+    const { data: instData } = await sb.schema("hub").from("companies")
+      .select("company_id, name, windows_server_id, ad_server_id")
+      .or("windows_server_id.not.is.null,ad_server_id.not.is.null").limit(10000)
+    const instComps = (instData ?? []) as { company_id: string; name: string; windows_server_id: string | null; ad_server_id: string | null }[]
+
+    const serverCompany = new Map<string, string>()
+    for (const c of instComps) {
+      if (c.windows_server_id && !serverCompany.has(c.windows_server_id)) serverCompany.set(c.windows_server_id, c.name)
+      if (c.ad_server_id && !serverCompany.has(c.ad_server_id)) serverCompany.set(c.ad_server_id, c.name)
     }
 
-    // Kullanıcı bazlı gerçek firma — ADUsers.Username → Companies.Name
-    // (ADUsers.OU = Companies.CompanyId eşlemesi kurulum sırasında yapıldı).
-    // Shared RDP sunucularında (örn. PUSULARDP) tek sunucuya birçok firma
-    // kullanıcısı bağlanır — sunucu eşlemesi yanıltıcı olur, bu yüzden
-    // kullanıcı eşlemesi öncelikli.
-    const userCompany = new Map<string, string>()  // key: username (lowercase)
-    try {
-      const urows = await query<{ Username: string; CompanyName: string }[]>`
-        SELECT u.Username, c.Name AS CompanyName
-          FROM ADUsers u
-          JOIN Companies c ON c.CompanyId = u.OU
-      `
-      for (const r of urows) {
-        if (r.Username && r.CompanyName) {
-          userCompany.set(r.Username.toLowerCase(), r.CompanyName)
-        }
-      }
-    } catch { /* ADUsers yoksa sessizce geç */ }
+    // Kullanıcı→firma: ad_users.ou → companies.company_id (öncelikli, shared RDP için)
+    const { data: adu } = await sb.schema("hub").from("ad_users").select("username, ou")
+    const aduRows = (adu ?? []) as { username: string; ou: string }[]
+    const ous = [...new Set(aduRows.map((u) => u.ou).filter(Boolean))]
+    const nameByFirkod = new Map<string, string>(instComps.map((c) => [c.company_id, c.name]))
+    if (ous.length) {
+      const { data: ouComps } = await sb.schema("hub").from("companies").select("company_id, name").in("company_id", ous)
+      for (const c of (ouComps ?? []) as { company_id: string; name: string }[]) nameByFirkod.set(c.company_id, c.name)
+    }
+    const userCompany = new Map<string, string>()
+    for (const u of aduRows) {
+      const cn = nameByFirkod.get(u.ou)
+      if (u.username && cn) userCompany.set(u.username.toLowerCase(), cn)
+    }
 
-    const recipients: {
-      agentId:     string
-      serverName:  string
-      username:    string
-      company:     string
-      online:      boolean
-      sessionType: string
-      state:       string
-    }[] = []
-
+    const recipients: { agentId: string; serverName: string; username: string; company: string; online: boolean; sessionType: string; state: string }[] = []
     for (const a of agents) {
-      const sessions = a.lastReport?.sessions ?? []
-      for (const s of sessions) {
+      for (const s of a.lastReport?.sessions ?? []) {
         if (!s.username) continue
-        const byUser   = userCompany.get(s.username.toLowerCase())
-        const byServer = serverCompany.get(a.agentId)
         recipients.push({
-          agentId:     a.agentId,
-          serverName:  a.hostname,
-          username:    s.username,
-          company:     byUser ?? byServer ?? "—",
-          online:      a.status === "online" && s.state === "Active",
-          sessionType: s.sessionType,
-          state:       s.state,
+          agentId: a.agentId, serverName: a.hostname, username: s.username,
+          company: userCompany.get(s.username.toLowerCase()) ?? serverCompany.get(a.agentId) ?? "—",
+          online: a.status === "online" && s.state === "Active",
+          sessionType: s.sessionType, state: s.state,
         })
       }
     }
 
-    // Aynı kullanıcı birden fazla session açmışsa tek satıra indir (agentId+username unique)
     const seen = new Set<string>()
-    const dedup = recipients.filter(r => {
+    const dedup = recipients.filter((r) => {
       const k = `${r.agentId}::${r.username}`
       if (seen.has(k)) return false
-      seen.add(k)
-      return true
+      seen.add(k); return true
     })
 
-    // Mesaj göndermek için seçilebilecek firmalar (online sunucusu olanlar)
-    let companies: { id: string; name: string; userCount: number }[] = []
-    try {
-      const compRows = await query<{ CompanyId: string; Name: string; WindowsServerId: string | null; AdServerId: string | null }[]>`
-        SELECT CompanyId, Name, WindowsServerId, AdServerId
-          FROM Companies WHERE CompanyId IS NOT NULL
-      `
-      const onlineSet = new Set(agents.filter(a => a.status === "online").map(a => a.agentId))
-      companies = compRows
-        .filter(c => (c.WindowsServerId && onlineSet.has(c.WindowsServerId)) ||
-                     (c.AdServerId      && onlineSet.has(c.AdServerId)))
-        .map(c => ({
-          id:        c.CompanyId,
-          name:      c.Name,
-          // Firmaya ait kullanıcı = recipients içinde company adı eşleşenler
-          // (kullanıcı→firma eşlemesi üzerinden, shared RDP senaryosunda doğru).
-          userCount: dedup.filter(r => r.company === c.Name).length,
-        }))
-    } catch { /* ignore */ }
+    const onlineSet = new Set(agents.filter((a) => a.status === "online").map((a) => a.agentId))
+    const companies = instComps
+      .filter((c) => (c.windows_server_id && onlineSet.has(c.windows_server_id)) || (c.ad_server_id && onlineSet.has(c.ad_server_id)))
+      .map((c) => ({ id: c.company_id, name: c.name, userCount: dedup.filter((r) => r.company === c.name).length }))
 
     return NextResponse.json({ recipients: dedup, companies })
   } catch (err) {

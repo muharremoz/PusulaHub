@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { listSessions, createSession, type CreateInput } from "@/lib/aktarim-proxy"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { decrypt } from "@/lib/crypto"
 
 interface ServerCred {
@@ -22,16 +22,15 @@ interface ServerCred {
 
 async function loadServerCreds(id: string | null | undefined): Promise<ServerCred | null> {
   if (!id) return null
-  const rows = await query<ServerCred[]>`
-    SELECT Name, IP, Username, Password FROM Servers WHERE Id = ${id}
-  `
-  if (!rows.length) return null
-  const r = rows[0]
-  let pw: string | null = r.Password ?? null
+  const sb = await getSupabaseServer()
+  const { data } = await sb.schema("hub").from("servers").select("name, ip, username, password").eq("id", id).maybeSingle()
+  if (!data) return null
+  const r = data as { name: string; ip: string; username: string | null; password: string | null }
+  let pw: string | null = r.password ?? null
   if (pw && pw.startsWith("enc:v1:")) {
     try { const dec = decrypt(pw); if (dec) pw = dec } catch { /* plain */ }
   }
-  return { Name: r.Name, IP: r.IP, Username: r.Username, Password: pw }
+  return { Name: r.name, IP: r.ip, Username: r.username, Password: pw }
 }
 
 export async function GET() {
