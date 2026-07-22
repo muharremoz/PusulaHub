@@ -1,63 +1,55 @@
 import { NextRequest, NextResponse } from "next/server"
-import { generateSecret, generateURI, verifySync } from "otplib"
-import QRCode                        from "qrcode"
-import { auth }                      from "@/auth"
-import { query, execute }            from "@/lib/db"
+import { auth } from "@/auth"
+import { getSupabaseServer } from "@/lib/supabase/server"
 
-interface UserRow { TwoFactorEnabled: boolean; TwoFactorSecret: string | null; Username: string }
+/**
+ * Profil 2FA — birleşik platformda Supabase MFA (TOTP). Eski AppUsers.TwoFactorSecret
+ * (mssql + otplib) KALDIRILDI. QR/secret Supabase enroll'dan gelir.
+ * Not: POST artık { factorId, code } bekler (GET yanıtındaki factorId).
+ */
 
-// GET /api/profile/2fa  →  mevcut durum + kurulum için QR
+// GET → durum + (kapalıysa) yeni enroll QR
 export async function GET() {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
 
-  const rows = await query<UserRow[]>`
-    SELECT TwoFactorEnabled, TwoFactorSecret, Username
-    FROM AppUsers WHERE Id = ${session.user.id}
-  `
-  if (!rows.length) return NextResponse.json({ error: "Kullanıcı bulunamadı" }, { status: 404 })
-  const user = rows[0]
+  const sb = await getSupabaseServer()
+  const { data: factors } = await sb.auth.mfa.listFactors()
+  const verified = factors?.totp?.find((f) => f.status === "verified")
+  if (verified) return NextResponse.json({ enabled: true, qrCode: null, secret: null, factorId: null })
 
-  if (user.TwoFactorEnabled) {
-    return NextResponse.json({ enabled: true, qrCode: null, secret: null })
+  // Bekleyen (unverified) faktörleri temizle, yenisini enroll et
+  for (const f of factors?.totp ?? []) {
+    if (f.status !== "verified") { try { await sb.auth.mfa.unenroll({ factorId: f.id }) } catch {} }
   }
-
-  // Kurulum için yeni secret üret (etkinleştirilmeden DB'e kaydetme)
-  const secret  = generateSecret()
-  const otpauth = generateURI({ issuer: "PusulaHub", label: user.Username, secret })
-  const qrCode  = await QRCode.toDataURL(otpauth)
-
-  return NextResponse.json({ enabled: false, qrCode, secret })
+  const { data: enroll, error } = await sb.auth.mfa.enroll({ factorType: "totp", friendlyName: "PusulaHub" })
+  if (error || !enroll) return NextResponse.json({ error: error?.message ?? "MFA başlatılamadı" }, { status: 500 })
+  return NextResponse.json({ enabled: false, qrCode: enroll.totp.qr_code, secret: enroll.totp.secret, factorId: enroll.id })
 }
 
-// POST /api/profile/2fa  →  2FA'yı etkinleştir (kodu doğrula)
+// POST { factorId, code } → doğrula + etkinleştir
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
 
-  const { secret, code } = await req.json()
-  if (!secret || !code)
-    return NextResponse.json({ error: "Eksik bilgi" }, { status: 400 })
+  const { factorId, code } = await req.json()
+  if (!factorId || !code) return NextResponse.json({ error: "Eksik bilgi" }, { status: 400 })
 
-  const { valid } = verifySync({ token: code.trim(), secret })
-  if (!valid)
-    return NextResponse.json({ error: "Geçersiz kod. QR'ı yeniden tara." }, { status: 400 })
-
-  await execute`
-    UPDATE AppUsers SET TwoFactorSecret = ${secret}, TwoFactorEnabled = 1, UpdatedAt = GETDATE()
-    WHERE Id = ${session.user.id}
-  `
+  const sb = await getSupabaseServer()
+  const { data: ch, error: chErr } = await sb.auth.mfa.challenge({ factorId })
+  if (chErr || !ch) return NextResponse.json({ error: chErr?.message ?? "Challenge başarısız" }, { status: 400 })
+  const { error } = await sb.auth.mfa.verify({ factorId, challengeId: ch.id, code: String(code).trim() })
+  if (error) return NextResponse.json({ error: "Geçersiz kod. QR'ı yeniden tara." }, { status: 400 })
   return NextResponse.json({ ok: true })
 }
 
-// DELETE /api/profile/2fa  →  2FA'yı devre dışı bırak
+// DELETE → tüm TOTP faktörlerini kaldır
 export async function DELETE() {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Yetkisiz" }, { status: 401 })
 
-  await execute`
-    UPDATE AppUsers SET TwoFactorSecret = NULL, TwoFactorEnabled = 0, UpdatedAt = GETDATE()
-    WHERE Id = ${session.user.id}
-  `
+  const sb = await getSupabaseServer()
+  const { data: factors } = await sb.auth.mfa.listFactors()
+  for (const f of factors?.totp ?? []) { try { await sb.auth.mfa.unenroll({ factorId: f.id }) } catch {} }
   return NextResponse.json({ ok: true })
 }

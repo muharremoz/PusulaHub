@@ -1,24 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
-import bcrypt from "bcryptjs"
-import { execute } from "@/lib/db"
-import { auth }    from "@/auth"
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
+import { auth } from "@/auth"
 import { filterKnownApps } from "@/lib/apps-registry"
 
 type Params = { params: Promise<{ id: string }> }
-
 type AppGrant = { id: string; role: "admin" | "user" }
 
 function normalizeGrants(input: unknown): AppGrant[] {
   if (!Array.isArray(input)) return []
   const out: AppGrant[] = []
   for (const x of input) {
-    if (typeof x === "string") {
-      out.push({ id: x, role: "user" })
-    } else if (x && typeof x === "object" && "id" in (x as object)) {
+    if (typeof x === "string") out.push({ id: x, role: "user" })
+    else if (x && typeof x === "object" && "id" in (x as object)) {
       const o = x as { id: string; role?: string }
-      // Eski "viewer" rol kayıtları artık desteklenmiyor → "user"'a düşür.
-      const role: AppGrant["role"] = o.role === "admin" ? "admin" : "user"
-      out.push({ id: String(o.id), role })
+      out.push({ id: String(o.id), role: o.role === "admin" ? "admin" : "user" })
     }
   }
   const known = new Set(filterKnownApps(out.map((g) => g.id)))
@@ -28,42 +23,38 @@ function normalizeGrants(input: unknown): AppGrant[] {
 // PATCH /api/users/[id]  { email?, fullName?, role?, isActive?, password?, reset2FA?, allowedApps? }
 export async function PATCH(req: NextRequest, { params }: Params) {
   const session = await auth()
-  if (session?.user?.role !== "admin")
-    return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
+  if (session?.user?.role !== "admin") return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
 
   const { id } = await params
   const body   = await req.json()
+  const admin  = getSupabaseAdmin()
 
-  if (body.password) {
-    const hash = await bcrypt.hash(body.password, 12)
-    await execute`UPDATE AppUsers SET PasswordHash = ${hash}, UpdatedAt = GETDATE() WHERE Id = ${id}`
+  // Şifre / e-posta → auth.users (Supabase Auth)
+  const authUpdate: { password?: string; email?: string } = {}
+  if (body.password) authUpdate.password = body.password
+  if (body.email != null) authUpdate.email = String(body.email).trim()
+  if (Object.keys(authUpdate).length) {
+    const { error } = await admin.auth.admin.updateUserById(id, authUpdate)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   }
 
-  if (body.reset2FA) {
-    await execute`
-      UPDATE AppUsers SET TwoFactorSecret = NULL, TwoFactorEnabled = 0, UpdatedAt = GETDATE()
-      WHERE Id = ${id}
-    `
+  // reset2FA: birleşik modelde 2FA = Supabase MFA (Hub'da kapalı) → no-op.
+
+  // Profil → public.users (yalnız gönderilenler)
+  const patch: Record<string, unknown> = {}
+  if (body.email    != null) patch.email  = String(body.email).trim()
+  if (body.fullName != null) patch.name   = body.fullName
+  if (body.role     != null) patch.role   = body.role
+  if (body.isActive != null) patch.active = !!body.isActive
+  if (Object.keys(patch).length) {
+    await admin.from("users").update(patch).eq("id", id)
   }
 
-  await execute`
-    UPDATE AppUsers SET
-      Email     = COALESCE(${body.email    ?? null}, Email),
-      FullName  = COALESCE(${body.fullName ?? null}, FullName),
-      Role      = COALESCE(${body.role     ?? null}, Role),
-      IsActive  = COALESCE(${body.isActive != null ? (body.isActive ? 1 : 0) : null}, IsActive),
-      UpdatedAt = GETDATE()
-    WHERE Id = ${id}
-  `
-
-  // AllowedApps — gönderildiyse UserApps tablosunu tamamen yeniden yaz (diff yerine replace)
-  // Yeni format: [{ id, role }]; eski string[] formatı da kabul edilir.
+  // allowedApps → user_apps replace
   if (Array.isArray(body.allowedApps)) {
     const grants = normalizeGrants(body.allowedApps)
-    await execute`DELETE FROM UserApps WHERE UserId = ${id}`
-    for (const g of grants) {
-      await execute`INSERT INTO UserApps (UserId, AppId, [Role]) VALUES (${id}, ${g.id}, ${g.role})`
-    }
+    await admin.from("user_apps").delete().eq("user_id", id)
+    if (grants.length) await admin.from("user_apps").insert(grants.map((g) => ({ user_id: id, app_id: g.id, role: g.role })))
   }
 
   return NextResponse.json({ ok: true })
@@ -72,14 +63,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 // DELETE /api/users/[id]
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const session = await auth()
-  if (session?.user?.role !== "admin")
-    return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
+  if (session?.user?.role !== "admin") return NextResponse.json({ error: "Yetkisiz" }, { status: 403 })
 
   const { id } = await params
-  if (session.user.id === id)
-    return NextResponse.json({ error: "Kendi hesabınızı silemezsiniz" }, { status: 400 })
+  if (session.user.id === id) return NextResponse.json({ error: "Kendi hesabınızı silemezsiniz" }, { status: 400 })
 
-  // UserApps FK'da ON DELETE CASCADE var — ayrıca silmeye gerek yok
-  await execute`DELETE FROM AppUsers WHERE Id = ${id}`
+  const admin = getSupabaseAdmin()
+  // Grant/izin/profil temizliği (FK cascade'e güvenmeden), sonra auth kullanıcısı.
+  await admin.from("user_permissions").delete().eq("user_id", id)
+  await admin.from("user_apps").delete().eq("user_id", id)
+  await admin.from("users").delete().eq("id", id)
+  const { error } = await admin.auth.admin.deleteUser(id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

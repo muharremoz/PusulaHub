@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server"
-import { query, execute } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { serverAgentById, sqlServerById, serversWithRole } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
@@ -94,30 +95,24 @@ async function allocatePort(
    *  dışında elle kurulmuş siteleri de dışlamak için. Bkz: 26003 çakışması. */
   liveUsedPorts?: ReadonlySet<number>,
 ): Promise<{ ok: true; port: number } | { ok: false; error: string }> {
-  const ranges = await query<{ PortStart: number; PortEnd: number; IsActive: boolean }[]>`
-    SELECT PortStart, PortEnd, IsActive FROM WizardPortRanges WHERE Id = ${rangeId}
-  `
-  if (!ranges.length)         return { ok: false, error: "Port aralığı bulunamadı" }
-  if (!ranges[0].IsActive)    return { ok: false, error: "Port aralığı pasif" }
+  const sb = await getSupabaseServer()
+  const { data: range } = await sb.schema("hub").from("wizard_port_ranges")
+    .select("port_start, port_end, is_active").eq("id", rangeId).maybeSingle()
+  if (!range)            return { ok: false, error: "Port aralığı bulunamadı" }
+  if (!range.is_active)  return { ok: false, error: "Port aralığı pasif" }
 
-  const used = await query<{ Port: number }[]>`
-    SELECT Port FROM WizardPortAssignments WHERE PortRangeId = ${rangeId}
-  `
-  const usedSet = new Set(used.map((u) => u.Port))
+  const { data: used } = await sb.schema("hub").from("wizard_port_assignments")
+    .select("port").eq("port_range_id", rangeId)
+  const usedSet = new Set(((used ?? []) as { port: number }[]).map((u) => u.port))
 
-  for (let p = ranges[0].PortStart; p <= ranges[0].PortEnd; p++) {
+  for (let p = range.port_start; p <= range.port_end; p++) {
     if (usedSet.has(p)) continue
     if (liveUsedPorts?.has(p)) continue
-    try {
-      await execute`
-        INSERT INTO WizardPortAssignments (PortRangeId, ServiceId, CompanyId, Port, SiteName)
-        VALUES (${rangeId}, ${serviceId}, ${companyId}, ${p}, ${siteName})
-      `
-      return { ok: true, port: p }
-    } catch {
-      // UNIQUE çakışması — başka bir kurulum aynı anda aldı, sıradaki portu dene
-      continue
-    }
+    // UNIQUE(port_range_id, port) sayesinde race-safe: çakışma → sıradaki portu dene
+    const { error } = await sb.schema("hub").from("wizard_port_assignments").insert({
+      port_range_id: rangeId, service_id: serviceId, company_id: companyId, port: p, site_name: siteName,
+    })
+    if (!error) return { ok: true, port: p }
   }
   return { ok: false, error: "Aralıkta boş port kalmadı" }
 }
@@ -178,22 +173,6 @@ interface RunPayload {
   skipDepo?:         boolean
 }
 
-interface ServerRow {
-  IP:        string
-  AgentPort: number | null
-  ApiKey:    string | null
-}
-
-interface SqlServerRow {
-  Id:          string
-  Name:        string
-  IP:          string
-  SqlUsername: string | null
-  SqlPassword: string | null
-  ApiKey:      string | null
-  AgentPort:   number | null
-}
-
 interface AgentTarget {
   ip:        string
   port:      number
@@ -238,10 +217,8 @@ export async function POST(req: NextRequest) {
   }
 
   // AD sunucusu (1-4. adımlar)
-  const adRows = await query<ServerRow[]>`
-    SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${payload.serverId}
-  `
-  if (!adRows.length || !adRows[0].ApiKey || !adRows[0].AgentPort) {
+  const adSrv = await serverAgentById(payload.serverId)
+  if (!adSrv || !adSrv.api_key || !adSrv.agent_port) {
     return new Response(JSON.stringify({ error: "AD sunucu bilgisi eksik (ApiKey/AgentPort)" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
@@ -249,9 +226,9 @@ export async function POST(req: NextRequest) {
   }
 
   const adAgent: AgentTarget = {
-    ip:     adRows[0].IP,
-    port:   adRows[0].AgentPort!,
-    apiKey: adRows[0].ApiKey!,
+    ip:     adSrv.ip,
+    port:   adSrv.agent_port,
+    apiKey: adSrv.api_key,
   }
 
   // Hizmetleri tipine göre ayır
@@ -268,19 +245,17 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       })
     }
-    const winRows = await query<ServerRow[]>`
-      SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${payload.windowsServerId}
-    `
-    if (!winRows.length || !winRows[0].ApiKey || !winRows[0].AgentPort) {
+    const winSrv = await serverAgentById(payload.windowsServerId)
+    if (!winSrv || !winSrv.api_key || !winSrv.agent_port) {
       return new Response(JSON.stringify({ error: "Windows sunucu bilgisi eksik (ApiKey/AgentPort)" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       })
     }
     winAgent = {
-      ip:     winRows[0].IP,
-      port:   winRows[0].AgentPort!,
-      apiKey: winRows[0].ApiKey!,
+      ip:     winSrv.ip,
+      port:   winSrv.agent_port,
+      apiKey: winSrv.api_key,
     }
   }
 
@@ -293,43 +268,37 @@ export async function POST(req: NextRequest) {
         headers: { "Content-Type": "application/json" },
       })
     }
-    const iisRows = await query<ServerRow[]>`
-      SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${payload.iisServerId}
-    `
-    if (!iisRows.length || !iisRows[0].ApiKey || !iisRows[0].AgentPort) {
+    const iisSrv = await serverAgentById(payload.iisServerId)
+    if (!iisSrv || !iisSrv.api_key || !iisSrv.agent_port) {
       return new Response(JSON.stringify({ error: "IIS sunucu bilgisi eksik (ApiKey/AgentPort)" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       })
     }
     iisAgent = {
-      ip:     iisRows[0].IP,
-      port:   iisRows[0].AgentPort!,
-      apiKey: iisRows[0].ApiKey!,
+      ip:     iisSrv.ip,
+      port:   iisSrv.agent_port,
+      apiKey: iisSrv.api_key,
     }
   }
 
   // Depo sunucusu — sihirbazda Pusula programı seçilmişse payload.depoServerId
   // gelir; aksi halde sistemdeki ilk Role='Depo' sunucusu fallback olarak kullanılır.
   let depoAgent: AgentTarget | null = null
-  let depoRows: ServerRow[] = []
+  let depoSrv: { ip: string; agent_port: number | null; api_key: string | null } | null = null
   if (!payload.skipDepo) {
-    depoRows = payload.depoServerId
-      ? await query<ServerRow[]>`
-          SELECT IP, AgentPort, ApiKey FROM Servers WHERE Id = ${payload.depoServerId}
-        `
-      : await query<ServerRow[]>`
-          SELECT TOP 1 s.IP, s.AgentPort, s.ApiKey
-          FROM Servers s
-          INNER JOIN ServerRoles r ON r.ServerId = s.Id
-          WHERE r.Role = 'File'
-        `
+    if (payload.depoServerId) {
+      depoSrv = await serverAgentById(payload.depoServerId)
+    } else {
+      const fileSrvs = await serversWithRole("File", "ip, agent_port, api_key")
+      depoSrv = (fileSrvs[0] as unknown as typeof depoSrv) ?? null
+    }
   }
-  if (depoRows.length > 0 && depoRows[0].AgentPort && depoRows[0].ApiKey) {
+  if (depoSrv && depoSrv.agent_port && depoSrv.api_key) {
     depoAgent = {
-      ip:     depoRows[0].IP,
-      port:   depoRows[0].AgentPort!,
-      apiKey: depoRows[0].ApiKey!,
+      ip:     depoSrv.ip,
+      port:   depoSrv.agent_port,
+      apiKey: depoSrv.api_key,
     }
   }
 
@@ -350,56 +319,48 @@ export async function POST(req: NextRequest) {
      (runSqlMode === 1 && runDemoDbIds.length > 0))
 
   if (hasSqlWork) {
-    const sqlRows = await query<SqlServerRow[]>`
-      SELECT s.Id, s.Name, s.IP, s.SqlUsername, s.SqlPassword, s.ApiKey, s.AgentPort
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE s.Id = ${payload.sqlServerId!} AND r.Role = 'SQL'
-    `
-    if (!sqlRows.length) {
+    const row = await sqlServerById(payload.sqlServerId!)
+    if (!row) {
       return new Response(JSON.stringify({ error: "SQL sunucusu bulunamadı veya SQL rolü atanmamış" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       })
     }
-    const row = sqlRows[0]
-    if (!row.SqlUsername || !row.SqlPassword) {
+    if (!row.sql_username || !row.sql_password) {
       return new Response(JSON.stringify({
-        error: `${row.Name} sunucusu için SA kullanıcı adı/şifresi tanımlanmamış. Sunucu ayarlarından ekleyin.`,
+        error: `${row.name} sunucusu için SA kullanıcı adı/şifresi tanımlanmamış. Sunucu ayarlarından ekleyin.`,
       }), { status: 400, headers: { "Content-Type": "application/json" } })
     }
-    const decrypted = decrypt(row.SqlPassword)
+    const decrypted = decrypt(row.sql_password)
     if (!decrypted) {
       return new Response(JSON.stringify({
         error: "SA şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin.",
       }), { status: 500, headers: { "Content-Type": "application/json" } })
     }
     sqlTarget = {
-      id:       row.Id,
-      name:     row.Name,
-      ip:       row.IP,
-      username: row.SqlUsername,
+      id:       row.id,
+      name:     row.name,
+      ip:       row.ip,
+      username: row.sql_username,
       password: decrypted,
       // ATTACH akışı için SQL sunucusunun agent'ı (varsa). Yoksa attach
       // adımında net hata verilir; .bak restore agent gerektirmez.
-      agent: (row.ApiKey && row.AgentPort)
-        ? { ip: row.IP, port: row.AgentPort, apiKey: row.ApiKey }
+      agent: (row.api_key && row.agent_port)
+        ? { ip: row.ip, port: row.agent_port, apiKey: row.api_key }
         : null,
     }
 
     // Mode 1: demo DB bilgilerini DB'den çek (client'a güvenmiyoruz; kaynak/yol
     // sunucu tarafında gerçek olmalı).
     if (runSqlMode === 1 && runDemoDbIds.length > 0) {
-      // SQL Server'ın parametreli IN clause'u için tek tek template literal
-      const placeholders = runDemoDbIds.map((id) => Number(id)).filter((n) => Number.isFinite(n))
-      if (placeholders.length > 0) {
-        // `query` tagged template IN () doğrudan desteklemiyor — yardımcı
-        const rows = await query<DemoDbRow[]>`
-          SELECT Id, Name, DataName, LocationType, LocationPath
-          FROM DemoDatabases
-          WHERE IsActive = 1
-        `
-        demoDbsForRun = rows.filter((r) => placeholders.includes(r.Id))
+      const ids = runDemoDbIds.map((id) => Number(id)).filter((n) => Number.isFinite(n))
+      if (ids.length > 0) {
+        const sb = await getSupabaseServer()
+        const { data: rows } = await sb.schema("hub").from("demo_databases")
+          .select("id, name, data_name, location_type, location_path")
+          .eq("is_active", true).in("id", ids)
+        demoDbsForRun = ((rows ?? []) as { id: number; name: string; data_name: string; location_type: string; location_path: string | null }[])
+          .map((r) => ({ Id: r.id, Name: r.name, DataName: r.data_name, LocationType: r.location_type, LocationPath: r.location_path }))
       }
     }
   }
@@ -933,30 +894,29 @@ export async function POST(req: NextRequest) {
             // Önce junction'ı tek sorguda çek
             const dbIds = demoDbsForRun.map((d) => d.Id)
             if (dbIds.length > 0) {
-              const junctions = await query<{ DemoDatabaseId: number; ServiceId: number }[]>`
-                SELECT DemoDatabaseId, ServiceId FROM DemoDatabaseServices
-              `
+              const sb = await getSupabaseServer()
+              const { data: junctions } = await sb.schema("hub").from("demo_database_services")
+                .select("demo_database_id, service_id")
               const junctionMap = new Map<number, number[]>()
-              for (const j of junctions) {
-                if (!dbIds.includes(j.DemoDatabaseId)) continue
-                const list = junctionMap.get(j.DemoDatabaseId) ?? []
-                list.push(j.ServiceId)
-                junctionMap.set(j.DemoDatabaseId, list)
+              for (const j of ((junctions ?? []) as { demo_database_id: number; service_id: number }[])) {
+                if (!dbIds.includes(j.demo_database_id)) continue
+                const list = junctionMap.get(j.demo_database_id) ?? []
+                list.push(j.service_id)
+                junctionMap.set(j.demo_database_id, list)
               }
               // Pusula program kodlarını çek (tek sorguda)
-              const pusulaCatalog = await query<{ Id: number; Config: string | null }[]>`
-                SELECT Id, Config FROM WizardServices WHERE Type = 'pusula-program' AND IsActive = 1
-              `
+              const { data: pusulaCatalog } = await sb.schema("hub").from("wizard_services")
+                .select("id, config").eq("type", "pusula-program").eq("is_active", true)
               const codeById = new Map<number, string | null>()
-              for (const row of pusulaCatalog) {
+              for (const row of ((pusulaCatalog ?? []) as { id: number; config: string | null }[])) {
                 let code: string | null = null
-                if (row.Config) {
+                if (row.config) {
                   try {
-                    const parsed = JSON.parse(row.Config) as { programCode?: string | null }
+                    const parsed = JSON.parse(row.config) as { programCode?: string | null }
                     code = parsed?.programCode && parsed.programCode.trim() ? parsed.programCode.trim() : null
                   } catch { /* noop */ }
                 }
-                codeById.set(row.Id, code)
+                codeById.set(row.id, code)
               }
 
               for (const demo of demoDbsForRun) {
@@ -1237,17 +1197,16 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Sunucu atamasını Companies tablosuna kaydet
+        // Sunucu atamasını hub.companies tablosuna kaydet
         try {
-          await execute`
-            UPDATE Companies
-            SET WindowsServerId = ${payload.windowsServerId ?? null},
-                AdServerId      = ${payload.serverId ?? null},
-                SqlServerId     = ${payload.sqlServerId ?? null},
-                FileServerId    = ${payload.depoServerId ?? null}
-            WHERE CompanyId = ${payload.firmaId}
-          `
-        } catch { /* Companies tablosunda kayıt yoksa sessizce geç */ }
+          const sb = await getSupabaseServer()
+          await sb.schema("hub").from("companies").update({
+            windows_server_id: payload.windowsServerId ?? null,
+            ad_server_id:      payload.serverId ?? null,
+            sql_server_id:     payload.sqlServerId ?? null,
+            file_server_id:    payload.depoServerId ?? null,
+          }).eq("company_id", payload.firmaId)
+        } catch { /* hub.companies'te kayıt yoksa sessizce geç */ }
 
         send("done", {
           ok: true,
