@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
 import { getCompanyCredentials } from "@/lib/firma-credentials"
 
@@ -41,20 +41,10 @@ export interface AccessInfoResponse {
   credentials: Record<string, string>
 }
 
-interface CompanyRow {
-  CompanyId:       string
-  AdServerId:      string | null
-  WindowsServerId: string | null
-}
-
 interface ServerRow {
-  Id:      string
-  Name:    string
-  IP:      string
-  DNS:     string | null
-  Domain:  string | null
-  RdpPort: number | null
+  id: string; name: string; ip: string; dns: string | null; domain: string | null; rdp_port: number | null
 }
+const SRV_COLS = "id, name, ip, dns, domain, rdp_port"
 
 export async function GET(
   _req: Request,
@@ -70,50 +60,38 @@ export async function GET(
   const { firkod } = await params
 
   try {
-    const compRows = await query<CompanyRow[]>`
-      SELECT CompanyId, AdServerId, WindowsServerId
-      FROM Companies WHERE CompanyId = ${firkod}
-    `
-    if (!compRows.length) {
-      return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
-    }
-    const c = compRows[0]
+    const sb = await getSupabaseServer()
+    const { data: c } = await sb.schema("hub").from("companies")
+      .select("company_id, ad_server_id, windows_server_id").eq("company_id", firkod).maybeSingle()
+    if (!c) return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
+    const comp = c as { company_id: string; ad_server_id: string | null; windows_server_id: string | null }
 
     const fetchServer = async (id: string | null): Promise<ServerRow | null> => {
       if (!id) return null
-      const r = await query<ServerRow[]>`
-        SELECT Id, Name, IP, DNS, Domain, RdpPort FROM Servers WHERE Id = ${id}
-      `
-      return r[0] ?? null
+      const { data } = await sb.schema("hub").from("servers").select(SRV_COLS).eq("id", id).maybeSingle()
+      return (data as ServerRow | null) ?? null
     }
-    // IIS sunucusu — firma'nın IIS sitelerinden ilkinin Server adını bul
     const fetchIisServer = async (): Promise<ServerRow | null> => {
-      const r = await query<{ Server: string | null }[]>`
-        SELECT TOP 1 i.Server
-        FROM IISSites i
-        WHERE i.Firma = ${firkod} AND i.Server IS NOT NULL
-        ORDER BY i.Name
-      `
-      const name = r[0]?.Server
+      const { data: iis } = await sb.schema("hub").from("iis_sites")
+        .select("server").eq("firma", firkod).not("server", "is", null).order("name").limit(1).maybeSingle()
+      const name = (iis as { server: string | null } | null)?.server
       if (!name) return null
-      const s = await query<ServerRow[]>`
-        SELECT TOP 1 Id, Name, IP, DNS, Domain, RdpPort FROM Servers WHERE Name = ${name}
-      `
-      return s[0] ?? null
+      const { data } = await sb.schema("hub").from("servers").select(SRV_COLS).eq("name", name).limit(1).maybeSingle()
+      return (data as ServerRow | null) ?? null
     }
 
     const [adRow, winRow, iisRow, credentials] = await Promise.all([
-      fetchServer(c.AdServerId),
-      fetchServer(c.WindowsServerId),
+      fetchServer(comp.ad_server_id),
+      fetchServer(comp.windows_server_id),
       fetchIisServer(),
       getCompanyCredentials(firkod),
     ])
 
     const response: AccessInfoResponse = {
-      firmaId:   c.CompanyId,
-      ad:       adRow  ? { name: adRow.Name,  ip: adRow.IP,  domain: adRow.Domain ?? null } : null,
-      windows:  winRow ? { name: winRow.Name, ip: winRow.IP, dns: winRow.DNS ?? null, rdpPort: winRow.RdpPort ?? null } : null,
-      iis:      iisRow ? { name: iisRow.Name, ip: iisRow.IP, dns: iisRow.DNS ?? null } : null,
+      firmaId:   comp.company_id,
+      ad:       adRow  ? { name: adRow.name,  ip: adRow.ip,  domain: adRow.domain ?? null } : null,
+      windows:  winRow ? { name: winRow.name, ip: winRow.ip, dns: winRow.dns ?? null, rdpPort: winRow.rdp_port ?? null } : null,
+      iis:      iisRow ? { name: iisRow.name, ip: iisRow.ip, dns: iisRow.dns ?? null } : null,
       credentials,
     }
     return NextResponse.json(response)

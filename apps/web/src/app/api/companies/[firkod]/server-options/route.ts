@@ -1,45 +1,33 @@
 import { NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
+import { serversWithRole } from "@/lib/hub-servers"
 
-/** Firma için AD + RDP/Windows sunucu seçenekleri. Yeni kullanıcı
- *  ekleme dialog'unda seçici doldurmak için. */
+/** Firma için AD + RDP/Windows sunucu seçenekleri (yeni kullanıcı dialog'u). */
 
-interface CompanyRow { AdServerId: string | null; WindowsServerId: string | null }
 interface ServerOpt { id: string; name: string; ip: string; dns: string | null; domain: string | null; rdpPort: number | null }
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ firkod: string }> }
-) {
+export async function GET(_req: Request, { params }: { params: Promise<{ firkod: string }> }) {
   const { firkod } = await params
   try {
-    const company = await query<CompanyRow[]>`
-      SELECT AdServerId, WindowsServerId
-      FROM Companies
-      WHERE CompanyId = ${firkod}
-    `
+    const sb = await getSupabaseServer()
+    const { data: company } = await sb.schema("hub").from("companies")
+      .select("ad_server_id, windows_server_id").eq("company_id", firkod).maybeSingle()
+    const c = company as { ad_server_id: string | null; windows_server_id: string | null } | null
 
-    const adServers = await query<ServerOpt[]>`
-      SELECT DISTINCT s.Id AS id, s.Name AS name, s.IP AS ip, s.DNS AS dns, s.Domain AS domain, s.RdpPort AS rdpPort
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE r.Role = 'AD' AND s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL AND s.ApiKey <> ''
-      ORDER BY s.Name
-    `
+    const cols = "id, name, ip, dns, domain, rdp_port, agent_port, api_key"
+    const activeOnly = (rows: Record<string, unknown>[]): ServerOpt[] => rows
+      .filter((r) => r.agent_port != null && r.api_key)
+      .map((r) => ({ id: r.id as string, name: r.name as string, ip: r.ip as string, dns: (r.dns as string | null) ?? null, domain: (r.domain as string | null) ?? null, rdpPort: (r.rdp_port as number | null) ?? null }))
 
-    const rdpServers = await query<ServerOpt[]>`
-      SELECT DISTINCT s.Id AS id, s.Name AS name, s.IP AS ip, s.DNS AS dns, s.Domain AS domain, s.RdpPort AS rdpPort
-      FROM Servers s
-      INNER JOIN ServerRoles r ON r.ServerId = s.Id
-      WHERE r.Role = 'RDP' AND s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL AND s.ApiKey <> ''
-      ORDER BY s.Name
-    `
+    const [adServers, rdpServers] = await Promise.all([
+      serversWithRole("AD", cols).then(activeOnly),
+      serversWithRole("RDP", cols).then(activeOnly),
+    ])
 
     return NextResponse.json({
-      adServerId:      company[0]?.AdServerId ?? null,
-      windowsServerId: company[0]?.WindowsServerId ?? null,
-      adServers,
-      rdpServers,
+      adServerId: c?.ad_server_id ?? null,
+      windowsServerId: c?.windows_server_id ?? null,
+      adServers, rdpServers,
     })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })

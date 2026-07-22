@@ -1,39 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
-import { query } from "@/lib/db"
+import { getSupabaseServer } from "@/lib/supabase/server"
 import { execOnAgent } from "@/lib/agent-poller"
 
-/* Firma'nın Pusula program klasörü C:\MUSTERI\{firkod} — içinde her hizmet için
-   ayrı alt-klasör bulunur (Muhasebe, Stok, ...). debugsql.txt seçilen hizmet
-   klasörünün içinde oluşur. */
+/* Firma'nın Pusula program klasörü C:\MUSTERI\{firkod}. debugsql.txt hizmet klasöründe. */
 
 interface AgentCreds { IP: string; AgentPort: number; ApiKey: string }
+interface SrvCredRow { ip: string; agent_port: number | null; api_key: string | null }
+const toCreds = (r: SrvCredRow | null): AgentCreds | null =>
+  r && r.agent_port != null && r.api_key ? { IP: r.ip, AgentPort: r.agent_port, ApiKey: r.api_key } : null
 
 async function getWinAgent(firkod: string, serverId?: string): Promise<AgentCreds | null> {
+  const sb = await getSupabaseServer()
   if (serverId) {
-    const rows = await query<AgentCreds[]>`
-      SELECT s.IP, s.AgentPort, s.ApiKey
-      FROM Servers s
-      WHERE s.Id = ${serverId} AND s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL
-    `
-    return rows[0] ?? null
+    const { data } = await sb.schema("hub").from("servers").select("ip, agent_port, api_key").eq("id", serverId).maybeSingle()
+    return toCreds(data as SrvCredRow | null)
   }
-  const rows = await query<AgentCreds[]>`
-    SELECT s.IP, s.AgentPort, s.ApiKey
-    FROM Companies c
-    JOIN Servers s ON s.Id = c.WindowsServerId
-    WHERE c.CompanyId = ${firkod} AND s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL
-  `
-  return rows[0] ?? null
+  const { data: c } = await sb.schema("hub").from("companies").select("windows_server_id").eq("company_id", firkod).maybeSingle()
+  const wsid = (c as { windows_server_id: string | null } | null)?.windows_server_id
+  if (!wsid) return null
+  const { data } = await sb.schema("hub").from("servers").select("ip, agent_port, api_key").eq("id", wsid).maybeSingle()
+  return toCreds(data as SrvCredRow | null)
 }
 
 interface WinServerOpt { Id: string; Name: string; IP: string }
 async function listWinAgents(): Promise<WinServerOpt[]> {
-  return await query<WinServerOpt[]>`
-    SELECT s.Id, s.Name, s.IP
-    FROM Servers s
-    WHERE s.AgentPort IS NOT NULL AND s.ApiKey IS NOT NULL AND s.ApiKey <> ''
-    ORDER BY s.Name
-  `
+  const sb = await getSupabaseServer()
+  const { data } = await sb.schema("hub").from("servers").select("id, name, ip, agent_port, api_key").order("name")
+  return ((data ?? []) as { id: string; name: string; ip: string; agent_port: number | null; api_key: string | null }[])
+    .filter((s) => s.agent_port != null && s.api_key)
+    .map((s) => ({ Id: s.id, Name: s.name, IP: s.ip }))
 }
 
 const getRoot = (firkod: string) => `C:\\MUSTERI\\${firkod}`
