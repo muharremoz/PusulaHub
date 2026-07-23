@@ -287,9 +287,13 @@ export function AppSidebar() {
           </div>
         </nav>
 
-        {/* -------- PANEL (sağ) — seçim yapılınca gizlenir -------- */}
-        {panelOpen && (
-        <div className="flex w-[232px] min-w-0 flex-col bg-[#061a48]">
+        {/* -------- PANEL (sağ) — seçim yapılınca animasyonla gizlenir -------- */}
+        <div
+          className={`flex min-w-0 flex-col overflow-hidden bg-[#061a48] transition-[width,opacity] duration-300 ease-out ${
+            panelOpen ? "w-[232px] opacity-100" : "w-0 opacity-0"
+          }`}
+        >
+        <div className="flex h-full w-[232px] min-w-0 flex-col">
           {/* Header: AppSwitcher */}
           <div className="px-2 pt-2">
             <AppSwitcher />
@@ -335,7 +339,7 @@ export function AppSidebar() {
             </nav>
           </div>
         </div>
-        )}
+        </div>
       </aside>
     </>
   )
