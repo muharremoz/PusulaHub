@@ -1,26 +1,17 @@
 "use client"
 
-import {
-  useState,
-  useEffect } from "react"
-import {
-  Sheet,
-} from "@muharremoz/pusula-ui";
-import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useState, useEffect } from "react"
+import { SheetTitle, SheetContent, SheetHeader, Sheet } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { NoteRichEditor } from "@/components/notes/note-rich-editor"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@muharremoz/pusula-ui"
+import { Checkbox } from "@muharremoz/pusula-ui";
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
-} from "@muharremoz/pusula-ui"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
 import { toast } from "sonner"
 import {
   Calendar, User, Tag, Trash2, MessageSquare, Send, Clock,

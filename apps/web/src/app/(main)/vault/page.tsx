@@ -10,30 +10,12 @@ import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@muharremoz/pusula-ui"
+import { Switch } from "@muharremoz/pusula-ui";
 import {
   Slider } from "@/components/ui/slider"
-import {
-  Sheet,
-} from "@muharremoz/pusula-ui";
-import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@muharremoz/pusula-ui"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@muharremoz/pusula-ui"
+import { SheetTitle, SheetContent, SheetHeader, Sheet } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@muharremoz/pusula-ui";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui";
 import {
   Dialog,
   DialogContent,
@@ -47,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Checkbox } from "@muharremoz/pusula-ui"
+import { Checkbox } from "@muharremoz/pusula-ui";
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import {

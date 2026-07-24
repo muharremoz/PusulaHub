@@ -4,41 +4,21 @@ import { useState, useEffect } from "react"
 import { useSession }          from "next-auth/react"
 import { useRouter }           from "next/navigation"
 import {
-  Plus, Pencil, Trash2, User, MoreVertical,
-  ToggleLeft, ToggleRight, ShieldCheck, ShieldOff,
-  ChevronDown, ChevronRight, AlertTriangle,
-  Eye, EyeOff, Sparkles, Copy,
-} from "lucide-react"
+  Plus, Pencil, Trash2, User, MoreVertical, ToggleLeft, ToggleRight, ShieldCheck, ShieldOff, ChevronDown, ChevronRight, AlertTriangle, Eye, EyeOff, Sparkles, Copy, } from "lucide-react"
 import { Button }       from "@/components/ui/button"
 import { Input }        from "@/components/ui/input"
 import { Label }        from "@/components/ui/label"
 import { Skeleton }     from "@/components/ui/skeleton"
 import { copyToClipboard } from "@/lib/clipboard"
 import { generateSafePassword } from "@/lib/password-gen"
-import { Switch }       from "@muharremoz/pusula-ui"
+import { Switch } from "@muharremoz/pusula-ui";
 import {
   ScrollArea }   from "@/components/ui/scroll-area"
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  } from "@/components/ui/table"
-import {
-  Sheet,
-} from "@muharremoz/pusula-ui";
-import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@muharremoz/pusula-ui"
-import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription,
-  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@muharremoz/pusula-ui"
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, } from "@/components/ui/table"
+import { SheetTitle, SheetContent, SheetHeader, Sheet } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@muharremoz/pusula-ui";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"
