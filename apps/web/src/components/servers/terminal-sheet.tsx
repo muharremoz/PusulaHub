@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useRef, useEffect, KeyboardEvent } from "react";
+import {
+  useState,
+  useRef,
+  useEffect,
+  KeyboardEvent } from "react";
 import {
   Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
 } from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Terminal, Loader2, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";

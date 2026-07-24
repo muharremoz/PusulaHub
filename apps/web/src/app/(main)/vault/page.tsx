@@ -11,13 +11,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@muharremoz/pusula-ui"
-import { Slider } from "@/components/ui/slider"
+import {
+  Slider } from "@/components/ui/slider"
 import {
   Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@muharremoz/pusula-ui"
+} from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,

@@ -16,13 +16,20 @@ import { Skeleton }     from "@/components/ui/skeleton"
 import { copyToClipboard } from "@/lib/clipboard"
 import { generateSafePassword } from "@/lib/password-gen"
 import { Switch }       from "@muharremoz/pusula-ui"
-import { ScrollArea }   from "@/components/ui/scroll-area"
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from "@/components/ui/table"
+  ScrollArea }   from "@/components/ui/scroll-area"
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@muharremoz/pusula-ui"
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  } from "@/components/ui/table"
+import {
+  Sheet,
+} from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,

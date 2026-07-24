@@ -30,17 +30,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
+  } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
 } from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import type { AgentReport } from "@/lib/agent-types";
 
 type Company = NonNullable<NonNullable<AgentReport["ad"]>["companies"]>[number];

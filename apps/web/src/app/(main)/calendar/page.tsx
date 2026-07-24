@@ -2,23 +2,41 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import {
-  ChevronLeft, ChevronRight, Plus, X, Clock, CalendarDays,
-  ListTodo, StickyNote, AlarmClock, Trash2, CalendarRange,
-  Search, RotateCcw, User,
-} from "lucide-react"
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  X,
+  Clock,
+  CalendarDays,
+  ListTodo,
+  StickyNote,
+  AlarmClock,
+  Trash2,
+  CalendarRange,
+  Search,
+  RotateCcw,
+  User,
+  } from "lucide-react"
 import { useSession } from "next-auth/react"
 import {
-  DndContext, DragOverlay, PointerSensor, useSensor, useSensors,
-  type DragStartEvent, type DragEndEvent,
-} from "@dnd-kit/core"
-import { useDraggable, useDroppable } from "@dnd-kit/core"
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragStartEvent,
+  type DragEndEvent,
+  } from "@dnd-kit/core"
+import { useDraggable,
+  useDroppable } from "@dnd-kit/core"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@muharremoz/pusula-ui"
+  Sheet,
+} from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,

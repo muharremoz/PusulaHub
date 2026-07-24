@@ -1,9 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
 import {
-  Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@muharremoz/pusula-ui"
+  useState,
+  useEffect } from "react"
+import {
+  Sheet,
+} from "@muharremoz/pusula-ui";
+import { SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
