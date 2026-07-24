@@ -5,6 +5,7 @@ import { Command as CommandPrimitive } from "cmdk"
 import { SearchIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
+import { Highlight, HighlightItem, useDataState } from "@muharremoz/pusula-ui"
 import {
   Dialog,
   DialogContent,
@@ -13,19 +14,48 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
+/**
+ * Seçili (data-selected) item'ın değeri — dropdown'daki kayan highlight'ın
+ * Command/Combobox karşılığı. cmdk açılışta ilk item'ı otomatik seçtiği için
+ * highlight yalnız ilk gerçek etkileşimden (hover/ok tuşu) sonra görünür.
+ */
+const CommandHighlightContext = React.createContext<{
+  selected: string | null
+  setSelected: (v: string | null) => void
+  armed: boolean
+  arm: () => void
+} | null>(null)
+
 function Command({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive>) {
+  const [selected, setSelected] = React.useState<string | null>(null)
+  const [armed, setArmed] = React.useState(false)
+  const arm = React.useCallback(() => setArmed(true), [])
+  const ctx = React.useMemo(
+    () => ({ selected, setSelected, armed, arm }),
+    [selected, armed, arm]
+  )
   return (
-    <CommandPrimitive
-      data-slot="command"
-      className={cn(
-        "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
-        className
-      )}
-      {...props}
-    />
+    <CommandHighlightContext.Provider value={ctx}>
+      <CommandPrimitive
+        data-slot="command"
+        className={cn(
+          "flex h-full w-full flex-col overflow-hidden rounded-md bg-popover text-popover-foreground",
+          className
+        )}
+        {...props}
+        onPointerMove={(e) => {
+          arm()
+          props.onPointerMove?.(e)
+        }}
+        onKeyDown={(e) => {
+          if (e.key.startsWith("Arrow") || e.key === "Home" || e.key === "End") arm()
+          props.onKeyDown?.(e)
+        }}
+      />
+    </CommandHighlightContext.Provider>
   )
 }
 
@@ -84,8 +114,10 @@ function CommandInput({
 
 function CommandList({
   className,
+  children,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.List>) {
+  const ctx = React.useContext(CommandHighlightContext)
   return (
     <CommandPrimitive.List
       data-slot="command-list"
@@ -94,7 +126,17 @@ function CommandList({
         className
       )}
       {...props}
-    />
+    >
+      <Highlight
+        mode="parent"
+        controlledItems
+        value={ctx?.armed ? ctx.selected : null}
+        className="absolute inset-0 z-0 rounded-sm bg-accent"
+        transition={{ type: "spring", stiffness: 350, damping: 35 }}
+      >
+        {children}
+      </Highlight>
+    </CommandPrimitive.List>
   )
 }
 
@@ -143,15 +185,33 @@ function CommandItem({
   className,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item>) {
+  const ctx = React.useContext(CommandHighlightContext)
+  const [, itemRef] = useDataState<HTMLDivElement>("selected", undefined, (v) => {
+    if (v === true) {
+      const dv = itemRef.current?.dataset.value ?? null
+      if (dv) ctx?.setSelected(dv)
+    }
+  })
+  const [hlValue, setHlValue] = React.useState<string | undefined>(undefined)
+  React.useEffect(() => {
+    const dv = itemRef.current?.dataset.value
+    if (dv && dv !== hlValue) setHlValue(dv)
+  })
+
   return (
-    <CommandPrimitive.Item
-      data-slot="command-item"
-      className={cn(
-        "relative flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
-        className
-      )}
-      {...props}
-    />
+    <HighlightItem value={hlValue}>
+      <CommandPrimitive.Item
+        ref={itemRef}
+        data-slot="command-item"
+        className={cn(
+          // Statik `data-[selected=true]:bg-accent` kaldırıldı — arka planı artık
+          // CommandList'teki kayan Highlight çiziyor.
+          "relative z-[1] flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:text-accent-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground",
+          className
+        )}
+        {...props}
+      />
+    </HighlightItem>
   )
 }
 
