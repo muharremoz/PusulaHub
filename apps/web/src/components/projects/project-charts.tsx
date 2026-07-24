@@ -6,7 +6,7 @@ import {
   Tooltip as RechartsTooltip, ResponsiveContainer, Legend,
 } from "recharts"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@muharremoz/pusula-ui"
 import {
   TrendingDown, BarChart3, Target,
   CheckCircle2, ListTodo, ArrowUpRight, ArrowDownRight,

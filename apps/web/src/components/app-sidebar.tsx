@@ -33,12 +33,12 @@ import { AppSwitcher } from "@/components/app-switcher"
 import type { PermissionLevel, PermissionMap } from "@/lib/permissions"
 import { BorderBeam } from "border-beam"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuGroup,
   DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@muharremoz/pusula-ui"
 import { Badge } from "@/components/ui/badge"
 
 // ---------- Icon helper ----------

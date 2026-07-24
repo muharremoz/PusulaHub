@@ -15,23 +15,23 @@ import { Label }        from "@/components/ui/label"
 import { Skeleton }     from "@/components/ui/skeleton"
 import { copyToClipboard } from "@/lib/clipboard"
 import { generateSafePassword } from "@/lib/password-gen"
-import { Switch }       from "@/components/ui/switch"
+import { Switch }       from "@muharremoz/pusula-ui"
 import { ScrollArea }   from "@/components/ui/scroll-area"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
-} from "@/components/ui/sheet"
+} from "@muharremoz/pusula-ui"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@muharremoz/pusula-ui"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@muharremoz/pusula-ui"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select"

@@ -8,7 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@muharremoz/pusula-ui"
 import {
   SidebarMenu,
   SidebarMenuButton,

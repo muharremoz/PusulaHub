@@ -15,9 +15,9 @@ import {
 import { StatsCard } from "@/components/shared/stats-card"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@muharremoz/pusula-ui"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 
 /* ══════════════════════════════════════════════════════════
    Types — /api/monitoring response
@@ -115,7 +115,7 @@ function HeartbeatBar({ beats }: { beats: BeatPoint[] }) {
   const visible = beats.slice(-BEAT_SLOTS)
   const missing = Math.max(0, BEAT_SLOTS - visible.length)
   return (
-    <TooltipProvider delayDuration={100} skipDelayDuration={50}>
+    <>
       <div
         className="grid items-stretch gap-1 h-8"
         style={{ gridTemplateColumns: `repeat(${BEAT_SLOTS}, minmax(0, 1fr))` }}
@@ -148,7 +148,7 @@ function HeartbeatBar({ beats }: { beats: BeatPoint[] }) {
           </Tooltip>
         ))}
       </div>
-    </TooltipProvider>
+    </>
   )
 }
 

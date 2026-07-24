@@ -11,7 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@muharremoz/pusula-ui";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {

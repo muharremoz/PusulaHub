@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import type { Server as ServerType } from "@/types";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { MoreVertical, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import {
   Monitor as IsMonitor,
@@ -27,7 +27,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@muharremoz/pusula-ui";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -37,7 +37,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@muharremoz/pusula-ui";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -360,7 +360,6 @@ export default function ServersPage() {
           {/* Refresh + Last Update */}
           <div className="flex items-center gap-2">
             {lastUpdate && (
-              <TooltipProvider delayDuration={200}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span className="text-[10px] text-muted-foreground tabular-nums cursor-default">
@@ -371,7 +370,6 @@ export default function ServersPage() {
                     Her 5 saniyede otomatik yenilenir
                   </TooltipContent>
                 </Tooltip>
-              </TooltipProvider>
             )}
             <button
               onClick={handleRefresh}

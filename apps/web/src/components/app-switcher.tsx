@@ -9,7 +9,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@muharremoz/pusula-ui"
 import { SidebarMenuButton } from "@/components/ui/sidebar"
 
 /**
@@ -116,28 +116,27 @@ export function AppSwitcher() {
           return (
             <DropdownMenuItem
               key={app.id}
-              asChild
+              onSelect={() => { window.location.href = app.externalUrl ?? `/apps/${app.id}` }}
               className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
             >
-              <a href={app.externalUrl ?? `/apps/${app.id}`}>
-                <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={app.logo} alt={app.name} className="w-full h-full object-cover" />
-                </div>
-                <div className="grid flex-1 leading-tight min-w-0">
-                  <span className="truncate text-[12px] font-medium">{app.name}</span>
-                  <span className="truncate text-[10px] text-[#b4c8ff]">{app.description}</span>
-                </div>
-                {isActive && <Check className="size-3.5 text-[#1d64ff] shrink-0" />}
-              </a>
+              <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={app.logo} alt={app.name} className="w-full h-full object-cover" />
+              </div>
+              <div className="grid flex-1 leading-tight min-w-0">
+                <span className="truncate text-[12px] font-medium">{app.name}</span>
+                <span className="truncate text-[10px] text-[#b4c8ff]">{app.description}</span>
+              </div>
+              {isActive && <Check className="size-3.5 text-[#1d64ff] shrink-0" />}
             </DropdownMenuItem>
           )
         })}
         <DropdownMenuSeparator className="bg-[#0d3380]" />
-        <DropdownMenuItem asChild className="gap-2 p-2 cursor-pointer text-[11px] text-[#b4c8ff] focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]">
-          <a href={SWITCH_URL}>
-            Switch ekranına dön
-          </a>
+        <DropdownMenuItem
+          onSelect={() => { window.location.href = SWITCH_URL }}
+          className="gap-2 p-2 cursor-pointer text-[11px] text-[#b4c8ff] focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
+        >
+          Switch ekranına dön
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

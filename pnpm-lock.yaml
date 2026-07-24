@@ -24,8 +24,8 @@ importers:
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.5)
       '@muharremoz/pusula-ui':
-        specifier: ^0.2.0
-        version: 0.2.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(lucide-react@0.469.0(react@19.2.5))(motion@12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+        specifier: ^0.4.0
+        version: 0.4.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(lucide-react@0.469.0(react@19.2.5))(motion@12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.14)(react@19.2.5)
@@ -732,8 +732,8 @@ packages:
   '@js-joda/core@5.7.0':
     resolution: {integrity: sha512-WBu4ULVVxySLLzK1Ppq+OdfP+adRS4ntmDQT915rzDJ++i95gc2jZkM5B6LWEAwN3lGXpfie3yPABozdD3K3Vg==}
 
-  '@muharremoz/pusula-ui@0.2.0':
-    resolution: {integrity: sha512-kYMbPen4k1QHBHDlRpkcgFlVBGXgWOWtM2iVyxZ9kIER7Fr0fg1bObBAwIk3BBUcYrz7j7j7qxopVY0m3JJ+Hg==, tarball: https://npm.pkg.github.com/download/@muharremoz/pusula-ui/0.2.0/a7ff71006309d59e4c29baf21a0025f37d81d0ea}
+  '@muharremoz/pusula-ui@0.4.0':
+    resolution: {integrity: sha512-2CSDg+O2X4nHD8mRn26zPpeimaI3oAjNb9aHhdPE8tEnrmqKIuzwYAA3ou2VgwwsOoOodQ4FAAwNKjZHg57KAQ==, tarball: https://npm.pkg.github.com/download/@muharremoz/pusula-ui/0.4.0/c9f4cd6cb5971cbf31032c461d920aedb3921d51}
     peerDependencies:
       lucide-react: '>=0.4'
       motion: '>=12'
@@ -4624,13 +4624,14 @@ snapshots:
 
   '@js-joda/core@5.7.0': {}
 
-  '@muharremoz/pusula-ui@0.2.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(lucide-react@0.469.0(react@19.2.5))(motion@12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
+  '@muharremoz/pusula-ui@0.4.0(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(lucide-react@0.469.0(react@19.2.5))(motion@12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)':
     dependencies:
       '@floating-ui/react': 0.27.20(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       class-variance-authority: 0.7.1
       clsx: 2.1.1
       lucide-react: 0.469.0(react@19.2.5)
       motion: 12.38.0(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      next-themes: 0.4.6(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       radix-ui: 1.4.3(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       react: 19.2.5
       react-dom: 19.2.5(react@19.2.5)

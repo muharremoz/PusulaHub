@@ -6,9 +6,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@muharremoz/pusula-ui"
 import { cn } from "@/lib/utils"
 import { ChevronLeft, ChevronRight, Calendar, AlertCircle } from "lucide-react"
 import type { BoardData, BoardTask } from "@/app/api/projects/[id]/route"
@@ -292,8 +291,7 @@ export function GanttChart({ board, loading }: Props) {
               </div>
 
               {/* Grid + bars */}
-              <TooltipProvider delayDuration={200}>
-                <div className="relative">
+              <div className="relative">
                   {/* Background grid */}
                   {days.map((d, i) => {
                     const isToday = i === todayIndex
@@ -413,7 +411,6 @@ export function GanttChart({ board, loading }: Props) {
                     )
                   })}
                 </div>
-              </TooltipProvider>
             </div>
           </div>
         </div>

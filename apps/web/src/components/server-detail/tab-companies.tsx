@@ -15,14 +15,14 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+} from "@muharremoz/pusula-ui";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@muharremoz/pusula-ui";
 import {
   Dialog,
   DialogContent,
@@ -40,7 +40,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetDescription,
-} from "@/components/ui/sheet";
+} from "@muharremoz/pusula-ui";
 import type { AgentReport } from "@/lib/agent-types";
 
 type Company = NonNullable<NonNullable<AgentReport["ad"]>["companies"]>[number];

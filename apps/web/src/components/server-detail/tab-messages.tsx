@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { MessageSquare, RefreshCw, CheckCircle2, Clock, ChevronDown, ChevronRight } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Checkbox } from "@muharremoz/pusula-ui";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";

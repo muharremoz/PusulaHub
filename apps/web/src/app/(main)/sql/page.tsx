@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muharremoz/pusula-ui"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Select,
@@ -20,7 +20,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+} from "@muharremoz/pusula-ui"
 import { cn } from "@/lib/utils"
 import {
   MoreVertical,
