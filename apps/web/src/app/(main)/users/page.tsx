@@ -11,7 +11,7 @@ import { Label }        from "@/components/ui/label"
 import { Skeleton }     from "@/components/ui/skeleton"
 import { copyToClipboard } from "@/lib/clipboard"
 import { generateSafePassword } from "@/lib/password-gen"
-import { Switch } from "@muharremoz/pusula-ui";
+import { PageHeader, Switch } from "@muharremoz/pusula-ui";
 import {
   ScrollArea }   from "@/components/ui/scroll-area"
 import {
@@ -648,14 +648,16 @@ export default function UsersPage() {
     <div className="p-4 space-y-3">
       {/* Header */}
       <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] px-4 py-3 flex items-center justify-between" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-          <div>
-            <h1 className="text-[13px] font-semibold">Kullanıcı Yönetimi</h1>
-            <p className="text-[11px] text-muted-foreground">{users.length} kullanıcı</p>
-          </div>
-          <Button onClick={() => { setEditUser(null); setSheetOpen(true) }} className="h-8 text-[12px] rounded-[5px] gap-1.5">
-            <Plus className="size-3.5" />Yeni Kullanıcı
-          </Button>
+        <div className="bg-white rounded-[4px] px-4 py-3" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+          <PageHeader
+            title="Kullanıcı Yönetimi"
+            description={`${users.length} kullanıcı`}
+            actions={
+              <Button onClick={() => { setEditUser(null); setSheetOpen(true) }} className="h-8 text-[12px] rounded-[5px] gap-1.5">
+                <Plus className="size-3.5" />Yeni Kullanıcı
+              </Button>
+            }
+          />
         </div>
       </div>
 
