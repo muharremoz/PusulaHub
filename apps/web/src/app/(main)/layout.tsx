@@ -1,7 +1,6 @@
-import { AppSidebar }               from "@/components/app-sidebar"
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
-import { SessionProvider }          from "next-auth/react"
-import { auth }                     from "@/auth"
+import { PusulaAppShell }  from "@/components/pusula-app-shell"
+import { SessionProvider } from "next-auth/react"
+import { auth }            from "@/auth"
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -13,12 +12,7 @@ export default async function MainLayout({ children }: { children: React.ReactNo
     : null
   return (
     <SessionProvider session={nextAuthSession as unknown as Parameters<typeof SessionProvider>[0]["session"]}>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          {children}
-        </SidebarInset>
-      </SidebarProvider>
+      <PusulaAppShell>{children}</PusulaAppShell>
     </SessionProvider>
   )
 }

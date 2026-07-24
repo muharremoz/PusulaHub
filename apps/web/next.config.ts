@@ -8,6 +8,8 @@ import type { NextConfig } from "next";
  */
 const nextConfig: NextConfig = {
   serverExternalPackages: ["qrcode", "otplib", "bcryptjs", "mssql"],
+  // Ortak app-shell paketi source-only yayınlanıyor → Next derlesin.
+  transpilePackages: ["@muharremoz/pusula-ui"],
 };
 
 export default nextConfig;

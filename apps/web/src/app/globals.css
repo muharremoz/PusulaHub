@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
+/* Ortak app-shell paketi — sidebar token'ları .pusula-ui scope'unda + class taraması */
+@import "@muharremoz/pusula-ui/styles.css";
+@source "../../node_modules/@muharremoz/pusula-ui/src";
+
 @custom-variant dark (&:is(.dark *));
 
 :root {
