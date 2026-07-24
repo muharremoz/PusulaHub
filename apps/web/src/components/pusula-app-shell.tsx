@@ -7,6 +7,7 @@ import { useSession } from "next-auth/react";
 import {
   AppShell,
   UserMenuShell,
+  ThemeTogglerButton,
   ItemBadge,
   DropdownMenuLabel,
   DropdownMenuItem,
@@ -273,7 +274,21 @@ export function PusulaAppShell({ children }: { children: React.ReactNode }) {
       linkComponent={Link}
       onSwitchApp={onSwitchApp}
       onBackToSwitch={onBackToSwitch}
-      footer={<HubUserMenu />}
+      footer={
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1">
+            <HubUserMenu />
+          </div>
+          {/* Tema değiştirici — üst bar olmadığı için sidebar footer'ında. */}
+          <ThemeTogglerButton
+            modes={["light", "dark", "system"]}
+            variant="ghost"
+            size="sm"
+            aria-label="Tema değiştir"
+            className="text-muted-foreground hover:bg-sidebar-accent size-8 shrink-0 rounded-md"
+          />
+        </div>
+      }
     >
       {children}
     </AppShell>

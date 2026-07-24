@@ -1,6 +1,9 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
+import { RippleEffect, RippleButtonRipples } from "@muharremoz/pusula-ui"
 
 import { cn } from "@/lib/utils"
 
@@ -49,13 +52,34 @@ function Button({
     asChild?: boolean
   }) {
   const Comp = asChild ? Slot.Root : "button"
+  const classes = cn(buttonVariants({ variant, size, className }))
+
+  // Primary (default) butonlarda tıklama dalgası. RippleEffect stilsiz köktür,
+  // varyant sistemini bozmaz. asChild kullanımlarında (Link vb.) uygulanmaz —
+  // çocuk elemanın kendi yapısı korunsun.
+  if (variant === "default" && !asChild) {
+    return (
+      <RippleEffect asChild hoverScale={1} tapScale={0.98} data-slot="button">
+        <button
+          data-slot="button"
+          data-variant={variant}
+          data-size={size}
+          className={cn(classes, "[--ripple-button-ripple-color:var(--primary-foreground)]")}
+          {...props}
+        >
+          {props.children}
+          <RippleButtonRipples />
+        </button>
+      </RippleEffect>
+    )
+  }
 
   return (
     <Comp
       data-slot="button"
       data-variant={variant}
       data-size={size}
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={classes}
       {...props}
     />
   )
