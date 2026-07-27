@@ -2,6 +2,7 @@ import "server-only"
 
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { getCompanyCredentials, type SupabaseLike } from "@/lib/firma-credentials"
+import { decrypt } from "@/lib/crypto"
 
 /**
  * Firma erişim bilgileri — sunucular + kullanıcı şifreleri.
@@ -39,6 +40,21 @@ export interface FirmaErisimBilgisi {
     dns: string | null
   } | null
 
+  /**
+   * SQL sunucusu — bağlanmak için gereken kimlik bilgisi.
+   *
+   * Veritabanı listesi/boyutları BİLEREK yok: o veri firmanın SQL sunucusuna
+   * canlı bağlanmayı gerektiriyor (yavaş, ağa bağlı) ve "erişim bilgisi"
+   * değil operasyonel detay. Gerekirse Hub'ın SQL sekmesinden bakılır.
+   */
+  sql?: {
+    name: string
+    ip: string
+    port: number
+    username: string | null
+    password: string | null
+  } | null
+
   /** Tam kullanıcı adı ("2507.vefa1") → düz şifre. */
   credentials: Record<string, string>
 }
@@ -52,6 +68,7 @@ interface ServerRow {
   rdp_port: number | null
 }
 const SRV_COLS = "id, name, ip, dns, domain, rdp_port"
+const SQL_COLS = "id, name, ip, sql_username, sql_password"
 
 /** Firma bulunamazsa `null` döner. */
 export async function getFirmaErisim(
@@ -65,11 +82,16 @@ export async function getFirmaErisim(
   const { data: c } = await sb
     .schema("hub")
     .from("companies")
-    .select("company_id, ad_server_id, windows_server_id")
+    .select("company_id, ad_server_id, windows_server_id, sql_server_id")
     .eq("company_id", firkod)
     .maybeSingle()
   if (!c) return null
-  const comp = c as { company_id: string; ad_server_id: string | null; windows_server_id: string | null }
+  const comp = c as {
+    company_id: string
+    ad_server_id: string | null
+    windows_server_id: string | null
+    sql_server_id: string | null
+  }
 
   const fetchServer = async (id: string | null): Promise<ServerRow | null> => {
     if (!id) return null
@@ -93,10 +115,36 @@ export async function getFirmaErisim(
     return (data as ServerRow | null) ?? null
   }
 
-  const [adRow, winRow, iisRow, credentials] = await Promise.all([
+  /** SQL sunucusu — şifre AES ile saklanıyor, burada çözülür. */
+  const fetchSqlServer = async (): Promise<FirmaErisimBilgisi["sql"]> => {
+    if (!comp.sql_server_id) return null
+    const { data } = await sb
+      .schema("hub")
+      .from("servers")
+      .select(SQL_COLS)
+      .eq("id", comp.sql_server_id)
+      .maybeSingle()
+    const s = data as
+      | { name: string; ip: string; sql_username: string | null; sql_password: string | null }
+      | null
+    if (!s) return null
+    let sifre: string | null = null
+    if (s.sql_password) {
+      // Şifreleme anahtarı değişmişse çöz edilemez — bilgiyi bastırma, boş bırak.
+      try {
+        sifre = decrypt(s.sql_password) ?? null
+      } catch {
+        sifre = null
+      }
+    }
+    return { name: s.name, ip: s.ip, port: 1433, username: s.sql_username ?? null, password: sifre }
+  }
+
+  const [adRow, winRow, iisRow, sql, credentials] = await Promise.all([
     fetchServer(comp.ad_server_id),
     fetchServer(comp.windows_server_id),
     fetchIisServer(),
+    fetchSqlServer(),
     getCompanyCredentials(firkod, sb),
   ])
 
@@ -107,6 +155,7 @@ export async function getFirmaErisim(
       ? { name: winRow.name, ip: winRow.ip, dns: winRow.dns ?? null, rdpPort: winRow.rdp_port ?? null }
       : null,
     iis: iisRow ? { name: iisRow.name, ip: iisRow.ip, dns: iisRow.dns ?? null } : null,
+    sql,
     credentials,
   }
 }
