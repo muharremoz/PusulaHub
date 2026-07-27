@@ -20,10 +20,11 @@ const DOVIZ_ONEKI = "Döviz - "
 
 type Durum = "normal" | "kismi" | "sorunlu" | "bilinmiyor"
 
-interface Sorunlu {
+interface Sistem {
   ad: string
   tip: string
-  bekliyor: boolean
+  /** up | down | pending | diger */
+  hal: string
   sonYanitMs: number | null
 }
 
@@ -31,7 +32,10 @@ interface Grup {
   durum: Durum
   toplam: number
   calisan: number
-  sorunlu: Sorunlu[]
+  /** Grubun TUM sistemleri — sorunlular basta. Personel neyin izlendigini
+   *  gormek istiyor; yalnizca arizalari gostermek "hangi sistemler var?"
+   *  sorusunu cevapsiz birakiyordu. */
+  sistemler: Sistem[]
 }
 
 function grupla(monitors: KumaMonitor[], adiSadelestir: (n: string) => string): Grup {
@@ -45,16 +49,20 @@ function grupla(monitors: KumaMonitor[], adiSadelestir: (n: string) => string): 
   const durum: Durum =
     toplam === 0 ? "bilinmiyor" : down.length > 0 ? "sorunlu" : pending.length > 0 ? "kismi" : "normal"
 
+  const sirala = (m: KumaMonitor) => (m.status === "down" ? 0 : m.status === "pending" ? 1 : 2)
+
   return {
     durum,
     toplam,
     calisan,
-    sorunlu: [...down, ...pending].map((m) => ({
-      ad: adiSadelestir(m.name),
-      tip: m.type,
-      bekliyor: m.status === "pending",
-      sonYanitMs: m.responseMs != null && m.responseMs >= 0 ? m.responseMs : null,
-    })),
+    sistemler: [...monitors]
+      .sort((a, b) => sirala(a) - sirala(b) || a.name.localeCompare(b.name, "tr"))
+      .map((m) => ({
+        ad: adiSadelestir(m.name),
+        tip: m.type,
+        hal: m.status,
+        sonYanitMs: m.responseMs != null && m.responseMs >= 0 ? m.responseMs : null,
+      })),
   }
 }
 
@@ -65,7 +73,7 @@ function genelDurum(a: Durum, b: Durum): Durum {
   return "normal"
 }
 
-const BOS: Grup = { durum: "bilinmiyor", toplam: 0, calisan: 0, sorunlu: [] }
+const BOS: Grup = { durum: "bilinmiyor", toplam: 0, calisan: 0, sistemler: [] }
 
 export async function GET(req: NextRequest) {
   const sentKey = req.headers.get("x-internal-key")
