@@ -1,7 +1,7 @@
 import "server-only"
 
 import { getSupabaseServer } from "@/lib/supabase/server"
-import { getCompanyCredentials } from "@/lib/firma-credentials"
+import { getCompanyCredentials, type SupabaseLike } from "@/lib/firma-credentials"
 
 /**
  * Firma erişim bilgileri — sunucular + kullanıcı şifreleri.
@@ -54,8 +54,13 @@ interface ServerRow {
 const SRV_COLS = "id, name, ip, dns, domain, rdp_port"
 
 /** Firma bulunamazsa `null` döner. */
-export async function getFirmaErisim(firkod: string): Promise<FirmaErisimBilgisi | null> {
-  const sb = await getSupabaseServer()
+export async function getFirmaErisim(
+  firkod: string,
+  client?: SupabaseLike,
+): Promise<FirmaErisimBilgisi | null> {
+  // Oturumsuz (servis-servis) cagrilarda admin istemcisi ZORUNLU: hub semasinda
+  // RLS var, oturumsuz okuma bos doner ve firma "bulunamadi" gibi gorunur.
+  const sb = client ?? (await getSupabaseServer())
 
   const { data: c } = await sb
     .schema("hub")
@@ -92,7 +97,7 @@ export async function getFirmaErisim(firkod: string): Promise<FirmaErisimBilgisi
     fetchServer(comp.ad_server_id),
     fetchServer(comp.windows_server_id),
     fetchIisServer(),
-    getCompanyCredentials(firkod),
+    getCompanyCredentials(firkod, sb),
   ])
 
   return {

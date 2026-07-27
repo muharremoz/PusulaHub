@@ -6,6 +6,9 @@
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { encrypt, decrypt } from "@/lib/crypto"
 
+/** Oturum ya da admin istemcisi — ikisi de `.schema()` sunar. */
+export type SupabaseLike = Awaited<ReturnType<typeof getSupabaseServer>>
+
 /** Şifreyi kaydet — yoksa INSERT, varsa UPDATE. Boş çağrı yok sayılır. */
 export async function saveCompanyUserPassword(companyId: string, username: string, password: string): Promise<void> {
   if (!companyId || !username || !password) return
@@ -21,10 +24,19 @@ export async function saveCompanyUserPassword(companyId: string, username: strin
   }
 }
 
-/** Firmanın tüm saklı şifrelerini decrypt edip Map döner (username → düz şifre). */
-export async function getCompanyCredentials(companyId: string): Promise<Record<string, string>> {
+/**
+ * Firmanın tüm saklı şifrelerini decrypt edip Map döner (username → düz şifre).
+ *
+ * `client` verilmezse oturum tabanlı istemci kullanılır (Hub UI akışı).
+ * Servis-servis çağrılarda (alt uygulamalar, `/api/hub/*`) oturum YOKTUR;
+ * çağıran admin istemcisini geçmek zorundadır, aksi halde RLS boş döndürür.
+ */
+export async function getCompanyCredentials(
+  companyId: string,
+  client?: SupabaseLike,
+): Promise<Record<string, string>> {
   if (!companyId) return {}
-  const sb = await getSupabaseServer()
+  const sb = client ?? (await getSupabaseServer())
   const { data } = await sb.schema("hub").from("company_user_credentials")
     .select("username, password").eq("company_id", companyId)
   const out: Record<string, string> = {}

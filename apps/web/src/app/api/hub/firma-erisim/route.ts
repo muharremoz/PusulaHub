@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getFirmaErisim } from "@/lib/firma-erisim"
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
+import type { SupabaseLike } from "@/lib/firma-credentials"
 
 /**
  * GET /api/hub/firma-erisim?firkod=2312
@@ -22,7 +24,10 @@ export async function GET(req: NextRequest) {
   if (!firkod) return NextResponse.json({ error: "firkod zorunludur." }, { status: 400 })
 
   try {
-    const data = await getFirmaErisim(firkod)
+    // Oturum YOK (servis-servis) → admin istemcisi şart; oturum tabanlı
+    // istemciyle hub şemasındaki RLS okumayı boş döndürür ve firma
+    // "bulunamadı" gibi görünür.
+    const data = await getFirmaErisim(firkod, getSupabaseAdmin() as unknown as SupabaseLike)
     if (!data) return NextResponse.json({ error: "Firma bulunamadı" }, { status: 404 })
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
