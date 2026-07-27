@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { fetchKumaMonitors } from "@/lib/kuma"
+import { fetchKumaMonitors, type KumaMonitor } from "@/lib/kuma"
 
 /**
  * Altyapı durumu — ÖZET. Alt uygulamalar (CRM) için.
@@ -8,11 +8,65 @@ import { fetchKumaMonitors } from "@/lib/kuma"
  *
  * Amaç: destek personeli müşteri "program açılmıyor" dediğinde 3 saniyede
  * "bizde mi, onda mı?" sorusuna cevap versin. Bu yüzden yanıt BİLEREK dar:
- * ham monitör listesi değil, tek bir genel karar + sorunlu olanlar.
+ * ham monitör listesi değil, karar + sorunlular.
  *
- * Yanıt: { durum, toplam, calisan, sorunlu: [{ ad, tip, sonYanitMs }], zaman }
- *   durum: "normal" | "kismi" | "sorunlu" | "bilinmiyor"
+ * İki grup ayrı raporlanır çünkü sonuçları farklı: döviz kaynağı düşerse
+ * kurlar bayatlar (program çalışmaya devam eder), sunucu düşerse program
+ * hiç açılmaz. Personelin müşteriye söyleyeceği şey değişir.
  */
+
+/** Kuma'da döviz kaynağı monitörleri bu önekle adlandırılır (/tv ile aynı kural). */
+const DOVIZ_ONEKI = "Döviz - "
+
+type Durum = "normal" | "kismi" | "sorunlu" | "bilinmiyor"
+
+interface Sorunlu {
+  ad: string
+  tip: string
+  bekliyor: boolean
+  sonYanitMs: number | null
+}
+
+interface Grup {
+  durum: Durum
+  toplam: number
+  calisan: number
+  sorunlu: Sorunlu[]
+}
+
+function grupla(monitors: KumaMonitor[], adiSadelestir: (n: string) => string): Grup {
+  const toplam = monitors.length
+  const down = monitors.filter((m) => m.status === "down")
+  const pending = monitors.filter((m) => m.status === "pending")
+  const calisan = monitors.filter((m) => m.status === "up").length
+
+  // Monitör yoksa "bilinmiyor" — veri yokluğunu "her şey yolunda" diye
+  // göstermek en tehlikeli yanlış olurdu.
+  const durum: Durum =
+    toplam === 0 ? "bilinmiyor" : down.length > 0 ? "sorunlu" : pending.length > 0 ? "kismi" : "normal"
+
+  return {
+    durum,
+    toplam,
+    calisan,
+    sorunlu: [...down, ...pending].map((m) => ({
+      ad: adiSadelestir(m.name),
+      tip: m.type,
+      bekliyor: m.status === "pending",
+      sonYanitMs: m.responseMs != null && m.responseMs >= 0 ? m.responseMs : null,
+    })),
+  }
+}
+
+/** Genel karar = iki gruptan en kötüsü. */
+function genelDurum(a: Durum, b: Durum): Durum {
+  const sira: Durum[] = ["sorunlu", "kismi", "bilinmiyor", "normal"]
+  for (const d of sira) if (a === d || b === d) return d
+  return "normal"
+}
+
+const BOS: Grup = { durum: "bilinmiyor", toplam: 0, calisan: 0, sorunlu: [] }
+
 export async function GET(req: NextRequest) {
   const sentKey = req.headers.get("x-internal-key")
   const expected = process.env.INTERNAL_APP_KEY
@@ -21,27 +75,17 @@ export async function GET(req: NextRequest) {
 
   try {
     const monitors = await fetchKumaMonitors()
-    const toplam = monitors.length
-    const down = monitors.filter((m) => m.status === "down")
-    const pending = monitors.filter((m) => m.status === "pending")
-    const calisan = monitors.filter((m) => m.status === "up").length
+    const kurMonitorleri = monitors.filter((m) => m.name.startsWith(DOVIZ_ONEKI))
+    const sunucuMonitorleri = monitors.filter((m) => !m.name.startsWith(DOVIZ_ONEKI))
 
-    // Karar: hiç monitör yoksa "bilinmiyor" (veri yokluğunu "her şey yolunda"
-    // diye göstermek en tehlikeli yanlış — personel yanlış güvenle cevap verir).
-    const durum =
-      toplam === 0 ? "bilinmiyor" : down.length > 0 ? "sorunlu" : pending.length > 0 ? "kismi" : "normal"
+    const kur = grupla(kurMonitorleri, (n) => n.slice(DOVIZ_ONEKI.length))
+    const sunucu = grupla(sunucuMonitorleri, (n) => n)
 
     return NextResponse.json(
       {
-        durum,
-        toplam,
-        calisan,
-        sorunlu: [...down, ...pending].map((m) => ({
-          ad: m.name,
-          tip: m.type,
-          bekliyor: m.status === "pending",
-          sonYanitMs: m.responseMs != null && m.responseMs >= 0 ? m.responseMs : null,
-        })),
+        durum: genelDurum(sunucu.durum, kur.durum),
+        sunucu,
+        kur,
         zaman: new Date().toISOString(),
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -50,10 +94,9 @@ export async function GET(req: NextRequest) {
     // Kuma'ya ulaşılamıyor → "normal" DEME. Bilinmiyor de.
     return NextResponse.json(
       {
-        durum: "bilinmiyor",
-        toplam: 0,
-        calisan: 0,
-        sorunlu: [],
+        durum: "bilinmiyor" as Durum,
+        sunucu: BOS,
+        kur: BOS,
         hata: e instanceof Error ? e.message : "İzleme sistemine ulaşılamadı",
         zaman: new Date().toISOString(),
       },
