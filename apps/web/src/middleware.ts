@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { createServerClient } from "@supabase/ssr"
-import { stripPersistence } from "@/lib/supabase/session-cookies"
+import { stripPersistence, tvIstegiMi } from "@/lib/supabase/session-cookies"
 
 /**
  * Hub middleware — Birleşik platform (Supabase Auth).
@@ -60,6 +60,9 @@ export async function middleware(req: NextRequest) {
     return new NextResponse("Not Found", { status: 404 })
   }
 
+  // TV panosu (agent kiosk) → oturum çerezi kalıcı yazılır, her açılışta giriş istenmez.
+  const tvPanosu = tvIstegiMi(req.headers.get("user-agent"))
+
   let response = NextResponse.next({ request: req })
   const supabase = createServerClient(url, anonKey, {
     cookies: {
@@ -70,7 +73,7 @@ export async function middleware(req: NextRequest) {
         cookiesToSet.forEach(({ name, value }) => req.cookies.set(name, value))
         response = NextResponse.next({ request: req })
         cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, stripPersistence(value, options)),
+          response.cookies.set(name, value, stripPersistence(value, options, tvPanosu)),
         )
       },
     },

@@ -20,10 +20,27 @@ export function withDomain<T extends CookieOpts>(options?: T): T {
   return base;
 }
 
-export function stripPersistence<T extends CookieOpts>(value: string, options?: T): T | undefined {
+/**
+ * TV panosu isteği mi? Agent TV modunda User-Agent'a "PusulaCRM-TV" imzası ekler.
+ *
+ * TV bir kiosk ekranı: PC her açıldığında birinin gidip giriş yapması beklenemez,
+ * bu yüzden onun oturumu kalıcı olmalı. Personel makinelerinde "uygulama kapanınca
+ * çıkış" davranışı aynen korunur.
+ */
+export function tvIstegiMi(userAgent: string | null | undefined): boolean {
+  return !!userAgent && userAgent.includes("PusulaCRM-TV");
+}
+
+/** `kalici` verilirse (TV panosu) kalıcılık KORUNUR. */
+export function stripPersistence<T extends CookieOpts>(
+  value: string,
+  options?: T,
+  kalici = false,
+): T | undefined {
   const withDom = withDomain(options);
   const deleting = value === "" || (typeof withDom.maxAge === "number" && withDom.maxAge <= 0);
   if (deleting) return withDom;
+  if (kalici) return withDom;
   const rest = { ...withDom };
   delete rest.maxAge;
   delete rest.expires;

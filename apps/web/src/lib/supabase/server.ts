@@ -2,8 +2,8 @@ import "server-only";
 
 import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { stripPersistence } from "./session-cookies";
+import { cookies, headers } from "next/headers";
+import { stripPersistence, tvIstegiMi } from "./session-cookies";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -13,6 +13,8 @@ const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 // kimliği (mssql AppUsers.Id) için email köprüsü pusula-session.ts'te.
 export const getSupabaseServer = cache(async () => {
   const cookieStore = await cookies();
+  // TV panosu → oturum çerezi kalıcı kalsın (bkz. tvIstegiMi).
+  const tvPanosu = tvIstegiMi((await headers()).get("user-agent"));
   const client = createServerClient(url, anonKey, {
     cookies: {
       getAll() {
@@ -21,7 +23,7 @@ export const getSupabaseServer = cache(async () => {
       setAll(cookiesToSet) {
         try {
           cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, stripPersistence(value, options)),
+            cookieStore.set(name, value, stripPersistence(value, options, tvPanosu)),
           );
         } catch {
           // Server Component'ten set çağrılırsa yutulur (middleware refresh eder)
