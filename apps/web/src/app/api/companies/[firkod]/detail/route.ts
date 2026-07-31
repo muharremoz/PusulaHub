@@ -19,6 +19,19 @@ import type { AgentReport } from "@/lib/agent-types"
  * Kota alanları skorun paydası olarak hizmet eder — kullanıcıya "kullanım/kota" ikilisi gösterilir.
  */
 
+/**
+ * Haftalık grafik noktası — firmanın o günkü TOPLAM kullanımı, gerçek
+ * birimleriyle. `null` = o gün ölçüm yok (0 ile karıştırılmamalı).
+ */
+export interface WeeklyUsagePoint {
+  day:    string        // "Sal"
+  date:   string        // "2026-07-28"
+  cpu:    number | null // % — tüm kullanıcıların toplamı
+  ramGB:  number | null // GB — tüm kullanıcıların toplamı
+  diskGB: number | null // GB — firma klasörünün boyutu
+  users:  number | null // o gün oturum açmış kullanıcı sayısı
+}
+
 export interface CompanyDetail {
   usageCpu:     number  // Firmanın kullandığı CPU yüzdesi (0-100)
   quotaCpu:     number  // 100 — CPU zaten oran
@@ -35,7 +48,7 @@ export interface CompanyDetail {
   dbSizeMB:     number
   dbQuota:      number  // GB — sunucudaki tüm DB'lerin toplam boyutu
   dbTotalMB:    number  // MB — sunucudaki tüm DB'lerin toplam boyutu (hassas)
-  weeklyUsage:  { day: string; cpu: number | null; ram: number | null; disk: number | null; db: number | null }[]
+  weeklyUsage:  WeeklyUsagePoint[]
   history30d?:  CompanyUsageHistory
   /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
    *  → bar paylaşımlı-sunucu oranı/varsayılan kotaya göre gösterilir. Manuel
@@ -179,68 +192,63 @@ export async function GET(
       dbGB:   (c.db_quota   != null && c.db_quota   > 0 && c.db_quota   !== 1)   ? c.db_quota   : null,
     }
 
-    // Haftalık kullanım grafiği — CompanyUsageDaily'den son 7 gün, yüzde bazlı.
-    // RAM/Disk mutlak değerleri firma kotasına oranlanıp 0-100 arası yüzde döner.
+    // Haftalık kullanım grafiği — firmanın O GÜNKÜ TOPLAM kullanımı, gerçek
+    // birimleriyle (yüzde değil): "salı günü kullanıcılar toplam şu kadar
+    // CPU/RAM harcamış, disklerinde şu kadar veri var".
+    //
+    // Kaynak `user_daily_usage` (kullanıcı × gün): CPU ve RAM kullanıcı bazında
+    // tutulduğu için gün bazında TOPLANIR. `company_usage_daily.avg_cpu`
+    // kullanılmıyor — o kolon kullanıcıların ORTALAMASI, firmanın toplam yükü
+    // değil (3 kullanıcı × %1 → toplam %3 ama kolonda %1 yazıyor).
+    // Disk firma klasörünün boyutu, kullanıcı bazlı değil → company_usage_daily.
     try {
-      interface WeekDailyRow {
-        date: string
-        avg_cpu: number | null
-        avg_ram_mb: number | null
-        disk_mb: number | null
-        db_mb: number | null
-      }
-      const { data: weekDailyRaw } = await sb.schema("hub").from("company_usage_daily")
-        .select("date, avg_cpu, avg_ram_mb, disk_mb, db_mb").eq("company_id", firkod).order("date", { ascending: false }).limit(7)
-      const weekDaily = (weekDailyRaw ?? []) as WeekDailyRow[]
-      // Haftalık grafik, üstteki "Kullanım Yoğunluğu" kartıyla AYNI paydayı
-      // kullanır: firmanın kotası. Eskiden payda sunucunun TOPLAM kapasitesiydi
-      // (128 GB RAM, 3 TB disk) — firma 640 MB RAM / 1.3 GB disk kullanınca
-      // her gün %1 çıkıyor, grafik dümdüz sıfırda duruyordu. Aynı sayfada kart
-      // %27 derken grafiğin %1 demesi de kafa karıştırıyordu.
-      //
-      // Kota kaynağı (kartla birebir):
-      //   CPU  → manuel kota varsa ona, yoksa ham % (sunucu CPU yükü)
-      //   RAM  → manuel kota, yoksa RDP sunucusunun toplam RAM'i
-      //   Disk → Companies.QuotaDisk (varsayılan 25 GB)
-      //   DB   → Companies.DbQuota (varsayılan 1 GB)
-      const mqCpuPct  = (c.quota_cpu ?? 0) > 0 ? c.quota_cpu! : 0
-      const mqRamMB   = (c.quota_ram ?? 0) > 0 ? c.quota_ram! * 1024 : 0
-      const ramQuota  = Math.max(1, mqRamMB || quotaRamMB)
-      const diskQuota = Math.max(1, quotaDiskMB)
-      const dbQuota   = Math.max(1, dbQuotaMB)
+      interface UserDayRow { date: string; username: string; avg_cpu: number | null; avg_ram_mb: number | null }
+      interface DiskDayRow { date: string; disk_mb: number | null }
 
-      const pct = (u: number, q: number): number => {
-        if (!q || q <= 0 || u <= 0) return 0
-        const p = (u / q) * 100
-        if (p > 0 && p < 1) return 1
-        return Math.min(100, Math.round(p))
-      }
-      const dayMap = new Map<string, WeekDailyRow>()
-      for (const r of weekDaily) dayMap.set(r.date, r)
+      const since = new Date()
+      since.setDate(since.getDate() - 6)
+      const sinceIso = since.toISOString().slice(0, 10)
 
-      // Disk/DB fallback: geçmiş günlerde kolon yazılmamış olabilir. Null ise
-      // bugünkü değere düş — ikisi de günden güne dramatik değişmez.
-      const fallbackDiskMB = fileStorageMB
+      const [{ data: userDaysRaw }, { data: diskDaysRaw }] = await Promise.all([
+        sb.schema("hub").from("user_daily_usage")
+          .select("date, username, avg_cpu, avg_ram_mb").eq("firma_no", firkod).gte("date", sinceIso),
+        sb.schema("hub").from("company_usage_daily")
+          .select("date, disk_mb").eq("company_id", firkod).gte("date", sinceIso),
+      ])
+
+      // Gün → firma toplamı. Aynı kullanıcı iki sunucuda olabilir; CPU/RAM
+      // toplanır ama kullanıcı sayısı benzersiz isimden sayılır.
+      const agg = new Map<string, { cpu: number; ramMB: number; users: Set<string> }>()
+      for (const r of (userDaysRaw ?? []) as UserDayRow[]) {
+        const g = agg.get(r.date) ?? { cpu: 0, ramMB: 0, users: new Set<string>() }
+        g.cpu   += r.avg_cpu ?? 0
+        g.ramMB += r.avg_ram_mb ?? 0
+        g.users.add(r.username)
+        agg.set(r.date, g)
+      }
+      const diskByDate = new Map<string, number>()
+      for (const r of (diskDaysRaw ?? []) as DiskDayRow[]) {
+        if (r.disk_mb != null) diskByDate.set(r.date, r.disk_mb)
+      }
 
       const trNames = ["Paz", "Pzt", "Sal", "Car", "Per", "Cum", "Cmt"]
       const today = new Date()
-      const out: { day: string; cpu: number | null; ram: number | null; disk: number | null; db: number | null }[] = []
+      const out: WeeklyUsagePoint[] = []
       for (let i = 6; i >= 0; i--) {
         const d = new Date(today)
         d.setDate(today.getDate() - i)
         const iso = d.toISOString().slice(0, 10)
-        const row = dayMap.get(iso)
-        const diskMB = row?.disk_mb ?? fallbackDiskMB
-        const dbMB   = row?.db_mb ?? firmaDbMB
-        // Ölçüm yoksa 0 DEĞİL null: 0 "kullanım sıfıra düştü" gibi okunuyordu,
+        const g = agg.get(iso)
+        const diskMB = diskByDate.get(iso)
+        // Ölçüm yoksa 0 DEĞİL null: 0 "kullanım sıfıra düştü" gibi okunuyor,
         // oysa o gün poller çalışmamış. Grafik null'da çizgiyi kesiyor.
         out.push({
-          day:  trNames[d.getDay()],
-          cpu:  row?.avg_cpu == null ? null
-                : mqCpuPct > 0 ? pct(row.avg_cpu, mqCpuPct) : Math.min(100, Math.max(row.avg_cpu > 0 ? 1 : 0, Math.round(row.avg_cpu))),
-          ram:  row?.avg_ram_mb == null ? null : pct(row.avg_ram_mb, ramQuota),
-          disk: diskMB > 0 ? pct(diskMB, diskQuota) : null,
-          db:   dbMB   > 0 ? pct(dbMB,   dbQuota)   : null,
+          day:    trNames[d.getDay()],
+          date:   iso,
+          cpu:    g ? Math.round(g.cpu * 10) / 10 : null,
+          ramGB:  g ? Math.round((g.ramMB / 1024) * 100) / 100 : null,
+          diskGB: diskMB != null ? Math.round((diskMB / 1024) * 100) / 100 : null,
+          users:  g ? g.users.size : null,
         })
       }
       detail.weeklyUsage = out

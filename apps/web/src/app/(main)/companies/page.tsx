@@ -2041,17 +2041,16 @@ tr:nth-child(even) td{background:#fafafa}
               footer={
                 <>
                   <Activity className="h-3 w-3" />
-                  <span>Son 7 günün kotaya oranı (%) — yukarıdaki yoğunluk ile aynı hesap</span>
+                  <span>Firmanın tüm kullanıcılarının günlük toplam kullanımı</span>
                 </>
               }
             >
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold">Haftalık Kullanım</h3>
                 <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-blue-400" />CPU</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />RAM</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />Disk</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-red-400" />DB</span>
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />RAM (GB)</span>
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />Disk (GB)</span>
+                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-blue-400" />CPU (%)</span>
                 </div>
               </div>
               <div className="flex-1 min-h-0">
