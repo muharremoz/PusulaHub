@@ -986,6 +986,41 @@ export default function CompaniesPage() {
     return sl.includes(lf)
   }
 
+  /**
+   * Firma listesini Excel'e aktar.
+   *
+   * EKRANDA NE VARSA O aktarılır: arama/filtre uygulanmış ve seçili sıraya
+   * göre dizilmiş liste (`listSorted`). "Gördüğüm tablo ile dosya farklı"
+   * şaşkınlığı olmasın diye tüm firmalar değil.
+   */
+  async function exportCompanyList() {
+    if (!listSorted.length) return
+    const XLSX = await import("xlsx")
+
+    const header = ["Firma", "Firma Kodu", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
+    const rows = listSorted.map((c) => [
+      c.firma,
+      c.firkod,
+      c.email || "",
+      c.phone || "",
+      c.userCount,
+      c.lisansBitis || "",
+      firmaIsActive(c) ? "Aktif" : "Süresi Doldu",
+    ])
+
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows])
+    ws["!cols"] = header.map((h, i) => ({
+      wch: Math.min(50, Math.max(h.length, ...rows.map((r) => String(r[i] ?? "").length))) + 2,
+    }))
+    ws["!freeze"] = { xSplit: 0, ySplit: 1 } as unknown as undefined
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, "Firmalar")
+    const ts = new Date().toISOString().slice(0, 10)
+    XLSX.writeFile(wb, `firmalar_${ts}.xlsx`)
+    toast.success("Excel indirildi", { description: `${rows.length} firma` })
+  }
+
   async function exportQueryResult(format: "xlsx" | "txt" | "pdf") {
     if (!queryResult?.rows.length) return
     const rows = filteredQueryRows.length ? filteredQueryRows : queryResult.rows
@@ -3737,6 +3772,17 @@ tr:nth-child(even) td{background:#fafafa}
                 title={listSortDir === "asc" ? "Artan" : "Azalan"}
               >
                 {listSortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 rounded-[5px] text-[11px] gap-1.5"
+                onClick={exportCompanyList}
+                disabled={apiLoading || listSorted.length === 0}
+                title="Listelenen firmaları Excel olarak indir"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Excel
               </Button>
             </div>
 
