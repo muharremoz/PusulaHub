@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { ChevronsUpDown, Check } from "lucide-react"
+import { createPortal } from "react-dom"
+import { ChevronsUpDown, Check, ExternalLink } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,6 +86,11 @@ export function AppSwitcher() {
 
   const current = APPS.find((a) => a.id === CURRENT_ID) ?? APPS[0]
 
+  // Sağ tık → "Yeni pencerede aç" (imleç konumunda küçük menü).
+  const [sagTik, setSagTik] = React.useState<{ app: AppEntry; x: number; y: number } | null>(null)
+  const hedefUrl = (app: AppEntry) =>
+    app.externalUrl ?? (typeof window !== "undefined" ? `${window.location.origin}/apps/${app.id}` : "")
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -117,6 +123,11 @@ export function AppSwitcher() {
             <DropdownMenuItem
               key={app.id}
               onSelect={() => { window.location.href = app.externalUrl ?? `/apps/${app.id}` }}
+              onContextMenu={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setSagTik({ app, x: e.clientX, y: e.clientY })
+              }}
               className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
             >
               <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
@@ -139,6 +150,104 @@ export function AppSwitcher() {
           Switch ekranına dön
         </DropdownMenuItem>
       </DropdownMenuContent>
+
+      {sagTik ? (
+        <SagTikMenu
+          x={sagTik.x}
+          y={sagTik.y}
+          onKapat={() => setSagTik(null)}
+          onSec={() => {
+            const url = hedefUrl(sagTik.app)
+            setSagTik(null)
+            yeniPencerede(url)
+          }}
+        />
+      ) : null}
     </DropdownMenu>
+  )
+}
+
+/**
+ * Uygulamayı ayrı pencerede açar.
+ *
+ * Masaüstü agent (Electron) içinde `window.open` gömülü view'a yönleniyor —
+ * agent köprüsü varsa (`window.pusulaAgent.yeniPencere`) o kullanılır.
+ */
+function yeniPencerede(href: string): void {
+  if (typeof window === "undefined" || !href) return
+  const w = window as unknown as { pusulaAgent?: { yeniPencere?: (u: string) => void } }
+  if (typeof w.pusulaAgent?.yeniPencere === "function") {
+    w.pusulaAgent.yeniPencere(href)
+    return
+  }
+  window.open(href, "_blank", "noopener,noreferrer")
+}
+
+const MENU_W = 190
+const MENU_H = 44
+
+/**
+ * İmleç konumunda açılan tek maddelik menü (body'ye portal).
+ *
+ * Dropdown içinde `absolute` çizilirse panel kenarından kırpılıyor; ayrıca
+ * Radix modal dropdown açıkken body'ye `pointer-events:none` koyduğu için
+ * menünün kendi `pointerEvents: auto` demesi gerekiyor.
+ */
+function SagTikMenu({
+  x,
+  y,
+  onKapat,
+  onSec,
+}: {
+  x: number
+  y: number
+  onKapat: () => void
+  onSec: () => void
+}) {
+  const kutuRef = React.useRef<HTMLDivElement | null>(null)
+
+  React.useEffect(() => {
+    const kapat = (e: Event) => {
+      if (kutuRef.current?.contains(e.target as Node)) return
+      onKapat()
+    }
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onKapat()
+    }
+    window.addEventListener("pointerdown", kapat, true)
+    window.addEventListener("scroll", kapat, true)
+    window.addEventListener("keydown", esc, true)
+    return () => {
+      window.removeEventListener("pointerdown", kapat, true)
+      window.removeEventListener("scroll", kapat, true)
+      window.removeEventListener("keydown", esc, true)
+    }
+  }, [onKapat])
+
+  if (typeof document === "undefined") return null
+
+  const sol = Math.max(8, Math.min(x, window.innerWidth - MENU_W - 8))
+  const ust = Math.max(8, Math.min(y, window.innerHeight - MENU_H - 8))
+
+  return createPortal(
+    <div
+      ref={kutuRef}
+      className="fixed rounded-[5px] border border-[#0d3380] bg-[#082c6b] p-1 text-white shadow-lg"
+      style={{ left: sol, top: ust, zIndex: 1200, minWidth: MENU_W, pointerEvents: "auto" }}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <button
+        type="button"
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          onSec()
+        }}
+        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] outline-none transition-colors hover:bg-[#0d3380]"
+      >
+        <ExternalLink className="size-3.5 shrink-0 opacity-70" />
+        Yeni pencerede aç
+      </button>
+    </div>,
+    document.body,
   )
 }
