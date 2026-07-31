@@ -533,7 +533,6 @@ export default function CompaniesPage() {
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
   // Erişim Bilgileri modal'ı
-  const [accessOpen, setAccessOpen]         = useState(false);
   const [accessLoading, setAccessLoading]   = useState(false);
   const [accessError, setAccessError]       = useState<string | null>(null);
   const [accessInfo, setAccessInfo]         = useState<AccessInfoResponse | null>(null);
@@ -1182,47 +1181,10 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  async function selectFirma(f: FirmaCompany) {
-    // company-detail yetkisi olmayan (rol: kullanıcı) için detay panelini açmak
-    // yerine doğrudan "Erişim Bilgileri" modal'ını göster. selectedFirma yine
-    // set edilir — modal başlığında firma adı, buildAccessText vs. ona bakar —
-    // ama yukarıdaki detay useEffect canViewCompanyDetail guard'ı ile skip eder.
-    if (!canViewCompanyDetail) {
-      setSelectedFirma(f)
-      setSearchOpen(false)
-      setSearchQuery("")
-      setAccessOpen(true)
-      setAccessError(null)
-      setAccessLoading(true)
-      setAccessInfo(null)
-      // Modal'ın admin görünümüyle aynı bilgileri göstermesi için tab
-      // array'lerini de doldur (Kullanıcılar / Web Hizmetleri / Veritabanları
-      // bölümleri bunlardan okuyor). Bu endpoint'ler de "companies" yetkisini
-      // kabul ediyor.
-      setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
-      const firkod = f.firkod
-      try {
-        const [accessRes, users, iis, sqlDbs, services] = await Promise.all([
-          fetch(`/api/companies/${encodeURIComponent(firkod)}/access-info`)
-            .then(async (r) => ({ ok: r.ok, data: await r.json() })),
-          fetch(`/api/companies/${encodeURIComponent(firkod)}/users`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/companies/${encodeURIComponent(firkod)}/iis`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/companies/${encodeURIComponent(firkod)}/sql`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/companies/${encodeURIComponent(firkod)}/services`).then(r => r.ok ? r.json() : []),
-        ])
-        if (!accessRes.ok) throw new Error(accessRes.data?.error ?? "Erişim bilgileri alınamadı")
-        setAccessInfo(accessRes.data as AccessInfoResponse)
-        setTabUsers(Array.isArray(users)  ? users  : [])
-        setTabIIS(Array.isArray(iis)      ? iis    : [])
-        setTabSQL(Array.isArray(sqlDbs)   ? sqlDbs : [])
-        setTabServices(Array.isArray(services) ? services : [])
-      } catch (err) {
-        setAccessError(err instanceof Error ? err.message : "İstek başarısız")
-      } finally {
-        setAccessLoading(false)
-      }
-      return
-    }
+  function selectFirma(f: FirmaCompany) {
+    // company-detail yetkisi olmayan (rol: kullanıcı) firmayı seçemez: erişim
+    // bilgileri artık yalnız detay sayfasındaki "Erişim" sekmesinde.
+    if (!canViewCompanyDetail) return
     setSelectedFirma(f)
     setSearchOpen(false)
     setSearchQuery("")
@@ -1587,25 +1549,6 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  // Erişim Bilgileri modal'ını aç + access-info fetch et
-  async function openAccessInfo() {
-    if (!selectedFirma) return
-    setAccessOpen(true)
-    setAccessError(null)
-    setAccessLoading(true)
-    setAccessInfo(null)
-    try {
-      const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/access-info`)
-      const d = await r.json()
-      if (!r.ok) throw new Error(d?.error ?? "Erişim bilgileri alınamadı")
-      setAccessInfo(d as AccessInfoResponse)
-    } catch (err) {
-      setAccessError(err instanceof Error ? err.message : "İstek başarısız")
-    } finally {
-      setAccessLoading(false)
-    }
-  }
-
   // Username'in firma prefix'inden sonraki kısa kısmını döner.
   // "2507.vefa1" → "vefa1"  ·  "vefa1" → "vefa1"
   function shortUsername(firkod: string, fullUsername: string): string {
@@ -1938,15 +1881,6 @@ tr:nth-child(even) td{background:#fafafa}
                 </>
 
                 <div className="flex-1" />
-
-                <button
-                  onClick={() => openAccessInfo()}
-                  className="flex items-center gap-1.5 border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 transition-colors"
-                  title="VPN / RDP / API / SQL erişim özetini göster"
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Erişim Bilgileri
-                </button>
 
                 <Popover open={searchOpen} onOpenChange={(o) => { setSearchOpen(o); if (!o) setSearchQuery(""); }}>
                   <PopoverTrigger asChild>
@@ -4139,205 +4073,6 @@ tr:nth-child(even) td{background:#fafafa}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Erişim Bilgileri Modal'ı — VPN/RDP/API/SQL kullanıcı + URL özetleri */}
-      <Dialog
-        open={accessOpen}
-        onOpenChange={(open) => {
-          setAccessOpen(open)
-          // company-detail yetkisi olmayan kullanıcı modal'ı kapattığında
-          // selectedFirma'yı da temizle — aksi halde sağ panel boş bir
-          // detay görünümü ile takılı kalır.
-          if (!open && !canViewCompanyDetail) {
-            setSelectedFirma(null)
-            setAccessInfo(null)
-            setAccessError(null)
-            // No-perm modunda tab array'lerini biz manuel doldurmuştuk —
-            // detay useEffect bizim için temizlemediği için burada sıfırla.
-            setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
-          }
-        }}
-      >
-        <DialogContent className="max-w-2xl p-0 gap-0">
-          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
-            <DialogTitle className="flex items-center gap-2 text-[13px]">
-              <KeyRound className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground font-normal">Erişim Bilgileri</span>
-              <span className="text-foreground">— {selectedFirma?.firma}</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="px-5 py-4">
-            {accessLoading && (
-              <div className="space-y-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-[6px]" />
-                ))}
-              </div>
-            )}
-
-            {!accessLoading && accessError && (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-[6px] border border-red-200 bg-red-50 text-[12px] text-red-700">
-                {accessError}
-              </div>
-            )}
-
-            {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
-              const firkod = selectedFirma.firkod
-              const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
-              const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
-              const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
-              const sqlIp = tabSQL[0]?.ServerIP || ""
-              const credentials = accessInfo.credentials ?? {}
-              const hasAnyPassword = Object.keys(credentials).length > 0
-              const webServices = collectWebServices()
-
-              return (
-                <div className="max-h-[62vh] overflow-y-auto pr-1 space-y-4">
-
-                  {/* Sunucular özeti */}
-                  <AccessSection title="Sunucular">
-                    {accessInfo.ad && (
-                      <AccessRow
-                        label="AD Sunucusu"
-                        value={`${accessInfo.ad.domain || accessInfo.ad.name} · ${accessInfo.ad.ip}`}
-                        copyValue={accessInfo.ad.ip}
-                      />
-                    )}
-                    {accessInfo.windows && (
-                      <AccessRow
-                        label="RDP"
-                        value={rdpTarget || `${accessInfo.windows.name} · ${accessInfo.windows.ip}`}
-                        copyValue={rdpTarget || accessInfo.windows.ip}
-                      />
-                    )}
-                    {sqlIp && <AccessRow label="SQL" value={sqlIp} copyValue={sqlIp} />}
-                  </AccessSection>
-
-                  {/* Kullanıcılar */}
-                  {tabUsers.length > 0 && (
-                    <AccessSection title={`Kullanıcılar (${tabUsers.length})`}>
-                      <div className="px-3 py-2 space-y-2">
-                        {tabUsers.map((u) => {
-                          const vpnUser = u.username  // AD'den zaten "2507.vefa1" formatında
-                          const fullUser = domainShort ? `${domainShort}\\${vpnUser}` : vpnUser
-                          const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
-                          const pw = credentials[u.username] ?? ""
-                          return (
-                            <div
-                              key={u.username}
-                              className="rounded-[6px] border border-border/40 bg-white overflow-hidden"
-                            >
-                              <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/30 border-b border-border/30">
-                                <span className="text-[12px] font-medium">{u.displayName || u.username}</span>
-                                {!u.enabled && (
-                                  <span className="text-[9px] px-1.5 py-0.5 rounded-[3px] bg-red-50 text-red-700 border border-red-200 uppercase tracking-wide">
-                                    Pasif
-                                  </span>
-                                )}
-                              </div>
-                              <div className="divide-y divide-border/30">
-                                <AccessRow label="VPN" value={vpnUser} copyValue={vpnUser} />
-                                {pw ? (
-                                  <AccessPasswordRow label="Şifre" value={pw} />
-                                ) : (
-                                  <div className="flex items-center gap-3 px-3 py-2">
-                                    <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">Şifre</span>
-                                    <span className="text-[11px] text-muted-foreground/70 italic">
-                                      Saklanmamış (sihirbaz öncesi kullanıcı)
-                                    </span>
-                                  </div>
-                                )}
-                                {accessInfo.windows && (
-                                  <AccessRow label="RDP" value={fullUser} copyValue={fullUser} />
-                                )}
-                                {webServices.length > 0 && (
-                                  <AccessRow label="API" value={apiUser} copyValue={apiUser} />
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </AccessSection>
-                  )}
-
-                  {/* Web Hizmetleri — IIS siteleri + firmaya atanmış hizmetler.
-                      Users.xml kullanıcıları BİLEREK burada YOK: modal'ı taşırıyordu,
-                      firma detayındaki "Erişim" sekmesinde tam tabloyla gösteriliyor.
-                      Bu modal, firma detayını göremeyen kullanıcılar için sade kalmalı. */}
-                  {webServices.length > 0 && (
-                    <AccessSection title={`Web Hizmetleri (${webServices.length})`}>
-                      {webServices.map((s) => (
-                        <div
-                          key={s.key}
-                          className="flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors"
-                        >
-                          <span className="text-[12px] font-medium flex-1 truncate">{s.name}</span>
-                          <a
-                            href={s.url.startsWith("http") ? s.url : undefined}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-[12px] text-blue-600 hover:underline shrink-0"
-                          >
-                            {s.url}
-                          </a>
-                          <CopyIconButton value={s.url} />
-                        </div>
-                      ))}
-                    </AccessSection>
-                  )}
-
-                  {/* Veritabanları */}
-                  {tabSQL.length > 0 && (
-                    <AccessSection title={`Veritabanları (${tabSQL.length})`}>
-                      {tabUsers[0] && (() => {
-                        const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
-                        const sqlPw    = credentials[tabUsers[0].username] ?? ""
-                        return (
-                          <>
-                            <AccessRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
-                            {sqlPw && <AccessPasswordRow label="Şifre" value={sqlPw} />}
-                          </>
-                        )
-                      })()}
-                      {tabSQL.map((d) => (
-                        <AccessRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
-                      ))}
-                    </AccessSection>
-                  )}
-
-                  {!hasAnyPassword && (
-                    <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[6px] px-3 py-2">
-                      Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının şifresini sıfırlama sonrası burada görünür.
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
-          </div>
-
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/50 bg-muted/10">
-            <button
-              onClick={() => setAccessOpen(false)}
-              className="px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 text-[11px] font-medium text-muted-foreground transition-colors"
-            >
-              Kapat
-            </button>
-            <button
-              onClick={handleCopyAccessText}
-              disabled={!accessInfo || accessLoading}
-              className={`px-3 py-1.5 rounded-[5px] text-[11px] font-medium transition-colors flex items-center gap-1.5 ${
-                accessCopied
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                  : "bg-[#1d64ff] text-white hover:bg-[#1d64ff]/90 disabled:opacity-50"
-              }`}
-            >
-              {accessCopied ? (<><CheckCheck className="h-3.5 w-3.5" /> Kopyalandı</>) : (<><Copy className="h-3.5 w-3.5" /> Metin Olarak Kopyala</>)}
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </PageContainer>
   );
 }
@@ -4370,19 +4105,6 @@ function CopyIconButton({ value, subtle }: { value: string; subtle?: boolean }) 
         ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600" />
         : <Copy className="h-3.5 w-3.5" />}
     </button>
-  )
-}
-
-function AccessSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-[6px] border border-border/50 overflow-hidden bg-white">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-        {title}
-      </div>
-      <div className="divide-y divide-border/40">
-        {children}
-      </div>
-    </div>
   )
 }
 
@@ -4507,37 +4229,6 @@ function AccessPwCell({ value }: { value: string }) {
       </button>
       <CopyIconButton value={value} subtle />
     </span>
-  )
-}
-
-function AccessRow({ label, value, copyValue }: { label: string; value: string; copyValue: string }) {
-  return (
-    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors">
-      <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">{label}</span>
-      <span className="text-[12px] flex-1 truncate">{value}</span>
-      <CopyIconButton value={copyValue} />
-    </div>
-  )
-}
-
-function AccessPasswordRow({ label, value }: { label: string; value: string }) {
-  const [show, setShow] = useState(false)
-  return (
-    <div className="group flex items-center gap-2 px-3 py-2 hover:bg-muted/20 transition-colors">
-      <span className="text-[11px] text-muted-foreground w-[90px] shrink-0">{label}</span>
-      <span className="text-[12px] flex-1 truncate select-all tracking-wider">
-        {show ? value : "•".repeat(Math.min(value.length, 12))}
-      </span>
-      <button
-        type="button"
-        onClick={() => setShow((s) => !s)}
-        className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
-        title={show ? "Gizle" : "Göster"}
-      >
-        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-      </button>
-      <CopyIconButton value={value} />
-    </div>
   )
 }
 
