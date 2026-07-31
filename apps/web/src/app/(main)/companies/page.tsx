@@ -361,15 +361,17 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
         <div className="mt-4 pt-3 border-t border-border/40 grid grid-cols-3 gap-3">
           <div className="flex flex-col">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wide">CPU 30g</span>
-            <span className="text-[13px] font-semibold tabular-nums">Ort %{d.history30d.avgCpu} <span className="text-muted-foreground font-normal">/ Peak %{d.history30d.peakCpu}</span></span>
-            {d.history30d.peakCpuDate && (
+            {/* Zirve ölçülmemişse (eski hatalı kayıtlar temizlendi) "—" göster,
+                sıfır yazıp "hiç yük olmamış" izlenimi verme. */}
+            <span className="text-[13px] font-semibold tabular-nums">Ort %{d.history30d.avgCpu} <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakCpu == null ? "—" : `%${d.history30d.peakCpu}`}</span></span>
+            {d.history30d.peakCpu != null && d.history30d.peakCpuDate && (
               <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakCpuDate}</span>
             )}
           </div>
           <div className="flex flex-col">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wide">RAM 30g</span>
-            <span className="text-[13px] font-semibold tabular-nums">Ort {d.history30d.avgRamGB} GB <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakRamGB} GB</span></span>
-            {d.history30d.peakRamDate && (
+            <span className="text-[13px] font-semibold tabular-nums">Ort {d.history30d.avgRamGB} GB <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakRamGB == null ? "—" : `${d.history30d.peakRamGB} GB`}</span></span>
+            {d.history30d.peakRamGB != null && d.history30d.peakRamDate && (
               <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakRamDate}</span>
             )}
           </div>
@@ -399,7 +401,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
         <div className="space-y-1.5 mt-1">
           {[
-            { label: "CPU Kullanımı",  icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `Ort %${h?.avgCpu ?? 0} · Peak %${h?.peakCpu ?? 0}` },
+            { label: "CPU Kullanımı",  icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `Ort %${h?.avgCpu ?? 0} · Peak ${h?.peakCpu == null ? "—" : `%${h.peakCpu}`}` },
             { label: "RAM Kullanımı",  icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${(avgRamMB/1024).toFixed(1)} / ${d.quotaRam} GB` },
             { label: "Disk Kullanımı", icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk.toFixed(1)} / ${d.quotaDisk} GB` },
             { label: "Veritabanı",     icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },

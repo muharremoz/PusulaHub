@@ -64,10 +64,11 @@ export interface CompanyDetail {
 
 export interface CompanyUsageHistory {
   avgCpu:       number        // 30g ortalama CPU %
-  peakCpu:      number        // 30g peak CPU %
+  /** 30g zirve CPU % — null: o dönemde zirve ölçümü yok (UI "—" gösterir) */
+  peakCpu:      number | null
   peakCpuDate:  string | null // Peak CPU tarihi (YYYY-MM-DD)
   avgRamGB:     number        // 30g ortalama RAM (GB)
-  peakRamGB:    number
+  peakRamGB:    number | null
   peakRamDate:  string | null
   maxUsers:     number        // 30g içinde görülen max kullanıcı sayısı
   dbStartMB:    number        // 30g öncesi DB boyutu
@@ -269,18 +270,26 @@ export async function GET(
         const rows = dailyRows.slice().reverse() // eskiden yeniye
         const cpus = rows.map((r) => r.avg_cpu ?? 0)
         const rams = rows.map((r) => r.avg_ram_mb ?? 0)
-        const peakCpuRow = rows.reduce((best, r) => ((r.peak_cpu ?? 0) > (best.peak_cpu ?? 0) ? r : best), rows[0])
-        const peakRamRow = rows.reduce((best, r) => ((r.peak_ram_mb ?? 0) > (best.peak_ram_mb ?? 0) ? r : best), rows[0])
+        // Zirve ölçülmemiş günler (eski hatalı kayıtlar temizlendi) hesaba
+        // katılmaz; hiç ölçüm yoksa peak null döner ve UI "—" gösterir.
+        const cpuPeaks = rows.filter((r) => r.peak_cpu != null)
+        const ramPeaks = rows.filter((r) => r.peak_ram_mb != null)
+        const peakCpuRow = cpuPeaks.length
+          ? cpuPeaks.reduce((best, r) => ((r.peak_cpu ?? 0) > (best.peak_cpu ?? 0) ? r : best), cpuPeaks[0])
+          : null
+        const peakRamRow = ramPeaks.length
+          ? ramPeaks.reduce((best, r) => ((r.peak_ram_mb ?? 0) > (best.peak_ram_mb ?? 0) ? r : best), ramPeaks[0])
+          : null
         const nonZeroDb = rows.filter((r) => (r.db_mb ?? 0) > 0)
         const dbStart = nonZeroDb.length ? (nonZeroDb[0].db_mb ?? 0) : 0
         const dbEnd   = nonZeroDb.length ? (nonZeroDb[nonZeroDb.length - 1].db_mb ?? 0) : 0
         detail.history30d = {
           avgCpu:      Math.round((cpus.reduce((a, v) => a + v, 0) / cpus.length) * 10) / 10,
-          peakCpu:     peakCpuRow.peak_cpu ?? 0,
-          peakCpuDate: peakCpuRow.date,
+          peakCpu:     peakCpuRow?.peak_cpu ?? null,
+          peakCpuDate: peakCpuRow?.date ?? null,
           avgRamGB:    Math.round((rams.reduce((a, v) => a + v, 0) / rams.length / 1024) * 10) / 10,
-          peakRamGB:   Math.round(((peakRamRow.peak_ram_mb ?? 0) / 1024) * 10) / 10,
-          peakRamDate: peakRamRow.date,
+          peakRamGB:   peakRamRow ? Math.round(((peakRamRow.peak_ram_mb ?? 0) / 1024) * 10) / 10 : null,
+          peakRamDate: peakRamRow?.date ?? null,
           maxUsers:    rows.reduce((m, r) => Math.max(m, r.user_count ?? 0), 0),
           dbStartMB:   dbStart,
           dbEndMB:     dbEnd,
