@@ -27,7 +27,11 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ firkod: string }> }
 ) {
-  const gate = await requirePermission("company-detail", "read")
+  // "companies" yetkisi yeterli: bu liste Erişim Bilgileri modal'ının
+  // "Web Hizmetleri" bölümünü de besliyor ve o modal, firma detayını
+  // göremeyen (rol: kullanıcı) kişilere de açık. İçerik zaten IIS listesiyle
+  // aynı sınıfta — şifre/kimlik bilgisi içermiyor.
+  const gate = await requirePermission("companies", "read")
   if (gate) return gate
   const { firkod } = await params
   try {

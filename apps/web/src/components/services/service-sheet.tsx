@@ -397,9 +397,12 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                     </div>
                   </Field>
 
-                  <Field label="IIS Site Adı Pattern" hint="{firmaKod} placeholder kullanabilirsiniz.">
+                  <Field
+                    label="IIS Site Adı Pattern"
+                    hint="{firmaKod} placeholder kullanabilirsiniz. Boş bırakılırsa {firmaKod}_<hizmet adı> olur."
+                  >
                     <Input
-                      placeholder={"RFID_{firmaKod}"}
+                      placeholder={"{firmaKod}_RFID"}
                       value={iSiteNamePattern}
                       onChange={(e) => setISiteNamePattern(e.target.value)}
                       className="rounded-[5px] text-[11px] h-8 font-mono"

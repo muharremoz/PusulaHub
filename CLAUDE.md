@@ -6,6 +6,10 @@
 PusulaHub, Windows/Linux sunucularını yöneten bir Next.js 15 (App Router) + TypeScript + Tailwind CSS v4 panelidir.
 Monorepo yapısı: `apps/web` ana uygulama dizinidir.
 
+**Altyapı/deploy:** Coolify + self-hosted Supabase (`hub` şeması), `main`'e push ile
+otomatik deploy → **[docs/YENI-SISTEM.md](docs/YENI-SISTEM.md)**. Eski on-prem prod
+(10.10.10.5, PM2, MSSQL) **emekli** — `docs/prod-server.md` sadece geçmiş referansı.
+
 ---
 
 ## UI Geliştirme Kuralları
@@ -192,105 +196,6 @@ constraint adları (`PK_X`, `DF_X_Y`, `FK_X_Y`) DB-wide unique olmalı.
 constraint adlarını compile-time çözebilir → çakışma → 1750. **Yeni
 tablolarda named constraint kullanma**, anonymous bırak (`Id PRIMARY KEY`,
 `Type DEFAULT 'info'` gibi) — SQL otomatik benzersiz ad üretir.
-
----
-
-### Hub Prod Modda Çalışır — Sayfa Geçişleri Hızlı Olsun Diye
-Hub `next dev` modunda çalıştırıldığında her route ilk ziyarette lazy
-compile ediliyor (Turbopack), bu da sayfa geçişlerinde 1–3 sn takılmaya
-yol açıyor. Kullanıcı paneli sık sık sayfa değiştirdiği için bu fark
-hissediliyor. SpareFlow (prod) ile karşılaştırıldığında Hub belirgin
-şekilde yavaş kalıyordu.
-
-**Çözüm:** Hub da prod modda (`pnpm start`) çalışır, PM2 altında bir
-`hub-watcher` process'i `apps/web/src` ve `apps/web/public`'ı
-`fs.watch` ile dinler; değişiklik olursa 3 sn debounce ile
-**`pm2 stop hub` → `pnpm build` → `pm2 start hub` → port readiness bekle**
-sırasını çalıştırır.
-
-- **Script:** `scripts/hub-watcher.mjs` (deps'siz, Node built-in `fs.watch`)
-- **PM2 kaydı:** `ecosystem.config.js` → `hub` (prod) + `hub-watcher`
-
-> **KRİTİK — build ÖNCESİ stop:** Eskiden watcher `pnpm build && pm2 restart hub`
-> yapıyordu. `next build` çalışırken `.next/` dizinine üzerine yazıyor ve
-> eski hub process'i hâlâ aynı `.next/`'ten chunk'ları lazy-load ediyor →
-> hash uyuşmazlığı → hub crash → PM2 auto-restart loop (25–60 restart gördük,
-> restart_delay 3sn × 15sn build = uzun pencerede kullanıcıya 500). Düzeltme:
-> build'den önce hub'ı **stop**, build bitince **start**, sonra TCP port
-> probe (`127.0.0.1:4242` connect) ile gerçek hazır olma teyidi. Tek seferlik
-> ~15sn kesinti — crash loop yok, "Internal Server Error" yok.
-
-> **KRİTİK — NODE_ENV tuzağı:** `apps/web/server.ts` satır 20:
-> ```ts
-> const dev = process.env.NODE_ENV !== "production"
-> ```
-> PM2 env'e `NODE_ENV=production` vermezsen `pnpm start` yine dev modda
-> koşar (N badge + yavaş sayfa geçişleri). `ecosystem.config.js`'de hub
-> entry'sinde **`env: { NODE_ENV: "production" }`** olmak **zorunda**.
-> Değişiklik sonrası `pm2 delete hub && pm2 start ecosystem.config.js --only hub && pm2 save`
-> gerekir — sadece `pm2 restart hub` env'i güncellemez.
-
-```bash
-# Manuel restart (acil — watcher beklemeden)
-cd "C:/GitHub/Pusula Yazılım/PusulaHub/apps/web"
-pnpm build && pm2 restart hub
-
-# Watcher loglarını gör
-pm2 logs hub-watcher
-
-# Watcher'ı geçici durdur (büyük refactor sırasında)
-pm2 stop hub-watcher
-```
-
-Build tipik olarak 15–25 sn. Watcher debounce'u 2 sn — arka arkaya
-kaydedilen dosyalar tek build'de toplanır. Bu yüzden kod değiştirip
-~25 sn beklemek, ardından sayfayı yenilemek (Ctrl+Shift+R) lazım —
-aksi halde önceki bundle cache'den gelir.
-
-> Not: Dev mode'a dönmek istersen (örn. agresif debug / yeni feature
-> geliştirirken) `pm2 stop hub hub-watcher && cd apps/web && pnpm dev`.
-
----
-
-### Switch + Hub — İki Next Dev Server Çakışması
-PusulaSwitch (:4000) gateway olarak `/apps/hub/*` isteklerini Hub'a (:4242) rewrite ediyor. **İki uygulama da `next dev` modunda çalışırsa** tarayıcıda `Cannot read properties of undefined (reading 'call')` / `originalFactory is undefined` hatası + dev overlay'de `(outdated) Webpack` etiketi görülür. Sebep: Switch'in HMR runtime'ı (`:4000/_next/*`) ve Hub'ın HMR runtime'ı (`:4242/apps/hub/_next/*`) aynı browser window'da yan yana çalışınca webpack module registry çakışır.
-
-**Çözüm:** Switch'i production modda çalıştır (HMR gereksiz), Hub dev'de kalsın.
-
-```bash
-# Switch — nadir değişir
-cd PusulaSwitch && pnpm build && pnpm start   # :4000
-
-# Hub — aktif geliştirme
-cd PusulaHub/apps/web && pnpm dev             # :4242, HMR çalışır
-```
-
-Switch kodunda değişiklik olursa `pnpm build && pnpm start` tekrar.
-
----
-
-### SpareFlow — LAN'daki Diğer PC'de Dashboard Skeleton'da Takılıyor
-Aynı hatanın SpareFlow versiyonu. SpareFlow `next dev` modunda Switch
-gateway (`:4000/apps/spareflow/*`) arkasından LAN'daki başka bir PC'ye
-sunulduğunda HMR WebSocket (`/apps/spareflow/_next/webpack-hmr`)
-proxy'den geçemiyor (`ERR_INVALID_HTTP_RESPONSE`). Turbopack dev chunk'ları
-tutarsız yükleniyor, useEffect hiç ateşlenmiyor, `loading` state hep
-`true` kalıyor → 4 skeleton kartta takılıp kalıyor. API'ler 200 döner,
-`fetch("/api/dashboard/summary")` console'dan manuel çağırıldığında
-veri gelir — ama sayfa render olmaz.
-
-**Çözüm:** SpareFlow'u da prod modda çalıştır (`ecosystem.config.js`
-zaten böyle ayarlı: `args: "/c npm run start"`, `env: { PORT: "4243" }`).
-
-```bash
-cd "C:/GitHub/Pusula Yazılım/SpareFlow/spare-flow-ui"
-npm run build
-pm2 restart spareflow
-```
-
-> Kural: Switch gateway arkasındaki her alt uygulama **prod modda**
-> çalıştırılmalıdır. Sadece Hub dev modda kalabilir çünkü doğrudan
-> `:4242` üzerinden geliştirilir, gateway arkasından değil.
 
 ---
 
@@ -500,42 +405,21 @@ WTS session injection ile kullanıcılara anlık popup gönderme ve okundu takib
 
 ---
 
-## PM2 ile 3 Uygulamayı Yönetme
+## Deploy — Coolify (otomatik)
 
-PusulaSwitch + PusulaHub + SpareFlow PM2 altında yönetilir. Config:
-`ecosystem.config.js` (repo kökünde). 3 uygulamayı da boot'ta otomatik
-başlatır, crash olursa restart eder, tek komutla yönetim sağlar.
+**Prod artık on-prem sunucuda (10.10.10.5) DEĞİL, PM2 de kullanılmıyor.**
+Hub `https://hub.pusulanet.net` adresinde Coolify üzerinde çalışır; veriler
+self-hosted Supabase'de (`hub` şeması). `main` branch'ine push → self-hosted
+runner → otomatik deploy.
 
-### İlk Kurulum (bir defa)
 ```bash
-npm i -g pm2 pm2-windows-startup
-cd "C:/GitHub/Pusula Yazılım/PusulaHub"
-pm2 start ecosystem.config.js
-pm2 save
-pm2-startup install      # Windows boot'ta otomatik baslat
+git push origin main
 ```
 
-### Günlük Kullanım
-```bash
-pm2 list                 # durum
-pm2 logs hub             # canli log (hub / switch / spareflow)
-pm2 restart hub          # sadece birini yeniden baslat
-pm2 restart all          # hepsini
-pm2 monit                # CPU/RAM panel
-pm2 stop spareflow       # durdur
-```
-
-Log dosyalari: `C:\GitHub\Pusula Yazılım\logs\*.log`
-
-### Önemli Notlar
-- `ecosystem.config.js` mutlak path kullanir (`C:/GitHub/Pusula Yazılım/...`).
-  Baska makinede farkliysa path'leri guncelle.
-- Windows'ta `.cmd` dosyalari direkt spawn edilemedigi icin `cmd.exe /c`
-  ile sarmalandi (`script: "cmd.exe"`, `args: "/c pnpm dev"`).
-- PM2 boot'ta `pm2-startup install` ile kullanici login'inde calisir.
-  Login gerektirmeden servis olarak calismasi icin `pm2-installer`
-  (ayri kurulum) gerekir.
-- Config degistirirsen: `pm2 delete all && pm2 start ecosystem.config.js && pm2 save`
+> Detay (env, Supabase, migration, runner, kullanıcı/yetki):
+> **[docs/YENI-SISTEM.md](docs/YENI-SISTEM.md)** — deploy ve altyapı için tek
+> başvuru dosyası. `docs/prod-server.md` yalnız emekliye ayrılan eski prod'un
+> referansıdır, yeni işlerde kullanılmaz.
 
 ---
 

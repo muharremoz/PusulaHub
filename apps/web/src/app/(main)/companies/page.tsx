@@ -9,6 +9,8 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { generateSafePassword } from "@/lib/password-gen";
 import { useSession } from "next-auth/react";
 import type { AccessInfoResponse } from "@/app/api/companies/[firkod]/access-info/route";
+import type { WebServiceUsersDto } from "@/app/api/companies/[firkod]/web-users/route";
+import type { WebUserTestResult } from "@/app/api/companies/[firkod]/web-users/test/route";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
@@ -18,6 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
+import { Checkbox } from "@muharremoz/pusula-ui";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
@@ -535,11 +538,38 @@ export default function CompaniesPage() {
   const [accessError, setAccessError]       = useState<string | null>(null);
   const [accessInfo, setAccessInfo]         = useState<AccessInfoResponse | null>(null);
   const [accessCopied, setAccessCopied]     = useState(false);
+  // Web hizmetlerinin sunucudaki Config\Users.xml içeriği (kullanıcı/şifre/DB)
+  const [webUsers, setWebUsers]             = useState<WebServiceUsersDto[]>([]);
+  const [webUsersLoading, setWebUsersLoading] = useState(false);
+  // Detay sayfası sekmesi — "access" sekmesi seçilince veri lazy yüklenir
+  const [detailTab, setDetailTab]           = useState("users");
+  // Erişim sekmesi: soldaki kart listesinde seçili olan blok
+  // ("servers" | "users" | "databases" | web hizmetinin key'i)
+  const [accessSel, setAccessSel]           = useState("servers");
+  // Web hizmeti Users.xml kullanıcısı — ekleme / düzenleme dialog'u
+  const [webUserDlg, setWebUserDlg] = useState<
+    { siteName: string; dbOptions: string[]; mode: "add" | "edit" | "delete"; original?: string } | null
+  >(null);
+  const [webUserName, setWebUserName]     = useState("");
+  const [webUserPw, setWebUserPw]         = useState("");
+  const [webUserDbs, setWebUserDbs]       = useState<string[]>([]);
+  const [webUserSaving, setWebUserSaving] = useState(false);
+  // Users.xml yazma + IIS restart ilerlemesi (dialog gövdesinde gösterilir)
+  const [webUserSteps, setWebUserSteps] = useState<
+    { label: string; status: "pending" | "running" | "done" | "error"; error?: string }[] | null
+  >(null);
+  // Silme onayı
+  const [webUserDelTarget, setWebUserDelTarget] = useState<{ siteName: string; username: string } | null>(null);
+  // Erişim testi — "site::kullanıcı" anahtarı ile satır bazlı sonuç
+  const [webUserTestBusy, setWebUserTestBusy] = useState<string | null>(null);
+  const [webUserTestResult, setWebUserTestResult] = useState<Record<string, { ok: boolean; message: string }>>({});
+  // Testin döndürdüğü veriyi gösteren dialog
+  const [webUserTestDetail, setWebUserTestDetail] = useState<
+    (WebUserTestResult & { siteName: string; username: string }) | null
+  >(null);
   const [sqlRefreshing, setSqlRefreshing] = useState(false);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
-  const [iisActionBusy, setIisActionBusy] = useState<string | null>(null);
-  const [iisRemoveTarget, setIisRemoveTarget] = useState<TabIISSite | null>(null);
 
   // SQL aksiyonları
   const [sqlActionBusy, setSqlActionBusy] = useState<string | null>(null);
@@ -1082,6 +1112,9 @@ tr:nth-child(even) td{background:#fafafa}
     if (!canViewCompanyDetail) return
     const firkod = selectedFirma.firkod
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
+    // Firma değişti — Erişim sekmesi verisi bayat, sekmeyi de başa al.
+    setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([])
+    setAccessSel("servers")
     setCompanyDetail(null)
     setTabLoading(true)
     setDetailLoading(true)
@@ -1166,21 +1199,23 @@ tr:nth-child(even) td{background:#fafafa}
       // array'lerini de doldur (Kullanıcılar / Web Hizmetleri / Veritabanları
       // bölümleri bunlardan okuyor). Bu endpoint'ler de "companies" yetkisini
       // kabul ediyor.
-      setTabUsers([]); setTabIIS([]); setTabSQL([])
+      setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
       const firkod = f.firkod
       try {
-        const [accessRes, users, iis, sqlDbs] = await Promise.all([
+        const [accessRes, users, iis, sqlDbs, services] = await Promise.all([
           fetch(`/api/companies/${encodeURIComponent(firkod)}/access-info`)
             .then(async (r) => ({ ok: r.ok, data: await r.json() })),
           fetch(`/api/companies/${encodeURIComponent(firkod)}/users`).then(r => r.ok ? r.json() : []),
           fetch(`/api/companies/${encodeURIComponent(firkod)}/iis`).then(r => r.ok ? r.json() : []),
           fetch(`/api/companies/${encodeURIComponent(firkod)}/sql`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/companies/${encodeURIComponent(firkod)}/services`).then(r => r.ok ? r.json() : []),
         ])
         if (!accessRes.ok) throw new Error(accessRes.data?.error ?? "Erişim bilgileri alınamadı")
         setAccessInfo(accessRes.data as AccessInfoResponse)
         setTabUsers(Array.isArray(users)  ? users  : [])
         setTabIIS(Array.isArray(iis)      ? iis    : [])
         setTabSQL(Array.isArray(sqlDbs)   ? sqlDbs : [])
+        setTabServices(Array.isArray(services) ? services : [])
       } catch (err) {
         setAccessError(err instanceof Error ? err.message : "İstek başarısız")
       } finally {
@@ -1211,49 +1246,6 @@ tr:nth-child(even) td{background:#fafafa}
     const match = apiCompanies.find((c) => c.firkod === urlFirkod)
     if (match) setSelectedFirma((prev) => (prev?.firkod === urlFirkod ? prev : match))
   }, [urlFirkod, apiCompanies, canViewCompanyDetail, router])
-
-  async function refreshIIS() {
-    if (!selectedFirma) return
-    try {
-      const r = await fetch(`/api/companies/${selectedFirma.firkod}/iis`, { cache: "no-store" })
-      if (r.ok) {
-        const data = await r.json()
-        if (Array.isArray(data)) setTabIIS(data)
-      }
-    } catch {}
-  }
-
-  async function iisAction(site: TabIISSite, action: "start" | "stop" | "restart" | "remove") {
-    if (!selectedFirma) return
-    const labels: Record<typeof action, { running: string; ok: string; fail: string }> = {
-      start:   { running: "Site başlatılıyor…",        ok: "Site başlatıldı",        fail: "Site başlatılamadı" },
-      stop:    { running: "Site durduruluyor…",        ok: "Site durduruldu",        fail: "Site durdurulamadı" },
-      restart: { running: "Site yeniden başlatılıyor…", ok: "Site yeniden başlatıldı", fail: "Site yeniden başlatılamadı" },
-      remove:  { running: "Site kaldırılıyor…",        ok: "Site kaldırıldı",        fail: "Site kaldırılamadı" },
-    }
-    setIisActionBusy(site.Id)
-    const toastId = toast.loading(labels[action].running, { description: site.Name })
-    try {
-      const resp = await fetch(`/api/companies/${selectedFirma.firkod}/iis/action`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ server: site.Server, siteName: site.Name, action }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) {
-        toast.error(labels[action].fail, { id: toastId, description: data?.error ?? "Bilinmeyen hata" })
-        return
-      }
-      toast.success(labels[action].ok, { id: toastId, description: site.Name })
-      // Biraz bekle, agent'ın bir sonraki raporu DB'ye yazsın — sonra yenile
-      await new Promise((r) => setTimeout(r, 1200))
-      await refreshIIS()
-    } catch (err) {
-      toast.error(labels[action].fail, { id: toastId, description: err instanceof Error ? err.message : "Bağlantı hatası" })
-    } finally {
-      setIisActionBusy(null)
-    }
-  }
 
   async function sqlBackup(db: TabSQLDatabase) {
     if (!selectedFirma) return
@@ -1343,6 +1335,258 @@ tr:nth-child(even) td{background:#fafafa}
     router.replace(`/companies`, { scroll: false })
   }
 
+  /**
+   * Web hizmetlerinin sunucudaki `Config\Users.xml` içeriğini çeker.
+   *
+   * Agent'a gidiyor (yavaş olabilir) — bu yüzden modal'ın geri kalanını
+   * bekletmeden AYRI yükleniyor, hata durumunda modal çalışmaya devam eder.
+   */
+  async function loadWebUsers(firkod: string) {
+    setWebUsers([])
+    setWebUsersLoading(true)
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(firkod)}/web-users`)
+      const d = await r.json()
+      setWebUsers(r.ok && Array.isArray(d) ? d : [])
+    } catch {
+      setWebUsers([])
+    } finally {
+      setWebUsersLoading(false)
+    }
+  }
+
+  /**
+   * "Kullanıcı Ekle" dialog'unu aç.
+   *
+   * DB seçenekleri FİRMANIN veritabanlarıdır (Veritabanları sekmesi) — hizmetin
+   * Users.xml <DB> listesi değil: o liste dosya en son yazıldığı andaki
+   * durumu yansıtıyor, sonradan eklenen veritabanları orada görünmüyor.
+   * Users.xml boş/eksikse bile firma DB'lerinden seçilebilsin.
+   * Hepsi varsayılan işaretli — pratikte kullanıcı tüm firma DB'lerine erişiyor.
+   */
+  function openWebUserDialog(siteName: string, xmlDbs: string[]) {
+    const firmaDbs = tabSQL.map((d) => d.Name)
+    const opts = firmaDbs.length > 0 ? firmaDbs : xmlDbs
+    setWebUserDlg({ siteName, dbOptions: opts, mode: "add" })
+    setWebUserName("")
+    setWebUserPw(generateSafePassword())
+    setWebUserDbs(opts)
+    setWebUserSteps(null)
+  }
+
+  /** Mevcut Users.xml kullanıcısını düzenlemek için dialog'u aç. */
+  function editWebUserDialog(
+    siteName: string,
+    xmlDbs: string[],
+    user: { username: string; password: string; dbs: string[] },
+  ) {
+    const firmaDbs = tabSQL.map((d) => d.Name)
+    const base = firmaDbs.length > 0 ? firmaDbs : xmlDbs
+    // Kullanıcıda firma listesinde olmayan bir DB varsa onu da seçenek olarak göster
+    const opts = [...new Set([...base, ...user.dbs])]
+    setWebUserDlg({ siteName, dbOptions: opts, mode: "edit", original: user.username })
+    setWebUserName(user.username)
+    setWebUserPw(user.password)
+    setWebUserDbs(user.dbs)
+    setWebUserSteps(null)
+  }
+
+  /**
+   * Users.xml yazma işlemi + ardından IIS sitesinin yeniden başlatılması.
+   *
+   * Restart ŞART: uygulama Users.xml'i açılışta okuyor, dosyayı değiştirmek
+   * tek başına yeni kullanıcıyı geçerli kılmıyor. İki adım ayrı isteklerle
+   * yürütülüyor ki kullanıcı ilerlemeyi görebilsin ve restart patlarsa
+   * "dosya yazıldı ama restart olmadı" ayrımı net olsun.
+   */
+  async function runWebUserOp(
+    op: {
+      method: "POST" | "PUT" | "DELETE"
+      body: Record<string, unknown>
+      siteName: string
+      okMsg: string
+      /** Ekleme/düzenlemede son adım: kimlik bilgileriyle gerçekten giriş denenir */
+      verify?: { username: string; password: string; database: string }
+    },
+  ) {
+    if (!selectedFirma) return
+    const firkod = selectedFirma.firkod
+    const steps: { label: string; status: "pending" | "running" | "done" | "error"; error?: string }[] = [
+      { label: "Users.xml güncelleniyor", status: "running" },
+      { label: `IIS sitesi yeniden başlatılıyor (${op.siteName})`, status: "pending" },
+      ...(op.verify ? [{ label: "Erişim test ediliyor", status: "pending" as const }] : []),
+    ]
+    setWebUserSteps([...steps])
+    setWebUserSaving(true)
+
+    const fail = (i: number, msg: string) => {
+      steps[i] = { ...steps[i], status: "error", error: msg }
+      setWebUserSteps([...steps])
+      toast.error(msg)
+    }
+
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(firkod)}/web-users`, {
+        method:  op.method,
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(op.body),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { fail(0, d?.error ?? "İşlem başarısız"); return }
+      steps[0] = { ...steps[0], status: "done" }
+      steps[1] = { ...steps[1], status: "running" }
+      setWebUserSteps([...steps])
+
+      const rr = await fetch(`/api/companies/${encodeURIComponent(firkod)}/web-users/restart`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ siteName: op.siteName }),
+      })
+      const dd = await rr.json().catch(() => ({}))
+      if (!rr.ok) {
+        // Dosya yazıldı — kullanıcı bunu bilmeli, işlem yarım değil.
+        fail(1, dd?.error ?? "Site yeniden başlatılamadı")
+        return
+      }
+      steps[1] = { ...steps[1], status: "done" }
+      setWebUserSteps([...steps])
+
+      if (op.verify) {
+        steps[2] = { ...steps[2], status: "running" }
+        setWebUserSteps([...steps])
+        const tr = await fetch(`/api/companies/${encodeURIComponent(firkod)}/web-users/test`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ siteName: op.siteName, ...op.verify }),
+        })
+        const td = await tr.json().catch(() => ({}))
+        if (!tr.ok || !td?.ok) {
+          // Kayıt yazıldı ve site restart oldu — sadece giriş doğrulanamadı
+          fail(2, td?.error ?? td?.message ?? "Giriş doğrulanamadı")
+          return
+        }
+        steps[2] = { ...steps[2], status: "done", error: undefined }
+        setWebUserSteps([...steps])
+      }
+
+      toast.success(op.okMsg, { description: op.siteName })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "İşlem başarısız"
+      const at = steps.findIndex((s) => s.status === "running")
+      fail(at >= 0 ? at : 0, msg)
+    } finally {
+      setWebUserSaving(false)
+      // Sunucudaki dosya değişmiş olabilir — listeyi her durumda tazele
+      await loadWebUsers(firkod)
+    }
+  }
+
+  async function saveWebUser() {
+    if (!webUserDlg || !selectedFirma) return
+    const username = webUserName.trim()
+    if (!username || !webUserPw) {
+      toast.error("Kullanıcı adı ve şifre zorunludur")
+      return
+    }
+    const edit = webUserDlg.mode === "edit"
+    await runWebUserOp({
+      method:   edit ? "PUT" : "POST",
+      siteName: webUserDlg.siteName,
+      okMsg:    edit ? "Kullanıcı güncellendi" : "Kullanıcı eklendi",
+      // Kayıt + restart sonrası kimlik bilgileriyle gerçekten giriş yapılabiliyor mu
+      verify:   { username, password: webUserPw, database: webUserDbs[0] ?? "" },
+      body: edit
+        ? {
+            siteName:    webUserDlg.siteName,
+            username:    webUserDlg.original,
+            newUsername: username,
+            password:    webUserPw,
+            dbs:         webUserDbs,
+          }
+        : { siteName: webUserDlg.siteName, username, password: webUserPw, dbs: webUserDbs },
+    })
+  }
+
+  /**
+   * Kullanıcının hizmete gerçekten giriş yapabildiğini dışarıdan dener —
+   * servisin login ucuna istek atar. Users.xml'de kayıt olması yeterli değil:
+   * site restart edilmediyse veya DB adı yanlışsa giriş yine reddedilir.
+   */
+  async function testWebUser(
+    siteName: string,
+    u: { username: string; password: string; dbs: string[] },
+    via: "lan" | "wan" = "lan",
+  ) {
+    if (!selectedFirma) return
+    const key = `${siteName}::${u.username}`
+    setWebUserTestBusy(key)
+    setWebUserTestResult((prev) => { const n = { ...prev }; delete n[key]; return n })
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/web-users/test`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          siteName,
+          username: u.username,
+          password: u.password,
+          database: u.dbs[0] ?? "",
+          via,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.error ?? "Test yapılamadı")
+
+      const ok = !!d.ok
+      setWebUserTestResult((prev) => ({ ...prev, [key]: { ok, message: d.message ?? "" } }))
+      // Servisten dönen veriyi (erişilebilen DB'ler + ham yanıt) göster
+      setWebUserTestDetail({ ...(d as WebUserTestResult), siteName, username: u.username })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Test yapılamadı"
+      setWebUserTestResult((prev) => ({ ...prev, [key]: { ok: false, message: msg } }))
+      toast.error(msg)
+    } finally {
+      setWebUserTestBusy(null)
+    }
+  }
+
+  async function deleteWebUser() {
+    const t = webUserDelTarget
+    if (!t) return
+    setWebUserDelTarget(null)
+    // Silmenin ilerlemesi de aynı dialog gövdesinde gösterilir
+    setWebUserDlg({ siteName: t.siteName, dbOptions: [], mode: "delete", original: t.username })
+    await runWebUserOp({
+      method:   "DELETE",
+      siteName: t.siteName,
+      okMsg:    "Kullanıcı silindi",
+      body:     { siteName: t.siteName, username: t.username },
+    })
+  }
+
+  /**
+   * Detay sayfasındaki "Erişim" sekmesinin verisi: access-info (sunucular +
+   * şifreler) + web hizmetlerinin Users.xml'i. Sekmeye ilk geçişte bir kez
+   * çalışır; zaten yüklüyse tekrar istek atmaz.
+   */
+  async function loadAccessTab(firkod: string) {
+    if (accessLoading) return
+    if (accessInfo?.firmaId === firkod) return
+    setAccessError(null)
+    setAccessLoading(true)
+    setAccessInfo(null)
+    void loadWebUsers(firkod)
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(firkod)}/access-info`)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d?.error ?? "Erişim bilgileri alınamadı")
+      setAccessInfo(d as AccessInfoResponse)
+    } catch (err) {
+      setAccessError(err instanceof Error ? err.message : "İstek başarısız")
+    } finally {
+      setAccessLoading(false)
+    }
+  }
+
   // Erişim Bilgileri modal'ını aç + access-info fetch et
   async function openAccessInfo() {
     if (!selectedFirma) return
@@ -1369,6 +1613,87 @@ tr:nth-child(even) td{background:#fafafa}
     return fullUsername.startsWith(prefix) ? fullUsername.slice(prefix.length) : fullUsername
   }
 
+  /**
+   * "Hizmetler" sekmesinin listesi — sihirbaz atamaları (`tabServices`) +
+   * atama kaydı OLMAYAN IIS siteleri (`tabIIS`).
+   *
+   * Neden: sihirbazdan önce elle kurulmuş siteler `wizard_port_assignments`'ta
+   * yok (örn. 4646_RESIM). Bunlar eskiden ayrı "IIS Siteler" sekmesinde
+   * görünüyordu; o sekme kaldırılınca firmanın hizmet listesinden tamamen
+   * düştüler. Atamasız siteler `assigned: false` ile işaretlenir — sihirbaz
+   * kaydı olmadığı için "Hizmeti Kaldır" gibi atama işlemleri onlara uygulanmaz.
+   */
+  function collectServices(): (TabCompanyService & { assigned: boolean })[] {
+    const out: (TabCompanyService & { assigned: boolean })[] = []
+    const seen = new Set<string>()
+
+    tabServices.forEach((svc) => {
+      seen.add((svc.siteName || svc.name).trim().toLowerCase())
+      out.push({ ...svc, assigned: true })
+    })
+
+    tabIIS.forEach((s) => {
+      if (seen.has(s.Name.trim().toLowerCase())) return
+      const port = (s.Binding || "").match(/:(\d+)/)?.[1]
+      out.push({
+        id:         -1 * (out.length + 1),   // sentetik: atama kaydı yok
+        name:       s.Name,
+        category:   "",
+        type:       "iis-site",
+        port:       port ? Number(port) : null,
+        siteName:   s.Name,
+        server:     s.Server,
+        status:     s.Status,
+        appPool:    s.AppPool,
+        assignedAt: "",
+        assigned:   false,
+      })
+    })
+
+    return out.sort((a, b) => a.name.localeCompare(b.name))
+  }
+
+  /**
+   * Erişim modal'ındaki "Web Hizmetleri" listesi.
+   *
+   * Sadece `tabIIS`'e bakmak eksikti: firmaya atanmış hizmetler (Hizmetler
+   * sekmesi — Pusula MOBIL/RFID gibi) IIS sekmesinde görünmeyebiliyor
+   * (site farklı sunucuda ya da IIS taraması firmayla eşleşmemiş olabilir),
+   * bu yüzden müşteriye giden listede eksik kalıyorlardı. İki kaynağı site
+   * adına göre birleştiriyoruz.
+   */
+  function collectWebServices(): { key: string; name: string; url: string }[] {
+    const iisHost = accessInfo?.iis?.dns?.trim() || ""
+    const out: { key: string; name: string; url: string }[] = []
+    const seen = new Set<string>()
+
+    const mkUrl = (host: string, port: string | number | null | undefined) =>
+      host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "—")
+
+    tabIIS.forEach((s) => {
+      // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
+      const port = (s.Binding || "").match(/:(\d+)/)?.[1]
+      const host = iisHost || s.ServerIP || ""
+      seen.add(s.Name.trim().toLowerCase())
+      out.push({ key: `iis-${s.Id}`, name: s.Name, url: mkUrl(host, port) })
+    })
+
+    tabServices.forEach((svc) => {
+      // Port'u da site adı da olmayan kayıt web'den erişilebilir değil — atla.
+      if (!svc.port && !svc.siteName) return
+      const siteKey = (svc.siteName || svc.name).trim().toLowerCase()
+      if (seen.has(siteKey)) return
+      seen.add(siteKey)
+      out.push({
+        key: `svc-${svc.id}`,
+        name: svc.siteName || svc.name,
+        url: mkUrl(iisHost, svc.port),
+      })
+    })
+
+    return out
+  }
+
   // Modal'daki bilgileri tek metin halinde derle — sihirbazdaki (step-run.tsx)
   // "customerMessage" ile BİREBİR aynı müşteri mesajı formatı.
   function buildAccessText(): string {
@@ -1378,6 +1703,7 @@ tr:nth-child(even) td{background:#fafafa}
     const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
     const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
     const credentials = accessInfo.credentials ?? {}
+    const webServices = collectWebServices()
 
     const lines: string[] = [
       "Merhaba,",
@@ -1404,7 +1730,7 @@ tr:nth-child(even) td{background:#fafafa}
       lines.push("")
 
       // API / Web uygulama kimlik bilgileri — Users.xml ile uyumlu ({firmaId}_{kısa})
-      if (tabIIS.length > 0) {
+      if (webServices.length > 0) {
         const apiUser = `${firkod}_${shortUsername(firkod, u.username)}`
         lines.push("API / Web Uygulama Bilgileri:")
         lines.push(`Kullanıcı Adı: ${apiUser}`)
@@ -1418,18 +1744,10 @@ tr:nth-child(even) td{background:#fafafa}
       }
     })
 
-    // Web (IIS) hizmet URL'leri
-    if (tabIIS.length > 0) {
-      const iisHost = (accessInfo.iis?.dns?.trim()) || ""
+    // Web hizmet URL'leri — IIS siteleri + firmaya atanmış hizmetler
+    if (webServices.length > 0) {
       lines.push("Web Hizmetleri:")
-      tabIIS.forEach((s) => {
-        // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
-        const portMatch = (s.Binding || "").match(/:(\d+)/)
-        const port = portMatch?.[1]
-        const host = iisHost || s.ServerIP || ""
-        const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "")
-        lines.push(`${s.Name}: ${url}`)
-      })
+      webServices.forEach((s) => lines.push(`${s.name}: ${s.url === "—" ? "" : s.url}`))
       lines.push("")
     }
 
@@ -1809,7 +2127,15 @@ tr:nth-child(even) td{background:#fafafa}
 
           {/* Tab Kartı */}
           <NestedCard>
-            <Tabs defaultValue="users">
+            <Tabs
+              value={detailTab}
+              onValueChange={(v) => {
+                setDetailTab(v)
+                // Erişim sekmesi ağır: access-info + agent'tan Users.xml okuma.
+                // Sekmeye geçilene kadar hiç istek atmıyoruz, sonra bir kez.
+                if (v === "access" && selectedFirma) loadAccessTab(selectedFirma.firkod)
+              }}
+            >
               <TabsList className="mb-3 h-8">
                 <TabsTrigger value="users" className="text-[11px] h-7 gap-1.5">
                   <Users className="h-3.5 w-3.5" />
@@ -1819,17 +2145,16 @@ tr:nth-child(even) td{background:#fafafa}
                 <TabsTrigger value="services" className="text-[11px] h-7 gap-1.5">
                   <Briefcase className="h-3.5 w-3.5" />
                   Hizmetler
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabServices.length}</span>
-                </TabsTrigger>
-                <TabsTrigger value="iis" className="text-[11px] h-7 gap-1.5">
-                  <Globe className="h-3.5 w-3.5" />
-                  IIS Siteler
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabIIS.length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{collectServices().length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="databases" className="text-[11px] h-7 gap-1.5">
                   <Database className="h-3.5 w-3.5" />
                   Veritabanları
                   <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabSQL.length}</span>
+                </TabsTrigger>
+                <TabsTrigger value="access" className="text-[11px] h-7 gap-1.5">
+                  <KeyRound className="h-3.5 w-3.5" />
+                  Erişim
                 </TabsTrigger>
               </TabsList>
 
@@ -1955,17 +2280,19 @@ tr:nth-child(even) td{background:#fafafa}
                           <Skeleton className="h-3 rounded-[3px] w-14" />
                         </div>
                       ))
-                    ) : tabServices.length === 0 ? (
+                    ) : collectServices().length === 0 ? (
                       <div className="flex items-center justify-center py-8">
                         <p className="text-xs text-muted-foreground">Firmaya atanmış hizmet bulunamadı</p>
                       </div>
-                    ) : tabServices.map((svc) => {
+                    ) : collectServices().map((svc) => {
                       const running = svc.status === "Started"
                       const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
                       return (
                         <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
                           <div className="flex items-center gap-2 min-w-0">
-                            <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            {svc.assigned
+                              ? <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              : <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                             <div className="flex flex-col min-w-0">
                               <span className="text-[11px] font-medium truncate">{svc.name}</span>
                               {svc.siteName && <span className="text-[10px] font-mono text-muted-foreground truncate">{svc.siteName}</span>}
@@ -1990,10 +2317,19 @@ tr:nth-child(even) td{background:#fafafa}
                                 <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                               </button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44 text-[11px]">
-                              <DropdownMenuItem className="text-[11px] gap-2 text-destructive focus:text-destructive">
+                            <DropdownMenuContent align="end" className="w-56 text-[11px]">
+                              {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
+                              <DropdownMenuItem
+                                className="text-[11px] gap-2 text-destructive focus:text-destructive"
+                                disabled={!svc.assigned}
+                              >
                                 <Trash2 className="h-3.5 w-3.5" /> Hizmeti Kaldır
                               </DropdownMenuItem>
+                              {!svc.assigned && (
+                                <div className="px-2 py-1.5 text-[10px] text-muted-foreground border-t border-border/40">
+                                  Sihirbaz kaydı yok — IIS&apos;te elle kurulmuş site
+                                </div>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
@@ -2120,123 +2456,327 @@ tr:nth-child(even) td{background:#fafafa}
                 </div>
               </TabsContent>
 
-              {/* IIS Siteler */}
-              <TabsContent value="iis" className="mt-0">
-                <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase pl-[22px]">Site Adı</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Port</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
-                    <span />
-                    <span />
-                  </div>
-                  <div className="divide-y divide-border/40">
-                    {tabLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] px-3 py-2.5 items-center gap-3">
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[3px] w-10" />
-                          <Skeleton className="h-3 rounded-[3px] w-14" />
-                          <span />
-                          <span />
-                        </div>
-                      ))
-                    ) : tabIIS.length === 0 ? (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">IIS sitesi bulunamadı</p>
-                      </div>
-                    ) : tabIIS.map((site) => {
-                      const portMatch = (site.Binding ?? "").match(/:(\d+)(?:[,\s]|$)/)
-                      const port = portMatch ? portMatch[1] : "—"
-                      return (
-                        <div key={site.Id} className="grid grid-cols-[minmax(260px,420px)_260px_90px_90px_1fr_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-[11px] font-medium truncate">{site.Name}</span>
-                          </div>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[11px] truncate">{site.Server}</span>
-                            {site.ServerIP && (
-                              <span className="text-[10px] font-mono text-muted-foreground truncate">{site.ServerIP}</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{port}</span>
-                          <div className="flex items-center gap-1.5">
-                            <div className={`h-1.5 w-1.5 rounded-full ${site.Status === "Started" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                            <span className={`text-[10px] ${site.Status === "Started" ? "text-emerald-600" : "text-muted-foreground"}`}>
-                              {site.Status === "Started" ? "Aktif" : "Durduruldu"}
-                            </span>
-                          </div>
-                          <span />
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
-                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-44">
-                              <DropdownMenuItem
-                                className="text-[11px] gap-2"
-                                disabled={iisActionBusy === site.Id}
-                                onSelect={(e) => { e.preventDefault(); iisAction(site, site.Status === "Started" ? "stop" : "start") }}
-                              >
-                                {site.Status === "Started"
-                                  ? <><Square className="h-3.5 w-3.5" /> Durdur</>
-                                  : <><Play className="h-3.5 w-3.5" /> Başlat</>
-                                }
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className="text-[11px] gap-2"
-                                disabled={iisActionBusy === site.Id}
-                                onSelect={(e) => { e.preventDefault(); iisAction(site, "restart") }}
-                              >
-                                <RotateCw className="h-3.5 w-3.5" /> Yeniden Başlat
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                className="text-[11px] gap-2 text-destructive focus:text-destructive"
-                                disabled={iisActionBusy === site.Id}
-                                onSelect={(e) => { e.preventDefault(); setIisRemoveTarget(site) }}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Siteyi Kaldır
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      )
-                    })}
-                  </div>
+
+              {/* ── Erişim ─────────────────────────────────────────────────
+                  Modal'a sığmayan erişim bilgileri burada, sayfa genişliğinde
+                  ve kompakt tablo düzeninde. Veri sekmeye geçilince yükleniyor. */}
+              <TabsContent value="access" className="mt-0 space-y-2">
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={handleCopyAccessText}
+                    disabled={!accessInfo || accessLoading}
+                    className={`h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border transition-colors disabled:opacity-50 ${
+                      accessCopied
+                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        : "bg-white border-border/50 hover:bg-muted/40"
+                    }`}
+                  >
+                    {accessCopied
+                      ? (<><CheckCheck className="h-3 w-3" /> Kopyalandı</>)
+                      : (<><Copy className="h-3 w-3" /> Metin Olarak Kopyala</>)}
+                  </button>
                 </div>
+
+                {accessLoading && (
+                  <div className="space-y-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-16 w-full rounded-[4px]" />
+                    ))}
+                  </div>
+                )}
+
+                {!accessLoading && accessError && (
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-[4px] border border-red-200 bg-red-50 text-[11px] text-red-700">
+                    {accessError}
+                  </div>
+                )}
+
+                {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
+                  const firkod      = selectedFirma.firkod
+                  const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
+                  const rdpHost     = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
+                  const rdpTarget   = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
+                  const sqlIp       = tabSQL[0]?.ServerIP || ""
+                  const credentials = accessInfo.credentials ?? {}
+                  const webServices = collectWebServices()
+                  return (
+                    <div className="flex gap-2 min-h-[320px]">
+                      {/* ── Sol: kart listesi ─────────────────────────────── */}
+                      <div className="w-[220px] shrink-0 space-y-1">
+                        <AccessNavCard
+                          active={accessSel === "servers"}
+                          onClick={() => setAccessSel("servers")}
+                          icon={<Server className="h-3.5 w-3.5" />}
+                          title="Sunucular"
+                          subtitle={[accessInfo.ad && "AD", accessInfo.windows && "RDP", sqlIp && "SQL"].filter(Boolean).join(" · ") || "—"}
+                        />
+                        <AccessNavCard
+                          active={accessSel === "users"}
+                          onClick={() => setAccessSel("users")}
+                          icon={<Users className="h-3.5 w-3.5" />}
+                          title="Kullanıcılar"
+                          count={tabUsers.length}
+                          subtitle="VPN · RDP · API"
+                        />
+                        <AccessNavCard
+                          active={accessSel === "databases"}
+                          onClick={() => setAccessSel("databases")}
+                          icon={<Database className="h-3.5 w-3.5" />}
+                          title="Veritabanları"
+                          count={tabSQL.length}
+                          subtitle="SQL login + DB"
+                        />
+
+                        {webServices.length > 0 && (
+                          <div className="pt-1.5 pb-0.5 px-1 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                            Web Hizmetleri
+                          </div>
+                        )}
+                        {webServices.map((s) => {
+                          const xml = webUsers.find(
+                            (w) => w.siteName.trim().toLowerCase() === s.name.trim().toLowerCase(),
+                          )
+                          const uc = xml && !xml.notFound && !xml.error ? xml.users.length : 0
+                          return (
+                            <AccessNavCard
+                              key={s.key}
+                              active={accessSel === s.key}
+                              onClick={() => setAccessSel(s.key)}
+                              icon={<Globe className="h-3.5 w-3.5" />}
+                              title={s.name}
+                              count={uc || undefined}
+                              subtitle={s.url.replace(/^https?:\/\//, "")}
+                              loading={webUsersLoading && !xml}
+                            />
+                          )
+                        })}
+                      </div>
+
+                      {/* ── Sağ: seçilenin detayı ─────────────────────────── */}
+                      <div className="flex-1 min-w-0 rounded-[4px] border border-border/60 bg-white overflow-hidden">
+                        {accessSel === "servers" && (
+                          <>
+                            <AccessDetailHeader title="Sunucular" />
+                            <div className="divide-y divide-border/40">
+                              {accessInfo.ad && (
+                                <AccessDetailRow
+                                  label="AD Sunucusu"
+                                  value={`${accessInfo.ad.domain || accessInfo.ad.name} · ${accessInfo.ad.ip}`}
+                                  copyValue={accessInfo.ad.ip}
+                                />
+                              )}
+                              {accessInfo.windows && (
+                                <AccessDetailRow
+                                  label="RDP"
+                                  value={rdpTarget || `${accessInfo.windows.name} · ${accessInfo.windows.ip}`}
+                                  copyValue={rdpTarget || accessInfo.windows.ip}
+                                />
+                              )}
+                              {sqlIp && <AccessDetailRow label="SQL Sunucusu" value={sqlIp} copyValue={sqlIp} />}
+                              {!accessInfo.ad && !accessInfo.windows && !sqlIp && <AccessEmpty text="Sunucu ataması yok" />}
+                            </div>
+                          </>
+                        )}
+
+                        {accessSel === "users" && (
+                          <>
+                            <AccessDetailHeader title={`Kullanıcılar (${tabUsers.length})`} />
+                            {tabUsers.length === 0 ? (
+                              <AccessEmpty text="Firmaya ait kullanıcı bulunamadı" />
+                            ) : (
+                              <>
+                                <div className={ACCESS_USER_COLS + " px-3 py-1.5 bg-muted/40 border-b border-border/50"}>
+                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">VPN / Kullanıcı</span>
+                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Şifre</span>
+                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">RDP</span>
+                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">API</span>
+                                </div>
+                                <div className="divide-y divide-border/40">
+                                  {tabUsers.map((u) => {
+                                    const fullUser = domainShort ? `${domainShort}\\${u.username}` : u.username
+                                    const apiUser  = `${firkod}_${shortUsername(firkod, u.username)}`
+                                    const pw       = credentials[u.username] ?? ""
+                                    return (
+                                      <div
+                                        key={u.username}
+                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                      >
+                                        <AccessCell value={u.username} muted={!u.enabled} />
+                                        {pw
+                                          ? <AccessPwCell value={pw} />
+                                          : <span className="text-[10px] text-muted-foreground italic">saklanmamış</span>}
+                                        <AccessCell value={fullUser} />
+                                        <AccessCell value={webServices.length > 0 ? apiUser : "—"} />
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </>
+                            )}
+                          </>
+                        )}
+
+                        {accessSel === "databases" && (
+                          <>
+                            <AccessDetailHeader title={`Veritabanları (${tabSQL.length})`} />
+                            <div className="divide-y divide-border/40">
+                              {tabUsers[0] && (() => {
+                                const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
+                                const sqlPw    = credentials[tabUsers[0].username] ?? ""
+                                return (
+                                  <>
+                                    <AccessDetailRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
+                                    {sqlPw && (
+                                      <div className="group flex items-center gap-3 px-3 py-2">
+                                        <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">Şifre</span>
+                                        <AccessPwCell value={sqlPw} />
+                                      </div>
+                                    )}
+                                  </>
+                                )
+                              })()}
+                              {tabSQL.length === 0
+                                ? <AccessEmpty text="Firmaya ait veritabanı bulunamadı" />
+                                : tabSQL.map((d) => (
+                                    <AccessDetailRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
+                                  ))}
+                            </div>
+                          </>
+                        )}
+
+                        {(() => {
+                          const svc = webServices.find((s) => s.key === accessSel)
+                          if (!svc) return null
+                          const xml = webUsers.find(
+                            (w) => w.siteName.trim().toLowerCase() === svc.name.trim().toLowerCase(),
+                          )
+                          const users = xml && !xml.notFound && !xml.error ? xml.users : []
+                          return (
+                            <>
+                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/50">
+                                <span className="text-[11px] font-semibold flex-1 truncate">{svc.name}</span>
+                                {/* Users.xml'i olmayan hizmete kullanıcı eklenemez */}
+                                {!xml?.notFound && !xml?.error && (
+                                  <Button
+                                    size="sm"
+                                    className="rounded-[5px] h-6 text-[10px] gap-1"
+                                    onClick={() => openWebUserDialog(svc.name, xml?.dbs ?? [])}
+                                  >
+                                    <UserPlus className="h-3 w-3" /> Kullanıcı Ekle
+                                  </Button>
+                                )}
+                              </div>
+                              <div className="divide-y divide-border/40">
+                                <AccessDetailRow label="Adres" value={svc.url} copyValue={svc.url} link />
+                                {xml?.path && <AccessDetailRow label="Klasör" value={xml.path} copyValue={xml.path} />}
+                              </div>
+
+                              {webUsersLoading && !xml && (
+                                <div className="px-3 py-3 space-y-2">
+                                  <Skeleton className="h-3 w-1/2 rounded-[3px]" />
+                                  <Skeleton className="h-3 w-2/3 rounded-[3px]" />
+                                </div>
+                              )}
+
+                              {xml?.error && <AccessEmpty text={xml.error} />}
+                              {xml?.notFound && (
+                                <AccessEmpty text="Bu hizmette Users.xml yok — uygulama içi kullanıcı tutmuyor" />
+                              )}
+
+                              {users.length > 0 && (
+                                <>
+                                  <div className={ACCESS_SVC_COLS + " px-3 py-1.5 bg-muted/40 border-y border-border/50"}>
+                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Kullanıcı</span>
+                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Şifre</span>
+                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Veritabanı</span>
+                                    <span />
+                                  </div>
+                                  <div className="divide-y divide-border/40">
+                                    {users.map((u) => (
+                                      <div
+                                        key={u.username}
+                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                      >
+                                        <AccessCell value={u.username} />
+                                        {u.password
+                                          ? <AccessPwCell value={u.password} />
+                                          : <span className="text-[11px] text-muted-foreground">—</span>}
+                                        <span className="inline-flex items-center gap-1.5 min-w-0">
+                                          <AccessCell value={u.dbs.length > 0 ? u.dbs.join(", ") : "—"} />
+                                          {(() => {
+                                            const key = `${svc.name}::${u.username}`
+                                            if (webUserTestBusy === key) {
+                                              return <RefreshCw className="h-3 w-3 shrink-0 text-blue-600 animate-spin" />
+                                            }
+                                            const res = webUserTestResult[key]
+                                            if (!res) return null
+                                            return res.ok
+                                              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Erişim başarılı" />
+                                              : <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label={res.message} />
+                                          })()}
+                                        </span>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
+                                            </button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end" className="w-44 text-[11px]">
+                                            <DropdownMenuItem
+                                              className="text-[11px] gap-2"
+                                              onSelect={() => testWebUser(svc.name, u, "lan")}
+                                              disabled={!u.password}
+                                            >
+                                              <Play className="h-3.5 w-3.5" /> Test Et (LAN)
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              className="text-[11px] gap-2"
+                                              onSelect={() => testWebUser(svc.name, u, "wan")}
+                                              disabled={!u.password}
+                                            >
+                                              <Globe className="h-3.5 w-3.5" /> Dışarıdan Test Et
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              className="text-[11px] gap-2"
+                                              onSelect={() => editWebUserDialog(svc.name, xml?.dbs ?? [], u)}
+                                            >
+                                              <Settings2 className="h-3.5 w-3.5" /> Düzenle
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              className="text-[11px] gap-2 text-destructive focus:text-destructive"
+                                              onSelect={(e) => {
+                                                e.preventDefault()
+                                                setWebUserDelTarget({ siteName: svc.name, username: u.username })
+                                              }}
+                                            >
+                                              <Trash2 className="h-3.5 w-3.5" /> Sil
+                                            </DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          )
+                        })()}
+
+                        {Object.keys(credentials).length === 0 && accessSel === "users" && (
+                          <div className="m-3 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-3 py-2">
+                            Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının
+                            şifresini sıfırlama sonrası burada görünür.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })()}
               </TabsContent>
             </Tabs>
           </NestedCard>
-
-          <AlertDialog open={iisRemoveTarget !== null} onOpenChange={(o) => { if (!o) setIisRemoveTarget(null) }}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>IIS Sitesini Kaldır</AlertDialogTitle>
-                <AlertDialogDescription>
-                  <span className="font-mono font-medium">{iisRemoveTarget?.Name}</span> sitesi IIS'ten kaldırılacak.
-                  Fiziksel dosyalar sunucuda kalmaya devam eder, sadece IIS kaydı silinir. Bu işlem geri alınamaz.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>İptal</AlertDialogCancel>
-                <AlertDialogAction
-                  className="bg-destructive text-white hover:bg-destructive/90"
-                  onClick={() => {
-                    const target = iisRemoveTarget
-                    setIisRemoveTarget(null)
-                    if (target) iisAction(target, "remove")
-                  }}
-                >
-                  Kaldır
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           {/* SQL Restore */}
           <AlertDialog open={restoreTarget !== null} onOpenChange={(o) => { if (!o) setRestoreTarget(null) }}>
@@ -3328,6 +3868,278 @@ tr:nth-child(even) td{background:#fafafa}
         </NestedCard>
       )}
 
+      {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi */}
+      <Dialog
+        open={webUserDlg !== null}
+        onOpenChange={(o) => { if (!o && !webUserSaving) { setWebUserDlg(null); setWebUserSteps(null) } }}
+      >
+        <DialogContent className="max-w-md p-0 gap-0">
+          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
+            <DialogTitle className="flex items-center gap-2 text-[13px]">
+              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground font-normal">
+                {webUserDlg?.mode === "edit" ? "Kullanıcı Düzenle"
+                  : webUserDlg?.mode === "delete" ? "Kullanıcı Siliniyor"
+                  : "Kullanıcı Ekle"}
+              </span>
+              <span className="text-foreground">— {webUserDlg?.siteName}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* İşlem başladıysa form yerine adım listesi */}
+          {webUserSteps ? (
+            <div className="px-5 py-4 space-y-2">
+              {webUserSteps.map((s, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="mt-0.5 shrink-0">
+                    {s.status === "done"    && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
+                    {s.status === "running" && <RefreshCw className="h-3.5 w-3.5 text-blue-600 animate-spin" />}
+                    {s.status === "error"   && <XCircle className="h-3.5 w-3.5 text-destructive" />}
+                    {s.status === "pending" && <span className="block h-3.5 w-3.5 rounded-full border border-border" />}
+                  </span>
+                  <div className="min-w-0">
+                    <p className={`text-[11px] ${s.status === "pending" ? "text-muted-foreground" : ""}`}>{s.label}</p>
+                    {s.error && <p className="text-[10px] text-destructive mt-0.5">{s.error}</p>}
+                  </div>
+                </div>
+              ))}
+              {webUserSteps.some((s) => s.status === "error") && webUserSteps[0].status === "done" && (
+                <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-2.5 py-1.5">
+                  Users.xml güncellendi ama site yeniden başlatılamadı — değişiklik uygulama yeniden
+                  başlatılana kadar geçerli olmayabilir.
+                </p>
+              )}
+            </div>
+          ) : (
+          <div className="px-5 py-4 space-y-3">
+            <div className="space-y-1">
+              <Label className="text-[11px]">Kullanıcı Adı</Label>
+              <Input
+                value={webUserName}
+                onChange={(e) => setWebUserName(e.target.value)}
+                placeholder="örn. MERKEZ"
+                className="rounded-[5px] h-8 text-[11px] font-mono"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[11px]">Şifre</Label>
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={webUserPw}
+                  onChange={(e) => setWebUserPw(e.target.value)}
+                  className="rounded-[5px] h-8 text-[11px] font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setWebUserPw(generateSafePassword())}
+                  className="h-8 px-2.5 shrink-0 inline-flex items-center gap-1 text-[11px] rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors"
+                  title="Yeni şifre üret"
+                >
+                  <RefreshCw className="h-3 w-3" /> Üret
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[11px]">Veritabanları</Label>
+              {webUserDlg?.dbOptions.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">Bu hizmet için veritabanı listesi bulunamadı.</p>
+              ) : (
+                <div className="rounded-[5px] border border-border/50 divide-y divide-border/40 max-h-40 overflow-y-auto">
+                  {webUserDlg?.dbOptions.map((db) => {
+                    const on = webUserDbs.includes(db)
+                    return (
+                      <label
+                        key={db}
+                        className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono cursor-pointer hover:bg-muted/20"
+                      >
+                        <Checkbox
+                          checked={on}
+                          onCheckedChange={() =>
+                            setWebUserDbs((prev) => (on ? prev.filter((x) => x !== db) : [...prev, db]))
+                          }
+                          className="size-3.5"
+                        />
+                        {db}
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[10px] text-muted-foreground">
+              Değişiklik sunucudaki <span className="font-mono">Config\Users.xml</span> dosyasına yazılır
+              (önceki hali <span className="font-mono">.bak</span> olarak yedeklenir) ve ardından IIS
+              sitesi yeniden başlatılır.
+            </p>
+          </div>
+          )}
+
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/50 bg-muted/10">
+            {webUserSteps ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => { setWebUserDlg(null); setWebUserSteps(null) }}
+                disabled={webUserSaving}
+                className="rounded-[5px] h-7 text-[11px]"
+              >
+                {webUserSaving ? "Lütfen bekleyin…" : "Kapat"}
+              </Button>
+            ) : (
+              <>
+                <button
+                  onClick={() => setWebUserDlg(null)}
+                  disabled={webUserSaving}
+                  className="px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 text-[11px] font-medium text-muted-foreground transition-colors disabled:opacity-50"
+                >
+                  Vazgeç
+                </button>
+                <Button
+                  size="sm"
+                  onClick={saveWebUser}
+                  disabled={webUserSaving || !webUserName.trim() || !webUserPw}
+                  className="rounded-[5px] h-7 text-[11px] gap-1.5"
+                >
+                  {webUserDlg?.mode === "edit" ? "Kaydet" : "Ekle"}
+                </Button>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Erişim testi sonucu — servisten dönen veri */}
+      <Dialog open={webUserTestDetail !== null} onOpenChange={(o) => { if (!o) setWebUserTestDetail(null) }}>
+        <DialogContent className="max-w-lg p-0 gap-0">
+          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
+            <DialogTitle className="flex items-center gap-2 text-[13px]">
+              {webUserTestDetail?.ok
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                : <XCircle className="h-4 w-4 text-destructive" />}
+              <span className="text-muted-foreground font-normal">Erişim Testi</span>
+              <span className="text-foreground font-mono">{webUserTestDetail?.username}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="px-5 py-4 space-y-3">
+            <div
+              className={`rounded-[5px] border px-3 py-2 text-[11px] ${
+                webUserTestDetail?.ok
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {webUserTestDetail?.message}
+            </div>
+
+            <div className="rounded-[5px] border border-border/50 divide-y divide-border/40">
+              <div className="flex items-center gap-3 px-3 py-1.5">
+                <span className="text-[11px] text-foreground/60 w-[90px] shrink-0">Hizmet</span>
+                <span className="text-[11px] font-mono truncate">{webUserTestDetail?.siteName}</span>
+              </div>
+              <div className="flex items-center gap-3 px-3 py-1.5">
+                <span className="text-[11px] text-foreground/60 w-[90px] shrink-0">Hedef</span>
+                <span className="text-[11px] font-mono truncate">
+                  {webUserTestDetail?.host ?? "—"}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded-[3px] border border-border/50 bg-muted/30 shrink-0">
+                  {webUserTestDetail?.via === "wan" ? "dışarıdan (DNS)" : "LAN (IP)"}
+                </span>
+              </div>
+              {webUserTestDetail?.endpoint && (
+                <div className="flex items-center gap-3 px-3 py-1.5">
+                  <span className="text-[11px] text-foreground/60 w-[90px] shrink-0">Uç</span>
+                  <span className="text-[11px] font-mono truncate">{webUserTestDetail.endpoint}</span>
+                </div>
+              )}
+              {webUserTestDetail?.ms !== undefined && (
+                <div className="flex items-center gap-3 px-3 py-1.5">
+                  <span className="text-[11px] text-foreground/60 w-[90px] shrink-0">Süre</span>
+                  <span className="text-[11px] font-mono tabular-nums">{webUserTestDetail.ms} ms</span>
+                </div>
+              )}
+            </div>
+
+            {/* Asıl kanıt: servisin bu kullanıcı için döndürdüğü veritabanları */}
+            {webUserTestDetail?.databases && (
+              <div className="space-y-1">
+                <Label className="text-[11px]">
+                  Servisin döndürdüğü veritabanları ({webUserTestDetail.databases.length})
+                </Label>
+                {webUserTestDetail.databases.length === 0 ? (
+                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-2.5 py-1.5">
+                    Giriş geçti ama kullanıcıya hiç veritabanı dönmedi — Users.xml&apos;deki DB adları
+                    sunucudakilerle eşleşmiyor olabilir.
+                  </p>
+                ) : (
+                  <div className="rounded-[5px] border border-border/50 divide-y divide-border/40">
+                    {webUserTestDetail.databases.map((db) => (
+                      <div key={db} className="px-3 py-1.5 text-[11px] font-mono">{db}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {webUserTestDetail?.raw && (
+              <details className="rounded-[5px] border border-border/50">
+                <summary className="px-3 py-1.5 text-[11px] cursor-pointer select-none hover:bg-muted/30">
+                  Ham yanıt
+                </summary>
+                <div className="px-3 py-2 space-y-2 border-t border-border/40">
+                  {Object.entries(webUserTestDetail.raw).map(([k, v]) => (
+                    <div key={k}>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{k}</p>
+                      <pre className="mt-0.5 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-muted/20 rounded-[4px] px-2 py-1.5">
+                        {v}
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/50 bg-muted/10">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setWebUserTestDetail(null)}
+              className="rounded-[5px] h-7 text-[11px]"
+            >
+              Kapat
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Users.xml kullanıcısı silme onayı */}
+      <AlertDialog
+        open={webUserDelTarget !== null}
+        onOpenChange={(o) => { if (!o) setWebUserDelTarget(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kullanıcı silinsin mi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              <span className="font-mono">{webUserDelTarget?.username}</span> kullanıcısı{" "}
+              <span className="font-mono">{webUserDelTarget?.siteName}</span> hizmetinin Users.xml
+              dosyasından silinecek ve site yeniden başlatılacak. Bu kullanıcı uygulamaya giriş yapamaz hale gelir.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteWebUser} className="bg-destructive text-white">
+              Sil
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Erişim Bilgileri Modal'ı — VPN/RDP/API/SQL kullanıcı + URL özetleri */}
       <Dialog
         open={accessOpen}
@@ -3342,7 +4154,7 @@ tr:nth-child(even) td{background:#fafafa}
             setAccessError(null)
             // No-perm modunda tab array'lerini biz manuel doldurmuştuk —
             // detay useEffect bizim için temizlemediği için burada sıfırla.
-            setTabUsers([]); setTabIIS([]); setTabSQL([])
+            setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
           }
         }}
       >
@@ -3378,6 +4190,7 @@ tr:nth-child(even) td{background:#fafafa}
               const sqlIp = tabSQL[0]?.ServerIP || ""
               const credentials = accessInfo.credentials ?? {}
               const hasAnyPassword = Object.keys(credentials).length > 0
+              const webServices = collectWebServices()
 
               return (
                 <div className="max-h-[62vh] overflow-y-auto pr-1 space-y-4">
@@ -3438,7 +4251,7 @@ tr:nth-child(even) td{background:#fafafa}
                                 {accessInfo.windows && (
                                   <AccessRow label="RDP" value={fullUser} copyValue={fullUser} />
                                 )}
-                                {tabIIS.length > 0 && (
+                                {webServices.length > 0 && (
                                   <AccessRow label="API" value={apiUser} copyValue={apiUser} />
                                 )}
                               </div>
@@ -3449,33 +4262,29 @@ tr:nth-child(even) td{background:#fafafa}
                     </AccessSection>
                   )}
 
-                  {/* Web Hizmetleri */}
-                  {tabIIS.length > 0 && (
-                    <AccessSection title={`Web Hizmetleri (${tabIIS.length})`}>
-                      {tabIIS.map((s) => {
-                        // Binding iki formatta gelebilir: "http://*:26001" veya "*:26001:host"
-                        const portMatch = (s.Binding || "").match(/:(\d+)/)
-                        const port = portMatch?.[1]
-                        const host = (accessInfo.iis?.dns?.trim()) || s.ServerIP || ""
-                        const url = host && port ? `http://${host}:${port}` : (port ? `Port: ${port}` : "—")
-                        return (
-                          <div
-                            key={s.Id}
-                            className="flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors"
+                  {/* Web Hizmetleri — IIS siteleri + firmaya atanmış hizmetler.
+                      Users.xml kullanıcıları BİLEREK burada YOK: modal'ı taşırıyordu,
+                      firma detayındaki "Erişim" sekmesinde tam tabloyla gösteriliyor.
+                      Bu modal, firma detayını göremeyen kullanıcılar için sade kalmalı. */}
+                  {webServices.length > 0 && (
+                    <AccessSection title={`Web Hizmetleri (${webServices.length})`}>
+                      {webServices.map((s) => (
+                        <div
+                          key={s.key}
+                          className="flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors"
+                        >
+                          <span className="text-[12px] font-medium flex-1 truncate">{s.name}</span>
+                          <a
+                            href={s.url.startsWith("http") ? s.url : undefined}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-[12px] text-blue-600 hover:underline shrink-0"
                           >
-                            <span className="text-[12px] font-medium flex-1 truncate">{s.Name}</span>
-                            <a
-                              href={url.startsWith("http") ? url : undefined}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-[12px] text-blue-600 hover:underline shrink-0"
-                            >
-                              {url}
-                            </a>
-                            <CopyIconButton value={url} />
-                          </div>
-                        )
-                      })}
+                            {s.url}
+                          </a>
+                          <CopyIconButton value={s.url} />
+                        </div>
+                      ))}
                     </AccessSection>
                   )}
 
@@ -3535,7 +4344,7 @@ tr:nth-child(even) td{background:#fafafa}
 
 /* ─── Erişim Bilgileri modal'ı için küçük helper component'ler ──────────── */
 
-function CopyIconButton({ value }: { value: string }) {
+function CopyIconButton({ value, subtle }: { value: string; subtle?: boolean }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -3550,7 +4359,11 @@ function CopyIconButton({ value }: { value: string }) {
         }
       }}
       disabled={!value}
-      className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+      // subtle: her hücrede tam görünür ikon ekranı kalabalıklaştırıyordu —
+      // sönük duruyor, satırın üstüne gelince netleşiyor.
+      className={`shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity disabled:opacity-30 ${
+        subtle ? "opacity-30 group-hover:opacity-100 focus-visible:opacity-100" : ""
+      }`}
       title="Kopyala"
     >
       {copied
@@ -3570,6 +4383,130 @@ function AccessSection({ title, children }: { title: string; children: React.Rea
         {children}
       </div>
     </div>
+  )
+}
+
+/* ─── "Erişim" sekmesi — kompakt tablo bileşenleri ─────────────────────── */
+
+/** Hizmet detayındaki Users.xml tablosunun kolon şablonu (son kolon: aksiyon menüsü). */
+const ACCESS_SVC_COLS = "grid grid-cols-[minmax(120px,200px)_130px_minmax(160px,1fr)_32px] gap-3"
+
+/** Kullanıcılar tablosunun kolon şablonu. */
+const ACCESS_USER_COLS =
+  "grid grid-cols-[minmax(120px,200px)_130px_minmax(150px,240px)_minmax(120px,1fr)] gap-3"
+
+/**
+ * Sol listedeki seçilebilir kart. Seçili olan belirgin (beyaz zemin + sol
+ * vurgu çizgisi); diğerleri sakin ama okunur — "soluk" görünmemesi için
+ * başlıklar foreground, alt bilgi muted.
+ */
+function AccessNavCard({
+  active, onClick, icon, title, subtitle, count, loading,
+}: {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  title: string
+  subtitle?: string
+  count?: number
+  loading?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full text-left rounded-[4px] border px-2.5 py-2 transition-colors ${
+        active
+          ? "border-[#1d64ff]/40 bg-[#1d64ff]/[0.06] shadow-[inset_2px_0_0_0_#1d64ff]"
+          : "border-border/60 bg-white hover:bg-muted/30"
+      }`}
+    >
+      <span className="flex items-center gap-1.5 min-w-0">
+        <span className={active ? "text-[#1d64ff]" : "text-muted-foreground"}>{icon}</span>
+        <span className="text-[11px] font-medium truncate flex-1">{title}</span>
+        {loading
+          ? <Skeleton className="h-3 w-6 rounded-[3px]" />
+          : count !== undefined && (
+              <span className="text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium tabular-nums">{count}</span>
+            )}
+      </span>
+      {subtitle && (
+        <span className="block mt-0.5 pl-5 text-[10px] font-mono text-muted-foreground truncate">{subtitle}</span>
+      )}
+    </button>
+  )
+}
+
+/** Sağ paneldeki blok başlığı. */
+function AccessDetailHeader({ title }: { title: string }) {
+  return (
+    <div className="px-3 py-2 bg-muted/30 border-b border-border/50">
+      <span className="text-[11px] font-semibold">{title}</span>
+    </div>
+  )
+}
+
+/** Sağ panelde "etiket — değer — kopyala" satırı. */
+function AccessDetailRow({
+  label, value, copyValue, link,
+}: { label: string; value: string; copyValue: string; link?: boolean }) {
+  return (
+    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors">
+      <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">{label}</span>
+      {link && value.startsWith("http") ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[11px] font-mono text-blue-600 hover:underline truncate flex-1"
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="text-[11px] font-mono truncate flex-1" title={value}>{value}</span>
+      )}
+      <CopyIconButton value={copyValue} subtle />
+    </div>
+  )
+}
+
+function AccessEmpty({ text }: { text: string }) {
+  return <div className="px-3 py-6 text-center text-[11px] text-muted-foreground">{text}</div>
+}
+
+/** Tablo hücresi — mono değer, kopyala ikonu satır hover'ında belirir. */
+function AccessCell({ value, muted }: { value: string; muted?: boolean }) {
+  if (!value || value === "—") {
+    return <span className="text-[11px] text-muted-foreground/50">—</span>
+  }
+  return (
+    <span className="inline-flex items-center gap-1 min-w-0" title={value}>
+      <span className={`text-[11px] font-mono truncate ${muted ? "text-muted-foreground line-through" : ""}`}>
+        {value}
+      </span>
+      <CopyIconButton value={value} subtle />
+    </span>
+  )
+}
+
+/** Şifre hücresi — varsayılan gizli, göz ikonu ile açılır. */
+function AccessPwCell({ value }: { value: string }) {
+  const [show, setShow] = useState(false)
+  return (
+    <span className="inline-flex items-center gap-0.5 min-w-0">
+      <span className="text-[11px] font-mono truncate select-all tracking-wider">
+        {show ? value : "••••••••"}
+      </span>
+      <button
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity opacity-30 group-hover:opacity-100 focus-visible:opacity-100"
+        title={show ? "Gizle" : "Göster"}
+      >
+        {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+      </button>
+      <CopyIconButton value={value} subtle />
+    </span>
   )
 }
 

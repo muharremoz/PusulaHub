@@ -714,11 +714,13 @@ export async function POST(req: NextRequest) {
 
             // IIS hedef yolu: C:\Pusula\Service\<firmaKod>\<serviceName>
             const destPath = `${iisFirmaRoot}\\${sanitizeWindowsName(s.name)}`
-            // siteNamePattern opsiyonel — yoksa servis adı + firmaId fallback
+            // siteNamePattern opsiyonel — yoksa "{firmaKod}_<servis adı>".
+            // Firma kodu BAŞTA: IIS site listesi ada göre sıralandığı için aynı
+            // firmanın siteleri yan yana geliyor (4646_RESIM, 4646_Pusula MOBIL…).
             const siteName = expandPattern(
               cfg.siteNamePattern && cfg.siteNamePattern.trim()
                 ? cfg.siteNamePattern
-                : `${s.name}_{firmaKod}`,
+                : `{firmaKod}_${s.name}`,
               payload.firmaId,
             )
 

@@ -4,21 +4,28 @@
  * Auth: Basic (username/password)
  */
 
-const BASE_URL  = process.env.FIRMA_API_URL      ?? ""
-const USERNAME  = process.env.FIRMA_API_USERNAME ?? ""
-const PASSWORD  = process.env.FIRMA_API_PASSWORD ?? ""
-const TIMEOUT   = parseInt(process.env.FIRMA_API_TIMEOUT ?? "10") * 1000
-
-function basicAuth() {
-  return "Basic " + Buffer.from(`${USERNAME}:${PASSWORD}`).toString("base64")
+/**
+ * ⚠ Env top-level const'a ALINMAZ, her çağrıda okunur. `server.ts` bu modülü
+ * firma-sync üzerinden import ediyor; ESM import'ları hoist edildiği için modül
+ * gövdesi dotenv `config()` çağrısından ÖNCE çalışır ve değerler boş kalırdı.
+ */
+function apiEnv() {
+  return {
+    baseUrl:  process.env.FIRMA_API_URL      ?? "",
+    username: process.env.FIRMA_API_USERNAME ?? "",
+    password: process.env.FIRMA_API_PASSWORD ?? "",
+    timeout:  parseInt(process.env.FIRMA_API_TIMEOUT ?? "10") * 1000,
+  }
 }
 
 async function firmaFetch<T>(path: string, method: "GET" | "POST" = "POST"): Promise<T> {
+  const { baseUrl, username, password, timeout } = apiEnv()
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT)
+  const timer = setTimeout(() => controller.abort(), timeout)
+  const basicAuth = () => "Basic " + Buffer.from(`${username}:${password}`).toString("base64")
 
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await fetch(`${baseUrl}${path}`, {
       method,
       headers: {
         "Authorization": basicAuth(),
