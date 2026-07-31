@@ -113,7 +113,7 @@ export interface Company {
   contractEnd: string;
   monthlyQuota: { cpu: number; ram: number; disk: number };
   currentUsage: { cpu: number; ram: number; disk: number };
-  weeklyUsage: Array<{ day: string; cpu: number; ram: number; disk: number }>;
+  weeklyUsage: Array<{ day: string; cpu: number | null; ram: number | null; disk: number | null; db: number | null }>;
   dbQuota: number;
   databases?: Array<{ name: string; type: "MSSQL" | "MySQL" | "PostgreSQL"; size: number; status: "online" | "offline" }>;
   notes?: string;

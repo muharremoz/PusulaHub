@@ -35,7 +35,7 @@ export interface CompanyDetail {
   dbSizeMB:     number
   dbQuota:      number  // GB — sunucudaki tüm DB'lerin toplam boyutu
   dbTotalMB:    number  // MB — sunucudaki tüm DB'lerin toplam boyutu (hassas)
-  weeklyUsage:  { day: string; cpu: number; ram: number; disk: number }[]
+  weeklyUsage:  { day: string; cpu: number | null; ram: number | null; disk: number | null; db: number | null }[]
   history30d?:  CompanyUsageHistory
   /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
    *  → bar paylaşımlı-sunucu oranı/varsayılan kotaya göre gösterilir. Manuel
@@ -187,23 +187,28 @@ export async function GET(
         avg_cpu: number | null
         avg_ram_mb: number | null
         disk_mb: number | null
+        db_mb: number | null
       }
       const { data: weekDailyRaw } = await sb.schema("hub").from("company_usage_daily")
-        .select("date, avg_cpu, avg_ram_mb, disk_mb").eq("company_id", firkod).order("date", { ascending: false }).limit(7)
+        .select("date, avg_cpu, avg_ram_mb, disk_mb, db_mb").eq("company_id", firkod).order("date", { ascending: false }).limit(7)
       const weekDaily = (weekDailyRaw ?? []) as WeekDailyRow[]
-      // Haftalık grafik = firmanın sunucuya GERÇEK yükü. Manuel kotaya DEĞİL,
-      // sunucu KAPASİTESİNE oranlanır (amaç: "bu firma sunucuya haftalık ne
-      // kadar yük oldu" — ne kullandıysa o). RAM → resolve edilen RDP sunucusu
-      // toplam RAM; Disk → dosya (Depo) sunucusu toplam disk; CPU → ham % (zaten
-      // sunucu CPU yükü).
-      const ramQuota = Math.max(1, quotaRamMB)
-      let fileDiskTotalMB = 0
-      if (c.file_server_id) {
-        const fa = getAgentById(c.file_server_id)
-        const disks = fa?.lastReport?.metrics?.disks ?? []
-        fileDiskTotalMB = disks.reduce((mx, dsk) => Math.max(mx, (dsk.totalGB ?? 0) * 1024), 0)
-      }
-      const diskQuota = Math.max(1, fileDiskTotalMB)
+      // Haftalık grafik, üstteki "Kullanım Yoğunluğu" kartıyla AYNI paydayı
+      // kullanır: firmanın kotası. Eskiden payda sunucunun TOPLAM kapasitesiydi
+      // (128 GB RAM, 3 TB disk) — firma 640 MB RAM / 1.3 GB disk kullanınca
+      // her gün %1 çıkıyor, grafik dümdüz sıfırda duruyordu. Aynı sayfada kart
+      // %27 derken grafiğin %1 demesi de kafa karıştırıyordu.
+      //
+      // Kota kaynağı (kartla birebir):
+      //   CPU  → manuel kota varsa ona, yoksa ham % (sunucu CPU yükü)
+      //   RAM  → manuel kota, yoksa RDP sunucusunun toplam RAM'i
+      //   Disk → Companies.QuotaDisk (varsayılan 25 GB)
+      //   DB   → Companies.DbQuota (varsayılan 1 GB)
+      const mqCpuPct  = (c.quota_cpu ?? 0) > 0 ? c.quota_cpu! : 0
+      const mqRamMB   = (c.quota_ram ?? 0) > 0 ? c.quota_ram! * 1024 : 0
+      const ramQuota  = Math.max(1, mqRamMB || quotaRamMB)
+      const diskQuota = Math.max(1, quotaDiskMB)
+      const dbQuota   = Math.max(1, dbQuotaMB)
+
       const pct = (u: number, q: number): number => {
         if (!q || q <= 0 || u <= 0) return 0
         const p = (u / q) * 100
@@ -213,30 +218,29 @@ export async function GET(
       const dayMap = new Map<string, WeekDailyRow>()
       for (const r of weekDaily) dayMap.set(r.date, r)
 
-      // Disk fallback: geçmiş günlerde DiskMB henüz yazılmamış olabilir
-      // (kolon sonradan eklendi). Null ise son bilinen değere (bugünkü
-      // FileStorageMB) düş — disk günden güne dramatik değişmez.
+      // Disk/DB fallback: geçmiş günlerde kolon yazılmamış olabilir. Null ise
+      // bugünkü değere düş — ikisi de günden güne dramatik değişmez.
       const fallbackDiskMB = fileStorageMB
 
       const trNames = ["Paz", "Pzt", "Sal", "Car", "Per", "Cum", "Cmt"]
       const today = new Date()
-      const out: { day: string; cpu: number; ram: number; disk: number }[] = []
+      const out: { day: string; cpu: number | null; ram: number | null; disk: number | null; db: number | null }[] = []
       for (let i = 6; i >= 0; i--) {
         const d = new Date(today)
         d.setDate(today.getDate() - i)
         const iso = d.toISOString().slice(0, 10)
         const row = dayMap.get(iso)
         const diskMB = row?.disk_mb ?? fallbackDiskMB
+        const dbMB   = row?.db_mb ?? firmaDbMB
+        // Ölçüm yoksa 0 DEĞİL null: 0 "kullanım sıfıra düştü" gibi okunuyordu,
+        // oysa o gün poller çalışmamış. Grafik null'da çizgiyi kesiyor.
         out.push({
           day:  trNames[d.getDay()],
-          // CPU: ham kullanım % (firmanın sunucudaki gerçek CPU yükü).
-          cpu:  row?.avg_cpu != null ? Math.min(100, Math.round(row.avg_cpu)) : 0,
-          // RAM: firma RAM'i / sunucu toplam RAM. Sunucu çözülemezse (quotaRamMB=0)
-          // sahte %100 yerine 0.
-          ram:  (row?.avg_ram_mb != null && quotaRamMB > 0) ? pct(row.avg_ram_mb, ramQuota) : 0,
-          // Disk: firma görsel klasörü / dosya sunucusu toplam disk. Disk
-          // kapasitesi bilinmiyorsa 0.
-          disk: fileDiskTotalMB > 0 ? pct(diskMB, diskQuota) : 0,
+          cpu:  row?.avg_cpu == null ? null
+                : mqCpuPct > 0 ? pct(row.avg_cpu, mqCpuPct) : Math.min(100, Math.max(row.avg_cpu > 0 ? 1 : 0, Math.round(row.avg_cpu))),
+          ram:  row?.avg_ram_mb == null ? null : pct(row.avg_ram_mb, ramQuota),
+          disk: diskMB > 0 ? pct(diskMB, diskQuota) : null,
+          db:   dbMB   > 0 ? pct(dbMB,   dbQuota)   : null,
         })
       }
       detail.weeklyUsage = out

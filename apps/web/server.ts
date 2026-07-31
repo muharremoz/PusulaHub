@@ -58,9 +58,22 @@ app.prepare().then(() => {
       for (const ip of lan) console.log(`    http://${ip}:${port}`)
     }
 
-    // Agent polling başlat
-    startPolling()
-    // Firma cache sync başlat
-    startFirmaSync()
+    // ── Arka plan işleri (poller + firma sync) ──
+    //
+    // ⚠ Bunlar CANLI veritabanına YAZIYOR (agent metrikleri, günlük kullanım
+    // istatistikleri, firma listesi). Lokal geliştirmede de çalışırlarsa aynı
+    // veriye iki yerden yazılır: kullanım örneklem sayısı ve session_minutes
+    // iki katına çıkar, günlük ortalamalar bozulur. (Yaşandı: dev sunucusu
+    // açıkken bir günde 288 olması gereken örnek 528'e çıktı.)
+    //
+    // Bu yüzden yalnız production'da çalışır. Lokalde bilerek denemek için
+    // .env.local'e ENABLE_POLLER=1 eklenir.
+    const pollerEnabled = !dev || process.env.ENABLE_POLLER === "1"
+    if (pollerEnabled) {
+      startPolling()
+      startFirmaSync()
+    } else {
+      console.log("  [Poller] dev modunda kapalı — açmak için .env.local'e ENABLE_POLLER=1 ekle")
+    }
   })
 })
