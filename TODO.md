@@ -4,6 +4,22 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ---
 
+## Aksoy Sunucuları — SpareBackup Kurulumu
+
+### Yapılacak
+
+- [ ] **Aksoy sunucularında SpareBackup kurulumu yapılacak.**
+
+---
+
+## Hub Sunucuları — Felaket Kurtarma Senaryoları
+
+### Yapılacak
+
+- [ ] **Hub'ın sunucularında felaket kurtarma senaryoları oluşturulacak.**
+
+---
+
 ## Firma Kurulum Sihirbazı — Sağlamlaştırma (kod incelemesi bulguları)
 
 > Kaynak: 2026-06 firma sihirbazı + aktarım modülü kod incelemesi. Temel akış
