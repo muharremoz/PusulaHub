@@ -1,12 +1,18 @@
 /**
  * POST /api/companies/[firkod]/sql/old-data/scan
+ * Body: { source?: "depo" | "sql", path?: string }
  *
- * Firma detayındaki "Yeni Veritabanı Ekle" akışı için: firmanın Depo
- * sunucusundaki SABİT klasörü — `D:\Eski Datalar\{firmaId}` — tarayıp
- * içindeki `.bak` dosyalarını listeler.
+ * Firma detayındaki "Yeni Veritabanı Ekle" akışı için bir klasördeki `.bak`
+ * dosyalarını listeler.
  *
- * Depo sunucusu = Companies.FileServerId. Tarama Depo'nun PusulaAgent'ı
- * üzerinden yapılır (klasör Depo'da yereldir, net use gerekmez).
+ *   source="depo" (varsayılan) → Companies.FileServerId sunucusu
+ *   source="sql"               → firmanın SQL sunucusu
+ *   path boşsa                 → `D:\Eski Datalar\{firmaId}` (eski davranış)
+ *
+ * Kaynak eskiden Depo'daki "Eski Datalar" klasörüne sabitti; sadece müşterinin
+ * eski verisi yüklenebiliyordu. Normal/şablon veritabanları da kurulabilsin
+ * diye hem sunucu hem klasör seçilebilir oldu. Tarama her iki durumda da ilgili
+ * sunucunun PusulaAgent'ı üzerinden yapılır (klasör orada yereldir).
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -23,8 +29,13 @@ export interface OldDataFile {
   date:         string
 }
 
+export type ScanSource = "depo" | "sql"
+
 export interface OldDataScanResponse {
   folder: string
+  source: ScanSource
+  /** Taranan sunucunun adı — UI-da hangi makineye bakıldığı görünsün */
+  server: string
   files:  OldDataFile[]
 }
 
@@ -43,28 +54,44 @@ function toDateString(iso: string): string {
 }
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ firkod: string }> },
 ) {
   const gate = await requirePermission("companies", "read")
   if (gate) return gate
   const { firkod } = await params
 
+  let body: { source?: ScanSource; path?: string } = {}
+  try { body = await req.json() } catch { /* gövdesiz çağrı = eski davranış */ }
+  const source: ScanSource = body.source === "sql" ? "sql" : "depo"
+  const folder = (body.path ?? "").trim().replace(/[\\/]+$/, "") || `D:\\Eski Datalar\\${firkod}`
+
   try {
-    // Firma'nın Depo sunucusu (file_server_id)
     const sb = await getSupabaseServer()
-    const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id").eq("company_id", firkod).maybeSingle()
-    const fsid = (comp as { file_server_id: string | null } | null)?.file_server_id
-    if (!fsid) {
-      return NextResponse.json({ error: "Firmaya tanımlı Depo sunucusu yok (FileServerId boş)." }, { status: 400 })
-    }
-    const depo = await serverAgentById(fsid)
-    if (!depo || !depo.api_key || !depo.agent_port) {
-      return NextResponse.json({ error: "Depo sunucusunda PusulaAgent yapılandırılmamış." }, { status: 400 })
+
+    // Hangi sunucuda tarayacağız: Depo (file_server_id) ya da SQL (sql_server_id)
+    const { data: comp } = await sb.schema("hub").from("companies")
+      .select("file_server_id, sql_server_id").eq("company_id", firkod).maybeSingle()
+    const c = comp as { file_server_id: string | null; sql_server_id: string | null } | null
+    const targetId = source === "sql" ? c?.sql_server_id : c?.file_server_id
+    if (!targetId) {
+      return NextResponse.json({
+        error: source === "sql"
+          ? "Firmaya tanımlı SQL sunucusu yok (SqlServerId boş)."
+          : "Firmaya tanımlı Depo sunucusu yok (FileServerId boş).",
+      }, { status: 400 })
     }
 
-    const folder = `D:\\Eski Datalar\\${firkod}`
-    const result = await execOnAgent(depo.ip, depo.agent_port, depo.api_key, buildListBackupFiles(folder), 30)
+    const agent = await serverAgentById(targetId)
+    if (!agent || !agent.api_key || !agent.agent_port) {
+      return NextResponse.json({
+        error: `${source === "sql" ? "SQL" : "Depo"} sunucusunda PusulaAgent yapılandırılmamış.`,
+      }, { status: 400 })
+    }
+    const { data: srvRow } = await sb.schema("hub").from("servers").select("name").eq("id", targetId).maybeSingle()
+    const serverName = (srvRow as { name: string } | null)?.name ?? ""
+
+    const result = await execOnAgent(agent.ip, agent.agent_port, agent.api_key, buildListBackupFiles(folder), 30)
     if (result.exitCode !== 0) {
       const msg = result.stderr?.trim() || `Agent exec başarısız (exit=${result.exitCode})`
       return NextResponse.json({ error: msg }, { status: 502 })
@@ -83,7 +110,7 @@ export async function POST(
         date:         toDateString(it.LastWriteTime),
       }))
 
-    const resp: OldDataScanResponse = { folder, files }
+    const resp: OldDataScanResponse = { folder, source, server: serverName, files }
     return NextResponse.json(resp)
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Yedekler taranamadı"

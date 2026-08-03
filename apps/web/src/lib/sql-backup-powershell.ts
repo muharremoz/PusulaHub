@@ -114,36 +114,49 @@ export function buildCopyAttachFiles(opts: {
 }
 
 /**
- * "Eski Datalar" restore'u için: Depo sunucusundaki bir .bak dosyasını SQL
- * sunucusunun yerel diskine kimlik-doğrulamalı kopyalar.
+ * Depo sunucusundaki bir .bak dosyasını SQL sunucusunun yerel diskine
+ * kimlik-doğrulamalı kopyalar.
  *
  * SQL sunucusunun agent'ı (LocalSystem) Depo admin share'ine doğrudan
  * erişemiyor → önce Depo'nun Windows credential'ı ile `net use` mount edilir,
  * .bak yerele kopyalanır, mount kaldırılır. RESTORE bu yerel kopyadan yapılır
  * (SQL servis hesabı yereli her zaman okuyabilir; UNC'yi okuyamaz).
  *
- *   \\{depoIp}\d$\Eski Datalar\{firmaId}\{fileName}  →  {destDir}\{fileName}
+ *   {sourceDir}\{fileName}  →  {destDir}\{fileName}
+ *
+ * `sourceDir` Depo üzerindeki YEREL yoldur (örn. `D:\Eski Datalar\4646` ya da
+ * `E:\Kurulum\Sablon`). Sürücü harfi admin share'e çevrilir: `D:` → `\\ip\d$`.
+ * Eskiden bu yol "Eski Datalar" olarak sabitti; artık kullanıcı klasörü
+ * seçebildiği için parametre.
  *
  * Çift tırnak yasak (agent JSON parser) → tek tırnak + concat. Backslash'ler
  * tek; execOnAgent JSON.stringify ile escape eder.
  */
 export function buildPullBakFromDepo(opts: {
-  depoIp:   string
-  depoUser: string
-  depoPass: string
-  firmaId:  string
-  fileName: string
-  destDir:  string
+  depoIp:    string
+  depoUser:  string
+  depoPass:  string
+  /** Depo üzerindeki yerel klasör — sürücü harfiyle (örn. `D:\Eski Datalar\4646`) */
+  sourceDir: string
+  fileName:  string
+  destDir:   string
 }): string {
   const ip   = psQuote(opts.depoIp)
   const user = psQuote(opts.depoUser)
   const pass = psQuote(opts.depoPass)
-  const fid  = psQuote(opts.firmaId)
   const fn   = psQuote(opts.fileName)
   const dd   = psQuote(opts.destDir)
+
+  // `D:\Eski Datalar\4646` → sürücü `d`, kalan `Eski Datalar\4646`
+  const clean = opts.sourceDir.trim().replace(/[\\/]+$/, "")
+  const m = clean.match(/^([A-Za-z]):[\\/]?(.*)$/)
+  if (!m) throw new Error(`Geçersiz Depo klasörü: ${opts.sourceDir}`)
+  const drive = m[1].toLowerCase()
+  const rest  = psQuote(m[2].replace(/\//g, "\\"))
+
   // PS literal'da \\{ip}\d$ üretmek için TS template'te \\\\ ve \\
-  const share = `\\\\${ip}\\d$`
-  const src   = `\\\\${ip}\\d$\\Eski Datalar\\${fid}\\${fn}`
+  const share = `\\\\${ip}\\${drive}$`
+  const src   = rest ? `${share}\\${rest}\\${fn}` : `${share}\\${fn}`
   // ÖNEMLİ: net use'un stderr'ini PS seviyesinde 2>$null ile değil, cmd
   // içinde '>nul 2>&1' ile bastır — aksi halde ErrorActionPreference='Stop'
   // mount edilmemiş share'i silmeye çalışırken native stderr'i terminating

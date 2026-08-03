@@ -13,6 +13,8 @@ import { Database, HardDriveDownload, Loader2, Check, XCircle, FolderOpen, Refre
 import { cn } from "@/lib/utils"
 import type { OldDataScanResponse } from "@/app/api/companies/[firkod]/sql/old-data/scan/route"
 
+type Source = "depo" | "sql"
+
 interface ProgramOpt { id: number; name: string; programCode: string }
 interface FileRow {
   fileName:     string
@@ -42,17 +44,28 @@ export function OldDataRestoreSheet({
   const [scanLoading, setScanLoading] = useState(false)
   const [scanError, setScanError]     = useState<string | null>(null)
   const [folder, setFolder]     = useState("")
+  // Kaynak: Depo mu SQL sunucusu mu, hangi klasör. Varsayılan eski davranış
+  // (Depo · D:\Eski Datalar\{firkod}) — normal/şablon DB için değiştirilebilir.
+  const [source, setSource]     = useState<Source>("depo")
+  const [pathInput, setPathInput] = useState("")
+  const [scannedServer, setScannedServer] = useState("")
   const [files, setFiles]       = useState<FileRow[]>([])
   const [programs, setPrograms] = useState<ProgramOpt[]>([])
   const [steps, setSteps]       = useState<Step[]>([])
   const [runError, setRunError] = useState<string | null>(null)
   const startedRef = useRef(false)
 
-  const doScan = useCallback(async () => {
+  const doScan = useCallback(async (opts?: { source?: Source; path?: string }) => {
+    const src  = opts?.source ?? source
+    const path = opts?.path ?? pathInput
     setScanLoading(true); setScanError(null); setPhase("scan")
     try {
       const [scanRes, svcRes] = await Promise.all([
-        fetch(`/api/companies/${firkod}/sql/old-data/scan`, { method: "POST" }),
+        fetch(`/api/companies/${firkod}/sql/old-data/scan`, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ source: src, path: path.trim() }),
+        }),
         fetch(`/api/services?onlyActive=true`).then((r) => r.ok ? r.json() : []).catch(() => []),
       ])
       const progs: ProgramOpt[] = (Array.isArray(svcRes) ? svcRes : [])
@@ -70,6 +83,9 @@ export function OldDataRestoreSheet({
       }
       const data = await scanRes.json() as OldDataScanResponse
       setFolder(data.folder)
+      setScannedServer(data.server ?? "")
+      // Kullanıcı klasörü boş bıraktıysa sunucunun döndürdüğü varsayılanı göster
+      if (!path.trim()) setPathInput(data.folder)
       setFiles(data.files.map((f) => ({
         fileName: f.fileName, databaseName: f.databaseName, fileSizeMB: f.fileSizeMB, date: f.date,
         selected: false, programCode: progs.length === 1 ? progs[0].programCode : "",
@@ -80,16 +96,20 @@ export function OldDataRestoreSheet({
     } finally {
       setScanLoading(false)
     }
-  }, [firkod])
+  }, [firkod, source, pathInput])
 
-  // Açılınca tara, kapanınca sıfırla
+  // Açılınca varsayılan kaynakla (Depo · Eski Datalar) tara, kapanınca sıfırla.
+  // doScan bağımlılığa alınmıyor: source/pathInput değiştikçe kimliği değişir ve
+  // her tuş vuruşunda yeniden tarama tetiklerdi.
   useEffect(() => {
     if (open) {
       startedRef.current = false
       setSteps([]); setRunError(null); setPhase("scan")
-      doScan()
+      setSource("depo"); setPathInput("")
+      doScan({ source: "depo", path: "" })
     }
-  }, [open, doScan])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   const selectedFiles = files.filter((f) => f.selected)
   const canRun =
@@ -115,6 +135,8 @@ export function OldDataRestoreSheet({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          source,
+          path: pathInput.trim(),
           files: selectedFiles.map((f) => ({ fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode })),
         }),
       })
@@ -164,21 +186,69 @@ export function OldDataRestoreSheet({
           <SheetTitle className="text-sm flex items-center gap-2">
             <HardDriveDownload className="h-4 w-4" /> Yeni Veritabanı Ekle
           </SheetTitle>
-          <p className="text-[11px] text-muted-foreground">{firma} — Eski Datalar&apos;dan geri yükle</p>
+          <p className="text-[11px] text-muted-foreground">{firma} — yedekten geri yükle</p>
         </SheetHeader>
 
         <ScrollArea className="flex-1">
           <div className="px-4 py-4 space-y-3">
-            {/* Klasör bilgisi */}
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              <span className="font-mono truncate">{folder || `D:\\Eski Datalar\\${firkod}`}</span>
-              {phase === "select" && (
-                <button onClick={doScan} className="ml-auto inline-flex items-center gap-1 hover:text-foreground transition-colors" title="Yenile">
-                  <RefreshCw className={cn("h-3 w-3", scanLoading && "animate-spin")} />
-                </button>
-              )}
-            </div>
+            {/* Kaynak: hangi sunucu + hangi klasör */}
+            {phase !== "running" && phase !== "done" && (
+              <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veri Konumu</span>
+                </div>
+                <div className="px-3 py-2.5 space-y-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-[9px] text-muted-foreground">Sunucu</Label>
+                    <Select
+                      value={source}
+                      onValueChange={(v) => {
+                        const s = v as Source
+                        setSource(s)
+                        // Sunucu değişti — varsayılan klasör de değişsin
+                        const next = s === "depo" ? `D:\\Eski Datalar\\${firkod}` : ""
+                        setPathInput(next)
+                        doScan({ source: s, path: next })
+                      }}
+                    >
+                      <SelectTrigger className="h-7 rounded-[5px] text-[11px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="depo" className="text-[11px]">Depo sunucusu</SelectItem>
+                        <SelectItem value="sql" className="text-[11px]">SQL sunucusu</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-0.5">
+                    <Label className="text-[9px] text-muted-foreground">Klasör</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Input
+                        value={pathInput}
+                        onChange={(e) => setPathInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") doScan() }}
+                        placeholder={source === "depo" ? `D:\\Eski Datalar\\${firkod}` : "D:\\Yedekler"}
+                        className="h-7 rounded-[5px] text-[11px] font-mono"
+                      />
+                      <Button
+                        size="sm" variant="outline" onClick={() => doScan()} disabled={scanLoading}
+                        className="h-7 rounded-[5px] text-[11px] gap-1 shrink-0"
+                      >
+                        <RefreshCw className={cn("h-3 w-3", scanLoading && "animate-spin")} /> Tara
+                      </Button>
+                    </div>
+                  </div>
+                  {folder && (
+                    <p className="text-[9px] text-muted-foreground flex items-center gap-1">
+                      <FolderOpen className="h-3 w-3 shrink-0" />
+                      <span className="font-mono truncate">
+                        {scannedServer ? `${scannedServer} · ` : ""}{folder}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Tarama */}
             {phase === "scan" && (

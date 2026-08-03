@@ -1,16 +1,22 @@
 /**
  * POST /api/companies/[firkod]/sql/old-data/restore   (SSE / text-event-stream)
+ * Body: { source?: "depo" | "sql", path?: string, files: [...] }
  *
- * "Yeni Veritabanı Ekle" — firmanın Depo'sundaki `D:\Eski Datalar\{firmaId}`
- * klasöründen seçilen .bak dosyalarını, sihirbazın SQL adımıyla BİREBİR
- * şekilde geri yükler:
+ * "Yeni Veritabanı Ekle" — seçilen .bak dosyalarını sihirbazın SQL adımıyla
+ * BİREBİR şekilde geri yükler:
  *
- *   1) .bak'ı Depo'dan SQL sunucusuna kimlik-doğrulamalı kopyala (net use)
+ *   1) .bak SQL sunucusunda değilse Depo'dan kimlik-doğrulamalı kopyala (net use)
  *   2) RESTORE DATABASE  → hedef ad: {firmaId}_{databaseName}
  *   3) DB owner = firmanın mevcut SQL login'i ({firmaId}_*)
  *   4) sirket DB erişimi (idempotent)
  *   5) sirket.dbo.guvenlik kaydı (programCode)
- *   6) geçici .bak temizliği
+ *   6) yalnız KOPYALANAN geçici .bak temizlenir
+ *
+ * Kaynak eskiden Depo'daki `D:\Eski Datalar\{firmaId}` klasörüne sabitti.
+ * Artık klasör ve sunucu seçilebiliyor: normal/şablon veritabanları da
+ * kurulabilsin diye. `source="sql"` ise dosya zaten SQL sunucusunda demektir;
+ * kopyalama adımı atlanır ve — önemlisi — kaynak dosya SİLİNMEZ (kullanıcının
+ * kendi şablon/yedek dosyası olabilir).
  *
  * Firma SQL login'i zaten sihirbazda oluşturulmuş olmalı; burada yeniden
  * oluşturulmaz, sadece owner/erişim için kullanılır.
@@ -45,10 +51,13 @@ export async function POST(
   if (gate) return gate
   const { firkod } = await params
 
-  let body: { files?: FileReq[] }
+  let body: { files?: FileReq[]; source?: "depo" | "sql"; path?: string }
   try { body = await req.json() } catch { return json({ error: "Geçersiz JSON" }, 400) }
   const files = (body.files ?? []).filter((f) => f.fileName && f.databaseName)
   if (!files.length) return json({ error: "En az bir yedek dosyası seçilmeli" }, 400)
+
+  const source = body.source === "sql" ? "sql" : "depo"
+  const sourceDir = (body.path ?? "").trim().replace(/[\\/]+$/, "") || `D:\\Eski Datalar\\${firkod}`
 
   // SQL hedefi (bağlantı creds)
   const sqlTarget = await resolveFirmaSqlTarget(firkod)
@@ -72,12 +81,18 @@ export async function POST(
   }
   const sqlAgent: AgentInfo = { ip: sqlTarget.ip, port: sqlAgentRow.agent_port, apiKey: sqlAgentRow.api_key }
 
+  // Depo yalnız kopyalama gerektiğinde şart — dosya zaten SQL sunucusundaysa
+  // Depo tanımlı olmasa da restore yapılabilmeli.
   const depo = depoRow
-  if (!depo) return json({ error: "Firmaya tanımlı Depo sunucusu yok (FileServerId boş)" }, 400)
-  const depoUser = depo.username ?? ""
-  const depoPass = depo.password ? (decrypt(depo.password) ?? "") : ""
-  if (!depoUser || !depoPass) {
-    return json({ error: "Depo sunucusunun Windows credential'ı (Username/Password) tanımlı değil" }, 400)
+  let depoUser = ""
+  let depoPass = ""
+  if (source === "depo") {
+    if (!depo) return json({ error: "Firmaya tanımlı Depo sunucusu yok (FileServerId boş)" }, 400)
+    depoUser = depo.username ?? ""
+    depoPass = depo.password ? (decrypt(depo.password) ?? "") : ""
+    if (!depoUser || !depoPass) {
+      return json({ error: "Depo sunucusunun Windows credential'ı (Username/Password) tanımlı değil" }, 400)
+    }
   }
 
   // Firma'nın mevcut SQL login'i — sys.sql_logins LIKE '{firmaId}_%' (bu sorgu
@@ -123,20 +138,25 @@ export async function POST(
 
             for (const f of files) {
               const targetDb = `${firkod}_${f.databaseName}`
-              const localBak = `${localDir}\\${f.fileName}`
+              // SQL sunucusundaki dosya yerinde kalır; Depo'dakinin kopyası
+              // geçici klasöre alınır ve sonunda yalnız o silinir.
+              const isLocal  = source === "sql"
+              const localBak = isLocal ? `${sourceDir}\\${f.fileName}` : `${localDir}\\${f.fileName}`
 
-              // 1) Depo'dan kopyala
-              step(`copy_${f.fileName}`, `Depo'dan kopyalanıyor: ${f.fileName}`, "running")
-              const cp = await execOnAgent(
-                sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey,
-                buildPullBakFromDepo({ depoIp: depo.ip, depoUser, depoPass, firmaId: firkod, fileName: f.fileName, destDir: localDir }),
-                600,
-              )
-              if (cp.exitCode !== 0 || (cp.stderr ?? "").trim()) {
-                step(`copy_${f.fileName}`, `Kopyalama başarısız: ${f.fileName}`, "error", { error: (cp.stderr || cp.stdout || `exit ${cp.exitCode}`).slice(0, 300) })
-                continue
+              // 1) Depo'dan kopyala (dosya SQL sunucusunda değilse)
+              if (!isLocal && depo) {
+                step(`copy_${f.fileName}`, `Depo'dan kopyalanıyor: ${f.fileName}`, "running")
+                const cp = await execOnAgent(
+                  sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey,
+                  buildPullBakFromDepo({ depoIp: depo.ip, depoUser, depoPass, sourceDir, fileName: f.fileName, destDir: localDir }),
+                  600,
+                )
+                if (cp.exitCode !== 0 || (cp.stderr ?? "").trim()) {
+                  step(`copy_${f.fileName}`, `Kopyalama başarısız: ${f.fileName}`, "error", { error: (cp.stderr || cp.stdout || `exit ${cp.exitCode}`).slice(0, 300) })
+                  continue
+                }
+                step(`copy_${f.fileName}`, `Kopyalandı: ${f.fileName}`, "done")
               }
-              step(`copy_${f.fileName}`, `Kopyalandı: ${f.fileName}`, "done")
 
               // 2) RESTORE
               const restoreLabel = `Veritabanı restore ediliyor: ${targetDb}`
@@ -149,8 +169,10 @@ export async function POST(
                 step(`restore_${targetDb}`, restoreLabel, "done")
               } catch (err) {
                 step(`restore_${targetDb}`, `Restore başarısız: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
-                // temizlik dene, sonra sıradaki dosya
-                await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+                // Yalnız bizim kopyaladığımız geçici dosyayı temizle
+                if (!isLocal) {
+                  await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+                }
                 continue
               }
 
@@ -187,8 +209,12 @@ export async function POST(
                 }
               }
 
-              // 6) geçici .bak temizliği
-              await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+              // 6) geçici .bak temizliği — SADECE Depo'dan kopyaladığımız dosya.
+              // SQL sunucusundaki kaynak dosya kullanıcının kendi şablonu/yedeği
+              // olabilir, ona dokunulmaz.
+              if (!isLocal) {
+                await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+              }
             }
           },
         )
