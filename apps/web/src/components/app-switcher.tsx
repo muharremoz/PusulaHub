@@ -34,7 +34,7 @@ interface AppEntry {
 
 // Birleşik platform: her uygulama kendi alt-domain'inde, tek Supabase cookie'sini
 // (`.pusulanet.net`) paylaşır → externalUrl ile doğrudan gidilir (SSO). basePath yok.
-// Sıra 3 uygulamada AYNI (crm, hub, spareflow) — böylece app değiştikçe liste
+// Sıra tüm uygulamalarda AYNI (crm, hub, spareflow, akademi) — böylece app değiştikçe liste
 // sırası değişmez; aktif app sadece tik ile işaretlenir.
 const APPS: AppEntry[] = [
   {
@@ -57,6 +57,13 @@ const APPS: AppEntry[] = [
     description: "SpareBackup izleme uygulaması",
     logo:        "/logos/spareflow.svg",
     externalUrl: "https://spareflow.pusulanet.net/",
+  },
+  {
+    id:          "akademi",
+    name:        "Pusula Akademi",
+    description: "Personel eğitim platformu",
+    logo:        "/logos/akademi.svg",
+    externalUrl: "https://akademi.pusulanet.net/",
   },
 ]
 

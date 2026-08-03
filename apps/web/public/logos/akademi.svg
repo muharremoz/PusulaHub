@@ -1,0 +1,6 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Pusula Akademi — mezuniyet kepi. Marka SVG'si gelene kadar sade işaret. -->
+  <path d="M512 168 62 396l450 228 450-228-450-228Z" fill="#7C3AED"/>
+  <path d="M262 522v198c0 24 14 46 36 58 62 34 137 54 214 54s152-20 214-54c22-12 36-34 36-58V522l-250 127-250-127Z" fill="#7C3AED" fill-opacity="0.72"/>
+  <path d="M916 430v260a34 34 0 1 1-68 0V430h68Z" fill="#7C3AED"/>
+</svg>
