@@ -1,10 +1,9 @@
 /**
- * /tv — Full-bleed, dark, kiosk tarzı TV izleme sayfası.
+ * /tv — Full-bleed, açık temalı, kiosk tarzı TV izleme sayfası.
  *
  * Ana (main) layout grubunun DIŞINDA. Sidebar/header/padding yok. Root
- * layout'un ThemeProvider'ı `defaultTheme="light"` olduğu için burada
- * tailwind `dark` class'ını wrapper'a elle veriyoruz (ThemeProvider'ı
- * çalıştırmadan forced dark).
+ * layout'un ThemeProvider'ı `defaultTheme="light"` — burada zorlama yapmıyoruz,
+ * sayfa kendi renklerini açıkça veriyor.
  *
  * Font: Geist (next/font/google) — Inter yerine /tv altına özel.
  */
@@ -25,9 +24,10 @@ const geistMono = Geist_Mono({
 export default function TvLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={`${geist.variable} ${geistMono.variable} dark min-h-screen w-full bg-zinc-950 text-zinc-100 antialiased`}
+      className={`${geist.variable} ${geistMono.variable} min-h-screen w-full bg-[#EAE7E4] text-zinc-900 antialiased`}
       style={{
         fontFamily: "var(--font-geist), ui-sans-serif, system-ui, sans-serif",
+        colorScheme: "light",
       }}
     >
       {/* /tv altındaki font-mono sınıfı Geist Mono'ya bağlansın */}
