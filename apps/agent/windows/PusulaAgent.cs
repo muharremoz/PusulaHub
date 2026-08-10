@@ -1,4 +1,4 @@
-/* ================================================================
+﻿/* ================================================================
    PusulaAgent — Windows Tray Agent (Pull Model)
    Hub bu agent'in HTTP API'sini cagirarak metrik toplar.
 
@@ -1986,6 +1986,19 @@ class TrayApp : ApplicationContext
 
         menu.Items.Add(new ToolStripSeparator());
 
+        // Acilista baslat — tepsiden tek dokunusla. Ayarlar penceresindeki
+        // kutuyla ayni degeri yazar.
+        var mnuAuto = new ToolStripMenuItem("Windows acilisinda baslat");
+        mnuAuto.Checked = config.AutoStart;
+        mnuAuto.CheckOnClick = true;
+        mnuAuto.CheckedChanged += (s, e) =>
+        {
+            _config.AutoStart = mnuAuto.Checked;
+            _config.Save(_appDir);
+            ApplyAutoStart(_config.AutoStart, Application.ExecutablePath);
+        };
+        menu.Items.Add(mnuAuto);
+
         var mnuSettings = new ToolStripMenuItem("Ayarlar...");
         mnuSettings.Click += (s, e) => ShowSettings();
         menu.Items.Add(mnuSettings);
@@ -2037,33 +2050,40 @@ class TrayApp : ApplicationContext
         catch { }
 
         // Auto-start registry
-        if (_config.AutoStart)
+        ApplyAutoStart(_config.AutoStart, exePath);
+    }
+
+    /// <summary>
+    /// Windows acilisinda baslatmayi uygular. acikMi=false ise kayit SILINIR.
+    ///
+    /// Onceden kayit yalniz kurulumda ve yalniz true icin yaziliyordu; ayardan
+    /// kapatilsa bile kayit yerinde kaliyor, ajan acilista yine baslatiyordu
+    /// (10.08.2026). Iki kok de temizlenir: eski surumler HKLM basarisiz olunca
+    /// HKCU'ya yaziyordu, kayit iki yerde birden kalmis olabilir.
+    /// </summary>
+    public static void ApplyAutoStart(bool acikMi, string exePath)
+    {
+        var kokler = new[] { Microsoft.Win32.Registry.LocalMachine, Microsoft.Win32.Registry.CurrentUser };
+        bool yazildi = false;
+        foreach (var kok in kokler)
         {
             try
             {
-                var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(
-                    "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
-                if (key != null)
+                var key = kok.OpenSubKey("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+                if (key == null) continue;
+                // Makine genelinde bir kayit yeter; HKLM yazildiysa HKCU'daki silinir.
+                if (acikMi && !yazildi)
                 {
                     key.SetValue("PusulaAgent", "\"" + exePath + "\"");
-                    key.Close();
+                    yazildi = true;
                 }
-            }
-            catch
-            {
-                // Fallback to HKCU if HKLM fails
-                try
+                else
                 {
-                    var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                        "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run", true);
-                    if (key != null)
-                    {
-                        key.SetValue("PusulaAgent", "\"" + exePath + "\"");
-                        key.Close();
-                    }
+                    key.DeleteValue("PusulaAgent", false);
                 }
-                catch { }
+                key.Close();
             }
+            catch { }
         }
     }
 
@@ -2098,6 +2118,9 @@ class TrayApp : ApplicationContext
             _config.ApiKey = form.ResultKey;
             _config.AutoStart = form.ResultAutoStart;
             _config.Save(_appDir);
+            // Ayar kaydedilirken kayit defteri de guncellenir; yoksa "kapali"
+            // secilse bile ajan acilista baslatiyordu (10.08.2026).
+            ApplyAutoStart(_config.AutoStart, Application.ExecutablePath);
             if (portChanged)
             {
                 MessageBox.Show(
