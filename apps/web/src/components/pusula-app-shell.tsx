@@ -38,6 +38,7 @@ import {
   Headset,
   Package,
   Rocket,
+  Wand2,
   ChevronsUpDown,
   LogOut,
   User as UserIcon,
@@ -48,6 +49,14 @@ import {
 type Lvl = string;
 type NavItemDef = { title: string; url: string; icon: AppShellIcon; moduleKey?: string };
 type NavGroupDef = { key: string; label: string; icon: AppShellIcon; items: NavItemDef[] };
+
+/**
+ * Firma Kurulum Sihirbazı — nav gruplarının dışında, en üstte duran tekil
+ * giriş. Bir gruba ait değil çünkü tek başına bir akış (yeni firma kurulumu);
+ * eski `app-sidebar`'da da rail'in tepesinde ayrı bir buton olarak duruyordu.
+ * Yalnız `companies` modülüne yazma yetkisi olanlara görünür.
+ */
+const SETUP_HREF = "/companies/setup";
 
 const NAV: NavGroupDef[] = [
   {
@@ -215,27 +224,50 @@ export function PusulaAppShell({ children }: { children: React.ReactNode }) {
   const perms = React.useMemo(() => u.permissions ?? {}, [u.permissions]);
   const grantedApps = u.apps ? u.apps.map((a) => a.id) : null;
 
-  const nav: NavEntry[] = React.useMemo(
-    () =>
-      NAV.map((g) => {
-        const items = g.items
-          .filter((it) => itemVisible(it, isAdmin, perms))
-          .map((it) => ({ key: it.url, label: it.title, href: it.url, icon: it.icon }));
-        const open = items.some(
-          (it) => pathname === it.href || pathname.startsWith(it.href + "/"),
-        );
-        return {
-          type: "item" as const,
-          key: g.key,
-          label: g.label,
-          href: "",
-          icon: g.icon,
-          defaultOpen: open,
-          items,
-        };
-      }).filter((g) => g.items.length > 0),
-    [isAdmin, perms, pathname],
-  );
+  const canWriteCompanies = isAdmin || (perms["companies"] ?? "none") === "write";
+
+  const nav: NavEntry[] = React.useMemo(() => {
+    const groups = NAV.map((g) => {
+      const items = g.items
+        .filter((it) => itemVisible(it, isAdmin, perms))
+        .map((it) => ({
+          key: it.url,
+          label: it.title,
+          href: it.url,
+          icon: it.icon,
+          // AppShell varsayılanı prefix eşleşmesi yapıyor; /companies/setup'ın
+          // kendi girişi olduğu için "Firmalar" onunla birlikte yanmasın.
+          isActive:
+            pathname === it.url ||
+            (pathname.startsWith(it.url + "/") && !pathname.startsWith(SETUP_HREF)),
+        }));
+      const open = items.some(
+        (it) => pathname === it.href || pathname.startsWith(it.href + "/"),
+      );
+      return {
+        type: "item" as const,
+        key: g.key,
+        label: g.label,
+        href: "",
+        icon: g.icon,
+        defaultOpen: open,
+        items,
+      };
+    }).filter((g) => g.items.length > 0);
+
+    const entries: NavEntry[] = [];
+    if (canWriteCompanies) {
+      entries.push({
+        type: "item",
+        key: "company-setup",
+        label: "Firma Kurulum Sihirbazı",
+        href: SETUP_HREF,
+        icon: Wand2,
+      });
+    }
+    entries.push(...groups);
+    return entries;
+  }, [isAdmin, perms, pathname, canWriteCompanies]);
 
   const apps: AppDescriptor[] = React.useMemo(
     () =>
