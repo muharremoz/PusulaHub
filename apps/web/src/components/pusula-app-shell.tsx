@@ -45,15 +45,14 @@ import {
   Shield,
 } from "lucide-react";
 
-// ---- Nav grupları (eski app-sidebar ile aynı; yetkiye göre filtrelenir) ----
+// ---- Nav grupları (yetkiye göre filtrelenir) ----
 type Lvl = string;
 type NavItemDef = { title: string; url: string; icon: AppShellIcon; moduleKey?: string };
 type NavGroupDef = { key: string; label: string; icon: AppShellIcon; items: NavItemDef[] };
 
 /**
  * Firma Kurulum Sihirbazı — nav gruplarının dışında, en üstte duran tekil
- * giriş. Bir gruba ait değil çünkü tek başına bir akış (yeni firma kurulumu);
- * eski `app-sidebar`'da da rail'in tepesinde ayrı bir buton olarak duruyordu.
+ * giriş. Bir gruba ait değil çünkü tek başına bir akış (yeni firma kurulumu).
  * Yalnız `companies` modülüne yazma yetkisi olanlara görünür.
  */
 const SETUP_HREF = "/companies/setup";
