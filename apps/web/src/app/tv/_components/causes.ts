@@ -1,4 +1,4 @@
-import type { KumaMonitor } from "../../_shared/types"
+import type { KumaMonitor } from "../_shared/types"
 
 /**
  * Bir arıza için olası sebepler.

@@ -21,8 +21,8 @@
  * "bir şey bozuldu, hemen bak" demek — dökümü ağacın kendisi veriyor.
  */
 
-import type { KumaMonitor } from "../../_shared/types"
-import { formatDuration } from "../../_shared/types"
+import type { KumaMonitor } from "../_shared/types"
+import { formatDuration } from "../_shared/types"
 
 const DOWN     = "#EF4444"
 const DOWN_DIM = "rgba(239,68,68,0.16)"

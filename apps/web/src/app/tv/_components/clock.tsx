@@ -17,7 +17,7 @@
  * çıkıyor.
  */
 
-import { useClock } from "../../_shared/use-tv-data"
+import { useClock } from "../_shared/use-tv-data"
 
 const TXT     = "#D4D4D8"
 const TXT_DIM = "#8B8B93"

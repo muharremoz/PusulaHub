@@ -33,7 +33,7 @@
  */
 
 import { useEffect, useRef } from "react"
-import type { UiStatus } from "../../_shared/types"
+import type { UiStatus } from "../_shared/types"
 
 const TARGET_FPS = 30
 const FRAME_MS   = 1000 / TARGET_FPS

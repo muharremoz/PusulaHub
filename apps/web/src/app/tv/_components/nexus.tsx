@@ -31,11 +31,11 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import {
   type ExchangeHealthEntry, type KumaMonitor, type UiStatus,
   exchangeHealthKey, formatAgo, formatDuration, formatTarget, mapStatus,
-} from "../../_shared/types"
-import { useClock } from "../../_shared/use-tv-data"
+} from "../_shared/types"
+import { useClock } from "../_shared/use-tv-data"
 import { type MetricsMap, metricsFor } from "./use-server-metrics"
 import { causesFor } from "./causes"
-import { type TreeGroup, type TreeKey, SUBGROUPS, subGroupOf } from "../../_shared/monitor-groups"
+import { type TreeGroup, type TreeKey, SUBGROUPS, subGroupOf } from "../_shared/monitor-groups"
 import { CoreSphere, SPHERE_R_FACTOR } from "./core-sphere"
 import { Sky } from "./sky"
 

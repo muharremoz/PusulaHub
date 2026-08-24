@@ -18,7 +18,7 @@
  */
 
 import { useEffect, useState } from "react"
-import type { KumaMonitor } from "../../_shared/types"
+import type { KumaMonitor } from "../_shared/types"
 
 const POLL_MS = 30_000
 
