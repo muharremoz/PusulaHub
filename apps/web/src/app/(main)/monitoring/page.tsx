@@ -17,6 +17,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@muharremoz/pusula-ui"
 import { Skeleton } from "@/components/ui/skeleton"
+import { isExchange, stripExchangePrefix } from "@/app/tv/_shared/types"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 
 /* ══════════════════════════════════════════════════════════
@@ -264,12 +265,12 @@ function MonitorCard({ m, history }: { m: KumaMonitor; history: MonitorHistory |
 /* ══════════════════════════════════════════════════════════
    Döviz Grubu — 5 kaynağı tek karta toplar
 ══════════════════════════════════════════════════════════ */
-const EXCHANGE_PREFIX = "Döviz - "
-
-/** "Döviz - Datshop" → "Datshop" */
-function stripExchangePrefix(name: string): string {
-  return name.startsWith(EXCHANGE_PREFIX) ? name.slice(EXCHANGE_PREFIX.length) : name
-}
+/*
+ * Döviz tanıma (isExchange / stripExchangePrefix) /tv ile ORTAK yerden
+ * geliyor — yukarıdaki import'a bak. Burada yerel bir "Döviz - " önek
+ * kopyası vardı; Kuma tarafında önek kaldırılınca (adlar artık
+ * "Altınkaynak", "Datshop (Harem)") bu sayfa kaynakları kaçırıyordu.
+ */
 
 /** Grup statüsü: biri down ise down, biri warning ise warning, hepsi up ise up. */
 function aggregateStatus(monitors: KumaMonitor[]): UiStatus {
@@ -463,8 +464,8 @@ export default function MonitoringPage() {
   const { counts, monitors, fetchedAt } = data
 
   // Döviz monitor'lerini ayır, grouplanmış "Döviz Kurları" kartı tek render.
-  const exchangeMonitors = monitors.filter((m) => m.name.startsWith(EXCHANGE_PREFIX))
-  const regularMonitors  = monitors.filter((m) => !m.name.startsWith(EXCHANGE_PREFIX))
+  const exchangeMonitors = monitors.filter((m) => isExchange(m.name))
+  const regularMonitors  = monitors.filter((m) => !isExchange(m.name))
 
   // Filtre döviz grubunu komple gösterir/gizler — grubun agregat statüsüne göre.
   const exchangeUi = exchangeMonitors.length > 0 ? aggregateStatus(exchangeMonitors) : null

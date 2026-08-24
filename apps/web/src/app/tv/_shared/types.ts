@@ -38,6 +38,11 @@ export interface StatusEvent { name: string; from: KumaStatus; to: KumaStatus; a
 
 export type UiStatus = "online" | "warning" | "offline"
 
+/**
+ * Eski adlandırma: monitörler "Döviz - Altınkaynak" gibi adlandırılmıştı.
+ * Kuma tarafında önek kaldırıldı ("Altınkaynak", "Datshop (Harem)"), ama
+ * geriye dönük tanımayı bozmamak için önek hâlâ kabul ediliyor.
+ */
 export const EXCHANGE_PREFIX = "Döviz - "
 
 /** Döviz mini kartlarında kaynak adını health endpoint anahtarına eşle */
@@ -47,6 +52,46 @@ export const EXCHANGE_HEALTH_KEY: Record<string, string> = {
   "Ozankur":     "ozankur",
   "TCMB":        "tcmb",
   "Pusula":      "pusula",
+}
+
+/** Sondaki parantezli ek: "Datshop (Harem)" -> "Datshop" */
+const PAREN_SUFFIX = /\s*\([^()]*\)\s*$/
+
+/**
+ * Kuma adını döviz kaynağı etiketine indirger; döviz monitörü değilse null.
+ *
+ * ── Neden önek yetmiyor? ───────────────────────────────────────────────
+ * Adlar Kuma tarafında "Döviz - X" biçiminden sade "X" biçimine geçti. Önek
+ * kuralına bağlı kalırsak bu monitörler sessizce "Sınıflandırılmamış"a
+ * düşüyor. O yüzden tanıma artık BİLİNEN KAYNAK LİSTESİNE bakıyor; önek
+ * varsa da temizleniyor.
+ *
+ * ── Parantezli ek ──────────────────────────────────────────────────────
+ * "Datshop (Harem)" gibi sondaki açıklama atılıyor: sağlayıcı aynı, yalnız
+ * ad zenginleştirilmiş.
+ *
+ * ── Neden tam eşleşme? ─────────────────────────────────────────────────
+ * "Pusula" bir kaynak adı; startsWith kullansaydık "Pusula VPN" ve
+ * "PUSULA LISANS" da döviz sanılırdı. Tam eşleşme bu tuzağı kapatıyor.
+ */
+export function exchangeLabelOf(name: string): string | null {
+  const bare = stripExchangePrefix(name).replace(PAREN_SUFFIX, "").trim()
+  const lower = bare.toLocaleLowerCase("tr-TR")
+  for (const label of Object.keys(EXCHANGE_HEALTH_KEY)) {
+    if (lower === label.toLocaleLowerCase("tr-TR")) return label
+  }
+  return null
+}
+
+/** Bu monitör bir döviz kaynağı mı? */
+export function isExchange(name: string): boolean {
+  return name.startsWith(EXCHANGE_PREFIX) || exchangeLabelOf(name) !== null
+}
+
+/** Döviz sağlık ucundaki anahtar — kaynak tanınmazsa undefined */
+export function exchangeHealthKey(name: string): string | undefined {
+  const label = exchangeLabelOf(name)
+  return label ? EXCHANGE_HEALTH_KEY[label] : undefined
 }
 
 /**
@@ -109,7 +154,7 @@ export function aggregateStatus(monitors: KumaMonitor[]): UiStatus {
 export type MonitorGroupKey = "server" | "service" | "exchange"
 
 export function groupOf(m: KumaMonitor): MonitorGroupKey {
-  if (m.name.startsWith(EXCHANGE_PREFIX)) return "exchange"
+  if (isExchange(m.name)) return "exchange"
   return m.type === "ping" ? "server" : "service"
 }
 

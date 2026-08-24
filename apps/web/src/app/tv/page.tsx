@@ -13,10 +13,10 @@ import {
   type StatusEvent,
   type StatusTrack,
   type UiStatus,
-  EXCHANGE_HEALTH_KEY,
   aggregateStatus,
   formatAgo,
   formatDuration,
+  exchangeHealthKey,
   mapStatus,
   stripExchangePrefix,
 } from "./_shared/types"
@@ -566,7 +566,7 @@ function ExchangeTile({
       <div className="divide-y" style={{ borderColor: BORDER }}>
         {sorted.map((m) => {
           const s   = mapStatus(m.status)
-          const key = EXCHANGE_HEALTH_KEY[stripExchangePrefix(m.name)]
+          const key = exchangeHealthKey(m.name)
           const hs  = key && health ? health[key] : null
           const ping = m.responseMs === null ? "—" : String(Math.max(1, Math.round(m.responseMs)))
           const respClass =

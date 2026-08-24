@@ -13,6 +13,8 @@ dist/
 .env.local
 .env.production
 .env.*.local
+# Elle alinan yedekler de gizli anahtar tasiyor (.env.local.bak gibi)
+.env*.bak
 
 # debug
 npm-debug.log*
