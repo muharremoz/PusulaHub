@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import {  } from "@muharremoz/pusula-ui";
 import { Combobox } from "@/components/ui/combobox";
 import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
-import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
+import { MetinFiltre, SecimFiltre, TarihFiltre, tarihUygun, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -484,6 +484,7 @@ export default function CompaniesPage() {
   const [firmaFiltre,  setFirmaFiltre]  = useState("");
   const [kodFiltre,    setKodFiltre]    = useState("");
   const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
+  const [lisansFiltre, setLisansFiltre] = useState<TarihFiltreDeger>({ mode: "tum" });
   const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
@@ -960,7 +961,7 @@ export default function CompaniesPage() {
       c.email || "",
       c.phone || "",
       c.userCount,
-      c.lisansBitis || "",
+      lisansGoster(c.lisansBitis),
       firmaIsActive(c) ? "Aktif" : "Süresi Doldu",
     ])
 
@@ -1722,6 +1723,25 @@ tr:nth-child(even) td{background:#fafafa}
     : apiCompanies.slice(0, 50);
 
   // Firma listesi (empty-state) için arama + sıralama
+  /**
+   * lisansBitis iki formatta gelebiliyor: "yyyy-MM-dd" (API) veya "dd.MM.yyyy"
+   * (eski kayıtlar). Filtre ve karşılaştırma için ISO'ya sabitliyoruz.
+   */
+  function lisansIso(s: string): string {
+    if (!s) return "";
+    const p = s.split(".");
+    if (p.length === 3) return `${p[2]}-${p[1].padStart(2, "0")}-${p[0].padStart(2, "0")}`;
+    return s.slice(0, 10);
+  }
+
+  /** Ekranda gg.aa.yyyy — ISO gösterim kullanıcı için okunaksızdı. */
+  function lisansGoster(s: string): string {
+    const iso = lisansIso(s);
+    if (!iso) return "—";
+    const [y, a, g] = iso.split("-");
+    return y && a && g ? `${g}.${a}.${y}` : s;
+  }
+
   function parseLisansDate(s: string): number {
     if (!s) return Number.POSITIVE_INFINITY;
     const parts = s.split(".");
@@ -1762,6 +1782,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (f && !c.firma.toLocaleLowerCase("tr-TR").includes(f)) return false;
     if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
     if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
+    if (!tarihUygun(lisansIso(c.lisansBitis), lisansFiltre)) return false;
     return true;
   });
 
@@ -3733,15 +3754,24 @@ tr:nth-child(even) td{background:#fafafa}
           <div className="max-h-[560px] overflow-auto">
             <table className="w-full text-[14px] font-medium leading-[20px]">
               <ListeThead>
-                <th className="px-4 py-1.5 text-left font-medium">
+                <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
                   <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
                 </th>
+                {/* Boş alanı bu sütun yutar — diğerleri içeriğine göre daralır. */}
                 <th className="px-4 py-1.5 text-left font-medium">
                   <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
                 </th>
-                <th className="px-4 py-1.5 text-right font-medium">Kullanıcı</th>
-                <th className="px-4 py-1.5 text-right font-medium">Lisans Bitiş</th>
-                <th className="px-4 py-1.5 text-right font-medium">
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">Kullanıcı</th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                  <TarihFiltre
+                    label="Lisans Bitiş"
+                    value={lisansFiltre}
+                    onChange={setLisansFiltre}
+                    buAyLabel="Bu ay doluyor"
+                    align="end"
+                  />
+                </th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
                   <SecimFiltre
                     label="Durum"
                     options={["aktif", "doldu"] as const}
@@ -3775,7 +3805,7 @@ tr:nth-child(even) td{background:#fafafa}
                       onClick={() => selectFirma(comp)}
                       className="hover:bg-muted/20 cursor-pointer transition-colors"
                     >
-                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
+                      <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
                         {comp.firkod || "—"}
                       </td>
                       <td className="px-4 py-1.5">
@@ -3784,16 +3814,16 @@ tr:nth-child(even) td{background:#fafafa}
                           <span className="truncate">{comp.firma}</span>
                         </span>
                       </td>
-                      <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
                         <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {comp.userCount}
                         </span>
                       </td>
-                      <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
-                        {comp.lisansBitis || "—"}
+                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                        {lisansGoster(comp.lisansBitis)}
                       </td>
-                      <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                      <td className="w-px px-4 py-1.5 text-right whitespace-nowrap">
                         {active ? (
                           <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                             <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
