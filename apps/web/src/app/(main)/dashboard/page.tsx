@@ -250,7 +250,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={i}
-                      className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_0.6fr] gap-2 px-2 py-1.5 text-[11px] hover:bg-muted/20 transition-colors"
+                      className="grid grid-cols-[1.2fr_1fr_1fr_0.8fr_0.6fr] gap-2 px-2 py-1.5 text-[11px] hover:bg-muted/70 transition-colors"
                     >
                       <span className="font-medium truncate" title={f.username}>{f.username}</span>
                       <span className="text-muted-foreground truncate" title={f.serverName}>{f.serverName}</span>

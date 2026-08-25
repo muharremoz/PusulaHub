@@ -369,7 +369,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                     {/* Mesaj satırı */}
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : msg.id)}
-                      className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors text-left"
+                      className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors text-left"
                     >
                       {/* Expand chevron */}
                       <span className="mt-0.5 text-muted-foreground/50 shrink-0">

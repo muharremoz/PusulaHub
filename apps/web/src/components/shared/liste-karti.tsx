@@ -9,6 +9,7 @@
 //   liste alanı: bg-card rounded-t-[10px] border-t + sadece ÜSTTE yumuşak gölge
 
 import * as React from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function ListeKarti({
@@ -54,8 +55,13 @@ export function ListeKarti({
         {aksiyon && <div className="flex shrink-0 items-center gap-1.5">{aksiyon}</div>}
       </div>
 
-      {/* (B) Liste alanı */}
-      <div className="border-border flex flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
+      {/* (B) Liste alanı — zebra şeritler burada tanımlı, sayfalar tekrar yazmaz. */}
+      <div
+        className={cn(
+          "border-border flex min-h-0 flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]",
+          "[&_tbody_tr:nth-child(even)]:bg-muted/45",
+        )}
+      >
         {children}
       </div>
     </div>
@@ -114,5 +120,61 @@ export function ListeBosSatir({
         {toplam === 0 ? bosMesaj : filtreliMesaj}
       </td>
     </tr>
+  );
+}
+
+/**
+ * Liste alt şeridi — sayfalama. Tek sayfaya sığan listelerde hiç render
+ * edilmez (gereksiz kontrol göstermemek için).
+ */
+export function ListeSayfalama({
+  sayfa,
+  onSayfaChange,
+  toplam,
+  sayfaBoyu = 25,
+}: {
+  sayfa: number;
+  onSayfaChange: (s: number) => void;
+  /** Filtre sonrası toplam kayıt. */
+  toplam: number;
+  sayfaBoyu?: number;
+}) {
+  const sonSayfa = Math.max(1, Math.ceil(toplam / sayfaBoyu));
+  if (toplam <= sayfaBoyu) return null;
+
+  const bas = (sayfa - 1) * sayfaBoyu + 1;
+  const son = Math.min(sayfa * sayfaBoyu, toplam);
+  const okCn =
+    "text-muted-foreground hover:text-foreground hover:bg-muted/60 flex size-6 items-center justify-center rounded-[5px] transition-colors disabled:pointer-events-none disabled:opacity-40";
+
+  return (
+    <div className="border-border/60 text-muted-foreground flex items-center justify-between border-t px-4 py-2 text-[11px]">
+      <span className="tabular-nums">
+        {bas}–{son} / {toplam} kayıt
+      </span>
+      <span className="flex items-center gap-1">
+        <button
+          type="button"
+          className={okCn}
+          disabled={sayfa <= 1}
+          onClick={() => onSayfaChange(sayfa - 1)}
+          aria-label="Önceki sayfa"
+        >
+          <ChevronLeft className="size-3.5" />
+        </button>
+        <span className="px-1 tabular-nums">
+          {sayfa} / {sonSayfa}
+        </span>
+        <button
+          type="button"
+          className={okCn}
+          disabled={sayfa >= sonSayfa}
+          onClick={() => onSayfaChange(sayfa + 1)}
+          aria-label="Sonraki sayfa"
+        >
+          <ChevronRight className="size-3.5" />
+        </button>
+      </span>
+    </div>
   );
 }

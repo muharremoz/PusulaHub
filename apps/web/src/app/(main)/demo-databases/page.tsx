@@ -282,7 +282,7 @@ export default function DemoDatabasesPage() {
                   .map((id) => services.find((s) => s.id === id))
                   .filter((s): s is WizardServiceDto => !!s);
                 return (
-                  <tr key={db.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={db.id} className="hover:bg-muted/70 transition-colors">
                     <td className="px-4 py-1.5">
                       <span className="flex items-center gap-2">
                         <span className={cn("size-1.5 shrink-0 rounded-full", db.isActive ? "bg-emerald-500" : "bg-slate-300")} />

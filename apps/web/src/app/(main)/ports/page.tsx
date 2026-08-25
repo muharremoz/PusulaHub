@@ -262,7 +262,7 @@ export default function PortsPage() {
                   bosMesaj="Henüz port aralığı yok."
                 />
               ) : filtered.map((entry) => (
-                <tr key={entry.id} className="hover:bg-muted/20 transition-colors">
+                <tr key={entry.id} className="hover:bg-muted/70 transition-colors">
                   <td className="px-4 py-1.5 whitespace-nowrap font-medium">{entry.name}</td>
                   <td className="px-4 py-1.5 whitespace-nowrap font-mono font-semibold tabular-nums text-[13px]">
                     {entry.portStart}

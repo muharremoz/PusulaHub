@@ -289,7 +289,7 @@ export default function ADPage() {
                   ) : filtered.length === 0 ? (
                     <ListeBosSatir sutunSayisi={7} toplam={users.length} bosMesaj="Kullanıcı bulunamadı." />
                   ) : filtered.map((user) => (
-                    <tr key={user.id} className="hover:bg-muted/20 transition-colors">
+                    <tr key={user.id} className="hover:bg-muted/70 transition-colors">
                       <td className="px-4 py-1.5 whitespace-nowrap font-medium">{user.displayName}</td>
                       <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px]">{user.username}</td>
                       <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-64 truncate">{user.email}</td>

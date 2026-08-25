@@ -275,7 +275,7 @@ export default function ServicesPage() {
                     : null;
                 const typeMeta = TYPE_LABELS[svc.type];
                 return (
-                  <tr key={svc.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={svc.id} className="hover:bg-muted/70 transition-colors">
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <span className={cn("inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[11px] font-medium", typeMeta.badge)}>
                         {typeMeta.icon}

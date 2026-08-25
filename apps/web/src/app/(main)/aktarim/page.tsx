@@ -294,7 +294,7 @@ function SessionRow({
 
   return (
     <div className={cn(
-      "grid items-center px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors",
+      "grid items-center px-3 py-2 text-[11px] hover:bg-muted/70 transition-colors",
       isActiveTable ? GRID_ACTIVE : GRID_PAST,
     )}>
       {/* Firma */}

@@ -512,7 +512,7 @@ export default function ServersPage() {
                 {filtered.length === 0 ? (
                   <ListeBosSatir sutunSayisi={10} toplam={servers.length} bosMesaj="Henüz sunucu eklenmedi." />
                 ) : filtered.map((srv) => (
-                  <tr key={srv.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={srv.id} className="hover:bg-muted/70 transition-colors">
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <span className="flex items-center gap-2">
                         <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[srv.status])} />

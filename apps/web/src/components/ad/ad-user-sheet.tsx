@@ -293,7 +293,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                 <button
                   type="button"
                   onClick={handleSuggestPassword}
-                  className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-[5px] border border-dashed border-border/70 hover:border-ring/50 hover:bg-muted/20 transition-colors text-left group"
+                  className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-[5px] border border-dashed border-border/70 hover:border-ring/50 hover:bg-muted/70 transition-colors text-left group"
                 >
                   <Sparkles className="size-3.5 text-amber-500 shrink-0" />
                   <div className="flex-1 min-w-0">

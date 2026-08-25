@@ -341,7 +341,7 @@ export function TabFiles({ serverId }: Props) {
                       <TableRow
                         key={item.name}
                         className={cn(
-                          "hover:bg-muted/20 transition-colors",
+                          "hover:bg-muted/70 transition-colors",
                           item.isDir && "cursor-pointer"
                         )}
                         onClick={() => item.isDir && handleFolderClick(item)}

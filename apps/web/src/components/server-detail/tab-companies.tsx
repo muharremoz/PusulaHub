@@ -227,7 +227,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
             {sorted.map((company) => (
               <div
                 key={company.firmaNo}
-                className="grid grid-cols-[80px_1fr_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                className="grid grid-cols-[80px_1fr_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
               >
                 <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium w-fit">{company.firmaNo}</span>
                 <span className="text-[13px] font-medium truncate">{firmaName(company.firmaNo)}</span>
@@ -290,7 +290,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
                 <div className="divide-y divide-border/40">
                   {selectedCompany?.users.map((user) => (
-                    <div key={user.username} className="grid grid-cols-[1fr_1fr_130px_60px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center">
+                    <div key={user.username} className="grid grid-cols-[1fr_1fr_130px_60px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center">
                       <span className="text-[11px] font-mono truncate">{user.username}</span>
                       <span className="text-[11px] truncate">{user.displayName}</span>
 

@@ -153,7 +153,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
             {filtered.map((user) => (
               <div
                 key={user.username}
-                className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
               >
                 <span className="text-[11px] font-mono truncate">{user.username}</span>
                 <span className="text-[11px] truncate">{user.displayName}</span>

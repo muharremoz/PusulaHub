@@ -725,7 +725,7 @@ export default function UsersPage() {
               ) : filtered.map(u => {
                 const isSelf = session?.user?.id === u.id
                 return (
-                  <tr key={u.id} className="hover:bg-muted/20 transition-colors">
+                  <tr key={u.id} className="hover:bg-muted/70 transition-colors">
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <p className="font-medium">{u.fullName ?? u.username}</p>
                       <p className="text-muted-foreground font-mono text-[12px]">@{u.username}</p>

@@ -36,7 +36,7 @@ export function PageContainer({ title, description, children }: PageContainerPro
           </button>
         </div>
       </header>
-      <main className="flex-1 p-6 bg-[var(--page-bg)]">
+      <main className="flex min-h-0 flex-1 flex-col p-6 bg-[var(--page-bg)]">
         {children}
       </main>
     </>

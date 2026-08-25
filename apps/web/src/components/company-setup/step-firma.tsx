@@ -148,7 +148,7 @@ export function StepFirma({
             <button
               key={c.id}
               onClick={() => { onSelectCompany(c); setSearch("") }}
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/20 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/70 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-muted-foreground w-10 shrink-0">{c.firkod}</span>

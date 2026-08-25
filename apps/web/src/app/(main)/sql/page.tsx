@@ -436,7 +436,7 @@ export default function SQLPage() {
                   ) : sorted.map((db) => {
                     const stateKey = (db.state ?? "").toUpperCase()
                     return (
-                      <tr key={db.uid} className="hover:bg-muted/20 transition-colors">
+                      <tr key={db.uid} className="hover:bg-muted/70 transition-colors">
                         <td className="px-4 py-1.5 whitespace-nowrap">
                           <span className="flex items-center gap-2">
                             <span className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[stateKey] ?? "bg-slate-300")} />
@@ -510,7 +510,7 @@ export default function SQLPage() {
                       key={sq.id}
                       onClick={() => loadSaved(sq)}
                       className={cn(
-                        "w-full text-left px-3 py-2.5 hover:bg-muted/20 transition-colors",
+                        "w-full text-left px-3 py-2.5 hover:bg-muted/70 transition-colors",
                         selectedSaved === sq.id && "bg-muted/30",
                       )}
                     >
@@ -735,7 +735,7 @@ export default function SQLPage() {
                           </thead>
                           <tbody className="divide-y divide-border/40">
                             {result.rows.map((row, ri) => (
-                              <tr key={ri} className="hover:bg-muted/20 transition-colors">
+                              <tr key={ri} className="hover:bg-muted/70 transition-colors">
                                 <td className="px-3 py-2 text-muted-foreground/50 tabular-nums select-none">{ri + 1}</td>
                                 {row.map((cell, ci) => (
                                   <td key={ci} className="px-3 py-2 font-mono text-foreground whitespace-nowrap max-w-[300px] truncate">

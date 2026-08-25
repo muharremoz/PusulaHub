@@ -186,7 +186,7 @@ export default function IISPage() {
                   bosMesaj="IIS sitesi bulunamadı — IIS rolündeki sunuculardan henüz veri gelmedi."
                 />
               ) : sorted.map((site) => (
-                <tr key={site.id} className="hover:bg-muted/20 transition-colors">
+                <tr key={site.id} className="hover:bg-muted/70 transition-colors">
                   <td className="px-4 py-1.5 whitespace-nowrap">
                     <span className="flex items-center gap-2">
                       <span className={cn("size-1.5 shrink-0 rounded-full", SITE_STATUS_DOT[site.status] ?? "bg-slate-300")} />

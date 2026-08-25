@@ -22,8 +22,8 @@ import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremo
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import {  } from "@muharremoz/pusula-ui";
 import { Combobox } from "@/components/ui/combobox";
-import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
-import { MetinFiltre, SecimFiltre, TarihFiltre, tarihUygun, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
+import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -34,7 +34,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import type { Top5Company } from "@/app/api/companies/top5/route";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
 const OldDataRestoreSheet = dynamic(() => import("@/components/companies/old-data-restore-sheet").then((m) => m.OldDataRestoreSheet), { ssr: false });
 
@@ -465,8 +464,6 @@ export default function CompaniesPage() {
   const userRole = session?.user?.role;
   const canViewCompanyDetail = userRole === "admin" || (perms["company-detail"] ?? "none") !== "none";
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const [top5, setTop5] = useState<Top5Company[]>([]);
-  const [top5Loading, setTop5Loading] = useState(true);
   const [selectedFirma, setSelectedFirma] = useState<FirmaCompany | null>(null);
   // Firma etiketleri
   const [firmaTags, setFirmaTags] = useState<string[]>([]);
@@ -478,13 +475,17 @@ export default function CompaniesPage() {
   const [apiLoading, setApiLoading] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [listSearch, setListSearch] = useState("");
 
   /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
   const [firmaFiltre,  setFirmaFiltre]  = useState("");
   const [kodFiltre,    setKodFiltre]    = useState("");
   const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
   const [lisansFiltre, setLisansFiltre] = useState<TarihFiltreDeger>({ mode: "tum" });
+  const [kullaniciFiltre, setKullaniciFiltre] = useState<SayiAralikDeger>({});
+
+  /* Sayfalama — sayfa başına 25 kayıt. */
+  const FIRMA_SAYFA_BOYU = 25;
+  const [firmaSayfa, setFirmaSayfa] = useState(1);
   const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
@@ -1087,14 +1088,6 @@ tr:nth-child(even) td{background:#fafafa}
       .then((data: FirmaCompany[]) => setApiCompanies(data))
       .catch(() => setApiCompanies([]))
       .finally(() => setApiLoading(false))
-  }, [])
-
-  useEffect(() => {
-    fetch("/api/companies/top5")
-      .then((r) => r.ok ? r.json() : Promise.reject(r))
-      .then((data: Top5Company[]) => setTop5(Array.isArray(data) ? data : []))
-      .catch(() => setTop5([]))
-      .finally(() => setTop5Loading(false))
   }, [])
 
   useEffect(() => {
@@ -1752,12 +1745,7 @@ tr:nth-child(even) td{background:#fafafa}
     const d = new Date(s).getTime();
     return isNaN(d) ? Number.POSITIVE_INFINITY : d;
   }
-  const listFiltered = listSearch.trim()
-    ? apiCompanies.filter((c) => {
-        const q = foldTr(listSearch);
-        return foldTr(c.firma).includes(q) || foldTr(c.firkod || "").includes(q);
-      })
-    : apiCompanies.slice();
+  const listFiltered = apiCompanies.slice();
   const listSorted = listFiltered.slice().sort((a, b) => {
     let cmp = 0;
     switch (listSortKey) {
@@ -1775,6 +1763,11 @@ tr:nth-child(even) td{background:#fafafa}
     return listSortDir === "asc" ? cmp : -cmp;
   });
 
+  /* Filtre değişince kullanıcı 3. sayfada boş liste görmesin. */
+  useEffect(() => {
+    setFirmaSayfa(1);
+  }, [firmaFiltre, kodFiltre, durumFiltre, lisansFiltre, kullaniciFiltre]);
+
   /* Sütun başlığı filtreleri — üstteki serbest arama ile VE (AND) birleşir. */
   const listeFiltreli = listSorted.filter((c) => {
     const f = firmaFiltre.trim().toLocaleLowerCase("tr-TR");
@@ -1783,8 +1776,17 @@ tr:nth-child(even) td{background:#fafafa}
     if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
     if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
     if (!tarihUygun(lisansIso(c.lisansBitis), lisansFiltre)) return false;
+    if (kullaniciFiltre.min != null && c.userCount < kullaniciFiltre.min) return false;
+    if (kullaniciFiltre.max != null && c.userCount > kullaniciFiltre.max) return false;
     return true;
   });
+
+  /* Ekranda gösterilen sayfa. Excel yine TÜM filtrelenmiş kaydı alır — tek
+     sayfayı değil; "listelenen firmalar" filtre sonucu demek. */
+  const firmaSayfalik = listeFiltreli.slice(
+    (firmaSayfa - 1) * FIRMA_SAYFA_BOYU,
+    firmaSayfa * FIRMA_SAYFA_BOYU,
+  );
 
   return (
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
@@ -1889,7 +1891,7 @@ tr:nth-child(even) td{background:#fafafa}
                                       key={t}
                                       onClick={() => addTag(t)}
                                       disabled={tagBusy}
-                                      className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[5px] hover:bg-muted/50 transition-colors text-left"
+                                      className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[5px] hover:bg-muted/70 transition-colors text-left"
                                     >
                                       <span className={`inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
                                     </button>
@@ -1938,75 +1940,7 @@ tr:nth-child(even) td{background:#fafafa}
               </div>
             </div>
                 </div>
-        ) : (
-          /* Seçili firma yok: kart grid */
-          <NestedCard>
-            <p className="text-[11px] font-medium text-muted-foreground tracking-wide mb-3">EN YOĞUN 5 FİRMA</p>
-            {top5Loading ? (
-              <div className="grid grid-cols-5 gap-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-                    <div className="rounded-[5px] px-3 py-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-                      <Skeleton className="h-3 w-3/4 mb-3 rounded-[5px]" />
-                      <div className="flex gap-1.5">
-                        <Skeleton className="flex-1 h-8 rounded-[5px]" />
-                        <Skeleton className="flex-1 h-8 rounded-[5px]" />
-                        <Skeleton className="flex-1 h-8 rounded-[5px]" />
-                      </div>
-                    </div>
-                                </div>
-                ))}
-              </div>
-            ) : top5.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground py-4 text-center">Henüz firma verisi yok</p>
-            ) : (
-              <div className="grid grid-cols-5 gap-2">
-                {top5.map((comp) => {
-                  const st = statusConfig[comp.status] ?? statusConfig.active;
-                  const yogunlukColor = comp.yogunluk >= 80 ? "text-red-600 dark:text-red-400" : comp.yogunluk >= 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
-                  return (
-                    <button
-                      key={comp.id}
-                      onClick={() => {
-                        const apiMatch = apiCompanies.find((a) => a.firkod === comp.id)
-                        setSelectedFirma(apiMatch ?? null)
-                        setSelectedCompany(apiMatch?.id ?? null)
-                      }}
-                      className="rounded-[8px] p-2 text-left transition-all flex flex-col hover:brightness-[0.97]"
-                      style={{ backgroundColor: "var(--section-bg)" }}
-                    >
-                      <div
-                        className="rounded-[5px] px-3 py-3 w-full"
-                        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
-                      >
-                        <div className="flex items-start justify-between gap-1 mb-3">
-                          <p className="text-[11px] font-semibold leading-tight line-clamp-2">{comp.name}</p>
-                          <span className={`shrink-0 inline-flex items-center rounded-[5px] border px-1 py-0 text-[9px] font-medium ${st.color}`}>
-                            {st.label}
-                          </span>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[5px] py-1.5 bg-muted/40">
-                            <span className={`text-[12px] font-bold tabular-nums leading-none ${yogunlukColor}`}>%{comp.yogunluk}</span>
-                            <span className="text-[9px] text-muted-foreground">Yoğunluk</span>
-                          </div>
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[5px] py-1.5 bg-muted/40">
-                            <Database className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[11px] font-semibold tabular-nums">{comp.dbCount}</span>
-                          </div>
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[5px] py-1.5 bg-muted/40">
-                            <Users className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[11px] font-semibold tabular-nums">{comp.userCount}</span>
-                          </div>
-                        </div>
-                      </div>
-                                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </NestedCard>
-        )}
+        ) : null}
       </div>
 
       {/* Company Detail */}
@@ -2141,7 +2075,7 @@ tr:nth-child(even) td{background:#fafafa}
                         <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
                       </div>
                     ) : tabUsers.map((usr) => (
-                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 hover:bg-muted/20 transition-colors items-center gap-3">
+                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                         <span className="text-[11px] font-mono truncate">{usr.username}</span>
                         <span className="text-[11px] truncate">{usr.displayName}</span>
                         <span
@@ -2233,7 +2167,7 @@ tr:nth-child(even) td{background:#fafafa}
                       const running = svc.status === "Started"
                       const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
                       return (
-                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/20 transition-colors items-center gap-3">
+                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                           <div className="flex items-center gap-2 min-w-0">
                             {svc.assigned
                               ? <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
@@ -2354,7 +2288,7 @@ tr:nth-child(even) td{background:#fafafa}
                         db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
                       ].filter(Boolean).join("\n")
                       return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/20 transition-colors items-center">
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
                         <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="text-[13px] font-medium truncate">{db.Name}</span>
@@ -2543,7 +2477,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     return (
                                       <div
                                         key={u.username}
-                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
                                       >
                                         <AccessCell value={u.username} muted={!u.enabled} />
                                         {pw
@@ -2639,7 +2573,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     {users.map((u) => (
                                       <div
                                         key={u.username}
-                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
                                       >
                                         <AccessCell value={u.username} />
                                         {u.password
@@ -3713,45 +3647,26 @@ tr:nth-child(even) td{background:#fafafa}
         </div>
       ) : (
         <ListeKarti
+          className="min-h-0 flex-1"
           baslik="Firmalar"
           ikon={<Building2 className="size-3.5" />}
           toplam={apiCompanies.length}
           filtreli={listeFiltreli.length}
           aksiyon={
-            <>
-              <div className="relative">
-                <Search className="text-muted-foreground absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
-                <Input
-                  value={listSearch}
-                  onChange={(e) => setListSearch(e.target.value)}
-                  placeholder="Firma adı veya kodu ara..."
-                  className="h-7 w-56 rounded-[5px] pl-7 text-[12px]"
-                />
-              </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 w-7 rounded-[5px] p-0"
-                onClick={() => setListSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                title={listSortDir === "asc" ? "Artan" : "Azalan"}
-              >
-                {listSortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-7 gap-1.5 rounded-[5px] text-[12px]"
-                onClick={exportCompanyList}
-                disabled={apiLoading || listeFiltreli.length === 0}
-                title="Listelenen firmaları Excel olarak indir"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Excel
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 rounded-[5px] text-[12px]"
+              onClick={exportCompanyList}
+              disabled={apiLoading || listeFiltreli.length === 0}
+              title="Listelenen firmaları Excel olarak indir"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Excel
+            </Button>
           }
         >
-          <div className="max-h-[560px] overflow-auto">
+          <div className="min-h-0 flex-1 overflow-auto">
             <table className="w-full text-[14px] font-medium leading-[20px]">
               <ListeThead>
                 <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
@@ -3761,7 +3676,9 @@ tr:nth-child(even) td{background:#fafafa}
                 <th className="px-4 py-1.5 text-left font-medium">
                   <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
                 </th>
-                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">Kullanıcı</th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                  <SayiAralikFiltre label="Kullanıcı" value={kullaniciFiltre} onChange={setKullaniciFiltre} />
+                </th>
                 <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
                   <TarihFiltre
                     label="Lisans Bitiş"
@@ -3797,7 +3714,7 @@ tr:nth-child(even) td{background:#fafafa}
                     bosMesaj="Kayıtlı firma yok."
                     filtreliMesaj="Arama sonucu bulunamadı."
                   />
-                ) : listeFiltreli.map((comp) => {
+                ) : firmaSayfalik.map((comp) => {
                   const active = firmaIsActive(comp);
                   return (
                     <tr
@@ -3840,6 +3757,12 @@ tr:nth-child(even) td{background:#fafafa}
               </tbody>
             </table>
           </div>
+          <ListeSayfalama
+            sayfa={firmaSayfa}
+            onSayfaChange={setFirmaSayfa}
+            toplam={listeFiltreli.length}
+            sayfaBoyu={FIRMA_SAYFA_BOYU}
+          />
         </ListeKarti>
       )}
 
@@ -4214,7 +4137,7 @@ function AccessDetailRow({
   label, value, copyValue, link,
 }: { label: string; value: string; copyValue: string; link?: boolean }) {
   return (
-    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors">
+    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/70 transition-colors">
       <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">{label}</span>
       {link && value.startsWith("http") ? (
         <a

@@ -337,7 +337,7 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
         <div className="relative">
           <button
             onClick={() => setShowColors(v => !v)}
-            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] text-muted-foreground hover:bg-muted/50 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] text-muted-foreground hover:bg-muted/70 transition-colors"
           >
             <span className="size-3 rounded-full border border-border/50" style={{ backgroundColor: color }} />
             <ChevronDown className="size-2.5" />

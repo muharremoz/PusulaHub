@@ -320,7 +320,7 @@ function EntryRow({
   const strength = STRENGTH[score]
 
   return (
-    <tr className="hover:bg-muted/20 transition-colors group">
+    <tr className="hover:bg-muted/70 transition-colors group">
 
       {/* Favori */}
       <td className="px-4 py-1.5 w-10">

@@ -129,7 +129,7 @@ export function TabSessions({ sessions, serverId }: Props) {
               {sessions.map((ses, idx) => (
                 <div
                   key={`${ses.username}-${idx}`}
-                  className="grid grid-cols-[1fr_120px_160px_100px_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[1fr_120px_160px_100px_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
                 >
                   <span className="text-[11px] font-mono font-medium truncate">{ses.username}</span>
                   <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium w-fit">
