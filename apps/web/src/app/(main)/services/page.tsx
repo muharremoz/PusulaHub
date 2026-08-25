@@ -34,8 +34,6 @@ import {
   Server,
   Globe,
   Waypoints,
-  Pencil,
-  Trash2,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
 import { toast } from "sonner";
@@ -88,6 +86,7 @@ export default function ServicesPage() {
   const [sortDir, setSortDir]   = useState<SortDir>("asc");
   /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
   const [adFiltre,        setAdFiltre]        = useState("");
+  const [kodFiltre,       setKodFiltre]       = useState("");
   const [tipFiltre,       setTipFiltre]       = useState<ServiceType[]>([]);
   const [kategoriFiltre,  setKategoriFiltre]  = useState<string[]>([]);
   const [durumFiltre,     setDurumFiltre]     = useState<string[]>([]);
@@ -125,9 +124,16 @@ export default function ServicesPage() {
 
   const filtered = useMemo(() => {
     const ad = adFiltre.trim().toLocaleLowerCase("tr-TR");
+    const kod = kodFiltre.trim().toLocaleLowerCase("tr-TR");
     return services
       .filter((s) => {
         if (ad && !s.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+        if (kod) {
+          const pk = s.type === "pusula-program" && s.config && "programCode" in s.config
+            ? String(s.config.programCode ?? "")
+            : "";
+          if (!pk.toLocaleLowerCase("tr-TR").includes(kod)) return false;
+        }
         if (tipFiltre.length && !tipFiltre.includes(s.type)) return false;
         if (kategoriFiltre.length && !kategoriFiltre.includes(s.category)) return false;
         if (durumFiltre.length && !durumFiltre.includes(s.isActive ? "aktif" : "pasif")) return false;
@@ -140,7 +146,7 @@ export default function ServicesPage() {
         if (sortKey === "type")         return a.type.localeCompare(b.type) * mul;
         return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
       });
-  }, [services, adFiltre, tipFiltre, kategoriFiltre, durumFiltre, sortKey, sortDir]);
+  }, [services, adFiltre, kodFiltre, tipFiltre, kategoriFiltre, durumFiltre, sortKey, sortDir]);
 
   const openCreate = () => { setEditing(null); setSheetOpen(true); };
   const openEdit   = (s: WizardServiceDto) => { setEditing(s); setSheetOpen(true); };
@@ -202,6 +208,9 @@ export default function ServicesPage() {
               <th className="px-4 py-1.5 text-left font-medium">
                 <MetinFiltre label="Hizmet Adı" value={adFiltre} onChange={setAdFiltre} />
               </th>
+              <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
+                <MetinFiltre label="Program Kodu" value={kodFiltre} onChange={setKodFiltre} />
+              </th>
               <th className="px-4 py-1.5 text-left font-medium">
                 <SecimFiltre
                   label="Kategori"
@@ -222,9 +231,6 @@ export default function ServicesPage() {
                   selected={durumFiltre}
                   onChange={(v) => setDurumFiltre(v as string[])}
                 />
-              </th>
-              <th className="px-4 py-1.5 text-left font-medium">
-                <SortHeader label="Sıra" sortKey="displayOrder" active={sortKey} dir={sortDir} onSort={handleSort} />
               </th>
               <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
             </ListeThead>
@@ -259,19 +265,16 @@ export default function ServicesPage() {
                 return (
                   <tr key={svc.id} className="hover:bg-muted/70 transition-colors">
                     <td className="px-4 py-1.5 whitespace-nowrap">
-                      <span className={cn("inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[11px] font-medium", typeMeta.badge)}>
-                        {typeMeta.icon}
-                        {typeMeta.label}
-                      </span>
+                      <span className="text-[12px]">{typeMeta.label}</span>
                     </td>
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <span className="flex items-center gap-2">
                         <span className={cn("size-1.5 shrink-0 rounded-full", svc.isActive ? "bg-emerald-500" : "bg-slate-300")} />
                         <span className="font-medium">{svc.name}</span>
                       </span>
-                      {programCode && (
-                        <p className="text-muted-foreground/70 mt-0.5 font-mono text-[11px]">{programCode}</p>
-                      )}
+                    </td>
+                    <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap font-mono text-[12px]">
+                      {programCode || "—"}
                     </td>
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <span className="text-muted-foreground inline-flex rounded-[5px] bg-muted/40 px-2 py-0.5 text-[11px] font-medium">
@@ -316,9 +319,6 @@ export default function ServicesPage() {
                         </span>
                       )}
                     </td>
-                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">
-                      {svc.displayOrder}
-                    </td>
                     <td className="px-4 py-1.5 text-right whitespace-nowrap">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -327,14 +327,14 @@ export default function ServicesPage() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" sideOffset={4} className="w-40 text-[12px]">
-                          <DropdownMenuItem className="gap-2" onClick={() => openEdit(svc)}>
-                            <Pencil className="text-muted-foreground size-3.5" />Düzenle
+                          <DropdownMenuItem onClick={() => openEdit(svc)}>
+                            Düzenle
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2" onClick={() => handleToggleActive(svc)}>
+                          <DropdownMenuItem onClick={() => handleToggleActive(svc)}>
                             {svc.isActive ? "Pasife Al" : "Aktif Et"}
                           </DropdownMenuItem>
-                          <DropdownMenuItem className="gap-2 text-rose-600 focus:text-rose-600" onClick={() => setDeleting(svc)}>
-                            <Trash2 className="size-3.5" />Sil
+                          <DropdownMenuItem className="text-rose-600 focus:text-rose-600" onClick={() => setDeleting(svc)}>
+                            Sil
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
