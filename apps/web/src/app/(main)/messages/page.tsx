@@ -21,7 +21,8 @@ import {
 } from "@muharremoz/pusula-ui"
 
 import { ComboboxMulti } from "@/components/ui/combobox"
-import { ListeThead } from "@/components/shared/liste-karti"
+import { ListeKarti, ListeThead } from "@/components/shared/liste-karti"
+import { MetinFiltre, SecimFiltre, TarihFiltre, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
 import {
   Send, Plus, Search, Mail,
   Users, Building2, UserCheck, Check, CheckCheck, X,
@@ -149,7 +150,6 @@ export default function MessagesPage() {
 
   // Sol panel modu — mesaj seçilirse detail otomatik kazanır.
   const [leftMode,         setLeftMode]         = useState<"compose" | "templates">("compose")
-  const [search,            setSearch]            = useState("")
   // Liste filtreleri
   const [filterFrom,        setFilterFrom]        = useState<string>("")  // yyyy-MM-dd
   const [filterTo,          setFilterTo]          = useState<string>("")
@@ -158,6 +158,8 @@ export default function MessagesPage() {
   const [filterSubject,     setFilterSubject]     = useState<string>("")
   const [filterPriority,    setFilterPriority]    = useState<string>("")  // "" | "normal" | "high" | "urgent"
   const [filtersOpen,       setFiltersOpen]       = useState(false)
+  // Sütun başlığındaki tarih seçiminin görünen hali (from/to buradan türetilir)
+  const [lisansTarih,       setLisansTarih]       = useState<TarihFiltreDeger>({ mode: "tum" })
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [detailRecipients,  setDetailRecipients]  = useState<RecipientItem[]>([])
 
@@ -174,6 +176,29 @@ export default function MessagesPage() {
   const [companyFilter,      setCompanyFilter]      = useState<string>("all")
   const [userSearch,         setUserSearch]         = useState<string>("")
   const [sending,            setSending]            = useState(false)
+
+  /**
+   * TarihFiltre modunu server'ın beklediği from/to çiftine çevirir.
+   * Sütun başlığındaki seçim doğrudan mevcut filterFrom/filterTo state'ini
+   * besliyor; böylece veri çekme yolu değişmiyor.
+   */
+  function tarihModunuUygula(v: TarihFiltreDeger) {
+    setLisansTarih(v)
+    const ymd = (d: Date) =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+    const bugun = new Date()
+    if (v.mode === "tum")      { setFilterFrom(""); setFilterTo(""); return }
+    if (v.mode === "bugun")    { setFilterFrom(ymd(bugun)); setFilterTo(ymd(bugun)); return }
+    if (v.mode === "buhafta")  {
+      const bas = new Date(bugun); bas.setDate(bugun.getDate() - ((bugun.getDay() + 6) % 7))
+      setFilterFrom(ymd(bas)); setFilterTo(ymd(bugun)); return
+    }
+    if (v.mode === "buay") {
+      setFilterFrom(ymd(new Date(bugun.getFullYear(), bugun.getMonth(), 1)))
+      setFilterTo(ymd(bugun)); return
+    }
+    setFilterFrom(v.from ?? ""); setFilterTo(v.to ?? "")
+  }
 
   const loadList = async () => {
     setLoading(true)
@@ -263,15 +288,9 @@ export default function MessagesPage() {
     return () => { cancelled = true }
   }, [selectedMessageId])
 
-  /* Filtreler ve sayaçlar */
-  const filtered = useMemo(() => {
-    if (!search.trim()) return messages
-    const q = search.toLowerCase()
-    return messages.filter(m =>
-      m.subject.toLowerCase().includes(q) ||
-      m.body.toLowerCase().includes(q)
-    )
-  }, [messages, search])
+  /* Liste sunucu tarafında filtreleniyor (loadList query string) — burada
+     ek istemci filtresi yok. */
+  const filtered = messages
 
 
   const filteredDirectory = useMemo(() => {
@@ -399,19 +418,6 @@ export default function MessagesPage() {
 
   return (
     <PageContainer title="Mesajlar" description="Sunucu kullanıcılarına mesaj gönderme">
-      {/* Action bar — sadece arama (Yeni Mesaj sol panele inline taşındı) */}
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Mesaj ara..."
-            className="h-8 text-xs rounded-[5px] bg-card pl-8 w-64"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-      </div>
-
       {/*
         2 sütun layout:
           SOL  (~520px) — Compose form / Hazır Mesajlar / Detay (toggle veya selected'a göre)
@@ -850,10 +856,12 @@ export default function MessagesPage() {
         )}
 
         {/* Mesaj listesi */}
-        <NestedCard footer={<><Mail className="h-3 w-3" /><span>{filtered.length} mesaj</span></>}>
-            <div className="flex items-center justify-between mb-3 gap-2">
-              <h3 className="text-sm font-semibold">Gönderilen Mesajlar</h3>
-              <div className="flex items-center gap-2">
+        <ListeKarti
+          baslik="Gönderilen Mesajlar"
+          ikon={<Mail className="size-3.5" />}
+          toplam={filtered.length}
+          aksiyon={
+            <>
                 {activeFilterCount > 0 && (
                   <button
                     onClick={clearFilters}
@@ -900,28 +908,6 @@ export default function MessagesPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Başlangıç</Label>
-                        <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-                          className="h-7 text-[11px] rounded-[5px]" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Bitiş</Label>
-                        <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-                          className="h-7 text-[11px] rounded-[5px]" />
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Öncelik</Label>
-                        <Select value={filterPriority || "all"} onValueChange={(v) => setFilterPriority(v === "all" ? "" : v)}>
-                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Hepsi</SelectItem>
-                            <SelectItem value="normal">Normal</SelectItem>
-                            <SelectItem value="high">Yüksek</SelectItem>
-                            <SelectItem value="urgent">Acil</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
                         <Label className="text-foreground/80 text-[12px] font-medium">Firma</Label>
                         <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
                           <SelectTrigger className="w-full h-7 text-[11px] rounded-[5px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
@@ -939,27 +925,38 @@ export default function MessagesPage() {
                           placeholder="kullanıcı adı"
                           className="h-7 text-[11px] rounded-[5px] font-mono" />
                       </div>
-                      <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Konu içerir</Label>
-                        <Input value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
-                          placeholder="konu kelimesi"
-                          className="h-7 text-[11px] rounded-[5px]" />
-                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
-              </div>
-            </div>
-
+            </>
+          }
+        >
             <div className="overflow-x-auto">
               <table className="w-full text-[14px] font-medium leading-[20px]">
                 <ListeThead>
-                  <th className="px-4 py-1.5 text-left font-medium">Öncelik</th>
-                  <th className="px-4 py-1.5 text-left font-medium">Konu</th>
-                  <th className="px-4 py-1.5 text-left font-medium">Alıcı</th>
-                  <th className="px-4 py-1.5 text-left font-medium">Durum</th>
-                  <th className="px-4 py-1.5 text-left font-medium">Okunma</th>
-                  <th className="px-4 py-1.5 text-left font-medium">Tarih</th>
+                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
+                    <SecimFiltre
+                      label="Öncelik"
+                      options={["normal", "high", "urgent"] as const}
+                      getLabel={(o) => (o === "normal" ? "Normal" : o === "high" ? "Yüksek" : "Acil")}
+                      selected={filterPriority ? [filterPriority] : []}
+                      onChange={(v) => setFilterPriority(v[v.length - 1] ?? "")}
+                    />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Konu" value={filterSubject} onChange={setFilterSubject} />
+                  </th>
+                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Alıcı</th>
+                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Durum</th>
+                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Okunma</th>
+                  <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                    <TarihFiltre
+                      label="Tarih"
+                      value={lisansTarih}
+                      onChange={tarihModunuUygula}
+                      align="end"
+                    />
+                  </th>
                 </ListeThead>
                 <tbody>
                   {loading ? (
@@ -1039,7 +1036,7 @@ export default function MessagesPage() {
                 </tbody>
               </table>
             </div>
-        </NestedCard>
+        </ListeKarti>
 
       </div>
 
