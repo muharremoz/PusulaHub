@@ -22,6 +22,8 @@ import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremo
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import {  } from "@muharremoz/pusula-ui";
 import { Combobox } from "@/components/ui/combobox";
+import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -477,6 +479,11 @@ export default function CompaniesPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [listSearch, setListSearch] = useState("");
+
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [firmaFiltre,  setFirmaFiltre]  = useState("");
+  const [kodFiltre,    setKodFiltre]    = useState("");
+  const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
   const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
@@ -938,16 +945,16 @@ export default function CompaniesPage() {
   /**
    * Firma listesini Excel'e aktar.
    *
-   * EKRANDA NE VARSA O aktarılır: arama/filtre uygulanmış ve seçili sıraya
-   * göre dizilmiş liste (`listSorted`). "Gördüğüm tablo ile dosya farklı"
-   * şaşkınlığı olmasın diye tüm firmalar değil.
+   * EKRANDA NE VARSA O aktarılır: arama + sütun başlığı filtreleri uygulanmış
+   * ve seçili sıraya göre dizilmiş liste (`listeFiltreli`). "Gördüğüm tablo ile
+   * dosya farklı" şaşkınlığı olmasın diye tüm firmalar değil.
    */
   async function exportCompanyList() {
-    if (!listSorted.length) return
+    if (!listeFiltreli.length) return
     const XLSX = await import("xlsx")
 
     const header = ["Firma", "Firma Kodu", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
-    const rows = listSorted.map((c) => [
+    const rows = listeFiltreli.map((c) => [
       c.firma,
       c.firkod,
       c.email || "",
@@ -1746,6 +1753,16 @@ tr:nth-child(even) td{background:#fafafa}
       }
     }
     return listSortDir === "asc" ? cmp : -cmp;
+  });
+
+  /* Sütun başlığı filtreleri — üstteki serbest arama ile VE (AND) birleşir. */
+  const listeFiltreli = listSorted.filter((c) => {
+    const f = firmaFiltre.trim().toLocaleLowerCase("tr-TR");
+    const k = kodFiltre.trim().toLocaleLowerCase("tr-TR");
+    if (f && !c.firma.toLocaleLowerCase("tr-TR").includes(f)) return false;
+    if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
+    if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
+    return true;
   });
 
   return (
@@ -3674,35 +3691,26 @@ tr:nth-child(even) td{background:#fafafa}
           </Dialog>
         </div>
       ) : (
-        <NestedCard>
-          <div className="flex flex-col gap-0">
-            {/* Üst bar: arama + sıralama */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-muted/20">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <ListeKarti
+          baslik="Firmalar"
+          ikon={<Building2 className="size-3.5" />}
+          toplam={apiCompanies.length}
+          filtreli={listeFiltreli.length}
+          aksiyon={
+            <>
+              <div className="relative">
+                <Search className="text-muted-foreground absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
                 <Input
                   value={listSearch}
                   onChange={(e) => setListSearch(e.target.value)}
                   placeholder="Firma adı veya kodu ara..."
-                  className="h-8 pl-7 text-[11px] rounded-[5px]"
+                  className="h-7 w-56 rounded-[5px] pl-7 text-[12px]"
                 />
               </div>
-              <Select value={listSortKey} onValueChange={(v) => setListSortKey(v as typeof listSortKey)}>
-                <SelectTrigger className="h-8 w-[160px] text-[11px] rounded-[5px]">
-                  <SelectValue placeholder="Sırala..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="firma" className="text-[13px]">Firma Adı</SelectItem>
-                  <SelectItem value="firkod" className="text-[13px]">Firma Kodu</SelectItem>
-                  <SelectItem value="userCount" className="text-[13px]">Kullanıcı Sayısı</SelectItem>
-                  <SelectItem value="lisansBitis" className="text-[13px]">Lisans Bitiş</SelectItem>
-                  <SelectItem value="status" className="text-[13px]">Durum</SelectItem>
-                </SelectContent>
-              </Select>
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 w-8 p-0 rounded-[5px]"
+                className="h-7 w-7 rounded-[5px] p-0"
                 onClick={() => setListSortDir((d) => (d === "asc" ? "desc" : "asc"))}
                 title={listSortDir === "asc" ? "Artan" : "Azalan"}
               >
@@ -3711,78 +3719,98 @@ tr:nth-child(even) td{background:#fafafa}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 rounded-[5px] text-[11px] gap-1.5"
+                className="h-7 gap-1.5 rounded-[5px] text-[12px]"
                 onClick={exportCompanyList}
-                disabled={apiLoading || listSorted.length === 0}
+                disabled={apiLoading || listeFiltreli.length === 0}
                 title="Listelenen firmaları Excel olarak indir"
               >
                 <Download className="h-3.5 w-3.5" />
                 Excel
               </Button>
-            </div>
-
-            {/* Liste başlığı */}
-            <div className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-1.5 bg-muted/20 border-b border-border text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-              <div>Firma</div>
-              <div className="text-right">Firma Kodu</div>
-              <div className="text-right">Kullanıcı</div>
-              <div className="text-right">Lisans Bitiş</div>
-              <div className="text-right">Durum</div>
-            </div>
-
-            {/* Liste satırları */}
-            <div className="divide-y divide-border/40 max-h-[520px] overflow-y-auto">
-              {apiLoading ? (
-                <div className="p-3 space-y-1.5">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[5px]" />)}
-                </div>
-              ) : listSorted.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Building2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
-                  <p className="text-[12px] font-medium text-muted-foreground">
-                    {listSearch.trim() ? "Arama sonucu bulunamadı" : "Kayıtlı firma yok"}
-                  </p>
-                </div>
-              ) : (
-                listSorted.map((comp) => {
+            </>
+          }
+        >
+          <div className="max-h-[560px] overflow-auto">
+            <table className="w-full text-[14px] font-medium leading-[20px]">
+              <ListeThead>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
+                </th>
+                <th className="px-4 py-1.5 text-right font-medium">Kullanıcı</th>
+                <th className="px-4 py-1.5 text-right font-medium">Lisans Bitiş</th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SecimFiltre
+                    label="Durum"
+                    options={["aktif", "doldu"] as const}
+                    getLabel={(o) => (o === "aktif" ? "Aktif" : "Süresi Doldu")}
+                    selected={durumFiltre}
+                    onChange={(v) => setDurumFiltre(v as string[])}
+                  />
+                </th>
+              </ListeThead>
+              <tbody>
+                {apiLoading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i}>
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : listeFiltreli.length === 0 ? (
+                  <ListeBosSatir
+                    sutunSayisi={5}
+                    toplam={apiCompanies.length}
+                    bosMesaj="Kayıtlı firma yok."
+                    filtreliMesaj="Arama sonucu bulunamadı."
+                  />
+                ) : listeFiltreli.map((comp) => {
                   const active = firmaIsActive(comp);
                   return (
-                    <button
+                    <tr
                       key={comp.id}
                       onClick={() => selectFirma(comp)}
-                      className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors text-left items-center w-full"
+                      className="hover:bg-muted/20 cursor-pointer transition-colors"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">{comp.firma}</span>
-                      </div>
-                      <div className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">{comp.firkod || "—"}</div>
-                      <div className="text-right tabular-nums">
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <td className="px-4 py-1.5">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{comp.firma}</span>
+                        </span>
+                      </td>
+                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
+                        {comp.firkod || "—"}
+                      </td>
+                      <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                        <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {comp.userCount}
                         </span>
-                      </div>
-                      <div className="text-right text-muted-foreground tabular-nums">{comp.lisansBitis || "—"}</div>
-                      <div className="flex justify-end">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${active ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`} />
-                          {active ? "Aktif" : "Süresi Doldu"}
-                        </span>
-                      </div>
-                    </button>
+                      </td>
+                      <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                        {comp.lisansBitis || "—"}
+                      </td>
+                      <td className="px-4 py-1.5 whitespace-nowrap">
+                        {active ? (
+                          <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                            <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">
+                            <span className="size-1.5 rounded-full bg-red-500" />Süresi Doldu
+                          </span>
+                        )}
+                      </td>
+                    </tr>
                   );
-                })
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-3 py-2 border-t border-border/40 bg-muted/20 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Building2 className="h-3 w-3" />
-              {listSorted.length} / {apiCompanies.length} firma listeleniyor
-            </div>
+                })}
+              </tbody>
+            </table>
           </div>
-        </NestedCard>
+        </ListeKarti>
       )}
 
       {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi */}
