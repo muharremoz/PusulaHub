@@ -17,8 +17,9 @@
  * ve DOKUNULMADIĞI sürece kaydederken "read" kalır — kimsenin yetkisi sessizce
  * yükseltilmez. Kapatılıp tekrar açılırsa "write" olur.
  *
- * CRM'de hazır paketler `permission_packages` tablosundan gelir; Hub'da öyle
- * bir tablo yok, o blok yerine başlıkta toplu aç/temizle var.
+ * Hazır paketler `hub.permission_packages` tablosundan gelir ve bu ekrandan
+ * yönetilir. Paket bir ROL DEĞİL: uygulandığında modül kümesi KOPYALANIR,
+ * bağ kurulmaz — paket sonradan değişirse eski kişiler etkilenmez.
  *
  * Kullanıcı OLUŞTURMA burada yok: kimlik ve uygulama erişimi CRM'de
  * (docs/YENI-SISTEM.md). Bu ekran yalnız `user_permissions` düzenler.
@@ -27,13 +28,16 @@
 import { useState, useEffect, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { ChevronDown, ChevronRight, Copy, Search, ShieldAlert } from "lucide-react"
+import { Check, ChevronDown, ChevronRight, Copy, Pencil, Plus, Search, ShieldAlert, Trash2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger, Switch } from "@muharremoz/pusula-ui"
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { APP_REGISTRY } from "@/lib/apps-registry"
@@ -41,6 +45,10 @@ import type { AppUser } from "@/app/api/users/route"
 
 type Level = "none" | "read" | "write"
 interface ModuleDef { key: string; label: string; group: string }
+interface Paket {
+  id: string; appId: string; name: string
+  description: string | null; modules: string[]; sortOrder: number
+}
 
 /** Modül gruplarının ekrandaki başlıkları — MODULES.group ile eşleşir. */
 const GRUP_BASLIK: Record<string, string> = {
@@ -166,6 +174,8 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
   const [saving,    setSaving]    = useState(false)
   const [detayAcik, setDetayAcik] = useState(true)
   const [kopyaAcik, setKopyaAcik] = useState(false)
+  const [paketler,  setPaketler]  = useState<Paket[]>([])
+  const [paketDuzenle, setPaketDuzenle] = useState<Paket | "yeni" | null>(null)
 
   /** Kişinin erişebildiği uygulamalar — izin yalnız bunlar için anlamlı. */
   const apps = useMemo(() => {
@@ -196,6 +206,15 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
   }, [])
 
   useEffect(() => { yukle(kisi.id, appId) }, [kisi.id, appId, yukle])
+
+  const paketleriYukle = useCallback(async (uygulama: string) => {
+    try {
+      const r = await fetch(`/api/permission-packages?appId=${uygulama}`)
+      if (r.ok) setPaketler(await r.json())
+    } catch { /* paket olmadan da ekran çalışır */ }
+  }, [])
+
+  useEffect(() => { paketleriYukle(appId) }, [appId, paketleriYukle])
 
   const seviye = (k: string): Level => perms[k] ?? "none"
   const aktifSayi = mods.filter((m) => seviye(m.key) !== "none").length
@@ -243,6 +262,25 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
     } catch {
       toast.error("Kopyalanamadı")
     }
+  }
+
+  /** Paketi uygula — küme KOPYALANIR, bağ kurulmaz. Kaydet'e basılana kadar yazılmaz. */
+  function paketUygula(pk: Paket) {
+    const kume = new Set(pk.modules)
+    const next: Record<string, Level> = {}
+    for (const m of mods) next[m.key] = kume.has(m.key) ? "write" : "none"
+    setPerms(next)
+    toast.success(`"${pk.name}" uygulandı`, { description: "Kaydet'e basana kadar yazılmaz." })
+  }
+
+  async function paketSil(id: string) {
+    try {
+      const r = await fetch(`/api/permission-packages?id=${id}`, { method: "DELETE" })
+      if (!r.ok) { toast.error("Paket silinemedi"); return }
+      toast.success("Paket silindi")
+      setPaketDuzenle(null)
+      paketleriYukle(appId)
+    } catch { toast.error("Paket silinemedi") }
   }
 
   async function kaydet() {
@@ -393,6 +431,65 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
           </div>
         ) : (
           <>
+            {/* Hazır paketler */}
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-muted-foreground/70 text-[10px] font-medium tracking-wider uppercase">
+                Hazır paketler
+              </span>
+              <button
+                onClick={() => setPaketDuzenle("yeni")}
+                title="Ekrandaki yetkilerle yeni paket oluştur"
+                className="text-muted-foreground hover:text-foreground ml-auto inline-flex items-center gap-1 text-[11px] transition-colors"
+              >
+                <Plus className="size-3" />
+                Yeni paket
+              </button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {paketler.map((pk) => {
+                // Paket "seçili" sayılır: açık modüller kümesi paketle birebir aynıysa.
+                const acikKume = mods.filter((m) => seviye(m.key) !== "none").map((m) => m.key)
+                const pkKume = pk.modules.filter((k) => mods.some((m) => m.key === k))
+                const seciliPaket =
+                  acikKume.length === pkKume.length && acikKume.every((k) => pkKume.includes(k))
+                return (
+                  <div
+                    key={pk.id}
+                    className={cn(
+                      "group bg-muted/25 hover:bg-muted/50 relative rounded-[8px] border transition-colors",
+                      seciliPaket ? "border-primary ring-primary/40 ring-1" : "border-border",
+                    )}
+                  >
+                    <button onClick={() => paketUygula(pk)} className="w-full p-2.5 text-left">
+                      <span className="flex items-center gap-1.5">
+                        <span className="text-[12.5px] font-semibold">{pk.name}</span>
+                        {seciliPaket && <Check className="text-primary size-3.5" />}
+                      </span>
+                      <p className="text-muted-foreground mt-0.5 pr-5 text-[11px] leading-snug">
+                        {pk.description ?? "—"}
+                      </p>
+                      <p className="text-muted-foreground/70 mt-1.5 text-[10.5px] tabular-nums">
+                        {pkKume.length} modül
+                      </p>
+                    </button>
+                    {/* Düzenleme kartın üstünde ama sessiz: paket seçmek asıl eylem. */}
+                    <button
+                      onClick={() => setPaketDuzenle(pk)}
+                      title="Paketi düzenle"
+                      className="text-muted-foreground/50 hover:text-foreground absolute right-1.5 top-1.5 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
+              {paketler.length === 0 && (
+                <p className="text-muted-foreground/70 col-span-full text-[11.5px]">
+                  Henüz paket yok — “Yeni paket” ile ekrandaki yetkilerden oluştur.
+                </p>
+              )}
+            </div>
+
             {/* Tek tek düzenleme — katlı */}
             <button
               onClick={() => setDetayAcik((a) => !a)}
@@ -458,6 +555,134 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
           </>
         )}
       </div>
+
+      {paketDuzenle && (
+        <PaketDialog
+          paket={paketDuzenle === "yeni" ? null : paketDuzenle}
+          appId={appId}
+          mods={mods}
+          /* Yeni paket ekrandaki açık yetkilerle başlar — CRM'deki gibi. */
+          baslangic={mods.filter((m) => seviye(m.key) !== "none").map((m) => m.key)}
+          onClose={() => setPaketDuzenle(null)}
+          onSaved={() => { setPaketDuzenle(null); paketleriYukle(appId) }}
+          onDelete={paketSil}
+        />
+      )}
     </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Paket ekle / düzenle
+   ══════════════════════════════════════════════════════════════ */
+
+function PaketDialog({
+  paket, appId, mods, baslangic, onClose, onSaved, onDelete,
+}: {
+  paket: Paket | null
+  appId: string
+  mods: ModuleDef[]
+  baslangic: string[]
+  onClose: () => void
+  onSaved: () => void
+  onDelete: (id: string) => void
+}) {
+  const [ad,       setAd]       = useState(paket?.name ?? "")
+  const [aciklama, setAciklama] = useState(paket?.description ?? "")
+  const [secili,   setSecili]   = useState<string[]>(paket ? paket.modules : baslangic)
+  const [saving,   setSaving]   = useState(false)
+
+  async function kaydet() {
+    if (!ad.trim()) { toast.error("Paket adı zorunludur"); return }
+    setSaving(true)
+    try {
+      const r = await fetch("/api/permission-packages", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          id: paket?.id, appId, name: ad.trim(),
+          description: aciklama, modules: secili,
+          sortOrder: paket?.sortOrder ?? 100,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error("Kaydedilemedi", { description: d?.error }); return }
+      toast.success(paket ? "Paket güncellendi" : "Paket oluşturuldu")
+      onSaved()
+    } catch {
+      toast.error("Kaydedilemedi")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o && !saving) onClose() }}>
+      <DialogContent className="max-w-lg p-0 gap-0">
+        <DialogHeader className="border-border/50 border-b px-5 py-3.5">
+          <DialogTitle className="text-[13px]">
+            {paket ? "Paketi Düzenle" : "Yeni Paket"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="max-h-[60vh] space-y-3 overflow-y-auto px-5 py-4">
+          <div className="flex flex-col gap-1">
+            <Label className="text-foreground/80 text-[12px] font-medium">Ad</Label>
+            <Input value={ad} onChange={(e) => setAd(e.target.value)} placeholder="ör. Destek" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-foreground/80 text-[12px] font-medium">Açıklama</Label>
+            <Input
+              value={aciklama}
+              onChange={(e) => setAciklama(e.target.value)}
+              placeholder="Bu paket kimler için?"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <Label className="text-foreground/80 text-[12px] font-medium">
+              Modüller <span className="text-muted-foreground tabular-nums">({secili.length}/{mods.length})</span>
+            </Label>
+            <div className="border-border/60 divide-border/60 max-h-56 divide-y overflow-y-auto rounded-[5px] border">
+              {mods.map((m) => {
+                const on = secili.includes(m.key)
+                return (
+                  <div key={m.key} className="hover:bg-muted/30 flex items-center gap-2 px-2.5 py-1.5">
+                    <span className="min-w-0 flex-1 truncate text-[12.5px]">{m.label}</span>
+                    <Switch
+                      checked={on}
+                      onCheckedChange={(v) =>
+                        setSecili((c) => (v ? [...c, m.key] : c.filter((x) => x !== m.key)))
+                      }
+                    />
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-border/50 flex items-center gap-2 border-t px-5 py-3">
+          {paket && (
+            <button
+              onClick={() => onDelete(paket.id)}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 text-[12px] font-medium text-rose-600 transition-colors hover:text-rose-700 disabled:opacity-50"
+            >
+              <Trash2 className="size-3.5" />
+              Sil
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-8 text-[12px]" onClick={onClose} disabled={saving}>
+              İptal
+            </Button>
+            <Button size="sm" className="h-8 text-[12px]" onClick={kaydet} disabled={saving}>
+              {saving ? "Kaydediliyor…" : "Kaydet"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
