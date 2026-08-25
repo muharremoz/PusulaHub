@@ -953,10 +953,10 @@ export default function CompaniesPage() {
     if (!listeFiltreli.length) return
     const XLSX = await import("xlsx")
 
-    const header = ["Firma", "Firma Kodu", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
+    const header = ["Firma Kodu", "Firma", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
     const rows = listeFiltreli.map((c) => [
-      c.firma,
       c.firkod,
+      c.firma,
       c.email || "",
       c.phone || "",
       c.userCount,
@@ -3734,14 +3734,14 @@ tr:nth-child(even) td{background:#fafafa}
             <table className="w-full text-[14px] font-medium leading-[20px]">
               <ListeThead>
                 <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
+                  <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
                 </th>
                 <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
+                  <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
                 </th>
                 <th className="px-4 py-1.5 text-right font-medium">Kullanıcı</th>
                 <th className="px-4 py-1.5 text-right font-medium">Lisans Bitiş</th>
-                <th className="px-4 py-1.5 text-left font-medium">
+                <th className="px-4 py-1.5 text-right font-medium">
                   <SecimFiltre
                     label="Durum"
                     options={["aktif", "doldu"] as const}
@@ -3775,14 +3775,14 @@ tr:nth-child(even) td{background:#fafafa}
                       onClick={() => selectFirma(comp)}
                       className="hover:bg-muted/20 cursor-pointer transition-colors"
                     >
+                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
+                        {comp.firkod || "—"}
+                      </td>
                       <td className="px-4 py-1.5">
                         <span className="flex min-w-0 items-center gap-2">
                           <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{comp.firma}</span>
                         </span>
-                      </td>
-                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
-                        {comp.firkod || "—"}
                       </td>
                       <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
                         <span className="inline-flex items-center gap-1">
@@ -3793,7 +3793,7 @@ tr:nth-child(even) td{background:#fafafa}
                       <td className="text-muted-foreground px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
                         {comp.lisansBitis || "—"}
                       </td>
-                      <td className="px-4 py-1.5 whitespace-nowrap">
+                      <td className="px-4 py-1.5 text-right whitespace-nowrap">
                         {active ? (
                           <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                             <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
