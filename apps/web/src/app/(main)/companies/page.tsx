@@ -3808,7 +3808,7 @@ tr:nth-child(even) td{background:#fafafa}
                       <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
                         {comp.firkod || "—"}
                       </td>
-                      <td className="px-4 py-1.5">
+                      <td className="px-4 py-1.5 text-[12px]">
                         <span className="flex min-w-0 items-center gap-2">
                           <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{comp.firma}</span>
