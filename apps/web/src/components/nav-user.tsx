@@ -82,8 +82,8 @@ export function NavUser() {
                 <User className="size-3.5" />Profil
               </DropdownMenuItem>
               {role === "admin" && (
-                <DropdownMenuItem onClick={() => router.push("/users")} className="gap-2 text-[12px]">
-                  <Shield className="size-3.5" />Kullanıcı Yönetimi
+                <DropdownMenuItem onClick={() => router.push("/permissions")} className="gap-2 text-[12px]">
+                  <Shield className="size-3.5" />Yetkiler
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => router.push("/settings")} className="gap-2 text-[12px]">

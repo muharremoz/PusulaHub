@@ -89,7 +89,7 @@ const NAV: NavGroupDef[] = [
     label: "Yönetim",
     icon: Users,
     items: [
-      { title: "Kullanıcılar", url: "/users", icon: Users, moduleKey: "users" },
+      { title: "Yetkiler", url: "/permissions", icon: Users, moduleKey: "users" },
       { title: "Şifre Kasası", url: "/vault", icon: KeyRound, moduleKey: "vault" },
     ],
   },
@@ -185,11 +185,11 @@ function HubUserMenu() {
         <span className="flex-1 truncate">Profil</span>
       </DropdownMenuItem>
       {isAdmin && (
-        <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push("/users")}>
+        <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push("/permissions")}>
           <ItemBadge>
             <Shield className="text-muted-foreground size-3.5" />
           </ItemBadge>
-          <span className="flex-1 truncate">Kullanıcı Yönetimi</span>
+          <span className="flex-1 truncate">Yetkiler</span>
         </DropdownMenuItem>
       )}
       {/* Tema — CRM ile aynı: tek tıkla açık/koyu. */}

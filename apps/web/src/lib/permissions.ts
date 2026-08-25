@@ -40,7 +40,7 @@ export const MODULES: ModuleDef[] = [
   { key: "ports",            label: "Port Yönetimi",     group: "services" },
 
   // Yönetim
-  { key: "users",            label: "Kullanıcılar",      group: "admin" },
+  { key: "users",            label: "Yetkiler",          group: "admin" },
   { key: "vault",            label: "Şifre Kasası",      group: "admin" },
 
   // Geliştirici

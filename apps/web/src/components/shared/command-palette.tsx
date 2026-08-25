@@ -34,7 +34,7 @@ const NAV: NavEntry[] = [
   { group: "Servisler", label: "Active Directory",   url: "/ad",             icon: "shield-check", keywords: "ad active directory" },
   { group: "Servisler", label: "SQL",                url: "/sql",            icon: "file-text" },
   { group: "Servisler", label: "Port Yönetimi",      url: "/ports",          icon: Network },
-  { group: "Yönetim", label: "Kullanıcılar", url: "/users",    icon: "users", keywords: "user" },
+  { group: "Yönetim", label: "Yetkiler", url: "/permissions", icon: "users", keywords: "user kullanıcı yetki izin" },
   { group: "Yönetim", label: "Şifre Kasası", url: "/vault",    icon: "lock-keyhole", keywords: "password vault" },
   { group: "Yönetim", label: "Ayarlar",      url: "/settings", icon: "settings" },
   { group: "Geliştirici", label: "Mesaj Önizleme", url: "/preview", icon: "bell" },
