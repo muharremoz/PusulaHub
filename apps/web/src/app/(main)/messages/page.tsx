@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 import { PageContainer } from "@/components/layout/page-container"
 import { NestedCard } from "@/components/shared/nested-card"
-import { StatsCard } from "@/components/shared/stats-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,8 +23,8 @@ import {
 import { ComboboxMulti } from "@/components/ui/combobox"
 import { ListeThead } from "@/components/shared/liste-karti"
 import {
-  Send, Plus, Search, Mail, MailOpen,
-  AlertTriangle, Users, Building2, UserCheck, Check, CheckCheck, X,
+  Send, Plus, Search, Mail,
+  Users, Building2, UserCheck, Check, CheckCheck, X,
   Server, ChevronsUpDown, Sparkles, Bookmark, MoreVertical, Pencil, Trash2,
 } from "lucide-react"
 
@@ -274,9 +273,6 @@ export default function MessagesPage() {
     )
   }, [messages, search])
 
-  const totalSent   = messages.length
-  const totalRead   = messages.filter(m => m.readCount >= m.totalCount && m.totalCount > 0).length
-  const urgentCount = messages.filter(m => m.priority === "urgent").length
 
   const filteredDirectory = useMemo(() => {
     const q = userSearch.trim().toLowerCase()
@@ -403,15 +399,6 @@ export default function MessagesPage() {
 
   return (
     <PageContainer title="Mesajlar" description="Sunucu kullanıcılarına mesaj gönderme">
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-3 mb-6 items-stretch">
-        <StatsCard title="GÖNDERİLEN" value={totalSent}                       icon={<Send             className="h-4 w-4" />} subtitle="Toplam mesaj" />
-        <StatsCard title="OKUNAN"     value={totalRead}                       icon={<MailOpen         className="h-4 w-4" />} subtitle="Tamamlanan"
-          trend={totalSent > 0 ? { value: `%${Math.round((totalRead / totalSent) * 100)} okunma`, positive: true } : undefined} />
-        <StatsCard title="ACİL"       value={urgentCount}                     icon={<AlertTriangle    className="h-4 w-4" />} subtitle="Yüksek öncelikli" />
-        <StatsCard title="ALICI"      value={recipients.length}               icon={<Users            className="h-4 w-4" />} subtitle={`${companies.length} firma`} />
-      </div>
-
       {/* Action bar — sadece arama (Yeni Mesaj sol panele inline taşındı) */}
       <div className="flex items-center gap-3 mb-4">
         <div className="relative ml-auto">
