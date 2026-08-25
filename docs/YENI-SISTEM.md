@@ -50,9 +50,24 @@ eski prod'daki DEĞERLE aynı olmalı), `AGENT_SECRET`, `INTERNAL_APP_KEY`, `FIR
 
 ## DB / migration
 
-DB değişikliği: VPS'e SSH + `docker exec supabase-db-p127ik4ru8fgovgmuc9qj9uq psql`. **Supabase MCP eski cloud'a
-bakar, KULLANMA.** SQL'i `supabase/migrations/`'a koy. PostgREST'e yeni şema açmak: authenticator role
-`pgrst.db_schemas` + `notify pgrst, 'reload config/schema'` (+ Coolify Supabase service env `PGRST_DB_SCHEMAS`).
+**Supabase MCP eski cloud'a bakar, KULLANMA.** Üretim = self-hosted (`10.15.2.7`).
+
+Akış — SQL'i `supabase/migrations/`'a yaz, sonra VPS'e uygula (SSH anahtarı: `~/.ssh/claude_ops`):
+
+```bash
+cat supabase/migrations/<dosya>.sql | ssh -i ~/.ssh/claude_ops root@10.15.2.7   "docker exec -i supabase-db-p127ik4ru8fgovgmuc9qj9uq psql -U postgres -d postgres -v ON_ERROR_STOP=1"
+```
+
+Yeni tablo/kolon PostgREST'e görünsün diye şemayı yenile:
+
+```bash
+ssh -i ~/.ssh/claude_ops root@10.15.2.7   "docker exec -i supabase-db-p127ik4ru8fgovgmuc9qj9uq psql -U postgres -d postgres -c \"notify pgrst, 'reload schema';\""
+```
+
+Yeni **şema** açmak (tablo değil): authenticator role `pgrst.db_schemas` + `notify pgrst, 'reload config/schema'`
+(+ Coolify Supabase service env `PGRST_DB_SCHEMAS`).
+
+Migration disiplini: **append-only** — geçmiş migration'ı düzenleme, yeni dosya yaz.
 
 ## Fastify (aktarım vb.)
 
