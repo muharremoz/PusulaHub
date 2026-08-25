@@ -1,31 +1,39 @@
 "use client"
 
 /**
- * Yetkiler — kullanıcıların Hub (ve diğer uygulama) modül izinleri.
+ * Yetkilendirme — PusulaCRM'in settings/permissions ekranının Hub karşılığı.
  *
- * Kullanıcı OLUŞTURMA/silme burada YOK: kimlik ve uygulama erişimi Pusula
- * CRM'den yönetiliyor (docs/YENI-SISTEM.md). Bu sayfa yalnız
- * `user_permissions` düzenler — CRM'de Hub izinlerini yöneten bir ekran yok,
- * her uygulama kendi yetkilendirmesini kendi içinden yapıyor.
+ * Düzen CRM ile aynı: SOLDA kişi listesi (arama + yetki sayısı), SAĞDA seçili
+ * kişinin yetkileri. Sağ tarafta sırasıyla başlık şeridi (ad, sayaç, kişiden
+ * kopyala, kaydet), HAZIR PAKETLER ve katlanır "tek tek düzenle" bölümü —
+ * gruplu, iki sütun, grup başında "Tümünü aç".
  *
- * Görsel dil CRM'in "Sayfa Yetkileri" ekranından: sayaç + toplu aksiyon
- * şeridi, ayraçlı satır listesi. Fark: CRM'de yetki açık/kapalı, Hub'da üç
- * seviyeli (Yok / Okuma / Yazma), o yüzden Switch yerine segment kontrol.
+ * CRM'den iki zorunlu fark:
+ *   1. CRM'de yetki açık/kapalı (Switch); Hub'da ÜÇ seviyeli
+ *      (Yok / Okuma / Yazma), o yüzden satırda segment kontrol var.
+ *   2. CRM paketleri `permission_packages` tablosundan gelir ve ekrandan
+ *      düzenlenir. Hub'da böyle bir tablo yok — paketler kodda tanımlı ve
+ *      seviye tabanlı (aşağıdaki PAKETLER). Özel paket ihtiyacı doğarsa
+ *      tablo + CRUD gerekir.
+ *
+ * Kullanıcı OLUŞTURMA burada yok: kimlik ve uygulama erişimi CRM'de
+ * (docs/YENI-SISTEM.md). Bu ekran yalnız `user_permissions` düzenler.
  */
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { ShieldCheck } from "lucide-react"
+import { ChevronDown, ChevronRight, Copy, Search, ShieldAlert } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui"
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { APP_REGISTRY } from "@/lib/apps-registry"
 import type { AppUser } from "@/app/api/users/route"
-import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
-import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
 
 type Level = "none" | "read" | "write"
 interface ModuleDef { key: string; label: string; group: string }
@@ -36,6 +44,27 @@ const SEVIYELER: { value: Level; label: string }[] = [
   { value: "write", label: "Yazma" },
 ]
 
+/** Modül gruplarının ekrandaki başlıkları — MODULES.group ile eşleşir. */
+const GRUP_BASLIK: Record<string, string> = {
+  general:  "Günlük iş",
+  services: "Servisler",
+  data:     "Veri",
+  admin:    "Yönetim & sistem",
+  dev:      "Geliştirici",
+}
+const GRUP_SIRA = ["general", "services", "data", "admin", "dev"]
+
+/**
+ * Hazır paketler — CRM'dekiler DB'den gelir, Hub'da kodda. Politika
+ * uydurmamak için seviye tabanlı tutuldu; modül seçen özel paketler
+ * gerekirse `permission_packages` benzeri bir tablo şart.
+ */
+const PAKETLER: { ad: string; aciklama: string; seviye: Level }[] = [
+  { ad: "Kapalı",     aciklama: "Hiçbir modüle erişim yok",              seviye: "none"  },
+  { ad: "Salt okuma", aciklama: "Tüm modülleri görür, değişiklik yapamaz", seviye: "read"  },
+  { ad: "Tam yetki",  aciklama: "Tüm modüllerde okuma ve yazma",          seviye: "write" },
+]
+
 const roleLabel = (r: string) => (r === "admin" ? "Süper Admin" : "Kullanıcı")
 
 export default function PermissionsPage() {
@@ -44,307 +73,422 @@ export default function PermissionsPage() {
 
   const [users,   setUsers]   = useState<AppUser[]>([])
   const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<AppUser | null>(null)
-
-  /* Sütun başlığı filtreleri */
-  const [adFiltre,    setAdFiltre]    = useState("")
-  const [emailFiltre, setEmailFiltre] = useState("")
-  const [rolFiltre,   setRolFiltre]   = useState<string[]>([])
+  const [ara,     setAra]     = useState("")
+  const [seciliId, setSeciliId] = useState<string | null>(null)
 
   useEffect(() => {
     if (session === undefined) return
     if (session?.user?.role !== "admin") { router.replace("/dashboard"); return }
-    load()
+    ;(async () => {
+      setLoading(true)
+      try {
+        const r = await fetch("/api/users")
+        if (r.ok) setUsers(await r.json())
+      } catch {
+        toast.error("Kullanıcılar yüklenemedi")
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [session])
 
-  async function load() {
-    setLoading(true)
-    try {
-      const r = await fetch("/api/users")
-      if (r.ok) setUsers(await r.json())
-    } catch {
-      toast.error("Kullanıcılar yüklenemedi")
-    } finally {
-      setLoading(false)
-    }
-  }
+  const liste = useMemo(() => {
+    const q = ara.trim().toLocaleLowerCase("tr-TR")
+    const s = [...users].sort((a, b) =>
+      (a.fullName ?? a.username).localeCompare(b.fullName ?? b.username, "tr"))
+    if (!q) return s
+    return s.filter((u) =>
+      (u.fullName ?? u.username).toLocaleLowerCase("tr-TR").includes(q) ||
+      u.username.toLocaleLowerCase("tr-TR").includes(q) ||
+      (u.email ?? "").toLocaleLowerCase("tr-TR").includes(q))
+  }, [users, ara])
 
-  const filtered = useMemo(() => {
-    const ad = adFiltre.trim().toLocaleLowerCase("tr-TR")
-    const em = emailFiltre.trim().toLocaleLowerCase("tr-TR")
-    return users.filter((u) => {
-      const isim = (u.fullName ?? u.username).toLocaleLowerCase("tr-TR")
-      if (ad && !isim.includes(ad) && !u.username.toLocaleLowerCase("tr-TR").includes(ad)) return false
-      if (em && !(u.email ?? "").toLocaleLowerCase("tr-TR").includes(em)) return false
-      if (rolFiltre.length && !rolFiltre.includes(u.role)) return false
-      return true
-    })
-  }, [users, adFiltre, emailFiltre, rolFiltre])
+  const kisi = seciliId ? users.find((u) => u.id === seciliId) ?? null : null
 
   return (
-    <div className="p-4">
-      <ListeKarti
-        className="min-h-0 flex-1"
-        baslik="Yetkiler"
-        ikon={<ShieldCheck className="size-3.5" />}
-        toplam={users.length}
-        filtreli={filtered.length}
-      >
-        <div className="min-h-0 flex-1 overflow-auto">
-          <table className="w-full text-[14px] font-medium leading-[20px]">
-            <ListeThead>
-              <th className="px-4 py-1.5 text-left font-medium">
-                <MetinFiltre label="Kullanıcı" value={adFiltre} onChange={setAdFiltre} />
-              </th>
-              <th className="px-4 py-1.5 text-left font-medium">
-                <MetinFiltre label="E-posta" value={emailFiltre} onChange={setEmailFiltre} />
-              </th>
-              <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
-                <SecimFiltre
-                  label="Rol"
-                  options={["admin", "user"] as const}
-                  getLabel={(o) => roleLabel(o)}
-                  selected={rolFiltre}
-                  onChange={(v) => setRolFiltre(v as string[])}
-                />
-              </th>
-              <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">İşlem</th>
-            </ListeThead>
-            <tbody>
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    {Array.from({ length: 3 }).map((_, j) => (
-                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
-                    ))}
-                    <td />
-                  </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <ListeBosSatir sutunSayisi={4} toplam={users.length} bosMesaj="Henüz kullanıcı yok." />
-              ) : filtered.map((u) => (
-                <tr key={u.id} className="hover:bg-muted/70 transition-colors">
-                  <td className="px-4 py-1.5 whitespace-nowrap text-[12px]">
-                    <span className="font-medium">{u.fullName ?? u.username}</span>
-                    <span className="text-muted-foreground ml-1.5 font-mono">@{u.username}</span>
-                  </td>
-                  <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">{u.email ?? "—"}</td>
-                  <td className="px-4 py-1.5 whitespace-nowrap">
-                    <span className={cn(
-                      "inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
-                      u.role === "admin"
-                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                        : "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-                    )}>
-                      {roleLabel(u.role)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-1.5 text-right whitespace-nowrap">
-                    {u.role === "admin" ? (
-                      <span className="text-muted-foreground text-[11px] italic">Tüm yetkiler</span>
-                    ) : (
-                      <button
-                        onClick={() => setEditing(u)}
-                        className="border-border/60 hover:bg-muted/40 text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[12px] font-medium transition-colors"
-                      >
-                        <ShieldCheck className="size-3.5" />
-                        Yetkileri Düzenle
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </ListeKarti>
+    <div className="flex min-h-0 flex-1 flex-col p-4">
+      <div className="bg-[var(--section-bg)] flex min-h-0 flex-1 flex-col rounded-[8px] p-2">
+        <div className="border-border flex min-h-0 flex-1 overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
 
-      <YetkiSheet user={editing} onClose={() => setEditing(null)} />
+          {/* ── SOL: kişi listesi ── */}
+          <div className="border-border/60 flex w-64 shrink-0 flex-col border-r">
+            <div className="border-border/60 border-b p-2">
+              <div className="relative">
+                <Search className="text-muted-foreground absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2" />
+                <input
+                  value={ara}
+                  onChange={(e) => setAra(e.target.value)}
+                  placeholder="Personel ara..."
+                  className="border-input focus:border-primary/50 focus:ring-primary/20 h-8 w-full rounded-[5px] border bg-card pl-8 pr-2 text-[12px] outline-none transition-colors focus:ring-2"
+                />
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {loading ? (
+                <div className="space-y-1.5 p-2">
+                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-[5px]" />)}
+                </div>
+              ) : liste.length === 0 ? (
+                <p className="text-muted-foreground p-3 text-[12px]">Sonuç yok.</p>
+              ) : liste.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setSeciliId(u.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-left transition-colors",
+                    seciliId === u.id ? "bg-muted/70" : "hover:bg-muted/40",
+                  )}
+                >
+                  <span className="bg-primary/10 text-primary flex size-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold">
+                    {(u.fullName ?? u.username).slice(0, 2).toLocaleUpperCase("tr-TR")}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-medium">{u.fullName ?? u.username}</span>
+                    <span className="text-muted-foreground block truncate text-[11px]">{roleLabel(u.role)}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── SAĞ: seçili kişinin yetkileri ── */}
+          {!kisi ? (
+            <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center gap-2">
+              <ShieldAlert className="size-8 opacity-40" />
+              <span className="text-[13px]">Soldan bir personel seç</span>
+            </div>
+          ) : (
+            <YetkiPaneli key={kisi.id} kisi={kisi} tumKisiler={users} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Yetki düzenleme — uygulama başına modül listesi
+   Sağ panel — seçili kişinin modül izinleri
    ══════════════════════════════════════════════════════════════ */
 
-function YetkiSheet({ user, onClose }: { user: AppUser | null; onClose: () => void }) {
-  const [appId,   setAppId]   = useState<string>("hub")
-  const [mods,    setMods]    = useState<ModuleDef[]>([])
-  const [perms,   setPerms]   = useState<Record<string, Level>>({})
-  const [loading, setLoading] = useState(false)
-  const [saving,  setSaving]  = useState(false)
+function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[] }) {
+  const [appId,     setAppId]     = useState("hub")
+  const [mods,      setMods]      = useState<ModuleDef[]>([])
+  const [perms,     setPerms]     = useState<Record<string, Level>>({})
+  const [kayitli,   setKayitli]   = useState<Record<string, Level>>({})
+  const [loading,   setLoading]   = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [detayAcik, setDetayAcik] = useState(false)
+  const [kopyaAcik, setKopyaAcik] = useState(false)
 
-  /** Kullanıcının erişebildiği uygulamalar — izin yalnız bunlar için anlamlı. */
+  /** Kişinin erişebildiği uygulamalar — izin yalnız bunlar için anlamlı. */
   const apps = useMemo(() => {
-    if (!user) return []
-    const ids = (user.allowedApps ?? []).map((g) => (typeof g === "string" ? g : g.id))
-    return APP_REGISTRY.filter((a) => ids.includes(a.id))
-  }, [user])
+    const ids = (kisi.allowedApps ?? []).map((g) => (typeof g === "string" ? g : g.id))
+    const bulunan = APP_REGISTRY.filter((a) => ids.includes(a.id))
+    return bulunan.length > 0 ? bulunan : APP_REGISTRY.filter((a) => a.id === "hub")
+  }, [kisi])
 
-  useEffect(() => {
-    if (!user) return
-    const ilk = apps[0]?.id ?? "hub"
-    setAppId(ilk)
-  }, [user, apps])
+  useEffect(() => { setAppId(apps[0]?.id ?? "hub") }, [apps])
 
-  useEffect(() => {
-    if (!user || !appId) return
-    let iptal = false
+  const yukle = useCallback(async (hedefId: string, uygulama: string) => {
     setLoading(true)
-    Promise.all([
-      fetch(`/api/permissions/modules?appId=${appId}`).then((r) => r.json()),
-      fetch(`/api/users/${user.id}/permissions?appId=${appId}`).then((r) => r.json()),
-    ])
-      .then(([m, d]: [ModuleDef[], { permissions?: { moduleKey: string; level: Level }[] }]) => {
-        if (iptal) return
-        const map: Record<string, Level> = {}
-        for (const p of d.permissions ?? []) map[p.moduleKey] = p.level
-        setMods(Array.isArray(m) ? m : [])
-        setPerms(map)
-      })
-      .catch(() => { if (!iptal) toast.error("Modül izinleri yüklenemedi") })
-      .finally(() => { if (!iptal) setLoading(false) })
-    return () => { iptal = true }
-  }, [user, appId])
+    try {
+      const [m, d] = await Promise.all([
+        fetch(`/api/permissions/modules?appId=${uygulama}`).then((r) => r.json()),
+        fetch(`/api/users/${hedefId}/permissions?appId=${uygulama}`).then((r) => r.json()),
+      ]) as [ModuleDef[], { permissions?: { moduleKey: string; level: Level }[] }]
+      const map: Record<string, Level> = {}
+      for (const p of d.permissions ?? []) map[p.moduleKey] = p.level
+      setMods(Array.isArray(m) ? m : [])
+      setPerms(map)
+      setKayitli(map)
+    } catch {
+      toast.error("Modül izinleri yüklenemedi")
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const aktifSayisi = mods.filter((m) => (perms[m.key] ?? "none") !== "none").length
+  useEffect(() => { yukle(kisi.id, appId) }, [kisi.id, appId, yukle])
 
-  function hepsi(lvl: Level) {
+  const seviye = (k: string): Level => perms[k] ?? "none"
+  const aktifSayi = mods.filter((m) => seviye(m.key) !== "none").length
+  const degisti = useMemo(
+    () => mods.some((m) => (perms[m.key] ?? "none") !== (kayitli[m.key] ?? "none")),
+    [mods, perms, kayitli],
+  )
+
+  /** MODULES.group sırasına göre öbekle — 16 satırı düz dizmek okunmuyor. */
+  const gruplar = useMemo(() => {
+    const g = new Map<string, ModuleDef[]>()
+    for (const m of mods) {
+      const k = m.group || "other"
+      if (!g.has(k)) g.set(k, [])
+      g.get(k)!.push(m)
+    }
+    return [...g.entries()].sort(
+      (a, b) => (GRUP_SIRA.indexOf(a[0]) + 99) % 99 - (GRUP_SIRA.indexOf(b[0]) + 99) % 99,
+    )
+  }, [mods])
+
+  function hepsineUygula(lvl: Level) {
     const next: Record<string, Level> = {}
     for (const m of mods) next[m.key] = lvl
     setPerms(next)
   }
 
+  function grubaUygula(grup: ModuleDef[], lvl: Level) {
+    setPerms((p) => {
+      const next = { ...p }
+      for (const m of grup) next[m.key] = lvl
+      return next
+    })
+  }
+
+  /** Başka kişinin izinlerini kopyala — set KOPYALANIR, bağ kurulmaz. */
+  async function kisidenKopyala(kaynakId: string) {
+    setKopyaAcik(false)
+    try {
+      const d = await fetch(`/api/users/${kaynakId}/permissions?appId=${appId}`).then((r) => r.json())
+      const map: Record<string, Level> = {}
+      for (const p of (d.permissions ?? []) as { moduleKey: string; level: Level }[]) map[p.moduleKey] = p.level
+      setPerms(map)
+      toast.success("Yetkiler kopyalandı", { description: "Kaydet'e basana kadar uygulanmaz." })
+    } catch {
+      toast.error("Kopyalanamadı")
+    }
+  }
+
   async function kaydet() {
-    if (!user) return
     setSaving(true)
     try {
       const payload = mods.map((m) => ({ moduleKey: m.key, level: perms[m.key] ?? "none" }))
-      const r = await fetch(`/api/users/${user.id}/permissions`, {
+      const r = await fetch(`/api/users/${kisi.id}/permissions`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ appId, permissions: payload }),
       })
       if (!r.ok) {
         const d = await r.json().catch(() => ({}))
-        toast.error("Yetkiler kaydedilemedi", { description: d?.error })
+        toast.error("Kaydedilemedi", { description: d?.error })
         return
       }
-      toast.success("Yetkiler kaydedildi", { description: user.fullName ?? user.username })
-      onClose()
+      setKayitli({ ...perms })
+      toast.success("Yetkiler kaydedildi", { description: kisi.fullName ?? kisi.username })
     } catch {
-      toast.error("Yetkiler kaydedilemedi")
+      toast.error("Kaydedilemedi")
     } finally {
       setSaving(false)
     }
   }
 
-  return (
-    <Sheet open={!!user} onOpenChange={(o) => { if (!o) onClose() }}>
-      <SheetContent className="!w-[520px] !max-w-[520px]">
-        <SheetHeader>
-          <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
-            <ShieldCheck className="size-4" />
-          </span>
-          <SheetTitle>Sayfa Yetkileri</SheetTitle>
-          <SheetDescription>
-            {user ? `${user.fullName ?? user.username} — erişebileceği modüller` : ""}
-          </SheetDescription>
-        </SheetHeader>
+  const adminMi = kisi.role === "admin"
 
-        {/* Uygulama seçimi — kullanıcı birden fazla uygulamaya erişiyorsa */}
-        {apps.length > 1 && (
-          <div className="border-border/60 flex items-center gap-1.5 border-b px-4 py-2">
-            {apps.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => setAppId(a.id)}
-                className={cn(
-                  "rounded-[5px] px-2.5 py-1 text-[12px] font-medium transition-colors",
-                  appId === a.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
-                )}
-              >
-                {a.name}
-              </button>
-            ))}
+  return (
+    <div className="flex min-w-0 flex-1 flex-col">
+      {/* ── Başlık + araçlar ── */}
+      <div className="border-border/60 flex flex-wrap items-center gap-2 border-b px-3 py-2.5">
+        <span className="bg-primary/10 text-primary flex size-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold">
+          {(kisi.fullName ?? kisi.username).slice(0, 2).toLocaleUpperCase("tr-TR")}
+        </span>
+        <div className="min-w-0">
+          <div className="truncate text-[13px] font-semibold">{kisi.fullName ?? kisi.username}</div>
+          <div className="text-muted-foreground truncate text-[11px]">
+            {roleLabel(kisi.role)} · <span className="tabular-nums">{aktifSayi} / {mods.length}</span> modül
           </div>
+        </div>
+
+        {adminMi && (
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10.5px] text-amber-600 dark:text-amber-400">
+            süper admin — tüm modüllere yazma
+          </span>
+        )}
+        {degisti && !adminMi && (
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10.5px] text-amber-600 dark:text-amber-400">
+            kaydedilmemiş değişiklik
+          </span>
         )}
 
-        {/* Sayaç + toplu aksiyon şeridi (CRM deseni) */}
-        <div className="border-border/60 bg-muted/30 flex shrink-0 items-center justify-between border-b px-4 py-2">
-          <span className="text-muted-foreground text-[11px] tabular-nums">
-            {aktifSayisi} / {mods.length} modül açık
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => hepsi("write")}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors"
-            >
-              Tümüne yazma
-            </button>
-            <button
-              onClick={() => hepsi("read")}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors"
-            >
-              Tümüne okuma
-            </button>
-            <button
-              onClick={() => hepsi("none")}
-              className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors"
-            >
-              Temizle
-            </button>
-          </div>
-        </div>
-
-        <div className="divide-border/60 min-h-0 flex-1 divide-y overflow-y-auto">
-          {loading ? (
-            <div className="space-y-2 p-4">
-              {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[5px]" />)}
+        <div className="ml-auto flex items-center gap-1.5">
+          {apps.length > 1 && (
+            <div className="border-border/60 flex items-center gap-0.5 rounded-[5px] border p-0.5">
+              {apps.map((a) => (
+                <button
+                  key={a.id}
+                  onClick={() => setAppId(a.id)}
+                  className={cn(
+                    "rounded-[4px] px-2 py-0.5 text-[11px] font-medium transition-colors",
+                    appId === a.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {a.name}
+                </button>
+              ))}
             </div>
-          ) : mods.length === 0 ? (
-            <p className="text-muted-foreground px-4 py-10 text-center text-[13px]">
-              Bu uygulama için modül tanımı yok.
-            </p>
-          ) : mods.map((m) => {
-            const lvl = perms[m.key] ?? "none"
-            return (
-              <div key={m.key} className="hover:bg-muted/30 flex items-center justify-between gap-3 px-4 py-2 transition-colors">
-                <span className="text-foreground truncate text-[13px] font-medium">{m.label}</span>
-                {/* CRM'de açık/kapalı Switch; Hub üç seviyeli olduğu için segment. */}
-                <div className="border-border/60 flex shrink-0 items-center rounded-[5px] border p-0.5">
-                  {SEVIYELER.map((s) => (
-                    <button
-                      key={s.value}
-                      onClick={() => setPerms((p) => ({ ...p, [m.key]: s.value }))}
-                      className={cn(
-                        "rounded-[4px] px-2 py-0.5 text-[11px] font-medium transition-colors",
-                        lvl === s.value
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+          )}
 
-        <SheetFooter className="flex-row">
-          <Button variant="outline" className="flex-1 h-8 text-[12px]" onClick={onClose} disabled={saving}>
-            İptal
-          </Button>
-          <Button className="flex-1 h-8 text-[12px]" onClick={kaydet} disabled={saving || loading}>
+          {/* Kopyala — proje kuralı: dropdown daima arama içerir. */}
+          <Popover open={kopyaAcik} onOpenChange={setKopyaAcik}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                disabled={adminMi}
+                className="border-input bg-card hover:bg-muted/40 flex h-8 items-center gap-1.5 rounded-[5px] border px-2.5 text-[12px] transition-colors disabled:opacity-50"
+              >
+                <Copy className="size-3.5" />
+                Kişiden kopyala
+                <ChevronDown className="size-3.5 opacity-50" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[240px] bg-card p-0">
+              <Command className="bg-card">
+                <CommandInput placeholder="Personel ara…" className="text-[13px] h-8" />
+                <CommandList>
+                  <CommandEmpty className="text-muted-foreground py-4 text-center text-[12px]">
+                    Personel bulunamadı.
+                  </CommandEmpty>
+                  <CommandGroup>
+                    {tumKisiler
+                      .filter((u) => u.id !== kisi.id && u.role !== "admin")
+                      .sort((a, b) => (a.fullName ?? a.username).localeCompare(b.fullName ?? b.username, "tr"))
+                      .map((u) => (
+                        <CommandItem
+                          key={u.id}
+                          value={`${u.fullName ?? u.username} ${u.email ?? ""}`}
+                          onSelect={() => kisidenKopyala(u.id)}
+                          className="text-[13px]"
+                        >
+                          {u.fullName ?? u.username}
+                        </CommandItem>
+                      ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          <Button
+            size="sm"
+            className="h-8 text-[12px]"
+            onClick={kaydet}
+            disabled={saving || loading || adminMi || !degisti}
+          >
             {saving ? "Kaydediliyor…" : "Kaydet"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </div>
+
+      {/* ── Gövde ── */}
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {adminMi ? (
+          <p className="text-muted-foreground py-10 text-center text-[13px]">
+            Süper admin tüm modüllere yazma yetkisiyle erişir; ayrıca izin verilmez.
+          </p>
+        ) : loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[5px]" />)}
+          </div>
+        ) : (
+          <>
+            {/* Hazır paketler */}
+            <div className="text-muted-foreground/70 mb-1.5 text-[10px] font-medium tracking-wider uppercase">
+              Hazır paketler
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+              {PAKETLER.map((p) => {
+                const seciliPaket = mods.length > 0 && mods.every((m) => seviye(m.key) === p.seviye)
+                return (
+                  <button
+                    key={p.ad}
+                    onClick={() => hepsineUygula(p.seviye)}
+                    className={cn(
+                      "bg-muted/25 hover:bg-muted/50 rounded-[8px] border p-2.5 text-left transition-colors",
+                      seciliPaket ? "border-primary ring-primary/40 ring-1" : "border-border",
+                    )}
+                  >
+                    <span className="text-[12.5px] font-semibold">{p.ad}</span>
+                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">{p.aciklama}</p>
+                    <p className="text-muted-foreground/70 mt-1.5 text-[10.5px] tabular-nums">
+                      {mods.length} modül
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Tek tek düzenleme — katlı */}
+            <button
+              onClick={() => setDetayAcik((a) => !a)}
+              className="border-border hover:bg-muted/40 mt-3 flex w-full items-center gap-2 rounded-[8px] border px-2.5 py-2 text-[12px] transition-colors"
+            >
+              <ChevronRight className={cn("size-3.5 transition-transform", detayAcik && "rotate-90")} />
+              Yetkileri tek tek düzenle
+              <span className="text-muted-foreground/70 text-[11px]">({mods.length} modül, gruplu)</span>
+            </button>
+
+            {detayAcik && (
+              <div className="mt-3 grid gap-x-6 gap-y-4 md:grid-cols-2">
+                {gruplar.map(([grupKey, grupMods]) => {
+                  const acikSayi = grupMods.filter((m) => seviye(m.key) !== "none").length
+                  const hepsiAcik = acikSayi === grupMods.length
+                  return (
+                    <div key={grupKey}>
+                      <div className="border-border mb-1 flex items-center gap-2 border-b pb-1">
+                        <span className="text-muted-foreground/70 text-[10px] font-medium tracking-wider uppercase">
+                          {GRUP_BASLIK[grupKey] ?? grupKey}
+                        </span>
+                        <span className="text-muted-foreground/70 text-[10px] tabular-nums">
+                          {acikSayi}/{grupMods.length}
+                        </span>
+                        <button
+                          onClick={() => grubaUygula(grupMods, hepsiAcik ? "none" : "write")}
+                          className="text-muted-foreground hover:text-foreground ml-auto text-[10.5px] transition-colors"
+                        >
+                          {hepsiAcik ? "Tümünü kapat" : "Tümünü aç"}
+                        </button>
+                      </div>
+                      {grupMods.map((m) => {
+                        const lvl = seviye(m.key)
+                        const satirDegisti = lvl !== (kayitli[m.key] ?? "none")
+                        return (
+                          <div
+                            key={m.key}
+                            className="hover:bg-muted/40 flex items-center gap-2 rounded px-1 py-[3px] transition-colors"
+                          >
+                            <span className={cn(
+                              "min-w-0 flex-1 truncate text-[12.5px]",
+                              lvl === "none" && "text-muted-foreground",
+                            )}>
+                              {m.label}
+                              {satirDegisti && <span className="text-amber-500"> •</span>}
+                            </span>
+                            {/* CRM'de Switch; Hub üç seviyeli olduğu için segment. */}
+                            <div className="border-border/60 flex shrink-0 items-center rounded-[5px] border p-0.5">
+                              {SEVIYELER.map((s) => (
+                                <button
+                                  key={s.value}
+                                  onClick={() => setPerms((p) => ({ ...p, [m.key]: s.value }))}
+                                  className={cn(
+                                    "rounded-[4px] px-1.5 py-0.5 text-[10.5px] font-medium transition-colors",
+                                    lvl === s.value
+                                      ? "bg-primary text-primary-foreground"
+                                      : "text-muted-foreground hover:text-foreground",
+                                  )}
+                                >
+                                  {s.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
   )
 }
