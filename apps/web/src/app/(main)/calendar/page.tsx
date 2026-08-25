@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
-import { ChevronLeft, ChevronRight, Plus, X, Clock, CalendarDays, ListTodo, StickyNote, AlarmClock, Trash2, CalendarRange, Search, RotateCcw, User, } from "lucide-react"
+import { ChevronLeft, ChevronRight, Plus, X, Clock, CalendarDays, StickyNote, AlarmClock, Trash2, CalendarRange, Search, RotateCcw, User, } from "lucide-react"
 import { useSession } from "next-auth/react"
 import {
   DndContext, DragOverlay, PointerSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent, } from "@dnd-kit/core"
@@ -14,7 +14,7 @@ import { SheetTitle, SheetContent, SheetHeader, Sheet } from "@/components/ui/sh
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { Switch } from "@muharremoz/pusula-ui";
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
@@ -38,10 +38,9 @@ const EVENT_COLORS = [
 ]
 
 const TYPE_META: Record<string, { label: string; icon: React.ElementType; bg: string }> = {
-  event:    { label: "Etkinlik",      icon: CalendarDays, bg: "bg-blue-50 text-blue-700 border-blue-200"     },
-  reminder: { label: "Hatırlatıcı",   icon: AlarmClock,   bg: "bg-purple-50 text-purple-700 border-purple-200" },
-  task:     { label: "Görev",         icon: ListTodo,     bg: "bg-amber-50 text-amber-700 border-amber-200"   },
-  note:     { label: "Not",           icon: StickyNote,   bg: "bg-yellow-50 text-yellow-700 border-yellow-200"},
+  event:    { label: "Etkinlik",      icon: CalendarDays, bg: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25"     },
+  reminder: { label: "Hatırlatıcı",   icon: AlarmClock,   bg: "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/25" },
+  note:     { label: "Not",           icon: StickyNote,   bg: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/25"},
 }
 
 const RECURRENCE_OPTIONS = [
@@ -94,22 +93,20 @@ function DraggableEventPill({
         ref={setNodeRef}
         onClick={e => { e.stopPropagation(); onClick(evt) }}
         className={cn(
-          "w-full text-left rounded-[4px] px-1.5 py-1 text-[10px] font-semibold transition-all cursor-pointer",
+          "w-full text-left rounded-[5px] px-1.5 py-1 text-[10px] font-semibold transition-all cursor-pointer",
           "bg-yellow-200 text-amber-900 border border-amber-400/60 shadow-[0_1px_2px_rgba(146,64,14,0.2)]",
           "hover:bg-yellow-300 hover:shadow-[0_2px_4px_rgba(146,64,14,0.25)]",
           "flex items-center gap-1",
           isDragging ? "opacity-30" : ""
         )}
       >
-        <StickyNote className="size-3 shrink-0 text-amber-700" />
+        <StickyNote className="size-3 shrink-0 text-amber-700 dark:text-amber-400" />
         <span className="truncate">{evt.title}</span>
       </button>
     )
   }
 
-  const TypeIcon = evt.type === "task"     ? ListTodo
-                 : evt.type === "reminder" ? AlarmClock
-                                           : null
+  const TypeIcon = evt.type === "reminder" ? AlarmClock : null
 
   return (
     <button
@@ -117,7 +114,7 @@ function DraggableEventPill({
       {...(canDrag ? { ...listeners, ...attributes } : {})}
       onClick={e => { e.stopPropagation(); onClick(evt) }}
       className={cn(
-        "w-full text-left rounded-[3px] px-1.5 py-0.5 text-[10px] font-medium truncate transition-opacity flex items-center gap-1",
+        "w-full text-left rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium truncate transition-opacity flex items-center gap-1",
         isDragging ? "opacity-30" : "hover:opacity-80",
         canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
       )}
@@ -183,7 +180,7 @@ function MiniCalendar({
             {d ? (
               <button onClick={() => onSelect(d)} className={cn(
                 "size-6 rounded-full text-[10px] font-medium relative flex items-center justify-center transition-colors",
-                isSameDay(d, selected) ? "bg-[#1d64ff] text-white" :
+                isSameDay(d, selected) ? "bg-primary text-primary-foreground" :
                 isSameDay(d, new Date()) ? "bg-primary/10 text-primary font-bold" : "hover:bg-muted/60 text-foreground"
               )}>
                 {d.getDate()}
@@ -280,7 +277,7 @@ function DayEventList({ date, events, onSelect, onCreate }: {
   return (
     <div className="flex-1 flex flex-col min-h-0 border-t border-border/40">
       <div className="px-3 py-2 flex items-center justify-between">
-        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
           {date.getDate()} {TR_MONTHS[date.getMonth()]}
         </span>
         <button onClick={() => onCreate(date)} className="text-muted-foreground hover:text-foreground transition-colors">
@@ -356,7 +353,7 @@ function MonthGrid({ year, month, events, selected, onSelectDay, onSelectEvent, 
               <div className="flex items-center justify-between px-0.5">
                 <span className={cn(
                   "size-6 flex items-center justify-center rounded-full text-[11px] font-medium",
-                  isToday ? "bg-[#1d64ff] text-white" : !current ? "text-muted-foreground/40" : "text-foreground"
+                  isToday ? "bg-primary text-primary-foreground" : !current ? "text-muted-foreground/40" : "text-foreground"
                 )}>
                   {date.getDate()}
                 </span>
@@ -398,7 +395,7 @@ function WeekGrid({ weekOf, events, onSelectEvent, onCreateOnDay }: {
           <div key={i} className={cn("text-center py-2 px-1 border-r border-border/25 last:border-r-0", isSameDay(d, today) && "bg-primary/5")}>
             <div className="text-[10px] font-medium text-muted-foreground">{TR_DAYS_SHORT[i]}</div>
             <div className={cn("mx-auto mt-0.5 size-7 flex items-center justify-center rounded-full text-[13px] font-semibold",
-              isSameDay(d, today) ? "bg-[#1d64ff] text-white" : "text-foreground")}>
+              isSameDay(d, today) ? "bg-primary text-primary-foreground" : "text-foreground")}>
               {d.getDate()}
             </div>
           </div>
@@ -426,7 +423,7 @@ function WeekGrid({ weekOf, events, onSelectEvent, onCreateOnDay }: {
 ────────────────────────────────────────── */
 function DragOverlayPill({ evt }: { evt: CalendarEvent }) {
   return (
-    <div className="rounded-[3px] px-2 py-1 text-[10px] font-medium shadow-lg pointer-events-none max-w-[150px] truncate"
+    <div className="rounded-[5px] px-2 py-1 text-[10px] font-medium shadow-lg pointer-events-none max-w-[150px] truncate"
       style={{ backgroundColor: evt.color + "ee", color: "#fff", borderLeft: `2px solid ${evt.color}` }}>
       {evt.title}
     </div>
@@ -505,14 +502,14 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
     } catch { toast.error("Silinemedi") }
   }
 
-  const isReadonly = mode === "view" && event && (event.type === "task" || event.type === "note")
+  const isReadonly = mode === "view" && event && event.type === "note"
   const meta       = event ? TYPE_META[event.type] : null
 
   return (
     <>
       <Sheet open={open} onOpenChange={v => !v && onClose()}>
-        <SheetContent className="!w-[480px] !max-w-[480px] p-0 flex flex-col gap-0">
-          <SheetHeader className="px-5 py-4 border-b border-border/50">
+        <SheetContent className="!w-[480px] !max-w-[480px]">
+          <SheetHeader>
             <VisuallyHidden.Root>
               <SheetTitle>{meta ? meta.label : mode === "create" ? "Yeni Etkinlik" : "Etkinlik"}</SheetTitle>
             </VisuallyHidden.Root>
@@ -560,7 +557,7 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
                       : `${formatTime(event!.startDate)} – ${formatTime(event!.endDate)}`}
                   </div>
                   <p className="text-[10px] text-muted-foreground">
-                    {event!.type === "task" ? "Bu görev proje panosundan yönetilebilir." : "Bu not, Not Defteri'nden yönetilebilir."}
+                    Bu not, Not Defteri'nden yönetilebilir.
                   </p>
                 </div>
               ) : (
@@ -572,7 +569,7 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
                       return (
                         <button key={t} onClick={() => setType(t)}
                           className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] text-[11px] font-medium border transition-colors",
-                            type === t ? "border-foreground/30 bg-[#1d64ff] text-white" : "border-border/40 hover:bg-muted/50")}>
+                            type === t ? "border-foreground/30 bg-primary text-primary-foreground" : "border-border/40 hover:bg-muted/50")}>
                           <m.icon className="size-3.5" />{m.label}
                         </button>
                       )
@@ -581,13 +578,13 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
 
                   {/* Başlık */}
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Başlık</Label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Başlık</Label>
                     <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Etkinlik başlığı..." className="h-8 text-[12px] rounded-[5px]" />
                   </div>
 
                   {/* Açıklama */}
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Açıklama</Label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Açıklama</Label>
                     <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="İsteğe bağlı..." className="text-[12px] rounded-[5px] resize-none min-h-[60px]" />
                   </div>
 
@@ -599,22 +596,22 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
 
                   {/* Tarih */}
                   <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tarih & Saat</span>
+                    <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Tarih & Saat</span>
                     </div>
                     <div className="p-3 space-y-2.5">
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Başlangıç</Label>
                         <div className="flex gap-1.5">
-                          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-8 text-[11px] rounded-[5px] flex-1" />
-                          {!allDay && <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="h-8 text-[11px] rounded-[5px] w-[90px]" />}
+                          <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-8 text-[13px] rounded-[5px] flex-1" />
+                          {!allDay && <Input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className="h-8 text-[13px] rounded-[5px] w-[90px]" />}
                         </div>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Bitiş</Label>
                         <div className="flex gap-1.5">
-                          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-[11px] rounded-[5px] flex-1" />
-                          {!allDay && <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="h-8 text-[11px] rounded-[5px] w-[90px]" />}
+                          <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-8 text-[13px] rounded-[5px] flex-1" />
+                          {!allDay && <Input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className="h-8 text-[13px] rounded-[5px] w-[90px]" />}
                         </div>
                       </div>
                     </div>
@@ -622,13 +619,13 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
 
                   {/* Tekrar */}
                   <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                    <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center gap-1.5">
+                    <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center gap-1.5">
                       <RotateCcw className="size-3 text-muted-foreground" />
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Tekrar</span>
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Tekrar</span>
                     </div>
                     <div className="p-3 space-y-2.5">
                       <Select value={recurrenceType} onValueChange={setRecurrenceType}>
-                        <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                        <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -639,8 +636,8 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
                       </Select>
                       {recurrenceType !== "none" && (
                         <div className="space-y-1">
-                          <Label className="text-[10px] text-muted-foreground">Bitiş tarihi (isteğe bağlı)</Label>
-                          <Input type="date" value={recurrenceEnd} onChange={e => setRecurrenceEnd(e.target.value)} className="h-8 text-[11px] rounded-[5px]" />
+                          <Label className="text-foreground/80 text-[12px] font-medium">Bitiş tarihi (isteğe bağlı)</Label>
+                          <Input type="date" value={recurrenceEnd} onChange={e => setRecurrenceEnd(e.target.value)} className="h-8 text-[13px] rounded-[5px]" />
                         </div>
                       )}
                     </div>
@@ -648,7 +645,7 @@ function EventSheet({ open, mode, event, defaultDate, onClose, onSaved, onDelete
 
                   {/* Renk */}
                   <div className="space-y-1.5">
-                    <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Renk</Label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Renk</Label>
                     <div className="flex gap-2 flex-wrap">
                       {EVENT_COLORS.map(c => (
                         <button key={c} onClick={() => setColor(c)}
@@ -813,7 +810,7 @@ export default function CalendarPage() {
   }
   function openView(evt: CalendarEvent) {
     setSheetEvent(evt)
-    setSheetMode(evt.type === "task" || evt.type === "note" ? "view" : "edit")
+    setSheetMode(evt.type === "note" ? "view" : "edit")
     setSheetOpen(true)
   }
   function handleSearchSelect(evt: CalendarEvent) {
@@ -828,7 +825,6 @@ export default function CalendarPage() {
   const counts = {
     event:    visibleEvents.filter(e => e.type === "event").length,
     reminder: visibleEvents.filter(e => e.type === "reminder").length,
-    task:     visibleEvents.filter(e => e.type === "task").length,
     note:     visibleEvents.filter(e => e.type === "note").length,
   }
 
@@ -841,10 +837,10 @@ export default function CalendarPage() {
 
   return (
     <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-      <div className="flex h-[calc(100vh-0px)] overflow-hidden" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="flex h-[calc(100vh-0px)] overflow-hidden" style={{ backgroundColor: "var(--section-bg)" }}>
 
         {/* ── Sol panel ── */}
-        <div className="w-[220px] shrink-0 flex flex-col border-r border-border/40 bg-[#eef3ff]">
+        <div className="w-[220px] shrink-0 flex flex-col border-r border-border/40 bg-[var(--section-bg)]">
           <div className="px-3 pt-4 pb-2 space-y-2">
             {/* Kullanıcı filtresi — varsayılan: oturum sahibinin etkinlikleri.
                 "Tüm kullanıcılar" seçilirse herkesin etkinlikleri görünür. */}
@@ -852,20 +848,20 @@ export default function CalendarPage() {
               value={userFilter}
               onValueChange={(v) => { userTouched.current = true; setUserFilter(v) }}
             >
-              <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-white border-border/40">
+              <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-card border-border/40">
                 <div className="flex items-center gap-1.5 min-w-0">
                   <User className="size-3 text-muted-foreground shrink-0" />
                   <SelectValue />
                 </div>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all" className="text-[11px]">Tüm kullanıcılar</SelectItem>
+                <SelectItem value="all" className="text-[13px]">Tüm kullanıcılar</SelectItem>
                 {userOptions.map(u => (
-                  <SelectItem key={u} value={u} className="text-[11px]">{u}</SelectItem>
+                  <SelectItem key={u} value={u} className="text-[13px]">{u}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={() => openCreate()} className="w-full h-8 text-[11px] rounded-[5px] gap-1.5">
+            <Button onClick={() => openCreate()} className="w-full h-8 text-[13px] rounded-[5px] gap-1.5">
               <Plus className="size-3.5" />Yeni Etkinlik
             </Button>
             {/* Arama toggle */}
@@ -873,7 +869,7 @@ export default function CalendarPage() {
               onClick={() => setShowSearch(v => !v)}
               className={cn(
                 "w-full flex items-center gap-2 h-7 px-2.5 rounded-[5px] text-[11px] border transition-colors",
-                showSearch ? "bg-[#1d64ff] text-white border-foreground" : "border-border/40 text-muted-foreground hover:bg-muted/50"
+                showSearch ? "bg-primary text-primary-foreground border-foreground" : "border-border/40 text-muted-foreground hover:bg-muted/50"
               )}
             >
               <Search className="size-3.5" />Ara
@@ -917,7 +913,7 @@ export default function CalendarPage() {
         </div>
 
         {/* ── Ana alan ── */}
-        <div className="flex-1 flex flex-col min-w-0 bg-white rounded-tl-[8px] overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 bg-card rounded-tl-[8px] overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-3 px-5 py-3 border-b border-border/40 shrink-0">
             <div className="flex items-center gap-1">
@@ -929,11 +925,11 @@ export default function CalendarPage() {
             <button onClick={goToday} className="px-3 py-1 rounded-[5px] text-[11px] font-medium border border-border/50 hover:bg-muted/50 transition-colors">Bugün</button>
             <div className="flex items-center rounded-[5px] border border-border/50 overflow-hidden">
               <button onClick={() => setViewMode("month")} className={cn("flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors",
-                viewMode === "month" ? "bg-[#1d64ff] text-white" : "hover:bg-muted/50 text-muted-foreground")}>
+                viewMode === "month" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50 text-muted-foreground")}>
                 <CalendarDays className="size-3.5" />Ay
               </button>
               <button onClick={() => setViewMode("week")} className={cn("flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium transition-colors border-l border-border/50",
-                viewMode === "week" ? "bg-[#1d64ff] text-white" : "hover:bg-muted/50 text-muted-foreground")}>
+                viewMode === "week" ? "bg-primary text-primary-foreground" : "hover:bg-muted/50 text-muted-foreground")}>
                 <CalendarRange className="size-3.5" />Hafta
               </button>
             </div>

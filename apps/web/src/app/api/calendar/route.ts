@@ -59,10 +59,6 @@ function expandRecurring(base: CalendarEvent, rangeStart: Date, rangeEnd: Date):
   return results
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  urgent: "#ef4444", critical: "#ef4444", high: "#f97316", medium: "#f59e0b",
-}
-
 // GET /api/calendar?start=&end=
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -74,14 +70,10 @@ export async function GET(req: NextRequest) {
 
   try {
     const sb = await getSupabaseServer()
-    const [{ data: evData }, { data: taskData }, { data: noteData }] = await Promise.all([
+    const [{ data: evData }, { data: noteData }] = await Promise.all([
       // Etkinlikler — hepsi (küçük veri); tekrarlayan/aralık filtresi JS'te.
       sb.schema("hub").from("calendar_events")
         .select("id, title, description, start_date, end_date, all_day, color, type, recurrence_type, recurrence_end, created_by"),
-      // Proje görevleri — due_date aralıkta
-      sb.schema("hub").from("project_tasks")
-        .select("id, title, description, priority, due_date, created_at")
-        .not("due_date", "is", null).gte("due_date", startStr.slice(0, 10)).lte("due_date", endStr.slice(0, 10)),
       // Notlar — created_at aralıkta
       sb.schema("hub").from("notes")
         .select("id, title, content, color, created_by, created_at")
@@ -93,7 +85,6 @@ export async function GET(req: NextRequest) {
       all_day: boolean; color: string; type: string; recurrence_type: string | null
       recurrence_end: string | null; created_by: string | null
     }[]
-    const tasks = (taskData ?? []) as { id: string; title: string; description: string | null; priority: string; due_date: string; created_at: string }[]
     const notes = (noteData ?? []) as { id: string; title: string; content: string | null; color: string; created_by: string | null; created_at: string }[]
 
     const creators = await resolveCreators(sb, [...events.map(e => e.created_by), ...notes.map(n => n.created_by)])
@@ -119,19 +110,7 @@ export async function GET(req: NextRequest) {
       all.push(...expandRecurring(base, rangeStart, rangeEnd))
     }
 
-    // 2) Proje görevleri
-    for (const t of tasks) {
-      const dt = `${t.due_date} 00:00:00`
-      all.push({
-        id: t.id, title: t.title, description: t.description ?? "",
-        startDate: dt, endDate: dt, allDay: true,
-        color: PRIORITY_COLOR[t.priority] ?? "#6b7280",
-        type: "task", refId: t.id, recurrenceType: null, recurrenceEnd: null,
-        createdBy: "Admin", createdAt: fmt(t.created_at),
-      })
-    }
-
-    // 3) Notlar
+    // 2) Notlar
     for (const n of notes) {
       const dt = fmt(n.created_at)
       all.push({

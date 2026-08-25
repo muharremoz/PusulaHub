@@ -9,9 +9,10 @@ import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-
 import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import { Checkbox } from "@muharremoz/pusula-ui"
+import {  } from "@muharremoz/pusula-ui"
 import { Switch } from "@muharremoz/pusula-ui"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
+import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -283,17 +284,17 @@ export function StepSql({
 
       {/* SQL Sunucu listesi */}
       <div>
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">SQL Sunucusu</p>
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">SQL Sunucusu</p>
 
         {/* Yükleniyor */}
         {sqlServersLoading && (
           <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-3">
-                <Skeleton className="h-3 w-32 rounded-[4px]" />
-                <Skeleton className="h-3 w-24 rounded-[4px]" />
-                <Skeleton className="h-3 w-20 rounded-[4px]" />
-                <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+                <Skeleton className="h-3 w-32 rounded-[5px]" />
+                <Skeleton className="h-3 w-24 rounded-[5px]" />
+                <Skeleton className="h-3 w-20 rounded-[5px]" />
+                <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
               </div>
             ))}
           </div>
@@ -301,7 +302,7 @@ export function StepSql({
 
         {/* Hata */}
         {!sqlServersLoading && sqlServersError && (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
             <AlertTriangle className="size-3.5 shrink-0" />
             {sqlServersError}
           </div>
@@ -317,7 +318,7 @@ export function StepSql({
             </p>
             <a
               href="/servers"
-              className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+              className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
             >
               Sunucu Ekle
             </a>
@@ -382,7 +383,7 @@ export function StepSql({
 
           {/* Mod seçimi */}
           <div>
-            <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">Veri Kaynağı</p>
+            <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">Veri Kaynağı</p>
             <div className="flex gap-1 rounded-[5px] border border-border/50 p-1 bg-muted/20 w-fit">
               {[
                 { mode: 0 as const, label: "Yedekten Yükle" },
@@ -392,7 +393,7 @@ export function StepSql({
                   key={mode}
                   onClick={() => onSetSqlMode(mode)}
                   className={cn(
-                    "px-3 py-1.5 rounded-[4px] text-[11px] font-medium transition-colors",
+                    "px-3 py-1.5 rounded-[5px] text-[11px] font-medium transition-colors",
                     sqlMode === mode
                       ? "bg-background text-foreground shadow-sm border border-border/50"
                       : "text-muted-foreground hover:text-foreground"
@@ -434,8 +435,8 @@ export function StepSql({
               {/* Yedek dosyaları */}
               {backupFiles.length > 0 && (
                 <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                  <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                       {backupFiles.length} yedek dosyası
                     </span>
                     <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
@@ -463,7 +464,7 @@ export function StepSql({
                           )}
                         >
                           <span className={cn(
-                            "size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0",
+                            "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0",
                             f.selected ? "bg-foreground border-foreground" : "border-border"
                           )}>
                             {f.selected && <Check className="size-2.5 text-background" strokeWidth={3} />}
@@ -471,7 +472,7 @@ export function StepSql({
                           <span className="flex items-center gap-1.5 min-w-0">
                             {f.kind === "attach" && (
                               <span
-                                className="shrink-0 rounded-[3px] bg-violet-100 text-violet-700 text-[9px] font-semibold px-1 py-0.5 leading-none"
+                                className="shrink-0 rounded-[5px] bg-violet-100 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1 py-0.5 leading-none"
                                 title={f.ldfFileName ? `${f.mdfFileName} + ${f.ldfFileName}` : `${f.mdfFileName} (log yeniden üretilecek)`}
                               >
                                 ATTACH
@@ -485,7 +486,7 @@ export function StepSql({
                             onClick={(e) => e.stopPropagation()}
                           >
                             <span className="text-[11px] text-muted-foreground shrink-0">→</span>
-                            <div className="flex-1 flex items-center rounded-[4px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
+                            <div className="flex-1 flex items-center rounded-[5px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
                               {showPrefix && (
                                 <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                                   {firmaId}_
@@ -510,7 +511,7 @@ export function StepSql({
                                 <SelectTrigger
                                   className={cn(
                                     "w-full h-7 rounded-[5px] px-2 text-[11px]",
-                                    programMissing && "border-amber-500/60 text-amber-700"
+                                    programMissing && "border-amber-500/60 text-amber-700 dark:text-amber-400"
                                   )}
                                 >
                                   <SelectValue placeholder="— Program seç —" />
@@ -519,7 +520,7 @@ export function StepSql({
                                   {selectedPusulaServices.map((s) => {
                                     const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
                                     return (
-                                      <SelectItem key={s.id} value={String(s.id)} className="text-[11px]">
+                                      <SelectItem key={s.id} value={String(s.id)} className="text-[13px]">
                                         {s.name}{code ? ` (${code})` : ""}
                                       </SelectItem>
                                     )
@@ -546,17 +547,17 @@ export function StepSql({
             <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-3">
-                  <Skeleton className="size-4 rounded-[3px]" />
-                  <Skeleton className="h-3 w-32 rounded-[4px]" />
-                  <Skeleton className="h-3 w-40 rounded-[4px] ml-auto" />
-                  <Skeleton className="h-3 w-16 rounded-[4px]" />
+                  <Skeleton className="size-4 rounded-[5px]" />
+                  <Skeleton className="h-3 w-32 rounded-[5px]" />
+                  <Skeleton className="h-3 w-40 rounded-[5px] ml-auto" />
+                  <Skeleton className="h-3 w-16 rounded-[5px]" />
                 </div>
               ))}
             </div>
           )}
 
           {sqlMode === 1 && !demoDatabasesLoading && demoDatabasesError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
               <AlertTriangle className="size-3.5 shrink-0" />
               {demoDatabasesError}
             </div>
@@ -571,7 +572,7 @@ export function StepSql({
               </p>
               <a
                 href="/demo-databases"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
               >
                 Demo DB Ekle
               </a>
@@ -580,8 +581,8 @@ export function StepSql({
 
           {sqlMode === 1 && !demoDatabasesLoading && !demoDatabasesError && demoDatabases.length > 0 && (
             <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                   {demoDatabases.length} demo veritabanı
                 </span>
                 <div className="flex items-center gap-3">
@@ -624,13 +625,13 @@ export function StepSql({
                       )}
                     >
                       <span className={cn(
-                        "size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0",
+                        "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0",
                         isSelected ? "bg-foreground border-foreground" : "border-border"
                       )}>
                         {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[11px] font-medium truncate">{db.name}</p>
+                        <p className="text-[13px] font-medium truncate">{db.name}</p>
                         {db.locationPath && (
                           <p className="text-[9px] text-muted-foreground/70 font-mono truncate" title={db.locationPath}>
                             {db.locationPath}
@@ -646,7 +647,7 @@ export function StepSql({
                           onClick={(e) => e.stopPropagation()}
                         >
                           <span className="text-[11px] text-muted-foreground shrink-0">→</span>
-                          <div className="flex-1 flex items-center rounded-[4px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
+                          <div className="flex-1 flex items-center rounded-[5px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
                             {showPrefix && (
                               <span className="text-[11px] font-mono text-muted-foreground shrink-0">
                                 {firmaId}_
@@ -669,14 +670,14 @@ export function StepSql({
                       {/* Path durum rozeti */}
                       <div className="flex items-center justify-end">
                         {check.status === "checking" && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted text-muted-foreground border-border">
+                          <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-muted text-muted-foreground border-border">
                             <Loader2 className="size-2.5 animate-spin" />
                             Kontrol ediliyor
                           </span>
                         )}
                         {check.status === "found" && (
                           <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-emerald-50 text-emerald-700 border-emerald-200"
+                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
                             title={`${formatSize(check.sizeMB)} — ${db.locationPath}`}
                           >
                             <FileCheck2 className="size-2.5" />
@@ -685,7 +686,7 @@ export function StepSql({
                         )}
                         {check.status === "missing" && (
                           <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-red-50 text-red-700 border-red-200"
+                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25"
                             title="Dosya seçili SQL sunucusunda bulunamadı"
                           >
                             <FileWarning className="size-2.5" />
@@ -694,7 +695,7 @@ export function StepSql({
                         )}
                         {check.status === "no-path" && (
                           <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/50 text-muted-foreground border-border"
+                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-muted/50 text-muted-foreground border-border"
                             title="Bu demo DB için kaynak yol tanımlı değil"
                           >
                             <MinusCircle className="size-2.5" />
@@ -713,9 +714,9 @@ export function StepSql({
           {/* Restore Test — sihirbazdan bağımsız deneme */}
           {hasSelection && (
             <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
                 <PlayCircle className="size-3.5 text-muted-foreground" />
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">
                   Restore Testi
                 </span>
                 <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
@@ -729,7 +730,7 @@ export function StepSql({
                   type="button"
                   onClick={handleTestRestore}
                   disabled={testing}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border border-border bg-background text-[10px] font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[5px] border border-border bg-background text-[10px] font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
                 >
                   {testing
                     ? <Loader2 className="size-3 animate-spin" />
@@ -745,10 +746,10 @@ export function StepSql({
                   </p>
                 )}
                 {testError && (
-                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-[4px] bg-red-50 border border-red-200 text-[10px] text-red-700">
+                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-[5px] bg-red-500/15 border border-red-500/25 text-[10px] text-red-700 dark:text-red-400">
                     <AlertTriangle className="size-3 shrink-0 mt-0.5" />
                     <span className="flex-1">{testError}</span>
-                    <button type="button" onClick={() => setTestError(null)} className="text-red-700/60 hover:text-red-700">
+                    <button type="button" onClick={() => setTestError(null)} className="text-red-700 dark:text-red-400/60 hover:text-red-700 dark:text-red-400">
                       <X className="size-3" />
                     </button>
                   </div>
@@ -759,16 +760,16 @@ export function StepSql({
                       <div
                         key={i}
                         className={cn(
-                          "px-2.5 py-2 rounded-[4px] border text-[10px]",
+                          "px-2.5 py-2 rounded-[5px] border text-[10px]",
                           r.ok
-                            ? "bg-emerald-50 border-emerald-200"
-                            : "bg-red-50 border-red-200",
+                            ? "bg-emerald-500/15 border-emerald-500/25"
+                            : "bg-red-500/15 border-red-500/25",
                         )}
                       >
                         <div className="flex items-start gap-2">
                           {r.ok
-                            ? <FileCheck2 className="size-3 text-emerald-600 shrink-0 mt-0.5" />
-                            : <FileWarning className="size-3 text-red-600 shrink-0 mt-0.5" />}
+                            ? <FileCheck2 className="size-3 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                            : <FileWarning className="size-3 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />}
                           <div className="flex-1 min-w-0 space-y-0.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className={cn(
@@ -781,7 +782,7 @@ export function StepSql({
                                 {(r.durationMs / 1000).toFixed(1)}s
                               </span>
                               {r.ok && r.dropped && (
-                                <span className="text-[9px] text-emerald-700/70">
+                                <span className="text-[9px] text-emerald-700 dark:text-emerald-400/70">
                                   · test sonrası DROP edildi
                                 </span>
                               )}
@@ -790,7 +791,7 @@ export function StepSql({
                               {r.bakPath}
                             </p>
                             {!r.ok && r.error && (
-                              <p className="text-[10px] text-red-700 leading-relaxed whitespace-pre-wrap break-words">
+                              <p className="text-[10px] text-red-700 dark:text-red-400 leading-relaxed whitespace-pre-wrap break-words">
                                 {r.error}
                               </p>
                             )}

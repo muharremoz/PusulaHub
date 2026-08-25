@@ -8,10 +8,10 @@ interface Props {
 }
 
 const LEVEL_CLASS: Record<string, string> = {
-  info: "bg-blue-50 text-blue-700 border-blue-200/60 border",
-  warning: "bg-amber-50 text-amber-700 border-amber-200/60 border",
-  error: "bg-red-50 text-red-700 border-red-200/60 border",
-  critical: "bg-red-50 text-red-900 border-red-300/60 border font-bold",
+  info: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25/60 border",
+  warning: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25/60 border",
+  error: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25/60 border",
+  critical: "bg-red-500/15 text-red-900 border-red-300/60 border font-bold",
 };
 
 const LEVEL_LABEL: Record<string, string> = {
@@ -44,13 +44,13 @@ export function TabLogs({ logs }: Props) {
   return (
     <div className="grid grid-cols-2 gap-3">
       {/* Event Log */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px]"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px]"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
               Olay Günlüğü
             </span>
           </div>
@@ -60,7 +60,7 @@ export function TabLogs({ logs }: Props) {
                 <div className="flex items-center gap-2 mb-1">
                   <span
                     className={cn(
-                      "text-[9px] px-1.5 py-0.5 rounded-[4px] font-medium shrink-0",
+                      "text-[9px] px-1.5 py-0.5 rounded-[5px] font-medium shrink-0",
                       LEVEL_CLASS[event.level]
                     )}
                   >
@@ -76,17 +76,16 @@ export function TabLogs({ logs }: Props) {
             ))}
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
 
       {/* Failed Logins */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px]"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px]"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
               Başarısız Giriş Denemeleri
             </span>
           </div>
@@ -94,7 +93,7 @@ export function TabLogs({ logs }: Props) {
             {["Tarih", "Kullanıcı", "IP Adresi"].map((h) => (
               <span
                 key={h}
-                className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
+                className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase"
               >
                 {h}
               </span>
@@ -121,8 +120,7 @@ export function TabLogs({ logs }: Props) {
             )}
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     </div>
   );
 }

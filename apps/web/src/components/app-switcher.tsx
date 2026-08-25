@@ -103,7 +103,7 @@ export function AppSwitcher() {
       <DropdownMenuTrigger asChild>
         <SidebarMenuButton
           size="lg"
-          className="bg-[#082c6b] border border-[#0d3380] hover:bg-[#0d3380] data-[state=open]:bg-[#0d3380] rounded-[6px] text-white"
+          className="bg-sidebar border border-sidebar-border hover:bg-sidebar-accent data-[state=open]:bg-sidebar-accent rounded-[5px] text-white"
         >
           <div className="flex aspect-square size-8 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -111,17 +111,17 @@ export function AppSwitcher() {
           </div>
           <div className="grid flex-1 text-left text-sm leading-tight">
             <span className="truncate font-medium text-white">{current.name}</span>
-            <span className="truncate text-xs text-[#b4c8ff]">{current.description}</span>
+            <span className="truncate text-xs text-sidebar-foreground/70">{current.description}</span>
           </div>
-          <ChevronsUpDown className="ml-auto size-4 text-[#b4c8ff]" />
+          <ChevronsUpDown className="ml-auto size-4 text-sidebar-foreground/70" />
         </SidebarMenuButton>
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-64 rounded-[5px] bg-[#082c6b] border-[#0d3380] text-white"
+        className="w-64 rounded-[5px] bg-sidebar border-sidebar-border text-white"
         align="start"
         sideOffset={4}
       >
-        <DropdownMenuLabel className="text-[10px] font-medium text-[#b4c8ff] tracking-wide uppercase">
+        <DropdownMenuLabel className="text-[10px] font-medium text-sidebar-foreground/70 tracking-wide uppercase">
           Pusula Uygulamaları
         </DropdownMenuLabel>
         {visibleApps.map((app) => {
@@ -135,7 +135,7 @@ export function AppSwitcher() {
                 e.stopPropagation()
                 setSagTik({ app, x: e.clientX, y: e.clientY })
               }}
-              className="gap-2 p-2 cursor-pointer text-white focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
+              className="gap-2 p-2 cursor-pointer text-white focus:bg-sidebar-accent focus:text-white data-[highlighted]:bg-sidebar-accent"
             >
               <div className="flex aspect-square size-7 items-center justify-center rounded-[5px] overflow-hidden shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -143,16 +143,16 @@ export function AppSwitcher() {
               </div>
               <div className="grid flex-1 leading-tight min-w-0">
                 <span className="truncate text-[12px] font-medium">{app.name}</span>
-                <span className="truncate text-[10px] text-[#b4c8ff]">{app.description}</span>
+                <span className="truncate text-[10px] text-sidebar-foreground/70">{app.description}</span>
               </div>
-              {isActive && <Check className="size-3.5 text-[#1d64ff] shrink-0" />}
+              {isActive && <Check className="size-3.5 text-primary shrink-0" />}
             </DropdownMenuItem>
           )
         })}
-        <DropdownMenuSeparator className="bg-[#0d3380]" />
+        <DropdownMenuSeparator className="bg-sidebar-accent" />
         <DropdownMenuItem
           onSelect={() => { window.location.href = SWITCH_URL }}
-          className="gap-2 p-2 cursor-pointer text-[11px] text-[#b4c8ff] focus:bg-[#0d3380] focus:text-white data-[highlighted]:bg-[#0d3380]"
+          className="gap-2 p-2 cursor-pointer text-[11px] text-sidebar-foreground/70 focus:bg-sidebar-accent focus:text-white data-[highlighted]:bg-sidebar-accent"
         >
           Switch ekranına dön
         </DropdownMenuItem>
@@ -239,7 +239,7 @@ function SagTikMenu({
   return createPortal(
     <div
       ref={kutuRef}
-      className="fixed rounded-[5px] border border-[#0d3380] bg-[#082c6b] p-1 text-white shadow-lg"
+      className="fixed rounded-[5px] border border-sidebar-border bg-sidebar p-1 text-white shadow-lg"
       style={{ left: sol, top: ust, zIndex: 1200, minWidth: MENU_W, pointerEvents: "auto" }}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -249,7 +249,7 @@ function SagTikMenu({
           e.stopPropagation()
           onSec()
         }}
-        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] outline-none transition-colors hover:bg-[#0d3380]"
+        className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[12px] outline-none transition-colors hover:bg-sidebar-accent"
       >
         <ExternalLink className="size-3.5 shrink-0 opacity-70" />
         Yeni pencerede aç

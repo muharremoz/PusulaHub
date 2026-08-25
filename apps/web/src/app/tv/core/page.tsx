@@ -328,7 +328,7 @@ export default function CoreTaslakPage() {
         {VARIANTS.map((v) => (
           <div key={v.key}>
             <div className="mb-2 flex items-baseline gap-3">
-              <span className="flex size-6 items-center justify-center rounded-[4px] bg-[#1d64ff] text-[11px] font-bold text-white">
+              <span className="flex size-6 items-center justify-center rounded-[5px] bg-primary text-[11px] font-bold text-primary-foreground">
                 {v.no}
               </span>
               <span className="text-[13px] font-bold text-zinc-100">{v.title}</span>

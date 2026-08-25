@@ -56,7 +56,7 @@ export function NoteRichEditor({ value, onChange, placeholder, className }: Note
       Link.configure({
         openOnClick: true,
         autolink:    true,
-        HTMLAttributes: { class: "text-blue-600 underline" },
+        HTMLAttributes: { class: "text-blue-600 dark:text-blue-400 underline" },
       }),
       TaskList.configure({
         HTMLAttributes: { class: "note-task-list" },
@@ -235,7 +235,7 @@ function AnnotationBubble({ editor }: { editor: Editor | null }) {
       // Seçim değişince form kapansın
       updateDelay={0}
     >
-      <div className="rounded-[6px] border border-border/60 bg-white shadow-lg p-1 flex items-center gap-1">
+      <div className="rounded-[5px] border border-border/60 bg-card shadow-lg p-1 flex items-center gap-1">
         {mode === "idle" ? (
           <>
             <button
@@ -244,7 +244,7 @@ function AnnotationBubble({ editor }: { editor: Editor | null }) {
               className="inline-flex items-center gap-1.5 px-2.5 h-7 rounded-[5px] text-[11px] font-medium text-foreground hover:bg-muted/60 transition-colors"
               title="Bu seçime ek not ekle"
             >
-              <StickyNote className="size-3.5 text-amber-600" />
+              <StickyNote className="size-3.5 text-amber-600 dark:text-amber-400" />
               {editor.isActive("annotation") ? "Notu düzenle" : "Ek Not Ekle"}
             </button>
             {editor.isActive("annotation") && (
@@ -275,7 +275,7 @@ function AnnotationBubble({ editor }: { editor: Editor | null }) {
             <button
               type="button"
               onMouseDown={(e) => { e.preventDefault(); handleSave() }}
-              className="inline-flex items-center justify-center size-7 rounded-[5px] text-emerald-600 hover:bg-emerald-50 transition-colors"
+              className="inline-flex items-center justify-center size-7 rounded-[5px] text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15 transition-colors"
               title="Kaydet (Enter)"
             >
               <Check className="size-3.5" />

@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 import { PageContainer } from "@/components/layout/page-container";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui";
 import {
@@ -35,6 +36,8 @@ import {
   Server,
   Globe,
   Waypoints,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
 import { StatsCard } from "@/components/shared/stats-card";
@@ -47,8 +50,8 @@ type SortDir = "asc" | "desc";
 type FilterCat = "all" | string;
 
 const TYPE_LABELS: Record<ServiceType, { label: string; icon: React.ReactNode; badge: string }> = {
-  "pusula-program": { label: "Pusula", icon: <Server className="size-3" />, badge: "bg-blue-50 text-blue-700 border-blue-200" },
-  "iis-site":       { label: "IIS",    icon: <Globe  className="size-3" />, badge: "bg-purple-50 text-purple-700 border-purple-200" },
+  "pusula-program": { label: "Pusula", icon: <Server className="size-3" />, badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25" },
+  "iis-site":       { label: "IIS",    icon: <Globe  className="size-3" />, badge: "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/25" },
 };
 
 /* ── SortHeader ── */
@@ -86,7 +89,11 @@ export default function ServicesPage() {
 
   const [sortKey, setSortKey]   = useState<SortKey>("displayOrder");
   const [sortDir, setSortDir]   = useState<SortDir>("asc");
-  const [filter, setFilter]     = useState<FilterCat>("all");
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [adFiltre,        setAdFiltre]        = useState("");
+  const [tipFiltre,       setTipFiltre]       = useState<ServiceType[]>([]);
+  const [kategoriFiltre,  setKategoriFiltre]  = useState<string[]>([]);
+  const [durumFiltre,     setDurumFiltre]     = useState<string[]>([]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing]     = useState<WizardServiceDto | null>(null);
@@ -120,8 +127,15 @@ export default function ServicesPage() {
   );
 
   const filtered = useMemo(() => {
+    const ad = adFiltre.trim().toLocaleLowerCase("tr-TR");
     return services
-      .filter((s) => filter === "all" || s.category === filter)
+      .filter((s) => {
+        if (ad && !s.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+        if (tipFiltre.length && !tipFiltre.includes(s.type)) return false;
+        if (kategoriFiltre.length && !kategoriFiltre.includes(s.category)) return false;
+        if (durumFiltre.length && !durumFiltre.includes(s.isActive ? "aktif" : "pasif")) return false;
+        return true;
+      })
       .sort((a, b) => {
         const mul = sortDir === "asc" ? 1 : -1;
         if (sortKey === "displayOrder") return (a.displayOrder - b.displayOrder) * mul;
@@ -129,7 +143,7 @@ export default function ServicesPage() {
         if (sortKey === "type")         return a.type.localeCompare(b.type) * mul;
         return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
       });
-  }, [services, filter, sortKey, sortDir]);
+  }, [services, adFiltre, tipFiltre, kategoriFiltre, durumFiltre, sortKey, sortDir]);
 
   const counts = {
     total:    services.length,
@@ -180,105 +194,79 @@ export default function ServicesPage() {
         <StatsCard title="KATEGORİ"       value={counts.cats}     icon={<FolderOpen className="h-4 w-4" />}  trend={{ value: "Farklı grup",          positive: true }} subtitle="Otomatik gruplama" />
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="flex items-center rounded-[8px] p-1 flex-wrap gap-0.5" style={{ backgroundColor: "#eef3ff" }}>
-          <button
-            onClick={() => setFilter("all")}
-            className={cn(
-              "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-              filter === "all" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Tümü
-          </button>
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={cn(
-                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === cat ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-          >
-            <Plus className="size-3.5" />
-            Yeni Hizmet
-          </button>
-        </div>
-      </div>
-
-      {/* ── Liste ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-        <div
-          className="rounded-[4px] overflow-hidden"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-        >
-          {/* Header */}
-          <div className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-            <span />
-            <SortHeader label="Tip"          sortKey="type"          active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Hizmet Adı"   sortKey="name"          active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Kategori"     sortKey="category"      active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kaynak Klasör</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tipe Özel</span>
-            <SortHeader label="Durum"        sortKey="isActive"      active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Sıra"         sortKey="displayOrder"  active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span />
-          </div>
-
-          {/* Loading */}
-          {loading && (
-            <div className="divide-y divide-border/40">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2.5 items-center">
-                  <Skeleton className="size-1.5 rounded-full" />
-                  <Skeleton className="h-3 w-12 rounded-[3px]" />
-                  <Skeleton className="h-3 w-32 rounded-[3px]" />
-                  <Skeleton className="h-3 w-16 rounded-[3px]" />
-                  <Skeleton className="h-3 w-48 rounded-[3px]" />
-                  <Skeleton className="h-3 w-32 rounded-[3px]" />
-                  <Skeleton className="h-3 w-12 rounded-[3px]" />
-                  <Skeleton className="h-3 w-6 rounded-[3px]" />
-                  <Skeleton className="size-4 rounded-[3px]" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Error */}
-          {error && !loading && (
-            <div className="px-4 py-8 text-center text-[11px] text-red-600">{error}</div>
-          )}
-
-          {/* Empty */}
-          {!loading && !error && filtered.length === 0 && (
-            <div className="px-4 py-12 text-center">
-              <Inbox className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-[12px] font-medium text-foreground">
-                {filter === "all" ? "Henüz hizmet yok" : `${filter} kategorisinde hizmet yok`}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1">
-                {filter === "all"
-                  ? "Sağ üstteki “Yeni Hizmet” butonuyla ilk hizmetinizi ekleyin."
-                  : "Farklı bir kategori seçin veya yeni hizmet ekleyin."}
-              </p>
-            </div>
-          )}
-
-          {/* Satırlar */}
-          {!loading && !error && filtered.length > 0 && (
-            <div className="divide-y divide-border/40">
-              {filtered.map((svc) => {
+      <ListeKarti
+        baslik="Pusula Hizmetleri"
+        ikon={<Layers className="size-3.5" />}
+        toplam={services.length}
+        filtreli={filtered.length}
+        aksiyon={
+          <ListeAksiyonButonu onClick={openCreate}>
+            <Plus className="size-3.5" />Yeni Hizmet
+          </ListeAksiyonButonu>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px] font-medium leading-[20px]">
+            <ListeThead>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Tip"
+                  options={Object.keys(TYPE_LABELS) as ServiceType[]}
+                  getLabel={(o) => TYPE_LABELS[o]?.label ?? o}
+                  selected={tipFiltre}
+                  onChange={setTipFiltre}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Hizmet Adı" value={adFiltre} onChange={setAdFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Kategori"
+                  options={categories}
+                  getLabel={(o) => o}
+                  selected={kategoriFiltre}
+                  onChange={(v) => setKategoriFiltre(v as string[])}
+                  aranabilir
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">Kaynak Klasör</th>
+              <th className="px-4 py-1.5 text-left font-medium">Tipe Özel</th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Durum"
+                  options={["aktif", "pasif"] as const}
+                  getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")}
+                  selected={durumFiltre}
+                  onChange={(v) => setDurumFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Sıra" sortKey="displayOrder" active={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            </ListeThead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                    ))}
+                    <td />
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <ListeBosSatir
+                  sutunSayisi={8}
+                  toplam={services.length}
+                  bosMesaj="Henüz hizmet yok — “Yeni Hizmet” ile ilkini ekleyin."
+                />
+              ) : filtered.map((svc) => {
                 const sourceFolder =
                   svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : "—";
                 const programCode =
@@ -287,117 +275,95 @@ export default function ServicesPage() {
                     : null;
                 const typeMeta = TYPE_LABELS[svc.type];
                 return (
-                <div
-                  key={svc.id}
-                  className="grid grid-cols-[16px_70px_1.4fr_140px_2fr_1.2fr_90px_50px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                >
-                  {/* Durum noktası */}
-                  <span className="flex items-center justify-center">
-                    <span className="relative flex size-1.5">
-                      {svc.isActive && (
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <tr key={svc.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className={cn("inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[11px] font-medium", typeMeta.badge)}>
+                        {typeMeta.icon}
+                        {typeMeta.label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className="flex items-center gap-2">
+                        <span className={cn("size-1.5 shrink-0 rounded-full", svc.isActive ? "bg-emerald-500" : "bg-slate-300")} />
+                        <span className="font-medium">{svc.name}</span>
+                      </span>
+                      {programCode && (
+                        <p className="text-muted-foreground/70 mt-0.5 font-mono text-[11px]">{programCode}</p>
                       )}
-                      <span className={cn(
-                        "relative inline-flex size-1.5 rounded-full",
-                        svc.isActive ? "bg-emerald-500" : "bg-slate-300"
-                      )} />
-                    </span>
-                  </span>
-
-                  {/* Tip badge */}
-                  <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-[4px] border w-fit flex items-center gap-1", typeMeta.badge)}>
-                    {typeMeta.icon}
-                    {typeMeta.label}
-                  </span>
-
-                  {/* Hizmet adı + program kodu */}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium truncate">{svc.name}</span>
-                    </div>
-                    {programCode && (
-                      <p className="text-[9px] font-mono text-muted-foreground/70 mt-0.5">{programCode}</p>
-                    )}
-                  </div>
-
-                  {/* Kategori */}
-                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/40 text-muted-foreground border-border/60 w-fit">
-                    {svc.category}
-                  </span>
-
-                  {/* Kaynak klasör */}
-                  <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground">
-                    <FolderOpen className="size-3 shrink-0" />
-                    <span className="font-mono truncate">{sourceFolder}</span>
-                  </div>
-
-                  {/* Tipe özel */}
-                  <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground">
-                    {svc.type === "pusula-program" && svc.config && "paramFileName" in svc.config ? (
-                      svc.config.paramFileName ? (
-                        <>
-                          <FileText className="size-3 shrink-0" />
-                          <span className="font-mono truncate">{svc.config.paramFileName}</span>
-                        </>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className="text-muted-foreground inline-flex rounded-[5px] bg-muted/40 px-2 py-0.5 text-[11px] font-medium">
+                        {svc.category}
+                      </span>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-64">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <FolderOpen className="size-3 shrink-0" />
+                        <span className="truncate font-mono">{sourceFolder}</span>
+                      </span>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-56">
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {svc.type === "pusula-program" && svc.config && "paramFileName" in svc.config ? (
+                          svc.config.paramFileName ? (
+                            <>
+                              <FileText className="size-3 shrink-0" />
+                              <span className="truncate font-mono">{svc.config.paramFileName}</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground/40">— param yok</span>
+                          )
+                        ) : svc.type === "iis-site" && svc.config && "siteNamePattern" in svc.config ? (
+                          <>
+                            <Waypoints className="size-3 shrink-0" />
+                            <span className="truncate font-mono">{svc.config.siteNamePattern}</span>
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground/40">—</span>
+                        )}
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      {svc.isActive ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                          <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                        </span>
                       ) : (
-                        <span className="text-muted-foreground/40">— param yok</span>
-                      )
-                    ) : svc.type === "iis-site" && svc.config && "siteNamePattern" in svc.config ? (
-                      <>
-                        <Waypoints className="size-3 shrink-0" />
-                        <span className="font-mono truncate">{svc.config.siteNamePattern}</span>
-                      </>
-                    ) : (
-                      <span className="text-muted-foreground/40">—</span>
-                    )}
-                  </div>
-
-                  {/* Durum */}
-                  <span className={cn(
-                    "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
-                    svc.isActive
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-muted text-muted-foreground border-border"
-                  )}>
-                    {svc.isActive ? "Aktif" : "Pasif"}
-                  </span>
-
-                  {/* Sıra */}
-                  <span className="text-[10px] text-muted-foreground tabular-nums text-center">{svc.displayOrder}</span>
-
-                  {/* Aksiyon */}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-[6px]">
-                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEdit(svc)}>
-                        Düzenle
-                      </DropdownMenuItem>
-                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleToggleActive(svc)}>
-                        {svc.isActive ? "Pasife Al" : "Aktif Et"}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive" onClick={() => setDeleting(svc)}>
-                        Sil
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                        <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          <span className="size-1.5 rounded-full bg-zinc-400" />Pasif
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">
+                      {svc.displayOrder}
+                    </td>
+                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                            <MoreVertical className="size-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" sideOffset={4} className="w-40 text-[12px]">
+                          <DropdownMenuItem className="gap-2" onClick={() => openEdit(svc)}>
+                            <Pencil className="text-muted-foreground size-3.5" />Düzenle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2" onClick={() => handleToggleActive(svc)}>
+                            {svc.isActive ? "Pasife Al" : "Aktif Et"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2 text-rose-600 focus:text-rose-600" onClick={() => setDeleting(svc)}>
+                            <Trash2 className="size-3.5" />Sil
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
                 );
               })}
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-          <Layers className="size-3" />
-          <span>{filtered.length} hizmet listeleniyor</span>
-        </div>
-      </div>
+      </ListeKarti>
 
       <ServiceSheet
         open={sheetOpen}

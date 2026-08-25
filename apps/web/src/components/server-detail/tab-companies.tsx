@@ -162,10 +162,10 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
   if (companies.length === 0) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] px-6 py-10 flex flex-col items-center gap-2"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] px-6 py-10 flex flex-col items-center gap-2"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           <Building2 className="size-8 text-muted-foreground/30" />
           <p className="text-[12px] font-medium text-muted-foreground">AD firma verisi bulunamadı</p>
@@ -173,8 +173,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
             Bu sunucuda Active Directory rolü aktif değil veya henüz veri gelmedi.
           </p>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     );
   }
 
@@ -193,33 +192,32 @@ export function TabCompanies({ companies, firmaMap }: Props) {
             small: true,
           },
         ].map(({ label, value, sub, icon: Icon, small }) => (
-          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+          <div key={label} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div
-              className="rounded-[4px] px-3 py-3"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+              className="rounded-[5px] px-3 py-3"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
             >
               <div className="flex items-center gap-2 mb-1">
                 <Icon className="size-3 text-muted-foreground" />
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{label}</span>
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{label}</span>
               </div>
               <span className={cn("font-semibold", small ? "text-[13px] truncate block" : "text-2xl")}>{value}</span>
               {sub && <span className="text-[10px] text-muted-foreground mt-0.5 block">{sub}</span>}
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
         ))}
       </div>
 
       {/* List */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] overflow-hidden"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] overflow-hidden"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           {/* Header */}
-          <div className="grid grid-cols-[80px_1fr_100px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+          <div className="grid grid-cols-[80px_1fr_100px_28px] gap-3 px-3 py-2 bg-muted/20 border-b border-border items-center">
             <SortHeader label="Firma No"  sortKey="firmaNo"   active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Firma Adı</span>
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Firma Adı</span>
             <SortHeader label="Kullanıcı" sortKey="userCount" active={sortKey} dir={sortDir} onSort={handleSort} />
             <span />
           </div>
@@ -231,16 +229,16 @@ export function TabCompanies({ companies, firmaMap }: Props) {
                 key={company.firmaNo}
                 className="grid grid-cols-[80px_1fr_100px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
               >
-                <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium w-fit">{company.firmaNo}</span>
-                <span className="text-[11px] font-medium truncate">{firmaName(company.firmaNo)}</span>
+                <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium w-fit">{company.firmaNo}</span>
+                <span className="text-[13px] font-medium truncate">{firmaName(company.firmaNo)}</span>
                 <span className="text-[11px] text-muted-foreground tabular-nums">{company.userCount} kullanıcı</span>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+                    <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
                       <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-[6px]">
+                  <DropdownMenuContent align="end" className="rounded-[5px]">
                     <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => setSelectedCompany(company)}>
                       Kullanıcıları Görüntüle
                     </DropdownMenuItem>
@@ -260,13 +258,13 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
       {/* Company detail sheet */}
       <Sheet open={!!selectedCompany} onOpenChange={(open) => !open && setSelectedCompany(null)}>
-        <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
+        <SheetContent className="!w-[520px] !max-w-[520px]">
           <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
             <div className="flex items-center gap-2">
               <SheetTitle className="text-sm font-semibold">
                 {selectedCompany ? (firmaMap[selectedCompany.firmaNo] ?? selectedCompany.firmaNo) : ""}
               </SheetTitle>
-              <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium shrink-0">
+              <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium shrink-0">
                 {selectedCompany?.firmaNo}
               </span>
               <span className="text-[10px] text-muted-foreground">{selectedCompany?.userCount} kullanıcı</span>
@@ -277,16 +275,16 @@ export function TabCompanies({ companies, firmaMap }: Props) {
           <ScrollArea className="flex-1">
             <div className="px-4 py-4">
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcılar</p>
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                  <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kullanıcılar</p>
                 </div>
 
                 {/* Table header */}
                 <div className="grid grid-cols-[1fr_1fr_130px_60px_28px] gap-3 px-3 py-2 bg-muted/20 border-b border-border/40 items-center">
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı Adı</span>
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Ad Soyad</span>
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Güvenlik Grubu</span>
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kullanıcı Adı</span>
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Ad Soyad</span>
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Güvenlik Grubu</span>
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                   <span />
                 </div>
 
@@ -301,7 +299,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
                           user.groups.map((g) => (
                             <span
                               key={g}
-                              className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[3px] font-medium text-muted-foreground truncate max-w-full"
+                              className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium text-muted-foreground truncate max-w-full"
                               title={g}
                             >
                               {g}
@@ -319,11 +317,11 @@ export function TabCompanies({ companies, firmaMap }: Props) {
 
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+                          <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
                             <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="rounded-[6px]">
+                        <DropdownMenuContent align="end" className="rounded-[5px]">
                           <DropdownMenuItem
                             className="text-xs cursor-pointer"
                             onClick={() => openPasswordDialog(user.username)}
@@ -415,7 +413,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
                   type={showPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setPasswordCopied(false); }}
-                  className="rounded-[5px] h-8 text-[11px] pr-14 font-mono"
+                  className="rounded-[5px] h-8 text-[13px] pr-14 font-mono"
                   placeholder="En az 6 karakter"
                   autoComplete="new-password"
                 />
@@ -427,7 +425,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
                     className="hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                     title="Şifreyi kopyala"
                   >
-                    {passwordCopied ? <Check className="size-3.5 text-emerald-600" /> : <Copy className="size-3.5" />}
+                    {passwordCopied ? <Check className="size-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="size-3.5" />}
                   </button>
                   <button
                     type="button"
@@ -448,7 +446,7 @@ export function TabCompanies({ companies, firmaMap }: Props) {
                 type={showPassword ? "text" : "password"}
                 value={newPasswordConfirm}
                 onChange={(e) => setNewPasswordConfirm(e.target.value)}
-                className="rounded-[5px] h-8 text-[11px] font-mono"
+                className="rounded-[5px] h-8 text-[13px] font-mono"
                 autoComplete="new-password"
               />
             </div>

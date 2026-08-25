@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
+import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muharremoz/pusula-ui"
@@ -13,7 +15,7 @@ import {
   SelectLabel,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -113,11 +115,11 @@ function formatDate(iso: string): string {
 }
 
 const STATE_BADGE: Record<string, string> = {
-  ONLINE:     "bg-emerald-50 text-emerald-700 border-emerald-200",
+  ONLINE:     "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25",
   OFFLINE:    "bg-muted text-muted-foreground border-border",
-  RESTORING:  "bg-amber-50 text-amber-700 border-amber-200",
-  RECOVERING: "bg-blue-50 text-blue-700 border-blue-200",
-  SUSPECT:    "bg-red-50 text-red-700 border-red-200",
+  RESTORING:  "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  RECOVERING: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  SUSPECT:    "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25",
 }
 const STATE_DOT: Record<string, string> = {
   ONLINE:     "bg-emerald-500",
@@ -268,13 +270,35 @@ export default function SQLPage() {
     else { setSortKey(key); setSortDir("asc") }
   }
 
-  const sorted = [...databases].sort((a, b) => {
-    const mul = sortDir === "asc" ? 1 : -1
-    if (sortKey === "sizeMB") return (a.sizeMB - b.sizeMB) * mul
-    const av = String(a[sortKey] ?? "")
-    const bv = String(b[sortKey] ?? "")
-    return av.localeCompare(bv) * mul
-  })
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [dbFiltre,     setDbFiltre]     = useState("")
+  const [sunucuFiltre, setSunucuFiltre] = useState<string[]>([])
+  const [durumFiltre,  setDurumFiltre]  = useState<string[]>([])
+
+  const sunucuAdlari = useMemo(
+    () => [...new Set(databases.map((d) => d.serverName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr")),
+    [databases],
+  )
+  const durumlar = useMemo(
+    () => [...new Set(databases.map((d) => (d.state ?? "").toUpperCase()).filter(Boolean))].sort(),
+    [databases],
+  )
+
+  const sorted = useMemo(() => {
+    const q = dbFiltre.trim().toLocaleLowerCase("tr-TR")
+    return [...databases]
+      .filter((d) => {
+        if (q && !d.name.toLocaleLowerCase("tr-TR").includes(q)) return false
+        if (sunucuFiltre.length && !sunucuFiltre.includes(d.serverName)) return false
+        if (durumFiltre.length && !durumFiltre.includes((d.state ?? "").toUpperCase())) return false
+        return true
+      })
+      .sort((a, b) => {
+        const mul = sortDir === "asc" ? 1 : -1
+        if (sortKey === "sizeMB") return (a.sizeMB - b.sizeMB) * mul
+        return String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""), "tr") * mul
+      })
+  }, [databases, dbFiltre, sunucuFiltre, durumFiltre, sortKey, sortDir])
 
   /* ── Sorgu çalıştır ── */
   const handleRun = async () => {
@@ -322,16 +346,16 @@ export default function SQLPage() {
       <Tabs defaultValue="databases">
 
         {/* ── Tab Başlıkları ── */}
-        <TabsList className="rounded-[8px] p-1 h-auto mb-4 gap-0" style={{ backgroundColor: "#eef3ff" }}>
+        <TabsList className="rounded-[8px] p-1 h-auto mb-4 gap-0" style={{ backgroundColor: "var(--section-bg)" }}>
           <TabsTrigger
             value="databases"
-            className="rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
+            className="rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
           >
             Veritabanları
           </TabsTrigger>
           <TabsTrigger
             value="editor"
-            className="rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
+            className="rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
           >
             Sorgu Editörü
           </TabsTrigger>
@@ -341,143 +365,128 @@ export default function SQLPage() {
             TAB 1 — Veritabanları
         ══════════════════════════════════════ */}
         <TabsContent value="databases" className="mt-0">
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-            <div
-              className="rounded-[4px] overflow-hidden"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-            >
-              {/* Header */}
-              <div className="grid grid-cols-[16px_2fr_1fr_90px_100px_120px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-                <span />
-                <SortHeader label="Veritabanı"   sortKey="name"       active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Sunucu"        sortKey="serverName" active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Boyut"         sortKey="sizeMB"     active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Durum"         sortKey="state"      active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Oluşturulma"   sortKey="createDate" active={sortKey} dir={sortDir} onSort={handleSort} />
-                <button
-                  onClick={() => fetchDatabases(sqlServers)}
-                  disabled={dbsLoading || serversLoading}
-                  title="Yenile"
-                  className="flex items-center justify-center size-5 rounded-[3px] hover:bg-muted/60 transition-colors disabled:opacity-40"
-                >
-                  {dbsLoading
-                    ? <Loader2 className="size-3 animate-spin text-muted-foreground" />
-                    : <RefreshCw className="size-3 text-muted-foreground" />}
-                </button>
-              </div>
-
-              {/* Hata */}
-              {serversError && (
-                <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-red-600">
-                  <AlertTriangle className="size-3.5 shrink-0" />
-                  {serversError}
-                </div>
-              )}
-
-              {/* Yükleniyor */}
-              {(serversLoading || dbsLoading) && !serversError && (
-                <div className="divide-y divide-border/40">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="grid grid-cols-[16px_2fr_1fr_90px_100px_120px_28px] gap-3 px-3 py-3 items-center">
-                      <Skeleton className="size-1.5 rounded-full" />
-                      <Skeleton className="h-3 w-40 rounded-[4px]" />
-                      <Skeleton className="h-3 w-24 rounded-[4px]" />
-                      <Skeleton className="h-3 w-16 rounded-[4px]" />
-                      <Skeleton className="h-5 w-16 rounded-[4px]" />
-                      <Skeleton className="h-3 w-24 rounded-[4px]" />
-                      <span />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Boş */}
-              {!serversLoading && !dbsLoading && !serversError && databases.length === 0 && (
-                <div className="flex flex-col items-center justify-center gap-2 px-4 py-10 text-center">
-                  <ServerOff className="size-7 text-muted-foreground" />
-                  <p className="text-[12px] font-medium">Veritabanı bulunamadı</p>
-                  <p className="text-[10px] text-muted-foreground">
-                    SQL rolüne sahip sunucu tanımlanmamış veya sunucular çevrimdışı.
-                  </p>
-                  <a
-                    href="/servers"
-                    className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-                  >
-                    Sunuculara Git
-                  </a>
-                </div>
-              )}
-
-              {/* Liste */}
-              {!serversLoading && !dbsLoading && databases.length > 0 && (
-                <div className="divide-y divide-border/40">
-                  {sorted.map((db) => {
+          <ListeKarti
+            baslik="Veritabanları"
+            ikon={<Database className="size-3.5" />}
+            toplam={databases.length}
+            filtreli={sorted.length}
+            aksiyon={
+              <button
+                onClick={() => fetchDatabases(sqlServers)}
+                disabled={dbsLoading || serversLoading}
+                title="Yenile"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted/40 border-border/60 inline-flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[12px] font-medium transition-colors disabled:opacity-40"
+              >
+                {dbsLoading
+                  ? <Loader2 className="size-3.5 animate-spin" />
+                  : <RefreshCw className="size-3.5" />}
+                Yenile
+              </button>
+            }
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-[14px] font-medium leading-[20px]">
+                <ListeThead>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Veritabanı" value={dbFiltre} onChange={setDbFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SecimFiltre
+                      label="Sunucu"
+                      options={sunucuAdlari}
+                      getLabel={(o) => o}
+                      selected={sunucuFiltre}
+                      onChange={(v) => setSunucuFiltre(v as string[])}
+                      aranabilir
+                    />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Boyut" sortKey="sizeMB" active={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SecimFiltre
+                      label="Durum"
+                      options={durumlar}
+                      getLabel={(o) => o}
+                      selected={durumFiltre}
+                      onChange={(v) => setDurumFiltre(v as string[])}
+                    />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Oluşturulma" sortKey="createDate" active={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+                </ListeThead>
+                <tbody>
+                  {(serversLoading || dbsLoading) ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 5 }).map((_, j) => (
+                          <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                        ))}
+                        <td />
+                      </tr>
+                    ))
+                  ) : sorted.length === 0 ? (
+                    <ListeBosSatir
+                      sutunSayisi={6}
+                      toplam={databases.length}
+                      bosMesaj="SQL rolündeki sunuculardan henüz veritabanı verisi gelmedi."
+                    />
+                  ) : sorted.map((db) => {
                     const stateKey = (db.state ?? "").toUpperCase()
                     return (
-                      <div
-                        key={db.uid}
-                        className="grid grid-cols-[16px_2fr_1fr_90px_100px_120px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                      >
-                        <span className="flex items-center justify-center">
-                          <span className="relative flex size-1.5">
-                            {stateKey === "ONLINE" && (
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                            )}
-                            <span className={cn("relative inline-flex size-1.5 rounded-full", STATE_DOT[stateKey] ?? "bg-slate-300")} />
+                      <tr key={db.uid} className="hover:bg-muted/20 transition-colors">
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <span className="flex items-center gap-2">
+                            <span className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[stateKey] ?? "bg-slate-300")} />
+                            <Database className="text-muted-foreground size-3 shrink-0" />
+                            <span className="font-mono font-medium">{db.name}</span>
                           </span>
-                        </span>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Database className="size-3 text-muted-foreground shrink-0" />
-                          <span className="text-[11px] font-medium truncate font-mono">{db.name}</span>
-                        </div>
-                        <span className="text-[11px] text-muted-foreground truncate">{db.serverName}</span>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{formatSize(db.sizeMB)}</span>
-                        <span className={cn(
-                          "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
-                          STATE_BADGE[stateKey] ?? "bg-muted text-muted-foreground border-border",
-                        )}>
-                          {stateKey}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground tabular-nums">{formatDate(db.createDate)}</span>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="rounded-[6px]">
-                            <DropdownMenuItem
-                              className="text-xs cursor-pointer"
-                              onClick={() => {
-                                setEditorServerId(db.serverId)
-                                setEditorDb(db.name)
-                                const tabs = document.querySelector('[data-value="editor"]') as HTMLElement | null
-                                tabs?.click()
-                              }}
-                            >
-                              Sorgula
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-xs cursor-pointer text-muted-foreground" disabled>
-                              Yedek Al (yakında)
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
+                        </td>
+                        <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">{db.serverName}</td>
+                        <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{formatSize(db.sizeMB)}</td>
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <span className={cn(
+                            "inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
+                            STATE_BADGE[stateKey] ?? "bg-muted text-muted-foreground",
+                          )}>
+                            {stateKey}
+                          </span>
+                        </td>
+                        <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{formatDate(db.createDate)}</td>
+                        <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                                <MoreVertical className="size-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" sideOffset={4} className="w-44 text-[12px]">
+                              <DropdownMenuItem
+                                className="gap-2"
+                                onClick={() => {
+                                  setEditorServerId(db.serverId)
+                                  setEditorDb(db.name)
+                                  const tabs = document.querySelector('[data-value="editor"]') as HTMLElement | null
+                                  tabs?.click()
+                                }}
+                              >
+                                Sorgula
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-muted-foreground gap-2" disabled>
+                                Yedek Al (yakında)
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </td>
+                      </tr>
                     )
                   })}
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-              <Database className="size-3" />
-              {dbsLoading
-                ? <span>Veritabanları yükleniyor…</span>
-                : <span>{databases.length} veritabanı · {sqlServers.length} SQL sunucusu</span>}
-            </div>
-          </div>
+          </ListeKarti>
         </TabsContent>
 
         {/* ══════════════════════════════════════
@@ -487,13 +496,13 @@ export default function SQLPage() {
           <div className="grid grid-cols-[220px_1fr] gap-3 items-start">
 
             {/* ── Sol: Kayıtlı Sorgular ── */}
-            <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+            <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
               <div
-                className="rounded-[4px] overflow-hidden"
-                style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                className="rounded-[5px] overflow-hidden"
+                style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
               >
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kayıtlı Sorgular</p>
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                  <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kayıtlı Sorgular</p>
                 </div>
                 <div className="divide-y divide-border/40">
                   {SAVED_QUERIES.map((sq) => (
@@ -508,10 +517,10 @@ export default function SQLPage() {
                       <div className="flex items-start gap-2">
                         <Bookmark className={cn("size-3 mt-0.5 shrink-0", selectedSaved === sq.id ? "text-foreground" : "text-muted-foreground")} />
                         <div className="min-w-0">
-                          <p className={cn("text-[11px] font-medium truncate", selectedSaved === sq.id ? "text-foreground" : "text-foreground/80")}>
+                          <p className={cn("text-[13px] font-medium truncate", selectedSaved === sq.id ? "text-foreground" : "text-foreground/80")}>
                             {sq.name}
                           </p>
-                          <span className="text-[9px] bg-muted px-1 py-0 rounded-[3px] text-muted-foreground font-mono mt-0.5 inline-block">
+                          <span className="text-[9px] bg-muted px-1 py-0 rounded-[5px] text-muted-foreground font-mono mt-0.5 inline-block">
                             {sq.db}
                           </span>
                         </div>
@@ -520,20 +529,19 @@ export default function SQLPage() {
                   ))}
                 </div>
               </div>
-              <div className="h-2" />
-            </div>
+                    </div>
 
             {/* ── Sağ: Editör + Sonuçlar ── */}
             <div className="flex flex-col gap-3">
 
               {/* Editör Kartı */}
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+              <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
                 <div
-                  className="rounded-[4px] overflow-hidden"
-                  style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                  className="rounded-[5px] overflow-hidden"
+                  style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
                 >
                   {/* Editör Header — Sunucu + DB seçimi + Çalıştır */}
-                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
+                  <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
                     {/* Sunucu */}
                     <Select
                       value={editorServerId}
@@ -545,7 +553,7 @@ export default function SQLPage() {
                       </SelectTrigger>
                       <SelectContent className="rounded-[5px]">
                         {sqlServers.map((s) => (
-                          <SelectItem key={s.id} value={s.id} className="text-[11px] font-mono">
+                          <SelectItem key={s.id} value={s.id} className="text-[13px] font-mono">
                             {s.name}
                           </SelectItem>
                         ))}
@@ -566,7 +574,7 @@ export default function SQLPage() {
                         <SelectGroup>
                           <SelectLabel className="text-[9px]">Sistem</SelectLabel>
                           {["master", "msdb", "model"].map((sdb) => (
-                            <SelectItem key={sdb} value={sdb} className="text-[11px] font-mono">{sdb}</SelectItem>
+                            <SelectItem key={sdb} value={sdb} className="text-[13px] font-mono">{sdb}</SelectItem>
                           ))}
                         </SelectGroup>
                         {/* Kullanıcı veritabanları */}
@@ -574,7 +582,7 @@ export default function SQLPage() {
                           <SelectGroup>
                             <SelectLabel className="text-[9px]">Kullanıcı Veritabanları</SelectLabel>
                             {editorDbs.map((db) => (
-                              <SelectItem key={db.name} value={db.name} className="text-[11px] font-mono">
+                              <SelectItem key={db.name} value={db.name} className="text-[13px] font-mono">
                                 {db.name}
                               </SelectItem>
                             ))}
@@ -590,7 +598,7 @@ export default function SQLPage() {
                       <button
                         onClick={handleRun}
                         disabled={!canRun}
-                        className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+                        className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
                       >
                         {isRunning
                           ? <Loader2 className="size-3 animate-spin" />
@@ -620,7 +628,7 @@ export default function SQLPage() {
                         requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = s + 2 })
                       }
                     }}
-                    className="rounded-none border-0 border-b border-border/40 text-[12px] font-mono resize-none min-h-[180px] bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:ring-offset-0"
+                    className="rounded-none border-0 border-b border-border/40 text-[12px] font-mono resize-none min-h-[180px] bg-zinc-950 text-zinc-100 placeholder:text-zinc-600 dark:text-zinc-400 focus-visible:ring-0 focus-visible:ring-offset-0"
                     placeholder="-- SQL sorgunuzu buraya yazın…"
                     spellCheck={false}
                   />
@@ -629,22 +637,21 @@ export default function SQLPage() {
                   <div className="flex items-center gap-3 px-3 py-1.5">
                     <span className="text-[10px] text-muted-foreground">Ctrl+Enter ile çalıştır · Tab ile girinti</span>
                     {!canRun && !isRunning && (
-                      <span className="flex items-center gap-1 text-[10px] text-amber-600">
+                      <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400">
                         <Info className="size-3" />
                         {!editorServerId ? "Sunucu seçin" : !editorDb ? "Veritabanı seçin" : ""}
                       </span>
                     )}
                   </div>
                 </div>
-                <div className="h-2" />
-              </div>
+                        </div>
 
               {/* Hata Mesajı */}
               {queryError && (
-                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+                <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
                   <div
-                    className="rounded-[4px] overflow-hidden"
-                    style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                    className="rounded-[5px] overflow-hidden"
+                    style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
                   >
                     <div className="flex items-start gap-2 px-3 py-3">
                       <AlertCircle className="size-4 text-destructive shrink-0 mt-0.5" />
@@ -654,29 +661,28 @@ export default function SQLPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="h-2" />
-                </div>
+                            </div>
               )}
 
               {/* Sonuçlar Kartı */}
               {result && (
-                <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+                <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
                   <div
-                    className="rounded-[4px] overflow-hidden"
-                    style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                    className="rounded-[5px] overflow-hidden"
+                    style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
                   >
                     {/* Sonuçlar Header */}
-                    <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
-                      <CheckCircle2 className="size-3.5 text-emerald-600" />
-                      <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sonuçlar</p>
-                      <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-[4px] font-medium">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
+                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sonuçlar</p>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-1.5 py-0.5 rounded-[5px] font-medium">
                         {result.rows.length} satır
                       </span>
                       <span className="text-[10px] text-muted-foreground">
                         {result.executionMs}ms
                       </span>
                       {result.truncated && (
-                        <span className="flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-[4px]">
+                        <span className="flex items-center gap-1 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/25 px-1.5 py-0.5 rounded-[5px]">
                           <Info className="size-3" />
                           İlk 1.000 satır
                         </span>
@@ -711,7 +717,7 @@ export default function SQLPage() {
                     {/* Tablo */}
                     {result.columns.length === 0 ? (
                       <div className="flex items-center gap-2 px-3 py-3 text-[11px] text-muted-foreground">
-                        <CheckCircle2 className="size-3.5 text-emerald-600" />
+                        <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" />
                         Sorgu başarıyla çalıştırıldı, sonuç döndürülmedi.
                       </div>
                     ) : (
@@ -719,9 +725,9 @@ export default function SQLPage() {
                         <table className="w-full text-[11px]">
                           <thead>
                             <tr className="border-b border-border/40 bg-muted/20">
-                              <th className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground tracking-wide uppercase w-10 tabular-nums">#</th>
+                              <th className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground tracking-wider uppercase w-10 tabular-nums">#</th>
                               {result.columns.map((col) => (
-                                <th key={col} className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground tracking-wide uppercase whitespace-nowrap">
+                                <th key={col} className="text-left px-3 py-2 text-[10px] font-medium text-muted-foreground tracking-wider uppercase whitespace-nowrap">
                                   {col}
                                 </th>
                               ))}

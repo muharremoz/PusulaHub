@@ -6,10 +6,11 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@muharremoz/pusula-ui";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import {  } from "@muharremoz/pusula-ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Database, HardDriveDownload, Loader2, Check, XCircle, FolderOpen, RefreshCw, AlertTriangle } from "lucide-react"
+import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils"
 import type { OldDataScanResponse } from "@/app/api/companies/[firkod]/sql/old-data/scan/route"
 
@@ -181,8 +182,8 @@ export function OldDataRestoreSheet({
 
   return (
     <Sheet open={open} onOpenChange={(o) => { if (phase !== "running") onOpenChange(o) }}>
-      <SheetContent side="right" className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
-        <SheetHeader className="px-5 py-4 border-b border-border/50">
+      <SheetContent side="right" className="!w-[520px] !max-w-[520px]">
+        <SheetHeader>
           <SheetTitle className="text-sm flex items-center gap-2">
             <HardDriveDownload className="h-4 w-4" /> Yeni Veritabanı Ekle
           </SheetTitle>
@@ -194,8 +195,8 @@ export function OldDataRestoreSheet({
             {/* Kaynak: hangi sunucu + hangi klasör */}
             {phase !== "running" && phase !== "done" && (
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veri Konumu</span>
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Veri Konumu</span>
                 </div>
                 <div className="px-3 py-2.5 space-y-2">
                   <div className="space-y-0.5">
@@ -215,8 +216,8 @@ export function OldDataRestoreSheet({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="depo" className="text-[11px]">Depo sunucusu</SelectItem>
-                        <SelectItem value="sql" className="text-[11px]">SQL sunucusu</SelectItem>
+                        <SelectItem value="depo" className="text-[13px]">Depo sunucusu</SelectItem>
+                        <SelectItem value="sql" className="text-[13px]">SQL sunucusu</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -255,7 +256,7 @@ export function OldDataRestoreSheet({
               scanLoading ? (
                 <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-[5px]" />)}</div>
               ) : scanError ? (
-                <div className="flex items-start gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-700">
+                <div className="flex items-start gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400">
                   <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                   <span>{scanError}</span>
                 </div>
@@ -272,8 +273,8 @@ export function OldDataRestoreSheet({
                 </div>
               ) : (
                 <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Yedek Dosyaları ({files.length})</span>
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Yedek Dosyaları ({files.length})</span>
                   </div>
                   <div className="divide-y divide-border/40">
                     {files.map((f) => (
@@ -306,7 +307,7 @@ export function OldDataRestoreSheet({
                                 </SelectTrigger>
                                 <SelectContent>
                                   {programs.map((p) => (
-                                    <SelectItem key={p.id} value={p.programCode} className="text-[11px]">{p.name} ({p.programCode})</SelectItem>
+                                    <SelectItem key={p.id} value={p.programCode} className="text-[13px]">{p.name} ({p.programCode})</SelectItem>
                                   ))}
                                 </SelectContent>
                               </Select>
@@ -323,17 +324,17 @@ export function OldDataRestoreSheet({
             {/* Çalışıyor / sonuç — adım listesi */}
             {(phase === "running" || phase === "done") && (
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">Restore Adımları</span>
+                <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">Restore Adımları</span>
                   {phase === "running" && <Loader2 className="h-3.5 w-3.5 animate-spin text-foreground" />}
-                  {allDone && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
+                  {allDone && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
                   {hasError && <XCircle className="h-3.5 w-3.5 text-red-500" />}
                 </div>
                 <div className="divide-y divide-border/40 max-h-[50vh] overflow-y-auto">
                   {steps.map((s) => (
                     <div key={s.stepId} className={cn("flex items-start gap-2.5 px-3 py-2", s.status === "running" && "bg-muted/20")}>
                       <span className="shrink-0 mt-0.5">
-                        {s.status === "done" && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
+                        {s.status === "done" && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
                         {s.status === "running" && <Loader2 className="size-4 animate-spin text-foreground" />}
                         {s.status === "error" && <XCircle className="size-4 text-red-500" />}
                       </span>
@@ -348,7 +349,7 @@ export function OldDataRestoreSheet({
                   )}
                 </div>
                 {runError && (
-                  <div className="px-3 py-2 border-t border-red-200 bg-red-50 text-[11px] text-red-700 font-mono break-all">{runError}</div>
+                  <div className="px-3 py-2 border-t border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400 font-mono break-all">{runError}</div>
                 )}
               </div>
             )}
@@ -360,7 +361,7 @@ export function OldDataRestoreSheet({
           {phase === "select" && (
             <>
               <span className="text-[11px] text-muted-foreground">{selectedFiles.length} dosya seçildi</span>
-              <Button size="sm" disabled={!canRun} onClick={runRestore} className="rounded-[5px] h-8 text-[11px] gap-1.5">
+              <Button size="sm" disabled={!canRun} onClick={runRestore} className="rounded-[5px] h-8 text-[13px] gap-1.5">
                 <HardDriveDownload className="h-3.5 w-3.5" /> Geri Yükle
               </Button>
             </>
@@ -369,7 +370,7 @@ export function OldDataRestoreSheet({
             <span className="text-[11px] text-muted-foreground flex items-center gap-1.5 ml-auto"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Restore sürüyor…</span>
           )}
           {phase === "done" && (
-            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} className="rounded-[5px] h-8 text-[11px] ml-auto">Kapat</Button>
+            <Button size="sm" variant="outline" onClick={() => onOpenChange(false)} className="rounded-[5px] h-8 text-[13px] ml-auto">Kapat</Button>
           )}
         </div>
       </SheetContent>

@@ -10,12 +10,12 @@ interface NestedCardProps {
 export function NestedCard({ children, footer, className, innerClassName }: NestedCardProps) {
   return (
     <div
-      className={cn("rounded-[8px] p-2 pb-0", className)}
-      style={{ backgroundColor: "#eef3ff" }}
+      className={cn("rounded-[8px] p-2", className)}
+      style={{ backgroundColor: "var(--section-bg)" }}
     >
       <div
-        className={cn("rounded-[4px] px-4 py-3", innerClassName)}
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className={cn("rounded-[5px] px-4 py-3", innerClassName)}
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
         {children}
       </div>
@@ -24,7 +24,6 @@ export function NestedCard({ children, footer, className, innerClassName }: Nest
           {footer}
         </div>
       )}
-      {!footer && <div className="h-2" />}
     </div>
   );
 }

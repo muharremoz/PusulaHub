@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { MessageSquare, RefreshCw, CheckCircle2, Clock, ChevronDown, ChevronRight } from "lucide-react";
-import { Checkbox } from "@muharremoz/pusula-ui";
+import {  } from "@muharremoz/pusula-ui";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -52,9 +53,9 @@ const TEMPLATES = [
 ];
 
 const TYPE_LABELS: Record<MsgType, { label: string; cls: string; badgeCls: string }> = {
-  info:    { label: "Bilgi",   cls: "bg-blue-50 text-blue-700 border-blue-200",   badgeCls: "bg-blue-100 text-blue-700 border-0" },
-  warning: { label: "Uyarı",  cls: "bg-amber-50 text-amber-700 border-amber-200", badgeCls: "bg-amber-100 text-amber-700 border-0" },
-  urgent:  { label: "Acil",   cls: "bg-red-50 text-red-700 border-red-200",        badgeCls: "bg-red-100 text-red-700 border-0" },
+  info:    { label: "Bilgi",   cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25",   badgeCls: "bg-blue-100 text-blue-700 dark:text-blue-400 border-0" },
+  warning: { label: "Uyarı",  cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25", badgeCls: "bg-amber-100 text-amber-700 dark:text-amber-400 border-0" },
+  urgent:  { label: "Acil",   cls: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25",        badgeCls: "bg-red-100 text-red-700 dark:text-red-400 border-0" },
 };
 
 function formatTime(iso: string) {
@@ -171,28 +172,27 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
     <div className="space-y-3">
       {/* ── Compose + Hedef ── */}
       {noSessions ? (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] px-4 py-8 text-center"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] px-4 py-8 text-center"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
             <MessageSquare className="size-5 mx-auto mb-2 text-muted-foreground/60" />
             <p className="text-[11px] text-muted-foreground">
               Aktif oturum bulunmuyor — mesaj göndermek için en az bir oturum gerekli
             </p>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
       ) : (
         <div className="grid grid-cols-[1fr_280px] gap-3">
           {/* Compose area */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div
-              className="rounded-[4px]"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+              className="rounded-[5px]"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
             >
-              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                   Mesaj Oluştur
                 </span>
               </div>
@@ -206,7 +206,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                       className={cn(
                         "rounded-[5px] text-[11px] font-medium px-3 py-1.5 transition-colors border",
                         activeTemplate === tpl.key
-                          ? "bg-[#1d64ff] text-white border-foreground"
+                          ? "bg-primary text-primary-foreground border-foreground"
                           : "border-border/60 hover:bg-muted/40 text-muted-foreground"
                       )}
                     >
@@ -223,7 +223,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                       key={t}
                       onClick={() => setMsgType(t)}
                       className={cn(
-                        "text-[10px] font-medium px-2 py-0.5 rounded-[4px] border transition-colors",
+                        "text-[10px] font-medium px-2 py-0.5 rounded-[5px] border transition-colors",
                         msgType === t ? TYPE_LABELS[t].cls : "border-border/40 text-muted-foreground hover:bg-muted/30"
                       )}
                     >
@@ -237,7 +237,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Mesaj başlığı..."
-                  className="h-8 text-[11px] rounded-[5px] border-border/50"
+                  className="h-8 text-[13px] rounded-[5px] border-border/50"
                 />
 
                 {/* Mesaj gövdesi */}
@@ -257,24 +257,23 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                 <button
                   onClick={handleSend}
                   disabled={!title.trim() || !message.trim() || sending}
-                  className="w-full flex items-center justify-center gap-2 bg-[#1d64ff] text-white hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground hover:bg-foreground/90 rounded-[5px] text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
                   <MessageSquare className="size-3.5" />
                   {sending ? "Gönderiliyor..." : "Mesajı Gönder"}
                 </button>
               </div>
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
 
           {/* Target selection */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div
-              className="rounded-[4px]"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+              className="rounded-[5px]"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
             >
-              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                   Hedef Seçimi
                 </span>
               </div>
@@ -287,14 +286,14 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                       setSendAll(!!v);
                       if (v) setSelectedSessions(new Set());
                     }}
-                    className="rounded-[3px]"
+                    className="rounded-[5px]"
                   />
                   <label htmlFor="send-all" className="text-[11px] font-medium cursor-pointer">
                     Tüm Oturumlar
                   </label>
                 </div>
                 <div className="space-y-2">
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase block">
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase block">
                     Bireysel Seçim
                   </span>
                   {sessionUsernames.map((username) => (
@@ -304,7 +303,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                         checked={!sendAll && selectedSessions.has(username)}
                         disabled={sendAll}
                         onCheckedChange={() => toggleSession(username)}
-                        className="rounded-[3px]"
+                        className="rounded-[5px]"
                       />
                       <label
                         htmlFor={`ses-${username}`}
@@ -327,20 +326,19 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                 </div>
               </div>
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
         </div>
       )}
 
       {/* ── Gönderilen Mesajlar Geçmişi ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] overflow-hidden"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] overflow-hidden"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           {/* Header */}
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center justify-between">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
               Gönderilen Mesajlar
             </span>
             <button
@@ -387,7 +385,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
 
                       {/* Title + time */}
                       <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-medium truncate">{msg.title}</p>
+                        <p className="text-[13px] font-medium truncate">{msg.title}</p>
                         <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
                           <Clock className="size-2.5" />
                           {formatTime(msg.sentAt)}
@@ -397,7 +395,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
                       {/* Okundu durumu */}
                       <div className={cn(
                         "flex items-center gap-1 shrink-0 text-[10px] font-medium",
-                        allRead ? "text-emerald-600" : readCount > 0 ? "text-amber-600" : "text-muted-foreground"
+                        allRead ? "text-emerald-600 dark:text-emerald-400" : readCount > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
                       )}>
                         <CheckCircle2 className={cn("size-3", allRead && "fill-emerald-100")} />
                         <span>{readCount}/{msg.sessions} okundu</span>
@@ -446,8 +444,7 @@ export function TabMessages({ sessions, serverId }: TabMessagesProps) {
             </span>
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     </div>
   );
 }

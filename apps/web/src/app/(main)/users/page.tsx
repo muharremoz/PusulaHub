@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSession }          from "next-auth/react"
 import { useRouter }           from "next/navigation"
 import {
@@ -21,11 +21,13 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { toast }   from "sonner"
 import { cn }      from "@/lib/utils"
 import type { AppUser } from "@/app/api/users/route"
 import { APP_REGISTRY } from "@/lib/apps-registry"
+import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("tr-TR", { day: "2-digit", month: "short", year: "numeric" })
@@ -55,9 +57,9 @@ function FieldHint({ state, kind }: { state: FieldHintState; kind: "username" | 
   if (state === "idle") return null
   const map: Record<Exclude<FieldHintState, "idle">, { text: string; cls: string }> = {
     checking: { text: "Kontrol ediliyor…",                                              cls: "text-muted-foreground" },
-    ok:       { text: "Uygun",                                                          cls: "text-emerald-600" },
+    ok:       { text: "Uygun",                                                          cls: "text-emerald-600 dark:text-emerald-400" },
     taken:    { text: kind === "username" ? "Bu kullanıcı adı zaten kullanılıyor" : "Bu e-posta zaten kayıtlı", cls: "text-destructive" },
-    invalid:  { text: kind === "username" ? "3-32 karakter, harf/rakam/._- olabilir"  : "Geçerli bir e-posta girin", cls: "text-amber-600" },
+    invalid:  { text: kind === "username" ? "3-32 karakter, harf/rakam/._- olabilir"  : "Geçerli bir e-posta girin", cls: "text-amber-600 dark:text-amber-400" },
   }
   return <span className={cn("text-[10px]", map[state].cls)}>{map[state].text}</span>
 }
@@ -279,8 +281,8 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
   return (
     <Sheet open={open} onOpenChange={v => !v && onClose()}>
-      <SheetContent className="!w-[560px] !max-w-[560px] p-0 flex flex-col gap-0">
-        <SheetHeader className="px-5 py-4 border-b border-border/50">
+      <SheetContent className="!w-[560px] !max-w-[560px]">
+        <SheetHeader>
           <SheetTitle className="text-sm">{isEdit ? "Kullanıcıyı Düzenle" : "Yeni Kullanıcı"}</SheetTitle>
         </SheetHeader>
 
@@ -289,15 +291,15 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
             {/* ── Hesap Bilgileri ─────────────────────────────────────── */}
             <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <div className="px-3 py-1.5 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                   Hesap Bilgileri
                 </span>
               </div>
               <div className="p-3 space-y-2.5">
                 {!isEdit && (
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                       Kullanıcı Adı <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -316,7 +318,7 @@ function UserSheet({ open, user, onClose, onSaved }: {
                 )}
                 {isEdit && (
                   <div className="space-y-1">
-                    <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                       Kullanıcı Adı
                     </Label>
                     <Input value={username} disabled className="h-8 text-[12px] rounded-[5px] font-mono bg-muted/30" />
@@ -324,11 +326,11 @@ function UserSheet({ open, user, onClose, onSaved }: {
                   </div>
                 )}
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Ad Soyad</Label>
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Ad Soyad</Label>
                   <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Ad Soyad" className="h-8 text-[12px] rounded-[5px]" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                     E-posta <span className="text-destructive">*</span>
                   </Label>
                   <Input
@@ -350,13 +352,13 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
             {/* ── Güvenlik ─────────────────────────────────────────────── */}
             <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <div className="px-3 py-1.5 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                   Güvenlik
                 </span>
               </div>
               <div className="p-3 space-y-1">
-              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                 {isEdit ? "Yeni Şifre (değiştirmek için doldur)" : "Şifre *"}
               </Label>
               <div className="flex gap-1.5">
@@ -412,13 +414,13 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
             {/* ── Yetki ─────────────────────────────────────────────── */}
             <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              <div className="px-3 py-1.5 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                   Yetki
                 </span>
               </div>
               <div className="p-3 flex items-start gap-3">
-                <ShieldCheck className={cn("size-4 mt-[1px] shrink-0", role === "admin" ? "text-amber-600" : "text-muted-foreground")} />
+                <ShieldCheck className={cn("size-4 mt-[1px] shrink-0", role === "admin" ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")} />
                 <div className="flex-1 min-w-0">
                   <div className="text-[12px] font-medium">Süper Admin</div>
                   <div className="text-[10px] text-muted-foreground leading-snug">
@@ -435,7 +437,7 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
             {/* ── Uygulama Erişimi ───────────────────────────────────── */}
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-1">Uygulama Erişimi</Label>
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-1">Uygulama Erişimi</Label>
               {role === "admin" ? (
                 <div className="text-[11px] text-muted-foreground rounded-[5px] border border-dashed border-border/60 px-3 py-2">
                   Süper Admin tüm uygulamalara ve tüm sayfalara otomatik erişir.
@@ -461,7 +463,7 @@ function UserSheet({ open, user, onClose, onSaved }: {
                             onClick={() => on && toggleExpand(app.id)}
                             disabled={!on}
                             className={cn(
-                              "size-5 flex items-center justify-center rounded-[4px] text-muted-foreground shrink-0",
+                              "size-5 flex items-center justify-center rounded-[5px] text-muted-foreground shrink-0",
                               on ? "hover:bg-muted/60 cursor-pointer" : "opacity-30 cursor-not-allowed",
                             )}
                             aria-label="Sayfa izinlerini aç/kapat"
@@ -478,12 +480,12 @@ function UserSheet({ open, user, onClose, onSaved }: {
 
                           {on && (
                             <Select value={appRole} onValueChange={(v) => setAppRole(app.id, v as AppRole)}>
-                              <SelectTrigger className="h-7 text-[11px] rounded-[4px] w-[140px]">
+                              <SelectTrigger className="h-7 text-[11px] rounded-[5px] w-[140px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="admin" className="text-[11px]">Admin</SelectItem>
-                                <SelectItem value="user"  className="text-[11px]">Kullanıcı</SelectItem>
+                                <SelectItem value="admin" className="text-[13px]">Admin</SelectItem>
+                                <SelectItem value="user"  className="text-[13px]">Kullanıcı</SelectItem>
                               </SelectContent>
                             </Select>
                           )}
@@ -499,8 +501,8 @@ function UserSheet({ open, user, onClose, onSaved }: {
                         {on && appRole === "user" && loaded && mods.length > 0 &&
                           Object.values(pmap).every((v) => !v || v === "none") && (
                           <div className="px-3 pb-2 -mt-1 flex items-start gap-2">
-                            <AlertTriangle className="size-3.5 text-amber-600 mt-[1px] shrink-0" />
-                            <span className="text-[10px] text-amber-700">
+                            <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400 mt-[1px] shrink-0" />
+                            <span className="text-[10px] text-amber-700 dark:text-amber-400">
                               Hiçbir sayfa seçili değil — kullanıcı bu uygulamanın hiçbir sayfasına giremez.
                             </span>
                           </div>
@@ -510,15 +512,15 @@ function UserSheet({ open, user, onClose, onSaved }: {
                         {on && isOpen && (
                           <div className="px-3 pb-3 pt-0 bg-muted/10 border-t border-border/40">
                             {appRole === "admin" ? (
-                              <div className="mt-2 rounded-[5px] border border-amber-200 bg-amber-50/60 px-3 py-2 flex items-start gap-2">
-                                <ShieldCheck className="size-3.5 text-amber-700 mt-[1px] shrink-0" />
+                              <div className="mt-2 rounded-[5px] border border-amber-500/25 bg-amber-50/60 px-3 py-2 flex items-start gap-2">
+                                <ShieldCheck className="size-3.5 text-amber-700 dark:text-amber-400 mt-[1px] shrink-0" />
                                 <div className="text-[11px] text-amber-800">
                                   Bu uygulamadaki Admin rolü tüm modüllere otomatik yazma yetkisi verir.
                                 </div>
                               </div>
                             ) : !loaded ? (
                               <div className="mt-2 space-y-1.5">
-                                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[4px]" />)}
+                                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[5px]" />)}
                               </div>
                             ) : mods.length === 0 ? (
                               <div className="mt-2 text-[11px] text-muted-foreground italic">
@@ -529,19 +531,19 @@ function UserSheet({ open, user, onClose, onSaved }: {
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide mr-1">Toplu:</span>
                                   <button type="button" onClick={() => setAllLevels(app.id, "write")}
-                                    className="text-[10px] font-medium px-2 py-0.5 rounded-[4px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100">
+                                    className="text-[10px] font-medium px-2 py-0.5 rounded-[5px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100">
                                     Tümünü Aç
                                   </button>
                                   <button type="button" onClick={() => setAllLevels(app.id, "none")}
-                                    className="text-[10px] font-medium px-2 py-0.5 rounded-[4px] bg-muted/60 text-muted-foreground hover:bg-muted">
+                                    className="text-[10px] font-medium px-2 py-0.5 rounded-[5px] bg-muted/60 text-muted-foreground hover:bg-muted">
                                     Temizle
                                   </button>
                                 </div>
                                 {(["general", "services", "data", "admin", "dev"] as const).map((g) => (
                                   grouped[g]?.length ? (
-                                    <div key={g} className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
-                                      <div className="px-3 py-1 bg-muted/30 border-b border-border/40">
-                                        <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                                    <div key={g} className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
+                                      <div className="px-3 py-1 bg-muted/20 border-b border-border">
+                                        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                                           {GROUP_LABELS[g]}
                                         </span>
                                       </div>
@@ -598,6 +600,25 @@ export default function UsersPage() {
   const [editUser,   setEditUser]   = useState<AppUser | null>(null)
   const [deleteUser, setDeleteUser] = useState<AppUser | null>(null)
 
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [adFiltre,     setAdFiltre]     = useState("")
+  const [emailFiltre,  setEmailFiltre]  = useState("")
+  const [rolFiltre,    setRolFiltre]    = useState<string[]>([])
+  const [durumFiltre,  setDurumFiltre]  = useState<string[]>([])
+
+  const filtered = useMemo(() => {
+    const ad = adFiltre.trim().toLocaleLowerCase("tr-TR")
+    const em = emailFiltre.trim().toLocaleLowerCase("tr-TR")
+    return users.filter((u) => {
+      const isim = (u.fullName ?? u.username).toLocaleLowerCase("tr-TR")
+      if (ad && !isim.includes(ad) && !u.username.toLocaleLowerCase("tr-TR").includes(ad)) return false
+      if (em && !(u.email ?? "").toLocaleLowerCase("tr-TR").includes(em)) return false
+      if (rolFiltre.length && !rolFiltre.includes(u.role)) return false
+      if (durumFiltre.length && !durumFiltre.includes(u.isActive ? "aktif" : "pasif")) return false
+      return true
+    })
+  }, [users, adFiltre, emailFiltre, rolFiltre, durumFiltre])
+
   useEffect(() => {
     if (session === undefined) return
     if (session?.user?.role !== "admin") { router.replace("/dashboard"); return }
@@ -641,90 +662,105 @@ export default function UsersPage() {
 
   const roleLabel = (r: string) => r === "admin" ? "Süper Admin" : "Kullanıcı"
   const roleBadge = (r: string) =>
-    r === "admin" ? "bg-amber-50 text-amber-700 border-amber-200"
-                  : "bg-blue-50 text-blue-700 border-blue-200"
+    r === "admin" ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                  : "bg-blue-500/15 text-blue-700 dark:text-blue-400"
 
   return (
-    <div className="p-4 space-y-3">
-      {/* Header */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] px-4 py-3" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-          <PageHeader
-            title="Kullanıcı Yönetimi"
-            description={`${users.length} kullanıcı`}
-            actions={
-              <Button onClick={() => { setEditUser(null); setSheetOpen(true) }} className="h-8 text-[12px] rounded-[5px] gap-1.5">
-                <Plus className="size-3.5" />Yeni Kullanıcı
-              </Button>
-            }
-          />
-        </div>
-      </div>
-
-      {/* Tablo */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/30 border-b border-border/40">
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Kullanıcı</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">E-posta</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Rol</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Durum</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">2FA</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Uygulamalar</TableHead>
-                <TableHead className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide h-8">Oluşturuldu</TableHead>
-                <TableHead className="h-8 w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody className="divide-y divide-border/40">
+    <div className="p-4">
+      <ListeKarti
+        baslik="Kullanıcı Yönetimi"
+        ikon={<User className="size-3.5" />}
+        toplam={users.length}
+        filtreli={filtered.length}
+        aksiyon={
+          <ListeAksiyonButonu onClick={() => { setEditUser(null); setSheetOpen(true) }}>
+            <Plus className="size-3.5" />Yeni Kullanıcı
+          </ListeAksiyonButonu>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px] font-medium leading-[20px]">
+            <ListeThead>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Kullanıcı" value={adFiltre} onChange={setAdFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="E-posta" value={emailFiltre} onChange={setEmailFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Rol"
+                  options={["admin", "user"] as const}
+                  getLabel={(o) => roleLabel(o)}
+                  selected={rolFiltre}
+                  onChange={(v) => setRolFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Durum"
+                  options={["aktif", "pasif"] as const}
+                  getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")}
+                  selected={durumFiltre}
+                  onChange={(v) => setDurumFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">2FA</th>
+              <th className="px-4 py-1.5 text-left font-medium">Uygulamalar</th>
+              <th className="px-4 py-1.5 text-left font-medium">Oluşturuldu</th>
+              <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            </ListeThead>
+            <tbody>
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 6 }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-3 w-full rounded-[3px]" /></TableCell>
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
                     ))}
-                    <TableCell />
-                  </TableRow>
+                    <td />
+                  </tr>
                 ))
-              ) : users.map(u => {
+              ) : filtered.length === 0 ? (
+                <ListeBosSatir sutunSayisi={8} toplam={users.length} bosMesaj="Henüz kullanıcı yok." />
+              ) : filtered.map(u => {
                 const isSelf = session?.user?.id === u.id
                 return (
-                  <TableRow key={u.id} className="hover:bg-muted/20 transition-colors">
-                    <TableCell className="text-[11px] py-2.5">
-                      <div>
-                        <p className="font-medium">{u.fullName ?? u.username}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">@{u.username}</p>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-[11px] text-muted-foreground">{u.email ?? "—"}</TableCell>
-                    <TableCell>
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[5px] border", roleBadge(u.role))}>
+                  <tr key={u.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <p className="font-medium">{u.fullName ?? u.username}</p>
+                      <p className="text-muted-foreground font-mono text-[12px]">@{u.username}</p>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">{u.email ?? "—"}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", roleBadge(u.role))}>
                         {roleLabel(u.role)}
                       </span>
-                    </TableCell>
-                    <TableCell>
-                      <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[5px] border",
-                        u.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-200")}>
-                        {u.isActive ? "Aktif" : "Pasif"}
-                      </span>
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      {u.isActive ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                          <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                          <span className="size-1.5 rounded-full bg-zinc-400" />Pasif
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
                       {u.twoFactorEnabled ? (
-                        <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-[5px] border bg-green-50 text-green-700 border-green-200 w-fit">
+                        <span className="inline-flex w-fit items-center gap-1 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                           <ShieldCheck className="size-3" />Aktif
                         </span>
                       ) : (
-                        <span className="text-[10px] text-muted-foreground px-2 py-0.5 rounded-[5px] border border-border/40 bg-muted/20">
-                          Pasif
-                        </span>
+                        <span className="text-muted-foreground inline-flex rounded-[5px] bg-muted/40 px-2 py-0.5 text-[11px]">Pasif</span>
                       )}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="px-4 py-1.5">
                       {u.role === "admin" ? (
-                        <span className="text-[10px] text-muted-foreground italic">Tümü</span>
+                        <span className="text-muted-foreground text-[12px] italic">Tümü</span>
                       ) : u.allowedApps.length === 0 ? (
-                        <span className="text-[10px] text-muted-foreground">—</span>
+                        <span className="text-muted-foreground text-[12px]">—</span>
                       ) : (
                         <div className="flex flex-wrap gap-1">
                           {u.allowedApps.map((g) => {
@@ -732,55 +768,50 @@ export default function UsersPage() {
                             const role = typeof g === "string" ? null : g.role
                             const app  = APP_REGISTRY.find((a) => a.id === id)
                             return (
-                              <span key={id} className="text-[10px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted/30 border-border/40">
+                              <span key={id} className="inline-flex rounded-[5px] bg-muted/40 px-1.5 py-0.5 text-[11px] font-medium">
                                 {app?.name ?? id}
-                                {role ? <span className="ml-1 text-muted-foreground">· {role}</span> : null}
+                                {role ? <span className="text-muted-foreground ml-1">· {role}</span> : null}
                               </span>
                             )
                           })}
                         </div>
                       )}
-                    </TableCell>
-                    <TableCell className="text-[11px] text-muted-foreground">{formatDate(u.createdAt)}</TableCell>
-                    <TableCell>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">{formatDate(u.createdAt)}</td>
+                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="p-1 rounded hover:bg-muted/60 text-muted-foreground transition-colors">
-                            <MoreVertical className="size-3.5" />
+                          <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                            <MoreVertical className="size-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="text-[12px] w-44">
+                        <DropdownMenuContent align="end" sideOffset={4} className="w-44 text-[12px]">
                           <DropdownMenuItem onClick={() => { setEditUser(u); setSheetOpen(true) }} className="gap-2">
-                            <Pencil className="size-3.5" />Düzenle
+                            <Pencil className="text-muted-foreground size-3.5" />Düzenle
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => toggleActive(u)} disabled={isSelf} className="gap-2">
                             {u.isActive ? <ToggleLeft className="size-3.5" /> : <ToggleRight className="size-3.5" />}
                             {u.isActive ? "Devre Dışı Bırak" : "Etkinleştir"}
                           </DropdownMenuItem>
                           {u.twoFactorEnabled && (
-                            <DropdownMenuItem onClick={() => reset2FA(u)} className="gap-2 text-amber-600 focus:text-amber-600">
+                            <DropdownMenuItem onClick={() => reset2FA(u)} className="gap-2 text-amber-600 focus:text-amber-600 dark:text-amber-400">
                               <ShieldOff className="size-3.5" />2FA Sıfırla
                             </DropdownMenuItem>
                           )}
-                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => setDeleteUser(u)} disabled={isSelf}
-                            className="gap-2 text-destructive focus:text-destructive">
+                            className="gap-2 text-rose-600 focus:text-rose-600">
                             <Trash2 className="size-3.5" />Sil
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 )
               })}
-            </TableBody>
-          </Table>
-          <div className="px-4 py-2 border-t border-border/40 flex items-center gap-1.5 text-muted-foreground">
-            <User className="size-3" />
-            <span className="text-[10px]">{users.length} kullanıcı listeleniyor</span>
-          </div>
+            </tbody>
+          </table>
         </div>
-      </div>
+      </ListeKarti>
 
       <UserSheet open={sheetOpen} user={editUser} onClose={() => setSheetOpen(false)} onSaved={load} />
 

@@ -13,7 +13,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { cn } from "@/lib/utils"
 import { Waypoints, Loader2 } from "lucide-react"
 import { toast } from "sonner"
@@ -28,8 +28,8 @@ const PROTOCOLS: { value: PortProtocol; label: string }[] = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
       </div>
       <div className="p-3 space-y-3">{children}</div>
     </div>
@@ -39,7 +39,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
@@ -134,7 +134,7 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0 overflow-hidden">
+      <SheetContent className="!w-[520px] !max-w-[520px]">
 
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
           <div className="flex items-center gap-2">
@@ -157,7 +157,7 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
                   placeholder="Örn: RFID Portları"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
             </Section>
@@ -169,7 +169,7 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
                     placeholder="8000"
                     value={portStart}
                     onChange={(e) => setPortStart(e.target.value.replace(/\D/g, ""))}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 font-mono"
                     maxLength={5}
                   />
                 </Field>
@@ -178,7 +178,7 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
                     placeholder="8099"
                     value={portEnd}
                     onChange={(e) => setPortEnd(e.target.value.replace(/\D/g, ""))}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 font-mono"
                     maxLength={5}
                   />
                 </Field>
@@ -186,12 +186,12 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
 
               <Field label="Protokol">
                 <Select value={protocol} onValueChange={(v) => setProtocol(v as PortProtocol)}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                  <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-[5px]">
                     {PROTOCOLS.map((p) => (
-                      <SelectItem key={p.value} value={p.value} className="text-[11px]">{p.label}</SelectItem>
+                      <SelectItem key={p.value} value={p.value} className="text-[13px]">{p.label}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -202,8 +202,8 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
                 <div className={cn(
                   "rounded-[5px] px-3 py-2 text-[11px] font-mono border",
                   portRangeValid
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                    : "bg-red-50 border-red-200 text-red-700"
+                    ? "bg-emerald-500/15 border-emerald-500/25 text-emerald-700 dark:text-emerald-400"
+                    : "bg-red-500/15 border-red-500/25 text-red-700 dark:text-red-400"
                 )}>
                   {portRangeValid
                     ? <>Aralık: <strong>{portStart} – {portEnd}</strong> · <strong>{totalPorts}</strong> port · {protocol}</>
@@ -255,7 +255,7 @@ export function PortRangeSheet({ open, onOpenChange, editing = null, onSaved }: 
               type="button"
               disabled={!canSave}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {isEdit ? "Kaydet" : "Aralık Ekle"}

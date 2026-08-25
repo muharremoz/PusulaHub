@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
@@ -90,7 +90,7 @@ function NoteList({
           </span>
           <button
             onClick={onCreate}
-            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] font-semibold bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] font-semibold bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
           >
             <Plus className="size-3" /> Yeni
           </button>
@@ -98,16 +98,16 @@ function NoteList({
         {/* Kullanıcı filtresi — varsayılan: oturum sahibinin notları.
             "all" seçilince herkesin notları gösterilir. */}
         <Select value={userFilter} onValueChange={onUserFilter}>
-          <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-white border-border/40">
+          <SelectTrigger className="h-7 w-full text-[11px] rounded-[5px] bg-card border-border/40">
             <div className="flex items-center gap-1.5 min-w-0">
               <User className="size-3 text-muted-foreground shrink-0" />
               <SelectValue />
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all" className="text-[11px]">Tüm kullanıcılar</SelectItem>
+            <SelectItem value="all" className="text-[13px]">Tüm kullanıcılar</SelectItem>
             {userOptions.map(u => (
-              <SelectItem key={u} value={u} className="text-[11px]">{u}</SelectItem>
+              <SelectItem key={u} value={u} className="text-[13px]">{u}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -118,7 +118,7 @@ function NoteList({
             value={search}
             onChange={e => onSearch(e.target.value)}
             placeholder="Ara..."
-            className="h-7 pl-7 text-[11px] rounded-[5px] bg-white border-border/40"
+            className="h-7 pl-7 text-[11px] rounded-[5px] bg-card border-border/40"
           />
           {search && (
             <button onClick={() => onSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
@@ -132,10 +132,10 @@ function NoteList({
       <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="rounded-[6px] p-2.5 space-y-1.5">
-              <Skeleton className="h-3 w-3/4 rounded-[3px]" />
-              <Skeleton className="h-2.5 w-full rounded-[3px]" />
-              <Skeleton className="h-2 w-1/3 rounded-[3px]" />
+            <div key={i} className="rounded-[5px] p-2.5 space-y-1.5">
+              <Skeleton className="h-3 w-3/4 rounded-[5px]" />
+              <Skeleton className="h-2.5 w-full rounded-[5px]" />
+              <Skeleton className="h-2 w-1/3 rounded-[5px]" />
             </div>
           ))
         ) : filtered.length === 0 ? (
@@ -179,7 +179,7 @@ function NoteListItem({ note, selected, onSelect, onPin }: {
       onClick={() => onSelect(note.id)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(note.id) } }}
       className={cn(
-        "w-full text-left rounded-[6px] px-2.5 py-2 transition-colors group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "w-full text-left rounded-[5px] px-2.5 py-2 transition-colors group relative cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-ring",
         selected ? "bg-foreground/[0.07]" : "hover:bg-muted/50"
       )}
       style={note.color !== "#ffffff" ? { backgroundColor: selected ? undefined : note.color + "80" } : {}}
@@ -319,10 +319,10 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
   if (loading) {
     return (
       <div className="flex-1 p-6 space-y-4">
-        <Skeleton className="h-8 w-2/3 rounded-[4px]" />
+        <Skeleton className="h-8 w-2/3 rounded-[5px]" />
         <div className="space-y-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-4 rounded-[3px]" style={{ width: `${85 - i * 8}%` }} />
+            <Skeleton key={i} className="h-4 rounded-[5px]" style={{ width: `${85 - i * 8}%` }} />
           ))}
         </div>
       </div>
@@ -343,7 +343,7 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
             <ChevronDown className="size-2.5" />
           </button>
           {showColors && (
-            <div className="absolute top-full left-0 mt-1 z-50 rounded-[6px] border border-border/50 bg-white shadow-lg p-2 flex gap-1.5 flex-wrap w-[148px]">
+            <div className="absolute top-full left-0 mt-1 z-50 rounded-[5px] border border-border/50 bg-card shadow-lg p-2 flex gap-1.5 flex-wrap w-[148px]">
               {NOTE_COLORS.map(c => (
                 <button
                   key={c.value}
@@ -368,7 +368,7 @@ function NoteEditor({ noteId, onUpdated, onDeleted, onPinToggled }: {
           className={cn(
             "flex items-center gap-1 px-2 py-1 rounded-[5px] text-[10px] transition-colors",
             note?.pinned
-              ? "text-amber-600 bg-amber-50 hover:bg-amber-100"
+              ? "text-amber-600 dark:text-amber-400 bg-amber-500/15 hover:bg-amber-100"
               : "text-muted-foreground hover:bg-muted/50"
           )}
         >
@@ -580,7 +580,7 @@ export default function NotesPage() {
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
       {/* Sol: Not listesi */}
-      <div className="shrink-0 h-full" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="shrink-0 h-full" style={{ backgroundColor: "var(--section-bg)" }}>
         <NoteList
           notes={notes}
           selected={selected}
@@ -597,7 +597,7 @@ export default function NotesPage() {
       </div>
 
       {/* Sağ: Editör */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-card">
         <NoteEditor
           noteId={selected}
           onUpdated={handleUpdated}

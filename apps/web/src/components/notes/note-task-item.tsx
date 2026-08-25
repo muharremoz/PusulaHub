@@ -10,7 +10,8 @@ import {
   NodeViewWrapper,
   type NodeViewProps,
 } from "@tiptap/react"
-import { Checkbox } from "@muharremoz/pusula-ui"
+import {  } from "@muharremoz/pusula-ui"
+import { Checkbox } from "@/components/shared/form"
 
 export function NoteTaskItemView({ node, updateAttributes, editor }: NodeViewProps) {
   const checked = node.attrs.checked as boolean

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -20,9 +20,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui"
-import {
-  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
-} from "@/components/ui/command"
+
+import { ComboboxMulti } from "@/components/ui/combobox"
+import { ListeThead } from "@/components/shared/liste-karti"
 import {
   Send, Plus, Search, Mail, MailOpen,
   AlertTriangle, Users, Building2, UserCheck, Check, CheckCheck, X,
@@ -96,9 +96,9 @@ interface Company {
 }
 
 const priorityConfig: Record<MsgPriority, { label: string; color: string }> = {
-  normal: { label: "Normal", color: "bg-blue-50 text-blue-600 border-blue-200/60"   },
-  high:   { label: "Yüksek", color: "bg-amber-50 text-amber-600 border-amber-200/60" },
-  urgent: { label: "Acil",   color: "bg-red-50 text-red-600 border-red-200/60"      },
+  normal: { label: "Normal", color: "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/25/60"   },
+  high:   { label: "Yüksek", color: "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/25/60" },
+  urgent: { label: "Acil",   color: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/25/60"      },
 }
 
 const recipientTypeLabels: Record<RecipientKind, string> = {
@@ -418,7 +418,7 @@ export default function MessagesPage() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             placeholder="Mesaj ara..."
-            className="h-8 text-xs rounded-[5px] bg-white pl-8 w-64"
+            className="h-8 text-xs rounded-[5px] bg-card pl-8 w-64"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -443,7 +443,7 @@ export default function MessagesPage() {
                 </div>
                 <button
                   onClick={() => setSelectedMessageId(null)}
-                  className="h-6 w-6 inline-flex items-center justify-center rounded-[4px] hover:bg-muted/40 transition-colors"
+                  className="h-6 w-6 inline-flex items-center justify-center rounded-[5px] hover:bg-muted/40 transition-colors"
                   title="Kapat"
                 >
                   <X className="h-3.5 w-3.5 text-muted-foreground" />
@@ -523,19 +523,19 @@ export default function MessagesPage() {
             <div className="grid grid-cols-2 gap-2">
               {templates.map(t => {
                 const badge =
-                  t.priority === "urgent" ? { label: "Acil",    cls: "bg-red-100 text-red-700 border-red-200" } :
-                  t.priority === "high"   ? { label: "Yüksek",  cls: "bg-amber-100 text-amber-700 border-amber-200" } :
+                  t.priority === "urgent" ? { label: "Acil",    cls: "bg-red-100 text-red-700 dark:text-red-400 border-red-500/25" } :
+                  t.priority === "high"   ? { label: "Yüksek",  cls: "bg-amber-100 text-amber-700 dark:text-amber-400 border-amber-500/25" } :
                                              { label: "Normal",  cls: "bg-muted text-muted-foreground border-border/50" }
                 return (
                   <div
                     key={t.id}
-                    className="group relative flex flex-col items-start gap-1 rounded-[5px] border border-border/50 bg-white hover:border-foreground/30 hover:shadow-sm transition-all p-2.5 text-left cursor-pointer"
+                    className="group relative flex flex-col items-start gap-1 rounded-[5px] border border-border/50 bg-card hover:border-foreground/30 hover:shadow-sm transition-all p-2.5 text-left cursor-pointer"
                     onClick={() => openComposeWithTemplate(t)}
                   >
                     <div className="flex items-center justify-between w-full">
                       <Bookmark className="h-3 w-3 text-muted-foreground group-hover:text-foreground transition-colors" />
                       <div className="flex items-center gap-1">
-                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-[3px] border ${badge.cls}`}>
+                        <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border ${badge.cls}`}>
                           {badge.label}
                         </span>
                         {/* Kullanıcı şablonu — düzenle/sil dropdown */}
@@ -545,7 +545,7 @@ export default function MessagesPage() {
                               <button
                                 type="button"
                                 onClick={(e) => e.stopPropagation()}
-                                className="rounded-[3px] hover:bg-muted/60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="rounded-[5px] hover:bg-muted/60 p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                                 aria-label="Şablon işlemleri"
                               >
                                 <MoreVertical className="h-3 w-3 text-muted-foreground" />
@@ -584,9 +584,9 @@ export default function MessagesPage() {
             <LeftModeTabs leftMode={leftMode} setLeftMode={setLeftMode} templateCount={templates.length} />
             <div className="mt-3 space-y-3">
                 {/* Alıcılar bölümü */}
-                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Alıcılar</span>
+                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Alıcılar</span>
                     <div className="flex items-center gap-2">
                       {recipientType === "all" && (
                         <span className="text-[10px] text-muted-foreground tabular-nums">{recipients.length} kullanıcı</span>
@@ -610,13 +610,13 @@ export default function MessagesPage() {
                   </div>
                   <div className="p-3 space-y-3">
                     {/* Alıcı tipi toggle */}
-                    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#eef3ff" }}>
+                    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "var(--section-bg)" }}>
                       {(["all", "company", "selected"] as const).map(t => (
                         <button
                           key={t}
                           onClick={() => { setRecipientType(t); clearSelection(); setComposeCompanies(new Set()) }}
-                          className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-                            recipientType === t ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                          className={`flex-1 rounded-[5px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+                            recipientType === t ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {t === "all"      && <Users      className="h-3 w-3" />}
@@ -633,76 +633,45 @@ export default function MessagesPage() {
                         <p className="text-[11px] text-muted-foreground py-1">Aktif sunucusu olan firma yok</p>
                       ) : (
                         <div className="space-y-2">
-                          <Popover open={companyPickerOpen} onOpenChange={setCompanyPickerOpen}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="outline"
-                                role="combobox"
-                                className="w-full justify-between h-8 text-[11px] rounded-[5px] font-normal"
-                              >
-                                <span className="text-muted-foreground">
-                                  {composeCompanies.size === 0
-                                    ? "Firma seçin..."
-                                    : `${composeCompanies.size} firma seçildi`}
+                          <ComboboxMulti
+                            items={
+                              companyPickerSearch.trim()
+                                ? companies.filter((c) =>
+                                    c.name.toLowerCase().includes(companyPickerSearch.toLowerCase()),
+                                  ).slice(0, 50)
+                                : companies.slice(0, 50)
+                            }
+                            getKey={(c) => c.id}
+                            getLabel={(c) => c.name}
+                            values={[...composeCompanies]}
+                            onValuesChange={(next) => setComposeCompanies(new Set(next))}
+                            search={companyPickerSearch}
+                            onSearchChange={setCompanyPickerSearch}
+                            placeholder="Firma seçin..."
+                            searchPlaceholder="Firma ara..."
+                            emptyText="Sonuç bulunamadı"
+                            renderSummary={(v) => `${v.length} firma seçildi`}
+                            renderItem={(c) => (
+                              <span className="flex min-w-0 items-center gap-2">
+                                <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span className="flex-1 truncate">{c.name}</span>
+                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                                  {c.userCount}
                                 </span>
-                                <ChevronsUpDown className="h-3 w-3 opacity-50 shrink-0" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                              <Command shouldFilter={false}>
-                                <CommandInput
-                                  placeholder="Firma ara..."
-                                  value={companyPickerSearch}
-                                  onValueChange={setCompanyPickerSearch}
-                                  className="h-8 text-[11px]"
-                                />
-                                <CommandList onWheel={(e) => e.stopPropagation()} className="max-h-60">
-                                  <CommandEmpty className="text-[11px] py-3 text-muted-foreground">Sonuç bulunamadı</CommandEmpty>
-                                  <CommandGroup>
-                                    {(companyPickerSearch.trim()
-                                      ? companies.filter(c => c.name.toLowerCase().includes(companyPickerSearch.toLowerCase()))
-                                      : companies
-                                    ).slice(0, 50).map(c => {
-                                      const checked = composeCompanies.has(c.id)
-                                      return (
-                                        <CommandItem
-                                          key={c.id}
-                                          value={c.id}
-                                          onSelect={() => {
-                                            setComposeCompanies(prev => {
-                                              const next = new Set(prev)
-                                              if (next.has(c.id)) next.delete(c.id)
-                                              else next.add(c.id)
-                                              return next
-                                            })
-                                          }}
-                                          className="text-[11px] gap-2"
-                                        >
-                                          <div className={`h-3.5 w-3.5 rounded-[3px] border flex items-center justify-center shrink-0 ${checked ? "bg-foreground border-foreground" : "border-border"}`}>
-                                            {checked && <Check className="h-2.5 w-2.5 text-background" />}
-                                          </div>
-                                          <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-                                          <span className="flex-1 truncate">{c.name}</span>
-                                          <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">{c.userCount}</span>
-                                        </CommandItem>
-                                      )
-                                    })}
-                                  </CommandGroup>
-                                </CommandList>
-                              </Command>
-                            </PopoverContent>
-                          </Popover>
+                              </span>
+                            )}
+                          />
 
                           {/* Seçilen firma chip'leri */}
                           {composeCompanies.size > 0 && (
-                            <div className="flex flex-wrap gap-1.5 rounded-[5px] border border-border/50 p-2" style={{ backgroundColor: "#eef3ff" }}>
+                            <div className="flex flex-wrap gap-1.5 rounded-[5px] border border-border/50 p-2" style={{ backgroundColor: "var(--section-bg)" }}>
                               {[...composeCompanies].map(id => {
                                 const c = companies.find(x => x.id === id)
                                 if (!c) return null
                                 return (
                                   <span
                                     key={id}
-                                    className="inline-flex items-center gap-1.5 rounded-[5px] bg-white border border-border/50 pl-2 pr-1 py-1 text-[11px] font-medium"
+                                    className="inline-flex items-center gap-1.5 rounded-[5px] bg-card border border-border/50 pl-2 pr-1 py-1 text-[11px] font-medium"
                                   >
                                     <Building2 className="h-3 w-3 text-muted-foreground" />
                                     <span>{c.name}</span>
@@ -713,7 +682,7 @@ export default function MessagesPage() {
                                         next.delete(id)
                                         return next
                                       })}
-                                      className="h-4 w-4 rounded-[3px] hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                                      className="h-4 w-4 rounded-[5px] hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
                                       aria-label="Kaldır"
                                     >
                                       <X className="h-3 w-3" />
@@ -736,24 +705,24 @@ export default function MessagesPage() {
                             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
                             <Input
                               placeholder="Kullanıcı / firma / sunucu ara..."
-                              className="h-8 text-[11px] rounded-[5px] pl-7"
+                              className="h-8 text-[13px] rounded-[5px] pl-7"
                               value={userSearch}
                               onChange={(e) => setUserSearch(e.target.value)}
                             />
                           </div>
                           <Select value={companyFilter} onValueChange={setCompanyFilter}>
-                            <SelectTrigger className="h-8 text-[11px] rounded-[5px] w-40"><SelectValue /></SelectTrigger>
+                            <SelectTrigger className="h-8 text-[13px] rounded-[5px] w-40"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="all">Tüm Firmalar</SelectItem>
                               {companies.map(c => <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>)}
                             </SelectContent>
                           </Select>
-                          <Button variant="outline" size="sm" className="h-8 text-[11px] rounded-[5px] px-2.5 shrink-0" onClick={selectAllVisible}>Tümü</Button>
+                          <Button variant="outline" size="sm" className="h-8 text-[13px] rounded-[5px] px-2.5 shrink-0" onClick={selectAllVisible}>Tümü</Button>
                         </div>
 
-                        <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
+                        <div className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
                           {/* Tablo header */}
-                          <div className="grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                          <div className="grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 bg-muted/20 border-b border-border text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                             <span></span>
                             <span>Kullanıcı</span>
                             <span>Firma</span>
@@ -774,7 +743,7 @@ export default function MessagesPage() {
                                       key={key}
                                       onClick={() => toggleRecipient(key)}
                                       className={`w-full grid grid-cols-[16px_1fr_140px_110px] gap-2 px-2.5 py-1.5 text-left text-[11px] items-center transition-colors ${
-                                        isSel ? "bg-[#1d64ff] text-white" : "hover:bg-muted/20"
+                                        isSel ? "bg-primary text-primary-foreground" : "hover:bg-muted/20"
                                       }`}
                                     >
                                       <div className={`h-1.5 w-1.5 rounded-full shrink-0 ${r.online ? "bg-emerald-500" : "bg-gray-300"}`} />
@@ -806,14 +775,14 @@ export default function MessagesPage() {
                 </div>
 
                 {/* Mesaj içeriği bölümü */}
-                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Mesaj İçeriği</span>
+                <div className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center justify-between">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Mesaj İçeriği</span>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
                           type="button"
-                          className="h-6 inline-flex items-center gap-1 px-2 rounded-[4px] border border-border/50 bg-white text-[10px] hover:bg-muted/30 transition-colors"
+                          className="h-6 inline-flex items-center gap-1 px-2 rounded-[5px] border border-border/50 bg-card text-[10px] hover:bg-muted/30 transition-colors"
                         >
                           <Sparkles className="h-3 w-3 text-muted-foreground" />
                           <span>Hazır Mesaj</span>
@@ -838,19 +807,19 @@ export default function MessagesPage() {
                   </div>
                   <div className="p-3 space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Konu</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Konu</Label>
                       <Input
                         placeholder="Mesaj konusu..."
-                        className="h-8 text-[11px] rounded-[5px]"
+                        className="h-8 text-[13px] rounded-[5px]"
                         value={composeSubject}
                         onChange={(e) => setComposeSubject(e.target.value)}
                       />
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Mesaj Tipi</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Mesaj Tipi</Label>
                       <Select value={composeType} onValueChange={(v) => setComposeType(v as MsgType)}>
-                        <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full h-8 text-[13px] rounded-[5px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="info">Bilgi</SelectItem>
                           <SelectItem value="warning">Uyarı</SelectItem>
@@ -859,9 +828,9 @@ export default function MessagesPage() {
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Öncelik</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Öncelik</Label>
                       <Select value={composePriority} onValueChange={(v) => setComposePriority(v as MsgPriority)}>
-                        <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full h-8 text-[13px] rounded-[5px]"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="normal">Normal</SelectItem>
                           <SelectItem value="high">Yüksek</SelectItem>
@@ -871,9 +840,9 @@ export default function MessagesPage() {
                     </div>
 
                     <div className="space-y-1">
-                      <Label className="text-[11px] text-muted-foreground">Mesaj</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Mesaj</Label>
                       <textarea
-                        className="w-full h-32 rounded-[5px] border border-border/50 bg-white p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full h-32 rounded-[5px] border border-border/50 bg-card p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                         placeholder="Mesajınızı yazın..."
                         value={composeBody}
                         onChange={(e) => setComposeBody(e.target.value)}
@@ -884,8 +853,8 @@ export default function MessagesPage() {
               </div>
             {/* Compose footer — Sıfırla + Gönder */}
             <div className="flex items-center justify-end gap-2 mt-3 pt-3 border-t border-border/40">
-              <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]" onClick={resetCompose} disabled={sending}>Sıfırla</Button>
-              <Button size="sm" className="rounded-[5px] h-8 text-[11px] gap-1.5" onClick={sendMessage} disabled={sending}>
+              <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[13px]" onClick={resetCompose} disabled={sending}>Sıfırla</Button>
+              <Button size="sm" className="rounded-[5px] h-8 text-[13px] gap-1.5" onClick={sendMessage} disabled={sending}>
                 <Send className="h-3 w-3" />
                 {sending ? "Gönderiliyor..." : "Gönder"}
               </Button>
@@ -932,7 +901,7 @@ export default function MessagesPage() {
                     className="w-[560px] p-3"
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Filtreler</span>
+                      <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Filtreler</span>
                       {activeFilterCount > 0 && (
                         <button
                           onClick={clearFilters}
@@ -944,19 +913,19 @@ export default function MessagesPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Başlangıç</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Başlangıç</Label>
                         <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-                          className="h-7 text-[11px] rounded-[4px]" />
+                          className="h-7 text-[11px] rounded-[5px]" />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Bitiş</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Bitiş</Label>
                         <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-                          className="h-7 text-[11px] rounded-[4px]" />
+                          className="h-7 text-[11px] rounded-[5px]" />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Öncelik</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Öncelik</Label>
                         <Select value={filterPriority || "all"} onValueChange={(v) => setFilterPriority(v === "all" ? "" : v)}>
-                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Hepsi</SelectItem>
                             <SelectItem value="normal">Normal</SelectItem>
@@ -966,28 +935,28 @@ export default function MessagesPage() {
                         </Select>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Firma</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Firma</Label>
                         <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
-                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[4px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
+                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[5px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="all">Hepsi</SelectItem>
                             {companies.map(c => (
-                              <SelectItem key={c.id} value={c.id} className="text-[11px]">{c.name}</SelectItem>
+                              <SelectItem key={c.id} value={c.id} className="text-[13px]">{c.name}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Kullanıcı</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı</Label>
                         <Input value={filterUser} onChange={(e) => setFilterUser(e.target.value)}
                           placeholder="kullanıcı adı"
-                          className="h-7 text-[11px] rounded-[4px] font-mono" />
+                          className="h-7 text-[11px] rounded-[5px] font-mono" />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px] text-muted-foreground">Konu içerir</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Konu içerir</Label>
                         <Input value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}
                           placeholder="konu kelimesi"
-                          className="h-7 text-[11px] rounded-[4px]" />
+                          className="h-7 text-[11px] rounded-[5px]" />
                       </div>
                     </div>
                   </PopoverContent>
@@ -995,75 +964,94 @@ export default function MessagesPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-[0.4fr_2fr_0.7fr_0.7fr_0.8fr_0.6fr] gap-2 px-1 py-1.5 bg-muted/30 rounded-[4px] border-b">
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">ÖNCELİK</span>
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">KONU</span>
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">ALICI</span>
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">DURUM</span>
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">OKUNMA</span>
-              <span className="text-[11px] font-medium text-muted-foreground tracking-wide">TARİH</span>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[14px] font-medium leading-[20px]">
+                <ListeThead>
+                  <th className="px-4 py-1.5 text-left font-medium">Öncelik</th>
+                  <th className="px-4 py-1.5 text-left font-medium">Konu</th>
+                  <th className="px-4 py-1.5 text-left font-medium">Alıcı</th>
+                  <th className="px-4 py-1.5 text-left font-medium">Durum</th>
+                  <th className="px-4 py-1.5 text-left font-medium">Okunma</th>
+                  <th className="px-4 py-1.5 text-left font-medium">Tarih</th>
+                </ListeThead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 6 }).map((_, j) => (
+                          <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : filtered.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-muted-foreground px-4 py-10 text-center text-[13px]">
+                        {messages.length === 0
+                          ? "Henüz mesaj gönderilmedi — “Yeni Mesaj” ile ilkini gönderin."
+                          : "Filtreye uyan mesaj yok."}
+                      </td>
+                    </tr>
+                  ) : filtered.map(msg => {
+                    const prio = priorityConfig[msg.priority]
+                    const status = deriveStatus(msg)
+                    const readPct = msg.totalCount > 0 ? Math.round((msg.readCount / msg.totalCount) * 100) : 0
+                    return (
+                      <tr
+                        key={msg.id}
+                        onClick={() => setSelectedMessageId(msg.id)}
+                        className={`hover:bg-muted/20 cursor-pointer transition-colors ${
+                          selectedMessageId === msg.id ? "bg-muted/30" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${prio.color}`}>
+                            {prio.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 max-w-72">
+                          <p className="truncate font-medium">{msg.subject}</p>
+                          <p className="text-muted-foreground truncate text-[11px]">{msg.body}</p>
+                        </td>
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <span className="text-muted-foreground flex items-center gap-1 text-[12px]">
+                            {msg.recipientType === "all"      && <Users     className="h-3 w-3" />}
+                            {msg.recipientType === "company"  && <Building2 className="h-3 w-3" />}
+                            {msg.recipientType === "selected" && <UserCheck className="h-3 w-3" />}
+                            {msg.recipientType === "all"
+                              ? "Herkes"
+                              : msg.recipientType === "company"
+                                ? msg.companyName ?? "Firma"
+                                : `${msg.totalCount} kişi`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 whitespace-nowrap">
+                          <span className="text-muted-foreground flex items-center gap-1 text-[12px]">
+                            {statusIcon(status)}
+                            {statusLabel(status)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-1.5 min-w-32">
+                          <span className="flex items-center gap-1.5">
+                            <span className="h-1.5 flex-1 overflow-hidden rounded-[5px] bg-muted">
+                              <span
+                                className={`block h-full rounded-[5px] ${readPct === 100 ? "bg-emerald-500" : readPct >= 50 ? "bg-blue-500" : "bg-amber-500"}`}
+                                style={{ width: `${readPct}%` }}
+                              />
+                            </span>
+                            <span className="text-muted-foreground w-10 text-right text-[11px] tabular-nums">
+                              {msg.readCount}/{msg.totalCount}
+                            </span>
+                          </span>
+                        </td>
+                        <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">
+                          {formatDate(msg.sentAt)}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-
-            {loading ? (
-              <div className="space-y-2 py-2">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="py-12 flex flex-col items-center gap-2">
-                <div className="size-10 rounded-full bg-muted/60 flex items-center justify-center">
-                  <Mail className="size-5 text-muted-foreground" />
-                </div>
-                <p className="text-xs font-medium">Henüz mesaj gönderilmedi</p>
-                <p className="text-[11px] text-muted-foreground">"Yeni Mesaj" ile ilk mesajınızı gönderin</p>
-              </div>
-            ) : filtered.map(msg => {
-              const prio = priorityConfig[msg.priority]
-              const status = deriveStatus(msg)
-              const readPct = msg.totalCount > 0 ? Math.round((msg.readCount / msg.totalCount) * 100) : 0
-              return (
-                <div
-                  key={msg.id}
-                  onClick={() => setSelectedMessageId(msg.id)}
-                  className={`grid grid-cols-[0.4fr_2fr_0.7fr_0.7fr_0.8fr_0.6fr] gap-2 px-1 py-2 border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors cursor-pointer items-center ${
-                    selectedMessageId === msg.id ? "bg-muted/30" : ""
-                  }`}
-                >
-                  <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium w-fit ${prio.color}`}>
-                    {prio.label}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-xs font-medium truncate">{msg.subject}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">{msg.body}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {msg.recipientType === "all"      && <Users     className="h-3 w-3 text-muted-foreground" />}
-                    {msg.recipientType === "company"  && <Building2 className="h-3 w-3 text-muted-foreground" />}
-                    {msg.recipientType === "selected" && <UserCheck className="h-3 w-3 text-muted-foreground" />}
-                    <span className="text-[10px] text-muted-foreground truncate">
-                      {msg.recipientType === "all"
-                        ? "Herkes"
-                        : msg.recipientType === "company"
-                          ? msg.companyName ?? "Firma"
-                          : `${msg.totalCount} kişi`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {statusIcon(status)}
-                    <span className="text-[10px] text-muted-foreground">{statusLabel(status)}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="flex-1 h-1.5 bg-muted rounded-[5px] overflow-hidden">
-                      <div
-                        className={`h-full rounded-[5px] ${readPct === 100 ? "bg-emerald-500" : readPct >= 50 ? "bg-blue-500" : "bg-amber-500"}`}
-                        style={{ width: `${readPct}%` }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-muted-foreground tabular-nums w-10 text-right">{msg.readCount}/{msg.totalCount}</span>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground tabular-nums">{formatDate(msg.sentAt)}</span>
-                </div>
-              )
-            })}
         </NestedCard>
 
       </div>
@@ -1090,11 +1078,11 @@ function LeftModeTabs({
   templateCount: number
 }) {
   return (
-    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="flex items-center rounded-[5px] p-0.5 w-full border border-border/50" style={{ backgroundColor: "var(--section-bg)" }}>
       <button
         onClick={() => setLeftMode("compose")}
-        className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-          leftMode === "compose" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+        className={`flex-1 rounded-[5px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+          leftMode === "compose" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <Send className="h-3 w-3" />
@@ -1102,8 +1090,8 @@ function LeftModeTabs({
       </button>
       <button
         onClick={() => setLeftMode("templates")}
-        className={`flex-1 rounded-[4px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
-          leftMode === "templates" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+        className={`flex-1 rounded-[5px] text-[11px] px-2 py-1.5 font-medium transition-colors flex items-center justify-center gap-1.5 ${
+          leftMode === "templates" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
         }`}
       >
         <Sparkles className="h-3 w-3" />
@@ -1185,9 +1173,9 @@ function TemplateFormDialog({
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
         className="sm:max-w-[520px] rounded-[8px] p-0 gap-0 max-h-[90vh] flex flex-col overflow-hidden"
-        style={{ backgroundColor: "#eef3ff" }}
+        style={{ backgroundColor: "var(--section-bg)" }}
       >
-        <DialogHeader className="px-5 py-4 border-b border-border/50 bg-white">
+        <DialogHeader className="px-5 py-4 border-b border-border/50 bg-card">
           <DialogTitle className="text-sm font-semibold flex items-center gap-2">
             <Bookmark className="h-3.5 w-3.5 text-muted-foreground" />
             {isEdit ? "Şablonu Düzenle" : "Yeni Şablon"}
@@ -1196,25 +1184,25 @@ function TemplateFormDialog({
 
         <ScrollArea className="flex-1">
           <div className="px-4 py-4 space-y-3">
-            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
-              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Şablon Bilgileri</span>
+            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
+              <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Şablon Bilgileri</span>
               </div>
               <div className="p-3 space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Başlık</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Başlık</Label>
                   <Input value={title} onChange={(e) => setTitle(e.target.value)}
-                    className="h-8 text-[11px] rounded-[5px]" placeholder="Örn. Planlı Bakım" />
+                    className="h-8 text-[13px] rounded-[5px]" placeholder="Örn. Planlı Bakım" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Açıklama (opsiyonel)</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Açıklama (opsiyonel)</Label>
                   <Input value={description} onChange={(e) => setDescription(e.target.value)}
-                    className="h-8 text-[11px] rounded-[5px]" placeholder="Listede 2. satırda görünür" />
+                    className="h-8 text-[13px] rounded-[5px]" placeholder="Listede 2. satırda görünür" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Mesaj Tipi</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Mesaj Tipi</Label>
                   <Select value={type} onValueChange={(v) => setType(v as MsgType)}>
-                    <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-8 text-[13px] rounded-[5px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="info">Bilgi</SelectItem>
                       <SelectItem value="warning">Uyarı</SelectItem>
@@ -1223,9 +1211,9 @@ function TemplateFormDialog({
                   </Select>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Öncelik</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Öncelik</Label>
                   <Select value={priority} onValueChange={(v) => setPriority(v as MsgPriority)}>
-                    <SelectTrigger className="w-full h-8 text-[11px] rounded-[5px]"><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="w-full h-8 text-[13px] rounded-[5px]"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="normal">Normal</SelectItem>
                       <SelectItem value="high">Yüksek</SelectItem>
@@ -1236,22 +1224,22 @@ function TemplateFormDialog({
               </div>
             </div>
 
-            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-white">
-              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Mesaj İçeriği</span>
+            <div className="rounded-[5px] border border-border/50 overflow-hidden bg-card">
+              <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Mesaj İçeriği</span>
               </div>
               <div className="p-3 space-y-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Konu</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Konu</Label>
                   <Input value={subject} onChange={(e) => setSubject(e.target.value)}
-                    className="h-8 text-[11px] rounded-[5px]" placeholder="Mesaj konusu" />
+                    className="h-8 text-[13px] rounded-[5px]" placeholder="Mesaj konusu" />
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">Mesaj</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Mesaj</Label>
                   <textarea
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
-                    className="w-full h-32 rounded-[5px] border border-border/50 bg-white p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                    className="w-full h-32 rounded-[5px] border border-border/50 bg-card p-2.5 text-[11px] resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                     placeholder="Mesaj metni — [SAAT], [SÜRE] gibi yer tutucular kullanabilirsin."
                   />
                 </div>
@@ -1260,10 +1248,10 @@ function TemplateFormDialog({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="px-5 py-3 border-t border-border/50 gap-2 sm:gap-2 bg-white">
-          <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[11px]"
+        <DialogFooter className="px-5 py-3 border-t border-border/50 gap-2 sm:gap-2 bg-card">
+          <Button variant="outline" size="sm" className="rounded-[5px] h-8 text-[13px]"
             onClick={onClose} disabled={saving}>İptal</Button>
-          <Button size="sm" className="rounded-[5px] h-8 text-[11px] gap-1.5"
+          <Button size="sm" className="rounded-[5px] h-8 text-[13px] gap-1.5"
             onClick={save} disabled={saving}>
             <Check className="h-3 w-3" />
             {saving ? "Kaydediliyor..." : (isEdit ? "Güncelle" : "Ekle")}

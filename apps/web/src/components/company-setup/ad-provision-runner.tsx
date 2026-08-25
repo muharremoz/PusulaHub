@@ -239,17 +239,17 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
 
       {/* Progress bar */}
       <div className="rounded-[5px] border border-border/50 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
           <div className="flex items-center gap-2">
             {completed ? (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
                 <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Check className="size-2.5 text-emerald-700" strokeWidth={3} />
+                  <Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} />
                 </span>
                 Tamamlandı
               </span>
             ) : errorStep || fatalError ? (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-red-600">
+              <span className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400">
                 <XCircle className="size-3.5" />
                 Hata
               </span>
@@ -276,7 +276,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
 
       {/* Fatal error */}
       {fatalError && (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-700">
+        <div className="flex items-start gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400">
           <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
           <div className="min-w-0">
             <p className="font-semibold">İstek başlatılamadı</p>
@@ -288,9 +288,9 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
       {/* Adım listesi */}
       {steps.length > 0 && (
         <div className="rounded-[5px] border border-border/50 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/40">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">Kurulum Adımları</span>
-            {completed && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
+          <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">Kurulum Adımları</span>
+            {completed && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
             {isRunning && <Loader2 className="size-3.5 text-foreground animate-spin" />}
           </div>
           <div className="divide-y divide-border/40">
@@ -300,7 +300,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
                 step.status === "running" && "bg-muted/20"
               )}>
                 <span className="shrink-0 mt-0.5">
-                  {step.status === "done"    && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700" strokeWidth={3} /></span>}
+                  {step.status === "done"    && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
                   {step.status === "running" && <Loader2 className="size-4 animate-spin text-foreground" />}
                   {step.status === "error"   && <XCircle className="size-4 text-red-500" />}
                   {step.status === "pending" && <span className="size-4 rounded-full border-2 border-border/60 block" />}

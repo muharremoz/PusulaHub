@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
 import { StatsCard } from "@/components/shared/stats-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,7 +18,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui";
 import { cn } from "@/lib/utils";
@@ -30,20 +29,22 @@ import {
   Waypoints,
   Plus,
   Layers,
-  Inbox,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PortRangeSheet } from "@/components/ports/port-range-sheet";
+import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 import type { PortRangeDto } from "@/app/api/port-ranges/route";
 
 type SortKey = "name" | "portStart" | "usage" | "status";
 type SortDir = "asc" | "desc";
-type FilterStatus = "all" | "active" | "inactive";
 
 const PROTOCOL_BADGE: Record<string, string> = {
-  "TCP":     "bg-blue-50 text-blue-700 border-blue-200",
-  "UDP":     "bg-purple-50 text-purple-700 border-purple-200",
-  "TCP/UDP": "bg-orange-50 text-orange-700 border-orange-200",
+  "TCP":     "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "UDP":     "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/25",
+  "TCP/UDP": "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/25",
 };
 
 /* ── Kullanım çubuğu ── */
@@ -73,7 +74,7 @@ function SortHeader({ label, sortKey, active, dir, onSort }: {
     <button
       onClick={() => onSort(sortKey)}
       className={cn(
-        "flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase transition-colors select-none",
+        "-mx-1 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider outline-none transition-colors select-none",
         isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
       )}
     >
@@ -95,7 +96,12 @@ export default function PortsPage() {
 
   const [sortKey,  setSortKey]  = useState<SortKey>("portStart");
   const [sortDir,  setSortDir]  = useState<SortDir>("asc");
-  const [filter,   setFilter]   = useState<FilterStatus>("all");
+
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [adFiltre,       setAdFiltre]       = useState("");
+  const [aciklamaFiltre, setAciklamaFiltre] = useState("");
+  const [protokolFiltre, setProtokolFiltre] = useState<string[]>([]);
+  const [durumFiltre,    setDurumFiltre]    = useState<string[]>([]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing,   setEditing]   = useState<PortRangeDto | null>(null);
@@ -125,15 +131,32 @@ export default function PortsPage() {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const filtered = ranges
-    .filter((r) => filter === "all" || (filter === "active" ? r.isActive : !r.isActive))
-    .sort((a, b) => {
-      const mul = sortDir === "asc" ? 1 : -1;
-      if (sortKey === "portStart") return (a.portStart - b.portStart) * mul;
-      if (sortKey === "usage")     return ((a.usedCount / Math.max(a.totalPorts, 1)) - (b.usedCount / Math.max(b.totalPorts, 1))) * mul;
-      if (sortKey === "status")    return ((a.isActive ? 1 : 0) - (b.isActive ? 1 : 0)) * mul;
-      return a.name.localeCompare(b.name) * mul;
-    });
+  /* Tüm sütun filtreleri VE (AND) ile birleşir; erken return false deseni. */
+  const filtered = useMemo(() => {
+    const ad  = adFiltre.trim().toLocaleLowerCase("tr-TR");
+    const acl = aciklamaFiltre.trim().toLocaleLowerCase("tr-TR");
+    return ranges
+      .filter((r) => {
+        if (ad && !r.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+        if (acl && !(r.description ?? "").toLocaleLowerCase("tr-TR").includes(acl)) return false;
+        if (protokolFiltre.length && !protokolFiltre.includes(r.protocol)) return false;
+        if (durumFiltre.length && !durumFiltre.includes(r.isActive ? "aktif" : "pasif")) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const mul = sortDir === "asc" ? 1 : -1;
+        if (sortKey === "portStart") return (a.portStart - b.portStart) * mul;
+        if (sortKey === "usage")     return ((a.usedCount / Math.max(a.totalPorts, 1)) - (b.usedCount / Math.max(b.totalPorts, 1))) * mul;
+        if (sortKey === "status")    return ((a.isActive ? 1 : 0) - (b.isActive ? 1 : 0)) * mul;
+        return a.name.localeCompare(b.name, "tr") * mul;
+      });
+  }, [ranges, adFiltre, aciklamaFiltre, protokolFiltre, durumFiltre, sortKey, sortDir]);
+
+  /* Listede geçen protokoller — filtre seçenekleri. */
+  const protokoller = useMemo(
+    () => [...new Set(ranges.map((r) => r.protocol))].sort(),
+    [ranges],
+  );
 
   const totalPorts     = ranges.reduce((s, r) => s + r.totalPorts, 0);
   const usedPorts      = ranges.reduce((s, r) => s + r.usedCount, 0);
@@ -171,141 +194,129 @@ export default function PortsPage() {
         <StatsCard title="KULLANILAN PORT" value={usedPorts}      icon={<Waypoints className="h-4 w-4" />} subtitle={`${totalPorts - usedPorts} boş / ${totalPorts}`} />
       </div>
 
-      {/* ── Toolbar ── */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
-          {(["all", "active", "inactive"] as FilterStatus[]).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {f === "all" ? "Tümü" : f === "active" ? "Aktif" : "Pasif"}
-            </button>
-          ))}
-        </div>
-        <div className="ml-auto">
-          <button
-            onClick={handleAdd}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-          >
-            <Plus className="size-3.5" />
-            Aralık Ekle
-          </button>
-        </div>
-      </div>
-
-      {/* ── Tablo ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-
-          {/* Header */}
-          <div className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-            <span />
-            <SortHeader label="Aralık Adı"   sortKey="name"      active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Port Aralığı" sortKey="portStart" active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Proto</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Açıklama</span>
-            <SortHeader label="Kullanım"     sortKey="usage"     active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Toplam</span>
-            <span />
-          </div>
-
-          {/* Body */}
-          {loading ? (
-            <div className="divide-y divide-border/40">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2.5 items-center">
-                  <Skeleton className="size-1.5 rounded-full" />
-                  <Skeleton className="h-3 w-32" />
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-3 w-10" />
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-1.5 w-full" />
-                  <Skeleton className="h-3 w-12" />
-                  <Skeleton className="h-5 w-5" />
-                </div>
-              ))}
-            </div>
-          ) : error ? (
-            <div className="px-4 py-12 text-center text-[11px] text-destructive">{error}</div>
-          ) : filtered.length === 0 ? (
-            <div className="px-4 py-16 flex flex-col items-center gap-3">
-              <Inbox className="size-8 text-muted-foreground/40" />
-              <div className="text-center">
-                <p className="text-[12px] font-medium">Henüz port aralığı yok</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5">IIS hizmetleri için port havuzu tanımlayın</p>
-              </div>
-              <button
-                onClick={handleAdd}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-              >
-                <Plus className="size-3.5" />
-                Aralık Ekle
-              </button>
-            </div>
-          ) : (
-            <div className="divide-y divide-border/40">
-              {filtered.map((entry) => (
-                <div
-                  key={entry.id}
-                  className="grid grid-cols-[16px_1.6fr_140px_70px_2fr_1.4fr_90px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                >
-                  {/* Durum noktası */}
-                  <span className="flex items-center justify-center">
-                    <span className="relative flex size-1.5">
-                      {entry.isActive && (
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      )}
-                      <span className={cn("relative inline-flex size-1.5 rounded-full", entry.isActive ? "bg-emerald-500" : "bg-slate-300")} />
-                    </span>
-                  </span>
-
-                  <span className="text-[11px] font-medium truncate">{entry.name}</span>
-
-                  <span className="text-[11px] font-mono font-semibold tabular-nums">
+      <ListeKarti
+        baslik="Port Aralıkları"
+        ikon={<Waypoints className="size-3.5" />}
+        toplam={ranges.length}
+        filtreli={filtered.length}
+        aksiyon={
+          <ListeAksiyonButonu onClick={handleAdd}>
+            <Plus className="size-3.5" />Aralık Ekle
+          </ListeAksiyonButonu>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px] font-medium leading-[20px]">
+            <ListeThead>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Aralık Adı" value={adFiltre} onChange={setAdFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Port Aralığı" sortKey="portStart" active={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Proto"
+                  options={protokoller}
+                  getLabel={(o) => o}
+                  selected={protokolFiltre}
+                  onChange={(v) => setProtokolFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Açıklama" value={aciklamaFiltre} onChange={setAciklamaFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Kullanım" sortKey="usage" active={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">Toplam</th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Durum"
+                  options={["aktif", "pasif"] as const}
+                  getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")}
+                  selected={durumFiltre}
+                  onChange={(v) => setDurumFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            </ListeThead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                    ))}
+                    <td />
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="text-destructive px-4 py-10 text-center text-[13px]">{error}</td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <ListeBosSatir
+                  sutunSayisi={8}
+                  toplam={ranges.length}
+                  bosMesaj="Henüz port aralığı yok."
+                />
+              ) : filtered.map((entry) => (
+                <tr key={entry.id} className="hover:bg-muted/20 transition-colors">
+                  <td className="px-4 py-1.5 whitespace-nowrap font-medium">{entry.name}</td>
+                  <td className="px-4 py-1.5 whitespace-nowrap font-mono font-semibold tabular-nums text-[13px]">
                     {entry.portStart}
                     <span className="text-muted-foreground font-normal"> – </span>
                     {entry.portEnd}
-                  </span>
-
-                  <span className={cn("text-[9px] font-semibold px-1.5 py-0.5 rounded-[4px] border w-fit", PROTOCOL_BADGE[entry.protocol] ?? PROTOCOL_BADGE.TCP)}>
-                    {entry.protocol}
-                  </span>
-
-                  <span className="text-[11px] text-muted-foreground truncate">{entry.description ?? "—"}</span>
-
-                  <UsageBar used={entry.usedCount} total={entry.totalPorts} isActive={entry.isActive} />
-
-                  <span className="text-[11px] text-muted-foreground tabular-nums">{entry.totalPorts} port</span>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-                        <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="rounded-[6px]">
-                      <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleEdit(entry)}>Düzenle</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-xs cursor-pointer text-destructive" onClick={() => setDeleting(entry)}>Sil</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                  </td>
+                  <td className="px-4 py-1.5 whitespace-nowrap">
+                    <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", PROTOCOL_BADGE[entry.protocol] ?? PROTOCOL_BADGE.TCP)}>
+                      {entry.protocol}
+                    </span>
+                  </td>
+                  <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-64 truncate">
+                    {entry.description ?? "—"}
+                  </td>
+                  <td className="px-4 py-1.5 min-w-40">
+                    <UsageBar used={entry.usedCount} total={entry.totalPorts} isActive={entry.isActive} />
+                  </td>
+                  <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">
+                    {entry.totalPorts} port
+                  </td>
+                  <td className="px-4 py-1.5 whitespace-nowrap">
+                    {entry.isActive ? (
+                      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                        <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+                        <span className="size-1.5 rounded-full bg-zinc-400" />Pasif
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                          <MoreVertical className="size-4" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" sideOffset={4} className="w-40 text-[12px]">
+                        <DropdownMenuItem className="gap-2" onClick={() => handleEdit(entry)}>
+                          <Pencil className="text-muted-foreground size-3.5" />Düzenle
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 text-rose-600 focus:text-rose-600" onClick={() => setDeleting(entry)}>
+                          <Trash2 className="size-3.5" />Sil
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
+                </tr>
               ))}
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-          <Waypoints className="size-3" />
-          <span>{filtered.length} aralık listeleniyor</span>
-        </div>
-      </div>
+      </ListeKarti>
 
       <PortRangeSheet
         open={sheetOpen}

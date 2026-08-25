@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@muharremoz/pusula-ui";
-import { Checkbox } from "@muharremoz/pusula-ui";
+import {  } from "@muharremoz/pusula-ui";
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
@@ -14,7 +14,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
+import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils"
 import { Database, FolderOpen, Loader2, Wrench } from "lucide-react"
 import { toast } from "sonner"
@@ -27,8 +28,8 @@ const LOCATION_TYPES = ["Yerel", "Şablon", "Uzak"] as const
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
       </div>
       <div className="p-3 space-y-3">{children}</div>
     </div>
@@ -38,7 +39,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
@@ -174,7 +175,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0 overflow-hidden">
+      <SheetContent className="!w-[520px] !max-w-[520px]">
 
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
           <SheetTitle className="text-sm font-semibold">
@@ -204,7 +205,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                     placeholder="ERP Demo"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 pl-7"
+                    className="rounded-[5px] text-[13px] h-8 pl-7"
                   />
                 </div>
               </Field>
@@ -214,7 +215,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                   placeholder="Hazır ERP şablonu — başlangıç için uygundur"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
             </Section>
@@ -223,12 +224,12 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
             <Section title="Kaynak">
               <Field label="Konum Tipi">
                 <Select value={locationType} onValueChange={setLocationType}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                  <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                     <SelectValue placeholder="Konum tipi seçin…" />
                   </SelectTrigger>
                   <SelectContent className="rounded-[5px]">
                     {LOCATION_TYPES.map((t) => (
-                      <SelectItem key={t} value={t} className="text-[11px]">{t}</SelectItem>
+                      <SelectItem key={t} value={t} className="text-[13px]">{t}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -250,7 +251,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                     placeholder={locationType === "Yerel" ? "D:\\Demo Data\\ERP.bak" : ""}
                     value={locationPath}
                     onChange={(e) => setLocationPath(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                   />
                 </div>
               </Field>
@@ -262,16 +263,16 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                 <div className="space-y-1.5">
                   {Array.from({ length: 3 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-2 px-2 py-1.5">
-                      <Skeleton className="size-4 rounded-[3px]" />
-                      <Skeleton className="h-3 w-32 rounded-[3px]" />
-                      <Skeleton className="h-3 w-16 rounded-[3px] ml-auto" />
+                      <Skeleton className="size-4 rounded-[5px]" />
+                      <Skeleton className="h-3 w-32 rounded-[5px]" />
+                      <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
                     </div>
                   ))}
                 </div>
               )}
 
               {!servicesLoading && servicesError && (
-                <p className="text-[11px] text-red-600 px-1">{servicesError}</p>
+                <p className="text-[11px] text-red-600 dark:text-red-400 px-1">{servicesError}</p>
               )}
 
               {!servicesLoading && !servicesError && services.length === 0 && (
@@ -288,7 +289,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                       <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase mb-1 px-1">
                         {category}
                       </p>
-                      <div className="rounded-[4px] border border-border/40 divide-y divide-border/40 overflow-hidden">
+                      <div className="rounded-[5px] border border-border/40 divide-y divide-border/40 overflow-hidden">
                         {list.map((svc) => {
                           const checked = serviceIds.includes(svc.id)
                           return (
@@ -322,7 +323,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
                   placeholder="0"
                   value={displayOrder}
                   onChange={(e) => setDisplayOrder(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8 tabular-nums"
+                  className="rounded-[5px] text-[13px] h-8 tabular-nums"
                 />
               </Field>
 
@@ -354,7 +355,7 @@ export function DemoDatabaseSheet({ open, onOpenChange, editing = null, onSaved 
               type="button"
               disabled={!canSave}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {isEdit ? "Kaydet" : "Demo DB Ekle"}

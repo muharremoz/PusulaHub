@@ -81,19 +81,19 @@ export function StepServices({
         </div>
         <div className="flex items-center gap-1 border-b border-border/50 pb-0">
           {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-7 w-20 rounded-[3px] mx-1 my-1" />
+            <Skeleton key={i} className="h-7 w-20 rounded-[5px] mx-1 my-1" />
           ))}
         </div>
         <div className="rounded-[5px] border border-border/50 overflow-hidden">
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-            <Skeleton className="h-3 w-32 rounded-[3px]" />
+          <div className="px-3 py-2 bg-muted/20 border-b border-border">
+            <Skeleton className="h-3 w-32 rounded-[5px]" />
           </div>
           <div className="divide-y divide-border/40">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                <Skeleton className="size-4 rounded-[3px]" />
-                <Skeleton className="h-3 flex-1 rounded-[3px]" />
-                <Skeleton className="h-3 w-32 rounded-[3px]" />
+                <Skeleton className="size-4 rounded-[5px]" />
+                <Skeleton className="h-3 flex-1 rounded-[5px]" />
+                <Skeleton className="h-3 w-32 rounded-[5px]" />
               </div>
             ))}
           </div>
@@ -104,7 +104,7 @@ export function StepServices({
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+      <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
         <AlertTriangle className="size-3.5 shrink-0" />
         {error}
       </div>
@@ -160,7 +160,7 @@ export function StepServices({
             >
               {cat}
               {count > 0 && (
-                <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold">
+                <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold">
                   {count}
                 </span>
               )}
@@ -172,8 +172,8 @@ export function StepServices({
       {/* Hizmet listesi */}
       <div className="rounded-[5px] border border-border/50 overflow-hidden">
         {/* Liste başlık satırı */}
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
             {activeTab} — {catItems.length} hizmet
           </span>
           <button
@@ -200,7 +200,7 @@ export function StepServices({
               >
                 {/* Checkbox */}
                 <span className={cn(
-                  "size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 transition-all",
+                  "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 transition-all",
                   isSelected ? "bg-foreground border-foreground" : "border-border"
                 )}>
                   {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
@@ -240,19 +240,19 @@ export function StepServices({
       {/* IIS Sunucusu seçimi — hizmet listesinin altında (aktif tab IIS kategorisindeyse veya iis-site seçildiyse) */}
       {showIisPicker && (
         <div>
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
             IIS Sunucusu
           </p>
 
           {/* Yükleniyor */}
           {iisServersLoading && (
-            <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+            <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-3">
-                  <Skeleton className="h-3 w-32 rounded-[4px]" />
-                  <Skeleton className="h-3 w-24 rounded-[4px]" />
-                  <Skeleton className="h-3 w-28 rounded-[4px]" />
-                  <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+                  <Skeleton className="h-3 w-32 rounded-[5px]" />
+                  <Skeleton className="h-3 w-24 rounded-[5px]" />
+                  <Skeleton className="h-3 w-28 rounded-[5px]" />
+                  <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
                 </div>
               ))}
             </div>
@@ -260,7 +260,7 @@ export function StepServices({
 
           {/* Hata */}
           {!iisServersLoading && iisServersError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
               <AlertTriangle className="size-3.5 shrink-0" />
               {iisServersError}
             </div>
@@ -268,7 +268,7 @@ export function StepServices({
 
           {/* Boş */}
           {!iisServersLoading && !iisServersError && iisServers.length === 0 && (
-            <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+            <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
               <ServerOff className="size-6 text-muted-foreground" />
               <p className="text-[12px] font-medium">IIS sunucusu tanımlı değil</p>
               <p className="text-[10px] text-muted-foreground max-w-xs">
@@ -277,7 +277,7 @@ export function StepServices({
               </p>
               <a
                 href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
               >
                 Sunucu Ekle
               </a>
@@ -287,10 +287,10 @@ export function StepServices({
           {/* Tablo */}
           {!iisServersLoading && !iisServersError && iisServers.length > 0 && (
             <>
-              <div className="rounded-[4px] border border-border/50 overflow-hidden">
+              <div className="rounded-[5px] border border-border/50 overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                    <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
@@ -308,7 +308,7 @@ export function StepServices({
                       const densityPct = maxSites > 0
                         ? Math.min(100, Math.round((srv.userCount / maxSites) * 100))
                         : 0
-                      const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600"
+                      const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
                       const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
                       return (
                         <TableRow
@@ -378,7 +378,7 @@ export function StepServices({
       {/* Depo Sunucusu — Pusula programı seçildiyse resim klasörü için gerekli */}
       {hasPusulaSelected && (
         <div>
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
             Depo Sunucusu
             <span className="ml-2 text-muted-foreground/70 normal-case tracking-normal">
               — D:\Resimler\&lt;firmaId&gt; klasörü ve NTFS yetkisi bu sunucuda açılır
@@ -386,26 +386,26 @@ export function StepServices({
           </p>
 
           {depoServersLoading && (
-            <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+            <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
               {Array.from({ length: 2 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-3">
-                  <Skeleton className="h-3 w-32 rounded-[4px]" />
-                  <Skeleton className="h-3 w-24 rounded-[4px]" />
-                  <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+                  <Skeleton className="h-3 w-32 rounded-[5px]" />
+                  <Skeleton className="h-3 w-24 rounded-[5px]" />
+                  <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
                 </div>
               ))}
             </div>
           )}
 
           {!depoServersLoading && depoServersError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
               <AlertTriangle className="size-3.5 shrink-0" />
               {depoServersError}
             </div>
           )}
 
           {!depoServersLoading && !depoServersError && depoServers.length === 0 && (
-            <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+            <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
               <HardDrive className="size-6 text-muted-foreground" />
               <p className="text-[12px] font-medium">Depo sunucusu tanımlı değil</p>
               <p className="text-[10px] text-muted-foreground max-w-xs">
@@ -414,7 +414,7 @@ export function StepServices({
               </p>
               <a
                 href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
               >
                 Sunucu Ekle
               </a>
@@ -423,10 +423,10 @@ export function StepServices({
 
           {!depoServersLoading && !depoServersError && depoServers.length > 0 && (
             <>
-              <div className="rounded-[4px] border border-border/50 overflow-hidden">
+              <div className="rounded-[5px] border border-border/50 overflow-hidden">
                 <Table>
                   <TableHeader>
-                    <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                    <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
                       <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>

@@ -25,12 +25,10 @@ export const MODULES: ModuleDef[] = [
   // Genel
   { key: "dashboard",        label: "Dashboard",         group: "general" },
   { key: "servers",          label: "Sunucular",         group: "general" },
-  { key: "monitoring",       label: "İzleme",            group: "general" },
   { key: "companies",        label: "Firmalar",          group: "general" },
   { key: "company-detail",   label: "Firma Detay",       group: "general" },
   { key: "aktarim",          label: "Firma Aktarım",     group: "general" },
   { key: "messages",         label: "Mesajlar",          group: "general" },
-  { key: "projects",         label: "Projeler",          group: "general" },
   { key: "calendar",         label: "Takvim",            group: "general" },
   { key: "notes",            label: "Not Defteri",       group: "general" },
 

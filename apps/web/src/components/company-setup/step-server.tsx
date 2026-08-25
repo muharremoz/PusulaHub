@@ -39,19 +39,19 @@ export function StepServer({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+      <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
         Active Directory Sunucusu
       </p>
 
       {/* Yüklenme */}
       {loading && (
-        <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+        <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-3">
-              <Skeleton className="h-3 w-32 rounded-[4px]" />
-              <Skeleton className="h-3 w-24 rounded-[4px]" />
-              <Skeleton className="h-3 w-28 rounded-[4px]" />
-              <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+              <Skeleton className="h-3 w-32 rounded-[5px]" />
+              <Skeleton className="h-3 w-24 rounded-[5px]" />
+              <Skeleton className="h-3 w-28 rounded-[5px]" />
+              <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
             </div>
           ))}
         </div>
@@ -59,14 +59,14 @@ export function StepServer({
 
       {/* Hata */}
       {!loading && error && (
-        <div className="rounded-[4px] border border-destructive/30 bg-destructive/5 px-3 py-4 text-[11px] text-destructive">
+        <div className="rounded-[5px] border border-destructive/30 bg-destructive/5 px-3 py-4 text-[11px] text-destructive">
           {error}
         </div>
       )}
 
       {/* Boş durum */}
       {!loading && !error && servers.length === 0 && (
-        <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+        <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
           <ServerOff className="size-6 text-muted-foreground" />
           <p className="text-[12px] font-medium">Henüz AD sunucusu tanımlı değil</p>
           <p className="text-[10px] text-muted-foreground max-w-xs">
@@ -74,7 +74,7 @@ export function StepServer({
           </p>
           <a
             href="/servers"
-            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
           >
             Sunucu Ekle
           </a>
@@ -83,10 +83,10 @@ export function StepServer({
 
       {/* Tablo */}
       {!loading && !error && servers.length > 0 && (
-      <div className="rounded-[4px] border border-border/50 overflow-hidden">
+      <div className="rounded-[5px] border border-border/50 overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+            <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
               <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
               <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
               <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Domain</TableHead>
@@ -100,7 +100,7 @@ export function StepServer({
               const isSelected = selectedId === srv.id
               const isDisabled = !srv.isOnline
               const densityPct = Math.min(100, Math.round((srv.userCount / 500) * 100))
-              const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600"
+              const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
               const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
 
               return (

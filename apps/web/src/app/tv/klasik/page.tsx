@@ -27,7 +27,7 @@ import { useAlarmSound, useClock, useTvData } from "../_shared/use-tv-data"
    ──────────────────────────────────────────────────────────
    Çift katmanlı kart:
      dış   #F4F2F0   rounded-[8px]  p-2 pb-0
-     iç    #FFFFFF   rounded-[4px]  shadow 0 2px 4px rgba(0,0,0,.06)
+     iç    #FFFFFF   rounded-[5px]  shadow 0 2px 4px rgba(0,0,0,.06)
    Sayfa zemini dış karttan bir ton koyu (#EAE7E4) — katmanlar ayrışsın.
 
    Bu ekran 7/24 açık kalıyor ve uzaktan izleniyor: **hiçbir animasyon yok**
@@ -42,7 +42,7 @@ const PANEL_BG = "#FAF9F8"   // başlık şeridi + ölçüm bloğu zemini
 const BORDER   = "#E0DCD8"
 const DOWN_BORDER = "#F5A3A3"   // çevrimdışı kart/panel çerçevesi
 
-const INNER_SHADOW = { boxShadow: "0 2px 4px rgba(0,0,0,0.06)" } as const
+const INNER_SHADOW = { boxShadow: "var(--card-shadow)" } as const
 
 /* ══════════════════════════════════════════════════════════
    Durum paleti
@@ -61,24 +61,24 @@ const STATUS: Record<UiStatus, StatusStyle> = {
   online: {
     label:  "Çevrimiçi",
     dot:    "bg-emerald-600",
-    text:   "text-emerald-700",
-    badge:  "text-emerald-700 bg-emerald-50 border-emerald-200",
+    text:   "text-emerald-700 dark:text-emerald-400",
+    badge:  "text-emerald-700 dark:text-emerald-400 bg-emerald-500/15 border-emerald-500/25",
     inner:  "#FFFFFF",
     stroke: "#16A34A",
   },
   warning: {
     label:  "Uyarı",
     dot:    "bg-amber-500",
-    text:   "text-amber-700",
-    badge:  "text-amber-700 bg-amber-50 border-amber-200",
+    text:   "text-amber-700 dark:text-amber-400",
+    badge:  "text-amber-700 dark:text-amber-400 bg-amber-500/15 border-amber-500/25",
     inner:  "#FFFBEB",
     stroke: "#D97706",
   },
   offline: {
     label:  "Çevrimdışı",
     dot:    "bg-red-600",
-    text:   "text-red-700",
-    badge:  "text-red-700 bg-red-50 border-red-200",
+    text:   "text-red-700 dark:text-red-400",
+    badge:  "text-red-700 dark:text-red-400 bg-red-500/15 border-red-500/25",
     inner:  "#FEF2F2",
     stroke: "#DC2626",
   },
@@ -108,11 +108,11 @@ function Card({
   const alert = ui === "offline"
   return (
     <div
-      className={cn("flex min-h-0 flex-col rounded-[8px] p-2 pb-0", className)}
+      className={cn("flex min-h-0 flex-col rounded-[8px] p-2", className)}
       style={{ background: alert ? ALERT_BG : OUTER_BG }}
     >
       <div
-        className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-[4px]", innerClassName)}
+        className={cn("flex min-h-0 flex-1 flex-col overflow-hidden rounded-[5px]", innerClassName)}
         style={{
           ...INNER_SHADOW,
           background: ui ? STATUS[ui].inner : "#FFFFFF",
@@ -168,9 +168,9 @@ function KpiCard({
   accent:   "emerald" | "amber" | "red" | "zinc"
 }) {
   const txt =
-    accent === "emerald" ? "text-emerald-700" :
-    accent === "amber"   ? "text-amber-700"   :
-    accent === "red"     ? "text-red-700"     :
+    accent === "emerald" ? "text-emerald-700 dark:text-emerald-400" :
+    accent === "amber"   ? "text-amber-700 dark:text-amber-400"   :
+    accent === "red"     ? "text-red-700 dark:text-red-400"     :
                            "text-zinc-800"
 
   return (
@@ -179,7 +179,7 @@ function KpiCard({
         <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{title}</p>
         <p className={cn("mt-1.5 text-[40px] font-bold leading-none tabular-nums", txt)}>{value}</p>
         {trend && (
-          <p className={cn("mt-2 text-[11px] font-medium", trend.positive ? "text-emerald-700" : "text-red-700")}>
+          <p className={cn("mt-2 text-[11px] font-medium", trend.positive ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400")}>
             {trend.value}
           </p>
         )}
@@ -202,10 +202,10 @@ function ClockCard({ fetchedAt }: { fetchedAt?: string }) {
       <div className="px-4 py-3">
         <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Saat</p>
         <p className="mt-1.5 font-mono text-[40px] font-bold leading-none tabular-nums text-zinc-800">{time}</p>
-        <p className="mt-2 text-[11px] capitalize text-zinc-600">{date}</p>
+        <p className="mt-2 text-[11px] capitalize text-zinc-600 dark:text-zinc-400">{date}</p>
         {updated && (
           <p className="mt-0.5 text-[10px] text-zinc-500">
-            Son güncelleme <span className="font-mono tabular-nums text-zinc-700">{updated}</span>
+            Son güncelleme <span className="font-mono tabular-nums text-zinc-700 dark:text-zinc-400">{updated}</span>
           </p>
         )}
       </div>
@@ -283,10 +283,10 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
   const now = useClock()
 
   const respClass =
-    m.responseMs === null ? "text-red-700"     :
-    m.responseMs < 30     ? "text-emerald-700" :
-    m.responseMs < 80     ? "text-amber-700"   :
-                            "text-red-700"
+    m.responseMs === null ? "text-red-700 dark:text-red-400"     :
+    m.responseMs < 30     ? "text-emerald-700 dark:text-emerald-400" :
+    m.responseMs < 80     ? "text-amber-700 dark:text-amber-400"   :
+                            "text-red-700 dark:text-red-400"
 
   const downDuration = ui === "offline" && since && now ? formatDuration(now.getTime() - since) : null
   const isDown = ui === "offline"
@@ -295,7 +295,7 @@ function MonitorTile({ m, since }: { m: KumaMonitor; since?: number }) {
 
   return (
     <div
-      className="flex min-w-0 overflow-hidden rounded-[6px] bg-white"
+      className="flex min-w-0 overflow-hidden rounded-[5px] bg-card"
       style={{ ...INNER_SHADOW, border: `1px solid ${edge}` }}
     >
       {/* Kimlik */}
@@ -346,7 +346,7 @@ function MonitorGroup({
         <h2 className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">{title}</h2>
         <span className="font-mono text-[10px] text-zinc-400">{count} monitör</span>
         {downCount > 0 && (
-          <span className="rounded-[3px] border border-red-200 bg-red-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+          <span className="rounded-[5px] border border-red-500/25 bg-red-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 dark:text-red-400">
             {downCount} çevrimdışı
           </span>
         )}
@@ -377,9 +377,9 @@ function DownBanner({ monitors, tracker }: { monitors: KumaMonitor[]; tracker: M
       className="flex shrink-0 items-center gap-4 rounded-[8px] px-4 py-3"
       style={{ background: STATUS.offline.inner, border: `1px solid ${DOWN_BORDER}` }}
     >
-      <AlertTriangle className="size-7 shrink-0 text-red-600" />
+      <AlertTriangle className="size-7 shrink-0 text-red-600 dark:text-red-400" />
       <div className="min-w-0 flex-1 overflow-hidden">
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-700">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-red-700 dark:text-red-400">
           {monitors.length === 1 ? "1 sistem çevrimdışı" : `${monitors.length} sistem çevrimdışı`}
         </p>
         <div className="mt-1 flex flex-wrap items-center gap-4">
@@ -389,7 +389,7 @@ function DownBanner({ monitors, tracker }: { monitors: KumaMonitor[]; tracker: M
             return (
               <span key={m.name} className="inline-flex items-baseline gap-2 text-[18px] font-bold text-red-800">
                 <span>{m.name}</span>
-                {dur && <span className="font-mono text-[13px] font-medium text-red-600">· {dur}</span>}
+                {dur && <span className="font-mono text-[13px] font-medium text-red-600 dark:text-red-400">· {dur}</span>}
               </span>
             )
           })}
@@ -409,7 +409,7 @@ function DownTimer({ since }: { since: number }) {
   return (
     <div className="text-right">
       <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Süre</div>
-      <div className="font-mono text-[36px] font-bold leading-none tabular-nums text-red-700">
+      <div className="font-mono text-[36px] font-bold leading-none tabular-nums text-red-700 dark:text-red-400">
         {formatDuration(now.getTime() - since)}
       </div>
     </div>
@@ -449,7 +449,7 @@ function DownSpotlight({
           <div className="flex min-h-[440px] flex-col p-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
-                <div className="flex items-center gap-2 text-red-700">
+                <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
                   <AlertTriangle className="size-5" />
                   <span className="text-[11px] font-bold uppercase tracking-[0.25em]">Çevrimdışı</span>
                 </div>
@@ -468,7 +468,7 @@ function DownSpotlight({
                   </span>
                 )}
                 <span
-                  className="rounded-[5px] border px-3 py-1 font-mono text-[13px] font-medium uppercase tracking-wide text-red-700"
+                  className="rounded-[5px] border px-3 py-1 font-mono text-[13px] font-medium uppercase tracking-wide text-red-700 dark:text-red-400"
                   style={{ borderColor: DOWN_BORDER, background: STATUS.offline.inner }}
                 >
                   {m.type}
@@ -486,7 +486,7 @@ function DownSpotlight({
               <div className="flex flex-wrap items-end justify-between gap-6">
                 <div>
                   <div className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">Yanıt</div>
-                  <div className="font-mono text-[56px] font-bold leading-none tabular-nums text-red-700">—</div>
+                  <div className="font-mono text-[56px] font-bold leading-none tabular-nums text-red-700 dark:text-red-400">—</div>
                 </div>
                 {since && <DownTimer since={since} />}
               </div>
@@ -509,11 +509,11 @@ function EventLog({ events }: { events: StatusEvent[] }) {
   const statusLabel = (s: KumaStatus) =>
     s === "up" ? "UP" : s === "down" ? "DOWN" : s === "pending" ? "BEKLEMEDE" : s === "maintenance" ? "BAKIM" : "?"
   const statusColor = (s: KumaStatus) =>
-    s === "up" ? "text-emerald-700" : s === "down" ? "text-red-700" : "text-amber-700"
+    s === "up" ? "text-emerald-700 dark:text-emerald-400" : s === "down" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"
 
   return (
     <div
-      className="flex shrink-0 items-center gap-4 overflow-hidden rounded-[6px] px-3 py-2"
+      className="flex shrink-0 items-center gap-4 overflow-hidden rounded-[5px] px-3 py-2"
       style={{ background: "#FFFFFF", border: `1px solid ${BORDER}` }}
     >
       <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-zinc-500">Son Olaylar</span>
@@ -570,10 +570,10 @@ function ExchangeTile({
           const hs  = key && health ? health[key] : null
           const ping = m.responseMs === null ? "—" : String(Math.max(1, Math.round(m.responseMs)))
           const respClass =
-            m.responseMs === null ? "text-red-700"     :
-            m.responseMs < 30     ? "text-emerald-700" :
-            m.responseMs < 80     ? "text-amber-700"   :
-                                    "text-red-700"
+            m.responseMs === null ? "text-red-700 dark:text-red-400"     :
+            m.responseMs < 30     ? "text-emerald-700 dark:text-emerald-400" :
+            m.responseMs < 80     ? "text-amber-700 dark:text-amber-400"   :
+                                    "text-red-700 dark:text-red-400"
           return (
             <div
               key={m.name}
@@ -597,7 +597,7 @@ function ExchangeTile({
                 </div>
               </div>
               {hs?.lastError && (
-                <div className="mt-0.5 truncate pl-3.5 font-mono text-[10px] text-red-600" title={hs.lastError}>
+                <div className="mt-0.5 truncate pl-3.5 font-mono text-[10px] text-red-600 dark:text-red-400" title={hs.lastError}>
                   {hs.lastError}
                 </div>
               )}
@@ -640,15 +640,15 @@ function OfflineFirmsTile({ data }: { data: SpareBackupOffline | null }) {
         {!data ? (
           <p className="py-3 text-center text-[11px] text-zinc-500">Servise ulaşılamadı</p>
         ) : count === 0 ? (
-          <p className="py-3 text-center text-[11px] text-emerald-700">Tüm yedeklemeler çevrimiçi</p>
+          <p className="py-3 text-center text-[11px] text-emerald-700 dark:text-emerald-400">Tüm yedeklemeler çevrimiçi</p>
         ) : (
           offline.map((f) => (
             <div key={f.firkod} className="flex items-center gap-2 px-3 py-1.5" style={{ background: "#FEF2F2" }}>
-              <WifiOff className="size-3.5 shrink-0 text-red-600" />
+              <WifiOff className="size-3.5 shrink-0 text-red-600 dark:text-red-400" />
               <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-zinc-800" title={f.firma}>
                 {f.firma}
               </span>
-              <span className="shrink-0 text-[12px] font-bold tabular-nums text-red-700">
+              <span className="shrink-0 text-[12px] font-bold tabular-nums text-red-700 dark:text-red-400">
                 {formatMinutesAgo(f.minutesAgo)}
               </span>
             </div>
@@ -702,7 +702,7 @@ function DomainExpiryTile({ data }: { data: DomainExpiry[] | null }) {
                 className="flex items-center gap-2 px-3 py-1.5"
                 style={u === "offline" ? { background: "#FEF2F2" } : u === "warning" ? { background: "#FFFBEB" } : undefined}
               >
-                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-zinc-700" title={d.domain}>
+                <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-zinc-700 dark:text-zinc-400" title={d.domain}>
                   {d.domain}
                 </span>
                 <span className={cn("shrink-0 text-[12px] font-bold tabular-nums", STATUS[u].text)}>
@@ -758,24 +758,24 @@ function BandwidthTile({ data }: { data: BandwidthData | null }) {
       <div className="flex flex-col gap-2 p-2">
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-[5px] px-2.5 py-2" style={{ background: "#F0FDF4", border: "1px solid #C6E9D3" }}>
-            <div className="flex items-center gap-1 text-emerald-700">
+            <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
               <ArrowDown className="size-3" />
               <span className="text-[9px] font-bold uppercase tracking-wide">İndirme</span>
             </div>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-700">
+              <span className="font-mono text-[24px] font-bold leading-none tabular-nums text-emerald-700 dark:text-emerald-400">
                 {data ? formatMbps(data.live.rxMbps) : "—"}
               </span>
               <span className="text-[9px] font-medium uppercase tracking-wide text-zinc-400">Mbps</span>
             </div>
           </div>
           <div className="rounded-[5px] px-2.5 py-2" style={{ background: "#F0F7FF", border: "1px solid #C5DCF5" }}>
-            <div className="flex items-center gap-1 text-sky-700">
+            <div className="flex items-center gap-1 text-sky-700 dark:text-sky-400">
               <ArrowUp className="size-3" />
               <span className="text-[9px] font-bold uppercase tracking-wide">Yükleme</span>
             </div>
             <div className="mt-1 flex items-baseline gap-1">
-              <span className="font-mono text-[24px] font-bold leading-none tabular-nums text-sky-700">
+              <span className="font-mono text-[24px] font-bold leading-none tabular-nums text-sky-700 dark:text-sky-400">
                 {data ? formatMbps(data.live.txMbps) : "—"}
               </span>
               <span className="text-[9px] font-medium uppercase tracking-wide text-zinc-400">Mbps</span>
@@ -867,7 +867,7 @@ export default function TvMonitoringPage() {
       {/* ── Başlık şeridi ── */}
       <div className="flex shrink-0 items-center justify-between gap-2 px-1 md:px-2">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex size-6 shrink-0 items-center justify-center rounded-[4px] bg-[#1d64ff]">
+          <div className="flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-primary">
             <Activity className="size-3.5 text-white" />
           </div>
           <div className="min-w-0 leading-tight">
@@ -888,8 +888,8 @@ export default function TvMonitoringPage() {
             className={cn(
               "h-7 rounded-[5px] border px-2 text-[10px] font-bold uppercase tracking-widest transition-colors",
               testDown
-                ? "cursor-wait border-red-300 bg-red-50 text-red-600"
-                : "border-[#DCD8D4] bg-white text-zinc-500 hover:border-red-300 hover:bg-red-50 hover:text-red-600",
+                ? "cursor-wait border-red-300 bg-red-500/15 text-red-600 dark:text-red-400"
+                : "border-border bg-card text-zinc-500 hover:border-red-300 hover:bg-red-500/15 hover:text-red-600 dark:text-red-400",
             )}
             title="Test: Active Directory'yi 8 sn boyunca DOWN göster"
           >
@@ -901,8 +901,8 @@ export default function TvMonitoringPage() {
             className={cn(
               "flex size-7 items-center justify-center rounded-[5px] border transition-colors",
               soundOn
-                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                : "border-[#DCD8D4] bg-white text-zinc-400 hover:bg-[#F4F2F0]",
+                ? "border-emerald-300 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                : "border-border bg-card text-zinc-400 hover:bg-[var(--section-bg)]",
             )}
             title={soundOn ? "Ses açık — kapatmak için tıkla" : "Ses kapalı — açmak için tıkla"}
           >

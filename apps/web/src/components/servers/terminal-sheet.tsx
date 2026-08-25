@@ -200,7 +200,7 @@ export function TerminalSheet({ open, onOpenChange, serverId, serverName }: Term
                     <span
                       className={cn(
                         "ml-auto text-[10px] tabular-nums",
-                        entry.exitCode === 0 ? "text-zinc-600" : "text-red-500"
+                        entry.exitCode === 0 ? "text-zinc-600 dark:text-zinc-400" : "text-red-500"
                       )}
                     >
                       {entry.exitCode !== 0 && `exit:${entry.exitCode} · `}
@@ -239,7 +239,7 @@ export function TerminalSheet({ open, onOpenChange, serverId, serverName }: Term
             onKeyDown={handleKeyDown}
             disabled={running}
             placeholder={running ? "Çalışıyor..." : "Komut girin…"}
-            className="flex-1 bg-transparent outline-none text-[12px] font-mono text-zinc-100 placeholder:text-zinc-600 disabled:opacity-50"
+            className="flex-1 bg-transparent outline-none text-[12px] font-mono text-zinc-100 placeholder:text-zinc-600 dark:text-zinc-400 disabled:opacity-50"
             spellCheck={false}
             autoComplete="off"
             autoCorrect="off"

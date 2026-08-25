@@ -24,7 +24,7 @@ const geistMono = Geist_Mono({
 export default function TvLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className={`${geist.variable} ${geistMono.variable} min-h-screen w-full bg-[#EAE7E4] text-zinc-900 antialiased`}
+      className={`${geist.variable} ${geistMono.variable} min-h-screen w-full bg-[var(--section-bg)] text-zinc-900 antialiased`}
       style={{
         fontFamily: "var(--font-geist), ui-sans-serif, system-ui, sans-serif",
         colorScheme: "light",

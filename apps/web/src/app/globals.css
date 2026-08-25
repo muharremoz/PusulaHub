@@ -8,36 +8,65 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* Sidebar #1d64ff royal blue paletiyle uyumlu hafif blue tint */
-  --background: oklch(0.985 0.005 260);   /* #fafbff — saf beyaz değil hafif mavi */
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);                   /* card içi temiz beyaz, page bg ile kontrast */
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.56 0.241 261);       /* #1d64ff — CTA/buton vurgusu */
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.92 0.012 260);        /* hafif blue tint border */
-  --input: oklch(0.92 0.012 260);
-  --ring: oklch(0.56 0.241 261);          /* focus ring #1d64ff */
-  --radius: 0.625rem;
-  --sidebar-background: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  --sidebar: hsl(0 0% 98%);
+  /* ── Zemin — beyaz/nötr (CRM ile birebir) ── */
+  --background: #FFFFFF;
+  --foreground: #0F1F1B;
+
+  /* ── İç içe kart mimarisi ──
+     sayfa zemini → bölüm paneli → beyaz kart (+ ince gölge).
+     Sayfalarda sabit hex YAZILMAZ; bu üç token kullanılır. */
+  --page-bg: #F7F7F8;
+  --section-bg: #F0F0F0;
+  --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+
+  --card: #FFFFFF;
+  --card-foreground: #0F1F1B;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F1F1B;
+
+  /* Primary — siyah/beyaz nötr (CRM varsayılanı). */
+  --primary: #171717;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #E8E8E8;
+  --secondary-foreground: #1A1A1A;
+  --muted: #E8E8E8;
+  --muted-foreground: #6B6B6B;
+  --accent: #E8E8E8;
+  --accent-foreground: #1A1A1A;
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: #FFFFFF;
+
+  --border: #DCDCDC;
+  --input: #DCDCDC;
+  --ring: color-mix(in oklab, #171717 45%, transparent);
+
+  /* Brand — altın yalnız logo/kritik rozet; accent'i altın YAPMA. */
+  --brand-gold: #C9A14A;
+  --brand-gold-foreground: #1A1A1A;
+
+  /* Chart — nötr gri ölçek */
+  --chart-1: #171717;
+  --chart-2: #6B6B6B;
+  --chart-3: #9C9C9C;
+  --chart-4: #4A4A4A;
+  --chart-5: #BFBFBF;
+
+  /* Radius — proje geneli 5px */
+  --radius: 5px;
+
+  /* Sidebar — açık gri */
+  --sidebar: #FAFAFA;
+  --sidebar-background: #FAFAFA;
+  --sidebar-foreground: #0F1F1B;
+  --sidebar-primary: #F5F5F5;
+  --sidebar-primary-foreground: #171717;
+  --sidebar-accent: #EFEFEF;
+  --sidebar-accent-foreground: #171717;
+  --sidebar-border: #E5E5E5;
+  --sidebar-ring: color-mix(in oklab, #171717 40%, transparent);
+
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);
@@ -65,6 +94,21 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-foreground: var(--brand-gold-foreground);
+  /* Radius ölçeği — proje geneli 5px (CRM ile birebir). */
+  --radius-sm: 5px;
+  --radius-md: 5px;
+  --radius-lg: 5px;
+  --radius-xl: 5px;
+  --radius-2xl: 5px;
+  --radius-3xl: 5px;
+  --radius-4xl: 5px;
   --radius: var(--radius);
   --color-sidebar-background: var(--sidebar-background);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -159,15 +203,59 @@
   }
 }
 
+/* Koyu tema — Linear-vibe: neredeyse siyah sidebar, koyu yüzeyler.
+   Katmanlar YUKARI doğru açılır: sayfa (#0F1113) → panel (#131519) → kart (#17191C). */
 .dark {
-  --sidebar: hsl(240 5.9% 10%);
-  --sidebar-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-primary: hsl(224.3 76.3% 48%);
-  --sidebar-primary-foreground: hsl(0 0% 100%);
-  --sidebar-accent: hsl(240 3.7% 15.9%);
-  --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
-  --sidebar-border: hsl(240 3.7% 15.9%);
-  --sidebar-ring: hsl(217.2 91.2% 59.8%);
+  --background: #0F1113;
+  --foreground: #E8E8EA;
+
+  --page-bg: #0F1113;
+  --section-bg: #131519;
+  /* Koyu zeminde salt gölge okunmaz → üstte ince ışık çizgisi + yumuşak gölge. */
+  --card-shadow: 0 1px 0 rgba(255, 255, 255, 0.05), 0 1px 4px rgba(0, 0, 0, 0.35);
+
+  --card: #17191C;
+  --card-foreground: #E8E8EA;
+  --popover: #1C1E22;
+  --popover-foreground: #E8E8EA;
+
+  --primary: #F5F5F5;
+  --primary-foreground: #171717;
+
+  --secondary: #24262A;
+  --secondary-foreground: #E8E8EA;
+  --muted: #24262A;
+  --muted-foreground: #9B9BA1;
+  --accent: #26282D;
+  --accent-foreground: #F0F0F2;
+
+  --destructive: oklch(0.62 0.20 25);
+  --destructive-foreground: #FFFFFF;
+
+  --border: #2A2C31;
+  --input: #2A2C31;
+  --ring: color-mix(in oklab, #F5F5F5 55%, transparent);
+
+  --brand-gold: #D4B15C;
+  --brand-gold-foreground: #1A1A1A;
+
+  --chart-1: #F5F5F5;
+  --chart-2: #A9A9AF;
+  --chart-3: #7C7C82;
+  --chart-4: #D8D8DC;
+  --chart-5: #5A5A60;
+
+  /* Sidebar — en koyu (neredeyse siyah) */
+  --sidebar: #0A0B0D;
+  --sidebar-background: #0A0B0D;
+  --sidebar-foreground: #D8D8DC;
+  --sidebar-primary: #F5F5F5;
+  --sidebar-primary-foreground: #171717;
+  --sidebar-accent: #1A1C20;
+  --sidebar-accent-foreground: #F5F5F5;
+  --sidebar-border: #1E2024;
+  --sidebar-ring: color-mix(in oklab, #F5F5F5 45%, transparent);
+
   --color-1: oklch(66.2% 0.225 25.9);
   --color-2: oklch(60.4% 0.26 302);
   --color-3: oklch(69.6% 0.165 251);
