@@ -3774,12 +3774,10 @@ tr:nth-child(even) td{background:#fafafa}
                       </td>
                       <td className="w-px px-4 py-1.5 text-right whitespace-nowrap">
                         {active ? (
-                          <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                            <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                          <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">
-                            <span className="size-1.5 rounded-full bg-red-500" />Süresi Doldu
+                          <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Süresi Doldu
                           </span>
                         )}
                       </td>

@@ -285,12 +285,10 @@ export default function PortsPage() {
                   </td>
                   <td className="px-4 py-1.5 whitespace-nowrap">
                     {entry.isActive ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                        <span className="size-1.5 rounded-full bg-emerald-500" />Aktif
+                      <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1.5 rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
-                        <span className="size-1.5 rounded-full bg-zinc-400" />Pasif
+                      <span className="inline-flex rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">Pasif
                       </span>
                     )}
                   </td>
