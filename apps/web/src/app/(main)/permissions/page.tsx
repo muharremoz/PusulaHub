@@ -5,16 +5,20 @@
  *
  * Düzen CRM ile aynı: SOLDA kişi listesi (arama + yetki sayısı), SAĞDA seçili
  * kişinin yetkileri. Sağ tarafta sırasıyla başlık şeridi (ad, sayaç, kişiden
- * kopyala, kaydet), HAZIR PAKETLER ve katlanır "tek tek düzenle" bölümü —
- * gruplu, iki sütun, grup başında "Tümünü aç".
+ * kopyala, kaydet) ve gruplu yetki listesi — iki sütun, grup başında ad,
+ * n/m sayacı ve "Tümünü aç".
  *
- * CRM'den iki zorunlu fark:
- *   1. CRM'de yetki açık/kapalı (Switch); Hub'da ÜÇ seviyeli
- *      (Yok / Okuma / Yazma), o yüzden satırda segment kontrol var.
- *   2. CRM paketleri `permission_packages` tablosundan gelir ve ekrandan
- *      düzenlenir. Hub'da böyle bir tablo yok — paketler kodda tanımlı ve
- *      seviye tabanlı (aşağıdaki PAKETLER). Özel paket ihtiyacı doğarsa
- *      tablo + CRUD gerekir.
+ * Yetki CRM'deki gibi AÇIK/KAPALI. Hub'ın DB'si üç seviye tutabiliyor
+ * (none/read/write) ama arayüzde ayrım yapılmıyor: anahtar açıkken "write"
+ * yazılır — yazma uçları `requirePermission(modul, "write")` istiyor, "read"
+ * verilseydi modül görünür ama hiçbir işlem yapılamazdı.
+ *
+ * Eskiden "read" verilmiş modüller olduğu gibi korunur: anahtar açık görünür
+ * ve DOKUNULMADIĞI sürece kaydederken "read" kalır — kimsenin yetkisi sessizce
+ * yükseltilmez. Kapatılıp tekrar açılırsa "write" olur.
+ *
+ * CRM'de hazır paketler `permission_packages` tablosundan gelir; Hub'da öyle
+ * bir tablo yok, o blok yerine başlıkta toplu aç/temizle var.
  *
  * Kullanıcı OLUŞTURMA burada yok: kimlik ve uygulama erişimi CRM'de
  * (docs/YENI-SISTEM.md). Bu ekran yalnız `user_permissions` düzenler.
@@ -26,7 +30,7 @@ import { useRouter } from "next/navigation"
 import { ChevronDown, ChevronRight, Copy, Search, ShieldAlert } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui"
+import { Popover, PopoverContent, PopoverTrigger, Switch } from "@muharremoz/pusula-ui"
 import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command"
@@ -38,12 +42,6 @@ import type { AppUser } from "@/app/api/users/route"
 type Level = "none" | "read" | "write"
 interface ModuleDef { key: string; label: string; group: string }
 
-const SEVIYELER: { value: Level; label: string }[] = [
-  { value: "none",  label: "Yok" },
-  { value: "read",  label: "Okuma" },
-  { value: "write", label: "Yazma" },
-]
-
 /** Modül gruplarının ekrandaki başlıkları — MODULES.group ile eşleşir. */
 const GRUP_BASLIK: Record<string, string> = {
   general:  "Günlük iş",
@@ -53,17 +51,6 @@ const GRUP_BASLIK: Record<string, string> = {
   dev:      "Geliştirici",
 }
 const GRUP_SIRA = ["general", "services", "data", "admin", "dev"]
-
-/**
- * Hazır paketler — CRM'dekiler DB'den gelir, Hub'da kodda. Politika
- * uydurmamak için seviye tabanlı tutuldu; modül seçen özel paketler
- * gerekirse `permission_packages` benzeri bir tablo şart.
- */
-const PAKETLER: { ad: string; aciklama: string; seviye: Level }[] = [
-  { ad: "Kapalı",     aciklama: "Hiçbir modüle erişim yok",              seviye: "none"  },
-  { ad: "Salt okuma", aciklama: "Tüm modülleri görür, değişiklik yapamaz", seviye: "read"  },
-  { ad: "Tam yetki",  aciklama: "Tüm modüllerde okuma ve yazma",          seviye: "write" },
-]
 
 const roleLabel = (r: string) => (r === "admin" ? "Süper Admin" : "Kullanıcı")
 
@@ -177,7 +164,7 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
   const [kayitli,   setKayitli]   = useState<Record<string, Level>>({})
   const [loading,   setLoading]   = useState(false)
   const [saving,    setSaving]    = useState(false)
-  const [detayAcik, setDetayAcik] = useState(false)
+  const [detayAcik, setDetayAcik] = useState(true)
   const [kopyaAcik, setKopyaAcik] = useState(false)
 
   /** Kişinin erişebildiği uygulamalar — izin yalnız bunlar için anlamlı. */
@@ -366,6 +353,23 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
             </PopoverContent>
           </Popover>
 
+          <button
+            type="button"
+            onClick={() => hepsineUygula("write")}
+            disabled={adminMi}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
+          >
+            Tümünü aç
+          </button>
+          <button
+            type="button"
+            onClick={() => hepsineUygula("none")}
+            disabled={adminMi}
+            className="text-muted-foreground hover:text-foreground hover:bg-muted/60 rounded-[5px] px-2 py-1 text-[11px] font-medium transition-colors disabled:opacity-50"
+          >
+            Temizle
+          </button>
+
           <Button
             size="sm"
             className="h-8 text-[12px]"
@@ -389,32 +393,6 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
           </div>
         ) : (
           <>
-            {/* Hazır paketler */}
-            <div className="text-muted-foreground/70 mb-1.5 text-[10px] font-medium tracking-wider uppercase">
-              Hazır paketler
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-              {PAKETLER.map((p) => {
-                const seciliPaket = mods.length > 0 && mods.every((m) => seviye(m.key) === p.seviye)
-                return (
-                  <button
-                    key={p.ad}
-                    onClick={() => hepsineUygula(p.seviye)}
-                    className={cn(
-                      "bg-muted/25 hover:bg-muted/50 rounded-[8px] border p-2.5 text-left transition-colors",
-                      seciliPaket ? "border-primary ring-primary/40 ring-1" : "border-border",
-                    )}
-                  >
-                    <span className="text-[12.5px] font-semibold">{p.ad}</span>
-                    <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">{p.aciklama}</p>
-                    <p className="text-muted-foreground/70 mt-1.5 text-[10.5px] tabular-nums">
-                      {mods.length} modül
-                    </p>
-                  </button>
-                )
-              })}
-            </div>
-
             {/* Tek tek düzenleme — katlı */}
             <button
               onClick={() => setDetayAcik((a) => !a)}
@@ -461,23 +439,14 @@ function YetkiPaneli({ kisi, tumKisiler }: { kisi: AppUser; tumKisiler: AppUser[
                               {m.label}
                               {satirDegisti && <span className="text-amber-500"> •</span>}
                             </span>
-                            {/* CRM'de Switch; Hub üç seviyeli olduğu için segment. */}
-                            <div className="border-border/60 flex shrink-0 items-center rounded-[5px] border p-0.5">
-                              {SEVIYELER.map((s) => (
-                                <button
-                                  key={s.value}
-                                  onClick={() => setPerms((p) => ({ ...p, [m.key]: s.value }))}
-                                  className={cn(
-                                    "rounded-[4px] px-1.5 py-0.5 text-[10.5px] font-medium transition-colors",
-                                    lvl === s.value
-                                      ? "bg-primary text-primary-foreground"
-                                      : "text-muted-foreground hover:text-foreground",
-                                  )}
-                                >
-                                  {s.label}
-                                </button>
-                              ))}
-                            </div>
+                            {/* Açarken "write": yazma uçları read'i kabul etmiyor.
+                                Dokunulmamış "read" kayıtları olduğu gibi kalır. */}
+                            <Switch
+                              checked={lvl !== "none"}
+                              onCheckedChange={(acik) =>
+                                setPerms((p) => ({ ...p, [m.key]: acik ? "write" : "none" }))
+                              }
+                            />
                           </div>
                         )
                       })}
