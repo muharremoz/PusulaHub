@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { StatsCard } from "@/components/shared/stats-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -28,7 +27,6 @@ import {
   ChevronsUpDown,
   Waypoints,
   Plus,
-  Layers,
   Pencil,
   Trash2,
 } from "lucide-react";
@@ -158,10 +156,6 @@ export default function PortsPage() {
     [ranges],
   );
 
-  const totalPorts     = ranges.reduce((s, r) => s + r.totalPorts, 0);
-  const usedPorts      = ranges.reduce((s, r) => s + r.usedCount, 0);
-  const activeRanges   = ranges.filter((r) => r.isActive).length;
-  const inactiveRanges = ranges.length - activeRanges;
 
   const handleAdd  = () => { setEditing(null); setSheetOpen(true); };
   const handleEdit = (r: PortRangeDto) => { setEditing(r); setSheetOpen(true); };
@@ -185,14 +179,6 @@ export default function PortsPage() {
 
   return (
     <PageContainer title="Port Yönetimi" description="IIS hizmetleri için port havuzları — tanım ve kullanım takibi">
-
-      {/* ── KPI Kartlar ── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM ARALIK"   value={ranges.length}  icon={<Layers    className="h-4 w-4" />} subtitle={`${totalPorts} port tanımlı`} />
-        <StatsCard title="AKTİF ARALIK"    value={activeRanges}   icon={<Waypoints className="h-4 w-4" />} subtitle="Atama için kullanılabilir" />
-        <StatsCard title="PASİF ARALIK"    value={inactiveRanges} icon={<Waypoints className="h-4 w-4" />} subtitle="Yeni atama yapılmaz" />
-        <StatsCard title="KULLANILAN PORT" value={usedPorts}      icon={<Waypoints className="h-4 w-4" />} subtitle={`${totalPorts - usedPorts} boş / ${totalPorts}`} />
-      </div>
 
       <ListeKarti
         baslik="Port Aralıkları"

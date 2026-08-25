@@ -29,16 +29,12 @@ import {
   ChevronsUpDown,
   Database,
   Plus,
-  Inbox,
-  Tag,
   FolderOpen,
   Wrench,
-  Link2,
   Pencil,
   Trash2,
 } from "lucide-react";
 import { DemoDatabaseSheet } from "@/components/demo-databases/demo-database-sheet";
-import { StatsCard } from "@/components/shared/stats-card";
 import { toast } from "sonner";
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route";
 import type { WizardServiceDto } from "@/app/api/services/route";
@@ -162,13 +158,6 @@ export default function DemoDatabasesPage() {
     [items],
   );
 
-  const counts = {
-    total:    items.length,
-    active:   items.filter((s) => s.isActive).length,
-    inactive: items.filter((s) => !s.isActive).length,
-    linked:   items.reduce((sum, s) => sum + (s.serviceIds?.length ?? 0), 0),
-  };
-
   const openCreate = () => { setEditing(null); setSheetOpen(true); };
   const openEdit   = (s: DemoDatabaseDto) => { setEditing(s); setSheetOpen(true); };
 
@@ -202,14 +191,6 @@ export default function DemoDatabasesPage() {
 
   return (
     <PageContainer title="Demo Veritabanları" description="Firma kurulum sihirbazında seçilebilen demo veritabanı kataloğu">
-
-      {/* ── İstatistikler ── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM"         value={counts.total}    icon={<Database className="h-4 w-4" />} trend={{ value: `${counts.active} aktif`,      positive: true }}  subtitle="Demo kataloğu" />
-        <StatsCard title="AKTİF"          value={counts.active}   icon={<Tag className="h-4 w-4" />}      trend={{ value: "Sihirbazda görünür",  positive: true }}  subtitle="Kullanılabilir" />
-        <StatsCard title="PASİF"          value={counts.inactive} icon={<Inbox className="h-4 w-4" />}    trend={{ value: "Sihirbazda gizli",    positive: false }} subtitle="Devre dışı" />
-        <StatsCard title="PROGRAM BAĞI"   value={counts.linked}   icon={<Link2 className="h-4 w-4" />}    trend={{ value: "Pusula programına",   positive: true }}  subtitle="Toplam ilişki" />
-      </div>
 
       <ListeKarti
         baslik="Demo Veritabanları"
