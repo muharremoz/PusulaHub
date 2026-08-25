@@ -15,7 +15,6 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog"
-import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui"
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui"
@@ -154,10 +153,8 @@ export default function MessagesPage() {
   const [filterFrom,        setFilterFrom]        = useState<string>("")  // yyyy-MM-dd
   const [filterTo,          setFilterTo]          = useState<string>("")
   const [filterCompany,     setFilterCompany]     = useState<string>("")  // companyId
-  const [filterUser,        setFilterUser]        = useState<string>("")  // username
   const [filterSubject,     setFilterSubject]     = useState<string>("")
   const [filterPriority,    setFilterPriority]    = useState<string>("")  // "" | "normal" | "high" | "urgent"
-  const [filtersOpen,       setFiltersOpen]       = useState(false)
   // Sütun başlığındaki tarih seçiminin görünen hali (from/to buradan türetilir)
   const [lisansTarih,       setLisansTarih]       = useState<TarihFiltreDeger>({ mode: "tum" })
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
@@ -208,7 +205,6 @@ export default function MessagesPage() {
       if (filterFrom)     qs.set("from",     filterFrom)
       if (filterTo)       qs.set("to",       filterTo)
       if (filterCompany)  qs.set("companyId",filterCompany)
-      if (filterUser)     qs.set("username", filterUser)
       if (filterSubject)  qs.set("subject",  filterSubject)
       if (filterPriority) qs.set("priority", filterPriority)
       const r = await fetch(`/api/messages?${qs.toString()}`)
@@ -266,16 +262,7 @@ export default function MessagesPage() {
     const t = setTimeout(() => loadList(), 250)
     return () => clearTimeout(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterFrom, filterTo, filterCompany, filterUser, filterSubject, filterPriority])
-
-  const activeFilterCount =
-    (filterFrom ? 1 : 0) + (filterTo ? 1 : 0) + (filterCompany ? 1 : 0) +
-    (filterUser ? 1 : 0) + (filterSubject ? 1 : 0) + (filterPriority ? 1 : 0)
-
-  const clearFilters = () => {
-    setFilterFrom(""); setFilterTo(""); setFilterCompany("")
-    setFilterUser(""); setFilterSubject(""); setFilterPriority("")
-  }
+  }, [filterFrom, filterTo, filterCompany, filterSubject, filterPriority])
 
   // Detay yükle
   useEffect(() => {
@@ -424,77 +411,8 @@ export default function MessagesPage() {
           SAĞ  (1fr)    — Gönderilen mesajlar listesi
       */}
       <div className="grid gap-3 grid-cols-[520px_1fr] items-start">
-        {/* SOL SÜTUN — mesaj seçiliyse detay, değilse Hazır Mesajlar paneli */}
-        {selected ? (
-          <NestedCard>
-            <div className="space-y-4">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium ${priorityConfig[selected.priority].color}`}>
-                    {priorityConfig[selected.priority].label}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setSelectedMessageId(null)}
-                  className="h-6 w-6 inline-flex items-center justify-center rounded-[5px] hover:bg-muted/40 transition-colors"
-                  title="Kapat"
-                >
-                  <X className="h-3.5 w-3.5 text-muted-foreground" />
-                </button>
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold">{selected.subject}</h3>
-                <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap">{selected.body}</p>
-              </div>
-
-              <div className="pt-3 border-t border-border/40 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Gönderen</span>
-                  <span className="text-xs font-medium">{selected.senderName}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Alıcı Tipi</span>
-                  <span className="text-xs">{recipientTypeLabels[selected.recipientType]}</span>
-                </div>
-                {selected.companyName && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Firma</span>
-                    <span className="text-xs font-medium">{selected.companyName}</span>
-                  </div>
-                )}
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Gönderim</span>
-                  <span className="text-xs tabular-nums">{formatDate(selected.sentAt)}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Okunma</span>
-                  <span className="text-xs font-medium tabular-nums">{selected.readCount} / {selected.totalCount}</span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-border/40">
-                <p className="text-[11px] text-muted-foreground mb-1.5">Alıcılar ({detailRecipients.length})</p>
-                <ScrollArea className="h-[260px]">
-                  <div className="space-y-1 pr-2">
-                    {detailRecipients.map(r => (
-                      <div key={r.id} className="flex items-center gap-2 text-[11px] py-1 px-1 rounded hover:bg-muted/30">
-                        {statusIcon(r.status)}
-                        <span className="font-mono font-medium truncate flex-1">{r.username}</span>
-                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                          <Server className="h-2.5 w-2.5" />
-                          {r.serverName ?? "—"}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground tabular-nums w-20 text-right">
-                          {r.readAt ? formatDate(r.readAt) : r.deliveredAt ? formatDate(r.deliveredAt) : ""}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-          </NestedCard>
-        ) : leftMode === "templates" ? (
+        {/* SOL SÜTUN — Hazır Mesajlar / Compose (detay artık modal'da) */}
+        {leftMode === "templates" ? (
           <NestedCard>
             {/* Mode toggle — Compose ↔ Templates */}
             <LeftModeTabs leftMode={leftMode} setLeftMode={setLeftMode} templateCount={templates.length} />
@@ -860,76 +778,6 @@ export default function MessagesPage() {
           baslik="Gönderilen Mesajlar"
           ikon={<Mail className="size-3.5" />}
           toplam={filtered.length}
-          aksiyon={
-            <>
-                {activeFilterCount > 0 && (
-                  <button
-                    onClick={clearFilters}
-                    className="text-[10px] text-muted-foreground hover:text-foreground underline"
-                  >
-                    Filtreleri temizle
-                  </button>
-                )}
-                {/*
-                  Filtre butonu — Popover olarak açılır. Inline expansion (mb-3 panel) yerine
-                  floating popover: liste yer kaybetmez, dış tıklamayla otomatik kapanır.
-                */}
-                <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={filtersOpen || activeFilterCount > 0 ? "default" : "outline"}
-                      className="h-7 rounded-[5px] text-[10px] gap-1 px-2"
-                    >
-                      <Search className="h-3 w-3" />
-                      Filtre
-                      {activeFilterCount > 0 && (
-                        <span className="ml-0.5 rounded-full bg-white/20 px-1 text-[9px] font-bold tabular-nums">
-                          {activeFilterCount}
-                        </span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    sideOffset={6}
-                    className="w-[560px] p-3"
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Filtreler</span>
-                      {activeFilterCount > 0 && (
-                        <button
-                          onClick={clearFilters}
-                          className="text-[10px] text-muted-foreground hover:text-foreground underline"
-                        >
-                          Temizle ({activeFilterCount})
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Firma</Label>
-                        <Select value={filterCompany || "all"} onValueChange={(v) => setFilterCompany(v === "all" ? "" : v)}>
-                          <SelectTrigger className="w-full h-7 text-[11px] rounded-[5px]"><SelectValue placeholder="Hepsi" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Hepsi</SelectItem>
-                            {companies.map(c => (
-                              <SelectItem key={c.id} value={c.id} className="text-[13px]">{c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-1">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı</Label>
-                        <Input value={filterUser} onChange={(e) => setFilterUser(e.target.value)}
-                          placeholder="kullanıcı adı"
-                          className="h-7 text-[11px] rounded-[5px] font-mono" />
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-            </>
-          }
         >
             <div className="overflow-x-auto">
               <table className="w-full text-[14px] font-medium leading-[20px]">
@@ -946,7 +794,16 @@ export default function MessagesPage() {
                   <th className="px-4 py-1.5 text-left font-medium">
                     <MetinFiltre label="Konu" value={filterSubject} onChange={setFilterSubject} />
                   </th>
-                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Alıcı</th>
+                  <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
+                    <SecimFiltre
+                      label="Alıcı"
+                      options={companies.map((c) => c.id)}
+                      getLabel={(id) => companies.find((c) => c.id === id)?.name ?? id}
+                      selected={filterCompany ? [filterCompany] : []}
+                      onChange={(v) => setFilterCompany(v[v.length - 1] ?? "")}
+                      aranabilir
+                    />
+                  </th>
                   <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Durum</th>
                   <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">Okunma</th>
                   <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
@@ -1039,6 +896,93 @@ export default function MessagesPage() {
         </ListeKarti>
 
       </div>
+
+
+      {/* Mesaj detayı — listeden satıra tıklayınca modal olarak açılır.
+          Önceden sol sütundaki compose alanının yerini alıyordu; kullanıcı
+          detayı açınca yeni mesaj formu kayboluyordu. */}
+      <Dialog open={!!selected} onOpenChange={(o) => { if (!o) setSelectedMessageId(null) }}>
+        <DialogContent className="max-w-2xl p-0 gap-0">
+          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
+            <DialogTitle className="flex items-center gap-2 text-[13px]">
+              <Mail className="h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground font-normal">Mesaj Detayı</span>
+              {selected && <span className="text-foreground truncate">— {selected.subject}</span>}
+            </DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-4">
+
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex items-center rounded-[5px] border px-2 py-0.5 text-[10px] font-medium ${priorityConfig[selected.priority].color}`}>
+                  {priorityConfig[selected.priority].label}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedMessageId(null)}
+                className="h-6 w-6 inline-flex items-center justify-center rounded-[5px] hover:bg-muted/40 transition-colors"
+                title="Kapat"
+              >
+                <X className="h-3.5 w-3.5 text-muted-foreground" />
+              </button>
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold">{selected.subject}</h3>
+              <p className="text-[11px] text-muted-foreground mt-1 whitespace-pre-wrap">{selected.body}</p>
+            </div>
+
+            <div className="pt-3 border-t border-border/40 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Gönderen</span>
+                <span className="text-xs font-medium">{selected.senderName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Alıcı Tipi</span>
+                <span className="text-xs">{recipientTypeLabels[selected.recipientType]}</span>
+              </div>
+              {selected.companyName && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-muted-foreground">Firma</span>
+                  <span className="text-xs font-medium">{selected.companyName}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Gönderim</span>
+                <span className="text-xs tabular-nums">{formatDate(selected.sentAt)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Okunma</span>
+                <span className="text-xs font-medium tabular-nums">{selected.readCount} / {selected.totalCount}</span>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-border/40">
+              <p className="text-[11px] text-muted-foreground mb-1.5">Alıcılar ({detailRecipients.length})</p>
+              <ScrollArea className="h-[260px]">
+                <div className="space-y-1 pr-2">
+                  {detailRecipients.map(r => (
+                    <div key={r.id} className="flex items-center gap-2 text-[11px] py-1 px-1 rounded hover:bg-muted/30">
+                      {statusIcon(r.status)}
+                      <span className="font-mono font-medium truncate flex-1">{r.username}</span>
+                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                        <Server className="h-2.5 w-2.5" />
+                        {r.serverName ?? "—"}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground tabular-nums w-20 text-right">
+                        {r.readAt ? formatDate(r.readAt) : r.deliveredAt ? formatDate(r.deliveredAt) : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
+          </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Şablon ekle/düzenle dialog */}
       <TemplateFormDialog

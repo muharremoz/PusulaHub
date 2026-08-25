@@ -87,25 +87,13 @@ export async function GET() {
     const { count: failedLogonTotal24h } = await sb.schema("hub").from("failed_logon_attempts")
       .select("id", { count: "exact", head: true }).gte("timestamp", since24h)
 
-    /* ── Takvim / Notlar (hub) ── */
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999)
+    /* ── Notlar (hub) ── */
     
-    const [{ data: calData }, { data: noteData }] = await Promise.all([
-      sb.schema("hub").from("calendar_events")
-        .select("id, title, start_date, end_date, all_day, color, type")
-        .lte("start_date", todayEnd.toISOString()).gte("end_date", todayStart.toISOString())
-        .order("start_date", { ascending: true }).limit(8),
+    const [{ data: noteData }] = await Promise.all([
       sb.schema("hub").from("notes")
         .select("id, title, color, pinned, tags, created_by, created_at, updated_at")
         .order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(6),
     ])
-
-    // Takvim (bugün)
-    const calendar = ((calData ?? []) as { id: string; title: string; start_date: string; end_date: string; all_day: boolean; color: string; type: string }[]).map(c => ({
-      id: c.id, title: c.title, startDate: fmt(c.start_date), endDate: fmt(c.end_date),
-      allDay: !!c.all_day, color: c.color, type: c.type,
-    }))
 
     // Notlar
     const noteRows = (noteData ?? []) as { id: string; title: string; color: string; pinned: boolean; tags: string | null; created_by: string | null; created_at: string; updated_at: string }[]
@@ -126,7 +114,6 @@ export async function GET() {
       disks: diskList,
       ramBreakdown,
       problemServers,
-      calendar,
       notes,
     })
   } catch (err) {

@@ -27,7 +27,6 @@ const NAV: NavEntry[] = [
   { group: "Genel", label: "Sunucular",   url: "/servers",     icon: "monitor-check", keywords: "server" },
   { group: "Genel", label: "Firmalar",    url: "/companies",   icon: Building2, keywords: "firma company" },
   { group: "Genel", label: "Mesajlar",    url: "/messages",    icon: "message-square", keywords: "mesaj message" },
-  { group: "Genel", label: "Takvim",      url: "/calendar",    icon: "calendar-days" },
   { group: "Genel", label: "Not Defteri", url: "/notes",       icon: "square-pen" },
   { group: "Servisler", label: "Pusula Hizmetleri",  url: "/services",       icon: "settings" },
   { group: "Servisler", label: "Demo Veritabanları", url: "/demo-databases", icon: Database, keywords: "db database" },

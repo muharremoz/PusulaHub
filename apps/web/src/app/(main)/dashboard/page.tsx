@@ -52,11 +52,6 @@ interface DashboardData {
     id: string; name: string; ip: string
     status: string; cpu: number; ram: number; disk: number
   }[]
-  calendar: {
-    id: string; title: string
-    startDate: string; endDate: string
-    allDay: boolean; color: string; type: string
-  }[]
   notes: {
     id: string; title: string
     color: string; pinned: boolean

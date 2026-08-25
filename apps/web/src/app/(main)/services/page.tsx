@@ -31,8 +31,6 @@ import {
   FolderOpen,
   FileText,
   Plus,
-  Tag,
-  Inbox,
   Server,
   Globe,
   Waypoints,
@@ -40,7 +38,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
-import { StatsCard } from "@/components/shared/stats-card";
 import { toast } from "sonner";
 import type { WizardServiceDto, ServiceType } from "@/app/api/services/route";
 
@@ -145,13 +142,6 @@ export default function ServicesPage() {
       });
   }, [services, adFiltre, tipFiltre, kategoriFiltre, durumFiltre, sortKey, sortDir]);
 
-  const counts = {
-    total:    services.length,
-    active:   services.filter((s) => s.isActive).length,
-    inactive: services.filter((s) => !s.isActive).length,
-    cats:     categories.length,
-  };
-
   const openCreate = () => { setEditing(null); setSheetOpen(true); };
   const openEdit   = (s: WizardServiceDto) => { setEditing(s); setSheetOpen(true); };
 
@@ -185,14 +175,6 @@ export default function ServicesPage() {
 
   return (
     <PageContainer title="Hizmetler" description="Firma kurulum sihirbazında kullanılan hizmet kataloğu">
-
-      {/* ── İstatistikler ── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM HİZMET" value={counts.total}    icon={<Layers className="h-4 w-4" />}      trend={{ value: `${counts.active} aktif`, positive: true }} subtitle="Tüm kategoriler" />
-        <StatsCard title="AKTİF"          value={counts.active}   icon={<Tag className="h-4 w-4" />}         trend={{ value: "Sihirbazda görünür",   positive: true }} subtitle="Kullanılabilir hizmet" />
-        <StatsCard title="PASİF"          value={counts.inactive} icon={<Inbox className="h-4 w-4" />}       trend={{ value: "Sihirbazda gizli",     positive: false }} subtitle="Devre dışı" />
-        <StatsCard title="KATEGORİ"       value={counts.cats}     icon={<FolderOpen className="h-4 w-4" />}  trend={{ value: "Farklı grup",          positive: true }} subtitle="Otomatik gruplama" />
-      </div>
 
       <ListeKarti
         baslik="Pusula Hizmetleri"
