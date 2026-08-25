@@ -1790,8 +1790,9 @@ tr:nth-child(even) td{background:#fafafa}
 
   return (
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
-      {/* Company Selector / Header Bar */}
-      <div className="mb-6">
+      {/* Company Selector / Header Bar — firma secili degilken hic render
+          edilmez; bos sarmalayici mb-6 ile listeyi asagi itiyordu. */}
+      <div className={selectedFirma && canViewCompanyDetail ? "mb-3" : undefined}>
         {/* No-perm modunda selectedFirma yalnızca modal'ı beslemek için set
             ediliyor — detay header'ını ve panelini render etme, liste görünür kalsın. */}
         {selectedFirma && canViewCompanyDetail ? (
