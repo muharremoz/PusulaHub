@@ -21,7 +21,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import {  } from "@muharremoz/pusula-ui";
-import { Combobox } from "@/components/ui/combobox";
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
 import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -129,7 +128,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Search, ChevronLeft, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, ArrowUp, ArrowDown, Tag as TagIcon } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
@@ -446,14 +445,6 @@ const statusConfig = {
  * "FRANSA ELİT" ile "elit" eşleşsin diye: İ/I/ı → i, ş→s, ç→c, ğ→g, ö→o, ü→u.
  * (JS toLowerCase() "İ"yi "i̇" = i + combining dot yapıp aramayı bozuyordu.)
  */
-function foldTr(s: string): string {
-  return (s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/ı/g, "i");
-}
-
 export default function CompaniesPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -473,8 +464,6 @@ export default function CompaniesPage() {
   const [tagBusy, setTagBusy] = useState(false);
   const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
 
   /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
   const [firmaFiltre,  setFirmaFiltre]  = useState("");
@@ -1173,8 +1162,6 @@ tr:nth-child(even) td{background:#fafafa}
     // bilgileri artık yalnız detay sayfasındaki "Erişim" sekmesinde.
     if (!canViewCompanyDetail) return
     setSelectedFirma(f)
-    setSearchOpen(false)
-    setSearchQuery("")
     router.replace(`/companies?firkod=${encodeURIComponent(f.firkod)}`, { scroll: false })
   }
 
@@ -1277,12 +1264,18 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  function clearSelection() {
+  /**
+   * URL'de firkod yoksa seçimi bırak. "Geri" butonu kaldırıldıktan sonra
+   * listeye dönüş yolu sidebar'daki "Firmalar" bağlantısı; o /companies'e
+   * gidiyor ama client-side navigasyonda selectedFirma state'te kalıyordu,
+   * dolayısıyla liste hiç görünmüyordu.
+   */
+  useEffect(() => {
+    if (urlFirkod) return
     setSelectedFirma(null)
     setCompanyDetail(null)
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
-    router.replace(`/companies`, { scroll: false })
-  }
+  }, [urlFirkod])
 
   /**
    * Web hizmetlerinin sunucudaki `Config\Users.xml` içeriğini çeker.
@@ -1711,10 +1704,6 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  const apiFiltered = searchQuery.trim()
-    ? apiCompanies.filter((c) => foldTr(c.firma).includes(foldTr(searchQuery))).slice(0, 50)
-    : apiCompanies.slice(0, 50);
-
   // Firma listesi (empty-state) için arama + sıralama
   /**
    * lisansBitis iki formatta gelebiliyor: "yyyy-MM-dd" (API) veya "dd.MM.yyyy"
@@ -1800,144 +1789,133 @@ tr:nth-child(even) td{background:#fafafa}
           <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div className="rounded-[5px] px-4 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={clearSelection}
-                  className="flex items-center gap-1 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 text-muted-foreground transition-colors shrink-0"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Geri
-                </button>
-
                 <>
                   <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
-                  <h2 className="text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    {selectedFirma.email && <span className="text-[11px]">{selectedFirma.email}</span>}
-                    {selectedFirma.email && selectedFirma.phone && <span className="text-[10px]">·</span>}
-                    {selectedFirma.phone && <span className="text-[11px] font-mono">{selectedFirma.phone}</span>}
-                    {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && <span className="text-[10px]">·</span>}
-                    {selectedFirma.lisansBitis && <span className="text-[11px]">Lisans: {selectedFirma.lisansBitis}</span>}
-                  </div>
-                  <span className={`shrink-0 inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${
-                    firmaIsActive(selectedFirma)
-                      ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/15"
-                      : "text-red-700 dark:text-red-400 border-red-500/25 bg-red-500/15"
-                  }`}>
-                    {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
-                  </span>
 
-                  {/* Firma etiketleri */}
-                  {canViewCompanyDetail && (
-                    <div className="flex items-center gap-1.5">
-                      {firmaTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
-                        >
-                          {tag}
-                          <button
-                            onClick={() => removeTag(tag)}
-                            className="opacity-50 hover:opacity-100 transition-opacity"
-                            title="Etiketi kaldır"
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </span>
-                      ))}
-
-                      <Popover open={tagPopoverOpen} onOpenChange={(o) => { setTagPopoverOpen(o); if (!o) setTagInput(""); }}>
-                        <PopoverTrigger asChild>
-                          <button
-                            className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-[5px] border border-dashed border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
-                            title="Etiket ekle"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-0 rounded-[5px]" align="start">
-                          <div className="p-2 border-b border-border/40">
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                value={tagInput}
-                                onChange={(e) => setTagInput(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
-                                placeholder="Yeni etiket yaz..."
-                                maxLength={50}
-                                className="h-7 text-[11px] rounded-[5px]"
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                disabled={tagBusy || !tagInput.trim()}
-                                onClick={() => addTag(tagInput)}
-                                className="h-7 px-2 rounded-[5px] text-[11px] shrink-0"
+                  {/* Firma adı üstte; e-posta / telefon / lisans altında,
+                      ikonlu ve dikey ayraçlı tek satır. */}
+                  <div className="min-w-0 flex-1">
+                    {/* İlk satır: ad + durum rozeti + etiketler */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h2 className="truncate text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
+                      <span className={`shrink-0 inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${
+                        firmaIsActive(selectedFirma)
+                          ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/15"
+                          : "text-red-700 dark:text-red-400 border-red-500/25 bg-red-500/15"
+                      }`}>
+                        {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
+                      </span>
+                        {/* Firma etiketleri */}
+                        {canViewCompanyDetail && (
+                          <div className="flex items-center gap-1.5">
+                            {firmaTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
                               >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
-                            {(() => {
-                              const suggestions = allTags.filter(
-                                (t) => !firmaTags.some((ft) => ft.toLowerCase() === t.toLowerCase())
-                              )
-                              if (suggestions.length === 0) {
-                                return <p className="text-[10px] text-muted-foreground text-center py-3">Mevcut etiket yok — yukarıdan yeni ekleyin</p>
-                              }
-                              return (
-                                <>
-                                  <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase px-1.5 py-1">Mevcut Etiketler</p>
-                                  {suggestions.map((t) => (
-                                    <button
-                                      key={t}
-                                      onClick={() => addTag(t)}
-                                      disabled={tagBusy}
-                                      className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[5px] hover:bg-muted/70 transition-colors text-left"
+                                {tag}
+                                <button
+                                  onClick={() => removeTag(tag)}
+                                  className="opacity-50 hover:opacity-100 transition-opacity"
+                                  title="Etiketi kaldır"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            ))}
+
+                            <Popover open={tagPopoverOpen} onOpenChange={(o) => { setTagPopoverOpen(o); if (!o) setTagInput(""); }}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-[5px] border border-dashed border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                                  title="Etiket ekle"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-56 p-0 rounded-[5px]" align="start">
+                                <div className="p-2 border-b border-border/40">
+                                  <div className="flex items-center gap-1.5">
+                                    <Input
+                                      value={tagInput}
+                                      onChange={(e) => setTagInput(e.target.value)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                                      placeholder="Yeni etiket yaz..."
+                                      maxLength={50}
+                                      className="h-7 text-[11px] rounded-[5px]"
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size="sm"
+                                      disabled={tagBusy || !tagInput.trim()}
+                                      onClick={() => addTag(tagInput)}
+                                      className="h-7 px-2 rounded-[5px] text-[11px] shrink-0"
                                     >
-                                      <span className={`inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
-                                    </button>
-                                  ))}
-                                </>
-                              )
-                            })()}
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+                                  {(() => {
+                                    const suggestions = allTags.filter(
+                                      (t) => !firmaTags.some((ft) => ft.toLowerCase() === t.toLowerCase())
+                                    )
+                                    if (suggestions.length === 0) {
+                                      return <p className="text-[10px] text-muted-foreground text-center py-3">Mevcut etiket yok — yukarıdan yeni ekleyin</p>
+                                    }
+                                    return (
+                                      <>
+                                        <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase px-1.5 py-1">Mevcut Etiketler</p>
+                                        {suggestions.map((t) => (
+                                          <button
+                                            key={t}
+                                            onClick={() => addTag(t)}
+                                            disabled={tagBusy}
+                                            className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[5px] hover:bg-muted/70 transition-colors text-left"
+                                          >
+                                            <span className={`inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
+                                          </button>
+                                        ))}
+                                      </>
+                                    )
+                                  })()}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
-                        </PopoverContent>
-                      </Popover>
+                        )}
                     </div>
-                  )}
+                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
+                      {selectedFirma.email && (
+                        <span className="inline-flex min-w-0 items-center gap-1">
+                          <Mail className="size-3 shrink-0" />
+                          <span className="truncate">{selectedFirma.email}</span>
+                        </span>
+                      )}
+                      {selectedFirma.email && selectedFirma.phone && (
+                        <span className="bg-border h-3 w-px shrink-0" />
+                      )}
+                      {selectedFirma.phone && (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-mono">
+                          <Phone className="size-3 shrink-0" />
+                          {selectedFirma.phone}
+                        </span>
+                      )}
+                      {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && (
+                        <span className="bg-border h-3 w-px shrink-0" />
+                      )}
+                      {selectedFirma.lisansBitis && (
+                        <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                          <Calendar className="size-3 shrink-0" />
+                          {lisansGoster(selectedFirma.lisansBitis)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                 </>
 
                 <div className="flex-1" />
-
-                <Combobox
-                  items={apiFiltered}
-                  getKey={(c) => c.id}
-                  getLabel={(c) => c.firma}
-                  onChange={(id) => {
-                    const c = apiFiltered.find((x) => x.id === id)
-                    if (c) selectFirma(c)
-                  }}
-                  search={searchQuery}
-                  onSearchChange={setSearchQuery}
-                  loading={apiLoading}
-                  emptyText="Firma bulunamadı"
-                  searchPlaceholder="Firma ara..."
-                  align="end"
-                  contentClassName="w-64"
-                  maxListHeight="max-h-56"
-                  renderItem={(c) => (
-                    <span className="flex w-full min-w-0 items-center justify-between gap-2">
-                      <span className="truncate">{c.firma}</span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums font-mono shrink-0">{c.firkod}</span>
-                    </span>
-                  )}
-                  trigger={
-                    <button className="flex items-center gap-1.5 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 text-muted-foreground transition-colors">
-                      <Search className="h-3.5 w-3.5" />
-                      Firma Değiştir
-                    </button>
-                  }
-                />
               </div>
             </div>
                 </div>
