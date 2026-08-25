@@ -42,7 +42,7 @@ function Calendar({
       captionLayout={captionLayout}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+          date.toLocaleString("tr-TR", { month: "long" }),
         ...formatters,
       }}
       classNames={{
@@ -185,8 +185,8 @@ function Calendar({
               disabled={disabled}
               placeholder="—"
               searchPlaceholder="Ara…"
-              className={cn("h-7 w-auto min-w-20 gap-1 border-0 bg-transparent px-1.5 text-[13px] font-medium hover:bg-muted/60", dropdownCn)}
-              contentClassName="w-auto min-w-28"
+              className={cn("h-7 w-fit shrink-0 gap-1 border-0 bg-transparent px-1.5 text-[13px] font-medium whitespace-nowrap hover:bg-muted/60 [&>span]:flex-none [&>span]:overflow-visible", dropdownCn)}
+              contentClassName="w-36 min-w-0"
               maxListHeight="max-h-56"
             />
           )
