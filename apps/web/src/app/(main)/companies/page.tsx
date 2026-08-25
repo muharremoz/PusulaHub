@@ -461,6 +461,9 @@ export default function CompaniesPage() {
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  // Panik: firmanın erişimini tek hamlede kesme
+  const [panicOpen, setPanicOpen] = useState(false);
+  const [panicBusy, setPanicBusy] = useState(false);
   const [tagBusy, setTagBusy] = useState(false);
   const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
@@ -1265,6 +1268,46 @@ tr:nth-child(even) td{background:#fafafa}
   }
 
   /**
+   * Panik: firmanın AD hesaplarını devre dışı bırakır ve açık oturumlarını
+   * kapatır. Yıkıcı olduğu için yalnız AlertDialog onayından sonra çağrılır.
+   */
+  async function runPanic() {
+    if (!selectedFirma) return
+    setPanicBusy(true)
+    const id = toast.loading("Erişim kesiliyor…", { description: selectedFirma.firma })
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/panic`, {
+        method: "POST",
+      })
+      const data = await r.json()
+      if (!r.ok) {
+        toast.error("Panik işlemi başarısız", { id, description: data?.error ?? "Bilinmeyen hata" })
+        return
+      }
+      const ozet = `${data.devreDisi} hesap devre dışı · ${data.kapatilanOturum} oturum kapatıldı`
+      if (data.ok) {
+        toast.success("Firma erişimi kesildi", { id, description: ozet })
+      } else {
+        // Kısmi başarı — ne olduğunu sayılarla birlikte söyle, sessiz geçme.
+        toast.warning("Kısmen tamamlandı", {
+          id,
+          description: `${ozet}. ${(data.hatalar ?? []).join(" ")}`,
+        })
+      }
+      setPanicOpen(false)
+      // Kullanıcı listesi güncel kalsın (hesaplar artık pasif görünmeli).
+      refreshTabUsers()
+    } catch (e) {
+      toast.error("Panik işlemi başarısız", {
+        id,
+        description: e instanceof Error ? e.message : "Bağlantı hatası",
+      })
+    } finally {
+      setPanicBusy(false)
+    }
+  }
+
+  /**
    * URL'de firkod yoksa seçimi bırak. "Geri" butonu kaldırıldıktan sonra
    * listeye dönüş yolu sidebar'daki "Firmalar" bağlantısı; o /companies'e
    * gidiyor ama client-side navigasyonda selectedFirma state'te kalıyordu,
@@ -1916,6 +1959,16 @@ tr:nth-child(even) td{background:#fafafa}
                 </>
 
                 <div className="flex-1" />
+
+                {/* Panik — firmanın erişimini kes */}
+                <button
+                  onClick={() => setPanicOpen(true)}
+                  className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
+                  title="Firmanın tüm hesaplarını devre dışı bırak ve açık oturumları kapat"
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                  Panik
+                </button>
               </div>
             </div>
                 </div>
@@ -3744,6 +3797,40 @@ tr:nth-child(even) td{background:#fafafa}
           />
         </ListeKarti>
       )}
+
+      {/* Panik onayı — yıkıcı işlem, AlertDialog zorunlu (proje kuralı) */}
+      <AlertDialog open={panicOpen} onOpenChange={(o) => { if (!panicBusy) setPanicOpen(o) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Firma erişimini kes</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-[12px]">
+                <p>
+                  <strong>{selectedFirma?.firma}</strong> firması için:
+                </p>
+                <ul className="list-inside list-disc space-y-1">
+                  <li>Tüm aktif AD hesapları devre dışı bırakılacak — yeni oturum açılamaz.</li>
+                  <li>O an açık olan oturumlar kapatılacak — <strong>kaydedilmemiş veriler kaybolur</strong>.</li>
+                </ul>
+                <p className="text-muted-foreground">
+                  Hesaplar sonradan Kullanıcılar sekmesinden tekrar etkinleştirilebilir;
+                  kapanan oturumlar geri gelmez.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={panicBusy} className="text-[12px] h-8">Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); runPanic() }}
+              disabled={panicBusy}
+              className="bg-destructive text-white hover:bg-destructive/90 text-[12px] h-8"
+            >
+              {panicBusy ? "Kesiliyor…" : "Erişimi Kes"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi */}
       <Dialog
