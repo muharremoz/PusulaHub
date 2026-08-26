@@ -6,7 +6,10 @@
 
    Faz 4: DB katmanı mssql → Supabase (service-role, Coolify'da agent'larla
    aynı 10.15.2.x ağında çalışır). Karmaşık MERGE/aggregation'lar hub.*_rpc'lerde.
-   DEĞİŞMEZ: agent fetch, agent-store, harici SQL toplama (withSqlConnection), execOnAgent.
+   DEĞİŞMEZ: agent fetch, agent-store, execOnAgent.
+   NOT: harici SQL toplama (withSqlConnection) 2026-08-26'da degisti — sorgu
+   tek gecisli yazima cevrildi ve kendi ritmine/kilidine alindi; sebebi
+   collectSqlFromServer ve sqlCollectDue uzerinde anlatiliyor.
 ══════════════════════════════════════════════════════════ */
 
 import { getSupabaseAdmin } from "./supabase/admin"
@@ -33,6 +36,29 @@ interface SqlDbRow {
   logFilePath:         string
 }
 
+/* ── Agir SQL toplama: es zamanlilik kilidi + kendi ritmi ──────────────────
+ * SQL metadata sorgusu (79 DB + backupset) saniyeler surer. persistHeavyData
+ * poll ritminde (10 sn) ve `await` EDILMEDEN cagriliyor; sorgu 10 sn'den uzun
+ * surunce biri bitmeden digeri basliyor ve SQL sunucusunda ust uste birikiyor.
+ * Yasandi: ayni anda 8 sorgu, SQL Server CPU %77, her turda 15 sn timeout —
+ * client vazgecse de sunucu sorguyu calistirmaya devam ettigi icin yuk kalici.
+ *
+ * Iki onlem: (a) ayni sunucu icin ayni anda TEK toplama, (b) poll'dan bagimsiz
+ * 5 dakikalik ritim — yedek/boyut bilgisi 10 sn tazelik istemez.
+ *
+ * Kapi kapaliyken SQL bolumu tamamen atlanir; DB'ye yazma da yapilmaz. Boylece
+ * en son yazilan (zengin) veri, agent'in daha eksik verisiyle 10 sn'de bir
+ * ezilmez.
+ */
+const HEAVY_SQL_INTERVAL_MS = 5 * 60 * 1000
+const _sqlCollecting = new Set<string>()
+const _sqlLastAt     = new Map<string, number>()
+
+function sqlCollectDue(serverName: string): boolean {
+  if (_sqlCollecting.has(serverName)) return false
+  return Date.now() - (_sqlLastAt.get(serverName) ?? 0) >= HEAVY_SQL_INTERVAL_MS
+}
+
 async function collectSqlFromServer(serverIp: string, user: string, password: string): Promise<SqlDbRow[] | null> {
   try {
     return await withSqlConnection(
@@ -42,19 +68,60 @@ async function collectSqlFromServer(serverIp: string, user: string, password: st
           -- READ UNCOMMITTED: msdb.backupset'i kilitlemeden oku (yoksa BACKUP/RESTORE
           -- bloke olur, restore %100'de takılır). Birkaç sn eski tarih monitoring için önemsiz.
           SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+
+          -- TEK GECISLI yazim. Onceki surum her veritabani icin ayri ayri
+          -- korelasyonlu alt sorgu calistiriyordu: 79 DB x 7 alt sorgu =
+          -- ~316 tekrar tarama, sorgu basina 94M mantiksal okuma ve 60-78 sn.
+          -- msdb.backupset uzerindeki indeks yalniz (database_name) — type
+          -- ve backup_finish_date indekste olmadigi icin her alt sorgu
+          -- satirlari tek tek okumak zorundaydi. Asagidaki bicimde her kaynak
+          -- BIR kez taranip gruplaniyor.
+          WITH sizes AS (
+            SELECT database_id, SUM(CAST(size AS BIGINT) * 8 / 1024) AS sizeMB
+            FROM sys.master_files WHERE type = 0 GROUP BY database_id
+          ),
+          paths AS (
+            SELECT database_id,
+                   MAX(CASE WHEN type = 0 THEN physical_name END) AS dataFilePath,
+                   MAX(CASE WHEN type = 1 THEN physical_name END) AS logFilePath
+            FROM (
+              SELECT database_id, type, physical_name,
+                     ROW_NUMBER() OVER (PARTITION BY database_id, type ORDER BY file_id) AS rn
+              FROM sys.master_files
+            ) f WHERE rn = 1 GROUP BY database_id
+          ),
+          -- Yalniz Full ('D') ve Differential ('I'); log yedekleri ('L')
+          -- satirlarin buyuk kismi ve burada kullanilmiyor.
+          bk AS (
+            SELECT database_name, type, backup_finish_date, backup_start_date,
+                   ROW_NUMBER() OVER (PARTITION BY database_name, type
+                                      ORDER BY backup_finish_date DESC) AS rn
+            FROM msdb.dbo.backupset WHERE type IN ('D','I')
+          ),
+          bks AS (
+            SELECT database_name,
+                   MAX(CASE WHEN type='D' THEN backup_finish_date END) AS lastBackup,
+                   MAX(CASE WHEN type='I' THEN backup_finish_date END) AS lastDiffBackup,
+                   MAX(CASE WHEN type='D' THEN backup_start_date  END) AS lastBackupStart,
+                   MAX(CASE WHEN type='I' THEN backup_start_date  END) AS lastDiffBackupStart
+            FROM bk WHERE rn = 1 GROUP BY database_name
+          )
           SELECT
             d.name AS name,
-            CAST(ISNULL((SELECT SUM(CAST(f.size AS BIGINT) * 8 / 1024) FROM sys.master_files f WHERE f.database_id=d.database_id AND f.type=0), 0) AS INT) AS sizeMB,
+            CAST(ISNULL(sz.sizeMB, 0) AS INT) AS sizeMB,
             d.state_desc AS status,
-            (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D') AS lastBackup,
-            (SELECT MAX(b.backup_finish_date) FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='I') AS lastDiffBackup,
-            (SELECT TOP 1 b.backup_start_date FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='D' ORDER BY b.backup_finish_date DESC) AS lastBackupStart,
-            (SELECT TOP 1 b.backup_start_date FROM msdb.dbo.backupset b WHERE b.database_name=d.name AND b.type='I' ORDER BY b.backup_finish_date DESC) AS lastDiffBackupStart,
+            bks.lastBackup          AS lastBackup,
+            bks.lastDiffBackup      AS lastDiffBackup,
+            bks.lastBackupStart     AS lastBackupStart,
+            bks.lastDiffBackupStart AS lastDiffBackupStart,
             d.recovery_model_desc AS recoveryModel,
             ISNULL(SUSER_SNAME(d.owner_sid), '') AS owner,
-            ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=0 ORDER BY file_id), '') AS dataFilePath,
-            ISNULL((SELECT TOP 1 physical_name FROM sys.master_files WHERE database_id=d.database_id AND type=1 ORDER BY file_id), '') AS logFilePath
+            ISNULL(pt.dataFilePath, '') AS dataFilePath,
+            ISNULL(pt.logFilePath,  '') AS logFilePath
           FROM sys.databases d
+          LEFT JOIN sizes sz ON sz.database_id   = d.database_id
+          LEFT JOIN paths pt ON pt.database_id   = d.database_id
+          LEFT JOIN bks      ON bks.database_name = d.name
           WHERE d.name NOT IN ('master','tempdb','model','msdb')
         `)
         return res.recordset as SqlDbRow[]
@@ -173,6 +240,25 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
       await hub().rpc("poller_iis_sites", { p_server: serverName, p_sites: sites })
     }
 
+    // SQL Databases — AGIR: kendi ritminde ve kilitli (bkz. HEAVY_SQL_INTERVAL_MS)
+    if (sqlCollectDue(serverName)) {
+      _sqlCollecting.add(serverName)
+      try {
+        await persistSqlDatabases(serverName, report)
+      } finally {
+        _sqlCollecting.delete(serverName)
+        _sqlLastAt.set(serverName, Date.now())
+      }
+    }
+  } catch (err) {
+    console.log(`[Poller] persistHeavyData hatası (${serverName}):`, err instanceof Error ? err.message : err)
+  }
+}
+
+/* SQL veritabani + yedek bilgisi — persistHeavyData'dan ayrildi cunku pahali.
+   Yalniz sqlCollectDue() izin verdiginde, kilit altinda cagrilir. */
+async function persistSqlDatabases(serverName: string, report: AgentReport): Promise<void> {
+  try {
     // SQL Databases — Hub'dan direkt SA (öncelik) > agent
     let directRows: SqlDbRow[] | null = null
     try {
@@ -222,7 +308,7 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
       await hub().rpc("poller_sql_databases", { p_server: serverName, p_dbs: dbs })
     }
   } catch (err) {
-    console.log(`[Poller] persistHeavyData hatası (${serverName}):`, err instanceof Error ? err.message : err)
+    console.log(`[Poller] persistSqlDatabases hatası (${serverName}):`, err instanceof Error ? err.message : err)
   }
 }
 
