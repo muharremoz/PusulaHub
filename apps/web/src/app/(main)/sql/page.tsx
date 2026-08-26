@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo } from "react"
-import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
+import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -56,7 +56,44 @@ interface FlatDb extends SqlDatabaseItem {
   serverName: string
 }
 
-type SortKey = "name" | "serverName" | "sizeMB" | "state" | "createDate"
+/**
+ * Yedek zamanı hücresi. Sadece tarih değil, ÜZERİNDEN GEÇEN SÜRE gösterilir:
+ * "26.08 11:05" tek başına bakan birine bir şey söylemez, "3 sa önce" söyler.
+ * Bayatlayan yedek renkle öne çıkar — 48 saat üstü kırmızı, 24 saat üstü sarı.
+ * Hiç yedek yoksa bu bir uyarıdır, "—" ile geçiştirilmez.
+ */
+function YedekHucre({ iso }: { iso: string | null }) {
+  if (!iso) {
+    return (
+      <span className="inline-flex rounded-[5px] bg-rose-500/15 px-2 py-0.5 text-[11px] font-medium text-rose-700 dark:text-rose-400">
+        Yedek yok
+      </span>
+    )
+  }
+  const t = new Date(iso)
+  if (isNaN(t.getTime())) return <span className="text-muted-foreground text-[12px]">—</span>
+
+  const saat = (Date.now() - t.getTime()) / 3_600_000
+  const renk =
+    saat >= 48 ? "text-rose-600 dark:text-rose-400"
+    : saat >= 24 ? "text-amber-600 dark:text-amber-400"
+    : "text-muted-foreground"
+
+  const gecen =
+    saat < 1  ? `${Math.max(1, Math.round(saat * 60))} dk önce`
+    : saat < 24 ? `${Math.round(saat)} sa önce`
+    : `${Math.round(saat / 24)} gün önce`
+
+  return (
+    <span className={cn("text-[12px] tabular-nums", renk)} title={t.toLocaleString("tr-TR")}>
+      {gecen}
+    </span>
+  )
+}
+
+const DB_SAYFA_BOYU = 25
+
+type SortKey = "name" | "sizeMB" | "state" | "createDate" | "lastBackup" | "lastDiffBackup"
 type SortDir = "asc" | "desc"
 
 /* ── Kayıtlı Sorgular (statik — sistem sorguları) ───────── */
@@ -192,6 +229,7 @@ export default function SQLPage() {
 
   /* ── Tablo sıralama ── */
   const [sortKey, setSortKey] = useState<SortKey>("name")
+  const [dbSayfa, setDbSayfa] = useState(1)
   const [sortDir, setSortDir] = useState<SortDir>("asc")
 
   /* ── Sorgu Editörü ── */
@@ -272,14 +310,12 @@ export default function SQLPage() {
   }
 
   /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
-  const [dbFiltre,     setDbFiltre]     = useState("")
-  const [sunucuFiltre, setSunucuFiltre] = useState<string[]>([])
-  const [durumFiltre,  setDurumFiltre]  = useState<string[]>([])
+  const [dbFiltre,    setDbFiltre]    = useState("")
+  const [durumFiltre, setDurumFiltre] = useState<string[]>([])
 
-  const sunucuAdlari = useMemo(
-    () => [...new Set(databases.map((d) => d.serverName).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr")),
-    [databases],
-  )
+  /* Sunucu sütunu kaldırıldı (pratikte tek SQL sunucusu var, kolon yer kaplıyordu).
+     Filtresi de birlikte silindi — aksi halde state kalır ama hiçbir yerden
+     erişilemezdi. */
   const durumlar = useMemo(
     () => [...new Set(databases.map((d) => (d.state ?? "").toUpperCase()).filter(Boolean))].sort(),
     [databases],
@@ -290,16 +326,35 @@ export default function SQLPage() {
     return [...databases]
       .filter((d) => {
         if (q && !d.name.toLocaleLowerCase("tr-TR").includes(q)) return false
-        if (sunucuFiltre.length && !sunucuFiltre.includes(d.serverName)) return false
         if (durumFiltre.length && !durumFiltre.includes((d.state ?? "").toUpperCase())) return false
         return true
       })
       .sort((a, b) => {
         const mul = sortDir === "asc" ? 1 : -1
         if (sortKey === "sizeMB") return (a.sizeMB - b.sizeMB) * mul
+        /* Tarihler metin olarak degil zaman olarak siralanir; yedegi hic
+           olmayan (null) kayitlar en eski sayilir, yani "yedek yok" satirlari
+           azalan siralamada dibe degil tepeye gelir - aranan da odur. */
+        if (sortKey === "lastBackup" || sortKey === "lastDiffBackup" || sortKey === "createDate") {
+          const zaman = (v: string | null | undefined) => {
+            if (!v) return 0
+            const t = new Date(v).getTime()
+            return isNaN(t) ? 0 : t
+          }
+          return (zaman(a[sortKey]) - zaman(b[sortKey])) * mul
+        }
         return String(a[sortKey] ?? "").localeCompare(String(b[sortKey] ?? ""), "tr") * mul
       })
-  }, [databases, dbFiltre, sunucuFiltre, durumFiltre, sortKey, sortDir])
+  }, [databases, dbFiltre, durumFiltre, sortKey, sortDir])
+
+  /* Filtre/sıralama değişince 1. sayfaya dön — yoksa 4. sayfadayken filtre
+     daraltıldığında boş ekran kalıyor. */
+  useEffect(() => { setDbSayfa(1) }, [dbFiltre, durumFiltre, sortKey, sortDir])
+
+  const sayfali = useMemo(
+    () => sorted.slice((dbSayfa - 1) * DB_SAYFA_BOYU, dbSayfa * DB_SAYFA_BOYU),
+    [sorted, dbSayfa],
+  )
 
   /* ── Sorgu çalıştır ── */
   const handleRun = async () => {
@@ -398,16 +453,6 @@ export default function SQLPage() {
                     <MetinFiltre label="Veritabanı" value={dbFiltre} onChange={setDbFiltre} />
                   </th>
                   <th className="px-4 py-1.5 text-left font-medium">
-                    <SecimFiltre
-                      label="Sunucu"
-                      options={sunucuAdlari}
-                      getLabel={(o) => o}
-                      selected={sunucuFiltre}
-                      onChange={(v) => setSunucuFiltre(v as string[])}
-                      aranabilir
-                    />
-                  </th>
-                  <th className="px-4 py-1.5 text-left font-medium">
                     <SortHeader label="Boyut" sortKey="sizeMB" active={sortKey} dir={sortDir} onSort={handleSort} />
                   </th>
                   <th className="px-4 py-1.5 text-left font-medium">
@@ -420,6 +465,12 @@ export default function SQLPage() {
                     />
                   </th>
                   <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Son Full" sortKey="lastBackup" active={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Son Diff" sortKey="lastDiffBackup" active={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
                     <SortHeader label="Oluşturulma" sortKey="createDate" active={sortKey} dir={sortDir} onSort={handleSort} />
                   </th>
                   <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
@@ -428,7 +479,7 @@ export default function SQLPage() {
                   {(serversLoading || dbsLoading) ? (
                     Array.from({ length: 6 }).map((_, i) => (
                       <tr key={i}>
-                        {Array.from({ length: 5 }).map((_, j) => (
+                        {Array.from({ length: 6 }).map((_, j) => (
                           <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
                         ))}
                         <td />
@@ -436,11 +487,11 @@ export default function SQLPage() {
                     ))
                   ) : sorted.length === 0 ? (
                     <ListeBosSatir
-                      sutunSayisi={6}
+                      sutunSayisi={7}
                       toplam={databases.length}
                       bosMesaj="SQL rolündeki sunuculardan henüz veritabanı verisi gelmedi."
                     />
-                  ) : sorted.map((db) => {
+                  ) : sayfali.map((db) => {
                     const stateKey = (db.state ?? "").toUpperCase()
                     return (
                       <tr key={db.uid} className="hover:bg-muted/70 transition-colors">
@@ -451,7 +502,6 @@ export default function SQLPage() {
                             <span className="font-mono font-medium">{db.name}</span>
                           </span>
                         </td>
-                        <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">{db.serverName}</td>
                         <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{formatSize(db.sizeMB)}</td>
                         <td className="px-4 py-1.5 whitespace-nowrap">
                           <span className={cn(
@@ -461,6 +511,8 @@ export default function SQLPage() {
                             {stateKey}
                           </span>
                         </td>
+                        <td className="px-4 py-1.5 whitespace-nowrap"><YedekHucre iso={db.lastBackup} /></td>
+                        <td className="px-4 py-1.5 whitespace-nowrap"><YedekHucre iso={db.lastDiffBackup} /></td>
                         <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{formatDate(db.createDate)}</td>
                         <td className="px-4 py-1.5 text-right whitespace-nowrap">
                           <DropdownMenu>
@@ -493,6 +545,12 @@ export default function SQLPage() {
                 </tbody>
               </table>
             </div>
+            <ListeSayfalama
+              sayfa={dbSayfa}
+              onSayfaChange={setDbSayfa}
+              toplam={sorted.length}
+              sayfaBoyu={DB_SAYFA_BOYU}
+            />
           </ListeKarti>
         </TabsContent>
 
