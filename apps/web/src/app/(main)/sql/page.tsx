@@ -261,20 +261,23 @@ export default function SQLPage() {
 
   /* ── Sunucular yüklendikten sonra veritabanlarını fetch et ── */
   const fetchDatabases = useCallback((servers: SqlServerItem[]) => {
-    const online = servers.filter((s) => s.isOnline)
-    if (online.length === 0) {
-      setDbHata(
-        servers.length === 0
-          ? "SQL rolünde sunucu görünmüyor — tanımlı değilse Sunucular sayfasından ekleyin, tanımlıysa oturum/yetkinizi kontrol edin."
-          : "SQL sunucusu çevrimdışı görünüyor — agent'tan son 3 dakikadır rapor gelmemiş.",
-      )
+    if (servers.length === 0) {
+      setDbHata("SQL rolünde sunucu görünmüyor — tanımlı değilse Sunucular sayfasından ekleyin, tanımlıysa oturum/yetkinizi kontrol edin.")
       setDatabases([])
       return
     }
+
+    /* `isOnline`a GORE ELEME YAPILMIYOR, bilerek. O bayrak poller'in bellekteki
+       agent kaydindan geliyor; poller dev'de kapali (ENABLE_POLLER) ve o zaman
+       DB'deki `status` sutununa dusuyor -- orada hepsi 'offline' yaziyor.
+       Sonuc: SQL sunucusu gayet erisilebilirken sayfa hic sorgu atmadan bos
+       kaliyordu. Artik deneniyor; gercekten erisilemiyorsa zaten hata donuyor
+       ve sebebi asagida yaziliyor. */
     setDbHata(null)
     setDbsLoading(true)
+    const hedefler = servers
     Promise.allSettled(
-      online.map((srv) =>
+      hedefler.map((srv) =>
         fetch(`/api/setup/sql-servers/${encodeURIComponent(srv.id)}/databases`)
           .then((r) => r.json())
           .then((data: SqlDatabasesResponse | { error: string }) => ({ srv, data })),
