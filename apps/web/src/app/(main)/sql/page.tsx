@@ -222,6 +222,10 @@ export default function SQLPage() {
   const [sqlServers,     setSqlServers]     = useState<SqlServerItem[]>([])
   const [serversLoading, setServersLoading] = useState(true)
   const [serversError,   setServersError]   = useState<string | null>(null)
+  /* Liste bos kaldiginda SEBEBI soylemek icin. Onceden her arizada ayni
+     "veri gelmedi" mesaji cikiyordu: sunucu cevrimdisi mi, yetki mi yok,
+     SA kimligi mi eksik, sorgu mu hata verdi -- hicbiri anlasilmiyordu. */
+  const [dbHata,         setDbHata]         = useState<string | null>(null)
 
   /* ── Veritabanları (tüm sunuculardan düzleştirilmiş) ── */
   const [databases,   setDatabases]   = useState<FlatDb[]>([])
@@ -258,8 +262,16 @@ export default function SQLPage() {
   /* ── Sunucular yüklendikten sonra veritabanlarını fetch et ── */
   const fetchDatabases = useCallback((servers: SqlServerItem[]) => {
     const online = servers.filter((s) => s.isOnline)
-    if (online.length === 0) return
-
+    if (online.length === 0) {
+      setDbHata(
+        servers.length === 0
+          ? "SQL rolünde sunucu görünmüyor — tanımlı değilse Sunucular sayfasından ekleyin, tanımlıysa oturum/yetkinizi kontrol edin."
+          : "SQL sunucusu çevrimdışı görünüyor — agent'tan son 3 dakikadır rapor gelmemiş.",
+      )
+      setDatabases([])
+      return
+    }
+    setDbHata(null)
     setDbsLoading(true)
     Promise.allSettled(
       online.map((srv) =>
@@ -269,10 +281,11 @@ export default function SQLPage() {
       ),
     ).then((results) => {
       const flat: FlatDb[] = []
+      const hatalar: string[] = []
       for (const r of results) {
-        if (r.status !== "fulfilled") continue
+        if (r.status !== "fulfilled") { hatalar.push("Sunucuya ulaşılamadı"); continue }
         const { srv, data } = r.value
-        if ("error" in data) continue
+        if ("error" in data) { hatalar.push(`${srv.name}: ${data.error}`); continue }
         for (const db of data.databases) {
           flat.push({
             ...db,
@@ -283,12 +296,17 @@ export default function SQLPage() {
         }
       }
       setDatabases(flat)
+      setDbHata(flat.length === 0 && hatalar.length > 0 ? hatalar[0] : null)
     }).finally(() => setDbsLoading(false))
   }, [])
 
+  /* Sunucu listesi BOS gelse de fetchDatabases cagriliyor: sebebi yazan tek
+     yer orasi. Eskiden bos listede hic cagrilmiyordu ve ekranda ayirt
+     edilemeyen genel bir "veri gelmedi" mesaji kaliyordu. */
   useEffect(() => {
-    if (sqlServers.length > 0) fetchDatabases(sqlServers)
-  }, [sqlServers, fetchDatabases])
+    if (serversLoading) return
+    fetchDatabases(sqlServers)
+  }, [sqlServers, serversLoading, fetchDatabases])
 
   /* ── İlk online sunucuyu editörde varsayılan seç ── */
   useEffect(() => {
@@ -489,7 +507,10 @@ export default function SQLPage() {
                     <ListeBosSatir
                       sutunSayisi={7}
                       toplam={databases.length}
-                      bosMesaj="SQL rolündeki sunuculardan henüz veritabanı verisi gelmedi."
+                      bosMesaj={
+                        serversError ?? dbHata ??
+                        "SQL rolündeki sunuculardan henüz veritabanı verisi gelmedi."
+                      }
                     />
                   ) : sayfali.map((db) => {
                     const stateKey = (db.state ?? "").toUpperCase()
