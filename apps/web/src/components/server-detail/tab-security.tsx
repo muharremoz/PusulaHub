@@ -12,18 +12,17 @@ interface Props {
 export function TabSecurity({ security, roles }: Props) {
   if (!security) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] flex flex-col items-center justify-center py-16 gap-3"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           <ShieldAlert className="size-8 text-muted-foreground/50" />
           <p className="text-[11px] text-muted-foreground">
             Güvenlik verisi henüz alınamadı
           </p>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     );
   }
 
@@ -32,13 +31,13 @@ export function TabSecurity({ security, roles }: Props) {
       {/* Firewall status + Roles — 2 column */}
       <div className="grid grid-cols-2 gap-3">
         {/* Firewall Status */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px]"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px]"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                 Güvenlik Duvarı
               </span>
             </div>
@@ -52,7 +51,7 @@ export function TabSecurity({ security, roles }: Props) {
                 <span
                   className={cn(
                     "text-[12px] font-semibold",
-                    security.firewall.enabled ? "text-emerald-600" : "text-red-500"
+                    security.firewall.enabled ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
                   )}
                 >
                   {security.firewall.enabled ? "Etkin" : "Devre Dışı"}
@@ -63,17 +62,16 @@ export function TabSecurity({ security, roles }: Props) {
               </div>
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
 
         {/* Server Roles */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px]"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px]"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                 Sunucu Rolleri
               </span>
             </div>
@@ -83,7 +81,7 @@ export function TabSecurity({ security, roles }: Props) {
                   {roles.map((role) => (
                     <span
                       key={role}
-                      className="inline-flex items-center gap-1 text-[10px] font-medium bg-muted/50 text-muted-foreground px-2 py-1 rounded-[4px]"
+                      className="inline-flex items-center gap-1 text-[10px] font-medium bg-muted/50 text-muted-foreground px-2 py-1 rounded-[5px]"
                     >
                       <ServerCog className="size-3" />
                       {role}
@@ -97,20 +95,19 @@ export function TabSecurity({ security, roles }: Props) {
               )}
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
       </div>
 
       {/* Adapters + Ports — 2 column */}
       <div className="grid grid-cols-2 gap-3">
         {/* Network Adapters */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px]"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px]"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                 Ağ Adaptörleri
               </span>
             </div>
@@ -119,7 +116,7 @@ export function TabSecurity({ security, roles }: Props) {
                 <div key={adapter.name} className="px-3 py-3 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium">{adapter.name}</span>
-                    <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium">
+                    <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium">
                       {adapter.status}
                     </span>
                   </div>
@@ -141,17 +138,16 @@ export function TabSecurity({ security, roles }: Props) {
               ))}
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
 
         {/* Open Ports */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px]"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px]"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                 Açık Portlar
               </span>
             </div>
@@ -159,7 +155,7 @@ export function TabSecurity({ security, roles }: Props) {
               {["Port", "Protokol", "Süreç", "PID"].map((h) => (
                 <span
                   key={h}
-                  className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
+                  className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase"
                 >
                   {h}
                 </span>
@@ -169,7 +165,7 @@ export function TabSecurity({ security, roles }: Props) {
               {security.ports.map((port) => (
                 <div
                   key={`${port.port}-${port.protocol}`}
-                  className="grid grid-cols-[60px_60px_1fr_60px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                  className="grid grid-cols-[60px_60px_1fr_60px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
                 >
                   <span className="text-[11px] font-mono font-semibold tabular-nums">{port.port}</span>
                   <span className="text-[10px] text-muted-foreground">{port.protocol}</span>
@@ -181,18 +177,17 @@ export function TabSecurity({ security, roles }: Props) {
               ))}
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
       </div>
 
       {/* Shares — full width */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px]"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px]"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
               Paylaşılan Klasörler
             </span>
           </div>
@@ -200,7 +195,7 @@ export function TabSecurity({ security, roles }: Props) {
             {["Paylaşım Adı", "Yol", "Erişim"].map((h) => (
               <span
                 key={h}
-                className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
+                className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase"
               >
                 {h}
               </span>
@@ -210,7 +205,7 @@ export function TabSecurity({ security, roles }: Props) {
             {security.shares.map((share) => (
               <div
                 key={share.name}
-                className="grid grid-cols-[120px_1fr_1fr] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                className="grid grid-cols-[120px_1fr_1fr] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
               >
                 <span className="text-[11px] font-mono font-medium">{share.name}</span>
                 <span className="text-[11px] font-mono text-muted-foreground truncate">
@@ -221,17 +216,16 @@ export function TabSecurity({ security, roles }: Props) {
             ))}
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
 
       {/* Firewall Rules — full width */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px]"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px]"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
               Güvenlik Duvarı Kuralları
             </span>
           </div>
@@ -241,7 +235,7 @@ export function TabSecurity({ security, roles }: Props) {
             {["Kural Adı", "Yön", "Eylem", "Durum"].map((h) => (
               <span
                 key={h}
-                className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase"
+                className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase"
               >
                 {h}
               </span>
@@ -252,14 +246,14 @@ export function TabSecurity({ security, roles }: Props) {
             {security.firewallRules.map((rule, i) => (
               <div
                 key={i}
-                className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                className="grid grid-cols-[1fr_60px_60px_50px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
               >
                 <span className="text-[11px] truncate">{rule.name}</span>
                 <span className="text-[10px] text-muted-foreground">{rule.direction}</span>
                 <span
                   className={cn(
                     "text-[10px] font-medium",
-                    rule.action === "Allow" ? "text-emerald-600" : "text-red-500"
+                    rule.action === "Allow" ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"
                   )}
                 >
                   {rule.action === "Allow" ? "İzin Ver" : "Engelle"}
@@ -279,8 +273,7 @@ export function TabSecurity({ security, roles }: Props) {
             ))}
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     </div>
   );
 }

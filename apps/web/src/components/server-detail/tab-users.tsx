@@ -71,15 +71,14 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
 
   if (allUsers.length === 0) {
     return (
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] px-3 py-12 text-center"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] px-3 py-12 text-center"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           <p className="text-[11px] text-muted-foreground">Kullanıcı verisi henüz alınamadı.</p>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
     );
   }
 
@@ -87,7 +86,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
     <div className="space-y-3">
       {/* Local kullanıcı uyarısı */}
       {isLocal && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-[6px] bg-amber-50 border border-amber-200 text-amber-800">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-[5px] bg-amber-500/15 border border-amber-500/25 text-amber-800">
           <Info className="size-3.5 shrink-0" />
           <span className="text-[11px]">
             Bu sunucu Active Directory rolü taşımıyor. Aşağıda <span className="font-semibold">yerel kullanıcılar</span> listeleniyor.
@@ -102,32 +101,31 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
           { label: "Aktif", value: activeCount },
           { label: "Devre Dışı", value: disabledCount },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-            <div className="rounded-[4px] px-3 py-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase block mb-1">{label}</span>
+          <div key={label} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+            <div className="rounded-[5px] px-3 py-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase block mb-1">{label}</span>
               <span className="text-2xl font-bold">{value}</span>
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
         ))}
       </div>
 
       {/* List */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="rounded-[4px]" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+        <div className="rounded-[5px]" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
           {/* Toolbar */}
-          <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center gap-3">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase flex-1">
+          <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center gap-3">
+            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">
               {isAD ? "AD Kullanıcıları" : "Yerel Kullanıcılar"}
             </span>
-            <div className="flex items-center rounded-[8px] p-0.5" style={{ backgroundColor: "#eef3ff" }}>
+            <div className="flex items-center rounded-[8px] p-0.5" style={{ backgroundColor: "var(--section-bg)" }}>
               {filters.map(({ key, label }) => (
                 <button
                   key={key}
                   onClick={() => setStatusFilter(key)}
                   className={cn(
-                    "rounded-[6px] text-[10px] px-2.5 py-1 font-medium transition-colors",
-                    statusFilter === key ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                    "rounded-[5px] text-[10px] px-2.5 py-1 font-medium transition-colors",
+                    statusFilter === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
                   )}
                 >
                   {label}
@@ -145,7 +143,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
           {/* Column headers */}
           <div className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
             {["Kullanıcı", "Görünen Ad", isAD ? "Firma" : "Açıklama", "Son Giriş", "Durum"].map((h) => (
-              <span key={h} className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{h}</span>
+              <span key={h} className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{h}</span>
             ))}
             <span />
           </div>
@@ -155,7 +153,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
             {filtered.map((user) => (
               <div
                 key={user.username}
-                className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
+                className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
               >
                 <span className="text-[11px] font-mono truncate">{user.username}</span>
                 <span className="text-[11px] truncate">{user.displayName}</span>
@@ -165,17 +163,17 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
                 <span className="text-[10px] text-muted-foreground">{user.lastLogin}</span>
                 <div className="flex items-center gap-1.5">
                   <span className={cn("size-1.5 rounded-full shrink-0", user.enabled ? "bg-emerald-500" : "bg-muted-foreground")} />
-                  <span className={cn("text-[10px]", user.enabled ? "text-emerald-700" : "text-muted-foreground")}>
+                  <span className={cn("text-[10px]", user.enabled ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>
                     {user.enabled ? "Aktif" : "Devre Dışı"}
                   </span>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+                    <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
                       <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-[6px]">
+                  <DropdownMenuContent align="end" className="rounded-[5px]">
                     <DropdownMenuItem className="text-xs cursor-pointer">
                       <Key className="size-3.5 mr-2" />
                       Şifre Sıfırla
@@ -202,8 +200,7 @@ export function TabUsers({ users, localUsers, firmaMap }: Props) {
             )}
           </div>
         </div>
-        <div className="h-2" />
-      </div>
+        </div>
 
       {/* Devre Dışı / Etkinleştir AlertDialog */}
       <AlertDialog open={!!toggleTarget} onOpenChange={(open) => !open && setToggleTarget(null)}>

@@ -14,6 +14,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { Button, buttonVariants } from "@/components/ui/button"
+import { Combobox } from "@/components/ui/combobox"
 
 function Calendar({
   className,
@@ -41,7 +42,7 @@ function Calendar({
       captionLayout={captionLayout}
       formatters={{
         formatMonthDropdown: (date) =>
-          date.toLocaleString("default", { month: "short" }),
+          date.toLocaleString("tr-TR", { month: "long" }),
         ...formatters,
       }}
       classNames={{
@@ -52,17 +53,20 @@ function Calendar({
         ),
         month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
         nav: cn(
-          "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
+          // pointer-events-none: nav tam genişlikte ve month_caption'ın üstünde
+          // duruyor; boş orta alanı ay/yıl seçicilerinin tıklamasını yutuyordu.
+          // Tıklamayı yalnız ok butonları yakalar (aşağıda pointer-events-auto).
+          "pointer-events-none absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
           defaultClassNames.nav
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_next
         ),
         month_caption: cn(
@@ -74,7 +78,7 @@ function Calendar({
           defaultClassNames.dropdowns
         ),
         dropdown_root: cn(
-          "relative rounded-md border border-input shadow-xs has-focus:border-ring has-focus:ring-[3px] has-focus:ring-ring/50",
+          "relative rounded-[5px]",
           defaultClassNames.dropdown_root
         ),
         dropdown: cn(
@@ -163,6 +167,30 @@ function Calendar({
           )
         },
         DayButton: CalendarDayButton,
+        // Ay/yıl seçicileri react-day-picker'da native <select> — proje kuralı
+        // native seçim öğesi kullanmamak (bkz. CLAUDE.md "UI primitive
+        // kuralları"). Aramalı Combobox ile değiştiriyoruz.
+        Dropdown: ({ options, value, onChange, disabled, className: dropdownCn }) => {
+          const secenekler = (options ?? []).filter((o) => !o.disabled)
+          return (
+            <Combobox
+              items={secenekler}
+              getKey={(o) => String(o.value)}
+              getLabel={(o) => o.label}
+              value={value != null ? String(value) : undefined}
+              onChange={(v) => {
+                // DayPicker select onChange bekliyor; sentetik event yeterli.
+                onChange?.({ target: { value: v } } as unknown as React.ChangeEvent<HTMLSelectElement>)
+              }}
+              disabled={disabled}
+              placeholder="—"
+              searchPlaceholder="Ara…"
+              className={cn("h-7 w-fit shrink-0 gap-1 border-0 bg-transparent px-1.5 text-[13px] font-medium whitespace-nowrap hover:bg-muted/60 [&>span]:flex-none [&>span]:overflow-visible", dropdownCn)}
+              contentClassName="w-36 min-w-0"
+              maxListHeight="max-h-56"
+            />
+          )
+        },
         WeekNumber: ({ children, ...props }) => {
           return (
             <td {...props}>

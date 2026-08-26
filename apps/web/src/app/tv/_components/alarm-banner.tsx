@@ -44,7 +44,7 @@ export function AlarmBanner({ monitors, since, now }: Props) {
   return (
     <div className="pointer-events-none absolute left-1/2 top-7 z-30 -translate-x-1/2 select-none">
       <div
-        className="tv-alarm flex items-center gap-4 rounded-[6px] px-5 py-3"
+        className="tv-alarm flex items-center gap-4 rounded-[5px] px-5 py-3"
         style={{
           background: "rgba(24,10,12,0.86)",
           border: `1px solid ${DOWN}`,

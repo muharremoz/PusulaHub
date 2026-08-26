@@ -8,7 +8,7 @@ export default function UnauthorizedPage() {
           <Lock className="size-6 text-zinc-500" />
         </div>
         <h1 className="text-xl font-semibold tracking-tight">Erişim yetkiniz yok</h1>
-        <p className="text-[13px] text-zinc-600 leading-relaxed">
+        <p className="text-[13px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
           Hub'da görüntüleyebileceğiniz hiçbir modüle yetkilendirilmemişsiniz.
           Lütfen yöneticinizle iletişime geçin.
         </p>

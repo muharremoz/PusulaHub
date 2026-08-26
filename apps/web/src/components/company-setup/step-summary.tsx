@@ -30,8 +30,8 @@ interface Props {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
       </div>
       <div className="divide-y divide-border/40">{children}</div>
     </div>
@@ -167,7 +167,7 @@ export function StepSummary({
         {operations.map((op, i) => (
           <div key={i} className="flex items-start gap-2.5 px-3 py-2">
             <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-              <Check className="size-2.5 text-emerald-700" strokeWidth={3} />
+              <Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} />
             </span>
             <span className="text-[11px] text-muted-foreground">{op}</span>
           </div>

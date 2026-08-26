@@ -90,6 +90,11 @@ let _timer: ReturnType<typeof setInterval> | null = null
 
 export function startFirmaSync(): void {
   if (_timer) return
+  /* Salt-okunur mod (POLLER_READONLY=1) — lokalde canlı DB'ye firma yazılmaz. */
+  if (process.env.POLLER_READONLY === "1") {
+    console.log("[FirmaSync] POLLER_READONLY=1 — atlandi (DB'ye yazilmaz)")
+    return
+  }
   console.log("[FirmaSync] Başlatıldı — 5 dk aralıkla")
   setTimeout(syncFirmalar, 10000)
   _timer = setInterval(syncFirmalar, SYNC_INTERVAL_MS)

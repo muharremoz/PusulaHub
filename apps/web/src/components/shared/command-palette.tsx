@@ -11,38 +11,39 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import {
-  Category2, Monitor, Building, Messages2, Kanban, Calendar, Note1,
-  Setting2, Data2, Global, SecuritySafe, DocumentText, Routing2,
-  Profile2User, KeySquare, Notification, Setting, Activity,
-} from "iconsax-reactjs"
+import { Building2, Database, Globe, Network } from "lucide-react"
+import { Icon } from "@/components/shared/icon"
+import type { IconName } from "@/components/shared/icon-registry"
 
-type NavEntry = { group: string; label: string; url: string; Icon: React.ComponentType<Record<string, unknown>>; keywords?: string }
+/**
+ * `icon` ya registry adı (animasyonlu, lucide-animated) ya da statik lucide
+ * bileşeni — proje kuralı: animasyonlu muadili olmayan ikonlarda lucide fallback.
+ */
+type NavIcon  = IconName | React.ComponentType<{ className?: string }>
+type NavEntry = { group: string; label: string; url: string; icon: NavIcon; keywords?: string }
 
 const NAV: NavEntry[] = [
-  { group: "Genel", label: "Dashboard",   url: "/dashboard",   Icon: Category2 },
-  { group: "Genel", label: "Sunucular",   url: "/servers",     Icon: Monitor, keywords: "server" },
-  { group: "Genel", label: "İzleme",      url: "/monitoring",  Icon: Activity, keywords: "monitoring izleme" },
-  { group: "Genel", label: "Firmalar",    url: "/companies",   Icon: Building, keywords: "firma company" },
-  { group: "Genel", label: "Mesajlar",    url: "/messages",    Icon: Messages2, keywords: "mesaj message" },
-  { group: "Genel", label: "Projeler",    url: "/projects",    Icon: Kanban, keywords: "proje project" },
-  { group: "Genel", label: "Takvim",      url: "/calendar",    Icon: Calendar },
-  { group: "Genel", label: "Not Defteri", url: "/notes",       Icon: Note1 },
-  { group: "Servisler", label: "Pusula Hizmetleri",  url: "/services",       Icon: Setting2 },
-  { group: "Servisler", label: "Demo Veritabanları", url: "/demo-databases", Icon: Data2, keywords: "db database" },
-  { group: "Servisler", label: "IIS",                url: "/iis",            Icon: Global },
-  { group: "Servisler", label: "Active Directory",   url: "/ad",             Icon: SecuritySafe, keywords: "ad active directory" },
-  { group: "Servisler", label: "SQL",                url: "/sql",            Icon: DocumentText },
-  { group: "Servisler", label: "Port Yönetimi",      url: "/ports",          Icon: Routing2 },
-  { group: "Yönetim", label: "Kullanıcılar", url: "/users",    Icon: Profile2User, keywords: "user" },
-  { group: "Yönetim", label: "Şifre Kasası", url: "/vault",    Icon: KeySquare, keywords: "password vault" },
-  { group: "Yönetim", label: "Ayarlar",      url: "/settings", Icon: Setting },
-  { group: "Geliştirici", label: "Mesaj Önizleme", url: "/preview", Icon: Notification },
+  { group: "Genel", label: "Dashboard",   url: "/dashboard",   icon: "layers" },
+  { group: "Genel", label: "Sunucular",   url: "/servers",     icon: "monitor-check", keywords: "server" },
+  { group: "Genel", label: "Firmalar",    url: "/companies",   icon: Building2, keywords: "firma company" },
+  { group: "Genel", label: "Mesajlar",    url: "/messages",    icon: "message-square", keywords: "mesaj message" },
+  { group: "Genel", label: "Not Defteri", url: "/notes",       icon: "square-pen" },
+  { group: "Servisler", label: "Pusula Hizmetleri",  url: "/services",       icon: "settings" },
+  { group: "Servisler", label: "Demo Veritabanları", url: "/demo-databases", icon: Database, keywords: "db database" },
+  { group: "Servisler", label: "IIS",                url: "/iis",            icon: Globe },
+  { group: "Servisler", label: "Active Directory",   url: "/ad",             icon: "shield-check", keywords: "ad active directory" },
+  { group: "Servisler", label: "SQL",                url: "/sql",            icon: "file-text" },
+  { group: "Servisler", label: "Port Yönetimi",      url: "/ports",          icon: Network },
+  { group: "Yönetim", label: "Yetkiler", url: "/permissions", icon: "users", keywords: "user kullanıcı yetki izin" },
+  { group: "Yönetim", label: "Şifre Kasası", url: "/vault",    icon: "lock-keyhole", keywords: "password vault" },
+  { group: "Yönetim", label: "Ayarlar",      url: "/settings", icon: "settings" },
+  { group: "Geliştirici", label: "Mesaj Önizleme", url: "/preview", icon: "bell" },
 ]
 
-const ItemIcon = ({ I }: { I: React.ComponentType<Record<string, unknown>> }) => (
-  <I size="16" color="currentColor" variant="TwoTone" />
-)
+const ItemIcon = ({ icon }: { icon: NavIcon }) =>
+  typeof icon === "string"
+    ? <Icon name={icon} size={16} className="inline-flex" />
+    : (() => { const I = icon; return <I className="size-4" /> })()
 
 interface ServerHit { id: string; slug?: string; name: string; ip: string }
 interface CompanyHit { id: string; firkod: string; firma: string }
@@ -122,7 +123,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   value={`${n.label} ${n.keywords ?? ""} ${n.url}`}
                   onSelect={() => go(n.url)}
                 >
-                  <ItemIcon I={n.Icon} />
+                  <ItemIcon icon={n.icon} />
                   <span>{n.label}</span>
                   <span className="ml-auto text-[10px] text-muted-foreground">{n.url}</span>
                 </CommandItem>
@@ -141,7 +142,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   value={`sunucu ${s.name} ${s.ip}`}
                   onSelect={() => go(`/servers/${s.slug ?? s.id}`)}
                 >
-                  <ItemIcon I={Monitor} />
+                  <ItemIcon icon="monitor-check" />
                   <span>{s.name}</span>
                   <span className="ml-auto text-[10px] font-mono text-muted-foreground">{s.ip}</span>
                 </CommandItem>
@@ -160,7 +161,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
                   value={`firma ${c.firkod} ${c.firma}`}
                   onSelect={() => go(`/companies/${c.firkod}`)}
                 >
-                  <ItemIcon I={Building} />
+                  <ItemIcon icon={Building2} />
                   <span>{c.firma}</span>
                   <span className="ml-auto text-[10px] text-muted-foreground">{c.firkod}</span>
                 </CommandItem>

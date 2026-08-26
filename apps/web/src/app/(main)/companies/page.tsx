@@ -20,19 +20,19 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
-import { Checkbox } from "@muharremoz/pusula-ui";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import {  } from "@muharremoz/pusula-ui";
+import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import type { Top5Company } from "@/app/api/companies/top5/route";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
 const OldDataRestoreSheet = dynamic(() => import("@/components/companies/old-data-restore-sheet").then((m) => m.OldDataRestoreSheet), { ssr: false });
 
@@ -114,77 +114,26 @@ function firmaIsActive(f: FirmaCompany): boolean {
 }
 // Etiket metninden deterministik renk seç (her etiket hep aynı renk)
 const TAG_PALETTE = [
-  "bg-blue-50 text-blue-700 border-blue-200",
-  "bg-violet-50 text-violet-700 border-violet-200",
-  "bg-amber-50 text-amber-700 border-amber-200",
-  "bg-teal-50 text-teal-700 border-teal-200",
-  "bg-rose-50 text-rose-700 border-rose-200",
-  "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/25",
+  "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  "bg-teal-500/15 text-teal-700 dark:text-teal-400 border-teal-500/25",
+  "bg-rose-500/15 text-rose-700 dark:text-rose-400 border-rose-500/25",
+  "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400 border-indigo-500/25",
   "bg-cyan-50 text-cyan-700 border-cyan-200",
-  "bg-orange-50 text-orange-700 border-orange-200",
+  "bg-orange-500/15 text-orange-700 dark:text-orange-400 border-orange-500/25",
 ]
 function tagColor(tag: string): string {
   let h = 0
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import {
-  Building2,
-  Users,
-  Server,
-  Mail,
-  Phone,
-  User,
-  Calendar,
-  Cpu,
-  MemoryStick,
-  HardDrive,
-  CheckCircle2,
-  XCircle,
-  Briefcase,
-  StickyNote,
-  Activity,
-  Database,
-  MoreVertical,
-  LogOut,
-  KeyRound,
-  Ban,
-  Globe,
-  Info,
-  Search,
-  ChevronsUpDown,
-  ChevronLeft,
-  Play,
-  Square,
-  RotateCw,
-  Trash2,
-  Download,
-  Upload,
-  Terminal,
-  Settings2,
-  ToggleLeft,
-  ToggleRight,
-  Copy,
-  CheckCheck,
-  X,
-  Bookmark,
-  Trash,
-  Save,
-  Bug,
-  Plus,
-  Check,
-  Eye,
-  EyeOff,
-  RefreshCw,
-  UserPlus,
-  ArrowUp,
-  ArrowDown,
-  Tag as TagIcon,
-} from "lucide-react";
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
+import { Checkbox } from "@/components/shared/form"
 
 function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
@@ -269,9 +218,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
   }, [yogunluk]);
 
   const scoreColor =
-    yogunluk >= 80 ? { text: "text-red-600",    primary: "#ef4444" } :
-    yogunluk >= 60 ? { text: "text-amber-600",  primary: "#f59e0b" } :
-                     { text: "text-emerald-600", primary: "#10b981" };
+    yogunluk >= 80 ? { text: "text-red-600 dark:text-red-400",    primary: "#ef4444" } :
+    yogunluk >= 60 ? { text: "text-amber-600 dark:text-amber-400",  primary: "#f59e0b" } :
+                     { text: "text-emerald-600 dark:text-emerald-400", primary: "#10b981" };
 
   const metrics = [
     { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  quota: mq?.cpuPct ? `%${mq.cpuPct}`   : null },
@@ -380,7 +329,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
             <span className="text-[13px] font-semibold tabular-nums">
               {(d.history30d.dbStartMB / 1024).toFixed(1)} → {(d.history30d.dbEndMB / 1024).toFixed(1)} GB
             </span>
-            <span className={`text-[9px] ${d.history30d.dbGrowthPct >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+            <span className={`text-[9px] ${d.history30d.dbGrowthPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
               {d.history30d.dbGrowthPct >= 0 ? "+" : ""}{d.history30d.dbGrowthPct}%
             </span>
           </div>
@@ -406,7 +355,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
             { label: "Disk Kullanımı", icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk.toFixed(1)} / ${d.quotaDisk} GB` },
             { label: "Veritabanı",     icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },
           ].map((m) => {
-            const color = m.pct >= 80 ? "text-red-600" : m.pct >= 60 ? "text-amber-600" : "text-emerald-600";
+            const color = m.pct >= 80 ? "text-red-600 dark:text-red-400" : m.pct >= 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
             const bar   = m.pct >= 80 ? "bg-red-500"   : m.pct >= 60 ? "bg-amber-400"   : "bg-emerald-500";
             return (
               <div key={m.label} className="rounded-[5px] border border-border/40 px-3 py-2">
@@ -434,7 +383,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
               ({cpuPct} + {ramPct} + {diskPct} + {dbPct}) ÷ 4
             </span>
             <span className={`text-base font-bold tabular-nums ${
-              yogunluk >= 80 ? "text-red-600" : yogunluk >= 60 ? "text-amber-600" : "text-emerald-600"
+              yogunluk >= 80 ? "text-red-600 dark:text-red-400" : yogunluk >= 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
             }`}>= %{yogunluk}</span>
           </div>
         </div>
@@ -474,8 +423,8 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
           ))}
         </div>
         <div className="flex justify-end gap-2 mt-3">
-          <Button variant="outline" size="sm" onClick={() => setQuotaOpen(false)} disabled={quotaSaving} className="rounded-[5px] h-8 text-[11px]">İptal</Button>
-          <Button size="sm" onClick={saveQuota} disabled={quotaSaving} className="rounded-[5px] h-8 text-[11px]">
+          <Button variant="outline" size="sm" onClick={() => setQuotaOpen(false)} disabled={quotaSaving} className="rounded-[5px] h-8 text-[13px]">İptal</Button>
+          <Button size="sm" onClick={saveQuota} disabled={quotaSaving} className="rounded-[5px] h-8 text-[13px]">
             {quotaSaving ? "Kaydediliyor…" : "Kaydet"}
           </Button>
         </div>
@@ -486,9 +435,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 }
 
 const statusConfig = {
-  active:    { label: "Aktif",          variant: "online"  as const, color: "bg-emerald-50 text-emerald-700 border-emerald-200/60" },
-  suspended: { label: "Askıya Alındı",  variant: "offline" as const, color: "bg-red-50 text-red-700 border-red-200/60" },
-  trial:     { label: "Deneme",         variant: "warning" as const, color: "bg-amber-50 text-amber-700 border-amber-200/60" },
+  active:    { label: "Aktif",          variant: "online"  as const, color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25/60" },
+  suspended: { label: "Askıya Alındı",  variant: "offline" as const, color: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25/60" },
+  trial:     { label: "Deneme",         variant: "warning" as const, color: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25/60" },
 };
 
 /**
@@ -496,14 +445,6 @@ const statusConfig = {
  * "FRANSA ELİT" ile "elit" eşleşsin diye: İ/I/ı → i, ş→s, ç→c, ğ→g, ö→o, ü→u.
  * (JS toLowerCase() "İ"yi "i̇" = i + combining dot yapıp aramayı bozuyordu.)
  */
-function foldTr(s: string): string {
-  return (s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/ı/g, "i");
-}
-
 export default function CompaniesPage() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -514,20 +455,29 @@ export default function CompaniesPage() {
   const userRole = session?.user?.role;
   const canViewCompanyDetail = userRole === "admin" || (perms["company-detail"] ?? "none") !== "none";
   const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
-  const [top5, setTop5] = useState<Top5Company[]>([]);
-  const [top5Loading, setTop5Loading] = useState(true);
   const [selectedFirma, setSelectedFirma] = useState<FirmaCompany | null>(null);
   // Firma etiketleri
   const [firmaTags, setFirmaTags] = useState<string[]>([]);
   const [allTags, setAllTags] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [tagInput, setTagInput] = useState("");
+  // Panik: firmanın erişimini tek hamlede kesme
+  const [panicOpen, setPanicOpen] = useState(false);
+  const [panicBusy, setPanicBusy] = useState(false);
   const [tagBusy, setTagBusy] = useState(false);
   const [apiCompanies, setApiCompanies] = useState<FirmaCompany[]>([]);
   const [apiLoading, setApiLoading] = useState(true);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [listSearch, setListSearch] = useState("");
+
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [firmaFiltre,  setFirmaFiltre]  = useState("");
+  const [kodFiltre,    setKodFiltre]    = useState("");
+  const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
+  const [lisansFiltre, setLisansFiltre] = useState<TarihFiltreDeger>({ mode: "tum" });
+  const [kullaniciFiltre, setKullaniciFiltre] = useState<SayiAralikDeger>({});
+
+  /* Sayfalama — sayfa başına 25 kayıt. */
+  const FIRMA_SAYFA_BOYU = 25;
+  const [firmaSayfa, setFirmaSayfa] = useState(1);
   const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
@@ -989,22 +939,22 @@ export default function CompaniesPage() {
   /**
    * Firma listesini Excel'e aktar.
    *
-   * EKRANDA NE VARSA O aktarılır: arama/filtre uygulanmış ve seçili sıraya
-   * göre dizilmiş liste (`listSorted`). "Gördüğüm tablo ile dosya farklı"
-   * şaşkınlığı olmasın diye tüm firmalar değil.
+   * EKRANDA NE VARSA O aktarılır: arama + sütun başlığı filtreleri uygulanmış
+   * ve seçili sıraya göre dizilmiş liste (`listeFiltreli`). "Gördüğüm tablo ile
+   * dosya farklı" şaşkınlığı olmasın diye tüm firmalar değil.
    */
   async function exportCompanyList() {
-    if (!listSorted.length) return
+    if (!listeFiltreli.length) return
     const XLSX = await import("xlsx")
 
-    const header = ["Firma", "Firma Kodu", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
-    const rows = listSorted.map((c) => [
-      c.firma,
+    const header = ["Firma Kodu", "Firma", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
+    const rows = listeFiltreli.map((c) => [
       c.firkod,
+      c.firma,
       c.email || "",
       c.phone || "",
       c.userCount,
-      c.lisansBitis || "",
+      lisansGoster(c.lisansBitis),
       firmaIsActive(c) ? "Aktif" : "Süresi Doldu",
     ])
 
@@ -1133,14 +1083,6 @@ tr:nth-child(even) td{background:#fafafa}
   }, [])
 
   useEffect(() => {
-    fetch("/api/companies/top5")
-      .then((r) => r.ok ? r.json() : Promise.reject(r))
-      .then((data: Top5Company[]) => setTop5(Array.isArray(data) ? data : []))
-      .catch(() => setTop5([]))
-      .finally(() => setTop5Loading(false))
-  }, [])
-
-  useEffect(() => {
     if (!selectedFirma) return
     // company-detail yetkisi olmayan kullanıcılar için detay tablarını fetch etme —
     // hepsi 403 döner ve gereksiz yük olur. Bu kullanıcılar firmaya tıklayınca
@@ -1223,8 +1165,6 @@ tr:nth-child(even) td{background:#fafafa}
     // bilgileri artık yalnız detay sayfasındaki "Erişim" sekmesinde.
     if (!canViewCompanyDetail) return
     setSelectedFirma(f)
-    setSearchOpen(false)
-    setSearchQuery("")
     router.replace(`/companies?firkod=${encodeURIComponent(f.firkod)}`, { scroll: false })
   }
 
@@ -1327,12 +1267,58 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  function clearSelection() {
+  /**
+   * Panik: firmanın AD hesaplarını devre dışı bırakır ve açık oturumlarını
+   * kapatır. Yıkıcı olduğu için yalnız AlertDialog onayından sonra çağrılır.
+   */
+  async function runPanic() {
+    if (!selectedFirma) return
+    setPanicBusy(true)
+    const id = toast.loading("Erişim kesiliyor…", { description: selectedFirma.firma })
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/panic`, {
+        method: "POST",
+      })
+      const data = await r.json()
+      if (!r.ok) {
+        toast.error("Panik işlemi başarısız", { id, description: data?.error ?? "Bilinmeyen hata" })
+        return
+      }
+      const ozet = `${data.devreDisi} hesap devre dışı · ${data.kapatilanOturum} oturum kapatıldı`
+      if (data.ok) {
+        toast.success("Firma erişimi kesildi", { id, description: ozet })
+      } else {
+        // Kısmi başarı — ne olduğunu sayılarla birlikte söyle, sessiz geçme.
+        toast.warning("Kısmen tamamlandı", {
+          id,
+          description: `${ozet}. ${(data.hatalar ?? []).join(" ")}`,
+        })
+      }
+      setPanicOpen(false)
+      // Kullanıcı listesi güncel kalsın (hesaplar artık pasif görünmeli).
+      refreshTabUsers()
+    } catch (e) {
+      toast.error("Panik işlemi başarısız", {
+        id,
+        description: e instanceof Error ? e.message : "Bağlantı hatası",
+      })
+    } finally {
+      setPanicBusy(false)
+    }
+  }
+
+  /**
+   * URL'de firkod yoksa seçimi bırak. "Geri" butonu kaldırıldıktan sonra
+   * listeye dönüş yolu sidebar'daki "Firmalar" bağlantısı; o /companies'e
+   * gidiyor ama client-side navigasyonda selectedFirma state'te kalıyordu,
+   * dolayısıyla liste hiç görünmüyordu.
+   */
+  useEffect(() => {
+    if (urlFirkod) return
     setSelectedFirma(null)
     setCompanyDetail(null)
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
-    router.replace(`/companies`, { scroll: false })
-  }
+  }, [urlFirkod])
 
   /**
    * Web hizmetlerinin sunucudaki `Config\Users.xml` içeriğini çeker.
@@ -1761,11 +1747,26 @@ tr:nth-child(even) td{background:#fafafa}
     }
   }
 
-  const apiFiltered = searchQuery.trim()
-    ? apiCompanies.filter((c) => foldTr(c.firma).includes(foldTr(searchQuery))).slice(0, 50)
-    : apiCompanies.slice(0, 50);
-
   // Firma listesi (empty-state) için arama + sıralama
+  /**
+   * lisansBitis iki formatta gelebiliyor: "yyyy-MM-dd" (API) veya "dd.MM.yyyy"
+   * (eski kayıtlar). Filtre ve karşılaştırma için ISO'ya sabitliyoruz.
+   */
+  function lisansIso(s: string): string {
+    if (!s) return "";
+    const p = s.split(".");
+    if (p.length === 3) return `${p[2]}-${p[1].padStart(2, "0")}-${p[0].padStart(2, "0")}`;
+    return s.slice(0, 10);
+  }
+
+  /** Ekranda gg.aa.yyyy — ISO gösterim kullanıcı için okunaksızdı. */
+  function lisansGoster(s: string): string {
+    const iso = lisansIso(s);
+    if (!iso) return "—";
+    const [y, a, g] = iso.split("-");
+    return y && a && g ? `${g}.${a}.${y}` : s;
+  }
+
   function parseLisansDate(s: string): number {
     if (!s) return Number.POSITIVE_INFINITY;
     const parts = s.split(".");
@@ -1776,12 +1777,7 @@ tr:nth-child(even) td{background:#fafafa}
     const d = new Date(s).getTime();
     return isNaN(d) ? Number.POSITIVE_INFINITY : d;
   }
-  const listFiltered = listSearch.trim()
-    ? apiCompanies.filter((c) => {
-        const q = foldTr(listSearch);
-        return foldTr(c.firma).includes(q) || foldTr(c.firkod || "").includes(q);
-      })
-    : apiCompanies.slice();
+  const listFiltered = apiCompanies.slice();
   const listSorted = listFiltered.slice().sort((a, b) => {
     let cmp = 0;
     switch (listSortKey) {
@@ -1799,238 +1795,184 @@ tr:nth-child(even) td{background:#fafafa}
     return listSortDir === "asc" ? cmp : -cmp;
   });
 
+  /* Filtre değişince kullanıcı 3. sayfada boş liste görmesin. */
+  useEffect(() => {
+    setFirmaSayfa(1);
+  }, [firmaFiltre, kodFiltre, durumFiltre, lisansFiltre, kullaniciFiltre]);
+
+  /* Sütun başlığı filtreleri — üstteki serbest arama ile VE (AND) birleşir. */
+  const listeFiltreli = listSorted.filter((c) => {
+    const f = firmaFiltre.trim().toLocaleLowerCase("tr-TR");
+    const k = kodFiltre.trim().toLocaleLowerCase("tr-TR");
+    if (f && !c.firma.toLocaleLowerCase("tr-TR").includes(f)) return false;
+    if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
+    if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
+    if (!tarihUygun(lisansIso(c.lisansBitis), lisansFiltre)) return false;
+    if (kullaniciFiltre.min != null && c.userCount < kullaniciFiltre.min) return false;
+    if (kullaniciFiltre.max != null && c.userCount > kullaniciFiltre.max) return false;
+    return true;
+  });
+
+  /* Ekranda gösterilen sayfa. Excel yine TÜM filtrelenmiş kaydı alır — tek
+     sayfayı değil; "listelenen firmalar" filtre sonucu demek. */
+  const firmaSayfalik = listeFiltreli.slice(
+    (firmaSayfa - 1) * FIRMA_SAYFA_BOYU,
+    firmaSayfa * FIRMA_SAYFA_BOYU,
+  );
+
   return (
     <PageContainer title="Firma Yönetimi" description="Firmaların sunucu kullanım durumları">
-      {/* Company Selector / Header Bar */}
-      <div className="mb-6">
+      {/* Company Selector / Header Bar — firma secili degilken hic render
+          edilmez; bos sarmalayici mb-6 ile listeyi asagi itiyordu. */}
+      <div className={selectedFirma && canViewCompanyDetail ? "mb-3" : undefined}>
         {/* No-perm modunda selectedFirma yalnızca modal'ı beslemek için set
             ediliyor — detay header'ını ve panelini render etme, liste görünür kalsın. */}
         {selectedFirma && canViewCompanyDetail ? (
           /* Seçili firma: kompakt header bar */
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-            <div className="rounded-[4px] px-4 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+            <div className="rounded-[5px] px-4 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
               <div className="flex items-center gap-3">
-                <button
-                  onClick={clearSelection}
-                  className="flex items-center gap-1 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 text-muted-foreground transition-colors shrink-0"
-                >
-                  <ChevronLeft className="h-3.5 w-3.5" />
-                  Geri
-                </button>
-
                 <>
                   <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
-                  <h2 className="text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    {selectedFirma.email && <span className="text-[11px]">{selectedFirma.email}</span>}
-                    {selectedFirma.email && selectedFirma.phone && <span className="text-[10px]">·</span>}
-                    {selectedFirma.phone && <span className="text-[11px] font-mono">{selectedFirma.phone}</span>}
-                    {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && <span className="text-[10px]">·</span>}
-                    {selectedFirma.lisansBitis && <span className="text-[11px]">Lisans: {selectedFirma.lisansBitis}</span>}
-                  </div>
-                  <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${
-                    firmaIsActive(selectedFirma)
-                      ? "text-emerald-700 border-emerald-200 bg-emerald-50"
-                      : "text-red-700 border-red-200 bg-red-50"
-                  }`}>
-                    {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
-                  </span>
 
-                  {/* Firma etiketleri */}
-                  {canViewCompanyDetail && (
-                    <div className="flex items-center gap-1.5">
-                      {firmaTags.map((tag) => (
-                        <span
-                          key={tag}
-                          className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
-                        >
-                          {tag}
-                          <button
-                            onClick={() => removeTag(tag)}
-                            className="opacity-50 hover:opacity-100 transition-opacity"
-                            title="Etiketi kaldır"
-                          >
-                            <X className="h-2.5 w-2.5" />
-                          </button>
-                        </span>
-                      ))}
-
-                      <Popover open={tagPopoverOpen} onOpenChange={(o) => { setTagPopoverOpen(o); if (!o) setTagInput(""); }}>
-                        <PopoverTrigger asChild>
-                          <button
-                            className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-[4px] border border-dashed border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
-                            title="Etiket ekle"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-56 p-0 rounded-[5px]" align="start">
-                          <div className="p-2 border-b border-border/40">
-                            <div className="flex items-center gap-1.5">
-                              <Input
-                                value={tagInput}
-                                onChange={(e) => setTagInput(e.target.value)}
-                                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
-                                placeholder="Yeni etiket yaz..."
-                                maxLength={50}
-                                className="h-7 text-[11px] rounded-[5px]"
-                                autoFocus
-                              />
-                              <Button
-                                size="sm"
-                                disabled={tagBusy || !tagInput.trim()}
-                                onClick={() => addTag(tagInput)}
-                                className="h-7 px-2 rounded-[5px] text-[11px] shrink-0"
+                  {/* Firma adı üstte; e-posta / telefon / lisans altında,
+                      ikonlu ve dikey ayraçlı tek satır. */}
+                  <div className="min-w-0 flex-1">
+                    {/* İlk satır: ad + durum rozeti + etiketler */}
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h2 className="truncate text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
+                      <span className={`shrink-0 inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${
+                        firmaIsActive(selectedFirma)
+                          ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/15"
+                          : "text-red-700 dark:text-red-400 border-red-500/25 bg-red-500/15"
+                      }`}>
+                        {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
+                      </span>
+                        {/* Firma etiketleri */}
+                        {canViewCompanyDetail && (
+                          <div className="flex items-center gap-1.5">
+                            {firmaTags.map((tag) => (
+                              <span
+                                key={tag}
+                                className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
                               >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-                          <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
-                            {(() => {
-                              const suggestions = allTags.filter(
-                                (t) => !firmaTags.some((ft) => ft.toLowerCase() === t.toLowerCase())
-                              )
-                              if (suggestions.length === 0) {
-                                return <p className="text-[10px] text-muted-foreground text-center py-3">Mevcut etiket yok — yukarıdan yeni ekleyin</p>
-                              }
-                              return (
-                                <>
-                                  <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase px-1.5 py-1">Mevcut Etiketler</p>
-                                  {suggestions.map((t) => (
-                                    <button
-                                      key={t}
-                                      onClick={() => addTag(t)}
-                                      disabled={tagBusy}
-                                      className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[4px] hover:bg-muted/50 transition-colors text-left"
+                                {tag}
+                                <button
+                                  onClick={() => removeTag(tag)}
+                                  className="opacity-50 hover:opacity-100 transition-opacity"
+                                  title="Etiketi kaldır"
+                                >
+                                  <X className="h-2.5 w-2.5" />
+                                </button>
+                              </span>
+                            ))}
+
+                            <Popover open={tagPopoverOpen} onOpenChange={(o) => { setTagPopoverOpen(o); if (!o) setTagInput(""); }}>
+                              <PopoverTrigger asChild>
+                                <button
+                                  className="shrink-0 inline-flex items-center justify-center h-5 w-5 rounded-[5px] border border-dashed border-border/70 text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                                  title="Etiket ekle"
+                                >
+                                  <Plus className="h-3 w-3" />
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-56 p-0 rounded-[5px]" align="start">
+                                <div className="p-2 border-b border-border/40">
+                                  <div className="flex items-center gap-1.5">
+                                    <Input
+                                      value={tagInput}
+                                      onChange={(e) => setTagInput(e.target.value)}
+                                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(tagInput); } }}
+                                      placeholder="Yeni etiket yaz..."
+                                      maxLength={50}
+                                      className="h-7 text-[11px] rounded-[5px]"
+                                      autoFocus
+                                    />
+                                    <Button
+                                      size="sm"
+                                      disabled={tagBusy || !tagInput.trim()}
+                                      onClick={() => addTag(tagInput)}
+                                      className="h-7 px-2 rounded-[5px] text-[11px] shrink-0"
                                     >
-                                      <span className={`inline-flex items-center rounded-[4px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
-                                    </button>
-                                  ))}
-                                </>
-                              )
-                            })()}
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="max-h-48 overflow-y-auto p-1" onWheel={(e) => e.stopPropagation()}>
+                                  {(() => {
+                                    const suggestions = allTags.filter(
+                                      (t) => !firmaTags.some((ft) => ft.toLowerCase() === t.toLowerCase())
+                                    )
+                                    if (suggestions.length === 0) {
+                                      return <p className="text-[10px] text-muted-foreground text-center py-3">Mevcut etiket yok — yukarıdan yeni ekleyin</p>
+                                    }
+                                    return (
+                                      <>
+                                        <p className="text-[9px] font-medium text-muted-foreground tracking-wide uppercase px-1.5 py-1">Mevcut Etiketler</p>
+                                        {suggestions.map((t) => (
+                                          <button
+                                            key={t}
+                                            onClick={() => addTag(t)}
+                                            disabled={tagBusy}
+                                            className="w-full flex items-center gap-1.5 px-1.5 py-1 rounded-[5px] hover:bg-muted/70 transition-colors text-left"
+                                          >
+                                            <span className={`inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(t)}`}>{t}</span>
+                                          </button>
+                                        ))}
+                                      </>
+                                    )
+                                  })()}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           </div>
-                        </PopoverContent>
-                      </Popover>
+                        )}
                     </div>
-                  )}
+                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
+                      {selectedFirma.email && (
+                        <span className="inline-flex min-w-0 items-center gap-1">
+                          <Mail className="size-3 shrink-0" />
+                          <span className="truncate">{selectedFirma.email}</span>
+                        </span>
+                      )}
+                      {selectedFirma.email && selectedFirma.phone && (
+                        <span className="bg-border h-3 w-px shrink-0" />
+                      )}
+                      {selectedFirma.phone && (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-mono">
+                          <Phone className="size-3 shrink-0" />
+                          {selectedFirma.phone}
+                        </span>
+                      )}
+                      {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && (
+                        <span className="bg-border h-3 w-px shrink-0" />
+                      )}
+                      {selectedFirma.lisansBitis && (
+                        <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
+                          <Calendar className="size-3 shrink-0" />
+                          {lisansGoster(selectedFirma.lisansBitis)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
                 </>
 
                 <div className="flex-1" />
 
-                <Popover open={searchOpen} onOpenChange={(o) => { setSearchOpen(o); if (!o) setSearchQuery(""); }}>
-                  <PopoverTrigger asChild>
-                    <button className="flex items-center gap-1.5 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-2.5 py-1.5 text-muted-foreground transition-colors">
-                      <Search className="h-3.5 w-3.5" />
-                      Firma Değiştir
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-0 rounded-[5px]" align="end">
-                    <Command shouldFilter={false}>
-                      <CommandInput placeholder="Firma ara..." className="text-[11px] h-8" value={searchQuery} onValueChange={setSearchQuery} />
-                      <CommandList className="max-h-56 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                        {apiLoading ? (
-                          <div className="p-2 space-y-1">
-                            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-7 w-full rounded-[4px]" />)}
-                          </div>
-                        ) : (
-                          <>
-                            <CommandEmpty className="text-[11px] py-4 text-center text-muted-foreground">Firma bulunamadı</CommandEmpty>
-                            <CommandGroup>
-                              {apiFiltered.map((comp) => (
-                                <CommandItem
-                                  key={comp.id}
-                                  value={comp.id}
-                                  onSelect={() => selectFirma(comp)}
-                                  className="text-[11px] flex items-center justify-between"
-                                >
-                                  <span>{comp.firma}</span>
-                                  <span className="text-[10px] text-muted-foreground tabular-nums font-mono">{comp.firkod}</span>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </>
-                        )}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                {/* Panik — firmanın erişimini kes */}
+                <button
+                  onClick={() => setPanicOpen(true)}
+                  className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
+                  title="Firmanın tüm hesaplarını devre dışı bırak ve açık oturumları kapat"
+                >
+                  <Ban className="h-3.5 w-3.5" />
+                  Panik
+                </button>
               </div>
             </div>
-            <div className="h-2" />
-          </div>
-        ) : (
-          /* Seçili firma yok: kart grid */
-          <NestedCard>
-            <p className="text-[11px] font-medium text-muted-foreground tracking-wide mb-3">EN YOĞUN 5 FİRMA</p>
-            {top5Loading ? (
-              <div className="grid grid-cols-5 gap-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-                    <div className="rounded-[4px] px-3 py-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-                      <Skeleton className="h-3 w-3/4 mb-3 rounded-[3px]" />
-                      <div className="flex gap-1.5">
-                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
-                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
-                        <Skeleton className="flex-1 h-8 rounded-[4px]" />
-                      </div>
-                    </div>
-                    <div className="h-2" />
-                  </div>
-                ))}
-              </div>
-            ) : top5.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground py-4 text-center">Henüz firma verisi yok</p>
-            ) : (
-              <div className="grid grid-cols-5 gap-2">
-                {top5.map((comp) => {
-                  const st = statusConfig[comp.status] ?? statusConfig.active;
-                  const yogunlukColor = comp.yogunluk >= 80 ? "text-red-600" : comp.yogunluk >= 60 ? "text-amber-600" : "text-emerald-600";
-                  return (
-                    <button
-                      key={comp.id}
-                      onClick={() => {
-                        const apiMatch = apiCompanies.find((a) => a.firkod === comp.id)
-                        setSelectedFirma(apiMatch ?? null)
-                        setSelectedCompany(apiMatch?.id ?? null)
-                      }}
-                      className="rounded-[8px] p-2 pb-0 text-left transition-all flex flex-col hover:brightness-[0.97]"
-                      style={{ backgroundColor: "#eef3ff" }}
-                    >
-                      <div
-                        className="rounded-[4px] px-3 py-3 w-full"
-                        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-                      >
-                        <div className="flex items-start justify-between gap-1 mb-3">
-                          <p className="text-[11px] font-semibold leading-tight line-clamp-2">{comp.name}</p>
-                          <span className={`shrink-0 inline-flex items-center rounded-[4px] border px-1 py-0 text-[9px] font-medium ${st.color}`}>
-                            {st.label}
-                          </span>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                            <span className={`text-[12px] font-bold tabular-nums leading-none ${yogunlukColor}`}>%{comp.yogunluk}</span>
-                            <span className="text-[9px] text-muted-foreground">Yoğunluk</span>
-                          </div>
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                            <Database className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[11px] font-semibold tabular-nums">{comp.dbCount}</span>
-                          </div>
-                          <div className="flex-1 flex flex-col items-center gap-0.5 rounded-[4px] py-1.5 bg-muted/40">
-                            <Users className="h-3 w-3 text-muted-foreground" />
-                            <span className="text-[11px] font-semibold tabular-nums">{comp.userCount}</span>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="h-2" />
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </NestedCard>
-        )}
+                </div>
+        ) : null}
       </div>
 
       {/* Company Detail */}
@@ -2039,9 +1981,9 @@ tr:nth-child(even) td{background:#fafafa}
           {/* Yoğunluk Skoru + Haftalık Kullanım */}
           <div className="grid grid-cols-[1fr_1fr] gap-3">
             {detailLoading ? (
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-                <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-                  <Skeleton className="h-4 w-36 rounded-[3px]" />
+              <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+                <div className="rounded-[5px] px-4 py-4 space-y-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
+                  <Skeleton className="h-4 w-36 rounded-[5px]" />
                   <div className="flex gap-4 items-center">
                     <Skeleton className="size-32 rounded-full shrink-0" />
                     <div className="flex-1 space-y-2.5">
@@ -2049,8 +1991,7 @@ tr:nth-child(even) td{background:#fafafa}
                     </div>
                   </div>
                 </div>
-                <div className="h-2" />
-              </div>
+                        </div>
             ) : companyDetail ? (
               <YoğunlukKart
                 key={selectedFirma.firkod}
@@ -2064,12 +2005,11 @@ tr:nth-child(even) td{background:#fafafa}
                 }}
               />
             ) : (
-              <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-                <div className="rounded-[4px] px-4 py-8 flex items-center justify-center" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+              <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+                <div className="rounded-[5px] px-4 py-8 flex items-center justify-center" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                   <p className="text-[12px] text-muted-foreground">Kullanım verisi bulunamadı</p>
                 </div>
-                <div className="h-2" />
-              </div>
+                        </div>
             )}
 
             <NestedCard
@@ -2111,17 +2051,17 @@ tr:nth-child(even) td{background:#fafafa}
                 <TabsTrigger value="users" className="text-[11px] h-7 gap-1.5">
                   <Users className="h-3.5 w-3.5" />
                   Kullanıcılar
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabUsers.length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[5px] px-1.5 py-0.5 font-medium">{tabUsers.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="services" className="text-[11px] h-7 gap-1.5">
                   <Briefcase className="h-3.5 w-3.5" />
                   Hizmetler
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{collectServices().length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[5px] px-1.5 py-0.5 font-medium">{collectServices().length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="databases" className="text-[11px] h-7 gap-1.5">
                   <Database className="h-3.5 w-3.5" />
                   Veritabanları
-                  <span className="ml-0.5 text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium">{tabSQL.length}</span>
+                  <span className="ml-0.5 text-[10px] bg-muted rounded-[5px] px-1.5 py-0.5 font-medium">{tabSQL.length}</span>
                 </TabsTrigger>
                 <TabsTrigger value="access" className="text-[11px] h-7 gap-1.5">
                   <KeyRound className="h-3.5 w-3.5" />
@@ -2140,26 +2080,26 @@ tr:nth-child(even) td{background:#fafafa}
                     <UserPlus className="h-3.5 w-3.5" /> Yeni Kullanıcı Ekle
                   </Button>
                 </div>
-                <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Kullanıcı</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Ad Soyad</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">CPU</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">RAM</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Son Giriş</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                <div className="rounded-[5px] overflow-hidden border border-border/40">
+                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kullanıcı</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Ad Soyad</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">CPU</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">RAM</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Son Giriş</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-2.5 items-center gap-3">
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-3/4" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-12" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-3/4" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-12" />
                         </div>
                       ))
                     ) : tabUsers.length === 0 ? (
@@ -2167,7 +2107,7 @@ tr:nth-child(even) td{background:#fafafa}
                         <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
                       </div>
                     ) : tabUsers.map((usr) => (
-                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                         <span className="text-[11px] font-mono truncate">{usr.username}</span>
                         <span className="text-[11px] truncate">{usr.displayName}</span>
                         <span
@@ -2181,13 +2121,13 @@ tr:nth-child(even) td{background:#fafafa}
                         <span className="text-[10px] tabular-nums text-muted-foreground">{usr.lastLogin || "—"}</span>
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${usr.enabled ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${usr.enabled ? "text-emerald-600" : "text-muted-foreground"}`}>
+                          <span className={`text-[10px] ${usr.enabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                             {usr.enabled ? "Aktif" : "Pasif"}
                           </span>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
                               <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             </button>
                           </DropdownMenuTrigger>
@@ -2231,24 +2171,24 @@ tr:nth-child(even) td{background:#fafafa}
                     <Plus className="h-3.5 w-3.5" /> Yeni Hizmet Ekle
                   </Button>
                 </div>
-                <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Hizmet</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tip</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Port</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                <div className="rounded-[5px] overflow-hidden border border-border/40">
+                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 bg-muted/20 border-b border-border">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Hizmet</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tip</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Port</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <div key={i} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2.5 items-center gap-3">
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-10" />
-                          <Skeleton className="h-3 rounded-[3px] w-14" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-10" />
+                          <Skeleton className="h-3 rounded-[5px] w-14" />
                         </div>
                       ))
                     ) : collectServices().length === 0 ? (
@@ -2259,13 +2199,13 @@ tr:nth-child(even) td{background:#fafafa}
                       const running = svc.status === "Started"
                       const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
                       return (
-                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2 hover:bg-muted/20 transition-colors items-center gap-3">
+                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                           <div className="flex items-center gap-2 min-w-0">
                             {svc.assigned
                               ? <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               : <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                             <div className="flex flex-col min-w-0">
-                              <span className="text-[11px] font-medium truncate">{svc.name}</span>
+                              <span className="text-[13px] font-medium truncate">{svc.name}</span>
                               {svc.siteName && <span className="text-[10px] font-mono text-muted-foreground truncate">{svc.siteName}</span>}
                             </div>
                           </div>
@@ -2275,7 +2215,7 @@ tr:nth-child(even) td{background:#fafafa}
                           {svc.status ? (
                             <div className="flex items-center gap-1.5">
                               <div className={`h-1.5 w-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-gray-300"}`} />
-                              <span className={`text-[10px] ${running ? "text-emerald-600" : "text-muted-foreground"}`}>
+                              <span className={`text-[10px] ${running ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                                 {running ? "Çalışıyor" : "Durdu"}
                               </span>
                             </div>
@@ -2284,7 +2224,7 @@ tr:nth-child(even) td{background:#fafafa}
                           )}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                              <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
                                 <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                               </button>
                             </DropdownMenuTrigger>
@@ -2336,36 +2276,36 @@ tr:nth-child(even) td{background:#fafafa}
                       }
                     }}
                     disabled={sqlRefreshing}
-                    className="h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border border-border/50 bg-white hover:bg-muted/40 transition-colors disabled:opacity-50"
+                    className="h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border border-border/50 bg-card hover:bg-muted/40 transition-colors disabled:opacity-50"
                   >
                     <RefreshCw className={`h-3 w-3 ${sqlRefreshing ? "animate-spin" : ""}`} />
                     {sqlRefreshing ? "Yenileniyor…" : "Yenile"}
                   </button>
                 </div>
-                <div className="rounded-[4px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 bg-muted/30 border-b border-border/40">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase pl-[22px]">Veritabanı</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Boyut</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Recovery</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Owner</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Tam Yedek</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Diff Yedek</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
+                <div className="rounded-[5px] overflow-hidden border border-border/40">
+                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase pl-[22px]">Veritabanı</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Boyut</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Recovery</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Owner</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tam Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Diff Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
                         <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-2.5 items-center">
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px]" />
-                          <Skeleton className="h-3 rounded-[3px] w-12" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-2/3" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-12" />
                           <span />
                         </div>
                       ))
@@ -2380,10 +2320,10 @@ tr:nth-child(even) td{background:#fafafa}
                         db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
                       ].filter(Boolean).join("\n")
                       return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-2 hover:bg-muted/20 transition-colors items-center">
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
                         <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-[11px] font-medium truncate">{db.Name}</span>
+                          <span className="text-[13px] font-medium truncate">{db.Name}</span>
                         </div>
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="text-[11px] font-mono truncate">{db.Server}</span>
@@ -2402,13 +2342,13 @@ tr:nth-child(even) td{background:#fafafa}
                         >{db.LastDiffBackup ?? "—"}</span>
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600" : "text-muted-foreground"}`}>
+                          <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
                             {(db.Status === "ONLINE" || db.Status === "Online") ? "Çevrimiçi" : "Çevrimdışı"}
                           </span>
                         </div>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
                               <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             </button>
                           </DropdownMenuTrigger>
@@ -2427,7 +2367,6 @@ tr:nth-child(even) td{background:#fafafa}
                 </div>
               </TabsContent>
 
-
               {/* ── Erişim ─────────────────────────────────────────────────
                   Modal'a sığmayan erişim bilgileri burada, sayfa genişliğinde
                   ve kompakt tablo düzeninde. Veri sekmeye geçilince yükleniyor. */}
@@ -2438,8 +2377,8 @@ tr:nth-child(even) td{background:#fafafa}
                     disabled={!accessInfo || accessLoading}
                     className={`h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border transition-colors disabled:opacity-50 ${
                       accessCopied
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-white border-border/50 hover:bg-muted/40"
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
+                        : "bg-card border-border/50 hover:bg-muted/40"
                     }`}
                   >
                     {accessCopied
@@ -2451,13 +2390,13 @@ tr:nth-child(even) td{background:#fafafa}
                 {accessLoading && (
                   <div className="space-y-2">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-16 w-full rounded-[4px]" />
+                      <Skeleton key={i} className="h-16 w-full rounded-[5px]" />
                     ))}
                   </div>
                 )}
 
                 {!accessLoading && accessError && (
-                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-[4px] border border-red-200 bg-red-50 text-[11px] text-red-700">
+                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400">
                     {accessError}
                   </div>
                 )}
@@ -2499,7 +2438,7 @@ tr:nth-child(even) td{background:#fafafa}
                         />
 
                         {webServices.length > 0 && (
-                          <div className="pt-1.5 pb-0.5 px-1 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                          <div className="pt-1.5 pb-0.5 px-1 text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                             Web Hizmetleri
                           </div>
                         )}
@@ -2524,7 +2463,7 @@ tr:nth-child(even) td{background:#fafafa}
                       </div>
 
                       {/* ── Sağ: seçilenin detayı ─────────────────────────── */}
-                      <div className="flex-1 min-w-0 rounded-[4px] border border-border/60 bg-white overflow-hidden">
+                      <div className="flex-1 min-w-0 rounded-[5px] border border-border/60 bg-card overflow-hidden">
                         {accessSel === "servers" && (
                           <>
                             <AccessDetailHeader title="Sunucular" />
@@ -2570,7 +2509,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     return (
                                       <div
                                         key={u.username}
-                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
                                       >
                                         <AccessCell value={u.username} muted={!u.enabled} />
                                         {pw
@@ -2624,7 +2563,7 @@ tr:nth-child(even) td{background:#fafafa}
                           const users = xml && !xml.notFound && !xml.error ? xml.users : []
                           return (
                             <>
-                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 border-b border-border/50">
+                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
                                 <span className="text-[11px] font-semibold flex-1 truncate">{svc.name}</span>
                                 {/* Users.xml'i olmayan hizmete kullanıcı eklenemez */}
                                 {!xml?.notFound && !xml?.error && (
@@ -2644,8 +2583,8 @@ tr:nth-child(even) td{background:#fafafa}
 
                               {webUsersLoading && !xml && (
                                 <div className="px-3 py-3 space-y-2">
-                                  <Skeleton className="h-3 w-1/2 rounded-[3px]" />
-                                  <Skeleton className="h-3 w-2/3 rounded-[3px]" />
+                                  <Skeleton className="h-3 w-1/2 rounded-[5px]" />
+                                  <Skeleton className="h-3 w-2/3 rounded-[5px]" />
                                 </div>
                               )}
 
@@ -2666,7 +2605,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     {users.map((u) => (
                                       <div
                                         key={u.username}
-                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/20 transition-colors"}
+                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
                                       >
                                         <AccessCell value={u.username} />
                                         {u.password
@@ -2677,18 +2616,18 @@ tr:nth-child(even) td{background:#fafafa}
                                           {(() => {
                                             const key = `${svc.name}::${u.username}`
                                             if (webUserTestBusy === key) {
-                                              return <RefreshCw className="h-3 w-3 shrink-0 text-blue-600 animate-spin" />
+                                              return <RefreshCw className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400 animate-spin" />
                                             }
                                             const res = webUserTestResult[key]
                                             if (!res) return null
                                             return res.ok
-                                              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" aria-label="Erişim başarılı" />
+                                              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Erişim başarılı" />
                                               : <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label={res.message} />
                                           })()}
                                         </span>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
-                                            <button className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors">
+                                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
                                               <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                                             </button>
                                           </DropdownMenuTrigger>
@@ -2736,7 +2675,7 @@ tr:nth-child(even) td{background:#fafafa}
                         })()}
 
                         {Object.keys(credentials).length === 0 && accessSel === "users" && (
-                          <div className="m-3 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-3 py-2">
+                          <div className="m-3 text-[11px] text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-[5px] px-3 py-2">
                             Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının
                             şifresini sıfırlama sonrası burada görünür.
                           </div>
@@ -2766,7 +2705,7 @@ tr:nth-child(even) td{background:#fafafa}
                   value={restorePath}
                   onChange={(e) => setRestorePath(e.target.value)}
                   placeholder="C:\Backup\firma_20260414.bak"
-                  className="rounded-[5px] h-8 text-[11px] font-mono"
+                  className="rounded-[5px] h-8 text-[13px] font-mono"
                 />
               </div>
               <AlertDialogFooter>
@@ -2886,7 +2825,7 @@ tr:nth-child(even) td{background:#fafafa}
                               {hasActive && (
                                 <div className="flex items-center gap-1.5 flex-wrap mt-2">
                                   {queryGlobalFilter.trim() && (
-                                    <span className="group inline-flex items-stretch text-[10px] rounded-[4px] border border-border/60 bg-background font-mono overflow-hidden">
+                                    <span className="group inline-flex items-stretch text-[10px] rounded-[5px] border border-border/60 bg-background font-mono overflow-hidden">
                                       <span className="flex items-center gap-1 px-2 py-0.5">
                                         <span className="text-muted-foreground">tümü:</span>
                                         <span>{queryGlobalFilter}</span>
@@ -2902,7 +2841,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     </span>
                                   )}
                                   {activeCols.map(([k, v]) => (
-                                    <span key={k} className="group inline-flex items-stretch text-[10px] rounded-[4px] border border-border/60 bg-background font-mono overflow-hidden">
+                                    <span key={k} className="group inline-flex items-stretch text-[10px] rounded-[5px] border border-border/60 bg-background font-mono overflow-hidden">
                                       <span className="flex items-center gap-1 px-2 py-0.5">
                                         <span className="text-muted-foreground">{k}:</span>
                                         <span>{v}</span>
@@ -2935,7 +2874,7 @@ tr:nth-child(even) td{background:#fafafa}
                         {queryResult.rows.length === 0 ? (
                           <div className="text-[11px] text-muted-foreground py-4 text-center">Sonuç boş</div>
                         ) : (
-                          <div className="rounded-[4px] border border-border/40">
+                          <div className="rounded-[5px] border border-border/40">
                             <table className="text-[10px] w-max min-w-full">
                               <thead className="sticky top-0 z-10">
                                 <tr>
@@ -2947,7 +2886,7 @@ tr:nth-child(even) td{background:#fafafa}
                                           value={queryColFilters[k] ?? ""}
                                           onChange={(e) => setQueryColFilters((f) => ({ ...f, [k]: e.target.value }))}
                                           placeholder="filtre…"
-                                          className="h-5 px-1 text-[10px] font-mono font-normal border border-border/60 rounded-[3px] bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                                          className="h-5 px-1 text-[10px] font-mono font-normal border border-border/60 rounded-[5px] bg-background focus:outline-none focus:ring-1 focus:ring-ring"
                                         />
                                       </div>
                                     </th>
@@ -3006,7 +2945,7 @@ tr:nth-child(even) td{background:#fafafa}
                 <DialogTitle className="text-sm">Kayıtlı Sorgular</DialogTitle>
               </DialogHeader>
               <div className="px-5 py-4 min-w-0">
-                <div className="max-h-[60vh] overflow-auto rounded-[4px] border border-border/40">
+                <div className="max-h-[60vh] overflow-auto rounded-[5px] border border-border/40">
                   {savedQueries.length === 0 ? (
                     <div className="text-[11px] text-muted-foreground py-8 text-center">Henüz kayıtlı sorgu yok</div>
                   ) : (
@@ -3023,8 +2962,8 @@ tr:nth-child(even) td{background:#fafafa}
                         >
                           <div className="flex-1 min-w-0 overflow-hidden">
                             <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-medium truncate">{q.name}</span>
-                              {q.category && <span className="text-[9px] rounded-[3px] bg-muted px-1.5 py-0.5 text-muted-foreground shrink-0">{q.category}</span>}
+                              <span className="text-[13px] font-medium truncate">{q.name}</span>
+                              {q.category && <span className="text-[9px] rounded-[5px] bg-muted px-1.5 py-0.5 text-muted-foreground shrink-0">{q.category}</span>}
                             </div>
                             <div className="text-[10px] text-muted-foreground font-mono truncate mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis">{q.sql.replace(/\s+/g, " ")}</div>
                           </div>
@@ -3048,7 +2987,7 @@ tr:nth-child(even) td{background:#fafafa}
                 <DialogTitle className="text-sm flex items-center gap-2">
                   <Bug className="h-4 w-4" /> Debug İzleme — <span className="font-mono">{selectedFirma?.firkod}</span>
                   {debugRunning && (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 font-normal">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> canlı
                     </span>
                   )}
@@ -3057,7 +2996,7 @@ tr:nth-child(even) td{background:#fafafa}
               <div className="px-5 py-3 border-b border-border/40 flex items-center gap-2 flex-wrap text-[11px]">
                 {debugServers.length > 0 && (
                   <>
-                    <Label className="text-[11px] text-muted-foreground">Sunucu:</Label>
+                    <Label className="text-foreground/80 text-[12px] font-medium">Sunucu:</Label>
                     <Select
                       value={debugServerId}
                       onValueChange={(v) => { setDebugServerId(v); loadDebugFolders(v) }}
@@ -3068,7 +3007,7 @@ tr:nth-child(even) td{background:#fafafa}
                       </SelectTrigger>
                       <SelectContent>
                         {debugServers.map((s) => (
-                          <SelectItem key={s.Id} value={s.Id} className="text-[11px]">
+                          <SelectItem key={s.Id} value={s.Id} className="text-[13px]">
                             {s.Name} <span className="text-muted-foreground font-mono ml-1">{s.IP}</span>
                           </SelectItem>
                         ))}
@@ -3077,13 +3016,13 @@ tr:nth-child(even) td{background:#fafafa}
                     <span className="text-muted-foreground">·</span>
                   </>
                 )}
-                <Label className="text-[11px] text-muted-foreground">Program:</Label>
+                <Label className="text-foreground/80 text-[12px] font-medium">Program:</Label>
                 <Select value={debugSubfolder} onValueChange={setDebugSubfolder} disabled={debugRunning || !debugFolders.length}>
                   <SelectTrigger className="h-7 text-[11px] rounded-[5px] w-[200px]">
                     <SelectValue placeholder={debugFolders.length ? "Seçin…" : "Klasör yok"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {debugFolders.map((f) => <SelectItem key={f} value={f} className="text-[11px]">{f}</SelectItem>)}
+                    {debugFolders.map((f) => <SelectItem key={f} value={f} className="text-[13px]">{f}</SelectItem>)}
                   </SelectContent>
                 </Select>
                 {debugPath && <span className="font-mono text-muted-foreground truncate text-[10px]" title={debugPath}>{debugPath}</span>}
@@ -3152,12 +3091,12 @@ tr:nth-child(even) td{background:#fafafa}
                         <div className="space-y-1.5">
                           <Label className="text-[11px] flex items-center gap-1">AD Sunucusu {newUserAdLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
                           <Select value={newUserAdServerId} onValueChange={setNewUserAdServerId} disabled={newUserAdLocked}>
-                            <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                            <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                               <SelectValue placeholder={newUserAdServers.length ? "Seçin…" : "Yükleniyor…"} />
                             </SelectTrigger>
                             <SelectContent>
                               {newUserAdServers.map((s) => (
-                                <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                <SelectItem key={s.id} value={s.id} className="text-[13px]">
                                   {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
                                 </SelectItem>
                               ))}
@@ -3167,12 +3106,12 @@ tr:nth-child(even) td{background:#fafafa}
                         <div className="space-y-1.5">
                           <Label className="text-[11px] flex items-center gap-1">RDP Sunucusu {newUserRdpLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
                           <Select value={newUserRdpServerId} onValueChange={setNewUserRdpServerId} disabled={newUserRdpLocked}>
-                            <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                            <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                               <SelectValue placeholder={newUserRdpServers.length ? "Seçin…" : "Yükleniyor…"} />
                             </SelectTrigger>
                             <SelectContent>
                               {newUserRdpServers.map((s) => (
-                                <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                <SelectItem key={s.id} value={s.id} className="text-[13px]">
                                   {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
                                 </SelectItem>
                               ))}
@@ -3183,7 +3122,7 @@ tr:nth-child(even) td{background:#fafafa}
 
                       {/* Kullanıcı adı */}
                       <div className="space-y-1.5">
-                        <Label className="text-[11px]">Kullanıcı Adı</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı Adı</Label>
                         <div className="flex items-center rounded-[5px] border border-border bg-background overflow-hidden focus-within:border-foreground/60 transition-colors h-8">
                           <span className="text-[11px] text-muted-foreground bg-muted px-2 h-full flex items-center border-r border-border shrink-0 font-mono">
                             {selectedFirma?.firkod}.
@@ -3199,13 +3138,13 @@ tr:nth-child(even) td{background:#fafafa}
 
                       {/* Ad Soyad */}
                       <div className="space-y-1.5">
-                        <Label className="text-[11px]">Ad Soyad</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Ad Soyad</Label>
                         <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" className="h-8 rounded-[5px] text-[11px]" />
                       </div>
 
                       {/* Şifre */}
                       <div className="space-y-1.5">
-                        <Label className="text-[11px]">Şifre</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Şifre</Label>
                         <div className={`flex items-center rounded-[5px] border bg-background h-8 ${newUserPassword && !meetsAdComplexity(newUserPassword) ? "border-red-400" : "border-border"}`}>
                           <input
                             type={newUserShowPw ? "text" : "password"}
@@ -3229,11 +3168,11 @@ tr:nth-child(even) td{background:#fafafa}
                       {/* E-posta + Telefon */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                          <Label className="text-[11px]">E-posta</Label>
+                          <Label className="text-foreground/80 text-[12px] font-medium">E-posta</Label>
                           <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" className="h-8 rounded-[5px] text-[11px]" />
                         </div>
                         <div className="space-y-1.5">
-                          <Label className="text-[11px]">Telefon</Label>
+                          <Label className="text-foreground/80 text-[12px] font-medium">Telefon</Label>
                           <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" className="h-8 rounded-[5px] text-[11px]" />
                         </div>
                       </div>
@@ -3288,13 +3227,13 @@ tr:nth-child(even) td{background:#fafafa}
                     ].join("\n")
                     return (
                       <div className="space-y-2 mt-2">
-                        <Label className="text-[11px]">Müşteri Bilgilendirme Mesajı</Label>
+                        <Label className="text-foreground/80 text-[12px] font-medium">Müşteri Bilgilendirme Mesajı</Label>
                         <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={async () => { if (await copyToClipboard(msg)) { setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) } }}
-                          className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
+                          className="w-full rounded-[5px] h-8 text-[13px] gap-1.5"
                         >
                           {newUserMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
                         </Button>
@@ -3330,7 +3269,7 @@ tr:nth-child(even) td{background:#fafafa}
                 {!pwResetDone ? (
                   <>
                     <div className="space-y-1.5">
-                      <Label className="text-[11px]">Yeni Şifre</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Yeni Şifre</Label>
                       <div className={`flex items-center rounded-[5px] border bg-background h-8 ${pwResetValue && !meetsAdComplexity(pwResetValue) ? "border-red-400" : "border-border"}`}>
                         <input
                           type={pwResetShow ? "text" : "password"}
@@ -3373,13 +3312,13 @@ tr:nth-child(even) td{background:#fafafa}
                   ].filter((l) => l !== null).join("\n")
                   return (
                     <div className="space-y-2">
-                      <Label className="text-[11px]">Müşteri Bilgilendirme Mesajı</Label>
+                      <Label className="text-foreground/80 text-[12px] font-medium">Müşteri Bilgilendirme Mesajı</Label>
                       <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={async () => { if (await copyToClipboard(msg)) { setPwResetMsgCopied(true); setTimeout(() => setPwResetMsgCopied(false), 2000) } }}
-                        className="w-full rounded-[5px] h-8 text-[11px] gap-1.5"
+                        className="w-full rounded-[5px] h-8 text-[13px] gap-1.5"
                       >
                         {pwResetMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
                       </Button>
@@ -3440,7 +3379,7 @@ tr:nth-child(even) td{background:#fafafa}
                   Bu işlem geri alınamaz. Onaylamak için aşağıya kullanıcı adını aynen yaz.
                 </p>
                 <div className="space-y-1.5">
-                  <Label className="text-[11px]">Kullanıcı Adı Onayı</Label>
+                  <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı Adı Onayı</Label>
                   <Input
                     value={deleteConfirm}
                     onChange={(e) => setDeleteConfirm(e.target.value)}
@@ -3479,7 +3418,7 @@ tr:nth-child(even) td{background:#fafafa}
                     <>
                       {newSvcLoading ? (
                         <div className="space-y-2">
-                          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[4px]" />)}
+                          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[5px]" />)}
                         </div>
                       ) : newSvcCatalog.length === 0 ? (
                         <p className="text-[11px] text-muted-foreground text-center py-6">Kayıtlı hizmet bulunamadı.</p>
@@ -3498,7 +3437,7 @@ tr:nth-child(even) td{background:#fafafa}
                                 >
                                   {cat}
                                   {count > 0 && (
-                                    <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold">{count}</span>
+                                    <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold">{count}</span>
                                   )}
                                 </button>
                               )
@@ -3507,8 +3446,8 @@ tr:nth-child(even) td{background:#fafafa}
 
                           {/* Hizmet listesi */}
                           <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                                 {newSvcActiveCat} — {newSvcCatalog.filter((s) => s.category === newSvcActiveCat).length} hizmet
                               </span>
                             </div>
@@ -3521,7 +3460,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     onClick={() => setNewSvcSelectedIds((p) => p.includes(svc.id) ? p.filter((x) => x !== svc.id) : [...p, svc.id])}
                                     className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${isSelected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"}`}
                                   >
-                                    <span className={`size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-foreground border-foreground" : "border-border"}`}>
+                                    <span className={`size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-foreground border-foreground" : "border-border"}`}>
                                       {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
                                     </span>
                                     {svc.type === "iis-site" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
@@ -3543,12 +3482,12 @@ tr:nth-child(even) td{background:#fafafa}
                                   Windows/RDP Sunucusu {newSvcWindowsLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}
                                 </Label>
                                 <Select value={newSvcWindowsServerId} onValueChange={setNewSvcWindowsServerId} disabled={newSvcWindowsLocked}>
-                                  <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                  <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                                     <SelectValue placeholder={newSvcWindowsList.length ? "Seçin…" : "Sunucu yok"} />
                                   </SelectTrigger>
                                   <SelectContent>
                                     {newSvcWindowsList.map((s) => (
-                                      <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                                      <SelectItem key={s.id} value={s.id} className="text-[13px]">
                                         {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
                                       </SelectItem>
                                     ))}
@@ -3556,14 +3495,14 @@ tr:nth-child(even) td{background:#fafafa}
                                 </Select>
                               </div>
                               <div className="space-y-1.5">
-                                <Label className="text-[11px]">Depo Sunucusu</Label>
+                                <Label className="text-foreground/80 text-[12px] font-medium">Depo Sunucusu</Label>
                                 <Select value={newSvcDepoServerId} onValueChange={setNewSvcDepoServerId}>
-                                  <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                  <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                                     <SelectValue placeholder={newSvcDepoServers.length ? "Seçin…" : "Sunucu yok"} />
                                   </SelectTrigger>
                                   <SelectContent>
                                     {newSvcDepoServers.map((s) => (
-                                      <SelectItem key={s.id} value={s.id} className="text-[11px]" disabled={!s.isOnline}>
+                                      <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
                                         {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
                                       </SelectItem>
                                     ))}
@@ -3576,14 +3515,14 @@ tr:nth-child(even) td{background:#fafafa}
                           {/* IIS sunucusu */}
                           {newSvcHasIis && (
                             <div className="space-y-1.5">
-                              <Label className="text-[11px]">IIS Sunucusu</Label>
+                              <Label className="text-foreground/80 text-[12px] font-medium">IIS Sunucusu</Label>
                               <Select value={newSvcIisServerId} onValueChange={setNewSvcIisServerId}>
-                                <SelectTrigger className="h-8 text-[11px] rounded-[5px]">
+                                <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
                                   <SelectValue placeholder={newSvcIisServers.length ? "Seçin…" : "Sunucu yok"} />
                                 </SelectTrigger>
                                 <SelectContent>
                                   {newSvcIisServers.map((s) => (
-                                    <SelectItem key={s.id} value={s.id} className="text-[11px]" disabled={!s.isOnline}>
+                                    <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
                                       {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
                                     </SelectItem>
                                   ))}
@@ -3593,7 +3532,7 @@ tr:nth-child(even) td{background:#fafafa}
                           )}
 
                           {!newSvcAdServerId && (
-                            <p className="text-[10px] text-amber-600">Uyarı: Bu firma için AD sunucusu tanımlı değil — hizmet kurulumu OU/grup adımları için AD ister.</p>
+                            <p className="text-[10px] text-amber-600 dark:text-amber-400">Uyarı: Bu firma için AD sunucusu tanımlı değil — hizmet kurulumu OU/grup adımları için AD ister.</p>
                           )}
                           {newSvcError && <p className="text-[11px] text-red-500">{newSvcError}</p>}
                         </>
@@ -3661,7 +3600,7 @@ tr:nth-child(even) td{background:#fafafa}
                 {q.description && <p className="text-[11px] leading-relaxed">{q.description}</p>}
                 <div>
                   <div className="text-[9px] uppercase tracking-wide text-muted-foreground mb-1">SQL</div>
-                  <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted/50 rounded-[3px] p-2 max-h-40 overflow-auto">{q.sql}</pre>
+                  <pre className="text-[10px] font-mono whitespace-pre-wrap bg-muted/50 rounded-[5px] p-2 max-h-40 overflow-auto">{q.sql}</pre>
                 </div>
               </div>
             )
@@ -3739,116 +3678,157 @@ tr:nth-child(even) td{background:#fafafa}
           </Dialog>
         </div>
       ) : (
-        <NestedCard>
-          <div className="flex flex-col gap-0">
-            {/* Üst bar: arama + sıralama */}
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-border/40 bg-muted/20">
-              <div className="relative flex-1">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input
-                  value={listSearch}
-                  onChange={(e) => setListSearch(e.target.value)}
-                  placeholder="Firma adı veya kodu ara..."
-                  className="h-8 pl-7 text-[11px] rounded-[5px]"
-                />
-              </div>
-              <Select value={listSortKey} onValueChange={(v) => setListSortKey(v as typeof listSortKey)}>
-                <SelectTrigger className="h-8 w-[160px] text-[11px] rounded-[5px]">
-                  <SelectValue placeholder="Sırala..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="firma" className="text-[11px]">Firma Adı</SelectItem>
-                  <SelectItem value="firkod" className="text-[11px]">Firma Kodu</SelectItem>
-                  <SelectItem value="userCount" className="text-[11px]">Kullanıcı Sayısı</SelectItem>
-                  <SelectItem value="lisansBitis" className="text-[11px]">Lisans Bitiş</SelectItem>
-                  <SelectItem value="status" className="text-[11px]">Durum</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 w-8 p-0 rounded-[5px]"
-                onClick={() => setListSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                title={listSortDir === "asc" ? "Artan" : "Azalan"}
-              >
-                {listSortDir === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 rounded-[5px] text-[11px] gap-1.5"
-                onClick={exportCompanyList}
-                disabled={apiLoading || listSorted.length === 0}
-                title="Listelenen firmaları Excel olarak indir"
-              >
-                <Download className="h-3.5 w-3.5" />
-                Excel
-              </Button>
-            </div>
-
-            {/* Liste başlığı */}
-            <div className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-1.5 bg-muted/30 border-b border-border/40 text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
-              <div>Firma</div>
-              <div className="text-right">Firma Kodu</div>
-              <div className="text-right">Kullanıcı</div>
-              <div className="text-right">Lisans Bitiş</div>
-              <div className="text-right">Durum</div>
-            </div>
-
-            {/* Liste satırları */}
-            <div className="divide-y divide-border/40 max-h-[520px] overflow-y-auto">
-              {apiLoading ? (
-                <div className="p-3 space-y-1.5">
-                  {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[4px]" />)}
-                </div>
-              ) : listSorted.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center">
-                  <Building2 className="h-10 w-10 text-muted-foreground/30 mb-2" />
-                  <p className="text-[12px] font-medium text-muted-foreground">
-                    {listSearch.trim() ? "Arama sonucu bulunamadı" : "Kayıtlı firma yok"}
-                  </p>
-                </div>
-              ) : (
-                listSorted.map((comp) => {
+        <ListeKarti
+          className="min-h-0 flex-1"
+          baslik="Firmalar"
+          ikon={<Building2 className="size-3.5" />}
+          toplam={apiCompanies.length}
+          filtreli={listeFiltreli.length}
+          aksiyon={
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 rounded-[5px] text-[12px]"
+              onClick={exportCompanyList}
+              disabled={apiLoading || listeFiltreli.length === 0}
+              title="Listelenen firmaları Excel olarak indir"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Excel
+            </Button>
+          }
+        >
+          <div className="min-h-0 flex-1 overflow-auto">
+            <table className="w-full text-[14px] font-medium leading-[20px]">
+              <ListeThead>
+                <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
+                  <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
+                </th>
+                {/* Boş alanı bu sütun yutar — diğerleri içeriğine göre daralır. */}
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
+                </th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                  <SayiAralikFiltre label="Kullanıcı" value={kullaniciFiltre} onChange={setKullaniciFiltre} />
+                </th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                  <TarihFiltre
+                    label="Lisans Bitiş"
+                    value={lisansFiltre}
+                    onChange={setLisansFiltre}
+                    buAyLabel="Bu ay doluyor"
+                    align="end"
+                  />
+                </th>
+                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
+                  <SecimFiltre
+                    label="Durum"
+                    options={["aktif", "doldu"] as const}
+                    getLabel={(o) => (o === "aktif" ? "Aktif" : "Süresi Doldu")}
+                    selected={durumFiltre}
+                    onChange={(v) => setDurumFiltre(v as string[])}
+                  />
+                </th>
+              </ListeThead>
+              <tbody>
+                {apiLoading ? (
+                  Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i}>
+                      {Array.from({ length: 5 }).map((_, j) => (
+                        <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                      ))}
+                    </tr>
+                  ))
+                ) : listeFiltreli.length === 0 ? (
+                  <ListeBosSatir
+                    sutunSayisi={5}
+                    toplam={apiCompanies.length}
+                    bosMesaj="Kayıtlı firma yok."
+                    filtreliMesaj="Arama sonucu bulunamadı."
+                  />
+                ) : firmaSayfalik.map((comp) => {
                   const active = firmaIsActive(comp);
                   return (
-                    <button
+                    <tr
                       key={comp.id}
                       onClick={() => selectFirma(comp)}
-                      className="grid grid-cols-[1fr_100px_90px_110px_80px] gap-2 px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors text-left items-center w-full"
+                      className="hover:bg-muted/20 cursor-pointer transition-colors"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                        <span className="truncate">{comp.firma}</span>
-                      </div>
-                      <div className="text-right font-mono text-[10px] text-muted-foreground tabular-nums">{comp.firkod || "—"}</div>
-                      <div className="text-right tabular-nums">
-                        <span className="inline-flex items-center gap-1 text-muted-foreground">
+                      <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
+                        {comp.firkod || "—"}
+                      </td>
+                      <td className="px-4 py-1.5 text-[12px]">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{comp.firma}</span>
+                        </span>
+                      </td>
+                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                        <span className="inline-flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {comp.userCount}
                         </span>
-                      </div>
-                      <div className="text-right text-muted-foreground tabular-nums">{comp.lisansBitis || "—"}</div>
-                      <div className="flex justify-end">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${active ? "text-emerald-600" : "text-red-600"}`}>
-                          <span className={`h-1.5 w-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-red-500"}`} />
-                          {active ? "Aktif" : "Süresi Doldu"}
-                        </span>
-                      </div>
-                    </button>
+                      </td>
+                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
+                        {lisansGoster(comp.lisansBitis)}
+                      </td>
+                      <td className="w-px px-4 py-1.5 text-right whitespace-nowrap">
+                        {active ? (
+                          <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Süresi Doldu
+                          </span>
+                        )}
+                      </td>
+                    </tr>
                   );
-                })
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-3 py-2 border-t border-border/40 bg-muted/20 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              <Building2 className="h-3 w-3" />
-              {listSorted.length} / {apiCompanies.length} firma listeleniyor
-            </div>
+                })}
+              </tbody>
+            </table>
           </div>
-        </NestedCard>
+          <ListeSayfalama
+            sayfa={firmaSayfa}
+            onSayfaChange={setFirmaSayfa}
+            toplam={listeFiltreli.length}
+            sayfaBoyu={FIRMA_SAYFA_BOYU}
+          />
+        </ListeKarti>
       )}
+
+      {/* Panik onayı — yıkıcı işlem, AlertDialog zorunlu (proje kuralı) */}
+      <AlertDialog open={panicOpen} onOpenChange={(o) => { if (!panicBusy) setPanicOpen(o) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Firma erişimini kes</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-[12px]">
+                <p>
+                  <strong>{selectedFirma?.firma}</strong> firması için:
+                </p>
+                <ul className="list-inside list-disc space-y-1">
+                  <li>Tüm aktif AD hesapları devre dışı bırakılacak — yeni oturum açılamaz.</li>
+                  <li>O an açık olan oturumlar kapatılacak — <strong>kaydedilmemiş veriler kaybolur</strong>.</li>
+                </ul>
+                <p className="text-muted-foreground">
+                  Hesaplar sonradan Kullanıcılar sekmesinden tekrar etkinleştirilebilir;
+                  kapanan oturumlar geri gelmez.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={panicBusy} className="text-[12px] h-8">Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); runPanic() }}
+              disabled={panicBusy}
+              className="bg-destructive text-white hover:bg-destructive/90 text-[12px] h-8"
+            >
+              {panicBusy ? "Kesiliyor…" : "Erişimi Kes"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi */}
       <Dialog
@@ -3874,8 +3854,8 @@ tr:nth-child(even) td{background:#fafafa}
               {webUserSteps.map((s, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <span className="mt-0.5 shrink-0">
-                    {s.status === "done"    && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" />}
-                    {s.status === "running" && <RefreshCw className="h-3.5 w-3.5 text-blue-600 animate-spin" />}
+                    {s.status === "done"    && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
+                    {s.status === "running" && <RefreshCw className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 animate-spin" />}
                     {s.status === "error"   && <XCircle className="h-3.5 w-3.5 text-destructive" />}
                     {s.status === "pending" && <span className="block h-3.5 w-3.5 rounded-full border border-border" />}
                   </span>
@@ -3886,7 +3866,7 @@ tr:nth-child(even) td{background:#fafafa}
                 </div>
               ))}
               {webUserSteps.some((s) => s.status === "error") && webUserSteps[0].status === "done" && (
-                <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-2.5 py-1.5">
+                <p className="text-[10px] text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-[5px] px-2.5 py-1.5">
                   Users.xml güncellendi ama site yeniden başlatılamadı — değişiklik uygulama yeniden
                   başlatılana kadar geçerli olmayabilir.
                 </p>
@@ -3895,23 +3875,23 @@ tr:nth-child(even) td{background:#fafafa}
           ) : (
           <div className="px-5 py-4 space-y-3">
             <div className="space-y-1">
-              <Label className="text-[11px]">Kullanıcı Adı</Label>
+              <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı Adı</Label>
               <Input
                 value={webUserName}
                 onChange={(e) => setWebUserName(e.target.value)}
                 placeholder="örn. MERKEZ"
-                className="rounded-[5px] h-8 text-[11px] font-mono"
+                className="rounded-[5px] h-8 text-[13px] font-mono"
                 autoFocus
               />
             </div>
 
             <div className="space-y-1">
-              <Label className="text-[11px]">Şifre</Label>
+              <Label className="text-foreground/80 text-[12px] font-medium">Şifre</Label>
               <div className="flex items-center gap-1.5">
                 <Input
                   value={webUserPw}
                   onChange={(e) => setWebUserPw(e.target.value)}
-                  className="rounded-[5px] h-8 text-[11px] font-mono"
+                  className="rounded-[5px] h-8 text-[13px] font-mono"
                 />
                 <button
                   type="button"
@@ -3925,7 +3905,7 @@ tr:nth-child(even) td{background:#fafafa}
             </div>
 
             <div className="space-y-1">
-              <Label className="text-[11px]">Veritabanları</Label>
+              <Label className="text-foreground/80 text-[12px] font-medium">Veritabanları</Label>
               {webUserDlg?.dbOptions.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">Bu hizmet için veritabanı listesi bulunamadı.</p>
               ) : (
@@ -4000,7 +3980,7 @@ tr:nth-child(even) td{background:#fafafa}
           <DialogHeader className="px-5 py-3.5 border-b border-border/50">
             <DialogTitle className="flex items-center gap-2 text-[13px]">
               {webUserTestDetail?.ok
-                ? <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                 : <XCircle className="h-4 w-4 text-destructive" />}
               <span className="text-muted-foreground font-normal">Erişim Testi</span>
               <span className="text-foreground font-mono">{webUserTestDetail?.username}</span>
@@ -4011,8 +3991,8 @@ tr:nth-child(even) td{background:#fafafa}
             <div
               className={`rounded-[5px] border px-3 py-2 text-[11px] ${
                 webUserTestDetail?.ok
-                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                  : "border-red-200 bg-red-50 text-red-700"
+                  ? "border-emerald-500/25 bg-emerald-500/15 text-emerald-800"
+                  : "border-red-500/25 bg-red-500/15 text-red-700 dark:text-red-400"
               }`}
             >
               {webUserTestDetail?.message}
@@ -4028,7 +4008,7 @@ tr:nth-child(even) td{background:#fafafa}
                 <span className="text-[11px] font-mono truncate">
                   {webUserTestDetail?.host ?? "—"}
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-[3px] border border-border/50 bg-muted/30 shrink-0">
+                <span className="text-[10px] px-1.5 py-0.5 rounded-[5px] border border-border/50 bg-muted/30 shrink-0">
                   {webUserTestDetail?.via === "wan" ? "dışarıdan (DNS)" : "LAN (IP)"}
                 </span>
               </div>
@@ -4049,11 +4029,11 @@ tr:nth-child(even) td{background:#fafafa}
             {/* Asıl kanıt: servisin bu kullanıcı için döndürdüğü veritabanları */}
             {webUserTestDetail?.databases && (
               <div className="space-y-1">
-                <Label className="text-[11px]">
+                <Label className="text-foreground/80 text-[12px] font-medium">
                   Servisin döndürdüğü veritabanları ({webUserTestDetail.databases.length})
                 </Label>
                 {webUserTestDetail.databases.length === 0 ? (
-                  <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-[4px] px-2.5 py-1.5">
+                  <p className="text-[11px] text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-[5px] px-2.5 py-1.5">
                     Giriş geçti ama kullanıcıya hiç veritabanı dönmedi — Users.xml&apos;deki DB adları
                     sunucudakilerle eşleşmiyor olabilir.
                   </p>
@@ -4076,7 +4056,7 @@ tr:nth-child(even) td{background:#fafafa}
                   {Object.entries(webUserTestDetail.raw).map(([k, v]) => (
                     <div key={k}>
                       <p className="text-[10px] text-muted-foreground uppercase tracking-wide">{k}</p>
-                      <pre className="mt-0.5 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-muted/20 rounded-[4px] px-2 py-1.5">
+                      <pre className="mt-0.5 text-[10px] font-mono whitespace-pre-wrap break-all max-h-40 overflow-y-auto bg-muted/20 rounded-[5px] px-2 py-1.5">
                         {v}
                       </pre>
                     </div>
@@ -4144,13 +4124,13 @@ function CopyIconButton({ value, subtle }: { value: string; subtle?: boolean }) 
       disabled={!value}
       // subtle: her hücrede tam görünür ikon ekranı kalabalıklaştırıyordu —
       // sönük duruyor, satırın üstüne gelince netleşiyor.
-      className={`shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity disabled:opacity-30 ${
+      className={`shrink-0 inline-flex items-center justify-center size-6 rounded-[5px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity disabled:opacity-30 ${
         subtle ? "opacity-30 group-hover:opacity-100 focus-visible:opacity-100" : ""
       }`}
       title="Kopyala"
     >
       {copied
-        ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600" />
+        ? <CheckCheck className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
         : <Copy className="h-3.5 w-3.5" />}
     </button>
   )
@@ -4185,19 +4165,19 @@ function AccessNavCard({
     <button
       type="button"
       onClick={onClick}
-      className={`w-full text-left rounded-[4px] border px-2.5 py-2 transition-colors ${
+      className={`w-full text-left rounded-[5px] border px-2.5 py-2 transition-colors ${
         active
-          ? "border-[#1d64ff]/40 bg-[#1d64ff]/[0.06] shadow-[inset_2px_0_0_0_#1d64ff]"
-          : "border-border/60 bg-white hover:bg-muted/30"
+          ? "border-primary/40 bg-primary/[0.06] shadow-[inset_2px_0_0_0_var(--primary)]"
+          : "border-border/60 bg-card hover:bg-muted/30"
       }`}
     >
       <span className="flex items-center gap-1.5 min-w-0">
-        <span className={active ? "text-[#1d64ff]" : "text-muted-foreground"}>{icon}</span>
-        <span className="text-[11px] font-medium truncate flex-1">{title}</span>
+        <span className={active ? "text-primary" : "text-muted-foreground"}>{icon}</span>
+        <span className="text-[13px] font-medium truncate flex-1">{title}</span>
         {loading
-          ? <Skeleton className="h-3 w-6 rounded-[3px]" />
+          ? <Skeleton className="h-3 w-6 rounded-[5px]" />
           : count !== undefined && (
-              <span className="text-[10px] bg-muted rounded-[3px] px-1.5 py-0.5 font-medium tabular-nums">{count}</span>
+              <span className="text-[10px] bg-muted rounded-[5px] px-1.5 py-0.5 font-medium tabular-nums">{count}</span>
             )}
       </span>
       {subtitle && (
@@ -4210,7 +4190,7 @@ function AccessNavCard({
 /** Sağ paneldeki blok başlığı. */
 function AccessDetailHeader({ title }: { title: string }) {
   return (
-    <div className="px-3 py-2 bg-muted/30 border-b border-border/50">
+    <div className="px-3 py-2 bg-muted/20 border-b border-border">
       <span className="text-[11px] font-semibold">{title}</span>
     </div>
   )
@@ -4221,14 +4201,14 @@ function AccessDetailRow({
   label, value, copyValue, link,
 }: { label: string; value: string; copyValue: string; link?: boolean }) {
   return (
-    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/20 transition-colors">
+    <div className="group flex items-center gap-3 px-3 py-2 hover:bg-muted/70 transition-colors">
       <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">{label}</span>
       {link && value.startsWith("http") ? (
         <a
           href={value}
           target="_blank"
           rel="noreferrer"
-          className="text-[11px] font-mono text-blue-600 hover:underline truncate flex-1"
+          className="text-[11px] font-mono text-blue-600 dark:text-blue-400 hover:underline truncate flex-1"
         >
           {value}
         </a>
@@ -4270,7 +4250,7 @@ function AccessPwCell({ value }: { value: string }) {
       <button
         type="button"
         onClick={() => setShow((s) => !s)}
-        className="shrink-0 inline-flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity opacity-30 group-hover:opacity-100 focus-visible:opacity-100"
+        className="shrink-0 inline-flex items-center justify-center size-6 rounded-[5px] hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-opacity opacity-30 group-hover:opacity-100 focus-visible:opacity-100"
         title={show ? "Gizle" : "Göster"}
       >
         {show ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
@@ -4279,4 +4259,3 @@ function AccessPwCell({ value }: { value: string }) {
     </span>
   )
 }
-

@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useRef } from "react"
+import { MODE_DRAWS, resolvePreset } from "thinking-orbs/engine"
 
 const RGB     = "56,189,248"
 const PAGE    = "#0B0B0D"
@@ -253,6 +254,45 @@ const DRAW: Record<Variant, (c: Ctx) => void> = {
 
 /* ══════════════════════════════════════════════════════════ */
 
+/**
+ * thinking-orbs "connecting" — engine ile İSTENEN boyutta çizilir (CSS scale
+ * DEĞİL). MODE_DRAWS painter'i size parametresini alip o cozunurlukte cizer,
+ * DPR ile retina keskinlik. Boylece 288px'te bulaniklik olmaz.
+ */
+function SharpOrb({ state, size = 300 }: { state: "connecting" | "working" | "composing"; size?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null)
+  useEffect(() => {
+    const canvas = ref.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    const dpr = Math.min(2, window.devicePixelRatio || 1)
+    canvas.width = size * dpr
+    canvas.height = size * dpr
+    canvas.style.width = size + "px"
+    canvas.style.height = size + "px"
+
+    // Painter geometriyi size'a göre kendi hesaplıyor; opts'u OLCEKLEME.
+    // Ham 64-preset degerleri noktalari KESKIN tutuyor — yariçapi buyutmek
+    // glow'u yumusatip bulanik gosteriyordu (composing dokunulmadigi icin netti).
+    const { mode, speed, opts } = resolvePreset(state, 64)
+    const draw = MODE_DRAWS[mode]
+
+    let raf = 0
+    const t0 = performance.now()
+    const loop = () => {
+      const t = ((performance.now() - t0) / 1000) * speed
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, size, size)
+      draw(ctx, size, t, true, opts)
+      raf = requestAnimationFrame(loop)
+    }
+    loop()
+    return () => cancelAnimationFrame(raf)
+  }, [state, size])
+  return <canvas ref={ref} className="block" />
+}
+
 function Core({ variant, size = 300 }: { variant: Variant; size?: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null)
 
@@ -324,11 +364,35 @@ export default function CoreTaslakPage() {
         <span className="text-zinc-300">Birkaç saniye izle</span>, hareketler aralıklı geliyor.
       </p>
 
+      {/* ── Aday E: thinking-orbs "connecting" ──
+          Paket 64px icin tune edilmis; TV olcegi icin canvas CSS ile buyutuluyor.
+          Solda native, sagda ~288px (transform scale). */}
+      <div className="mt-8 rounded-[8px] border border-zinc-800 p-6">
+        <div className="mb-4 flex items-baseline gap-3">
+          <span className="flex size-6 items-center justify-center rounded-[5px] bg-primary text-[11px] font-bold text-primary-foreground">E</span>
+          <span className="text-[13px] font-bold text-zinc-100">Connecting Orb — thinking-orbs paketi</span>
+          <span className="text-[11px]" style={{ color: TXT_DIM }}>bir takımyıldızı kablolanır, kenarlarda paketler koşar</span>
+        </div>
+        <div className="flex flex-wrap items-start gap-10">
+          {([
+            { st: "connecting", ad: "connecting", not: "takımyıldızı kablolanır, kenarlarda paketler koşar" },
+            { st: "working",    ad: "working",    not: "eğik yörüngelerde parçacıklar" },
+            { st: "composing",  ad: "composing",  not: "dalgalanan çok bantlı kuşak" },
+          ] as const).map((o) => (
+            <div key={o.st} className="flex flex-col items-center gap-2">
+              <SharpOrb state={o.st} size={288} />
+              <span className="text-[12px] font-medium text-zinc-200">{o.ad}</span>
+              <span className="max-w-[240px] text-center text-[11px]" style={{ color: TXT_DIM }}>{o.not}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="mt-8 flex flex-wrap gap-10">
         {VARIANTS.map((v) => (
           <div key={v.key}>
             <div className="mb-2 flex items-baseline gap-3">
-              <span className="flex size-6 items-center justify-center rounded-[4px] bg-[#1d64ff] text-[11px] font-bold text-white">
+              <span className="flex size-6 items-center justify-center rounded-[5px] bg-primary text-[11px] font-bold text-primary-foreground">
                 {v.no}
               </span>
               <span className="text-[13px] font-bold text-zinc-100">{v.title}</span>

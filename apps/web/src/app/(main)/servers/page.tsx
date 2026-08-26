@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { StatusBadge } from "@/components/shared/status-badge";
@@ -9,17 +9,15 @@ import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-p
 import type { Server as ServerType } from "@/types";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { MoreVertical, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import {
-  Monitor as IsMonitor,
-  Refresh as IsRefresh,
-  RowHorizontal as IsRowList,
-  Element3 as IsGrid,
-  Clock as IsClock,
-  Add as IsAdd,
-} from "iconsax-reactjs";
+import { RefreshCw, Rows3 } from "lucide-react";
+import { Icon } from "@/components/shared/icon";
+import type { IconName } from "@/components/shared/icon-registry";
+import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 
-const Ic = ({ I, className }: { I: React.ComponentType<Record<string, unknown>>; className?: string }) => (
-  <span className={`inline-flex ${className ?? ""}`}><I size="14" color="currentColor" variant="TwoTone" /></span>
+/** Animasyonlu registry ikonu (lucide-animated) — proje tek icon kaynağı. */
+const Ic = ({ name, className }: { name: IconName; className?: string }) => (
+  <Icon name={name} size={14} className={`inline-flex ${className ?? ""}`} />
 );
 import {
   DropdownMenu,
@@ -140,11 +138,11 @@ function ActionMenu({ serverId, serverSlug, serverName, onRemoved, onTerminal, o
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
+          <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
             <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="rounded-[6px]">
+        <DropdownMenuContent align="end" className="rounded-[5px]">
           <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => router.push(`/servers/${serverSlug}`)}>
             Detaylar
           </DropdownMenuItem>
@@ -219,6 +217,12 @@ export default function ServersPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [osFilter, setOsFilter] = useState<"all" | "windows" | "ubuntu">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "online" | "warning" | "offline">("all");
+
+  /* Sütun başlığı filtreleri — liste görünümünde tablo başlıklarından. */
+  const [adFiltre,  setAdFiltre]  = useState("");
+  const [ipFiltre,  setIpFiltre]  = useState("");
+  const [dnsFiltre, setDnsFiltre] = useState("");
+  const [rolFiltre, setRolFiltre] = useState<string[]>([]);
   const [view, setView] = useState<ViewMode>("list");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
@@ -264,6 +268,12 @@ export default function ServersPage() {
     return () => clearInterval(interval);
   }, []);
 
+  /* Listede geçen roller — Rol sütunu filtresi için. */
+  const roller = useMemo(
+    () => [...new Set(servers.flatMap((s) => s.roles))].sort((a, b) => a.localeCompare(b, "tr")),
+    [servers],
+  );
+
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
     else { setSortKey(key); setSortDir("asc"); }
@@ -274,6 +284,13 @@ export default function ServersPage() {
       if (osFilter === "windows" && !s.os.startsWith("Windows")) return false;
       if (osFilter === "ubuntu" && !s.os.startsWith("Ubuntu")) return false;
       if (statusFilter !== "all" && s.status !== statusFilter) return false;
+      const ad  = adFiltre.trim().toLocaleLowerCase("tr-TR");
+      const ip  = ipFiltre.trim().toLocaleLowerCase("tr-TR");
+      const dns = dnsFiltre.trim().toLocaleLowerCase("tr-TR");
+      if (ad && !s.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+      if (ip && !s.ip.toLowerCase().includes(ip)) return false;
+      if (dns && !(s.dns ?? "").toLowerCase().includes(dns)) return false;
+      if (rolFiltre.length && !s.roles.some((r) => rolFiltre.includes(r))) return false;
       return true;
     })
     .sort((a, b) => {
@@ -303,14 +320,14 @@ export default function ServersPage() {
       {/* Toolbar */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         {/* OS filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
           {(["all", "windows", "ubuntu"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setOsFilter(f)}
               className={cn(
-                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                osFilter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                "rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors",
+                osFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f === "all" ? "Tümü" : f === "windows" ? "Windows" : "Ubuntu"}
@@ -319,14 +336,14 @@ export default function ServersPage() {
         </div>
 
         {/* Status filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
           {(["all", "online", "warning", "offline"] as const).map((f) => (
             <button
               key={f}
               onClick={() => setStatusFilter(f)}
               className={cn(
-                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                statusFilter === f ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                "rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors",
+                statusFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
               {f === "all" ? "Tümü" : f === "online" ? "Aktif" : f === "warning" ? "Uyarı" : "Kapalı"}
@@ -336,24 +353,26 @@ export default function ServersPage() {
 
         <div className="ml-auto flex items-center gap-2">
           {/* View toggle */}
-          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "#eef3ff" }}>
+          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
             <button
               onClick={() => setView("list")}
               className={cn(
-                "flex items-center justify-center h-7 w-7 rounded-[6px] transition-colors",
-                view === "list" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                "flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-[12px] font-medium transition-colors",
+                view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Ic I={IsRowList} />
+              <span className="inline-flex"><Rows3 className="size-3.5" /></span>
+              Liste
             </button>
             <button
               onClick={() => setView("card")}
               className={cn(
-                "flex items-center justify-center h-7 w-7 rounded-[6px] transition-colors",
-                view === "card" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
+                "flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-[12px] font-medium transition-colors",
+                view === "card" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Ic I={IsGrid} />
+              <Ic name="blocks" />
+              Kart
             </button>
           </div>
 
@@ -373,9 +392,9 @@ export default function ServersPage() {
             )}
             <button
               onClick={handleRefresh}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[6px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
             >
-              <span className={cn("inline-flex", refreshing && "animate-spin")}><IsRefresh size="14" color="currentColor" variant="TwoTone" /></span>
+              <span className={cn("inline-flex", refreshing && "animate-spin")}><RefreshCw className="size-3.5" /></span>
               Yenile
             </button>
           </div>
@@ -383,9 +402,9 @@ export default function ServersPage() {
           {/* New server */}
           <button
             onClick={() => setSheetOpen(true)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
           >
-            <Ic I={IsAdd} />
+            <Ic name="plus" />
             Yeni Sunucu
           </button>
         </div>
@@ -393,12 +412,12 @@ export default function ServersPage() {
 
       {/* ── SKELETON ── */}
       {loading && (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-          <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+          <div className="border-border flex flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
             {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
+            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/20 border-b border-border items-center">
               {Array.from({ length: 11 }).map((_, i) => (
-                <Skeleton key={i} className="h-3 rounded-[3px]" />
+                <Skeleton key={i} className="h-3 rounded-[5px]" />
               ))}
             </div>
             {/* Rows */}
@@ -406,40 +425,39 @@ export default function ServersPage() {
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-3 items-center">
                   <Skeleton className="size-2 rounded-full" />
-                  <Skeleton className="h-3 rounded-[3px] w-3/4" />
-                  <Skeleton className="h-3 rounded-[3px]" />
-                  <Skeleton className="h-3 rounded-[3px] w-2/3" />
-                  <Skeleton className="h-5 rounded-[4px] w-14" />
+                  <Skeleton className="h-3 rounded-[5px] w-3/4" />
+                  <Skeleton className="h-3 rounded-[5px]" />
+                  <Skeleton className="h-3 rounded-[5px] w-2/3" />
+                  <Skeleton className="h-5 rounded-[5px] w-14" />
                   <Skeleton className="h-2 rounded-full" />
                   <Skeleton className="h-2 rounded-full" />
                   <Skeleton className="h-2 rounded-full" />
-                  <Skeleton className="h-5 rounded-[4px] w-10" />
-                  <Skeleton className="size-5 rounded-[4px]" />
+                  <Skeleton className="h-5 rounded-[5px] w-10" />
+                  <Skeleton className="size-5 rounded-[5px]" />
                 </div>
               ))}
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
       )}
 
       {/* ── BOŞ DURUM ── */}
       {!loading && servers.length === 0 && (
-        <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] flex flex-col items-center justify-center py-16 gap-3"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] flex flex-col items-center justify-center py-16 gap-3"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <IsMonitor size="32" color="currentColor" variant="TwoTone" className="text-muted-foreground/30" />
+            <Icon name="monitor-check" size={32} className="text-muted-foreground/30" />
             <div className="text-center space-y-1">
               <p className="text-[13px] font-medium text-foreground">Henüz sunucu eklenmedi</p>
               <p className="text-[11px] text-muted-foreground">Yönetmek istediğiniz sunucuları buradan ekleyin.</p>
             </div>
             <button
               onClick={() => setSheetOpen(true)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors mt-1"
+              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors mt-1"
             >
-              <Ic I={IsAdd} />
+              <Ic name="plus" />
               Yeni Sunucu Ekle
             </button>
           </div>
@@ -448,102 +466,103 @@ export default function ServersPage() {
 
       {/* ── LIST VIEW ── */}
       {view === "list" && servers.length > 0 && (
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-          <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-            {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-              <span />
-              <SortHeader label="Sunucu Adı" sortKey="name"   active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="IP Adresi"  sortKey="ip"     active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="DNS Adresi" sortKey="dns"    active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="Durum"      sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="CPU"        sortKey="cpu"    active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="RAM"        sortKey="ram"    active={sortKey} dir={sortDir} onSort={handleSort} />
-              <SortHeader label="Disk"       sortKey="disk"   active={sortKey} dir={sortDir} onSort={handleSort} />
-              <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Uptime</span>
-              <SortHeader label="Rol"        sortKey="role"   active={sortKey} dir={sortDir} onSort={handleSort} />
-              <span />
-            </div>
-
-            {/* Rows */}
-            <div className="divide-y divide-border/40">
-              {filtered.map((srv) => (
-                <div
-                  key={srv.id}
-                  className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                >
-                  {/* Status dot */}
-                  <span className="flex items-center justify-center">
-                    <span className="relative flex size-1.5">
-                      {srv.status === "online" && (
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                      )}
-                      <span className={cn("relative inline-flex size-1.5 rounded-full", STATUS_DOT[srv.status])} />
-                    </span>
-                  </span>
-
-                  {/* Name */}
-                  <span className="text-[11px] font-medium truncate">{srv.name}</span>
-
-                  {/* IP */}
-                  <span className="text-[11px] text-muted-foreground font-mono tabular-nums">{srv.ip}</span>
-
-                  {/* DNS */}
-                  <span className="text-[11px] text-muted-foreground/60 font-mono truncate">{srv.dns ?? "—"}</span>
-
-                  {/* Status badge */}
-                  <StatusBadge status={srv.status} className="w-fit" />
-
-                  {/* CPU */}
-                  <div className="flex items-center gap-1.5">
-                    <ProgressBar value={srv.cpu} className="flex-1" />
-                    <span className="text-[10px] tabular-nums text-muted-foreground w-6 text-right">%{srv.cpu}</span>
-                  </div>
-
-                  {/* RAM */}
-                  <div className="flex items-center gap-1.5">
-                    <ProgressBar value={srv.ram} className="flex-1" />
-                    <span className="text-[10px] tabular-nums text-muted-foreground w-6 text-right">%{srv.ram}</span>
-                  </div>
-
-                  {/* Disk */}
-                  <div className="flex items-center gap-1.5">
-                    <ProgressBar value={srv.disk} className="flex-1" />
-                    <span className="text-[10px] tabular-nums text-muted-foreground w-6 text-right">%{srv.disk}</span>
-                  </div>
-
-                  {/* Uptime */}
-                  <span className="text-[10px] text-muted-foreground tabular-nums whitespace-nowrap">
-                    {srv.uptime}
-                  </span>
-
-                  {/* Rol — sadece ilk badge */}
-                  <span className="inline-block text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium whitespace-nowrap w-fit">
-                    {srv.roles[0]}
-                  </span>
-
-                  {/* Actions */}
-                  <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
-                </div>
-              ))}
-            </div>
+        <ListeKarti
+          baslik="Sunucular"
+          ikon={<Icon name="monitor-check" size={13} className="inline-flex" />}
+          toplam={servers.length}
+          filtreli={filtered.length}
+        >
+          <div className="overflow-x-auto">
+            <table className="w-full text-[14px] font-medium leading-[20px]">
+              <ListeThead>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="Sunucu Adı" value={adFiltre} onChange={setAdFiltre} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="IP Adresi" value={ipFiltre} onChange={setIpFiltre} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <MetinFiltre label="DNS Adresi" value={dnsFiltre} onChange={setDnsFiltre} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SortHeader label="Durum" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SortHeader label="CPU" sortKey="cpu" active={sortKey} dir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SortHeader label="RAM" sortKey="ram" active={sortKey} dir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SortHeader label="Disk" sortKey="disk" active={sortKey} dir={sortDir} onSort={handleSort} />
+                </th>
+                <th className="px-4 py-1.5 text-left font-medium">Uptime</th>
+                <th className="px-4 py-1.5 text-left font-medium">
+                  <SecimFiltre
+                    label="Rol"
+                    options={roller}
+                    getLabel={(o) => o}
+                    selected={rolFiltre}
+                    onChange={(v) => setRolFiltre(v as string[])}
+                  />
+                </th>
+                <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+              </ListeThead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <ListeBosSatir sutunSayisi={10} toplam={servers.length} bosMesaj="Henüz sunucu eklenmedi." />
+                ) : filtered.map((srv) => (
+                  <tr key={srv.id} className="hover:bg-muted/70 transition-colors">
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className="flex items-center gap-2">
+                        <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[srv.status])} />
+                        <span className="font-medium">{srv.name}</span>
+                      </span>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">{srv.ip}</td>
+                    <td className="text-muted-foreground/60 px-4 py-1.5 font-mono text-[12px] max-w-56 truncate">{srv.dns ?? "—"}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap"><StatusBadge status={srv.status} className="w-fit" /></td>
+                    <td className="px-4 py-1.5 min-w-24">
+                      <span className="flex items-center gap-1.5">
+                        <ProgressBar value={srv.cpu} className="flex-1" />
+                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.cpu}</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 min-w-24">
+                      <span className="flex items-center gap-1.5">
+                        <ProgressBar value={srv.ram} className="flex-1" />
+                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.ram}</span>
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 min-w-24">
+                      <span className="flex items-center gap-1.5">
+                        <ProgressBar value={srv.disk} className="flex-1" />
+                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.disk}</span>
+                      </span>
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{srv.uptime}</td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">
+                        {srv.roles[0]}
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                      <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          {/* Footer */}
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-            <IsMonitor size="12" color="currentColor" variant="TwoTone" />
-            <span>{filtered.length} sunucu listeleniyor</span>
-          </div>
-        </div>
+        </ListeKarti>
       )}
 
-      {/* ── CARD VIEW ── */}
       {view === "card" && servers.length > 0 && (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filtered.map((srv) => (
-              <div key={srv.id} className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-                <div className="rounded-[4px] overflow-hidden" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+              <div key={srv.id} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+                <div className="border-border flex flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
 
                   {/* Card header */}
                   <div className="px-3 pt-3 pb-2.5 border-b border-border/40">
@@ -570,7 +589,7 @@ export default function ServersPage() {
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
                         {srv.roles.map((role) => (
-                          <span key={role} className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium">
+                          <span key={role} className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium">
                             {role}
                           </span>
                         ))}
@@ -595,7 +614,7 @@ export default function ServersPage() {
 
                   {/* Card footer */}
                   <div className="flex items-center gap-1 px-3 py-2 border-t border-border/40 bg-muted/20">
-                    <IsClock size="12" color="currentColor" variant="TwoTone" className="text-muted-foreground" />
+                    <Icon name="clock" size={12} className="inline-flex text-muted-foreground" />
                     <span className="text-[10px] text-muted-foreground">{srv.lastChecked}</span>
                     <span className="ml-auto text-[10px] text-muted-foreground">↑ {srv.uptime}</span>
                   </div>
@@ -605,7 +624,7 @@ export default function ServersPage() {
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1">
-            <IsMonitor size="12" color="currentColor" variant="TwoTone" />
+            <Icon name="monitor-check" size={12} className="inline-flex" />
             <span>{filtered.length} sunucu listeleniyor</span>
           </div>
         </div>

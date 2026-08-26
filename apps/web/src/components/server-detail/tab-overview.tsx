@@ -61,13 +61,13 @@ function LoadScoreCard({ cpu, ram, disk }: { cpu: number; ram: number; disk: num
   }, [score]);
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="rounded-[8px] p-2 flex flex-col" style={{ backgroundColor: "var(--section-bg)" }}>
       <div
-        className="rounded-[4px] flex-1 flex flex-col"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className="rounded-[5px] flex-1 flex flex-col"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
-        <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+        <div className="px-3 py-2 bg-muted/20 border-b border-border">
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
             Sunucu Yük Skoru
           </span>
         </div>
@@ -89,7 +89,6 @@ function LoadScoreCard({ cpu, ram, disk }: { cpu: number; ram: number; disk: num
           </div>
         </div>
       </div>
-      <div className="h-2" />
     </div>
   );
 }
@@ -110,13 +109,13 @@ function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
   const hasCache = ram.cacheMB != null;
 
   return (
-    <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
       <div
-        className="rounded-[4px]"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className="rounded-[5px]"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
-        <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+        <div className="px-3 py-2 bg-muted/20 border-b border-border">
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
             RAM Detayı
           </span>
         </div>
@@ -125,9 +124,9 @@ function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
           <div className="h-2 w-full rounded-full overflow-hidden bg-muted/30 flex">
             <div style={{ width: `${realPct}%`, backgroundColor: "#10b981" }} title={`Gerçek: ${fmtGB(real)}`} />
             {hasCache && (
-              <div style={{ width: `${cachePct}%`, backgroundColor: "#94a3b8" }} title={`Cache: ${fmtGB(cache)}`} />
+              <div style={{ width: `${cachePct}%`, backgroundColor: "var(--chart-3)" }} title={`Cache: ${fmtGB(cache)}`} />
             )}
-            <div style={{ width: `${freePct}%`, backgroundColor: "#e5e7eb" }} title={`Boş: ${fmtGB(free)}`} />
+            <div style={{ width: `${freePct}%`, backgroundColor: "var(--muted)" }} title={`Boş: ${fmtGB(free)}`} />
           </div>
 
           {/* Legend / values */}
@@ -151,7 +150,7 @@ function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
             {hasCache && (
               <div>
                 <div className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-full" style={{ backgroundColor: "#94a3b8" }} />
+                  <span className="size-2 rounded-full" style={{ backgroundColor: "var(--chart-3)" }} />
                   <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Cache</span>
                 </div>
                 <div className="font-semibold tabular-nums mt-0.5">
@@ -177,7 +176,6 @@ function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
           )}
         </div>
       </div>
-      <div className="h-2" />
     </div>
   );
 }
@@ -191,13 +189,13 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
         {/* Left column */}
         <div className="flex flex-col gap-3">
           {/* Sunucu Bilgileri */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div
-              className="rounded-[4px]"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+              className="rounded-[5px]"
+              style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
             >
-              <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+              <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                   Sunucu Bilgileri
                 </span>
               </div>
@@ -217,7 +215,7 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
                   })() },
                 ].map(({ label, value, mono }) => (
                   <div key={label} className="px-3 py-2.5 flex items-center justify-between gap-4">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase shrink-0">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase shrink-0">
                       {label}
                     </span>
                     <span className={cn("text-[11px] text-right truncate", mono && "font-mono")}>
@@ -227,19 +225,18 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
                 ))}
               </div>
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
 
           {/* Anlık Durum + Sunucu Yük Skoru */}
           <div className="grid grid-cols-2 gap-3 items-stretch">
             {/* Anlık Durum */}
-            <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
+            <div className="rounded-[8px] p-2 flex flex-col" style={{ backgroundColor: "var(--section-bg)" }}>
               <div
-                className="rounded-[4px] flex-1 flex flex-col"
-                style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+                className="rounded-[5px] flex-1 flex flex-col"
+                style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
               >
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
-                  <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center justify-between">
+                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                     Anlık Durum
                   </span>
                   {onRefresh && (
@@ -266,7 +263,7 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
                   ].map(({ label, value }) => (
                     <div key={label} className="flex flex-col items-center justify-center py-3 gap-1.5">
                       <AnimatedGauge value={value} className="size-14 text-[10px] font-semibold" />
-                      <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                      <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                         {label}
                       </span>
                       <span className="text-[10px] text-muted-foreground">%{value}</span>
@@ -276,15 +273,14 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
                     <div className="size-14 flex items-center justify-center">
                       <span className="text-3xl font-bold tabular-nums">{sessionCount}</span>
                     </div>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                       Oturum
                     </span>
                     <span className="text-[10px] text-muted-foreground">aktif</span>
                   </div>
                 </div>
               </div>
-              <div className="h-2" />
-            </div>
+                    </div>
 
             {/* Sunucu Yük Skoru */}
             <LoadScoreCard cpu={server.cpu} ram={server.ram} disk={server.disk} />
@@ -295,13 +291,13 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
         </div>
 
         {/* Right column: Weekly Stats Chart */}
-        <div className="rounded-[8px] p-2 pb-0 flex flex-col" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2 flex flex-col" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] flex-1 flex flex-col overflow-hidden"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] flex-1 flex flex-col overflow-hidden"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40 shrink-0">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+            <div className="px-3 py-2 bg-muted/20 border-b border-border shrink-0">
+              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                 Haftalık Ortalama (CPU)
               </span>
             </div>
@@ -309,8 +305,7 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
               <span className="text-[11px] text-muted-foreground">Veri toplanıyor...</span>
             </div>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
       </div>
 
     </div>

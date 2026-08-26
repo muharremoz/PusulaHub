@@ -83,6 +83,13 @@ function mapServer(r: Record<string, unknown>): ServerRow {
 }
 
 const POLL_INTERVAL_MS = 10_000  // 10 saniye
+
+/* Salt-okunur mod — agent'lardan veri çekilir, hafızaya yazılır, ama DB'ye
+   HİÇBİR ŞEY yazılmaz. Lokal geliştirme içindir: prod poller aynı verileri
+   zaten yazıyor, ikisi birlikte çalışırsa kullanım istatistikleri çift
+   sayılır (yaşandı: günde 288 olması gereken örnek 528'e çıktı).
+   .env.local'e POLLER_READONLY=1 eklenir. */
+const isReadOnly = (): boolean => process.env.POLLER_READONLY === "1"
 const toIso = (d: Date | null): string => (d ? d.toISOString() : "")
 
 /* Agent state_desc UPPERCASE döner → normalize (eski CHECK constraint uyumu). */
@@ -95,6 +102,7 @@ function normalizeDbStatus(raw: string | null | undefined): string {
 
 /* ── Failed logon denemelerini hub'a yaz (dedup RPC) ── */
 async function persistFailedLogons(serverId: string, serverName: string, report: AgentReport): Promise<void> {
+  if (isReadOnly()) return
   const failedLogins = report.logs?.failedLogins
   if (!failedLogins || !failedLogins.length) return
   try {
@@ -121,6 +129,7 @@ async function persistFailedLogons(serverId: string, serverName: string, report:
 
 /* ── AD / IIS / SQL / UserProcesses verilerini hub'a yaz ── */
 async function persistHeavyData(serverName: string, report: AgentReport): Promise<void> {
+  if (isReadOnly()) return
   try {
     // UserDailyUsage — running average (RPC). Sistem hesaplarını filtrele.
     if (report.userProcesses?.length) {
@@ -219,6 +228,7 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
 
 /* ── Pending mesajları Active session'daki kullanıcıya ilet (DEĞİŞMEZ mantık) ── */
 async function retryPendingForActiveUsers(server: ServerRow, port: number, report: AgentReport): Promise<void> {
+  if (isReadOnly()) return  // lokalde gerçek kullanıcılara popup gönderilmesin
   if (!server.ApiKey) return
   const activeUsers = new Set((report.sessions ?? []).filter(s => s.username && s.state === "Active").map(s => s.username.toLowerCase()))
   if (activeUsers.size === 0) return
@@ -317,6 +327,7 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
 
 /* ── File sunucusundan firma klasör boyutları → companies.file_storage_mb ── */
 async function collectFileStorage(): Promise<void> {
+  if (isReadOnly()) return
   try {
     const { data } = await hub().from("companies")
       .select("company_id, file_server_id, user_count, file_storage_mb")
@@ -365,6 +376,7 @@ async function collectFileStorage(): Promise<void> {
 
 /* ── Firma kullanım istatistikleri (5 dk'da bir): pre → fileStorage → post ── */
 async function updateCompanyUsage(): Promise<void> {
+  if (isReadOnly()) return
   try {
     await hub().rpc("update_company_usage_pre")
     await collectFileStorage()
@@ -455,7 +467,7 @@ let _timer: ReturnType<typeof setInterval> | null = null
 
 export function startPolling(): void {
   if (_timer) return
-  console.log(`[Poller] Başlatıldı — ${POLL_INTERVAL_MS / 1000}s aralıkla`)
+  console.log(`[Poller] Başlatıldı — ${POLL_INTERVAL_MS / 1000}s aralıkla${isReadOnly() ? " · SALT-OKUNUR (DB'ye yazilmaz)" : ""}`)
   setTimeout(pollAll, 5000)
   setTimeout(updateCompanyUsage, 8000)
   _timer = setInterval(pollAll, POLL_INTERVAL_MS)

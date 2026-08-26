@@ -85,8 +85,8 @@ export function StepUsers({
         <div className="flex items-center gap-2">
           {userLimit > 0 && (
             <span className={cn(
-              "text-[10px] font-medium px-2 py-0.5 rounded-[4px]",
-              limitReached ? "bg-red-100 text-red-600" : "bg-muted text-muted-foreground"
+              "text-[10px] font-medium px-2 py-0.5 rounded-[5px]",
+              limitReached ? "bg-red-100 text-red-600 dark:text-red-400" : "bg-muted text-muted-foreground"
             )}>
               {activeExisting + users.length} / {userLimit} kullanıcı hakkı
             </span>
@@ -110,7 +110,7 @@ export function StepUsers({
 
       {/* Mevcut kullanıcılar — hata */}
       {existingUsersError && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
           <AlertTriangle className="size-3.5 shrink-0" />
           {existingUsersError}
         </div>
@@ -119,7 +119,7 @@ export function StepUsers({
       {/* Mevcut kullanıcılar listesi */}
       {showExisting && (
         <div className="rounded-[5px] border border-border/50 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
+          <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
             <span className="text-[11px] font-medium">AD'de Kayıtlı Kullanıcılar</span>
             <button onClick={() => setShowExisting(false)} className="text-muted-foreground hover:text-foreground transition-colors">
               <X className="size-3.5" />
@@ -129,9 +129,9 @@ export function StepUsers({
             {existingUsersLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="grid grid-cols-[1fr_1fr_80px] gap-3 items-center px-3 py-2">
-                  <Skeleton className="h-3 w-24 rounded-[3px]" />
-                  <Skeleton className="h-3 w-32 rounded-[3px]" />
-                  <Skeleton className="h-3 w-14 rounded-[3px] ml-auto" />
+                  <Skeleton className="h-3 w-24 rounded-[5px]" />
+                  <Skeleton className="h-3 w-32 rounded-[5px]" />
+                  <Skeleton className="h-3 w-14 rounded-[5px] ml-auto" />
                 </div>
               ))
             ) : existingUsers.length === 0 ? (
@@ -290,8 +290,8 @@ export function StepUsers({
                         { ok: str.lengthOk,   label: "7+" },
                       ].map(({ ok, label }) => (
                         <span key={label} className={cn(
-                          "text-[9px] px-1 py-0.5 rounded-[3px]",
-                          ok ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
+                          "text-[9px] px-1 py-0.5 rounded-[5px]",
+                          ok ? "bg-emerald-100 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
                         )}>
                           {label}
                         </span>
@@ -325,15 +325,15 @@ export function StepUsers({
 
       {/* Test paneli */}
       {testRunning && (
-        <div className="rounded-[5px] border border-blue-200 bg-blue-50/30 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-200/60 bg-blue-50">
+        <div className="rounded-[5px] border border-blue-500/25 bg-blue-50/30 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-500/25/60 bg-blue-500/15">
             <div className="flex items-center gap-2">
-              <FlaskConical className="size-3.5 text-blue-700" />
+              <FlaskConical className="size-3.5 text-blue-700 dark:text-blue-400" />
               <p className="text-[11px] font-semibold text-blue-800">Test: AD Kullanıcı Oluşturma</p>
             </div>
             <button
               onClick={() => setTestRunning(false)}
-              className="text-blue-700 hover:text-blue-900 transition-colors"
+              className="text-blue-700 dark:text-blue-400 hover:text-blue-900 transition-colors"
               title="Kapat"
             >
               <X className="size-3.5" />
@@ -371,7 +371,7 @@ export function StepUsers({
               ? "Sunucu veya firma seçili değil"
               : "Bu kullanıcıları AD'ye ekle (test)"
           }
-          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border border-blue-200 bg-blue-50 text-[11px] text-blue-700 hover:bg-blue-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border border-blue-500/25 bg-blue-500/15 text-[11px] text-blue-700 dark:text-blue-400 hover:bg-blue-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <FlaskConical className="size-3.5" />
           Test Et — Bu adıma kadar olanı AD'ye uygula

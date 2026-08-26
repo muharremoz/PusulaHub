@@ -2,15 +2,12 @@ import { NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { resolveCreators } from "@/lib/hub-users"
-import { resolveCompanyNames } from "@/lib/hub-companies"
 
 /**
  * GET /api/dashboard/summary — dashboard verisini tek atışta toplar.
  * HİBRİT (Faz 4 geçişi): sunucu/firma/başarısız-giriş mssql'de kalır;
- * projeler/takvim/notlar Supabase `hub` schema'sından okunur.
+ * takvim/notlar Supabase `hub` schema'sından okunur.
  */
-
-const DONE_COLUMNS = new Set(["Tamamlandı", "Done", "Bitti"])
 
 interface FailedLogonRow { Timestamp: string; ServerName: string; Username: string; ClientIp: string }
 
@@ -90,61 +87,13 @@ export async function GET() {
     const { count: failedLogonTotal24h } = await sb.schema("hub").from("failed_logon_attempts")
       .select("id", { count: "exact", head: true }).gte("timestamp", since24h)
 
-    /* ── Projeler / Takvim / Notlar (hub) ── */
-    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-    const todayEnd   = new Date(); todayEnd.setHours(23, 59, 59, 999)
-    const todayDate  = todayStart.toISOString().slice(0, 10)
-
-    const [{ data: projData }, { data: calData }, { data: noteData }] = await Promise.all([
-      sb.schema("hub").from("projects")
-        .select("id, name, color, status, company_id, created_at")
-        .eq("status", "active").order("created_at", { ascending: false }),
-      sb.schema("hub").from("calendar_events")
-        .select("id, title, start_date, end_date, all_day, color, type")
-        .lte("start_date", todayEnd.toISOString()).gte("end_date", todayStart.toISOString())
-        .order("start_date", { ascending: true }).limit(8),
+    /* ── Notlar (hub) ── */
+    
+    const [{ data: noteData }] = await Promise.all([
       sb.schema("hub").from("notes")
         .select("id, title, color, pinned, tags, created_by, created_at, updated_at")
         .order("pinned", { ascending: false }).order("updated_at", { ascending: false }).limit(6),
     ])
-
-    // Aktif proje + görev/done/next-due hesabı
-    const activeProjs = (projData ?? []) as { id: string; name: string; color: string; company_id: string | null; created_at: string }[]
-    const projIds = activeProjs.map(p => p.id)
-    const stats = new Map<string, { total: number; done: number; nextDue: string | null }>()
-    if (projIds.length) {
-      const [{ data: cols }, { data: tasks }] = await Promise.all([
-        sb.schema("hub").from("project_columns").select("id, name, project_id").in("project_id", projIds),
-        sb.schema("hub").from("project_tasks").select("project_id, column_id, due_date").in("project_id", projIds),
-      ])
-      const colName = new Map(((cols ?? []) as { id: string; name: string }[]).map(c => [c.id, c.name]))
-      for (const t of (tasks ?? []) as { project_id: string; column_id: string; due_date: string | null }[]) {
-        const s = stats.get(t.project_id) ?? { total: 0, done: 0, nextDue: null }
-        s.total++
-        if (DONE_COLUMNS.has(colName.get(t.column_id) ?? "")) s.done++
-        if (t.due_date && t.due_date >= todayDate && (s.nextDue === null || t.due_date < s.nextDue)) s.nextDue = t.due_date
-        stats.set(t.project_id, s)
-      }
-    }
-
-    // Görevi olan aktif projeler (top 20) + aktif proje sayısı
-    const withTasks = activeProjs.filter(p => (stats.get(p.id)?.total ?? 0) > 0)
-    const activeProjects = withTasks.length
-    const companyNames = await resolveCompanyNames(withTasks.map(p => p.company_id))
-    const projects = withTasks.slice(0, 20).map(p => {
-      const s = stats.get(p.id)!
-      return {
-        id: p.id, name: p.name, color: p.color,
-        companyName: p.company_id ? (companyNames.get(p.company_id) ?? null) : null,
-        taskCount: s.total, doneCount: s.done, nextDueDate: s.nextDue,
-      }
-    })
-
-    // Takvim (bugün)
-    const calendar = ((calData ?? []) as { id: string; title: string; start_date: string; end_date: string; all_day: boolean; color: string; type: string }[]).map(c => ({
-      id: c.id, title: c.title, startDate: fmt(c.start_date), endDate: fmt(c.end_date),
-      allDay: !!c.all_day, color: c.color, type: c.type,
-    }))
 
     // Notlar
     const noteRows = (noteData ?? []) as { id: string; title: string; color: string; pinned: boolean; tags: string | null; created_by: string | null; created_at: string; updated_at: string }[]
@@ -157,7 +106,7 @@ export async function GET() {
     }))
 
     return NextResponse.json({
-      kpi: { totalServers, onlineServers, offlineServers, totalCompanies: totalCompanies ?? 0, totalCompanyUsers, activeProjects },
+      kpi: { totalServers, onlineServers, offlineServers, totalCompanies: totalCompanies ?? 0, totalCompanyUsers },
       failedLogons: {
         total24h: failedLogonTotal24h ?? 0,
         recent: failedLogons.map((f) => ({ timestamp: f.Timestamp, serverName: f.ServerName, username: f.Username, clientIp: f.ClientIp })),
@@ -165,8 +114,6 @@ export async function GET() {
       disks: diskList,
       ramBreakdown,
       problemServers,
-      projects,
-      calendar,
       notes,
     })
   } catch (err) {

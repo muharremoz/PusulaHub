@@ -114,7 +114,7 @@ function WpfMessageWindow({
           <div className="flex-1 min-w-0">
             <div className="mb-1">
               <span
-                className="text-[9px] font-bold px-[6px] py-[2px] rounded-[4px]"
+                className="text-[9px] font-bold px-[6px] py-[2px] rounded-[5px]"
                 style={{ background: t.badgeBg, color: t.fg }}
               >
                 {t.label}
@@ -187,14 +187,14 @@ function DesktopFrame({ children }: { children: React.ReactNode }) {
       <div className="absolute bottom-0 left-0 right-0 h-10 bg-[rgba(0,0,0,0.7)] backdrop-blur-sm flex items-center px-3 gap-2 z-10">
         <div className="flex items-center gap-1.5 ml-auto">
           <div className="relative group">
-            <div className="w-8 h-8 rounded-[4px] bg-[#3A3A3A] flex items-center justify-center cursor-pointer hover:bg-[#555] transition-colors">
+            <div className="w-8 h-8 rounded-[5px] bg-[#3A3A3A] flex items-center justify-center cursor-pointer hover:bg-[#555] transition-colors">
               <Monitor className="size-4 text-white" />
             </div>
             {/* Yeşil bağlantı noktası */}
             <div className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-emerald-400 border border-[rgba(0,0,0,0.7)]" />
             {/* Tooltip */}
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block pointer-events-none">
-              <div className="bg-[#111] text-white text-[10px] px-2 py-1 rounded-[4px] whitespace-nowrap">
+              <div className="bg-[#111] text-white text-[10px] px-2 py-1 rounded-[5px] whitespace-nowrap">
                 PusulaNotifier — Çalışıyor
               </div>
             </div>
@@ -233,7 +233,7 @@ function SettingsWindowPreview({ onClose }: { onClose: () => void }) {
 
       <div className="p-4 space-y-3">
         {/* Bağlantı */}
-        <div className="bg-white rounded-[6px] p-4" style={{ boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+        <div className="bg-white rounded-[5px] p-4" style={{ boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
           <p className="text-[10px] font-semibold text-[#9CA3AF] tracking-widest uppercase mb-3">Bağlantı</p>
           <div className="space-y-2.5">
             <div>
@@ -263,7 +263,7 @@ function SettingsWindowPreview({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Zamanlama */}
-        <div className="bg-white rounded-[6px] p-4" style={{ boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
+        <div className="bg-white rounded-[5px] p-4" style={{ boxShadow: "0 1px 4px rgba(0,0,0,.06)" }}>
           <p className="text-[10px] font-semibold text-[#9CA3AF] tracking-widest uppercase mb-3">Zamanlama</p>
           <div>
             <label className="text-[11px] font-semibold text-[#374151] block mb-1">Kontrol Aralığı (saniye)</label>
@@ -321,7 +321,7 @@ export default function PreviewPage() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-[10px] text-[#9CA3AF] font-mono">apps/agent/windows/notifier/</span>
-            <span className="text-[9px] bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-2 py-0.5 rounded-[4px] font-semibold">
+            <span className="text-[9px] bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-2 py-0.5 rounded-[5px] font-semibold">
               WPF · .NET 4.7.2
             </span>
           </div>
@@ -352,7 +352,7 @@ export default function PreviewPage() {
                   key={m.id}
                   onClick={() => handleTypeChange(i)}
                   className={cn(
-                    "text-[11px] font-medium px-3 h-8 rounded-[6px] border transition-colors",
+                    "text-[11px] font-medium px-3 h-8 rounded-[5px] border transition-colors",
                     active
                       ? "border-transparent text-white"
                       : "border-[#E5E7EB] text-[#6B7280] bg-white hover:bg-[#F9FAFB]",
@@ -423,7 +423,7 @@ export default function PreviewPage() {
               return (
                 <div key={type} className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
                   <div
-                    className="rounded-[4px] overflow-hidden bg-white"
+                    className="rounded-[5px] overflow-hidden bg-white"
                     style={{ boxShadow: "0 2px 4px rgba(0,0,0,.06)" }}
                   >
                     <div className="px-3 py-2 border-b border-[#F0F0F0]" style={{ background: t.hdrBg }}>
@@ -471,12 +471,12 @@ export default function PreviewPage() {
               <div className="bg-[#2D2D2D] rounded-[8px] px-3 py-2 flex items-center gap-2">
                 <span className="text-[10px] text-[#9CA3AF]">Görev Çubuğu</span>
                 <div className="relative group ml-2">
-                  <div className="w-8 h-8 rounded-[4px] bg-[#3A3A3A] flex items-center justify-center cursor-pointer hover:bg-[#555] transition-colors">
+                  <div className="w-8 h-8 rounded-[5px] bg-[#3A3A3A] flex items-center justify-center cursor-pointer hover:bg-[#555] transition-colors">
                     <Monitor className="size-4 text-white" />
                   </div>
                   <div className="absolute bottom-0.5 right-0.5 size-2 rounded-full bg-emerald-400 border border-[#2D2D2D]" />
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block pointer-events-none">
-                    <div className="bg-[#111] text-white text-[10px] px-2 py-1 rounded-[4px] whitespace-nowrap">
+                    <div className="bg-[#111] text-white text-[10px] px-2 py-1 rounded-[5px] whitespace-nowrap">
                       PusulaNotifier — Çalışıyor
                     </div>
                   </div>

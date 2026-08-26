@@ -224,10 +224,10 @@ export function TabFiles({ serverId }: Props) {
     <>
       <div className="space-y-2">
         {/* Toolbar */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] px-3 py-2 flex items-center gap-2"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] px-3 py-2 flex items-center gap-2"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
             {/* Drive buttons */}
             <div className="flex items-center gap-1 shrink-0">
@@ -244,7 +244,7 @@ export function TabFiles({ serverId }: Props) {
                     className={cn(
                       "flex items-center gap-1 px-2 py-1 rounded-[5px] text-[11px] font-medium transition-colors",
                       activeDrive === d
-                        ? "bg-[#1d64ff] text-white"
+                        ? "bg-primary text-primary-foreground"
                         : "bg-muted/60 text-muted-foreground hover:bg-muted"
                     )}
                   >
@@ -286,14 +286,13 @@ export function TabFiles({ serverId }: Props) {
               <RefreshCw className={cn("size-3", loading && "animate-spin")} />
             </button>
           </div>
-          <div className="h-2" />
-        </div>
+            </div>
 
         {/* File list */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] overflow-hidden"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] overflow-hidden"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
             {error ? (
               <div className="flex items-center gap-2 px-4 py-8 text-[12px] text-destructive justify-center">
@@ -319,7 +318,7 @@ export function TabFiles({ serverId }: Props) {
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                  <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
                     <TableHead className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground h-8 pl-3">
                       Ad
                     </TableHead>
@@ -342,7 +341,7 @@ export function TabFiles({ serverId }: Props) {
                       <TableRow
                         key={item.name}
                         className={cn(
-                          "hover:bg-muted/20 transition-colors",
+                          "hover:bg-muted/70 transition-colors",
                           item.isDir && "cursor-pointer"
                         )}
                         onClick={() => item.isDir && handleFolderClick(item)}
@@ -371,7 +370,7 @@ export function TabFiles({ serverId }: Props) {
                               <DropdownMenuTrigger asChild>
                                 <button
                                   onClick={(e) => e.stopPropagation()}
-                                  className="flex items-center justify-center size-6 rounded-[4px] hover:bg-muted/60 text-muted-foreground transition-colors ml-auto"
+                                  className="flex items-center justify-center size-6 rounded-[5px] hover:bg-muted/60 text-muted-foreground transition-colors ml-auto"
                                 >
                                   {isDownloading ? (
                                     <Loader2 className="size-3 animate-spin" />
@@ -382,7 +381,7 @@ export function TabFiles({ serverId }: Props) {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent
                                 align="end"
-                                className="rounded-[6px] min-w-[140px]"
+                                className="rounded-[5px] min-w-[140px]"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {previewable && (
@@ -421,8 +420,7 @@ export function TabFiles({ serverId }: Props) {
               {items.filter((i) => !i.isDir).length} dosya
             </div>
           )}
-          <div className="h-2" />
-        </div>
+            </div>
       </div>
 
       {/* Preview Dialog */}
@@ -452,7 +450,7 @@ export function TabFiles({ serverId }: Props) {
                 <img
                   src={previewUrl}
                   alt={preview.name}
-                  className="max-h-[70vh] max-w-full rounded-[4px] object-contain"
+                  className="max-h-[70vh] max-w-full rounded-[5px] object-contain"
                   onError={() => setPreviewError("Görsel yüklenemedi")}
                 />
                 {previewError && (

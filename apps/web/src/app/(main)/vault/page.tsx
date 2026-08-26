@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
+import { MetinFiltre } from "@/components/shared/liste-filtreleri"
 import { PageContainer } from "@/components/layout/page-container"
 import { StatsCard } from "@/components/shared/stats-card"
 import { Button } from "@/components/ui/button"
@@ -28,9 +30,10 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Checkbox } from "@muharremoz/pusula-ui";
+} from "@/components/ui/combobox-select"
+import {  } from "@muharremoz/pusula-ui";
 import { toast } from "sonner"
+import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils"
 import {
   Server,
@@ -70,14 +73,14 @@ import { copyToClipboard } from "@/lib/clipboard"
    Kategoriler
 ══════════════════════════════════════════════════════════ */
 const CATEGORIES = [
-  { id: "all",      label: "Tümü",           icon: KeyRound,  color: "text-[#6B7280]"  },
-  { id: "server",   label: "Sunucular",       icon: Server,    color: "text-blue-600"   },
-  { id: "database", label: "Veritabanı",      icon: Database,  color: "text-violet-600" },
-  { id: "network",  label: "Ağ Cihazları",    icon: Wifi,      color: "text-emerald-600"},
-  { id: "app",      label: "Uygulamalar",     icon: AppWindow, color: "text-orange-600" },
-  { id: "service",  label: "Servis Hesapları",icon: UserCog,   color: "text-rose-600"   },
-  { id: "web",      label: "Web / Panel",     icon: Globe,     color: "text-sky-600"    },
-  { id: "login",    label: "Login",           icon: LogIn,     color: "text-amber-600"  },
+  { id: "all",      label: "Tümü",           icon: KeyRound,  color: "text-muted-foreground"  },
+  { id: "server",   label: "Sunucular",       icon: Server,    color: "text-blue-600 dark:text-blue-400"   },
+  { id: "database", label: "Veritabanı",      icon: Database,  color: "text-violet-600 dark:text-violet-400" },
+  { id: "network",  label: "Ağ Cihazları",    icon: Wifi,      color: "text-emerald-600 dark:text-emerald-400"},
+  { id: "app",      label: "Uygulamalar",     icon: AppWindow, color: "text-orange-600 dark:text-orange-400" },
+  { id: "service",  label: "Servis Hesapları",icon: UserCog,   color: "text-rose-600 dark:text-rose-400"   },
+  { id: "web",      label: "Web / Panel",     icon: Globe,     color: "text-sky-600 dark:text-sky-400"    },
+  { id: "login",    label: "Login",           icon: LogIn,     color: "text-amber-600 dark:text-amber-400"  },
 ] as const
 
 type CategoryId = typeof CATEGORIES[number]["id"]
@@ -163,13 +166,13 @@ function PasswordAgeBadge({ changedAt }: { changedAt: string | null }) {
   if (days < 60) return null
   if (days < PASSWORD_MAX_AGE_DAYS) {
     return (
-      <span className="flex items-center gap-0.5 text-[9px] text-amber-600 font-medium" title={`${days} gün önce değiştirildi`}>
+      <span className="flex items-center gap-0.5 text-[9px] text-amber-600 dark:text-amber-400 font-medium" title={`${days} gün önce değiştirildi`}>
         <Clock className="size-2.5" /> {days}g
       </span>
     )
   }
   return (
-    <span className="flex items-center gap-0.5 text-[9px] text-red-600 font-semibold animate-pulse" title={`${days} gün önce — güncellenmeli!`}>
+    <span className="flex items-center gap-0.5 text-[9px] text-red-600 dark:text-red-400 font-semibold animate-pulse" title={`${days} gün önce — güncellenmeli!`}>
       <AlertTriangle className="size-2.5" /> {days}g
     </span>
   )
@@ -197,7 +200,7 @@ function CopyButton({ value, label, entryId, action }: { value: string; label: s
   return (
     <button
       onClick={copy}
-      className="h-6 w-6 flex items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+      className="h-6 w-6 flex items-center justify-center rounded-[5px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
     >
       {copied ? <Check className="size-3 text-emerald-500" /> : <Copy className="size-3" />}
     </button>
@@ -226,7 +229,7 @@ function PasswordField({ password, entryId }: { password: string; entryId?: stri
       </span>
       <button
         onClick={handleShow}
-        className="h-6 w-6 flex items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+        className="h-6 w-6 flex items-center justify-center rounded-[5px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
       >
         {show ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
       </button>
@@ -317,49 +320,56 @@ function EntryRow({
   const strength = STRENGTH[score]
 
   return (
-    <div className="grid grid-cols-[auto_1.5fr_1.3fr_1.4fr_1.6fr_0.8fr_0.8fr_auto] gap-3 items-center px-4 py-2.5 border-b border-border/40 last:border-0 hover:bg-muted/20 transition-colors group">
+    <tr className="hover:bg-muted/70 transition-colors group">
 
       {/* Favori */}
+      <td className="px-4 py-1.5 w-10">
       <button
         onClick={() => onToggleFavorite(entry.id)}
         className={cn(
-          "h-6 w-6 flex items-center justify-center rounded-[4px] transition-colors",
+          "h-6 w-6 flex items-center justify-center rounded-[5px] transition-colors",
           entry.isFavorite ? "text-amber-500" : "text-muted-foreground/30 hover:text-amber-400"
         )}
       >
         <Star className={cn("size-3.5", entry.isFavorite && "fill-current")} />
       </button>
+      </td>
 
       {/* Başlık */}
+      <td className="px-4 py-1.5">
       <div className="flex items-center gap-2.5 min-w-0">
         <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-muted/50", cat.color)}>
           <Icon className="size-3.5" />
         </div>
         <div className="min-w-0">
-          <p className="text-[12px] font-semibold truncate">{entry.title}</p>
-          {entry.notes && <p className="text-[9px] text-muted-foreground truncate">{entry.notes}</p>}
+          <p className="font-semibold truncate">{entry.title}</p>
+          {entry.notes && <p className="text-[11px] text-muted-foreground truncate">{entry.notes}</p>}
         </div>
       </div>
+      </td>
 
       {/* Host / IP */}
-      <div className="min-w-0">
-        <span className="text-[11px] font-mono text-muted-foreground truncate block">
-          {entry.host || entry.url || "—"}
-        </span>
-      </div>
+      <td className="text-muted-foreground px-4 py-1.5 font-mono text-[12px] max-w-52 truncate">
+        {entry.host || entry.url || "—"}
+      </td>
 
       {/* Kullanıcı adı */}
+      <td className="px-4 py-1.5">
       <div className="flex items-center gap-1.5 min-w-0 bg-muted/30 rounded-[5px] px-2 py-1">
-        <span className="text-[11px] font-mono truncate flex-1">{entry.username}</span>
+        <span className="text-[12px] font-mono truncate flex-1">{entry.username}</span>
         <CopyButton value={entry.username} label="Kullanıcı adı" entryId={entry.id} action="username_copied" />
       </div>
+      </td>
 
       {/* Şifre */}
+      <td className="px-4 py-1.5">
       <div className="bg-muted/30 rounded-[5px] px-2 py-1">
         <PasswordField password={entry.password} entryId={entry.id} />
       </div>
+      </td>
 
       {/* Güç + yaş */}
+      <td className="px-4 py-1.5">
       <div className="flex flex-col items-start gap-0.5">
         <div className="flex items-center gap-1.5">
           <div className="flex gap-[2px]">
@@ -370,14 +380,18 @@ function EntryRow({
         </div>
         <PasswordAgeBadge changedAt={entry.passwordChangedAt} />
       </div>
+      </td>
 
       {/* Güncelleme */}
-      <span className="text-[10px] text-muted-foreground">{formatRelativeDate(entry.updatedAt)}</span>
+      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px]">
+        {formatRelativeDate(entry.updatedAt)}
+      </td>
 
       {/* Aksiyon */}
+      <td className="px-4 py-1.5 text-right whitespace-nowrap">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="h-7 w-7 flex items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100">
+          <button className="h-7 w-7 flex items-center justify-center rounded-[5px] text-muted-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100">
             <MoreVertical className="size-3.5" />
           </button>
         </DropdownMenuTrigger>
@@ -388,13 +402,13 @@ function EntryRow({
           <DropdownMenuItem onClick={() => onToggleFavorite(entry.id)}>
             <Star className="size-3.5 mr-2" /> {entry.isFavorite ? "Favoriden Çıkar" : "Favorilere Ekle"}
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={() => onDelete(entry.id)} className="text-destructive focus:text-destructive">
+          <DropdownMenuItem onClick={() => onDelete(entry.id)} className="text-rose-600 focus:text-rose-600">
             <Trash2 className="size-3.5 mr-2" /> Sil
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    </div>
+      </td>
+    </tr>
   )
 }
 
@@ -533,8 +547,8 @@ function EntrySheet({
   return (
     <>
       <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
-        <SheetContent className="!w-[540px] !max-w-[540px] p-0 flex flex-col gap-0">
-          <SheetHeader className="px-5 py-4 border-b border-border/50">
+        <SheetContent className="!w-[540px] !max-w-[540px]">
+          <SheetHeader>
             <SheetTitle className="text-sm">{entry ? "Girişi Düzenle" : "Yeni Giriş Ekle"}</SheetTitle>
           </SheetHeader>
 
@@ -545,17 +559,17 @@ function EntrySheet({
 
               {/* Kategori */}
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Kategori</p>
                 </div>
                 <div className="px-3 py-3">
                   <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                    <SelectTrigger className="h-8 text-[11px] rounded-[5px] w-full">
+                    <SelectTrigger className="h-8 text-[13px] rounded-[5px] w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       {CATEGORIES.filter((c) => c.id !== "all").map((c) => (
-                        <SelectItem key={c.id} value={c.id} className="text-[11px]">
+                        <SelectItem key={c.id} value={c.id} className="text-[13px]">
                           {c.label}
                         </SelectItem>
                       ))}
@@ -566,17 +580,17 @@ function EntrySheet({
 
               {/* Temel Bilgiler */}
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Temel Bilgiler</p>
                 </div>
                 <div className="px-3 py-3 space-y-3">
                   <div>
                     <Label className="text-[11px] font-semibold mb-1 block">Başlık</Label>
-                    <Input className="h-8 text-[11px] rounded-[5px]" placeholder="DC-PRIMARY" value={form.title} onChange={(e) => set("title", e.target.value)} />
+                    <Input className="h-8 text-[13px] rounded-[5px]" placeholder="DC-PRIMARY" value={form.title} onChange={(e) => set("title", e.target.value)} />
                   </div>
                   <div>
                     <Label className="text-[11px] font-semibold mb-1 block">Kullanıcı Adı</Label>
-                    <Input className="h-8 text-[11px] rounded-[5px] font-mono" placeholder="Administrator" value={form.username} onChange={(e) => set("username", e.target.value)} />
+                    <Input className="h-8 text-[13px] rounded-[5px] font-mono" placeholder="Administrator" value={form.username} onChange={(e) => set("username", e.target.value)} />
                   </div>
                   <div>
                     <div className="flex items-center justify-between mb-1">
@@ -584,14 +598,14 @@ function EntrySheet({
                       <button
                         type="button"
                         onClick={openGenerator}
-                        className="flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-700 transition-colors"
+                        className="flex items-center gap-1 text-[10px] text-violet-600 dark:text-violet-400 hover:text-violet-700 dark:text-violet-400 transition-colors"
                       >
                         <Sparkles className="size-3" /> Şifre Üret
                       </button>
                     </div>
                     <div className="relative">
                       <Input
-                        className="h-8 text-[11px] rounded-[5px] font-mono pr-8"
+                        className="h-8 text-[13px] rounded-[5px] font-mono pr-8"
                         type={showPwd ? "text" : "password"}
                         placeholder="••••••••"
                         value={form.password}
@@ -616,21 +630,21 @@ function EntrySheet({
 
               {/* Ek Bilgiler */}
               <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
                   <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Ek Bilgiler</p>
                 </div>
                 <div className="px-3 py-3 space-y-3">
                   <div>
                     <Label className="text-[11px] font-semibold mb-1 block">Host / IP</Label>
-                    <Input className="h-8 text-[11px] rounded-[5px] font-mono" placeholder="192.168.1.10" value={form.host ?? ""} onChange={(e) => set("host", e.target.value)} />
+                    <Input className="h-8 text-[13px] rounded-[5px] font-mono" placeholder="192.168.1.10" value={form.host ?? ""} onChange={(e) => set("host", e.target.value)} />
                   </div>
                   <div>
                     <Label className="text-[11px] font-semibold mb-1 block">URL</Label>
-                    <Input className="h-8 text-[11px] rounded-[5px]" placeholder="https://panel.example.com" value={form.url ?? ""} onChange={(e) => set("url", e.target.value)} />
+                    <Input className="h-8 text-[13px] rounded-[5px]" placeholder="https://panel.example.com" value={form.url ?? ""} onChange={(e) => set("url", e.target.value)} />
                   </div>
                   <div>
                     <Label className="text-[11px] font-semibold mb-1 block">Notlar</Label>
-                    <Input className="h-8 text-[11px] rounded-[5px]" placeholder="Açıklama..." value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
+                    <Input className="h-8 text-[13px] rounded-[5px]" placeholder="Açıklama..." value={form.notes ?? ""} onChange={(e) => set("notes", e.target.value)} />
                   </div>
                 </div>
               </div>
@@ -638,11 +652,11 @@ function EntrySheet({
               {/* Veritabanları — sadece düzenleme + kategori = "database" */}
               {entry && form.category === "database" && (
                 <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40 flex items-center justify-between">
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center justify-between">
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <Database className="size-3" /> Veritabanları
                       {dbList && dbList.length > 0 && (
-                        <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[3px]">{dbList.length}</span>
+                        <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px]">{dbList.length}</span>
                       )}
                     </p>
                     <Button
@@ -660,11 +674,11 @@ function EntrySheet({
                   <div className="px-3 py-3">
                     {dbLoading ? (
                       <div className="space-y-1.5">
-                        <Skeleton className="h-7 rounded-[3px]" />
-                        <Skeleton className="h-7 rounded-[3px]" />
+                        <Skeleton className="h-7 rounded-[5px]" />
+                        <Skeleton className="h-7 rounded-[5px]" />
                       </div>
                     ) : dbError ? (
-                      <p className="text-[10px] text-red-600">{dbError}</p>
+                      <p className="text-[10px] text-red-600 dark:text-red-400">{dbError}</p>
                     ) : dbList === null ? (
                       <p className="text-[10px] text-muted-foreground text-center py-2">
                         Listeyi getirmek için <strong>Tara</strong>&apos;ya basın
@@ -674,7 +688,7 @@ function EntrySheet({
                     ) : (
                       <div className="divide-y divide-border/40">
                         {dbList.map((db) => (
-                          <div key={db} className="flex items-center gap-2 py-1.5 hover:bg-muted/20 px-1 rounded-[3px] transition-colors">
+                          <div key={db} className="flex items-center gap-2 py-1.5 hover:bg-muted/20 px-1 rounded-[5px] transition-colors">
                             <Database className="size-3 text-muted-foreground shrink-0" />
                             <span className="text-[11px] font-mono flex-1 truncate">{db}</span>
                             <DropdownMenu>
@@ -683,7 +697,7 @@ function EntrySheet({
                                   type="button"
                                   variant="ghost"
                                   size="sm"
-                                  className="h-6 w-6 p-0 rounded-[3px]"
+                                  className="h-6 w-6 p-0 rounded-[5px]"
                                   disabled={dbBusy === db}
                                 >
                                   <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -710,17 +724,17 @@ function EntrySheet({
               {/* Şifre Geçmişi (sadece düzenlemede) */}
               {entry && (
                 <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border">
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <History className="size-3" /> Şifre Geçmişi
-                      {historyItems.length > 0 && <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[3px]">{historyItems.length}</span>}
+                      {historyItems.length > 0 && <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px]">{historyItems.length}</span>}
                     </p>
                   </div>
                   <div className="px-3 py-3">
                     {histLoading ? (
                       <div className="space-y-2">
-                        <Skeleton className="h-4 w-full rounded-[3px]" />
-                        <Skeleton className="h-4 w-2/3 rounded-[3px]" />
+                        <Skeleton className="h-4 w-full rounded-[5px]" />
+                        <Skeleton className="h-4 w-2/3 rounded-[5px]" />
                       </div>
                     ) : historyItems.length === 0 ? (
                       <p className="text-[10px] text-muted-foreground text-center py-2">Henüz şifre değişikliği yok</p>
@@ -738,17 +752,17 @@ function EntrySheet({
               {/* Erişim Logları (sadece düzenlemede) */}
               {entry && (
                 <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
+                  <div className="px-3 py-2 bg-muted/20 border-b border-border">
                     <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <Activity className="size-3" /> Erişim Geçmişi
-                      {accessItems.length > 0 && <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[3px]">{accessItems.length}</span>}
+                      {accessItems.length > 0 && <span className="ml-1 text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px]">{accessItems.length}</span>}
                     </p>
                   </div>
                   <div className="px-3 py-3">
                     {accLoading ? (
                       <div className="space-y-2">
-                        <Skeleton className="h-3 w-full rounded-[3px]" />
-                        <Skeleton className="h-3 w-2/3 rounded-[3px]" />
+                        <Skeleton className="h-3 w-full rounded-[5px]" />
+                        <Skeleton className="h-3 w-2/3 rounded-[5px]" />
                       </div>
                     ) : accessItems.length === 0 ? (
                       <p className="text-[10px] text-muted-foreground text-center py-2">Henüz erişim kaydı yok</p>
@@ -801,7 +815,7 @@ function EntrySheet({
               <span className="text-[13px] font-mono font-bold flex-1 truncate select-all">{genPreview}</span>
               <CopyButton value={genPreview} label="Şifre" />
               <button onClick={() => setGenPreview(generatePasswordWithOptions(genOpts))}
-                className="h-6 w-6 flex items-center justify-center rounded-[4px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                className="h-6 w-6 flex items-center justify-center rounded-[5px] text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
                 <RefreshCw className="size-3" />
               </button>
             </div>
@@ -865,7 +879,7 @@ function EntrySheet({
 function HistoryRow({ item }: { item: PasswordHistory }) {
   const [show, setShow] = useState(false)
   return (
-    <div className="flex items-center gap-2 bg-muted/20 rounded-[4px] px-2.5 py-1.5">
+    <div className="flex items-center gap-2 bg-muted/20 rounded-[5px] px-2.5 py-1.5">
       <span className={cn("text-[10px] font-mono flex-1 truncate", !show && "tracking-widest")}>
         {show ? item.password : "••••••••"}
       </span>
@@ -942,7 +956,13 @@ export default function VaultPage() {
   }
 
   /* ── Filtreleme + sıralama ── */
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [hostFiltre, setHostFiltre] = useState("")
+  const [kadFiltre,  setKadFiltre]  = useState("")
+
   const filtered = useMemo(() => {
+    const host = hostFiltre.trim().toLocaleLowerCase("tr-TR")
+    const kad  = kadFiltre.trim().toLocaleLowerCase("tr-TR")
     let result = entries.filter((e) => {
       const inCat = category === "all" || e.category === category
       const q     = search.toLowerCase()
@@ -950,6 +970,9 @@ export default function VaultPage() {
                        e.username.toLowerCase().includes(q) ||
                        (e.host ?? "").toLowerCase().includes(q) ||
                        (e.url  ?? "").toLowerCase().includes(q)
+      // Sütun başlığı filtreleri
+      if (host && !`${e.host ?? ""} ${e.url ?? ""}`.toLocaleLowerCase("tr-TR").includes(host)) return false
+      if (kad && !e.username.toLocaleLowerCase("tr-TR").includes(kad)) return false
       return inCat && inSearch
     })
 
@@ -1079,182 +1102,52 @@ export default function VaultPage() {
 
         {/* ── Sol: Kategori Paneli ── */}
         <div className="w-52 shrink-0">
-          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
-            <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-              <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Kategoriler</p>
-              </div>
-              <div className="p-1.5 space-y-0.5">
-                {CATEGORIES.map((cat) => {
-                  const Icon = cat.icon
-                  const count = countFor(cat.id)
-                  const active = category === cat.id
-                  return (
-                    <button
-                      key={cat.id}
-                      onClick={() => setCategory(cat.id)}
-                      className={cn(
-                        "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[5px] text-left transition-colors",
-                        active ? "bg-primary text-primary-foreground" : "hover:bg-muted/60 text-foreground"
-                      )}
-                    >
-                      <Icon className={cn("size-3.5 shrink-0", active ? "text-primary-foreground" : cat.color)} />
-                      <span className="text-[11px] font-medium flex-1 truncate">{cat.label}</span>
-                      <span className={cn(
-                        "text-[10px] font-bold px-1.5 py-0.5 rounded-[3px]",
-                        active ? "bg-white/20 text-primary-foreground" : "bg-muted text-muted-foreground"
-                      )}>
-                        {count}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-            <div className="h-2" />
-          </div>
-
-          {/* Güvenlik özeti */}
-          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff] mt-0">
-            <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-              <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
-                <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Güvenlik</p>
-              </div>
-              <div className="p-3 space-y-2">
-                {STRENGTH.slice(3).map((s, i) => {
-                  const count = entries.filter((e) => Math.min(passwordScore(e.password), 5) === i + 3).length
-                  return (
-                    <div key={s.label} className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full shrink-0", s.color)} />
-                      <span className="text-[10px] text-muted-foreground flex-1">{s.label}</span>
-                      <span className="text-[11px] font-semibold tabular-nums">{count}</span>
-                    </div>
-                  )
-                })}
-                {STRENGTH.slice(0, 3).map((s, i) => {
-                  const count = entries.filter((e) => Math.min(passwordScore(e.password), 5) === i).length
-                  return count > 0 ? (
-                    <div key={s.label} className="flex items-center gap-2">
-                      <div className={cn("w-2 h-2 rounded-full shrink-0", s.color)} />
-                      <span className="text-[10px] text-muted-foreground flex-1">{s.label}</span>
-                      <span className="text-[11px] font-semibold tabular-nums text-red-600">{count}</span>
-                    </div>
-                  ) : null
-                })}
-                {/* Süre aşımı */}
-                {expiredCount > 0 && (
-                  <>
-                    <Separator className="my-1" />
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="size-2.5 text-red-500 shrink-0" />
-                      <span className="text-[10px] text-red-600 flex-1">Süresi dolan</span>
-                      <span className="text-[11px] font-semibold tabular-nums text-red-600">{expiredCount}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="h-2" />
-          </div>
-
-          {/* Favoriler */}
-          {entries.filter((e) => e.isFavorite).length > 0 && (
-            <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff] mt-0">
-              <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-                <div className="px-3 py-2.5 border-b border-border/40 bg-muted/30">
-                  <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
-                    <Star className="size-3 text-amber-500 fill-amber-500" /> Favoriler
-                  </p>
-                </div>
-                <div className="p-1.5 space-y-0.5">
-                  {entries.filter((e) => e.isFavorite).map((e) => {
-                    const cat = CATEGORIES.find((c) => c.id === e.category) ?? CATEGORIES[0]
-                    const Icon = cat.icon
-                    return (
-                      <button
-                        key={e.id}
-                        onClick={() => { setEditing(e); setSheetOpen(true) }}
-                        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-[5px] hover:bg-muted/60 transition-colors text-left"
-                      >
-                        <Icon className={cn("size-3 shrink-0", cat.color)} />
-                        <span className="text-[10px] font-medium truncate flex-1">{e.title}</span>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-              <div className="h-2" />
-            </div>
-          )}
-        </div>
-
-        {/* ── Sağ: Giriş Listesi ── */}
-        <div className="flex-1 min-w-0">
-          {/* Araç çubuğu */}
-          <div className="flex items-center gap-2 mb-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-              <Input
-                className="h-8 text-[11px] pl-8 rounded-[5px]"
-                placeholder="Başlık, kullanıcı adı veya host ara..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <Button
-              size="sm"
-              className="h-8 text-[11px] gap-1.5 shrink-0"
-              onClick={() => { setEditing(null); setSheetOpen(true) }}
-            >
-              <Plus className="size-3.5" /> Yeni Giriş
-            </Button>
-          </div>
-
-          <div className="rounded-[8px] p-2 pb-0 bg-[#eef3ff]">
-            <div className="rounded-[4px] bg-white overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-
-              {/* Tablo başlığı — sıralanabilir */}
-              <div className="grid grid-cols-[auto_1.5fr_1.3fr_1.4fr_1.6fr_0.8fr_0.8fr_auto] gap-3 items-center px-4 py-2.5 bg-muted/30 border-b border-border/40">
-                <span className="w-6" />
-                <SortHeader label="Başlık" sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Host / IP</span>
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Kullanıcı Adı</span>
-                <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">Şifre</span>
-                <SortHeader label="Güç" sortKey="strength" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Güncelleme" sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                <span className="w-7" />
-              </div>
-
-              {/* Satırlar */}
-              {loading ? (
-                <div className="p-4 space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-4">
-                      <Skeleton className="h-7 w-7 rounded-[5px]" />
-                      <Skeleton className="h-4 w-32" />
-                      <Skeleton className="h-4 w-28" />
-                      <Skeleton className="h-4 w-24" />
-                      <Skeleton className="h-4 flex-1" />
-                      <Skeleton className="h-4 w-20" />
-                    </div>
-                  ))}
-                </div>
-              ) : filtered.length === 0 ? (
-                <div className="py-16 flex flex-col items-center gap-3">
-                  <Lock className="size-8 text-muted-foreground/30" />
-                  <p className="text-[12px] text-muted-foreground font-medium">
-                    {entries.length === 0 ? "Henüz giriş eklenmedi" : "Sonuç bulunamadı"}
-                  </p>
-                  {entries.length === 0 && (
-                    <Button size="sm" className="h-8 text-[11px] gap-1.5"
-                      onClick={() => { setEditing(null); setSheetOpen(true) }}>
-                      <Plus className="size-3.5" /> İlk Girişi Ekle
-                    </Button>
-                  )}
-                </div>
-              ) : (
-                <div>
-                  {filtered.map((entry) => (
+          <ListeKarti
+            baslik="Şifre Kasası"
+            ikon={<ShieldCheck className="size-3.5" />}
+            toplam={entries.length}
+            filtreli={filtered.length}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-[14px] font-medium leading-[20px]">
+                <ListeThead>
+                  <th className="px-4 py-1.5 w-10" />
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Başlık" sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Host / IP" value={hostFiltre} onChange={setHostFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Kullanıcı Adı" value={kadFiltre} onChange={setKadFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">Şifre</th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Güç" sortKey="strength" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Güncelleme" sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+                </ListeThead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <tr key={i}>
+                        {Array.from({ length: 7 }).map((_, j) => (
+                          <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                        ))}
+                        <td />
+                      </tr>
+                    ))
+                  ) : filtered.length === 0 ? (
+                    <ListeBosSatir
+                      sutunSayisi={8}
+                      toplam={entries.length}
+                      bosMesaj="Henüz giriş eklenmedi."
+                      filtreliMesaj="Sonuç bulunamadı."
+                    />
+                  ) : filtered.map((entry) => (
                     <EntryRow
                       key={entry.id}
                       entry={entry}
@@ -1263,24 +1156,10 @@ export default function VaultPage() {
                       onToggleFavorite={handleToggleFavorite}
                     />
                   ))}
-                </div>
-              )}
-
-              {/* Footer */}
-              {!loading && filtered.length > 0 && (
-                <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-border/40 bg-muted/20">
-                  <ShieldCheck className="size-3 text-muted-foreground" />
-                  <span className="text-[10px] text-muted-foreground">
-                    {filtered.length} giriş listeleniyor
-                    {entries.filter((e) => e.isFavorite).length > 0 && (
-                      <span className="ml-2">· <Star className="size-2.5 inline text-amber-500 fill-amber-500" /> {entries.filter((e) => e.isFavorite).length} favori</span>
-                    )}
-                  </span>
-                </div>
-              )}
+                </tbody>
+              </table>
             </div>
-            <div className="h-2" />
-          </div>
+          </ListeKarti>
 
         </div>
       </div>

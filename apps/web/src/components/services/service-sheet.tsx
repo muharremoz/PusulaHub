@@ -12,7 +12,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
+} from "@/components/ui/combobox-select"
 import { cn } from "@/lib/utils"
 import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot } from "lucide-react"
 import { toast } from "sonner"
@@ -31,8 +31,8 @@ const IIS_CATEGORIES = ["API Hizmeti", "Entegrasyonlar"]
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
       </div>
       <div className="p-3 space-y-3">{children}</div>
     </div>
@@ -43,7 +43,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, hint, className }: { label: string; children: React.ReactNode; hint?: string; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
       {hint && <p className="text-[10px] text-muted-foreground">{hint}</p>}
     </div>
@@ -211,7 +211,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0 overflow-hidden">
+      <SheetContent className="!w-[520px] !max-w-[520px]">
 
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
           <SheetTitle className="text-sm font-semibold">
@@ -238,7 +238,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                       className={cn(
                         "flex items-center gap-2 px-3 py-2.5 rounded-[5px] border transition-colors text-[11px] font-medium",
                         active
-                          ? "border-foreground bg-[#1d64ff] text-white"
+                          ? "border-foreground bg-primary text-primary-foreground"
                           : "border-border/60 hover:border-foreground/40 hover:bg-muted/30",
                       )}
                     >
@@ -267,19 +267,19 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                   placeholder={type === "iis-site" ? "Pusula RFID" : "Toptan Satış"}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
 
               <Field label="Kategori">
                 {type === "iis-site" ? (
                   <Select value={category} onValueChange={setCategory}>
-                    <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                    <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                       <SelectValue placeholder="Kategori seçin…" />
                     </SelectTrigger>
                     <SelectContent className="rounded-[5px]">
                       {IIS_CATEGORIES.map((c) => (
-                        <SelectItem key={c} value={c} className="text-[11px]">{c}</SelectItem>
+                        <SelectItem key={c} value={c} className="text-[13px]">{c}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -287,7 +287,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                   <Input
                     value={category}
                     onChange={(e) => setCategory(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8"
+                    className="rounded-[5px] text-[13px] h-8"
                     placeholder="Pusula Programları"
                   />
                 )}
@@ -299,7 +299,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                   placeholder="0"
                   value={displayOrder}
                   onChange={(e) => setDisplayOrder(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8 tabular-nums"
+                  className="rounded-[5px] text-[13px] h-8 tabular-nums"
                 />
               </Field>
             </Section>
@@ -315,7 +315,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         placeholder="C:\Pusula\Toptan"
                         value={pSourceFolderPath}
                         onChange={(e) => setPSourceFolderPath(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                       />
                     </div>
                   </Field>
@@ -329,7 +329,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         placeholder="TptParametre.txt"
                         value={pParamFileName}
                         onChange={(e) => setPParamFileName(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                       />
                     </div>
                   </Field>
@@ -339,7 +339,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                       placeholder="TPT"
                       value={pProgramCode}
                       onChange={(e) => setPProgramCode(e.target.value)}
-                      className="rounded-[5px] text-[11px] h-8 font-mono uppercase"
+                      className="rounded-[5px] text-[13px] h-8 font-mono uppercase"
                     />
                   </Field>
                 </Section>
@@ -355,7 +355,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         placeholder="pusulax.exe"
                         value={pExeName}
                         onChange={(e) => setPExeName(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                       />
                     </div>
                   </Field>
@@ -374,7 +374,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         placeholder="C:\Pusula\RFID"
                         value={iSourceFolderPath}
                         onChange={(e) => setISourceFolderPath(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                       />
                     </div>
                   </Field>
@@ -392,7 +392,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         placeholder="appsettings.json"
                         value={iConfigFileName}
                         onChange={(e) => setIConfigFileName(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pl-7 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
                       />
                     </div>
                   </Field>
@@ -405,7 +405,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                       placeholder={"{firmaKod}_RFID"}
                       value={iSiteNamePattern}
                       onChange={(e) => setISiteNamePattern(e.target.value)}
-                      className="rounded-[5px] text-[11px] h-8 font-mono"
+                      className="rounded-[5px] text-[13px] h-8 font-mono"
                     />
                   </Field>
                 </Section>
@@ -413,7 +413,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                 <Section title="Port Havuzu">
                   <Field label="Port Aralığı" hint="Sihirbaz çalıştığında bu havuzdan sıradaki boş port atanır.">
                     <Select value={iPortRangeId} onValueChange={setIPortRangeId}>
-                      <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                      <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                         <SelectValue placeholder={portRangesLoading ? "Yükleniyor…" : "Port aralığı seçin…"} />
                       </SelectTrigger>
                       <SelectContent className="rounded-[5px]">
@@ -425,7 +425,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         {portRanges.map((r) => {
                           const free = r.totalPorts - r.usedCount
                           return (
-                            <SelectItem key={r.id} value={String(r.id)} className="text-[11px]">
+                            <SelectItem key={r.id} value={String(r.id)} className="text-[13px]">
                               <div className="flex items-center gap-2 w-full">
                                 <Waypoints className="size-3 text-muted-foreground shrink-0" />
                                 <span className="font-medium">{r.name}</span>
@@ -472,7 +472,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
               type="button"
               disabled={!canSave}
               onClick={handleSave}
-              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 flex items-center justify-center gap-1.5 text-[11px] font-semibold py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving && <Loader2 className="size-3.5 animate-spin" />}
               {isEdit ? "Kaydet" : "Hizmet Ekle"}

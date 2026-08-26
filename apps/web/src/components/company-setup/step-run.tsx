@@ -45,9 +45,9 @@ function CopyField({ label, value, mono }: { label: string; value: string; mono?
         type="button"
         onClick={handle}
         className={cn(
-          "shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] text-[10px] font-medium transition-colors",
+          "shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded-[5px] text-[10px] font-medium transition-colors",
           copied
-            ? "bg-emerald-100 text-emerald-700"
+            ? "bg-emerald-100 text-emerald-700 dark:text-emerald-400"
             : "text-muted-foreground hover:bg-muted hover:text-foreground"
         )}
         title="Kopyala"
@@ -342,13 +342,13 @@ export function StepRun({
 
       {/* Tamamlama banner */}
       {completed && (
-        <div className="rounded-[5px] border border-emerald-200 bg-emerald-50 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2.5 border-b border-emerald-200/60">
+        <div className="rounded-[5px] border border-emerald-500/25 bg-emerald-500/15 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2.5 border-b border-emerald-500/25/60">
             <div>
               <p className="text-[11px] font-semibold text-emerald-800">{firmaId} kurulumu başarıyla tamamlandı</p>
-              <p className="text-[10px] text-emerald-600 mt-0.5">{users.length} kullanıcı oluşturuldu</p>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">{users.length} kullanıcı oluşturuldu</p>
             </div>
-            <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-emerald-300 text-emerald-700 hover:bg-emerald-100 transition-colors">
+            <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-emerald-300 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 transition-colors">
               <RotateCcw className="size-3.5" />
               Yeni Firma
             </button>
@@ -357,7 +357,7 @@ export function StepRun({
           <div className="flex items-center gap-2 px-3 py-2.5">
             <button
               onClick={() => setShowFw(true)}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 transition-colors"
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-orange-300 bg-orange-500/15 text-orange-700 dark:text-orange-400 hover:bg-orange-100 transition-colors"
             >
               <Shield className="size-3.5" />
               Firewall Adımları
@@ -367,7 +367,7 @@ export function StepRun({
             </button>
             <button
               onClick={() => setShowMsg(true)}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors"
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-blue-300 bg-blue-500/15 text-blue-700 dark:text-blue-400 hover:bg-blue-100 transition-colors"
             >
               <MessageSquare className="size-3.5" />
               Kullanıcı Mesajı
@@ -378,10 +378,10 @@ export function StepRun({
 
       {/* Hata banner */}
       {hasError && !completed && (
-        <div className="rounded-[5px] border border-red-200 bg-red-50 px-3 py-2.5">
+        <div className="rounded-[5px] border border-red-500/25 bg-red-500/15 px-3 py-2.5">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold text-red-800">Kurulum tamamlanamadı</p>
-            <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-red-300 text-red-700 hover:bg-red-100 transition-colors">
+            <button onClick={onReset} className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-red-300 text-red-700 dark:text-red-400 hover:bg-red-100 transition-colors">
               <RotateCcw className="size-3.5" />
               Baştan Başla
             </button>
@@ -395,11 +395,11 @@ export function StepRun({
           <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
           <div className="relative w-full max-w-sm mx-4 rounded-[8px] border border-border bg-background shadow-xl overflow-hidden">
             {/* Header */}
-            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/50 bg-amber-50">
-              <AlertTriangle className="size-4 text-amber-600 shrink-0" />
+            <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border/50 bg-amber-500/15">
+              <AlertTriangle className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
               <div>
                 <p className="text-[12px] font-semibold text-amber-900">Şifre Karmaşıklık Hatası</p>
-                <p className="text-[11px] text-amber-700 mt-0.5">
+                <p className="text-[11px] text-amber-700 dark:text-amber-400 mt-0.5">
                   <span className="font-mono font-semibold">{pwRetry.fullUsername}</span> için şifre AD kuralını karşılamıyor.
                 </p>
               </div>
@@ -438,7 +438,7 @@ export function StepRun({
                   <p className="text-[10px] text-red-500">AD karmaşıklık kuralı karşılanmıyor.</p>
                 )}
                 {newPw && meetsAdComplexity(newPw) && (
-                  <p className="text-[10px] text-emerald-600">✓ Şifre uygun, kurulum devam edebilir.</p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400">✓ Şifre uygun, kurulum devam edebilir.</p>
                 )}
               </div>
             </div>
@@ -457,7 +457,7 @@ export function StepRun({
                 className={cn(
                   "flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] transition-colors",
                   meetsAdComplexity(newPw)
-                    ? "bg-[#1d64ff] text-white hover:bg-foreground/90"
+                    ? "bg-primary text-primary-foreground hover:bg-foreground/90"
                     : "bg-muted text-muted-foreground cursor-not-allowed"
                 )}
               >
@@ -480,10 +480,10 @@ export function StepRun({
                 onClick={() => setFwItems((prev) => prev.map((f, i) => i === idx ? { ...f, checked: !f.checked } : f))}
                 className={cn(
                   "w-full flex items-start gap-3 px-3 py-2.5 rounded-[5px] border text-left transition-colors",
-                  item.checked ? "border-emerald-200 bg-emerald-50" : "border-border/50 hover:bg-muted/20"
+                  item.checked ? "border-emerald-500/25 bg-emerald-500/15" : "border-border/50 hover:bg-muted/20"
                 )}
               >
-                <span className={cn("size-4 rounded-[3px] border-2 flex items-center justify-center shrink-0 mt-0.5",
+                <span className={cn("size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 mt-0.5",
                   item.checked ? "bg-foreground border-foreground" : "border-border"
                 )}>
                   {item.checked && <Check className="size-2.5 text-background" strokeWidth={3} />}
@@ -498,7 +498,7 @@ export function StepRun({
               </button>
             ))}
             {fwDone === fwItems.length && (
-              <div className="flex items-center gap-1.5 px-3 py-2 rounded-[5px] bg-emerald-50 border border-emerald-200 text-[11px] text-emerald-700 font-medium">
+              <div className="flex items-center gap-1.5 px-3 py-2 rounded-[5px] bg-emerald-500/15 border border-emerald-500/25 text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">
                 <Check className="size-3.5" strokeWidth={3} />
                 Tüm adımlar tamamlandı!
               </div>
@@ -513,8 +513,8 @@ export function StepRun({
           <div className="space-y-4 max-h-[70vh] overflow-auto pr-1">
             {credentials.map((c, i) => (
               <div key={i} className="rounded-[5px] border border-border/60 overflow-hidden">
-                <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                  <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
                     Kullanıcı · {c.displayName}
                   </p>
                 </div>
@@ -522,7 +522,7 @@ export function StepRun({
                 <div className="p-3 space-y-3">
                   {/* VPN */}
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">VPN Bilgileri</p>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">VPN Bilgileri</p>
                     <div className="space-y-1">
                       <CopyField label="Kullanıcı Adı" value={c.vpnUsername} />
                       <CopyField label="Şifre"         value={c.password} mono />
@@ -531,7 +531,7 @@ export function StepRun({
 
                   {/* RDP */}
                   <div>
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">RDP Bilgileri</p>
+                    <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider mb-1.5">RDP Bilgileri</p>
                     <div className="space-y-1">
                       <CopyField label="Sunucu"        value={c.rdpServer} />
                       <CopyField label="Kullanıcı Adı" value={c.rdpUsername} />
@@ -547,7 +547,7 @@ export function StepRun({
               className={cn(
                 "w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border text-[11px] font-medium transition-colors",
                 copied
-                  ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  ? "border-emerald-300 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                   : "border-border hover:bg-muted/40 text-foreground"
               )}
             >

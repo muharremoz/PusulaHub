@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 import { PageContainer } from "@/components/layout/page-container";
 import type { ADOU, ADUser } from "@/types";
 import { ADUserSheet } from "@/components/ad/ad-user-sheet";
@@ -9,7 +11,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui";
 import { Input } from "@/components/ui/input";
@@ -44,8 +45,8 @@ function OUTreeItem({
     <div>
       <button
         className={cn(
-          "w-full flex items-center gap-1.5 py-1.5 pr-2 text-left text-[11px] rounded-[4px] transition-colors",
-          isSelected ? "bg-[#1d64ff] text-white" : "hover:bg-black/5"
+          "w-full flex items-center gap-1.5 py-1.5 pr-2 text-left text-[11px] rounded-[5px] transition-colors",
+          isSelected ? "bg-primary text-primary-foreground" : "hover:bg-black/5"
         )}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         onClick={() => { onSelect(ou.path); if (hasChildren) setExpanded(!expanded); }}
@@ -106,6 +107,13 @@ export default function ADPage() {
   const [loading,    setLoading]    = useState(true);
   const [error,      setError]      = useState<string | null>(null);
 
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [adFiltre,    setAdFiltre]    = useState("");
+  const [kadFiltre,   setKadFiltre]   = useState("");
+  const [epostaFiltre, setEpostaFiltre] = useState("");
+  const [ouFiltre,    setOuFiltre]    = useState<string[]>([]);
+  const [durumFiltre, setDurumFiltre] = useState<string[]>([]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -136,43 +144,59 @@ export default function ADPage() {
     else { setSortKey(key); setSortDir("asc"); }
   };
 
-  const filtered = users
-    .filter((u) => {
-      if (search) {
-        const q = search.toLowerCase();
-        return (
-          u.displayName.toLowerCase().includes(q) ||
-          u.username.toLowerCase().includes(q) ||
-          u.email.toLowerCase().includes(q)
-        );
-      }
-      if (selectedOU && selectedOU !== "Firmalar") return u.ou === selectedOU;
-      return true;
-    })
-    .sort((a, b) => {
-      const mul = sortDir === "asc" ? 1 : -1;
-      return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
-    });
+  /* OU ağacından gelen seçim + sütun filtreleri VE (AND) ile birleşir. */
+  const filtered = useMemo(() => {
+    const ad  = adFiltre.trim().toLocaleLowerCase("tr-TR");
+    const kad = kadFiltre.trim().toLocaleLowerCase("tr-TR");
+    const eps = epostaFiltre.trim().toLocaleLowerCase("tr-TR");
+    const q   = search.trim().toLocaleLowerCase("tr-TR");
+    return users
+      .filter((u) => {
+        // Üstteki serbest arama — üç alanda birden.
+        if (q && !(
+          u.displayName.toLocaleLowerCase("tr-TR").includes(q) ||
+          u.username.toLocaleLowerCase("tr-TR").includes(q) ||
+          u.email.toLocaleLowerCase("tr-TR").includes(q)
+        )) return false;
+        // OU ağacı seçimi (serbest arama yokken).
+        if (!q && selectedOU && selectedOU !== "Firmalar" && u.ou !== selectedOU) return false;
+        if (ad && !u.displayName.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+        if (kad && !u.username.toLocaleLowerCase("tr-TR").includes(kad)) return false;
+        if (eps && !u.email.toLocaleLowerCase("tr-TR").includes(eps)) return false;
+        if (ouFiltre.length && !ouFiltre.includes(u.ou)) return false;
+        if (durumFiltre.length && !durumFiltre.includes(u.enabled ? "aktif" : "pasif")) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const mul = sortDir === "asc" ? 1 : -1;
+        return String(a[sortKey]).localeCompare(String(b[sortKey]), "tr") * mul;
+      });
+  }, [users, search, selectedOU, adFiltre, kadFiltre, epostaFiltre, ouFiltre, durumFiltre, sortKey, sortDir]);
+
+  const ouListesi = useMemo(
+    () => [...new Set(users.map((u) => u.ou).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr")),
+    [users],
+  );
 
   return (
     <PageContainer title="Active Directory" description="OU ve kullanıcı yönetimi">
       <div className="grid grid-cols-[260px_1fr] gap-3 items-start">
 
         {/* ── OU Ağacı ── */}
-        <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
+        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
           <div
-            className="rounded-[4px] overflow-hidden"
-            style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+            className="rounded-[5px] overflow-hidden"
+            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
           >
             {/* Başlık */}
-            <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-              <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">OU Yapısı</p>
+            <div className="px-3 py-2 bg-muted/20 border-b border-border">
+              <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">OU Yapısı</p>
             </div>
             {/* Ağaç */}
             <div className="p-2 space-y-0.5 max-h-[520px] overflow-y-auto">
               {loading
                 ? Array.from({ length: 6 }).map((_, i) => (
-                    <Skeleton key={i} className="h-6 w-full rounded-[4px]" />
+                    <Skeleton key={i} className="h-6 w-full rounded-[5px]" />
                   ))
                 : ouTree.map((ou) => (
                     <OUTreeItem key={ou.path} ou={ou} depth={0} selectedOU={selectedOU} onSelect={setSelectedOU} />
@@ -196,123 +220,117 @@ export default function ADPage() {
                 placeholder="Kullanıcı ara…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 text-[11px] rounded-[6px] pl-8 w-52 bg-background"
+                className="h-8 text-[13px] rounded-[5px] pl-8 w-52 bg-background"
               />
             </div>
             <div className="ml-auto">
-              <button
-                onClick={() => setSheetOpen(true)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-              >
-                <UserPlus className="size-3.5" />
-                Yeni Kullanıcı
-              </button>
+              <ListeAksiyonButonu onClick={() => setSheetOpen(true)}>
+                <UserPlus className="size-3.5" />Yeni Kullanıcı
+              </ListeAksiyonButonu>
             </div>
           </div>
 
-          {/* Liste */}
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-            <div
-              className="rounded-[4px] overflow-hidden"
-              style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-            >
-              {/* Header */}
-              <div className="grid grid-cols-[1.4fr_1fr_1.8fr_80px_70px_120px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-                <SortHeader label="Ad Soyad"      sortKey="displayName" active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="Kullanıcı Adı" sortKey="username"    active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="E-posta"        sortKey="email"       active={sortKey} dir={sortDir} onSort={handleSort} />
-                <SortHeader label="OU"             sortKey="ou"          active={sortKey} dir={sortDir} onSort={handleSort} />
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
-                <SortHeader label="Son Giriş"      sortKey="lastLogin"   active={sortKey} dir={sortDir} onSort={handleSort} />
-                <span />
-              </div>
-
-              {/* Satırlar */}
-              <div className="divide-y divide-border/40">
-                {loading && Array.from({ length: 6 }).map((_, i) => (
-                  <div key={`sk-${i}`} className="grid grid-cols-[1.4fr_1fr_1.8fr_80px_70px_120px_28px] gap-3 px-3 py-2.5 items-center">
-                    <Skeleton className="h-3 w-28" />
-                    <Skeleton className="h-3 w-24" />
-                    <Skeleton className="h-3 w-40" />
-                    <Skeleton className="h-3 w-12" />
-                    <Skeleton className="h-3 w-10" />
-                    <Skeleton className="h-3 w-20" />
-                    <span />
-                  </div>
-                ))}
-
-                {!loading && error && (
-                  <div className="px-3 py-8 text-center text-[11px] text-destructive">
-                    {error}
-                  </div>
-                )}
-
-                {!loading && !error && filtered.map((user) => (
-                  <div
-                    key={user.id}
-                    className="grid grid-cols-[1.4fr_1fr_1.8fr_80px_70px_120px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                  >
-                    {/* Ad soyad */}
-                    <span className="text-[11px] font-medium truncate">{user.displayName}</span>
-
-                    {/* Kullanıcı adı */}
-                    <span className="text-[11px] font-mono text-muted-foreground truncate">{user.username}</span>
-
-                    {/* E-posta */}
-                    <span className="text-[11px] text-muted-foreground truncate">{user.email}</span>
-
-                    {/* OU */}
-                    <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] text-muted-foreground font-medium w-fit">
-                      {user.ou}
-                    </span>
-
-                    {/* Durum */}
-                    <span className={cn(
-                      "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
-                      user.enabled
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-muted text-muted-foreground border-border"
-                    )}>
-                      {user.enabled ? "Aktif" : "Pasif"}
-                    </span>
-
-                    {/* Son giriş */}
-                    <span className="text-[10px] text-muted-foreground tabular-nums">{user.lastLogin}</span>
-
-                    {/* Aksiyon */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-                          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-[6px]">
-                        <DropdownMenuItem className="text-xs cursor-pointer">Düzenle</DropdownMenuItem>
-                        <DropdownMenuItem className="text-xs cursor-pointer">Şifre Sıfırla</DropdownMenuItem>
-                        <DropdownMenuItem className="text-xs cursor-pointer">OU Taşı</DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-xs cursor-pointer text-destructive">
-                          {user.enabled ? "Devre Dışı Bırak" : "Etkinleştir"}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                ))}
-
-                {!loading && !error && filtered.length === 0 && (
-                  <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
-                    Kullanıcı bulunamadı.
-                  </div>
-                )}
-              </div>
+          <ListeKarti
+            baslik="Kullanıcılar"
+            ikon={<Users className="size-3.5" />}
+            toplam={users.length}
+            filtreli={filtered.length}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full text-[14px] font-medium leading-[20px]">
+                <ListeThead>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Ad Soyad" value={adFiltre} onChange={setAdFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="Kullanıcı Adı" value={kadFiltre} onChange={setKadFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <MetinFiltre label="E-posta" value={epostaFiltre} onChange={setEpostaFiltre} />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SecimFiltre
+                      label="OU"
+                      options={ouListesi}
+                      getLabel={(o) => o}
+                      selected={ouFiltre}
+                      onChange={(v) => setOuFiltre(v as string[])}
+                      aranabilir
+                    />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SecimFiltre
+                      label="Durum"
+                      options={["aktif", "pasif"] as const}
+                      getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")}
+                      selected={durumFiltre}
+                      onChange={(v) => setDurumFiltre(v as string[])}
+                    />
+                  </th>
+                  <th className="px-4 py-1.5 text-left font-medium">
+                    <SortHeader label="Son Giriş" sortKey="lastLogin" active={sortKey} dir={sortDir} onSort={handleSort} />
+                  </th>
+                  <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+                </ListeThead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={`sk-${i}`}>
+                        {Array.from({ length: 6 }).map((_, j) => (
+                          <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                        ))}
+                        <td />
+                      </tr>
+                    ))
+                  ) : error ? (
+                    <tr>
+                      <td colSpan={7} className="text-destructive px-4 py-10 text-center text-[13px]">{error}</td>
+                    </tr>
+                  ) : filtered.length === 0 ? (
+                    <ListeBosSatir sutunSayisi={7} toplam={users.length} bosMesaj="Kullanıcı bulunamadı." />
+                  ) : filtered.map((user) => (
+                    <tr key={user.id} className="hover:bg-muted/70 transition-colors">
+                      <td className="px-4 py-1.5 whitespace-nowrap font-medium">{user.displayName}</td>
+                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px]">{user.username}</td>
+                      <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-64 truncate">{user.email}</td>
+                      <td className="px-4 py-1.5 whitespace-nowrap">
+                        <span className="text-muted-foreground inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">
+                          {user.ou}
+                        </span>
+                      </td>
+                      <td className="px-4 py-1.5 whitespace-nowrap">
+                        {user.enabled ? (
+                          <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
+                          </span>
+                        ) : (
+                          <span className="inline-flex rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">Pasif
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{user.lastLogin}</td>
+                      <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                              <MoreVertical className="size-4" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" sideOffset={4} className="w-44 text-[12px]">
+                            <DropdownMenuItem className="gap-2">Düzenle</DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2">Şifre Sıfırla</DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2">OU Taşı</DropdownMenuItem>
+                            <DropdownMenuItem className="gap-2 text-rose-600 focus:text-rose-600">
+                              {user.enabled ? "Devre Dışı Bırak" : "Etkinleştir"}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-
-            {/* Footer */}
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-              <Users className="size-3" />
-              <span>{filtered.length} kullanıcı listeleniyor</span>
-            </div>
-          </div>
+          </ListeKarti>
 
         </div>
       </div>

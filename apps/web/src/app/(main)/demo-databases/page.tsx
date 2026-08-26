@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
+import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
 import { PageContainer } from "@/components/layout/page-container";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@muharremoz/pusula-ui";
 import {
@@ -28,14 +29,12 @@ import {
   ChevronsUpDown,
   Database,
   Plus,
-  Inbox,
-  Tag,
   FolderOpen,
   Wrench,
-  Link2,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { DemoDatabaseSheet } from "@/components/demo-databases/demo-database-sheet";
-import { StatsCard } from "@/components/shared/stats-card";
 import { toast } from "sonner";
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route";
 import type { WizardServiceDto } from "@/app/api/services/route";
@@ -45,9 +44,9 @@ type SortDir = "asc" | "desc";
 type FilterLoc = "all" | string;
 
 const LOCATION_BADGE: Record<string, string> = {
-  "Yerel":  "bg-blue-50 text-blue-700 border-blue-200",
-  "Şablon": "bg-amber-50 text-amber-700 border-amber-200",
-  "Uzak":   "bg-purple-50 text-purple-700 border-purple-200",
+  "Yerel":  "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25",
+  "Şablon": "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25",
+  "Uzak":   "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/25",
 };
 
 function SortHeader({ label, sortKey, active, dir, onSort }: {
@@ -84,7 +83,11 @@ export default function DemoDatabasesPage() {
 
   const [sortKey, setSortKey] = useState<SortKey>("displayOrder");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [filter,  setFilter]  = useState<FilterLoc>("all");
+  /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [adFiltre,      setAdFiltre]      = useState("");
+  const [dbAdFiltre,    setDbAdFiltre]    = useState("");
+  const [tipFiltre,     setTipFiltre]     = useState<string[]>([]);
+  const [durumFiltre,   setDurumFiltre]   = useState<string[]>([]);
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing]     = useState<DemoDatabaseDto | null>(null);
@@ -132,22 +135,28 @@ export default function DemoDatabasesPage() {
   );
 
   const filtered = useMemo(() => {
+    const ad = adFiltre.trim().toLocaleLowerCase("tr-TR");
+    const db = dbAdFiltre.trim().toLocaleLowerCase("tr-TR");
     return items
-      .filter((s) => filter === "all" || s.locationType === filter)
+      .filter((s) => {
+        if (ad && !s.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
+        if (db && !s.dataName.toLocaleLowerCase("tr-TR").includes(db)) return false;
+        if (tipFiltre.length && !tipFiltre.includes(s.locationType)) return false;
+        if (durumFiltre.length && !durumFiltre.includes(s.isActive ? "aktif" : "pasif")) return false;
+        return true;
+      })
       .sort((a, b) => {
         const mul = sortDir === "asc" ? 1 : -1;
         if (sortKey === "displayOrder") return (a.displayOrder - b.displayOrder) * mul;
         if (sortKey === "isActive")     return (Number(b.isActive) - Number(a.isActive)) * mul;
         return String(a[sortKey]).localeCompare(String(b[sortKey])) * mul;
       });
-  }, [items, filter, sortKey, sortDir]);
+  }, [items, adFiltre, dbAdFiltre, tipFiltre, durumFiltre, sortKey, sortDir]);
 
-  const counts = {
-    total:    items.length,
-    active:   items.filter((s) => s.isActive).length,
-    inactive: items.filter((s) => !s.isActive).length,
-    linked:   items.reduce((sum, s) => sum + (s.serviceIds?.length ?? 0), 0),
-  };
+  const konumTipleri = useMemo(
+    () => [...new Set(items.map((s) => s.locationType))].sort(),
+    [items],
+  );
 
   const openCreate = () => { setEditing(null); setSheetOpen(true); };
   const openEdit   = (s: DemoDatabaseDto) => { setEditing(s); setSheetOpen(true); };
@@ -183,245 +192,166 @@ export default function DemoDatabasesPage() {
   return (
     <PageContainer title="Demo Veritabanları" description="Firma kurulum sihirbazında seçilebilen demo veritabanı kataloğu">
 
-      {/* ── İstatistikler ── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
-        <StatsCard title="TOPLAM"         value={counts.total}    icon={<Database className="h-4 w-4" />} trend={{ value: `${counts.active} aktif`,      positive: true }}  subtitle="Demo kataloğu" />
-        <StatsCard title="AKTİF"          value={counts.active}   icon={<Tag className="h-4 w-4" />}      trend={{ value: "Sihirbazda görünür",  positive: true }}  subtitle="Kullanılabilir" />
-        <StatsCard title="PASİF"          value={counts.inactive} icon={<Inbox className="h-4 w-4" />}    trend={{ value: "Sihirbazda gizli",    positive: false }} subtitle="Devre dışı" />
-        <StatsCard title="PROGRAM BAĞI"   value={counts.linked}   icon={<Link2 className="h-4 w-4" />}    trend={{ value: "Pusula programına",   positive: true }}  subtitle="Toplam ilişki" />
-      </div>
-
-      {/* ── Toolbar ── */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="flex items-center rounded-[8px] p-1 flex-wrap gap-0.5" style={{ backgroundColor: "#eef3ff" }}>
-          <button
-            onClick={() => setFilter("all")}
-            className={cn(
-              "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-              filter === "all" ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            Tümü
-          </button>
-          {locationTypes.map((loc) => (
-            <button
-              key={loc}
-              onClick={() => setFilter(loc)}
-              className={cn(
-                "rounded-[6px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                filter === loc ? "bg-[#1d64ff] text-white" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {loc}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[6px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-          >
-            <Plus className="size-3.5" />
-            Yeni Demo DB
-          </button>
-        </div>
-      </div>
-
-      {/* ── Liste ── */}
-      <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-        <div
-          className="rounded-[4px] overflow-hidden"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
-        >
-          {/* Header */}
-          <div className="grid grid-cols-[16px_1.3fr_1fr_1.5fr_1.5fr_90px_90px_50px_28px] gap-3 px-3 py-2 bg-muted/30 border-b border-border/40 items-center">
-            <span />
-            <SortHeader label="Ad"        sortKey="name"         active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="DB Adı"    sortKey="dataName"     active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Programlar</span>
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Konum</span>
-            <SortHeader label="Tip"       sortKey="locationType" active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Durum"     sortKey="isActive"     active={sortKey} dir={sortDir} onSort={handleSort} />
-            <SortHeader label="Sıra"      sortKey="displayOrder" active={sortKey} dir={sortDir} onSort={handleSort} />
-            <span />
-          </div>
-
-          {/* Loading */}
-          {loading && (
-            <div className="divide-y divide-border/40">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[16px_1.3fr_1fr_1.5fr_1.5fr_90px_90px_50px_28px] gap-3 px-3 py-2.5 items-center">
-                  <Skeleton className="size-1.5 rounded-full" />
-                  <Skeleton className="h-3 w-32 rounded-[3px]" />
-                  <Skeleton className="h-3 w-24 rounded-[3px]" />
-                  <Skeleton className="h-3 w-40 rounded-[3px]" />
-                  <Skeleton className="h-3 w-44 rounded-[3px]" />
-                  <Skeleton className="h-3 w-14 rounded-[3px]" />
-                  <Skeleton className="h-3 w-12 rounded-[3px]" />
-                  <Skeleton className="h-3 w-6 rounded-[3px]" />
-                  <Skeleton className="size-4 rounded-[3px]" />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Error */}
-          {error && !loading && (
-            <div className="px-4 py-8 text-center text-[11px] text-red-600">{error}</div>
-          )}
-
-          {/* Empty */}
-          {!loading && !error && filtered.length === 0 && (
-            <div className="px-4 py-12 text-center">
-              <Inbox className="size-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-[12px] font-medium text-foreground">
-                {filter === "all" ? "Henüz demo veritabanı yok" : `${filter} tipinde demo DB yok`}
-              </p>
-              <p className="text-[11px] text-muted-foreground mt-1 mb-3">
-                {filter === "all"
-                  ? "Sağ üstteki “Yeni Demo DB” butonuyla ilk kaydı ekleyin."
-                  : "Farklı bir tip seçin veya yeni demo DB ekleyin."}
-              </p>
-              {filter === "all" && (
-                <button
-                  onClick={openCreate}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
-                >
-                  <Plus className="size-3.5" />
-                  Yeni Demo DB
-                </button>
-              )}
-            </div>
-          )}
-
-          {/* Satırlar */}
-          {!loading && !error && filtered.length > 0 && (
-            <div className="divide-y divide-border/40">
-              {filtered.map((db) => {
-                const badge = LOCATION_BADGE[db.locationType] ?? "bg-muted text-muted-foreground border-border";
+      <ListeKarti
+        baslik="Demo Veritabanları"
+        ikon={<Database className="size-3.5" />}
+        toplam={items.length}
+        filtreli={filtered.length}
+        aksiyon={
+          <ListeAksiyonButonu onClick={openCreate}>
+            <Plus className="size-3.5" />Yeni Veritabanı
+          </ListeAksiyonButonu>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px] font-medium leading-[20px]">
+            <ListeThead>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Ad" value={adFiltre} onChange={setAdFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="DB Adı" value={dbAdFiltre} onChange={setDbAdFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">Programlar</th>
+              <th className="px-4 py-1.5 text-left font-medium">Konum</th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Tip"
+                  options={konumTipleri}
+                  getLabel={(o) => o}
+                  selected={tipFiltre}
+                  onChange={(v) => setTipFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SecimFiltre
+                  label="Durum"
+                  options={["aktif", "pasif"] as const}
+                  getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")}
+                  selected={durumFiltre}
+                  onChange={(v) => setDurumFiltre(v as string[])}
+                />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Sıra" sortKey="displayOrder" active={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            </ListeThead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                    ))}
+                    <td />
+                  </tr>
+                ))
+              ) : error ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <ListeBosSatir
+                  sutunSayisi={8}
+                  toplam={items.length}
+                  bosMesaj="Henüz demo veritabanı yok."
+                />
+              ) : filtered.map((db) => {
+                const badge = LOCATION_BADGE[db.locationType] ?? LOCATION_BADGE.Local;
                 const linkedServices = (db.serviceIds ?? [])
-                  .map((id) => serviceById.get(id))
+                  .map((id) => services.find((s) => s.id === id))
                   .filter((s): s is WizardServiceDto => !!s);
                 return (
-                  <div
-                    key={db.id}
-                    className="grid grid-cols-[16px_1.3fr_1fr_1.5fr_1.5fr_90px_90px_50px_28px] gap-3 px-3 py-2.5 hover:bg-muted/20 transition-colors items-center"
-                  >
-                    {/* Durum noktası */}
-                    <span className="flex items-center justify-center">
-                      <span className="relative flex size-1.5">
-                        {db.isActive && (
-                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                        )}
-                        <span className={cn(
-                          "relative inline-flex size-1.5 rounded-full",
-                          db.isActive ? "bg-emerald-500" : "bg-slate-300"
-                        )} />
+                  <tr key={db.id} className="hover:bg-muted/70 transition-colors">
+                    <td className="px-4 py-1.5">
+                      <span className="flex items-center gap-2">
+                        <span className={cn("size-1.5 shrink-0 rounded-full", db.isActive ? "bg-emerald-500" : "bg-slate-300")} />
+                        <span className="font-medium">{db.name}</span>
                       </span>
-                    </span>
-
-                    {/* Ad + açıklama */}
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-medium truncate">{db.name}</p>
                       {db.description && (
-                        <p className="text-[9px] text-muted-foreground/70 mt-0.5 truncate">{db.description}</p>
+                        <p className="text-muted-foreground/70 mt-0.5 truncate text-[11px]">{db.description}</p>
                       )}
-                    </div>
-
-                    {/* DB adı */}
-                    <span className="text-[11px] font-mono text-muted-foreground truncate">{db.dataName}</span>
-
-                    {/* Programlar badge'leri */}
-                    <div className="flex items-center gap-1 flex-wrap min-w-0">
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px]">{db.dataName}</td>
+                    <td className="px-4 py-1.5">
                       {linkedServices.length === 0 ? (
-                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground/50">
-                          <Wrench className="size-3" />
-                          <span>—</span>
+                        <span className="text-muted-foreground/50 inline-flex items-center gap-1 text-[12px]">
+                          <Wrench className="size-3" />—
                         </span>
                       ) : (
-                        <>
+                        <span className="flex flex-wrap items-center gap-1">
                           {linkedServices.slice(0, 3).map((svc) => (
                             <span
                               key={svc.id}
-                              className="text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-indigo-50 text-indigo-700 border-indigo-200 truncate max-w-[130px]"
+                              className="inline-flex max-w-[130px] truncate rounded-[5px] bg-indigo-500/15 px-1.5 py-0.5 text-[11px] font-medium text-indigo-700 dark:text-indigo-400"
                               title={svc.name}
                             >
                               {svc.name}
                             </span>
                           ))}
                           {linkedServices.length > 3 && (
-                            <span className="text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border bg-muted text-muted-foreground border-border">
+                            <span className="text-muted-foreground inline-flex rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium">
                               +{linkedServices.length - 3}
                             </span>
                           )}
-                        </>
+                        </span>
                       )}
-                    </div>
-
-                    {/* Konum yolu */}
-                    <div className="flex items-center gap-1.5 min-w-0 text-[10px] text-muted-foreground">
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 text-[12px] max-w-64">
                       {db.locationPath ? (
-                        <>
+                        <span className="flex min-w-0 items-center gap-1.5">
                           <FolderOpen className="size-3 shrink-0" />
-                          <span className="font-mono truncate">{db.locationPath}</span>
-                        </>
+                          <span className="truncate font-mono">{db.locationPath}</span>
+                        </span>
                       ) : (
                         <span className="text-muted-foreground/40">—</span>
                       )}
-                    </div>
-
-                    {/* Tip */}
-                    <span className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit", badge)}>
-                      {db.locationType}
-                    </span>
-
-                    {/* Durum */}
-                    <span className={cn(
-                      "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border w-fit",
-                      db.isActive
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-muted text-muted-foreground border-border"
-                    )}>
-                      {db.isActive ? "Aktif" : "Pasif"}
-                    </span>
-
-                    {/* Sıra */}
-                    <span className="text-[10px] text-muted-foreground tabular-nums text-center">{db.displayOrder}</span>
-
-                    {/* Aksiyon */}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button className="flex items-center justify-center h-6 w-6 rounded-[4px] hover:bg-muted/60 transition-colors shrink-0">
-                          <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="rounded-[6px]">
-                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openEdit(db)}>
-                          Düzenle
-                        </DropdownMenuItem>
-                        <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => handleToggleActive(db)}>
-                          {db.isActive ? "Pasife Al" : "Aktif Et"}
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-xs cursor-pointer text-destructive" onClick={() => setDeleting(db)}>
-                          Sil
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", badge)}>
+                        {db.locationType}
+                      </span>
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap">
+                      {db.isActive ? (
+                        <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-[5px] bg-zinc-500/15 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">Pasif
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">
+                      {db.displayOrder}
+                    </td>
+                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="text-muted-foreground hover:bg-muted/60 rounded-[5px] p-1 transition-colors">
+                            <MoreVertical className="size-4" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" sideOffset={4} className="w-40 text-[12px]">
+                          <DropdownMenuItem className="gap-2" onClick={() => openEdit(db)}>
+                            <Pencil className="text-muted-foreground size-3.5" />Düzenle
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2" onClick={() => handleToggleActive(db)}>
+                            {db.isActive ? "Pasife Al" : "Aktif Et"}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="gap-2 text-rose-600 focus:text-rose-600" onClick={() => setDeleting(db)}>
+                            <Trash2 className="size-3.5" />Sil
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
                 );
               })}
-            </div>
-          )}
+            </tbody>
+          </table>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-2 py-2">
-          <Database className="size-3" />
-          <span>{filtered.length} demo veritabanı listeleniyor</span>
-        </div>
-      </div>
+      </ListeKarti>
 
       <DemoDatabaseSheet
         open={sheetOpen}

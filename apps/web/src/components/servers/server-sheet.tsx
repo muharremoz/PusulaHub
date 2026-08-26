@@ -6,19 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/combobox-select"
+
+import { Combobox } from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
 import { copyToClipboard } from "@/lib/clipboard"
-import { Eye, EyeOff, Check, ChevronsUpDown, Copy, RefreshCw } from "lucide-react"
+import { Eye, EyeOff, Check, Copy, RefreshCw, Download, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
 const OS_OPTIONS = [
@@ -43,8 +36,8 @@ const ROLES = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
       </div>
       <div className="p-3 space-y-3">{children}</div>
     </div>
@@ -55,7 +48,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
     </div>
   )
@@ -80,6 +73,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
   const [roleOpen, setRoleOpen]   = useState(false)
   const [apiKey, setApiKey]       = useState("")
   const [agentPort, setAgentPort] = useState("5000")
+  const [indiriliyor, setIndiriliyor] = useState(false)
   const [rdpPort, setRdpPort]     = useState("")
   const [username, setUsername]   = useState("")
   const [password, setPassword]   = useState("")
@@ -129,6 +123,38 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
   }
 
   const isSqlRole = role === "SQL"
+  /** Seçilen işletim sistemine göre paket platformu. */
+  const agentPlatform = /ubuntu|linux|debian|centos/i.test(os) ? "linux" : "windows"
+
+  /**
+   * Agent paketini indirir. Blob üzerinden indiriyoruz; doğrudan link
+   * verilseydi 401/503 gövdesi kullanıcıya ZIP gibi kaydedilirdi.
+   */
+  async function agentIndir() {
+    setIndiriliyor(true)
+    try {
+      const r = await fetch(`/api/agent/download?os=${agentPlatform}`)
+      if (!r.ok) {
+        const j = await r.json().catch(() => null)
+        toast.error(j?.error ?? "Agent paketi indirilemedi")
+        return
+      }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `pusula-agent-${agentPlatform}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error("Agent paketi indirilemedi")
+    } finally {
+      setIndiriliyor(false)
+    }
+  }
+
   const canSave =
     name.trim() && ip.trim() && os && role && apiKey.trim() &&
     (!isSqlRole || (sqlUsername.trim() && sqlPassword))
@@ -178,7 +204,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
+      <SheetContent className="!w-[520px] !max-w-[520px]">
 
         {/* Başlık */}
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
@@ -199,7 +225,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   placeholder="DC-PRIMARY"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
 
@@ -209,7 +235,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                     placeholder="192.168.1.10"
                     value={ip}
                     onChange={(e) => setIp(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 font-mono"
                   />
                 </Field>
                 <Field label="DNS Adresi">
@@ -217,7 +243,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                     placeholder="sunucu.sirket.local"
                     value={dns}
                     onChange={(e) => setDns(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 font-mono"
                   />
                 </Field>
               </div>
@@ -227,78 +253,64 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   placeholder="sirket.local"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8 font-mono"
+                  className="rounded-[5px] text-[13px] h-8 font-mono"
                 />
               </Field>
 
               <Field label="İşletim Sistemi">
                 <Select value={os} onValueChange={setOs}>
-                  <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                  <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                     <SelectValue placeholder="Seçiniz…" />
                   </SelectTrigger>
                   <SelectContent className="rounded-[5px]">
                     {OS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt} value={opt} className="text-[11px]">{opt}</SelectItem>
+                      <SelectItem key={opt} value={opt} className="text-[13px]">{opt}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </Field>
 
               <Field label="Rol">
-                <Popover open={roleOpen} onOpenChange={setRoleOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      role="combobox"
-                      aria-expanded={roleOpen}
-                      className={cn(
-                        "w-full flex items-center justify-between h-8 px-3 rounded-[5px] border border-input bg-transparent text-[11px] transition-[color,box-shadow] outline-none",
-                        "hover:border-ring/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !selectedRole && "text-muted-foreground"
-                      )}
-                    >
-                      {selectedRole ? selectedRole.label : "Seçiniz…"}
-                      <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-[5px]" align="start">
-                    <Command>
-                      <CommandInput placeholder="Rol ara…" className="text-[11px] h-8" />
-                      <CommandList>
-                        <CommandEmpty className="text-[11px] text-muted-foreground py-3 text-center">
-                          Bulunamadı.
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {ROLES.map((r) => (
-                            <CommandItem
-                              key={r.value}
-                              value={r.value}
-                              onSelect={(val) => {
-                                setRole(val === role ? "" : val)
-                                setRoleOpen(false)
-                              }}
-                              className="text-[11px]"
-                            >
-                              <Check className={cn("size-3.5 mr-2 shrink-0", role === r.value ? "opacity-100" : "opacity-0")} />
-                              {r.label}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Combobox
+                  items={ROLES}
+                  getKey={(r) => r.value}
+                  getLabel={(r) => r.label}
+                  value={role}
+                  onChange={setRole}
+                  clearable
+                  placeholder="Seçiniz…"
+                  searchPlaceholder="Rol ara…"
+                />
               </Field>
             </Section>
 
             {/* ── Agent Bilgileri ── */}
             <Section title="Agent Bilgileri">
+              {/* Kurulum paketi — sunucuya kurulacak agent dosyaları. */}
+              <div className="rounded-[5px] border border-border/50 bg-muted/20 p-3">
+                <p className="text-[12px] font-medium">Agent kurulum paketi</p>
+                <p className="text-muted-foreground mt-0.5 text-[11px] leading-snug">
+                  {agentPlatform === "windows"
+                    ? "KUR.bat + kaynak dosyalar. Sunucuya kopyalayıp KUR.bat'ı yönetici olarak çalıştırın."
+                    : "install.sh + agent betiği. Sunucuda root olarak ./install.sh çalıştırın."}
+                  {" "}Agent ilk açılışta kendi API Key'ini üretir — aşağıdaki alanlara onu girin.
+                </p>
+                <button
+                  type="button"
+                  onClick={agentIndir}
+                  disabled={indiriliyor}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 mt-2 inline-flex items-center gap-1.5 rounded-[5px] px-2.5 py-1 text-[12px] font-medium transition-colors disabled:opacity-60"
+                >
+                  {indiriliyor ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />}
+                  {agentPlatform === "windows" ? "Windows agent'ı indir" : "Linux agent'ı indir"}
+                </button>
+              </div>
               <Field label="API Key">
                 <Input
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8 font-mono"
+                  className="rounded-[5px] text-[13px] h-8 font-mono"
                 />
               </Field>
               <Field label="Port">
@@ -306,7 +318,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   placeholder="5000"
                   value={agentPort}
                   onChange={(e) => setAgentPort(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8 font-mono w-28"
+                  className="rounded-[5px] text-[13px] h-8 font-mono w-28"
                 />
               </Field>
             </Section>
@@ -319,7 +331,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                     placeholder="3389"
                     value={rdpPort}
                     onChange={(e) => setRdpPort(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 font-mono w-28"
+                    className="rounded-[5px] text-[13px] h-8 font-mono w-28"
                   />
                 </Field>
                 <p className="text-[10px] text-muted-foreground -mt-1">
@@ -335,7 +347,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                   placeholder="Administrator"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
               <Field label="Şifre">
@@ -346,7 +358,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="rounded-[5px] text-[11px] h-8 pr-9"
+                      className="rounded-[5px] text-[13px] h-8 pr-9"
                     />
                     <button
                       type="button"
@@ -398,7 +410,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                     placeholder="sa"
                     value={sqlUsername}
                     onChange={(e) => setSqlUsername(e.target.value)}
-                    className="rounded-[5px] text-[11px] h-8 font-mono"
+                    className="rounded-[5px] text-[13px] h-8 font-mono"
                   />
                 </Field>
                 <Field label="SA Şifresi">
@@ -409,7 +421,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
                         placeholder="••••••••"
                         value={sqlPassword}
                         onChange={(e) => setSqlPassword(e.target.value)}
-                        className="rounded-[5px] text-[11px] h-8 pr-9 font-mono"
+                        className="rounded-[5px] text-[13px] h-8 pr-9 font-mono"
                       />
                       <button
                         type="button"
@@ -453,7 +465,7 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
               type="button"
               onClick={handleSave}
               disabled={!canSave || saving}
-              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               {saving ? (isEdit ? "Kaydediliyor..." : "Ekleniyor...") : (isEdit ? "Kaydet" : "Sunucu Ekle")}
             </button>

@@ -6,24 +6,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/select"
-import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command"
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/combobox-select"
+
 import { Switch } from "@muharremoz/pusula-ui";
 import { companies } from "@/lib/mock-data"
 import { copyToClipboard } from "@/lib/clipboard"
+import { Combobox } from "@/components/ui/combobox"
 import { cn } from "@/lib/utils"
-import {
-  Eye, EyeOff, Copy, Check,
-  ChevronsUpDown, Sparkles, Users,
-} from "lucide-react"
+import { Eye, EyeOff, Copy, Check, Sparkles, Users } from "lucide-react"
 
 /* ── OU listesi ── */
 const OU_OPTIONS = [
@@ -81,8 +71,8 @@ function Section({ title, children, action }: {
 }) {
   return (
     <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-muted/30 border-b border-border/40">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+      <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
+        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
         {action}
       </div>
       <div className="p-3 space-y-3">{children}</div>
@@ -96,7 +86,7 @@ function Field({ label, children, className }: {
 }) {
   return (
     <div className={cn("space-y-1.5", className)}>
-      <Label className="text-[11px] font-medium text-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
     </div>
   )
@@ -170,7 +160,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={handleClose}>
-      <SheetContent className="!w-[520px] !max-w-[520px] p-0 flex flex-col gap-0">
+      <SheetContent className="!w-[520px] !max-w-[520px]">
 
         {/* Başlık */}
         <SheetHeader className="px-5 py-4 border-b border-border/50 shrink-0">
@@ -187,70 +177,37 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
             {/* ── Firma ── */}
             <Section title="Firma">
               <Field label="Firma Seçimi">
-                <Popover open={companyOpen} onOpenChange={setCompanyOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      role="combobox"
-                      aria-expanded={companyOpen}
-                      className={cn(
-                        "w-full flex items-center justify-between h-8 px-3 rounded-[5px] border border-input bg-transparent text-[11px] transition-[color,box-shadow] outline-none",
-                        "hover:border-ring/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                        !selectedCompany && "text-muted-foreground"
-                      )}
-                    >
-                      {selectedCompany ? (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="truncate">{selectedCompany.name}</span>
-                          {/* Kullanıcı sayısı badge */}
-                          <span className="flex items-center gap-0.5 text-[9px] font-medium bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded-[4px] shrink-0">
-                            <Users className="size-2.5" />
-                            {selectedCompany.userCount} kullanıcı
-                          </span>
-                        </div>
-                      ) : "Firma seçiniz…"}
-                      <ChevronsUpDown className="size-3.5 text-muted-foreground shrink-0 ml-2" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0 rounded-[5px]" align="start">
-                    <Command>
-                      <CommandInput placeholder="Firma ara…" className="text-[11px] h-8" />
-                      <CommandList>
-                        <CommandEmpty className="text-[11px] text-muted-foreground py-3 text-center">
-                          Bulunamadı.
-                        </CommandEmpty>
-                        <CommandGroup>
-                          {companies.map((c) => (
-                            <CommandItem
-                              key={c.id}
-                              value={c.name}
-                              onSelect={() => {
-                                setCompanyId(c.id === companyId ? "" : c.id)
-                                setCompanyOpen(false)
-                              }}
-                              className="text-[11px]"
-                            >
-                              <Check className={cn(
-                                "size-3.5 mr-2 shrink-0",
-                                companyId === c.id ? "opacity-100" : "opacity-0"
-                              )} />
-                              <div className="flex items-center justify-between w-full gap-2 min-w-0">
-                                <div className="min-w-0">
-                                  <span className="truncate font-medium">{c.name}</span>
-                                  <span className="text-[10px] text-muted-foreground ml-1.5">{c.sector}</span>
-                                </div>
-                                <span className="flex items-center gap-0.5 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-[4px] shrink-0">
-                                  <Users className="size-2.5" />
-                                  {c.userCount}
-                                </span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                <Combobox
+                  items={companies}
+                  getKey={(c) => c.id}
+                  getLabel={(c) => c.name}
+                  value={companyId}
+                  onChange={setCompanyId}
+                  clearable
+                  placeholder="Firma seçiniz…"
+                  searchPlaceholder="Firma ara…"
+                  renderValue={(c) => (
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate">{c.name}</span>
+                      <span className="flex items-center gap-0.5 text-[9px] font-medium bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/25 px-1.5 py-0.5 rounded-[5px] shrink-0">
+                        <Users className="size-2.5" />
+                        {c.userCount} kullanıcı
+                      </span>
+                    </span>
+                  )}
+                  renderItem={(c) => (
+                    <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium">{c.name}</span>
+                        <span className="text-[10px] text-muted-foreground ml-1.5">{c.sector}</span>
+                      </span>
+                      <span className="flex items-center gap-0.5 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-[5px] shrink-0">
+                        <Users className="size-2.5" />
+                        {c.userCount}
+                      </span>
+                    </span>
+                  )}
+                />
 
                 {/* Seçili firma bilgi satırı */}
                 {selectedCompany && (
@@ -265,10 +222,10 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                     </div>
                     <div className="h-3 w-px bg-border" />
                     <span className={cn(
-                      "text-[9px] font-medium px-1.5 py-0.5 rounded-[4px] border",
+                      "text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border",
                       selectedCompany.status === "active"
-                        ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        : "bg-amber-50 text-amber-700 border-amber-200"
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
+                        : "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25"
                     )}>
                       {selectedCompany.status === "active" ? "Aktif" : "Deneme"}
                     </span>
@@ -284,7 +241,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                   placeholder="Ahmet Yılmaz"
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
 
@@ -295,7 +252,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                       placeholder="ahmet.yilmaz"
                       value={username}
                       onChange={(e) => { setUsernameManual(true); setUsername(e.target.value) }}
-                      className="rounded-[5px] text-[11px] h-8 font-mono pr-[72px]"
+                      className="rounded-[5px] text-[13px] h-8 font-mono pr-[72px]"
                     />
                     <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground/50 select-none pointer-events-none">
                       @{DOMAIN}
@@ -305,12 +262,12 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
 
                 <Field label="Organizasyon Birimi">
                   <Select value={ou} onValueChange={setOu}>
-                    <SelectTrigger className="rounded-[5px] text-[11px] h-8 w-full">
+                    <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                       <SelectValue placeholder="Seçiniz…" />
                     </SelectTrigger>
                     <SelectContent className="rounded-[5px]">
                       {OU_OPTIONS.map((o) => (
-                        <SelectItem key={o.value} value={o.value} className="text-[11px]">
+                        <SelectItem key={o.value} value={o.value} className="text-[13px]">
                           {o.label}
                         </SelectItem>
                       ))}
@@ -324,7 +281,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                   placeholder={`kullanici@${DOMAIN}`}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="rounded-[5px] text-[11px] h-8"
+                  className="rounded-[5px] text-[13px] h-8"
                 />
               </Field>
             </Section>
@@ -336,7 +293,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                 <button
                   type="button"
                   onClick={handleSuggestPassword}
-                  className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-[5px] border border-dashed border-border/70 hover:border-ring/50 hover:bg-muted/20 transition-colors text-left group"
+                  className="w-full flex items-center gap-2 px-3 py-2 mb-1 rounded-[5px] border border-dashed border-border/70 hover:border-ring/50 hover:bg-muted/70 transition-colors text-left group"
                 >
                   <Sparkles className="size-3.5 text-amber-500 shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -352,7 +309,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className={cn(
-                      "rounded-[5px] text-[11px] h-8 pr-16 font-mono",
+                      "rounded-[5px] text-[13px] h-8 pr-16 font-mono",
                       password && score < 2 && "border-destructive focus-visible:ring-destructive/30"
                     )}
                   />
@@ -361,17 +318,17 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                       <button
                         type="button"
                         onClick={handleCopy}
-                        className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors"
+                        className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors"
                       >
                         {copied
-                          ? <Check className="size-3 text-emerald-600" />
+                          ? <Check className="size-3 text-emerald-600 dark:text-emerald-400" />
                           : <Copy className="size-3 text-muted-foreground" />}
                       </button>
                     )}
                     <button
                       type="button"
                       onClick={() => setShowPass((v) => !v)}
-                      className="h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors"
+                      className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors"
                     >
                       {showPass
                         ? <EyeOff className="size-3 text-muted-foreground" />
@@ -405,14 +362,14 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     className={cn(
-                      "rounded-[5px] text-[11px] h-8 pr-9 font-mono",
+                      "rounded-[5px] text-[13px] h-8 pr-9 font-mono",
                       confirm && !passMatch && "border-destructive focus-visible:ring-destructive/30"
                     )}
                   />
                   <button
                     type="button"
                     onClick={() => setShowConf((v) => !v)}
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-[4px] hover:bg-muted/60 transition-colors"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors"
                   >
                     {showConf
                       ? <EyeOff className="size-3 text-muted-foreground" />
@@ -459,7 +416,7 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
             <button
               type="button"
               disabled={!canSave}
-              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
+              className="flex-1 text-[11px] font-semibold py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors disabled:opacity-40 disabled:pointer-events-none"
             >
               Kullanıcı Oluştur
             </button>

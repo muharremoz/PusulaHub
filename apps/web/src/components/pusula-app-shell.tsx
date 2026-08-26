@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useTheme } from "next-themes";
 import {
   AppShell,
   UserMenuShell,
@@ -18,12 +19,9 @@ import {
 import {
   LayoutGrid,
   Server,
-  Activity,
   Building2,
   ArrowLeftRight,
   MessageSquare,
-  Kanban,
-  Calendar,
   NotebookText,
   Settings2,
   Database,
@@ -43,6 +41,8 @@ import {
   LogOut,
   User as UserIcon,
   Shield,
+  Sun,
+  Moon,
 } from "lucide-react";
 
 // ---- Nav grupları (yetkiye göre filtrelenir) ----
@@ -65,12 +65,9 @@ const NAV: NavGroupDef[] = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutGrid, moduleKey: "dashboard" },
       { title: "Sunucular", url: "/servers", icon: Server, moduleKey: "servers" },
-      { title: "İzleme", url: "/monitoring", icon: Activity, moduleKey: "monitoring" },
       { title: "Firmalar", url: "/companies", icon: Building2, moduleKey: "companies" },
       { title: "Aktarım", url: "/aktarim", icon: ArrowLeftRight, moduleKey: "aktarim" },
       { title: "Mesajlar", url: "/messages", icon: MessageSquare, moduleKey: "messages" },
-      { title: "Projeler", url: "/projects", icon: Kanban, moduleKey: "projects" },
-      { title: "Takvim", url: "/calendar", icon: Calendar, moduleKey: "calendar" },
       { title: "Not Defteri", url: "/notes", icon: NotebookText, moduleKey: "notes" },
     ],
   },
@@ -92,7 +89,7 @@ const NAV: NavGroupDef[] = [
     label: "Yönetim",
     icon: Users,
     items: [
-      { title: "Kullanıcılar", url: "/users", icon: Users, moduleKey: "users" },
+      { title: "Yetkiler", url: "/permissions", icon: Users, moduleKey: "users" },
       { title: "Şifre Kasası", url: "/vault", icon: KeyRound, moduleKey: "vault" },
     ],
   },
@@ -143,6 +140,8 @@ function HubUserMenu() {
   const email = u.email ?? "";
   const isAdmin = u.role === "admin";
   const initials = initialsOf(name);
+  const { resolvedTheme, setTheme } = useTheme();
+  const koyu = resolvedTheme === "dark";
 
   return (
     <UserMenuShell
@@ -186,13 +185,20 @@ function HubUserMenu() {
         <span className="flex-1 truncate">Profil</span>
       </DropdownMenuItem>
       {isAdmin && (
-        <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push("/users")}>
+        <DropdownMenuItem className="gap-2 p-2" onClick={() => router.push("/permissions")}>
           <ItemBadge>
             <Shield className="text-muted-foreground size-3.5" />
           </ItemBadge>
-          <span className="flex-1 truncate">Kullanıcı Yönetimi</span>
+          <span className="flex-1 truncate">Yetkiler</span>
         </DropdownMenuItem>
       )}
+      {/* Tema — CRM ile aynı: tek tıkla açık/koyu. */}
+      <DropdownMenuItem className="gap-2 p-2" onClick={() => setTheme(koyu ? "light" : "dark")}>
+        <ItemBadge>
+          {koyu ? <Sun className="text-muted-foreground size-3.5" /> : <Moon className="text-muted-foreground size-3.5" />}
+        </ItemBadge>
+        <span className="flex-1 truncate">{koyu ? "Açık Tema" : "Koyu Tema"}</span>
+      </DropdownMenuItem>
       <DropdownMenuSeparator />
       <DropdownMenuItem
         variant="destructive"

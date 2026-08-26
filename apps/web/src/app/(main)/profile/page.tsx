@@ -103,8 +103,8 @@ export default function ProfilePage() {
     <div className="p-4 max-w-[600px] space-y-3">
 
       {/* Kullanıcı kartı */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] px-5 py-4 flex items-center gap-4" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+        <div className="bg-card rounded-[5px] px-5 py-4 flex items-center gap-4" style={{ boxShadow: "var(--card-shadow)" }}>
           <div className="size-14 rounded-full flex items-center justify-center text-white text-[18px] font-bold shrink-0"
             style={{ backgroundColor: color }}>
             {initials}
@@ -114,7 +114,7 @@ export default function ProfilePage() {
             <p className="text-[11px] text-muted-foreground">{email || "—"}</p>
             <span className={cn(
               "inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full border",
-              role === "admin" ? "bg-red-50 text-red-700 border-red-200" : "bg-blue-50 text-blue-700 border-blue-200"
+              role === "admin" ? "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25" : "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25"
             )}>
               {role === "admin" ? "Admin" : role === "viewer" ? "İzleyici" : "Kullanıcı"}
             </span>
@@ -123,41 +123,41 @@ export default function ProfilePage() {
       </div>
 
       {/* 2FA Bölümü */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-          <div className="px-4 py-3 bg-muted/30 border-b border-border/40 flex items-center gap-2">
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+        <div className="bg-card rounded-[5px] overflow-hidden" style={{ boxShadow: "var(--card-shadow)" }}>
+          <div className="px-4 py-3 bg-muted/20 border-b border-border flex items-center gap-2">
             <ShieldCheck className="size-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">İki Faktörlü Doğrulama (2FA)</span>
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">İki Faktörlü Doğrulama (2FA)</span>
           </div>
 
           <div className="p-4">
             {loading2 ? (
-              <div className="space-y-2"><Skeleton className="h-4 w-1/2 rounded-[3px]" /><Skeleton className="h-3 w-3/4 rounded-[3px]" /></div>
+              <div className="space-y-2"><Skeleton className="h-4 w-1/2 rounded-[5px]" /><Skeleton className="h-3 w-3/4 rounded-[5px]" /></div>
             ) : twoFA?.enabled ? (
               /* ── 2FA Aktif ── */
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <div className="size-8 rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle2 className="size-4 text-green-600" />
+                    <CheckCircle2 className="size-4 text-green-600 dark:text-green-400" />
                   </div>
                   <div>
-                    <p className="text-[13px] font-semibold text-green-700">2FA Aktif</p>
+                    <p className="text-[13px] font-semibold text-green-700 dark:text-green-400">2FA Aktif</p>
                     <p className="text-[11px] text-muted-foreground">Hesabınız iki faktörlü doğrulama ile korunuyor.</p>
                   </div>
                 </div>
                 <Button variant="outline" onClick={() => setDisableOpen(true)}
-                  className="h-8 text-[11px] rounded-[5px] gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5">
+                  className="h-8 text-[13px] rounded-[5px] gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/5">
                   <ShieldOff className="size-3.5" />2FA Devre Dışı Bırak
                 </Button>
               </div>
             ) : (
               /* ── 2FA Kurulum ── */
               <div className="space-y-4">
-                <div className="flex items-start gap-3 p-3 rounded-[5px] bg-amber-50 border border-amber-200">
-                  <AlertCircle className="size-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-3 p-3 rounded-[5px] bg-amber-500/15 border border-amber-500/25">
+                  <AlertCircle className="size-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <p className="text-[12px] font-medium text-amber-800">2FA Aktif Değil</p>
-                    <p className="text-[11px] text-amber-700">Google Authenticator veya benzer bir uygulama ile 2FA kurabilirsiniz.</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">Google Authenticator veya benzer bir uygulama ile 2FA kurabilirsiniz.</p>
                   </div>
                 </div>
 
@@ -165,17 +165,17 @@ export default function ProfilePage() {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                        <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold shrink-0">1</span>
+                        <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold shrink-0">1</span>
                         Authenticator uygulamanızla QR kodu tarayın
                       </p>
-                      <div className="flex justify-center p-3 rounded-[6px] border border-border/40 bg-white w-fit">
+                      <div className="flex justify-center p-3 rounded-[5px] border border-border/40 bg-card w-fit">
                         <img src={twoFA.qrCode} alt="2FA QR Code" className="size-[160px]" />
                       </div>
                     </div>
 
                     <div className="space-y-2">
                       <p className="text-[11px] font-medium text-muted-foreground flex items-center gap-1.5">
-                        <span className="size-4 rounded-full bg-[#1d64ff] text-white text-[9px] flex items-center justify-center font-bold shrink-0">2</span>
+                        <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold shrink-0">2</span>
                         Uygulamadaki 6 haneli kodu girin
                       </p>
                       <div className="flex gap-2">
@@ -192,7 +192,7 @@ export default function ProfilePage() {
                           <CheckCircle2 className="size-3.5" />
                           {verifying ? "Doğrulanıyor..." : "Etkinleştir"}
                         </Button>
-                        <Button variant="outline" onClick={load2FA} className="h-8 text-[11px] rounded-[5px]" title="QR yenile">
+                        <Button variant="outline" onClick={load2FA} className="h-8 text-[13px] rounded-[5px]" title="QR yenile">
                           <RefreshCw className="size-3.5" />
                         </Button>
                       </div>
@@ -206,20 +206,20 @@ export default function ProfilePage() {
       </div>
 
       {/* Şifre Değiştirme */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
-        <div className="bg-white rounded-[4px] overflow-hidden" style={{ boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-          <div className="px-4 py-3 bg-muted/30 border-b border-border/40 flex items-center gap-2">
+      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+        <div className="bg-card rounded-[5px] overflow-hidden" style={{ boxShadow: "var(--card-shadow)" }}>
+          <div className="px-4 py-3 bg-muted/20 border-b border-border flex items-center gap-2">
             <KeyRound className="size-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Şifre Değiştir</span>
+            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Şifre Değiştir</span>
           </div>
           <div className="p-4 space-y-3">
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Yeni Şifre</Label>
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Yeni Şifre</Label>
               <Input type="password" value={newPass} onChange={e => setNewPass(e.target.value)}
                 placeholder="En az 6 karakter" className="h-8 text-[12px] rounded-[5px]" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Yeni Şifre (Tekrar)</Label>
+              <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Yeni Şifre (Tekrar)</Label>
               <Input type="password" value={newPass2} onChange={e => setNewPass2(e.target.value)}
                 placeholder="Şifrenizi tekrar girin" className="h-8 text-[12px] rounded-[5px]" />
             </div>

@@ -40,7 +40,7 @@ export function NavUser() {
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
               <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarFallback className="rounded-lg bg-[#1d64ff] text-white text-[11px] font-bold">
+                <AvatarFallback className="rounded-lg bg-primary text-primary-foreground text-[11px] font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>
@@ -61,7 +61,7 @@ export function NavUser() {
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarFallback className="rounded-lg bg-[#1d64ff] text-white text-[11px] font-bold">
+                  <AvatarFallback className="rounded-lg bg-primary text-primary-foreground text-[11px] font-bold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -82,8 +82,8 @@ export function NavUser() {
                 <User className="size-3.5" />Profil
               </DropdownMenuItem>
               {role === "admin" && (
-                <DropdownMenuItem onClick={() => router.push("/users")} className="gap-2 text-[12px]">
-                  <Shield className="size-3.5" />Kullanıcı Yönetimi
+                <DropdownMenuItem onClick={() => router.push("/permissions")} className="gap-2 text-[12px]">
+                  <Shield className="size-3.5" />Yetkiler
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={() => router.push("/settings")} className="gap-2 text-[12px]">

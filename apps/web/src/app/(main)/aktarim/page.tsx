@@ -7,9 +7,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui"
-import { Command, CommandInput, CommandList, CommandGroup, CommandItem } from "@/components/ui/command"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+
+import { Combobox } from "@/components/ui/combobox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui"
 import { copyToClipboard } from "@/lib/clipboard"
 import { toast } from "sonner"
@@ -62,16 +62,16 @@ function formatRelative(iso: string): string {
 
 function statusBadge(s: TransferSession["status"]) {
   const map = {
-    pending:     { label: "Bekliyor",        cls: "bg-amber-50 text-amber-700 border-amber-200" },
-    active:      { label: "Aktif",           cls: "bg-blue-50 text-blue-700 border-blue-200" },
-    pushing:     { label: "Aktarılıyor",     cls: "bg-violet-50 text-violet-700 border-violet-200" },
-    push_failed: { label: "Aktarım Hatası",  cls: "bg-red-50 text-red-700 border-red-200" },
-    completed:   { label: "Tamamlandı",      cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    cancelled:   { label: "İptal",           cls: "bg-zinc-100 text-zinc-700 border-zinc-200" },
-    expired:     { label: "Süresi Doldu",    cls: "bg-red-50 text-red-700 border-red-200" },
+    pending:     { label: "Bekliyor",        cls: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25" },
+    active:      { label: "Aktif",           cls: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25" },
+    pushing:     { label: "Aktarılıyor",     cls: "bg-violet-500/15 text-violet-700 dark:text-violet-400 border-violet-500/25" },
+    push_failed: { label: "Aktarım Hatası",  cls: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25" },
+    completed:   { label: "Tamamlandı",      cls: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25" },
+    cancelled:   { label: "İptal",           cls: "bg-zinc-100 text-zinc-700 dark:text-zinc-400 border-zinc-500/25" },
+    expired:     { label: "Süresi Doldu",    cls: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25" },
   }[s]
   return (
-    <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[4px] border", map.cls)}>
+    <span className={cn("text-[10px] font-medium px-2 py-0.5 rounded-[5px] border", map.cls)}>
       {map.label}
     </span>
   )
@@ -136,7 +136,7 @@ export default function AktarimPage() {
       <div className="mb-4 flex items-center justify-end">
         <button
           onClick={() => setNewOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white text-[11px] font-medium hover:bg-[#1d64ff]/90 transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground text-[11px] font-medium hover:bg-primary/90 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Yeni Aktarım
@@ -147,7 +147,7 @@ export default function AktarimPage() {
       <NestedCard>
         <div className="mb-2 flex items-center gap-2">
           <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
             Aktif ({active.length})
           </span>
         </div>
@@ -155,11 +155,11 @@ export default function AktarimPage() {
         {loading ? (
           <div className="space-y-1">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-9 w-full rounded-[4px]" />
+              <Skeleton key={i} className="h-9 w-full rounded-[5px]" />
             ))}
           </div>
         ) : error ? (
-          <div className="text-[11px] text-red-600">{error}</div>
+          <div className="text-[11px] text-red-600 dark:text-red-400">{error}</div>
         ) : active.length === 0 ? (
           <div className="text-[11px] text-muted-foreground py-6 text-center">
             Aktif aktarım yok. "Yeni Aktarım" ile başlat.
@@ -174,11 +174,10 @@ export default function AktarimPage() {
       </NestedCard>
 
       {/* Geçmiş — tablo */}
-      <div className="h-2" />
       <NestedCard>
         <div className="mb-2 flex items-center gap-2">
           <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
             Geçmiş ({past.length})
           </span>
         </div>
@@ -236,21 +235,21 @@ function SessionTable({
   isActive: boolean
 }) {
   return (
-    <div className="rounded-[4px] overflow-hidden border border-border/40">
+    <div className="rounded-[5px] overflow-hidden border border-border/40">
       {/* Header */}
       <div className={cn(
-        "grid items-center px-3 py-1.5 bg-muted/30 border-b border-border/40",
+        "grid items-center px-3 py-1.5 bg-muted/20 border-b border-border",
         isActive ? GRID_ACTIVE : GRID_PAST,
       )}>
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Firma</span>
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Durum</span>
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Veri</span>
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Resimler</span>
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">Toplam</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Firma</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Veri</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Resimler</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">Toplam</span>
         {isActive && (
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">Link</span>
+          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Link</span>
         )}
-        <span className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase text-right">İşlem</span>
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">İşlem</span>
       </div>
 
       <div className="divide-y divide-border/40">
@@ -295,7 +294,7 @@ function SessionRow({
 
   return (
     <div className={cn(
-      "grid items-center px-3 py-2 text-[11px] hover:bg-muted/20 transition-colors",
+      "grid items-center px-3 py-2 text-[11px] hover:bg-muted/70 transition-colors",
       isActiveTable ? GRID_ACTIVE : GRID_PAST,
     )}>
       {/* Firma */}
@@ -342,10 +341,10 @@ function SessionRow({
         <div>
           <button
             onClick={handleCopyLink}
-            className="flex items-center gap-1 px-2 py-1 rounded-[4px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors w-full justify-center"
+            className="flex items-center gap-1 px-2 py-1 rounded-[5px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors w-full justify-center"
             title={url}
           >
-            {copied ? <CheckCheck className="h-3 w-3 text-emerald-600" /> : <Link2 className="h-3 w-3" />}
+            {copied ? <CheckCheck className="h-3 w-3 text-emerald-600 dark:text-emerald-400" /> : <Link2 className="h-3 w-3" />}
             {copied ? "Kopyalandı" : "Link"}
           </button>
         </div>
@@ -355,7 +354,7 @@ function SessionRow({
       <div className="flex items-center justify-end">
         <button
           onClick={() => onDelete(s)}
-          className="flex items-center justify-center size-6 rounded-[4px] hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors"
+          className="flex items-center justify-center size-6 rounded-[5px] hover:bg-red-500/15 text-muted-foreground hover:text-red-600 dark:text-red-400 transition-colors"
           title="Sil"
         >
           <Trash2 className="h-3 w-3" />
@@ -370,7 +369,7 @@ function ProgressBar({ pct }: { pct: number }) {
   return (
     <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">
       <div
-        className="h-full bg-[#1d64ff] transition-all duration-300"
+        className="h-full bg-primary transition-all duration-300"
         style={{ width: `${safe}%` }}
       />
     </div>
@@ -472,62 +471,42 @@ function NewTransferDialog({
                 ({firmas.length.toLocaleString("tr")} toplam)
               </span>
             </Label>
-            <Popover open={firmaPopOpen} onOpenChange={setFirmaPopOpen}>
-              <PopoverTrigger asChild>
-                <button className="w-full h-8 px-2.5 rounded-[5px] border border-border text-[11px] text-left flex items-center justify-between hover:bg-muted/40 transition-colors">
-                  {firma ? (
-                    <span className="truncate">
-                      <span className="font-mono text-muted-foreground">{firma.firkod}</span>
-                      {" — "}
-                      <span>{firma.firma}</span>
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">Firma seç...</span>
-                  )}
-                  <Search className="h-3 w-3 text-muted-foreground" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 rounded-[5px]" align="start">
-                <Command shouldFilter={false}>
-                  <CommandInput
-                    placeholder="Firma ara..."
-                    value={firmaSearch}
-                    onValueChange={setFirmaSearch}
-                    className="text-[11px] h-8"
-                  />
-                  <CommandList className="max-h-56 overflow-y-auto" onWheel={(e) => e.stopPropagation()}>
-                    <CommandGroup>
-                      {firmaFiltered.map((f) => (
-                        <CommandItem
-                          key={f.firkod}
-                          value={f.firkod}
-                          onSelect={() => {
-                            setFirma(f)
-                            setFirmaPopOpen(false)
-                            setFirmaSearch("")
-                          }}
-                          className="text-[11px]"
-                        >
-                          <span className="font-mono text-muted-foreground mr-2">{f.firkod}</span>
-                          {f.firma}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <Combobox
+              items={firmaFiltered}
+              getKey={(f) => f.firkod}
+              getLabel={(f) => f.firma}
+              value={firma?.firkod}
+              onChange={(kod) => setFirma(firmas.find((f) => f.firkod === kod) ?? null)}
+              search={firmaSearch}
+              onSearchChange={setFirmaSearch}
+              placeholder="Firma seç..."
+              searchPlaceholder="Firma ara..."
+              maxListHeight="max-h-56"
+              renderValue={(f) => (
+                <span className="truncate">
+                  <span className="font-mono text-muted-foreground">{f.firkod}</span>
+                  {" — "}
+                  <span>{f.firma}</span>
+                </span>
+              )}
+              renderItem={(f) => (
+                <span className="flex min-w-0 items-center">
+                  <span className="font-mono text-muted-foreground mr-2 shrink-0">{f.firkod}</span>
+                  <span className="truncate">{f.firma}</span>
+                </span>
+              )}
+            />
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px]">SQL Sunucusu</Label>
+            <Label className="text-foreground/80 text-[12px] font-medium">SQL Sunucusu</Label>
             <Select value={sqlServerId} onValueChange={setSqlServerId}>
               <SelectTrigger className="h-8 text-[11px] w-full">
                 <SelectValue placeholder="Seçilmedi" />
               </SelectTrigger>
               <SelectContent>
                 {sqlServers.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                  <SelectItem key={s.id} value={s.id} className="text-[13px]">
                     {s.name} ({s.ip})
                   </SelectItem>
                 ))}
@@ -536,14 +515,14 @@ function NewTransferDialog({
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px]">Depo Sunucusu</Label>
+            <Label className="text-foreground/80 text-[12px] font-medium">Depo Sunucusu</Label>
             <Select value={depoServerId} onValueChange={setDepoServerId}>
               <SelectTrigger className="h-8 text-[11px] w-full">
                 <SelectValue placeholder="Seçilmedi" />
               </SelectTrigger>
               <SelectContent>
                 {depoServers.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-[11px]">
+                  <SelectItem key={s.id} value={s.id} className="text-[13px]">
                     {s.name} ({s.ip})
                   </SelectItem>
                 ))}
@@ -552,7 +531,7 @@ function NewTransferDialog({
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[11px]">Not (opsiyonel)</Label>
+            <Label className="text-foreground/80 text-[12px] font-medium">Not (opsiyonel)</Label>
             <Input
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -561,7 +540,7 @@ function NewTransferDialog({
             />
           </div>
 
-          <div className="flex items-start gap-2 px-3 py-2 rounded-[5px] bg-amber-50 border border-amber-200 text-[10px] text-amber-800">
+          <div className="flex items-start gap-2 px-3 py-2 rounded-[5px] bg-amber-500/15 border border-amber-500/25 text-[10px] text-amber-800">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
             <div>
               Link <span className="font-mono">https://aktarim.pusulanet.net/&lt;token&gt;</span> formatında üretilir.
@@ -580,7 +559,7 @@ function NewTransferDialog({
           <button
             onClick={handleCreate}
             disabled={!firma || submitting}
-            className="px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white text-[11px] font-medium hover:bg-[#1d64ff]/90 disabled:opacity-50 transition-colors"
+            className="px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground text-[11px] font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {submitting ? "Oluşturuluyor..." : "Oluştur"}
           </button>

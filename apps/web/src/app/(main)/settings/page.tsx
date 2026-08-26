@@ -22,13 +22,13 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
       <div
-        className="rounded-[4px] overflow-hidden"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className="rounded-[5px] overflow-hidden"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
-        <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase">{title}</p>
+        <div className="px-3 py-2 bg-muted/20 border-b border-border">
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
         </div>
         <div className="p-4 space-y-3">{children}</div>
         <div className="px-3 py-2 border-t border-border/40 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -43,7 +43,7 @@ function Section({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] text-muted-foreground">{label}</Label>
+      <Label className="text-foreground/80 text-[12px] font-medium">{label}</Label>
       {children}
     </div>
   );
@@ -51,25 +51,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function SkeletonSection() {
   return (
-    <div className="rounded-[8px] p-2" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
       <div
-        className="rounded-[4px] overflow-hidden"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className="rounded-[5px] overflow-hidden"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
-        <div className="px-3 py-2 bg-muted/30 border-b border-border/40">
-          <Skeleton className="h-3 w-24 rounded-[3px]" />
+        <div className="px-3 py-2 bg-muted/20 border-b border-border">
+          <Skeleton className="h-3 w-24 rounded-[5px]" />
         </div>
         <div className="p-4 space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="space-y-1.5">
-              <Skeleton className="h-3 w-32 rounded-[3px]" />
+              <Skeleton className="h-3 w-32 rounded-[5px]" />
               <Skeleton className="h-8 w-full rounded-[5px]" />
             </div>
           ))}
           <Skeleton className="h-8 w-16 rounded-[5px]" />
         </div>
         <div className="px-3 py-2 border-t border-border/40">
-          <Skeleton className="h-3 w-40 rounded-[3px]" />
+          <Skeleton className="h-3 w-40 rounded-[5px]" />
         </div>
       </div>
     </div>
@@ -163,15 +163,15 @@ export default function SettingsPage() {
         <Section icon={Settings} title="Genel Ayarlar" footer="Genel uygulama ayarları">
           <Field label="Uygulama Adı">
             <Input value={appName} onChange={(e) => setAppName(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px]" />
+              className="h-8 text-[13px] rounded-[5px]" />
           </Field>
           <Field label="Agent Kontrol Aralığı (saniye)">
             <Input type="number" value={agentInterval} onChange={(e) => setAgentInterval(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28" />
+              className="h-8 text-[13px] rounded-[5px] w-28" />
           </Field>
           <Field label="Log Saklama Süresi (gün)">
             <Input type="number" value={logRetention} onChange={(e) => setLogRetention(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28" />
+              className="h-8 text-[13px] rounded-[5px] w-28" />
           </Field>
           <Button size="sm" className="rounded-[5px] text-xs" disabled={saving === "general"}
             onClick={() => save("general", { app_name: appName, agent_interval: agentInterval, log_retention_days: logRetention })}>
@@ -183,7 +183,7 @@ export default function SettingsPage() {
         <Section icon={Server} title="Agent Ayarları" footer="Agent bağlantı ayarları">
           <Field label="Varsayılan Agent Portu">
             <Input type="number" value={agentPort} onChange={(e) => setAgentPort(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28" />
+              className="h-8 text-[13px] rounded-[5px] w-28" />
           </Field>
           <Field label="TLS Doğrulama">
             <div className="flex items-center gap-2 h-8">
@@ -206,16 +206,16 @@ export default function SettingsPage() {
         <Section icon={Database} title="SQL Server Bağlantısı" footer="Bağlantı bilgileri .env.local dosyasından okunur">
           <Field label="Sunucu">
             <Input readOnly value={process.env.NEXT_PUBLIC_DB_SERVER ?? "localhost"}
-              className="h-8 text-[11px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
+              className="h-8 text-[13px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <Field label="Veritabanı">
               <Input readOnly value="PusulaHub"
-                className="h-8 text-[11px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
+                className="h-8 text-[13px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
             </Field>
             <Field label="Port">
               <Input readOnly value="1433"
-                className="h-8 text-[11px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
+                className="h-8 text-[13px] rounded-[5px] bg-muted/30 text-muted-foreground cursor-not-allowed" />
             </Field>
           </div>
           <p className="text-[10px] text-muted-foreground/70">
@@ -241,7 +241,7 @@ export default function SettingsPage() {
               value={firmaApiUrl}
               onChange={(e) => setFirmaApiUrl(e.target.value)}
               placeholder="http://erp.sirket.local/api"
-              className="h-8 text-[11px] rounded-[5px] font-mono"
+              className="h-8 text-[13px] rounded-[5px] font-mono"
               disabled={!firmaApiEnabled}
             />
           </Field>
@@ -250,7 +250,7 @@ export default function SettingsPage() {
               value={firmaApiUsername}
               onChange={(e) => setFirmaApiUsername(e.target.value)}
               placeholder="PusulaLisans"
-              className="h-8 text-[11px] rounded-[5px]"
+              className="h-8 text-[13px] rounded-[5px]"
               disabled={!firmaApiEnabled}
             />
           </Field>
@@ -261,7 +261,7 @@ export default function SettingsPage() {
                 value={firmaApiPassword}
                 onChange={(e) => setFirmaApiPassword(e.target.value)}
                 placeholder="••••••••"
-                className="h-8 text-[11px] rounded-[5px] pr-9"
+                className="h-8 text-[13px] rounded-[5px] pr-9"
                 disabled={!firmaApiEnabled}
               />
               <button
@@ -278,7 +278,7 @@ export default function SettingsPage() {
               type="number"
               value={firmaApiTimeout}
               onChange={(e) => setFirmaApiTimeout(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28"
+              className="h-8 text-[13px] rounded-[5px] w-28"
               disabled={!firmaApiEnabled}
             />
           </Field>
@@ -310,15 +310,15 @@ export default function SettingsPage() {
         <Section icon={Shield} title="Güvenlik" footer="Oturum ve erişim güvenlik ayarları">
           <Field label="Oturum Süresi (dakika)">
             <Input type="number" value={sessionTimeout} onChange={(e) => setSessionTimeout(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28" />
+              className="h-8 text-[13px] rounded-[5px] w-28" />
           </Field>
           <Field label="Maksimum Hatalı Giriş">
             <Input type="number" value={maxFailedLogins} onChange={(e) => setMaxFailedLogins(e.target.value)}
-              className="h-8 text-[11px] rounded-[5px] w-28" />
+              className="h-8 text-[13px] rounded-[5px] w-28" />
           </Field>
           <Field label="IP Kısıtlama">
             <Input value={ipWhitelist} onChange={(e) => setIpWhitelist(e.target.value)}
-              placeholder="192.168.1.0/24" className="h-8 text-[11px] rounded-[5px]" />
+              placeholder="192.168.1.0/24" className="h-8 text-[13px] rounded-[5px]" />
           </Field>
           <Button size="sm" className="rounded-[5px] text-xs" disabled={saving === "security"}
             onClick={() => save("security", { session_timeout: sessionTimeout, max_failed_logins: maxFailedLogins, ip_whitelist: ipWhitelist })}>

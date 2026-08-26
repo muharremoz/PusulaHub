@@ -469,17 +469,17 @@ export function WizardShell() {
   }
 
   return (
-    <div className="rounded-[8px] p-2 pb-0 max-w-[1400px] mx-auto w-full" style={{ backgroundColor: "#eef3ff" }}>
+    <div className="rounded-[8px] p-2 max-w-[1400px] mx-auto w-full" style={{ backgroundColor: "var(--section-bg)" }}>
       <Confetti trigger={showConfetti} />
       <div
-        className="rounded-[4px] overflow-hidden flex min-h-[600px]"
-        style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+        className="rounded-[5px] overflow-hidden flex min-h-[600px]"
+        style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
       >
         {/* ── Sol adım menüsü ── */}
         <div className="w-52 shrink-0 border-r border-border/50 flex flex-col py-4 px-3 gap-0.5"
-          style={{ backgroundColor: "#FAFAF9" }}>
+          style={{ backgroundColor: "var(--section-bg)" }}>
 
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase px-2 mb-2">
+          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase px-2 mb-2">
             Kurulum Adımları
           </p>
 
@@ -496,7 +496,7 @@ export function WizardShell() {
                 onClick={() => !isFuture && go(idx)}
                 className={cn(
                   "flex items-center gap-2.5 px-2 py-2 rounded-[5px] text-left transition-colors w-full",
-                  isActive && "bg-[#1d64ff] text-white",
+                  isActive && "bg-primary text-primary-foreground",
                   isDone && "text-foreground hover:bg-muted/60",
                   isFuture && "text-muted-foreground opacity-40 cursor-default"
                 )}
@@ -504,7 +504,7 @@ export function WizardShell() {
                 <span className={cn(
                   "size-5 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold",
                   isActive && "bg-background/20",
-                  isDone && "bg-emerald-100 text-emerald-700",
+                  isDone && "bg-emerald-100 text-emerald-700 dark:text-emerald-400",
                   isFuture && "bg-muted"
                 )}>
                   {isDone
@@ -674,7 +674,7 @@ export function WizardShell() {
           {/* Footer nav */}
           {step < 6 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-border/50"
-              style={{ backgroundColor: "#FAFAF9" }}>
+              style={{ backgroundColor: "var(--section-bg)" }}>
               <button
                 onClick={() => go(step - 1)}
                 disabled={step === 0}
@@ -692,7 +692,7 @@ export function WizardShell() {
                 <button
                   onClick={() => go(step + 1)}
                   disabled={!canProceed}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] transition-colors bg-[#1d64ff] text-white hover:bg-foreground/90 disabled:opacity-30 disabled:pointer-events-none"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] transition-colors bg-primary text-primary-foreground hover:bg-foreground/90 disabled:opacity-30 disabled:pointer-events-none"
                 >
                   İleri
                   <ChevronRight className="size-3.5" />
@@ -700,7 +700,7 @@ export function WizardShell() {
               ) : (
                 <button
                   onClick={() => go(6)}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+                  className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
                 >
                   <Sparkles className="size-3.5" />
                   Kurulumu Başlat
@@ -710,7 +710,6 @@ export function WizardShell() {
           )}
         </div>
       </div>
-      <div className="h-2" />
     </div>
   )
 }

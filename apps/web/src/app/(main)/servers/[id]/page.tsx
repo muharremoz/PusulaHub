@@ -4,36 +4,33 @@ import { use, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, Power as IsPower } from "lucide-react";
-import {
-  Category2 as IsDashboard,
-  Monitor as IsMonitor,
-  Building as IsBuilding,
-  Profile2User as IsUsers,
-  SecuritySafe as IsShield,
-  DocumentText as IsFile,
-  Messages2 as IsMessage,
-  FolderOpen as IsFolder,
-  Refresh as IsRefresh,
-  Logout as IsLogout,
-  Setting2 as IsSetting,
-} from "iconsax-reactjs";
+import { Building2, FolderOpen, RefreshCw, LogOut } from "lucide-react";
+import { Icon } from "@/components/shared/icon";
+import type { IconName } from "@/components/shared/icon-registry";
 
-const mkTabIcon = (I: React.ComponentType<Record<string, unknown>>) => {
+/** Sekme ikonu — animasyonlu registry ikonundan. */
+const mkTabIcon = (name: IconName) => {
   const Wrapped = ({ className }: { className?: string }) => (
-    <span className={`inline-flex ${className ?? ""}`}>
-      <I size="14" color="currentColor" variant="TwoTone" />
-    </span>
+    <Icon name={name} size={14} className={`inline-flex ${className ?? ""}`} />
   );
   return Wrapped;
 };
-const DashboardTab = mkTabIcon(IsDashboard);
-const MonitorTab   = mkTabIcon(IsMonitor);
-const BuildingTab  = mkTabIcon(IsBuilding);
-const UsersTab     = mkTabIcon(IsUsers);
-const ShieldTab    = mkTabIcon(IsShield);
-const FileTab      = mkTabIcon(IsFile);
-const MessageTab   = mkTabIcon(IsMessage);
-const FolderTab    = mkTabIcon(IsFolder);
+
+/** Registry'de muadili olmayanlar için statik lucide fallback. */
+const mkStaticTabIcon = (I: React.ElementType) => {
+  const Wrapped = ({ className }: { className?: string }) => (
+    <span className={`inline-flex ${className ?? ""}`}><I className="size-3.5" /></span>
+  );
+  return Wrapped;
+};
+const DashboardTab = mkTabIcon("layers");
+const MonitorTab   = mkTabIcon("monitor-check");
+const BuildingTab  = mkStaticTabIcon(Building2);
+const UsersTab     = mkTabIcon("users");
+const ShieldTab    = mkTabIcon("shield-check");
+const FileTab      = mkTabIcon("file-text");
+const MessageTab   = mkTabIcon("message-square");
+const FolderTab    = mkStaticTabIcon(FolderOpen);
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -169,10 +166,10 @@ export default function ServerDetailPage({
   if (serverLoading) {
     return (
       <div className="p-4 md:p-6 space-y-3">
-        <div className="rounded-[8px] p-3" style={{ backgroundColor: "#eef3ff" }}>
-          <div className="rounded-[4px] px-4 py-4 space-y-3" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
-            <Skeleton className="h-6 w-48 rounded-[4px]" />
-            <Skeleton className="h-4 w-32 rounded-[4px]" />
+        <div className="rounded-[8px] p-3" style={{ backgroundColor: "var(--section-bg)" }}>
+          <div className="rounded-[5px] px-4 py-4 space-y-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
+            <Skeleton className="h-6 w-48 rounded-[5px]" />
+            <Skeleton className="h-4 w-32 rounded-[5px]" />
           </div>
         </div>
       </div>
@@ -209,10 +206,10 @@ export default function ServerDetailPage({
   return (
     <div className="p-4 md:p-6 space-y-3">
       {/* Page Header */}
-      <div className="rounded-[8px] p-3" style={{ backgroundColor: "#eef3ff" }}>
+      <div className="rounded-[8px] p-3" style={{ backgroundColor: "var(--section-bg)" }}>
         <div
-          className="rounded-[4px] px-4 py-3"
-          style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}
+          className="rounded-[5px] px-4 py-3"
+          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
         >
           <div className="flex items-center gap-3">
             {/* Back button */}
@@ -258,7 +255,7 @@ export default function ServerDetailPage({
               {server.roles.map((role) => (
                 <span
                   key={role}
-                  className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[4px] font-medium"
+                  className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium"
                 >
                   {role}
                 </span>
@@ -276,9 +273,9 @@ export default function ServerDetailPage({
                   Güç
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-[6px] min-w-[160px]">
+              <DropdownMenuContent align="end" className="rounded-[5px] min-w-[160px]">
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <IsRefresh size="14" color="currentColor" variant="TwoTone" />
+                  <RefreshCw className="size-3.5" />
                   Yeniden Başlat
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer text-destructive">
@@ -286,12 +283,12 @@ export default function ServerDetailPage({
                   Kapat
                 </DropdownMenuItem>
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <IsLogout size="14" color="currentColor" variant="TwoTone" />
+                  <LogOut className="size-3.5" />
                   Oturumları Kapat
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <IsSetting size="14" color="currentColor" variant="TwoTone" />
+                  <Icon name="settings" size={14} className="inline-flex" />
                   Detayları Düzenle
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -321,7 +318,7 @@ export default function ServerDetailPage({
               {tab.count !== undefined && (
                 <span
                   className={cn(
-                    "text-[9px] px-1.5 py-0.5 rounded-[4px] font-medium",
+                    "text-[9px] px-1.5 py-0.5 rounded-[5px] font-medium",
                     isActive ? "bg-foreground/10 text-foreground" : "bg-muted text-muted-foreground"
                   )}
                 >
@@ -336,19 +333,18 @@ export default function ServerDetailPage({
       {/* Tab Content */}
       <div>
         {detailLoading && activeTab !== "overview" && activeTab !== "files" ? (
-          <div className="rounded-[8px] p-2 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-            <div className="rounded-[4px] overflow-hidden space-y-px" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
+            <div className="rounded-[5px] overflow-hidden space-y-px" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-3">
                   <Skeleton className="size-2 rounded-full shrink-0" />
-                  <Skeleton className="h-3 rounded-[3px] flex-1" />
-                  <Skeleton className="h-3 rounded-[3px] w-24" />
-                  <Skeleton className="h-3 rounded-[3px] w-16" />
+                  <Skeleton className="h-3 rounded-[5px] flex-1" />
+                  <Skeleton className="h-3 rounded-[5px] w-24" />
+                  <Skeleton className="h-3 rounded-[5px] w-16" />
                 </div>
               ))}
             </div>
-            <div className="h-2" />
-          </div>
+                </div>
         ) : (
           <>
             {activeTab === "overview" && (

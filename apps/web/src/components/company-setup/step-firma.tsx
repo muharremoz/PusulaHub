@@ -123,8 +123,8 @@ export function StepFirma({
         <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-              <Skeleton className="h-3 w-10 rounded-[3px]" />
-              <Skeleton className="h-3 flex-1 rounded-[3px]" />
+              <Skeleton className="h-3 w-10 rounded-[5px]" />
+              <Skeleton className="h-3 flex-1 rounded-[5px]" />
             </div>
           ))}
         </div>
@@ -132,7 +132,7 @@ export function StepFirma({
 
       {/* Hata */}
       {!companiesLoading && companiesError && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
           <AlertTriangle className="size-3.5 shrink-0" />
           {companiesError}
         </div>
@@ -148,7 +148,7 @@ export function StepFirma({
             <button
               key={c.id}
               onClick={() => { onSelectCompany(c); setSearch("") }}
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/20 transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/70 transition-colors"
             >
               <div className="flex items-center gap-2">
                 <span className="text-[10px] font-mono text-muted-foreground w-10 shrink-0">{c.firkod}</span>
@@ -180,32 +180,32 @@ export function StepFirma({
           {/* Stats kartları */}
           <div className="grid grid-cols-4 gap-2">
             {/* E-posta */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-              <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "var(--section-bg)" }}>
+              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">E-posta</p>
                   <Mail className="size-3 text-muted-foreground" />
                 </div>
-                <p className="text-[11px] font-medium truncate">{selectedCompany.email || "—"}</p>
+                <p className="text-[13px] font-medium truncate">{selectedCompany.email || "—"}</p>
               </div>
               <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">İletişim adresi</p>
             </div>
 
             {/* Telefon */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "#eef3ff" }}>
-              <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "var(--section-bg)" }}>
+              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Telefon</p>
                   <Phone className="size-3 text-muted-foreground" />
                 </div>
-                <p className="text-[11px] font-medium truncate">{selectedCompany.phone || "—"}</p>
+                <p className="text-[13px] font-medium truncate">{selectedCompany.phone || "—"}</p>
               </div>
               <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">İletişim numarası</p>
             </div>
 
             {/* Kullanıcı Hakkı */}
             <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: licenseSeats === 0 ? "#FEF3C7" : "#eef3ff" }}>
-              <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Kullanıcı Hakkı</p>
                   <Users className="size-3 text-muted-foreground" />
@@ -221,7 +221,7 @@ export function StepFirma({
 
             {/* Lisans Bitiş */}
             <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: isExpired(selectedCompany.lisansBitis) ? "#FEF2F2" : "#eef3ff" }}>
-              <div className="rounded-[4px] px-3 py-2.5" style={{ backgroundColor: "#FFFFFF", boxShadow: "0 2px 4px rgba(0,0,0,0.06)" }}>
+              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Lisans Bitiş</p>
                   <CalendarClock className="size-3 text-muted-foreground" />
@@ -240,14 +240,14 @@ export function StepFirma({
 
           {/* Kullanıcı hakkı 0 — sunucu seçimi engellendi */}
           {licenseSeats === 0 && (
-            <div className="rounded-[5px] border border-amber-200 bg-amber-50 overflow-hidden">
+            <div className="rounded-[5px] border border-amber-500/25 bg-amber-500/15 overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-4">
                 <div className="size-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                  <Ban className="size-4 text-amber-600" />
+                  <Ban className="size-4 text-amber-600 dark:text-amber-400" />
                 </div>
                 <div className="space-y-1">
                   <p className="text-[12px] font-semibold text-amber-800">Kullanıcı hakkı bulunmuyor</p>
-                  <p className="text-[11px] text-amber-700 leading-relaxed">
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
                     Bu firmanın aktif kullanıcı hakkı <span className="font-semibold">0</span> olarak görünüyor.
                     Devam edebilmek için önce firma lisansının güncellenmesi gerekmektedir.
                     Farklı bir firma seçmek için yukarıdaki <span className="font-medium">✕</span> butonunu kullanın.
@@ -259,14 +259,14 @@ export function StepFirma({
 
           {/* Lisans dolu uyarısı — sistemdeki mevcut kullanıcı sayısı lisansa ulaşmış */}
           {licenseSeats > 0 && licenseFull && (
-            <div className="rounded-[5px] border border-red-200 bg-red-50 overflow-hidden">
+            <div className="rounded-[5px] border border-red-500/25 bg-red-500/15 overflow-hidden">
               <div className="flex items-start gap-3 px-4 py-4">
                 <div className="size-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
-                  <Ban className="size-4 text-red-600" />
+                  <Ban className="size-4 text-red-600 dark:text-red-400" />
                 </div>
                 <div className="flex-1 space-y-2">
                   <p className="text-[12px] font-semibold text-red-800">Lisans dolu — kullanıcı eklenemez</p>
-                  <p className="text-[11px] text-red-700 leading-relaxed">
+                  <p className="text-[11px] text-red-700 dark:text-red-400 leading-relaxed">
                     Firmanın kullanıcı hakkı <span className="font-semibold">{userLimit}</span> ve
                     Active Directory&apos;de zaten <span className="font-semibold">{existingUserCount}</span> kullanıcı kayıtlı.
                     Devam edebilmek için lisansın artırılması veya mevcut bir kullanıcının silinmesi gerekmektedir.
@@ -276,7 +276,7 @@ export function StepFirma({
                       type="button"
                       onClick={onRefreshExistingUsers}
                       disabled={existingUsersLoading}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] border border-red-300 bg-white hover:bg-red-100 transition-colors text-[10px] font-medium text-red-700 disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[5px] border border-red-300 bg-card hover:bg-red-100 transition-colors text-[10px] font-medium text-red-700 dark:text-red-400 disabled:opacity-50"
                     >
                       <RefreshCw className={cn("size-3", existingUsersLoading && "animate-spin")} />
                       AD&apos;den yenile
@@ -289,19 +289,19 @@ export function StepFirma({
 
           {/* Bağlantı sunucusu (RDP) seçimi — sadece kullanıcı hakkı > 0 ve lisans doluysa gizle */}
           {licenseSeats > 0 && !licenseFull && <div>
-            <p className="text-[10px] font-medium text-muted-foreground tracking-wide uppercase mb-2">
+            <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
               Bağlantı Sunucusu
             </p>
 
             {/* Yükleniyor */}
             {rdpServersLoading && (
-              <div className="rounded-[4px] border border-border/50 overflow-hidden divide-y divide-border/40">
+              <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 px-3 py-3">
-                    <Skeleton className="h-3 w-32 rounded-[4px]" />
-                    <Skeleton className="h-3 w-24 rounded-[4px]" />
-                    <Skeleton className="h-3 w-28 rounded-[4px]" />
-                    <Skeleton className="h-3 w-16 rounded-[4px] ml-auto" />
+                    <Skeleton className="h-3 w-32 rounded-[5px]" />
+                    <Skeleton className="h-3 w-24 rounded-[5px]" />
+                    <Skeleton className="h-3 w-28 rounded-[5px]" />
+                    <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
                   </div>
                 ))}
               </div>
@@ -309,7 +309,7 @@ export function StepFirma({
 
             {/* Hata */}
             {!rdpServersLoading && rdpServersError && (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-200 bg-red-50 text-[11px] text-red-600">
+              <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 {rdpServersError}
               </div>
@@ -317,7 +317,7 @@ export function StepFirma({
 
             {/* Boş */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length === 0 && (
-              <div className="rounded-[4px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+              <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
                 <ServerOff className="size-6 text-muted-foreground" />
                 <p className="text-[12px] font-medium">RDP sunucusu tanımlı değil</p>
                 <p className="text-[10px] text-muted-foreground max-w-xs">
@@ -326,7 +326,7 @@ export function StepFirma({
                 </p>
                 <a
                   href="/servers"
-                  className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-[#1d64ff] text-white hover:bg-foreground/90 transition-colors"
+                  className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
                 >
                   Sunucu Ekle
                 </a>
@@ -336,10 +336,10 @@ export function StepFirma({
             {/* Tablo */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length > 0 && (
             <>
-            <div className="rounded-[4px] border border-border/50 overflow-hidden">
+            <div className="rounded-[5px] border border-border/50 overflow-hidden">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-muted/30 border-b border-border/40 hover:bg-muted/30">
+                  <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
                     <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
                     <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
                     <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
@@ -358,7 +358,7 @@ export function StepFirma({
                     const densityPct = maxUsers > 0
                       ? Math.min(100, Math.round((srv.userCount / maxUsers) * 100))
                       : 0
-                    const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600"
+                    const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
                     const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
                     return (
                       <TableRow

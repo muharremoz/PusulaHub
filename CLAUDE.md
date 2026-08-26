@@ -48,7 +48,7 @@ Aşağıdaki componentler `src/components/ui/` altında kurulu ve kullanıma haz
 | `popover` | Açılır kutu |
 | `progress` | İlerleme çubuğu |
 | `scroll-area` | Kaydırılabilir alan |
-| `select` | Tek seçim dropdown |
+| ~~`select`~~ | **KULLANMA** → `@/components/ui/combobox` (`Combobox`/`ComboboxMulti`) veya `combobox-select` |
 | `separator` | Ayırıcı çizgi |
 | `sheet` | Yan panel (drawer) |
 | `sidebar` | Ana navigasyon sidebar |
@@ -72,47 +72,169 @@ Kurulmadan custom implementasyon yapılmaz.
 
 ## Proje Tasarım Standardı
 
-### Renk ve Yapı
-- Dış kart arka planı: `#F4F2F0` (beige)
-- İç kart arka planı: `#FFFFFF` + `boxShadow: "0 2px 4px rgba(0,0,0,0.06)"`
-- Dış kart radius: `rounded-[8px]`
-- İç kart radius: `rounded-[4px]`
-- Input/buton radius: `rounded-[5px]`
-- Dış kart padding: `p-2 pb-0`, alt boşluk için `<div className="h-2" />`
+> **Tek kaynak: PusulaCRM.** Hub'ın görsel dili PusulaCRM ile **birebir aynıdır**.
+> Yeni bir desen gerekince önce `C:\Projeler\PusulaCRM` içindeki karşılığına bak;
+> liste/tablo işleri için `PusulaCRM/docs/liste-tasarim-deseni.md` uygulanır.
+> Sidebar/app-shell zaten ortak paketten gelir: `@muharremoz/pusula-ui`.
 
-### Tipografi
-- Başlık (section header): `text-[10px] font-medium text-muted-foreground tracking-wide uppercase`
-- Tablo verisi: `text-[11px]`
+### Renk — SABİT HEX YASAK
+
+Sayfalarda `#F4F2F0`, `#eef3ff`, `#1d64ff` gibi sabit renk **yazılmaz**. Her şey
+token üzerinden gider (`globals.css`), böylece koyu tema bedava çalışır.
+
+| Token | Açık | Koyu | Kullanım |
+|---|---|---|---|
+| `--page-bg` | `#F7F7F8` | `#0F1113` | Sayfa zemini |
+| `--section-bg` | `#F0F0F0` | `#131519` | Bölüm paneli (dış kart) |
+| `--card` | `#FFFFFF` | `#17191C` | Beyaz kart |
+| `--card-shadow` | ince gölge | ışık çizgisi + gölge | Kart elevation |
+| `--primary` | `#171717` | `#F5F5F5` | **Siyah/beyaz nötr** — CTA/vurgu |
+
+Kullanım: `bg-[var(--section-bg)]`, `bg-card`, `bg-[var(--page-bg)]`,
+`style={{ boxShadow: "var(--card-shadow)" }}`, `bg-primary text-primary-foreground`.
+
+**Koyu tema zorunlu.** Yeni bir renk sınıfı yazarken açık-tema-only üçlü
+(`bg-red-50 text-red-700 border-red-200`) kullanma; CRM tonunu kullan:
+`bg-red-500/15 text-red-700 dark:text-red-400`.
+
+### Radius
+Proje geneli **5px**. `--radius-sm..4xl` hepsi 5px'e sabitlenmiştir.
+İstisna: bölüm paneli `rounded-[8px]`, liste alanının üst köşeleri `rounded-t-[10px]`.
+
+### Tipografi / yoğunluk (compact)
+- Tablo/liste başlığı: `text-[10px] font-medium text-muted-foreground uppercase tracking-wider`
+- Liste satırı: `text-[14px] font-medium leading-[20px]`, hücre `px-4 py-1.5 whitespace-nowrap`
+- İkincil metin: `text-muted-foreground text-[12px]`. Boş değer: `—`
+- Rozet: `inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium`
 - Mono değerler (IP, kullanıcı adı): `font-mono`
 - Büyük sayı (KPI): `text-2xl font-bold tabular-nums`
 
-### Tablo / Liste Standardı
-- Header satırı: `bg-muted/30 border-b border-border/40`
-- Veri satırı: `hover:bg-muted/20 transition-colors`
-- Satır ayırıcı: `divide-y divide-border/40`
-- Aksiyon menüsü: `MoreVertical` ikonlu `DropdownMenu` (ayrı ikon buton kullanılmaz)
-- Footer: ikon + `X kayıt listeleniyor`
-- Container: `rounded-[4px] overflow-hidden`
+### Liste / tablo standardı
 
-### Sheet Standardı
-- Genişlik: `!w-[520px] !max-w-[520px]`
-- Yapı: `p-0 flex flex-col gap-0`
-- Header: `px-5 py-4 border-b border-border/50`
-- İçerik: `<ScrollArea className="flex-1">` + `px-4 py-4 space-y-3`
-- Section kart: `rounded-[5px] border border-border/50 overflow-hidden`
-- Section başlık: `px-3 py-2 bg-muted/30 border-b border-border/40`
-- Alan (field): `Label` + shadcn `Input`, `rounded-[5px] h-8 text-[11px]`
-- Footer: `px-5 py-3 border-t border-border/50`
+Hazır bileşenler: `@/components/shared/liste-karti` ve
+`@/components/shared/liste-filtreleri`. Referans uygulama:
+[users/page.tsx](apps/web/src/app/(main)/users/page.tsx).
 
-### AlertDialog Standardı
-Silme, devre dışı bırakma gibi destructive işlemlerde mutlaka `AlertDialog` kullanılır.
-- Onay butonu destructive işlemde: `bg-destructive text-white`
+```tsx
+<ListeKarti
+  baslik="Kullanıcı Yönetimi"
+  ikon={<User className="size-3.5" />}
+  toplam={users.length}
+  filtreli={filtered.length}
+  aksiyon={<ListeAksiyonButonu onClick={...}><Plus className="size-3.5" />Yeni</ListeAksiyonButonu>}
+>
+  <div className="overflow-x-auto">
+    <table className="w-full text-[14px] font-medium leading-[20px]">
+      <ListeThead>
+        <th className="px-4 py-1.5 text-left font-medium">
+          <MetinFiltre label="Kullanıcı" value={adFiltre} onChange={setAdFiltre} />
+        </th>
+        {/* ... */}
+        <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+      </ListeThead>
+      <tbody>{/* satırlar — hover:bg-muted/20 */}</tbody>
+    </table>
+  </div>
+</ListeKarti>
+```
 
-### Toast Standardı
-- `sonner` paketi kullanılır: `import { toast } from "sonner"`
-- Başarı: `toast.success("Mesaj", { description: "Alt bilgi" })`
-- Hata: `toast.error("Mesaj")`
-- Konum: `top-center`
+Yapı: dış panel `bg-[var(--section-bg)] rounded-[8px] p-2` → liste alanı
+`rounded-t-[10px] border-t bg-card` + **sadece üstte** yumuşak dış gölge.
+
+**Sütun başlığı filtreleri** — her filtrelenebilir başlık bir Popover trigger'ıdır:
+`MetinFiltre` (serbest metin), `SecimFiltre` (çoklu seçim + adet rozeti),
+`SayiAralikFiltre` (min–max), `TarihFiltre` (Bugün/Bu hafta/Bu ay/aralık + Calendar).
+Filtreler tek `useMemo` içinde **VE (AND)** ile birleşir, erken `return false` deseniyle.
+
+Boş durum: `toplam === 0` ise "Henüz kayıt yok.", filtreliyse "Filtreye uyan kayıt yok."
+
+### UI primitive kuralları (ÖNEMLİ)
+
+- **Açılır listeler tek bileşenden.** Elle `Popover + Command` KURMA:
+  - `@/components/ui/combobox` → **`Combobox`** (tek seçim) ve **`ComboboxMulti`** (çoklu).
+    Zengin satır (`renderItem`), zengin tetikleyici değeri (`renderValue`), özel
+    tetikleyici (`trigger`), yükleniyor iskeleti (`loading`), kontrollü arama
+    (`search`/`onSearchChange` — büyük listede `.slice(0, 50)` ile birlikte) destekler.
+  - `@/components/ui/combobox-select` → shadcn `Select` ile **aynı API**; eski
+    `<Select><SelectItem>` bloklarını değiştirmeden kullanmak için. Aynı paneli çizer.
+  - `@/components/ui/select` (shadcn) **kullanma**.
+  Onay işareti daima **sağda**, satırlar `text-[13px]`, popover tetikleyici genişliğinde.
+- **Checkbox / form alanı** → `@/components/shared/form`: `Checkbox` (CRM'in özel
+  `size-4 rounded border` kutusu, aktifken primary dolgu) ve `Field` (etiketli alan).
+  Native `<input type="checkbox">` ve pusula-ui Checkbox **kullanılmaz**.
+- **İkonlar tek kaynaktan.** Animasyonlu ikonlar [lucide-animated.com](https://lucide-animated.com)
+  (pqoqubbw) kaynaklı, `@/components/ui/<name>.tsx` altında; merkezi kayıt
+  `@/components/shared/icon-registry.ts`. Kullanım: `<Icon name="users" size={14} />`
+  (`@/components/shared/icon`). Yeni ikon:
+  `npx --yes shadcn@latest add "https://lucide-animated.com/r/<name>.json"` + registry'ye kayıt.
+  Statik `lucide-react` **sadece** o isimde animasyonlu muadil yoksa fallback.
+  `iconsax-reactjs` **kullanılmaz** (projeden kaldırıldı).
+- **Tarih seçimi daima** shadcn `Calendar` + `Popover`. Native `<input type="date">` yok.
+- **Aksiyon menüsü daima** `DropdownMenu` (`@muharremoz/pusula-ui`), `MoreVertical`
+  ikonuyla. **Ayraç (`DropdownMenuSeparator`) liste satırı menüsünde kullanılmaz.**
+  Yıkıcı öğe: `text-rose-600 focus:text-rose-600`.
+- `window.confirm/alert` yok → `AlertDialog` + `sonner` toast.
+- İstisna: button, card, sheet, badge, tooltip, sidebar gibi layout primitive'leri
+  shadcn default OK.
+
+### Sheet standardı
+
+CRM ile aynı: kenara yapışık değil, **12px boşluklu yüzen panel** — yuvarlak
+köşe, section-bg başlık şeridi. Bu görünüm `components/ui/sheet.tsx`'in
+**varsayılanıdır**; çağrı yerinde tekrar yazılmaz.
+
+```tsx
+<Sheet open={open} onOpenChange={onClose}>
+  <SheetContent className="!w-[520px] !max-w-[520px]">
+    <SheetHeader>
+      <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+        <Icon name="zap" size={18} />
+      </span>
+      <SheetTitle>Başlık</SheetTitle>
+      <SheetDescription>Kısa açıklama.</SheetDescription>
+    </SheetHeader>
+
+    <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+      <Field label="Firma" required><FirmaCombobox … /></Field>
+      <Field label="Açıklama"><Textarea rows={4} className="resize-none" /></Field>
+    </div>
+
+    <SheetFooter className="flex-row">
+      <Button variant="outline" className="flex-1" onClick={onClose}>İptal</Button>
+      <Button className="flex-1" onClick={kaydet}>Kaydet</Button>
+    </SheetFooter>
+  </SheetContent>
+</Sheet>
+```
+
+- **Panel**: `inset-*-3`, `rounded-[10px]`, `overflow-hidden`, `bg-popover` — bileşende hazır.
+  Çağrı yerinde yalnız genişlik verilir (`!w-[520px] !max-w-[520px]`).
+- **Header**: `bg-[var(--section-bg)] border-b p-4` — bileşende hazır. İkon rozeti
+  `size-9 rounded-[5px] bg-primary/10 text-primary ring-1 ring-primary/20`.
+  Başlık `text-[15px] font-semibold`, açıklama `text-[12px]`.
+- **İçerik**: `flex flex-1 flex-col gap-3 overflow-y-auto p-4`.
+- **Footer**: `SheetFooter className="flex-row"` (`border-t p-4` hazır), butonlar `flex-1`.
+- **Alan**: `Field` (`@/components/shared/form`) — `Label` `text-foreground/80 text-[12px]
+  font-medium`, zorunluysa `*` primary renkte.
+- **Kontroller**: `Input` / `Textarea` → `h-8`, `rounded-[5px]`, `text-[13px]` (bileşen
+  varsayılanı). Dropdown → `Combobox` / `combobox-select`. Checkbox → `@/components/shared/form`.
+
+> Not: CRM'in sheet'i `@base-ui/react` üzerine kurulu, Hub'ınki Radix üzerinde
+> kalır — **görünüm** aynıdır, altyapı farklıdır. Yeni sheet yazarken Radix
+> API'sini kullan (`asChild`, `data-[state=open]`), base-ui'ye geçirme.
+
+### AlertDialog standardı
+Silme / devre dışı bırakma gibi destructive işlemlerde zorunlu.
+Onay butonu: `bg-destructive text-white`.
+
+### Toast standardı
+`sonner` — `toast.success("Mesaj", { description: "Alt bilgi" })`,
+`toast.error("Mesaj")`. Konum: `top-center`.
+
+### Tema
+`next-themes`, `attribute="class"`, **varsayılan `system`** (açık + koyu).
+Kullanıcı menüsünden tek tıkla geçiş. Yeni yazılan her şey koyu temada da
+okunabilir olmalı.
 
 ---
 
