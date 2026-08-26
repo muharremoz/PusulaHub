@@ -76,34 +76,40 @@ export async function GET(
       },
       async (pool) => {
         const res = await pool.request().query<DbRow>(`
+          SET NOCOUNT ON;
+
           -- READ UNCOMMITTED: msdb.backupset yedekleme sirasinda surekli
           -- yaziliyor; kilitli okumak iki yonde de zararli -- sorgu kilit
           -- bekler, ve calisan BACKUP/RESTORE'u biz bloke edebiliriz.
-          -- (Poller'da ayni satirin yorumu: restore %100'de takiliyordu.)
-          -- Olculen sure: bos sunucuda ~1 sn; yedekleme penceresinde ayni
-          -- sorgu 60 sn'yi asabiliyor, bu yuzden UI'da 30 sn zaman asimi var.
           SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
-          -- Yedek tarihleri msdb.backupset'ten TEK GECISTE gruplanarak alinir.
-          -- Veritabani basina korelasyonlu alt sorgu YAZILMAZ: backupset
-          -- uzerindeki indeks yalniz (database_name) oldugu icin o desen her
-          -- DB icin tabloyu bastan tarar (olculdu: 79 DB'de 94M okuma, 65 sn).
-          WITH boyut AS (
-            SELECT database_id, SUM(CAST(size AS BIGINT)) * 8 / 1024 AS SizeMB
-            FROM sys.master_files GROUP BY database_id
-          ),
-          bk AS (
+          -- Yedek tarihleri GECICI TABLOYA alinir; CTE olarak birakilmaz.
+          -- Sebep olculdu: CTE'ler materyalize edilmez, satir ici gomulur ve
+          -- optimizer bunu her veritabani icin yeniden calistirmayi secebiliyor
+          -- (nested loops). O plana dustugunde 75 DB x ~21K sayfa = 1.6M
+          -- mantiksal okuma / 60 saniye; kilit beklemesi YOK, saf is. Ayni
+          -- sorgu bazen 1 saniyede bitiyordu -- yani plan kararsizligi, sabit
+          -- bir yavaslik degil. Gecici tablo tek taramayi garantiler.
+          CREATE TABLE #yedek (
+            database_name  sysname PRIMARY KEY,
+            LastBackup     datetime NULL,
+            LastDiffBackup datetime NULL
+          );
+
+          INSERT INTO #yedek (database_name, LastBackup, LastDiffBackup)
+          SELECT database_name,
+                 MAX(CASE WHEN type = 'D' THEN backup_finish_date END),
+                 MAX(CASE WHEN type = 'I' THEN backup_finish_date END)
+          FROM (
             SELECT database_name, type, backup_finish_date,
                    ROW_NUMBER() OVER (PARTITION BY database_name, type
                                       ORDER BY backup_finish_date DESC) AS rn
-            FROM msdb.dbo.backupset WHERE type IN ('D','I')
-          ),
-          yedek AS (
-            SELECT database_name,
-                   MAX(CASE WHEN type='D' THEN backup_finish_date END) AS LastBackup,
-                   MAX(CASE WHEN type='I' THEN backup_finish_date END) AS LastDiffBackup
-            FROM bk WHERE rn = 1 GROUP BY database_name
-          )
+            FROM msdb.dbo.backupset
+            WHERE type IN ('D','I')
+          ) x
+          WHERE rn = 1
+          GROUP BY database_name;
+
           SELECT
             d.name        AS Name,
             d.state_desc  AS StateDesc,
@@ -112,10 +118,15 @@ export async function GET(
             y.LastBackup     AS LastBackup,
             y.LastDiffBackup AS LastDiffBackup
           FROM sys.databases d
-          LEFT JOIN boyut b ON b.database_id   = d.database_id
-          LEFT JOIN yedek y ON y.database_name = d.name
+          LEFT JOIN (
+            SELECT database_id, SUM(CAST(size AS BIGINT)) * 8 / 1024 AS SizeMB
+            FROM sys.master_files GROUP BY database_id
+          ) b ON b.database_id = d.database_id
+          LEFT JOIN #yedek y ON y.database_name = d.name
           WHERE d.database_id > 4
-          ORDER BY d.name
+          ORDER BY d.name;
+
+          DROP TABLE #yedek;
         `)
         return res.recordset
       },
