@@ -47,6 +47,7 @@ import {
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { SqlDatabaseItem, SqlDatabasesResponse } from "@/app/api/setup/sql-servers/[id]/databases/route"
 import type { ExecuteResponse } from "@/app/api/sql/execute/route"
+import { CanliAktivite } from "./_components/canli-aktivite"
 
 /* ── Tipler ─────────────────────────────────────────────── */
 interface FlatDb extends SqlDatabaseItem {
@@ -358,6 +359,12 @@ export default function SQLPage() {
             className="rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
           >
             Sorgu Editörü
+          </TabsTrigger>
+          <TabsTrigger
+            value="aktivite"
+            className="rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors data-[state=active]:bg-foreground data-[state=active]:text-background data-[state=inactive]:text-muted-foreground data-[state=inactive]:hover:text-foreground data-[state=active]:shadow-none"
+          >
+            Canlı Aktivite
           </TabsTrigger>
         </TabsList>
 
@@ -763,6 +770,13 @@ export default function SQLPage() {
 
             </div>
           </div>
+        </TabsContent>
+
+        {/* ══════════════════════════════════════
+            TAB 3 — Canlı Aktivite
+        ══════════════════════════════════════ */}
+        <TabsContent value="aktivite" className="mt-0">
+          <CanliAktivite servers={sqlServers} loading={serversLoading} />
         </TabsContent>
 
       </Tabs>
