@@ -341,9 +341,16 @@ function EntryRow({
         <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] bg-muted/50", cat.color)}>
           <Icon className="size-3.5" />
         </div>
-        <div className="min-w-0">
-          <p className="font-semibold truncate">{entry.title}</p>
-          {entry.notes && <p className="text-[11px] text-muted-foreground truncate">{entry.notes}</p>}
+        {/* Genislik siniri sart: tablo hucresi icerige gore buyudugu icin
+            `truncate` tek basina is gormuyordu — tek satirlik bir not (ornegin
+            yapistirilmis ozel anahtar) butun satiri tasiriyordu. */}
+        <div className="min-w-0 max-w-[260px]">
+          <p className="truncate font-semibold">{entry.title}</p>
+          {entry.notes && (
+            <p className="text-muted-foreground truncate text-[11px]" title={entry.notes}>
+              {entry.notes}
+            </p>
+          )}
         </div>
       </div>
       </td>
