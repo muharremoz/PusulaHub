@@ -281,6 +281,63 @@ Agent `/api/exec` endpoint'i JSON regex-parse eder. Komut içinde çift tırnak 
 
 **Çözüm:** Tüm PS komutlarını tek tırnak `'` ile yaz. Değişken içinde `'` geçiyorsa `''` ile escape et (`psEscape` fonksiyonu).
 
+Aynı endpoint'in iki tuzağı daha var:
+
+**1) `^` sessizce karakter yiyor — regex karakter sınıfı kullanma.**
+Komut `powershell.exe -Command "..."` olarak çalıştırılıyor ve `^` yol boyunca
+escape karakteri gibi yorumlanıyor. Sonuç: ifade hata vermez, **sessizce yanlış
+çalışır**.
+
+```powershell
+# YANLIS — 4000 karakterlik base64'ten 247 gecerli karakteri yedi (hata vermeden)
+((Get-Content $f -Raw) -replace '[^A-Za-z0-9+/=]','').Length   # -> 3753
+
+# DOGRU
+((Get-Content $f -Raw) -replace '\s','').Length                # -> 4000
+```
+
+Boşluk temizliği için `-replace '\s',''` veya `.Trim()` kullan. Yaşandı:
+agent'a dosya aktarırken hash tutmadı, sebebi bulmak yarım saat aldı.
+
+**2) Çok satırlı komut gönderme — satır sonları literal `\n` oluyor.**
+Komutu tek satırda `;` ile ayırarak yaz. Aksi halde bir sonraki parametreye
+`SilentlyContinue\n'--- baslik ---'` gibi birleşik değer geçer ve
+"Cannot bind parameter" hatası alırsın.
+
+---
+
+### Agent'ı Uzaktan Güncelleme (KUR.bat'sız)
+
+`C:\PusulaAgent\__update.ps1` yerleşik güncelleyicidir: servisi durdurur,
+`PusulaAgent.exe`'yi `.bak` olarak yedekler, `PusulaAgent.exe.new`'i yerine
+taşır, servisi başlatır ve `update.log`'a yazar. Sunucuya RDP/SMB erişimi
+olmadan agent güncellemenin yolu budur.
+
+Akış:
+1. Yerelde `KUR.bat`'takiyle **birebir aynı** bayraklarla derle
+   (`/target:winexe /optimize+ /platform:anycpu` + aynı `/r:` listesi).
+2. Exe'yi base64'e çevir, `/api/exec` ile parça parça yaz
+   (`Set-Content` + `Add-Content`, ~6000 karakter). Yolları **ileri bölü** ile
+   yaz (`C:/PusulaAgent/...`) — betik dilinin `\a`, `\P` kaçışlarına takılmaz.
+3. Sunucuda `[Convert]::FromBase64String` ile çöz, **SHA256'yı yerelle
+   karşılaştır** — eşleşmeden devam etme.
+4. `__update.ps1`'i `Start-Process` ile **ayrı süreç** olarak başlat: updater
+   servisi durduruyor, exec komutu servisin çocuğu olduğu için aksi halde
+   kendini de öldürür.
+5. Agent geri gelene kadar `/api/report`'u yokla, sonra exe SHA'sını doğrula.
+
+**Geri dönüş yolu bırak.** Agent düşerse başka erişim kanalı yok. Tetiklemeden
+önce birkaç dakika sonrası için tek seferlik bir görev kur; servis ayakta
+değilse `.bak`'i geri yükleyip başlatsın, sonra kendini silsin:
+
+```powershell
+schtasks /Create /TN PusulaAgentRollback /TR 'powershell -NoProfile -ExecutionPolicy Bypass -File C:/PusulaAgent/__rollback.ps1' /SC ONCE /ST <HH:mm> /RU SYSTEM /RL HIGHEST /F
+```
+
+**Sunucudaki `PusulaAgent.cs`'i de güncellemeyi unutma.** Sadece exe'yi
+değiştirirsen kaynak eski kalır; ileride biri `KUR.bat` çalıştırdığında
+düzeltme sessizce geri alınır.
+
 ---
 
 ### IISSites — CHECK Constraint Sessiz Fail
