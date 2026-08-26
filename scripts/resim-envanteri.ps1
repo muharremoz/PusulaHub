@@ -81,8 +81,9 @@ foreach ($f in $klasorler) {
 
     if (-not $dosyalar) { continue }
 
-    $toplamBayt = 0; $buyukAdet = 0; $buyukBayt = 0; $cozunurlukAdet = 0
-    $enBuyukAd = ''; $enBuyukBayt = 0
+    # [long]: gercek veride tek firma 3+ GB tutabiliyor, Int32 tasiyor.
+    $toplamBayt = [long]0; $buyukAdet = 0; $buyukBayt = [long]0; $cozunurlukAdet = 0
+    $enBuyukAd = ''; $enBuyukBayt = [long]0
 
     foreach ($d in $dosyalar) {
         $toplamBayt += $d.Length
@@ -108,7 +109,8 @@ foreach ($f in $klasorler) {
     }
 
     # Tasarruf TAHMINI: yalnizca buyuk dosyalarin hedef boyuta inecegi varsayimi.
-    $tahminiKazancBayt = [Math]::Max(0, $buyukBayt - ($buyukAdet * $HedefKB * 1KB))
+    # Sabit 0 yazilirsa PowerShell Int32 asiri yuklemesini secip tasiyor.
+    $tahminiKazancBayt = [Math]::Max([long]0, $buyukBayt - ([long]$buyukAdet * $HedefKB * 1KB))
 
     $firmalar += [pscustomobject]@{
         Firma           = $f.Name
