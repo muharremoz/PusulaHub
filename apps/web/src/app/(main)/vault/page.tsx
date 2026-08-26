@@ -1098,6 +1098,82 @@ export default function VaultPage() {
         />
       </div>
 
+      <div className="flex gap-4">
+
+        {/* ── Sol: Kategori + Güvenlik panelleri ──────────────────────────
+            CRM tasarım geçişinde bu panelin içeriği silinmiş, ama `w-52`
+            kutusu kalıp tablo onun içine girmişti; sonuç: liste 208px'e
+            sıkıştı ve kategori filtresi (state + countFor duruyor) hiçbir
+            yerden erişilemez oldu. Panel token'larla geri yazıldı. */}
+        <div className="w-52 shrink-0 space-y-3">
+
+          <div className="bg-[var(--section-bg)] rounded-[8px] p-2">
+            <div className="px-3 py-1.5">
+              <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                Kategoriler
+              </span>
+            </div>
+            <div
+              className="bg-card space-y-0.5 rounded-[10px] border-t p-1.5"
+              style={{ boxShadow: "var(--card-shadow)" }}
+            >
+              {CATEGORIES.map((cat) => {
+                const Icon   = cat.icon
+                const adet   = countFor(cat.id)
+                const aktif  = category === cat.id
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setCategory(cat.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-[5px] px-2.5 py-2 text-left transition-colors",
+                      aktif ? "bg-primary text-primary-foreground" : "hover:bg-muted/60 text-foreground",
+                    )}
+                  >
+                    <Icon className={cn("size-3.5 shrink-0", aktif ? "text-primary-foreground" : cat.color)} />
+                    <span className="flex-1 truncate text-[11px] font-medium">{cat.label}</span>
+                    <span className={cn(
+                      "rounded-[3px] px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+                      aktif ? "bg-white/20 text-primary-foreground" : "bg-muted text-muted-foreground",
+                    )}>
+                      {adet}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <div className="bg-[var(--section-bg)] rounded-[8px] p-2">
+            <div className="px-3 py-1.5">
+              <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
+                Güvenlik
+              </span>
+            </div>
+            <div
+              className="bg-card space-y-2 rounded-[10px] border-t p-3"
+              style={{ boxShadow: "var(--card-shadow)" }}
+            >
+              {/* Güçlüden zayıfa — riskli olan alta düşsün diye ters sırada. */}
+              {STRENGTH.map((s, i) => ({ s, i })).reverse().map(({ s, i }) => {
+                const adet = entries.filter(
+                  (e) => Math.min(passwordScore(e.password), STRENGTH.length - 1) === i,
+                ).length
+                return (
+                  <div key={s.label} className="flex items-center gap-2">
+                    <div className={cn("size-2 shrink-0 rounded-full", s.color)} />
+                    <span className="text-muted-foreground flex-1 text-[10px]">{s.label}</span>
+                    <span className="text-[11px] font-semibold tabular-nums">{adet}</span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+
+        </div>
+
+        {/* ── Sağ: Liste ── */}
+        <div className="min-w-0 flex-1">
       <ListeKarti
         baslik="Şifre Kasası"
         ikon={<ShieldCheck className="size-3.5" />}
@@ -1156,6 +1232,8 @@ export default function VaultPage() {
           </table>
         </div>
       </ListeKarti>
+        </div>
+      </div>
 
       {/* Sheet */}
       <EntrySheet
