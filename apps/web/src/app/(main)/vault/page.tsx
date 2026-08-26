@@ -1098,71 +1098,64 @@ export default function VaultPage() {
         />
       </div>
 
-      <div className="flex gap-4">
-
-        {/* ── Sol: Kategori Paneli ── */}
-        <div className="w-52 shrink-0">
-          <ListeKarti
-            baslik="Şifre Kasası"
-            ikon={<ShieldCheck className="size-3.5" />}
-            toplam={entries.length}
-            filtreli={filtered.length}
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full text-[14px] font-medium leading-[20px]">
-                <ListeThead>
-                  <th className="px-4 py-1.5 w-10" />
-                  <th className="px-4 py-1.5 text-left font-medium">
-                    <SortHeader label="Başlık" sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                  </th>
-                  <th className="px-4 py-1.5 text-left font-medium">
-                    <MetinFiltre label="Host / IP" value={hostFiltre} onChange={setHostFiltre} />
-                  </th>
-                  <th className="px-4 py-1.5 text-left font-medium">
-                    <MetinFiltre label="Kullanıcı Adı" value={kadFiltre} onChange={setKadFiltre} />
-                  </th>
-                  <th className="px-4 py-1.5 text-left font-medium">Şifre</th>
-                  <th className="px-4 py-1.5 text-left font-medium">
-                    <SortHeader label="Güç" sortKey="strength" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                  </th>
-                  <th className="px-4 py-1.5 text-left font-medium">
-                    <SortHeader label="Güncelleme" sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
-                  </th>
-                  <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
-                </ListeThead>
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i}>
-                        {Array.from({ length: 7 }).map((_, j) => (
-                          <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
-                        ))}
-                        <td />
-                      </tr>
-                    ))
-                  ) : filtered.length === 0 ? (
-                    <ListeBosSatir
-                      sutunSayisi={8}
-                      toplam={entries.length}
-                      bosMesaj="Henüz giriş eklenmedi."
-                      filtreliMesaj="Sonuç bulunamadı."
-                    />
-                  ) : filtered.map((entry) => (
-                    <EntryRow
-                      key={entry.id}
-                      entry={entry}
-                      onEdit={(e) => { setEditing(e); setSheetOpen(true) }}
-                      onDelete={(id) => setDeleteId(id)}
-                      onToggleFavorite={handleToggleFavorite}
-                    />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </ListeKarti>
-
+      <ListeKarti
+        baslik="Şifre Kasası"
+        ikon={<ShieldCheck className="size-3.5" />}
+        toplam={entries.length}
+        filtreli={filtered.length}
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-[14px] font-medium leading-[20px]">
+            <ListeThead>
+              <th className="px-4 py-1.5 w-10" />
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Başlık" sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Host / IP" value={hostFiltre} onChange={setHostFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <MetinFiltre label="Kullanıcı Adı" value={kadFiltre} onChange={setKadFiltre} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">Şifre</th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Güç" sortKey="strength" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-left font-medium">
+                <SortHeader label="Güncelleme" sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+              </th>
+              <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            </ListeThead>
+            <tbody>
+              {loading ? (
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i}>
+                    {Array.from({ length: 7 }).map((_, j) => (
+                      <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
+                    ))}
+                    <td />
+                  </tr>
+                ))
+              ) : filtered.length === 0 ? (
+                <ListeBosSatir
+                  sutunSayisi={8}
+                  toplam={entries.length}
+                  bosMesaj="Henüz giriş eklenmedi."
+                  filtreliMesaj="Sonuç bulunamadı."
+                />
+              ) : filtered.map((entry) => (
+                <EntryRow
+                  key={entry.id}
+                  entry={entry}
+                  onEdit={(e) => { setEditing(e); setSheetOpen(true) }}
+                  onDelete={(id) => setDeleteId(id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
+              ))}
+            </tbody>
+          </table>
         </div>
-      </div>
+      </ListeKarti>
 
       {/* Sheet */}
       <EntrySheet
