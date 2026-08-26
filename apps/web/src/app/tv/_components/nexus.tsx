@@ -36,7 +36,8 @@ import { useClock } from "../_shared/use-tv-data"
 import { type MetricsMap, metricsFor } from "./use-server-metrics"
 import { causesFor } from "./causes"
 import { type TreeGroup, type TreeKey, SUBGROUPS, subGroupOf } from "../_shared/monitor-groups"
-import { CoreSphere, SPHERE_R_FACTOR } from "./core-sphere"
+import { SPHERE_R_FACTOR } from "./core-sphere"
+import { ThinkingOrbCanvas } from "./orb"
 import { Sky } from "./sky"
 
 /* ── Palet ── */
@@ -44,7 +45,6 @@ const LINE      = "rgba(255,255,255,0.13)"
 const LINE_DOWN = "rgba(239,68,68,0.5)"
 const FLOW      = "#7DD3FC"
 /** Sayfa zemini — düğüm diskinin içini doldurup ortadaki sayıyı okunur kılar */
-const PAGE_BG   = "#0B0B0D"
 const TXT       = "#D4D4D8"
 const TXT_DIM   = "#71717A"
 const TXT_DOWN  = "#FCA5A5"
@@ -62,7 +62,7 @@ const FAN_DEG = 30
  * başlayınca da düğüme yapışık duruyorlardı.
  * Dış hale yarıçapı 34 → 38 birim güvenli bir pay bırakıyor.
  */
-const NODE_GAP = 38
+const NODE_GAP = 24   // dal cizgisi orb KENARINDAN dogar (orb yarıçapı 22); ne icinde karmasa ne disinda bosluk
 
 /**
  * Gövdelerin küre merkezine uzaklığı — kısa kenarın bu katı.
@@ -316,7 +316,9 @@ export function Nexus({
        */
       const bs = branchGeometry(
         cx + Math.cos(a) * (R * 0.45), cy + Math.sin(a) * (R * 0.45),
-        cx + Math.cos(a) * D,          cy + Math.sin(a) * D,          deg,
+        // Dal gövde MERKEZİNE değil orb KENARINA gelsin (24px önce dursun),
+        // yoksa orb'un içine dalıp noktalarla karışıyordu.
+        cx + Math.cos(a) * (D - 24),   cy + Math.sin(a) * (D - 24),   deg,
       )
       return {
         g,
@@ -672,7 +674,28 @@ export function Nexus({
               height: geo.S,
             }}
           >
-            <CoreSphere status={coreUi} className="h-full w-full" />
+            {/* Çekirdek ışıması — orbun arkasında, tint renginde, nefes alan hale.
+                Dallar bu ışıktan çıkıyormuş gibi görünsün diye orbdan büyük. */}
+            <div
+              className="animate-pulse absolute rounded-full"
+              style={{
+                inset: "-35%",
+                background: `radial-gradient(circle, rgba(${
+                  coreUi === "offline" ? "239,68,68" : "56,189,248"
+                },0.24) 0%, rgba(${
+                  coreUi === "offline" ? "239,68,68" : "56,189,248"
+                },0.06) 42%, transparent 68%)`,
+                filter: "blur(18px)",
+                animationDuration: coreUi === "offline" ? "1.4s" : "3.2s",
+              }}
+            />
+            <ThinkingOrbCanvas
+              state="composing"
+              size={geo.S}
+              className="relative h-full w-full"
+              tint={coreUi === "offline" ? "239,68,68" : "56,189,248"}
+              speedMul={coreUi === "offline" ? 1.2 : 0.4}
+            />
           </div>
         )}
       </div>
@@ -807,42 +830,25 @@ export function Nexus({
                     onSelect(null)
                   }}
                 >
-                  {/* Tıklama alanı — ince halkayı kovalamak zorunda kalma */}
+                  {/* Tıklama alanı — orb'u kovalamak zorunda kalma */}
                   <circle cx={t.x} cy={t.y} r={34} fill="transparent" />
-
-                  {/* Yumuşak hale — hover ve odakta güçlenir */}
-                  <circle
-                    cx={t.x} cy={t.y} r={hot ? 34 : 28}
-                    fill={col}
-                    opacity={hot ? 0.14 : 0.06}
-                    style={{ transition: "opacity 220ms" }}
-                  />
-                  {/* Dış halka */}
-                  <circle
-                    cx={t.x} cy={t.y} r={hot ? 22 : 20}
-                    fill="none" stroke={col} strokeWidth={1}
-                    opacity={hot ? 0.55 : 0.3}
-                    style={{ transition: "opacity 220ms" }}
-                  />
-                  {/* Gövde diski — içi sayfa zemini, ortadaki sayı okunsun */}
-                  <circle cx={t.x} cy={t.y} r={16} fill={PAGE_BG} />
-                  <circle cx={t.x} cy={t.y} r={16} fill={col} opacity={t.down ? 0.16 : 0.09} />
-                  <circle
-                    cx={t.x} cy={t.y} r={16}
-                    fill="none" stroke={col} strokeWidth={active ? 2 : 1.4}
-                  />
-                  {/* Monitör sayısı düğümün İÇİNDE — ayrı alt satıra gerek
-                      kalmıyor, dalların üstüne binmiyor. Arıza varsa arıza
-                      sayısını gösteriyor. */}
-                  <text
-                    x={t.x} y={t.y}
-                    textAnchor="middle" dominantBaseline="central"
-                    fontSize={11} fontWeight={700}
-                    fill={col}
-                    className="font-mono"
+                  {/* Arka disk kaldırıldı: dallar orb'un ORTASINA kadar
+                      görünüyor, düğümün içinden çıkıyormuş gibi. Orb transparan
+                      canvas, altında doğrudan uzay + dal çizgileri. */}
+                  {/* Düğüm çekirdeği — sayı yerine breathing orb (halka morph).
+                      canvas SVG içine foreignObject ile girer; pointer-events
+                      kapali ki tıklama <g>'ye gitsin. Arıza -> kırmızı ton. */}
+                  <foreignObject
+                    x={t.x - 22} y={t.y - 22} width={44} height={44}
+                    style={{ pointerEvents: "none" }}
                   >
-                    {t.down > 0 ? t.down : t.g.monitors.length}
-                  </text>
+                    <ThinkingOrbCanvas
+                      state="breathing"
+                      size={44}
+                      tint={col === DOT.offline ? "239,68,68" : "56,189,248"}
+                      speedMul={t.down ? 2 : 1}
+                    />
+                  </foreignObject>
 
                   <text
                     x={active ? t.x : t.x + (right ? 26 : -26)}
