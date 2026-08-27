@@ -52,6 +52,24 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
+  /*
+   * ── YALNIZ LOKAL GELİŞTİRME ─────────────────────────────────────────
+   * Oturum kontrolünü atlar. İki koşul BİRDEN gerekli:
+   *   1) NODE_ENV production DEĞİL  → prod build'de bu blok hiç çalışmaz
+   *   2) istek host'u localhost    → LAN'dan gelen istek de muaf olmaz
+   *
+   * Neden var: giriş Switch'te ve Switch dışarıya kapalı
+   * (WEB_GIRIS_KAPALI). Çerez düştüğünde lokalde oturum yenilemenin yolu
+   * kalmıyor, `pnpm dev` ile hiçbir sayfa açılamıyor.
+   *
+   * Coolify prod'u `next build` + `start` ile çalıştığı için NODE_ENV
+   * orada production; koşul sağlanmaz. Yine de bu GEÇİCİ bir kolaylıktır —
+   * Switch dışarıya açıldığında kaldırılmalı.
+   */
+  if (process.env.NODE_ENV !== "production" && req.nextUrl.hostname === "localhost") {
+    return NextResponse.next()
+  }
+
   // Dışarı kapatma: WEB_GIRIS_KAPALI=1 iken yalnız masaüstü agent (PusulaCRM-Agent
   // UA imzalı) açabilir. Servis/agent uçları (yukarıda) muaf; UI + korumalı sayfalar
   // imzasız (normal tarayıcı) → sessiz 404 (site yokmuş gibi). Agent dağıtıldıktan
