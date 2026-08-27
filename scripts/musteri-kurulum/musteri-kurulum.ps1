@@ -64,11 +64,27 @@ if ($zatenKurulu) {
     Yaz '   Zaten kurulu — kurulum adimi atlandi.' Green
 } else {
     if (-not $MsiYolu) {
-        # Betikle ayni klasordeki kurulum dosyasini bul
-        $aday = Get-ChildItem -LiteralPath $PSScriptRoot -File -ErrorAction SilentlyContinue |
-                Where-Object { $_.Name -match '(?i)forticlient.*\.(msi|exe)$' } |
-                Select-Object -First 1
-        if ($aday) { $MsiYolu = $aday.FullName }
+        <#  MSI ONCELIKLI. Fortinet'in sitesinden inen "FortiClientVPN.exe"
+            aslinda ONLINE KURULUM: kendisi kurmaz, calisinca internetten
+            asil paketi indirir. Musteride internet/bant genisligi belirsiz
+            oldugu icin ona guvenmiyoruz.
+            Tam MSI, FortiClient kurulu bir makinede su iki yerden alinabilir:
+              C:\ProgramData\Applications\Cache\{PRODUCT-GUID}\<surum>\FortiClient.msi
+              (veya Windows Installer onbellegi: LocalPackage kaydi)                       #>
+        $msiAday = Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter *.msi -EA SilentlyContinue |
+                   Where-Object { $_.Name -match '(?i)forti' } | Select-Object -First 1
+        if ($msiAday) {
+            $MsiYolu = $msiAday.FullName
+        } else {
+            $exeAday = Get-ChildItem -LiteralPath $PSScriptRoot -File -Filter *.exe -EA SilentlyContinue |
+                       Where-Object { $_.Name -match '(?i)forticlient' } | Select-Object -First 1
+            if ($exeAday) {
+                $MsiYolu = $exeAday.FullName
+                Yaz '   UYARI: Pakette MSI yok, online kurulum dosyasi bulundu.' Yellow
+                Yaz '   Bu dosya kurulumu internetten indirir; yavas olabilir veya' Yellow
+                Yaz '   musteride internet yoksa basarisiz olur. Tam MSI onerilir.' Yellow
+            }
+        }
     }
     if (-not $MsiYolu -or -not (Test-Path -LiteralPath $MsiYolu)) {
         Yaz '   FortiClient kurulum dosyasi bulunamadi.' Red
