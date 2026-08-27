@@ -923,6 +923,31 @@ function SortHeader({
   )
 }
 
+/**
+ * Yalnız ok — etiketi olmayan sıralama düğmesi. Başlık sütununda etiketi
+ * MetinFiltre yazdığı için ikinci kez yazmak gereksiz tekrar olurdu.
+ */
+function SiralaOku({
+  sortKey, currentKey, dir, onSort,
+}: {
+  sortKey: SortKey; currentKey: SortKey; dir: SortDir
+  onSort: (key: SortKey) => void
+}) {
+  const active = currentKey === sortKey
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(sortKey)}
+      title="Başlığa göre sırala"
+      className="text-muted-foreground hover:text-foreground rounded-[5px] p-1 transition-colors"
+    >
+      {active
+        ? (dir === "asc" ? <ArrowUp className="size-2.5" /> : <ArrowDown className="size-2.5" />)
+        : <ArrowUpDown className="size-2.5 opacity-30" />}
+    </button>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════
    Ana Sayfa
 ══════════════════════════════════════════════════════════ */
@@ -930,7 +955,6 @@ export default function VaultPage() {
   const [entries, setEntries]     = useState<VaultEntry[]>([])
   const [loading, setLoading]     = useState(true)
   const [category, setCategory]   = useState<CategoryId>("all")
-  const [search, setSearch]       = useState("")
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editing, setEditing]     = useState<VaultEntry | null>(null)
   const [deleteId, setDeleteId]   = useState<string | null>(null)
@@ -962,23 +986,24 @@ export default function VaultPage() {
 
   /* ── Filtreleme + sıralama ── */
   /* Sütun başlığı filtreleri — liste tasarım deseni standardı. */
+  const [baslikFiltre, setBaslikFiltre] = useState("")
   const [hostFiltre, setHostFiltre] = useState("")
   const [kadFiltre,  setKadFiltre]  = useState("")
 
   const filtered = useMemo(() => {
+    /*  toLocaleLowerCase("tr-TR"): Türkçe'de "I" -> "ı", "İ" -> "i".
+        Düz toLowerCase kullanılırsa "İSTANBUL" araması "istanbul"
+        başlığını bulamıyor.                                          */
+    const bas  = baslikFiltre.trim().toLocaleLowerCase("tr-TR")
     const host = hostFiltre.trim().toLocaleLowerCase("tr-TR")
     const kad  = kadFiltre.trim().toLocaleLowerCase("tr-TR")
-    let result = entries.filter((e) => {
-      const inCat = category === "all" || e.category === category
-      const q     = search.toLowerCase()
-      const inSearch = !q || e.title.toLowerCase().includes(q) ||
-                       e.username.toLowerCase().includes(q) ||
-                       (e.host ?? "").toLowerCase().includes(q) ||
-                       (e.url  ?? "").toLowerCase().includes(q)
-      // Sütun başlığı filtreleri
+    const result = entries.filter((e) => {
+      // Sütun başlığı filtreleri — erken çıkışla VE (AND) birleşimi
+      if (category !== "all" && e.category !== category) return false
+      if (bas && !e.title.toLocaleLowerCase("tr-TR").includes(bas)) return false
       if (host && !`${e.host ?? ""} ${e.url ?? ""}`.toLocaleLowerCase("tr-TR").includes(host)) return false
       if (kad && !e.username.toLocaleLowerCase("tr-TR").includes(kad)) return false
-      return inCat && inSearch
+      return true
     })
 
     // Sıralama
@@ -1005,7 +1030,10 @@ export default function VaultPage() {
     })
 
     return result
-  }, [entries, category, search, sortKey, sortDir])
+    /*  Filtreler bagimlilik listesinde EKSIKTI (yalniz entries, category,
+        sortKey, sortDir vardi). useMemo eski sonucu dondurdugu icin
+        Host/IP ve Kullanici Adi filtreleri yazilinca liste degismiyordu. */
+  }, [entries, category, baslikFiltre, hostFiltre, kadFiltre, sortKey, sortDir])
 
   const countFor = (id: CategoryId) =>
     id === "all" ? entries.length : entries.filter((e) => e.category === id).length
@@ -1159,7 +1187,14 @@ export default function VaultPage() {
             <ListeThead>
               <th className="px-4 py-1.5 w-10" />
               <th className="px-4 py-1.5 text-left font-medium">
-                <SortHeader label="Başlık" sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+                {/*  Başlık sütunu hem aranabilir hem sıralanabilir: arama
+                     istendi, sıralamayı kaldırmanın da gereği yoktu.
+                     Filtre standart MetinFiltre, sıralama yanında sade
+                     bir ok düğmesi.                                     */}
+                <div className="flex items-center gap-0.5">
+                  <MetinFiltre label="Başlık" value={baslikFiltre} onChange={setBaslikFiltre} />
+                  <SiralaOku sortKey="title" currentKey={sortKey} dir={sortDir} onSort={handleSort} />
+                </div>
               </th>
               <th className="px-4 py-1.5 text-left font-medium">
                 <MetinFiltre label="Host / IP" value={hostFiltre} onChange={setHostFiltre} />
