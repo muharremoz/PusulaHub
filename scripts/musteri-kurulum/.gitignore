@@ -1,0 +1,3 @@
+# Derleme ciktisi ve musteriye ozel dosyalar depoda tutulmaz
+PusulaKurulum.exe
+*.msi
