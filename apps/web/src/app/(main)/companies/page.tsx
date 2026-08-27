@@ -585,6 +585,33 @@ export default function CompaniesPage() {
   const [deleteBusy, setDeleteBusy]         = useState(false);
   const [deleteError, setDeleteError]       = useState<string | null>(null);
 
+  /**
+   * Kullanıcıya özel kurulum paketi (.zip) indirir — içinde kurulum
+   * programı ve o kullanıcının ayarları var. Müşteriye tek dosya olarak
+   * gönderilip çift tıklanması yeterli.
+   */
+  async function kurulumIndir(username: string) {
+    if (!selectedFirma) return
+    const bekle = toast.loading(`${username} için paket hazırlanıyor…`)
+    try {
+      const r = await fetch(
+        `/api/companies/${selectedFirma.firkod}/kurulum?kullanici=${encodeURIComponent(username)}`,
+      )
+      if (!r.ok) {
+        // Hata gövdesi JSON; okunamazsa durum koduyla yetin.
+        const d = await r.json().catch(() => null)
+        throw new Error(d?.error ?? `Paket üretilemedi (HTTP ${r.status})`)
+      }
+      triggerDownload(await r.blob(), `PusulaKurulum-${username}.zip`)
+      toast.success("Kurulum paketi indirildi", {
+        id: bekle,
+        description: "ZIP'i açıp PusulaKurulum.exe'yi çalıştırın; ayarlar.ini yanında kalmalı.",
+      })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Paket üretilemedi", { id: bekle })
+    }
+  }
+
   async function openPwReset(usr: TabUser) {
     setPwResetUser(usr); setPwResetValue(""); setPwResetShow(false); setPwResetError(null)
     setPwResetDone(false); setPwResetMsgCopied(false)
@@ -2131,7 +2158,13 @@ tr:nth-child(even) td{background:#fafafa}
                               <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                             </button>
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44 text-[11px]">
+                          <DropdownMenuContent align="end" className="w-52 text-[11px]">
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2"
+                              onClick={() => kurulumIndir(usr.username)}
+                            >
+                              <Download className="h-3.5 w-3.5" /> Kurulum Paketi İndir
+                            </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[11px] gap-2"
                               onClick={() => openPwReset(usr)}

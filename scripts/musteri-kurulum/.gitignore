@@ -6,3 +6,4 @@ PusulaKurulum*.exe
 # sablon olarak depoda kalir.
 *.ini
 !ayarlar.ini
+!sablon.ini
