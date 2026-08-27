@@ -485,7 +485,7 @@ export function Nexus({
     /*  Metrik seridi, sunucu aktif kullanici bildiriyorsa bir satir
      *  uzuyor. Sabit 44 birakip satiri icine sikistirmak cubuklarla
      *  cakisiyordu.                                                   */
-    const mtH = mt ? 44 + (mt.aktifKullanici != null ? 20 : 0) : 0
+    const mtH = mt ? 44 + (mt.aktifKullanici != null ? 40 : 0) : 0
     const cardH = DETAIL_H + mtH + (fx ? 44 : 0) + causesH
 
     /*
@@ -954,44 +954,6 @@ export function Nexus({
                     >
                       {lf.m.name}
                     </text>
-                    {/*
-                      Aktif kullanici rozeti — yaprakta, SUREKLI gorunur.
-                      Detay kutusuna koymak yetmiyordu: o kutu yalniz
-                      tiklaninca ya da yeni arizada aciliyor, izleme
-                      duvarinin basinda ise kimse yok.
-
-                      Yalniz gercekten kullanicisi olan makinede ciziliyor
-                      (pratikte terminal sunuculari); her yaprakta "0"
-                      gostermek panoyu gurultuye bogardi.
-                    */}
-                    {(() => {
-                      const mtL = down || !metrics ? null : metricsFor(lf.m, metrics)
-                      const kul = mtL?.aktifKullanici
-                      if (kul == null || kul === 0) return null
-                      const tx = lf.x + 14 + lf.m.name.length * 7.4 + 10
-                      return (
-                        <g style={{ pointerEvents: "none" }}>
-                          <rect
-                            x={tx} y={lf.y - 9} width={20 + String(kul).length * 7} height={18} rx={9}
-                            fill="rgba(255,255,255,0.07)"
-                            stroke="rgba(255,255,255,0.14)" strokeWidth={1}
-                          />
-                          <text
-                            x={tx + 7} y={lf.y + 1} dominantBaseline="middle"
-                            fontSize={11} className="font-mono" fill={TXT}
-                          >
-                            {kul}
-                          </text>
-                          <text
-                            x={tx + 20 + String(kul).length * 7 + 6} y={lf.y + 1}
-                            dominantBaseline="middle" fontSize={9} fill={TXT_DIM}
-                            style={{ letterSpacing: "0.10em" }}
-                          >
-                            KULLANICI
-                          </text>
-                        </g>
-                      )
-                    })()}
                   </g>
                 )
               })}
@@ -1242,20 +1204,37 @@ export function Nexus({
 
                           {/*  Aktif kullanici — yalniz oturum bildiren
                               sunucuda (pratikte terminal makineleri).
-                              Yuzde degil adet oldugu icin cubuk yok;
-                              cubuk "100 uzerinden" izlenimi verirdi.   */}
+
+                              Yuzde degil ADET. Cubuk cizilmiyor: cubuk
+                              "100 uzerinden" izlenimi verirdi. Bunun
+                              yerine kartin en ustundeki kahraman deger
+                              ile ayni dil kullaniliyor — buyuk mono
+                              rakam + kucuk birim. Boylece satir bir
+                              olcum degil, bir SAYIM gibi okunuyor.     */}
                           {detail.mt.aktifKullanici != null && (
                             <>
+                              <line
+                                x1={bx + 16} y1={by + detail.bandMt + 40}
+                                x2={bx + DETAIL_W - 16} y2={by + detail.bandMt + 40}
+                                stroke="rgba(255,255,255,0.06)" strokeWidth={1}
+                              />
                               <text
-                                x={bx + 16} y={by + detail.bandMt + 50} dominantBaseline="middle"
+                                x={bx + 16} y={by + detail.bandMt + 60} dominantBaseline="middle"
                                 fontSize={8} fill={TXT_DIM} style={{ letterSpacing: "0.16em" }}
                               >
                                 AKTİF KULLANICI
                               </text>
                               <text
-                                x={bx + DETAIL_W - 16} y={by + detail.bandMt + 50} textAnchor="end"
-                                dominantBaseline="middle" fontSize={13}
-                                className="font-mono" fill={TXT}
+                                x={bx + DETAIL_W - 16} y={by + detail.bandMt + 62} textAnchor="end"
+                                dominantBaseline="middle" fontSize={8}
+                                fill={TXT_DIM} style={{ letterSpacing: "0.14em" }}
+                              >
+                                KİŞİ
+                              </text>
+                              <text
+                                x={bx + DETAIL_W - 44} y={by + detail.bandMt + 60} textAnchor="end"
+                                dominantBaseline="middle" fontSize={22} fontWeight={700}
+                                className="font-mono" fill={FLOW}
                               >
                                 {detail.mt.aktifKullanici}
                               </text>
