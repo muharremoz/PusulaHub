@@ -805,9 +805,10 @@ namespace PusulaKurulum
         //  Sistem islemleri
         // ═════════════════════════════════════════════════════════
 
-        /*  DATA1 alanina DOKUNULMUYOR: kullanici adini tutan "EncLM ..."
-         *  blobu makineye bagli anahtarla sifreli, disaridan yazilamaz.
-         *  promptusername = 1 -> FortiClient bir kez sorar.              */
+        /*  DATA1 alanina DOKUNULMUYOR: kullanici adi ve sifreyi tutan
+         *  "EncLM ..." blobu makineye bagli anahtarla sifreli, disaridan
+         *  yazilamaz. Kullanici ilk baglantida bilgilerini bir kez girer,
+         *  FortiClient blobu kendisi olusturur.                          */
         static void VpnProfiliYaz(string tunel, string sunucu)
         {
             RegistryKey k = Registry.LocalMachine.CreateSubKey(
@@ -817,7 +818,14 @@ namespace PusulaKurulum
             {
                 k.SetValue("Server", sunucu, RegistryValueKind.String);
                 k.SetValue("Description", tunel, RegistryValueKind.String);
-                k.SetValue("promptusername", 1, RegistryValueKind.DWord);
+
+                /*  promptusername = 0  ->  FortiClient'ta "Save login".
+                 *  1 yapilirsa "Prompt on login" olur ve kullanici adi
+                 *  HER baglantida yeniden sorulur — istedigimiz bu degil.
+                 *  0'da kullanici adi ilk girildiginde FortiClient kendi
+                 *  DATA1 blobuna yaziyor ve bir daha sormuyor. Zaten
+                 *  sahadaki calisan profillerin hepsi 0.                 */
+                k.SetValue("promptusername", 0, RegistryValueKind.DWord);
                 k.SetValue("promptcertificate", 0, RegistryValueKind.DWord);
                 k.SetValue("ServerCert", "0", RegistryValueKind.String);
                 k.SetValue("dual_stack", 0, RegistryValueKind.DWord);
@@ -842,10 +850,19 @@ namespace PusulaKurulum
             sb.AppendLine("keyboardhook:i:2");
             sb.AppendLine("audiocapturemode:i:0");
             sb.AppendLine("audiomode:i:2");
+            /*  Yerel kaynak yonlendirmeleri — Terminal 1'deki mevcut
+             *  kullanicilarin ayariyla ayni olsun diye acik birakiliyor.
+             *  SURUCULER BILEREK KAPALI (drivestoredirect bos): musteri
+             *  diskini oturuma bagladigimizda hem guvenlik hem de yavas
+             *  baglantida gozle gorulur yavaslama oluyor.               */
             sb.AppendLine("redirectprinters:i:1");
             sb.AppendLine("redirectclipboard:i:1");
-            sb.AppendLine("redirectsmartcards:i:0");
-            sb.AppendLine("drivestoredirect:s:");
+            sb.AppendLine("redirectsmartcards:i:1");   // Smart cards / Windows Hello
+            sb.AppendLine("redirectwebauthn:i:1");     // WebAuthn (guvenlik anahtarlari)
+            sb.AppendLine("redirectcomports:i:1");     // Ports (COM/LPT)
+            sb.AppendLine("drivestoredirect:s:");      // Surucular: kapali
+            sb.AppendLine("camerastoredirect:s:*");    // Video yakalama aygitlari
+            sb.AppendLine("devicestoredirect:s:*");    // Diger PnP aygitlari
             sb.AppendLine("autoreconnection enabled:i:1");
             sb.AppendLine("authentication level:i:2");
             sb.AppendLine("prompt for credentials:i:0");
@@ -853,10 +870,26 @@ namespace PusulaKurulum
             sb.AppendLine("bandwidthautodetect:i:1");
             sb.AppendLine("networkautodetect:i:1");
 
-            string mu = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
-            if (mu == null || mu.Length == 0)
-                mu = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            string dosya = Path.Combine(mu, ad + ".rdp");
+            /*  Once ortak masaustu (makinedeki her kullanici gorsun).
+             *  Yolun bos gelmesi degil, YAZMANIN patlamasi da mumkun —
+             *  program yonetici haklariyla calismiyorsa C:\Users\Public\
+             *  Desktop'a erisim reddediliyor. O durumda sessizce kendi
+             *  masaustune dusuyoruz; kisayolsuz kalmaktan iyidir.        */
+            string ortak = Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory);
+            string kendi = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
+            if (ortak != null && ortak.Length > 0)
+            {
+                try
+                {
+                    string y = Path.Combine(ortak, ad + ".rdp");
+                    File.WriteAllText(y, sb.ToString(), Encoding.Unicode);
+                    return y;
+                }
+                catch { }
+            }
+
+            string dosya = Path.Combine(kendi, ad + ".rdp");
             File.WriteAllText(dosya, sb.ToString(), Encoding.Unicode);
             return dosya;
         }
