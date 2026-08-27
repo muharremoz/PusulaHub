@@ -38,6 +38,7 @@ if not exist "LightTheme.xaml" (
 echo Derleniyor...
 "%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu ^
   /win32manifest:app.manifest ^
+  /win32icon:app.ico ^
   /out:PusulaKurulum.exe ^
   /resource:LightTheme.xaml,Tema.xaml ^
   /r:System.dll /r:System.Xml.dll /r:System.Xaml.dll ^
