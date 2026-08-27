@@ -16,8 +16,14 @@
  *  olmasinin sebebi bu: stiller (PrimaryButton, ModernTextBox ...)
  *  dogrudan kullanilabiliyor, kose/golge/kenarlik elle cizilmiyor.
  *
+ *  MUSTERIYE TEK DOSYA GIDER. Ayarlar (firma, kullanici, sunucular)
+ *  exe'ye gomuluyor; her musteri kendi ini'siyle derleniyor:
+ *      derle.bat 2311.ini  ->  PusulaKurulum-2311.exe
+ *  Exe'nin yanina ayarlar.ini konursa gomuluyu ezer — sahada bir deger
+ *  degistirmek gerekince yeniden derleyip dosya gondermeye gerek kalmaz.
+ *
  *  MSI GOMULU DEGIL, indiriliyor: 131 MB'lik dosyayi her musteriye
- *  gondermek yerine kendi sunucumuzdan cekiyoruz. Adres ayarlar.ini'de.
+ *  gondermek yerine kendi sunucumuzdan cekiyoruz. Adres ini'de.
  *
  *  SIFRE HAKKINDA — iki taraf farkli davraniyor, sebebi teknik:
  *    · RDP  : sifre Windows kimlik kasasina yazilabiliyor (CredWrite),
@@ -191,31 +197,51 @@ namespace PusulaKurulum
             return Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         }
 
+        /*  Ayarlar iki kaynaktan, bu sirayla:
+         *    1. exe'ye gomulu kopya  — musteriye TEK dosya gitsin diye.
+         *       Her musteri icin kendi ayarlar.ini'siyle derleniyor.
+         *    2. exe'nin yanindaki ayarlar.ini — varsa gomuluyu EZER.
+         *       Sahada bir deger degistirmek gerekirse yeniden derleyip
+         *       dosya gondermeden cozulsun diye birakildi.               */
         void AyarlariOku()
         {
-            string ini = Path.Combine(Klasor(), "ayarlar.ini");
-            if (!File.Exists(ini)) return;
             try
             {
-                string[] sat = File.ReadAllLines(ini, Encoding.UTF8);
-                for (int i = 0; i < sat.Length; i++)
-                {
-                    string s = sat[i].Trim();
-                    if (s.Length == 0 || s[0] == '#' || s[0] == ';') continue;
-                    int e = s.IndexOf('=');
-                    if (e <= 0) continue;
-                    string a = s.Substring(0, e).Trim().ToLowerInvariant();
-                    string d = s.Substring(e + 1).Trim();
-                    if (a == "firma") ayFirma = d;
-                    else if (a == "kullanici") ayKullanici = d;
-                    else if (a == "vpn") ayVpn = d;
-                    else if (a == "rdp") ayRdp = d;
-                    else if (a == "tunel") ayTunel = d;
-                    else if (a == "domain") ayDomain = d;
-                    else if (a == "msiurl") ayMsiUrl = d;
-                }
+                Stream akis = Assembly.GetExecutingAssembly()
+                                      .GetManifestResourceStream("Ayarlar.ini");
+                if (akis != null)
+                    using (StreamReader sr = new StreamReader(akis, Encoding.UTF8))
+                        SatirlariIsle(sr.ReadToEnd().Split('\n'));
             }
             catch { }
+
+            try
+            {
+                string ini = Path.Combine(Klasor(), "ayarlar.ini");
+                if (File.Exists(ini))
+                    SatirlariIsle(File.ReadAllLines(ini, Encoding.UTF8));
+            }
+            catch { }
+        }
+
+        void SatirlariIsle(string[] sat)
+        {
+            for (int i = 0; i < sat.Length; i++)
+            {
+                string s = sat[i].Trim();
+                if (s.Length == 0 || s[0] == '#' || s[0] == ';') continue;
+                int e = s.IndexOf('=');
+                if (e <= 0) continue;
+                string a = s.Substring(0, e).Trim().ToLowerInvariant();
+                string d = s.Substring(e + 1).Trim();
+                if (a == "firma") ayFirma = d;
+                else if (a == "kullanici") ayKullanici = d;
+                else if (a == "vpn") ayVpn = d;
+                else if (a == "rdp") ayRdp = d;
+                else if (a == "tunel") ayTunel = d;
+                else if (a == "domain") ayDomain = d;
+                else if (a == "msiurl") ayMsiUrl = d;
+            }
         }
 
         /// WPF'te WinForms'un DoEvents karsiligi. Kurulum akisi senkron

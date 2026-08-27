@@ -1,3 +1,8 @@
-# Derleme ciktisi ve musteriye ozel dosyalar depoda tutulmaz
-PusulaKurulum.exe
+# Derleme ciktisi ve musteriye ozel dosyalar depoda tutulmaz.
+PusulaKurulum*.exe
 *.msi
+
+# Musteriye ozel ayar dosyalari (ornegin 2311.ini). ayarlar.ini
+# sablon olarak depoda kalir.
+*.ini
+!ayarlar.ini
