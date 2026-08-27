@@ -205,7 +205,14 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
       const items = report.userProcesses
         .filter((up) => !isSystem(up.username))
         .map((up) => ({ username: up.username, cpu: up.cpuPercent, ram: up.ramMB }))
-      if (items.length) await hub().rpc("poller_user_usage", { p_server: serverName, p_items: items })
+      /*  Ornekleme araligi RPC'ye GONDERILIYOR: session_minutes orada
+       *  sample_count'tan turetiliyor. Once SQL tarafinda sabit "+5 dakika"
+       *  yaziyordu, yani 5 dakikalik poll varsayimi vardi; aralik 10 saniye
+       *  oldugu icin alan gercek surenin 30 katini gosteriyordu. Tek
+       *  dogruluk kaynagi artik POLL_INTERVAL_MS.                        */
+      if (items.length) await hub().rpc("poller_user_usage", {
+        p_server: serverName, p_items: items, p_interval_sec: POLL_INTERVAL_MS / 1000,
+      })
     }
 
     // AD Users — sunucudakileri sil + yeniden yaz (RPC)

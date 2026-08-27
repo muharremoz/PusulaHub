@@ -64,7 +64,8 @@ app.prepare().then(() => {
     // istatistikleri, firma listesi). Lokal geliştirmede de çalışırlarsa aynı
     // veriye iki yerden yazılır: kullanım örneklem sayısı ve session_minutes
     // iki katına çıkar, günlük ortalamalar bozulur. (Yaşandı: dev sunucusu
-    // açıkken bir günde 288 olması gereken örnek 528'e çıktı.)
+    // açıkken bir gündeki örnek sayısı 10 saniyelik tavanı — 8640 — aştı;
+    // 2026-07-24, 07-27, 07-31, 08-25 ve 08-26 satırları hâlâ şişik.)
     //
     // Bu yüzden yalnız production'da çalışır. Lokalde bilerek denemek için
     // .env.local'e ENABLE_POLLER=1 eklenir.
