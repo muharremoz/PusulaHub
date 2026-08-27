@@ -29,7 +29,12 @@ export async function GET(
       const { data: comp } = await sb.schema("hub").from("companies")
         .select("ad_server_id").eq("company_id", firkod).maybeSingle()
       const adId = (comp as { ad_server_id: string | null } | null)?.ad_server_id
-      if (adId) { try { await pollSingleAgent(adId) } catch {} }
+      /*  force ZORUNLU. AD kullanıcı listesi agent'ta "ağır veri" sayılıp
+       *  önbelleğe alınıyor; force'suz istek o önbelleği geri veriyor.
+       *  Bu endpoint yalnız bir değişiklikten SONRA çağrılıyor (panik,
+       *  hesap aç/kapa, şifre sıfırlama) — force olmadan kullanıcı
+       *  yaptığı işlemin sonucunu göremiyor, liste eski haliyle kalıyordu. */
+      if (adId) { try { await pollSingleAgent(adId, true) } catch {} }
     }
 
     const users = await listCompanyUsers(sb, firkod)

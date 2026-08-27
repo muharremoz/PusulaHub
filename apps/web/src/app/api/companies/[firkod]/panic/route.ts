@@ -16,9 +16,12 @@ import { requirePermission } from "@/lib/require-permission"
  * Sıra önemli: önce devre dışı, sonra logoff. Tersi olsaydı kullanıcı
  * logoff ile düşüp hemen yeniden giriş yapabilirdi.
  *
- * Geri alınamaz bir işlem DEĞİL — hesaplar `users/action` ile tekrar
- * "enable" edilebilir; ama açık oturumlarda kaydedilmemiş veri kaybolur.
- * Bu yüzden UI tarafında AlertDialog ile onay alınır.
+ * Gövdede `{ mod: "geri" }` gelirse TERSİ yapılır: firmanın pasif
+ * hesapları yeniden açılır. Oturum kapatma adımı geri almada atlanır —
+ * erişimi açarken kimseyi düşürmenin anlamı yok.
+ *
+ * Geri alınamaz bir işlem DEĞİL; ama açık oturumlarda kaydedilmemiş veri
+ * kaybolur. Bu yüzden UI tarafında AlertDialog ile onay alınır.
  *
  * ⚠ Agent `/api/exec` gövdesini regex ile ayrıştırıyor: komutlarda çift
  * tırnak YASAK, tek tırnak + '' escape (bkz. CLAUDE.md).
@@ -26,15 +29,18 @@ import { requirePermission } from "@/lib/require-permission"
 
 interface PanicSonuc {
   ok: boolean
-  /** Devre dışı bırakılan hesap sayısı. */
+  /** Devre dışı bırakılan hesap sayısı (geri almada: açılan hesap sayısı). */
   devreDisi: number
-  /** Kapatılan oturum sayısı. */
+  /** Kapatılan oturum sayısı. Geri almada her zaman 0. */
   kapatilanOturum: number
-  /** Zaten pasif olduğu için atlanan hesap sayısı. */
+  /** Zaten istenen durumda olduğu için atlanan hesap sayısı. */
   atlanan: number
   /** Kullanıcıya gösterilecek hata satırları (işlem kısmen başarılıysa dolu). */
   hatalar: string[]
 }
+
+/** "panik" = erişimi kes, "geri" = hesapları yeniden aç. */
+type Mod = "panik" | "geri"
 
 function psQuote(s: string): string {
   return (s ?? "").replace(/'/g, "''")
@@ -56,6 +62,11 @@ export async function POST(
   const { firkod } = await params
   const hatalar: string[] = []
 
+  // Gövde boş gelebilir (eski çağrılar) — varsayılan "panik".
+  const govde = await req.json().catch(() => null)
+  const mod: Mod = (govde as { mod?: string } | null)?.mod === "geri" ? "geri" : "panik"
+  const geriAl = mod === "geri"
+
   try {
     const sb = await getSupabaseServer()
 
@@ -67,12 +78,13 @@ export async function POST(
         { status: 404 },
       )
     }
-    const aktifler = users.filter((u) => u.enabled)
-    const atlanan = users.length - aktifler.length
+    // Panikte aktif olanlara dokunulur, geri almada pasif olanlara.
+    const hedefler = users.filter((u) => (geriAl ? !u.enabled : u.enabled))
+    const atlanan = users.length - hedefler.length
 
-    /* ── 2) AD'de devre dışı bırak ── */
+    /* ── 2) AD'de hesap durumunu değiştir ── */
     let devreDisi = 0
-    if (aktifler.length > 0) {
+    if (hedefler.length > 0) {
       const { data: comp } = await sb.schema("hub").from("companies")
         .select("ad_server_id").eq("company_id", firkod).maybeSingle()
       const adId = (comp as { ad_server_id: string | null } | null)?.ad_server_id
@@ -86,23 +98,33 @@ export async function POST(
       }
 
       if (!adAgent) {
-        hatalar.push("AD sunucusu tanımsız — hesaplar devre dışı bırakılamadı.")
+        hatalar.push(
+          geriAl
+            ? "AD sunucusu tanımsız — hesaplar açılamadı."
+            : "AD sunucusu tanımsız — hesaplar devre dışı bırakılamadı.",
+        )
       } else {
         // Tek komutta topluca: N kullanıcı için N ayrı exec, AD sunucusunu
         // gereksiz yorardı (proje prensibi: bağlı sunucularda ağır işlem yok).
-        const liste = aktifler.map((u) => `'${psQuote(u.username)}'`).join(",")
+        const liste = hedefler.map((u) => `'${psQuote(u.username)}'`).join(",")
+        const komut = geriAl ? "Enable-ADAccount" : "Disable-ADAccount"
         const cmd =
           `Import-Module ActiveDirectory; $n = 0; ` +
           `foreach ($u in @(${liste})) { ` +
-          `try { Disable-ADAccount -Identity $u -ErrorAction Stop; $n++ } catch { } }; ` +
+          `try { ${komut} -Identity $u -ErrorAction Stop; $n++ } catch { } }; ` +
           `Write-Output ('DISABLED=' + $n)`
 
         const res = await execOnAgent(adAgent.ip, adAgent.port, adAgent.key, cmd, 60)
         const m = /DISABLED=(\d+)/.exec(res.stdout ?? "")
         if (m) {
           devreDisi = Number(m[1])
-          if (devreDisi < aktifler.length) {
-            hatalar.push(`${aktifler.length - devreDisi} hesap devre dışı bırakılamadı.`)
+          if (devreDisi < hedefler.length) {
+            const eksik = hedefler.length - devreDisi
+            hatalar.push(
+              geriAl
+                ? `${eksik} hesap açılamadı.`
+                : `${eksik} hesap devre dışı bırakılamadı.`,
+            )
           }
         } else {
           hatalar.push(
@@ -115,10 +137,11 @@ export async function POST(
     /* ── 3) Açık oturumları kapat ── */
     // Oturumlar agent raporlarında; firmanın kullanıcı adlarıyla eşleşen
     // oturumu olan her sunucuya tek logoff komutu gönderilir.
+    // Geri almada bu adım atlanır: hesapları açarken kimseyi düşürmemeliyiz.
     const firmaAdlari = new Set(users.map((u) => sadeAd(u.username).toLowerCase()))
     let kapatilanOturum = 0
 
-    for (const agent of getAllAgents()) {
+    for (const agent of geriAl ? [] : getAllAgents()) {
       if (agent.status !== "online") continue
       const oturumlar = agent.lastReport?.sessions ?? []
       const hedefler = oturumlar.filter((s) =>

@@ -482,6 +482,9 @@ export default function CompaniesPage() {
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
+  /** Firmanın erişimi kesik mi: kullanıcı var ve hiçbiri aktif değil. */
+  const firmaErisimiKesik =
+    tabUsers.length > 0 && tabUsers.every((u) => !u.enabled);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
   // Erişim Bilgileri modal'ı
@@ -1295,25 +1298,32 @@ tr:nth-child(even) td{background:#fafafa}
   }
 
   /**
-   * Panik: firmanın AD hesaplarını devre dışı bırakır ve açık oturumlarını
-   * kapatır. Yıkıcı olduğu için yalnız AlertDialog onayından sonra çağrılır.
+   * Panik / geri alma. `geriAl=false` firmanın AD hesaplarını devre dışı
+   * bırakıp açık oturumları kapatır; `true` ise pasif hesapları yeniden
+   * açar. Her iki yön de AlertDialog onayından sonra çağrılır.
    */
-  async function runPanic() {
+  async function runPanic(geriAl: boolean) {
     if (!selectedFirma) return
     setPanicBusy(true)
-    const id = toast.loading("Erişim kesiliyor…", { description: selectedFirma.firma })
+    const id = toast.loading(geriAl ? "Erişim açılıyor…" : "Erişim kesiliyor…", {
+      description: selectedFirma.firma,
+    })
     try {
       const r = await fetch(`/api/companies/${encodeURIComponent(selectedFirma.firkod)}/panic`, {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mod: geriAl ? "geri" : "panik" }),
       })
       const data = await r.json()
       if (!r.ok) {
-        toast.error("Panik işlemi başarısız", { id, description: data?.error ?? "Bilinmeyen hata" })
+        toast.error("İşlem başarısız", { id, description: data?.error ?? "Bilinmeyen hata" })
         return
       }
-      const ozet = `${data.devreDisi} hesap devre dışı · ${data.kapatilanOturum} oturum kapatıldı`
+      const ozet = geriAl
+        ? `${data.devreDisi} hesap yeniden açıldı`
+        : `${data.devreDisi} hesap devre dışı · ${data.kapatilanOturum} oturum kapatıldı`
       if (data.ok) {
-        toast.success("Firma erişimi kesildi", { id, description: ozet })
+        toast.success(geriAl ? "Firma erişimi açıldı" : "Firma erişimi kesildi", { id, description: ozet })
       } else {
         // Kısmi başarı — ne olduğunu sayılarla birlikte söyle, sessiz geçme.
         toast.warning("Kısmen tamamlandı", {
@@ -1322,10 +1332,11 @@ tr:nth-child(even) td{background:#fafafa}
         })
       }
       setPanicOpen(false)
-      // Kullanıcı listesi güncel kalsın (hesaplar artık pasif görünmeli).
-      refreshTabUsers()
+      // Liste güncel kalsın; refreshTabUsers agent'ı force ile yeniden
+      // sorguluyor, yoksa hesaplar eski durumuyla görünüyordu.
+      await refreshTabUsers()
     } catch (e) {
-      toast.error("Panik işlemi başarısız", {
+      toast.error("İşlem başarısız", {
         id,
         description: e instanceof Error ? e.message : "Bağlantı hatası",
       })
@@ -1987,14 +1998,28 @@ tr:nth-child(even) td{background:#fafafa}
 
                 <div className="flex-1" />
 
-                {/* Panik — firmanın erişimini kes */}
+                {/* Panik — firmanın erişimini kes / geri aç.
+                    Tüm hesaplar pasifse buton yön değiştirir; aksi halde
+                    panik sonrası tekrar basılabilir ama hiçbir şey yapmayan
+                    ölü bir düğme olurdu. */}
                 <button
                   onClick={() => setPanicOpen(true)}
-                  className="border-destructive/40 text-destructive hover:bg-destructive hover:text-white inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors"
-                  title="Firmanın tüm hesaplarını devre dışı bırak ve açık oturumları kapat"
+                  disabled={tabUsers.length === 0}
+                  className={
+                    (firmaErisimiKesik
+                      ? "border-emerald-600/40 text-emerald-700 hover:bg-emerald-600 dark:text-emerald-400 "
+                      : "border-destructive/40 text-destructive hover:bg-destructive ") +
+                    "hover:text-white inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+                  }
+                  title={
+                    firmaErisimiKesik
+                      ? "Firmanın devre dışı hesaplarını yeniden aç"
+                      : "Firmanın tüm hesaplarını devre dışı bırak ve açık oturumları kapat"
+                  }
                 >
-                  <Ban className="h-3.5 w-3.5" />
-                  Panik
+                  {firmaErisimiKesik
+                    ? <><Play className="h-3.5 w-3.5" />Erişimi Aç</>
+                    : <><Ban className="h-3.5 w-3.5" />Panik</>}
                 </button>
               </div>
             </div>
@@ -3829,35 +3854,59 @@ tr:nth-child(even) td{background:#fafafa}
         </ListeKarti>
       )}
 
-      {/* Panik onayı — yıkıcı işlem, AlertDialog zorunlu (proje kuralı) */}
+      {/* Panik / geri alma onayı — yıkıcı işlem, AlertDialog zorunlu (proje kuralı) */}
       <AlertDialog open={panicOpen} onOpenChange={(o) => { if (!panicBusy) setPanicOpen(o) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Firma erişimini kes</AlertDialogTitle>
+            <AlertDialogTitle>
+              {firmaErisimiKesik ? "Firma erişimini aç" : "Firma erişimini kes"}
+            </AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-[12px]">
                 <p>
                   <strong>{selectedFirma?.firma}</strong> firması için:
                 </p>
-                <ul className="list-inside list-disc space-y-1">
-                  <li>Tüm aktif AD hesapları devre dışı bırakılacak — yeni oturum açılamaz.</li>
-                  <li>O an açık olan oturumlar kapatılacak — <strong>kaydedilmemiş veriler kaybolur</strong>.</li>
-                </ul>
-                <p className="text-muted-foreground">
-                  Hesaplar sonradan Kullanıcılar sekmesinden tekrar etkinleştirilebilir;
-                  kapanan oturumlar geri gelmez.
-                </p>
+                {firmaErisimiKesik ? (
+                  <>
+                    <ul className="list-inside list-disc space-y-1">
+                      <li>
+                        Devre dışı bırakılmış {tabUsers.length} AD hesabı yeniden açılacak —
+                        kullanıcılar tekrar oturum açabilir.
+                      </li>
+                    </ul>
+                    <p className="text-muted-foreground">
+                      Kapatılan oturumlar geri gelmez; kullanıcılar yeniden bağlanır.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <ul className="list-inside list-disc space-y-1">
+                      <li>Tüm aktif AD hesapları devre dışı bırakılacak — yeni oturum açılamaz.</li>
+                      <li>O an açık olan oturumlar kapatılacak — <strong>kaydedilmemiş veriler kaybolur</strong>.</li>
+                    </ul>
+                    <p className="text-muted-foreground">
+                      Erişim aynı düğmeyle geri açılabilir; kapanan oturumlar geri gelmez.
+                    </p>
+                  </>
+                )}
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={panicBusy} className="text-[12px] h-8">Vazgeç</AlertDialogCancel>
             <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); runPanic() }}
+              onClick={(e) => { e.preventDefault(); runPanic(firmaErisimiKesik) }}
               disabled={panicBusy}
-              className="bg-destructive text-white hover:bg-destructive/90 text-[12px] h-8"
+              className={
+                (firmaErisimiKesik
+                  ? "bg-emerald-600 hover:bg-emerald-600/90 "
+                  : "bg-destructive hover:bg-destructive/90 ") +
+                "text-white text-[12px] h-8"
+              }
             >
-              {panicBusy ? "Kesiliyor…" : "Erişimi Kes"}
+              {panicBusy
+                ? (firmaErisimiKesik ? "Açılıyor…" : "Kesiliyor…")
+                : (firmaErisimiKesik ? "Erişimi Aç" : "Erişimi Kes")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
