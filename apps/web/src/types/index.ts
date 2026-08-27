@@ -16,6 +16,13 @@ export interface Server {
   disk: number;
   uptime: string;
   lastChecked: string;
+  /**
+   * O an açık RDP/konsol oturumu olan FARKLI kullanıcı sayısı.
+   * Yalnız agent oturum bildiriyorsa dolu; bildirmeyen sunucularda
+   * undefined (0 ile karıştırılmasın — "kimse yok" ile "bilmiyoruz"
+   * farklı şeyler).
+   */
+  activeSessions?: number;
 }
 
 export interface ADUser {

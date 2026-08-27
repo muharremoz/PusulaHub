@@ -45,6 +45,21 @@ export async function GET() {
     const servers: Server[] = ((srvData ?? []) as SrvRow[]).map((r) => {
       const agent = agents.find((a) => a.agentId === r.id || a.hostname === r.name || a.ip === r.ip)
       const m = agent?.lastReport?.metrics
+
+      /*  Aktif kullanici sayisi. Oturum degil KULLANICI sayiliyor: bir
+       *  kisinin ayni sunucuda birden fazla oturumu olabiliyor ve
+       *  "8 kullanici" ile "8 oturum" farkli seyler. Baglantisi kopmus
+       *  (Disconnected) oturumlar disarida — ekranda "kac kisi calisiyor"
+       *  sorusuna cevap ariyoruz.                                        */
+      const oturumlar = agent?.lastReport?.sessions
+      const activeSessions = oturumlar
+        ? new Set(
+            oturumlar
+              .filter((s) => s.username && s.state === "Active")
+              .map((s) => s.username.toLowerCase()),
+          ).size
+        : undefined
+
       return {
         id: r.id, slug: slugify(r.name), name: r.name, ip: r.ip, dns: r.dns ?? undefined,
         os: r.os as Server["os"],
@@ -55,6 +70,7 @@ export async function GET() {
         uptime: m ? formatUptime(m.uptimeSeconds) : (r.uptime ?? "—"),
         lastChecked: agent ? agent.lastSeen : (r.last_checked ?? "—"),
         roles: (roleMap.get(r.id) ?? []) as Server["roles"],
+        activeSessions,
       }
     })
 

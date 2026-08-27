@@ -136,10 +136,14 @@ export function useMockOfflineFirms(enabled: boolean): SpareBackupOffline | null
  *
  * Anahtarlar gercek IP ler: metricsFor() once hostname ile bakiyor.
  */
-const MOCK_SERVERS: Record<string, { cpu: number; ram: number; disk: number; uptime: string }> = {
+// kullanici: yalniz terminal sunucusunda anlamli — digerlerinde
+// undefined birakiliyor ki satir hic cikmasin (gercek veride de oyle).
+const MOCK_SERVERS: Record<string, {
+  cpu: number; ram: number; disk: number; uptime: string; kullanici?: number
+}> = {
   "10.15.2.4":       { cpu: 12, ram: 48, disk: 71, uptime: "42g 6s" },
   "10.15.2.2":       { cpu: 34, ram: 67, disk: 58, uptime: "18g 3s" },
-  "10.15.2.5":       { cpu: 8,  ram: 39, disk: 44, uptime: "7g 21s" },
+  "10.15.2.5":       { cpu: 8,  ram: 39, disk: 44, uptime: "7g 21s", kullanici: 14 },
   "10.15.2.200":     { cpu: 3,  ram: 22, disk: 88, uptime: "96g 2s" },
   "10.15.2.3":       { cpu: 19, ram: 55, disk: 33, uptime: "31g 9s" },
   "192.168.169.203": { cpu: 6,  ram: 28, disk: 62, uptime: "11g 4s" },
@@ -166,6 +170,7 @@ export function useMockServerMetrics(enabled: boolean): MetricsMap {
       ram:  Math.min(99, Math.max(1, v.ram + j(ip.length + 2, 3))),
       disk: v.disk,
       uptime: v.uptime,
+      aktifKullanici: v.kullanici,
     })
   }
   return map

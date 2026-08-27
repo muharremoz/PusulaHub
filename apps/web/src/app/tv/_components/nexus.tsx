@@ -482,7 +482,11 @@ export function Nexus({
     }
 
     const causesH = causes.length ? 24 + causes.length * 15 : 0
-    const cardH = DETAIL_H + (mt ? 44 : 0) + (fx ? 44 : 0) + causesH
+    /*  Metrik seridi, sunucu aktif kullanici bildiriyorsa bir satir
+     *  uzuyor. Sabit 44 birakip satiri icine sikistirmak cubuklarla
+     *  cakisiyordu.                                                   */
+    const mtH = mt ? 44 + (mt.aktifKullanici != null ? 20 : 0) : 0
+    const cardH = DETAIL_H + mtH + (fx ? 44 : 0) + causesH
 
     /*
      * Serit konumlari kart yuksekliginden geriye dogru hesaplaniyor. Bugun
@@ -490,7 +494,7 @@ export function Nexus({
      * yalniz doviz), ama ikisi de "h - 44" kullansaydi yarin cakisirlardi.
      */
     const bandFx = fx ? cardH - 44 : 0
-    const bandMt = mt ? cardH - 44 - (fx ? 44 : 0) : 0
+    const bandMt = mt ? cardH - mtH - (fx ? 44 : 0) : 0
     const bandCa = causes.length ? cardH - causesH : 0
 
     const bx = leaf.x + DETAIL_GAP
@@ -950,6 +954,44 @@ export function Nexus({
                     >
                       {lf.m.name}
                     </text>
+                    {/*
+                      Aktif kullanici rozeti — yaprakta, SUREKLI gorunur.
+                      Detay kutusuna koymak yetmiyordu: o kutu yalniz
+                      tiklaninca ya da yeni arizada aciliyor, izleme
+                      duvarinin basinda ise kimse yok.
+
+                      Yalniz gercekten kullanicisi olan makinede ciziliyor
+                      (pratikte terminal sunuculari); her yaprakta "0"
+                      gostermek panoyu gurultuye bogardi.
+                    */}
+                    {(() => {
+                      const mtL = down || !metrics ? null : metricsFor(lf.m, metrics)
+                      const kul = mtL?.aktifKullanici
+                      if (kul == null || kul === 0) return null
+                      const tx = lf.x + 14 + lf.m.name.length * 7.4 + 10
+                      return (
+                        <g style={{ pointerEvents: "none" }}>
+                          <rect
+                            x={tx} y={lf.y - 9} width={20 + String(kul).length * 7} height={18} rx={9}
+                            fill="rgba(255,255,255,0.07)"
+                            stroke="rgba(255,255,255,0.14)" strokeWidth={1}
+                          />
+                          <text
+                            x={tx + 7} y={lf.y + 1} dominantBaseline="middle"
+                            fontSize={11} className="font-mono" fill={TXT}
+                          >
+                            {kul}
+                          </text>
+                          <text
+                            x={tx + 20 + String(kul).length * 7 + 6} y={lf.y + 1}
+                            dominantBaseline="middle" fontSize={9} fill={TXT_DIM}
+                            style={{ letterSpacing: "0.10em" }}
+                          >
+                            KULLANICI
+                          </text>
+                        </g>
+                      )
+                    })()}
                   </g>
                 )
               })}
@@ -1197,6 +1239,28 @@ export function Nexus({
                               </g>
                             )
                           })}
+
+                          {/*  Aktif kullanici — yalniz oturum bildiren
+                              sunucuda (pratikte terminal makineleri).
+                              Yuzde degil adet oldugu icin cubuk yok;
+                              cubuk "100 uzerinden" izlenimi verirdi.   */}
+                          {detail.mt.aktifKullanici != null && (
+                            <>
+                              <text
+                                x={bx + 16} y={by + detail.bandMt + 50} dominantBaseline="middle"
+                                fontSize={8} fill={TXT_DIM} style={{ letterSpacing: "0.16em" }}
+                              >
+                                AKTİF KULLANICI
+                              </text>
+                              <text
+                                x={bx + DETAIL_W - 16} y={by + detail.bandMt + 50} textAnchor="end"
+                                dominantBaseline="middle" fontSize={13}
+                                className="font-mono" fill={TXT}
+                              >
+                                {detail.mt.aktifKullanici}
+                              </text>
+                            </>
+                          )}
                         </>
                       )}
                     </>

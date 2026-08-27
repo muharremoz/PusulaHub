@@ -27,6 +27,8 @@ export interface ServerMetrics {
   ram:    number
   disk:   number
   uptime: string
+  /** Açık oturumu olan farklı kullanıcı sayısı. undefined = agent bildirmiyor. */
+  aktifKullanici?: number
 }
 
 /** API yanıtından ihtiyacımız olan alanlar */
@@ -37,6 +39,7 @@ interface ServerRow {
   ram:  number
   disk: number
   uptime: string
+  activeSessions?: number
 }
 
 /**
@@ -64,6 +67,7 @@ export function useServerMetrics(enabled = true): MetricsMap {
         for (const s of list) {
           const m: ServerMetrics = {
             cpu: s.cpu, ram: s.ram, disk: s.disk, uptime: s.uptime,
+            aktifKullanici: s.activeSessions,
           }
           if (s.ip)   next.set(s.ip, m)
           if (s.name) next.set(s.name.trim().toLowerCase(), m)
