@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
-import { Check } from "lucide-react"
+import { AlertTriangle, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -66,6 +66,13 @@ export function StepSummary({
   const sqlDbCount = sqlMode === 0 ? selectedBackups.length : selectedDemos.length
   const firstUser = users[0]
 
+  /* SQL sunucusu secili ama veri secilmemis: kurulum bu adimi SESSIZCE atlar
+     (bkz. api/setup/run -> hasSqlWork). Ozet de eskiden SQL satirini hic
+     gostermiyordu, yani kullanici hicbir sey olmayacagini anlamiyordu.
+     Yasandi: firma kuruldu, kullanicilar ve klasor acildi, veritabani
+     olusmadi ve hicbir uyari cikmadi. */
+  const sqlSecimiEksik = hasSqlSelection && sqlDbCount === 0
+
   const operations = [
     `AD'de Firmalar\\${firmaId} OU oluşturulacak`,
     `OU içinde ${firmaId}_users güvenlik grubu oluşturulacak`,
@@ -92,10 +99,30 @@ export function StepSummary({
           `${sqlDbCount} veritabanının owner'ı ${firmaId}_${firstUser.username} olarak ayarlanacak`,
         ]
       : []),
+    ...(sqlSecimiEksik ? ["SQL adımı ATLANACAK — veritabanı oluşturulmayacak"] : []),
   ]
 
   return (
     <div className="space-y-3">
+
+      {/* SQL sunucusu secili ama veri yok -> adim atlanacak.
+          Kutu olarak gosteriliyor: islem listesindeki tek satir gozden kaciyor. */}
+      {sqlSecimiEksik && (
+        <div className="flex items-start gap-2.5 rounded-[8px] border border-amber-500/40 bg-amber-500/10 px-4 py-3">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <div className="text-[12.5px] leading-relaxed">
+            <p className="font-semibold text-amber-800 dark:text-amber-300">
+              SQL adımı atlanacak — veritabanı oluşturulmayacak
+            </p>
+            <p className="text-amber-800/80 dark:text-amber-300/80">
+              SQL sunucusu seçtiniz ama {sqlMode === 0 ? "yedek dosyası" : "demo veritabanı"} seçmediniz.
+              Kurulum diğer adımları yapar, SQL adımını sessizce atlar. Veritabanı da
+              istiyorsanız <b>4. adıma dönüp seçim yapın</b>; istemiyorsanız bu uyarıyı
+              yok sayabilirsiniz.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Sunucu + Firma yan yana */}
       <div className="grid grid-cols-2 gap-3">

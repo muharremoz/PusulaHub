@@ -282,6 +282,20 @@ export function StepSql({
         </div>
       </div>
 
+      {/* Sunucu secili ama veri secilmemis: kurulum bu adimi SESSIZCE atlar
+          (api/setup/run -> hasSqlWork). Uyari olmadigi icin kullanici firma
+          kuruldugunu sanip veritabaninin olusmadigini sonradan fark ediyordu. */}
+      {selectedSqlServerId !== null && !hasSelection && (
+        <div className="flex items-start gap-2.5 rounded-[8px] border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <p className="text-[11.5px] leading-relaxed text-amber-800 dark:text-amber-300">
+            <b>Sunucu seçtiniz ama {sqlMode === 0 ? "yedek dosyası" : "demo veritabanı"} seçmediniz.</b>{" "}
+            Bu hâliyle devam ederseniz SQL adımı atlanır ve veritabanı oluşturulmaz.
+            Aşağıdan seçim yapın veya SQL'i tamamen istemiyorsanız sunucu seçimini kaldırın.
+          </p>
+        </div>
+      )}
+
       {/* SQL Sunucu listesi */}
       <div>
         <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">SQL Sunucusu</p>
