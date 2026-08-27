@@ -43,59 +43,162 @@ namespace PusulaKurulum
     // ═══════════════════════════════════════════════════════════════
     //  Gorsel sabitler
     // ═══════════════════════════════════════════════════════════════
+    /*  Renk ve yazi tipleri PusulaFix ile AYNI kaynaktan:
+     *  PusulaFix/Themes/LightTheme.xaml. Iki uygulama musteriye ayni
+     *  gorsel dili gostersin diye birebir ayni token'lar kullaniliyor.   */
     static class Tema
     {
-        public static readonly Color Kenar    = Color.FromArgb(23, 23, 23);
-        public static readonly Color KenarAlt = Color.FromArgb(38, 38, 40);
-        public static readonly Color Zemin    = Color.White;
-        public static readonly Color Metin    = Color.FromArgb(23, 23, 23);
-        public static readonly Color Solgun   = Color.FromArgb(115, 115, 122);
-        public static readonly Color Cizgi    = Color.FromArgb(232, 232, 234);
-        public static readonly Color Yesil    = Color.FromArgb(5, 122, 85);
-        public static readonly Color Kirmizi  = Color.FromArgb(190, 30, 30);
-        public static readonly Color Amber    = Color.FromArgb(180, 83, 9);
+        // Marka
+        public static readonly Color Marka      = Color.FromArgb(0x04, 0x78, 0x57);  // BrandPrimary
+        public static readonly Color MarkaKoyu  = Color.FromArgb(0x06, 0x5F, 0x46);  // BrandSecondary
+        public static readonly Color MarkaDerin = Color.FromArgb(0x06, 0x4E, 0x3B);  // BrandDark
+        public static readonly Color MarkaEnKoyu= Color.FromArgb(0x02, 0x2C, 0x22);  // BrandDeep
 
+        // Yuzeyler
+        public static readonly Color Zemin  = Color.FromArgb(0xF8, 0xF9, 0xFA);      // WindowBackground
+        public static readonly Color Kart   = Color.White;                            // CardBackground
+        public static readonly Color Hover  = Color.FromArgb(0xF0, 0xFD, 0xF4);      // HoverBackground
+
+        // Cizgiler
+        public static readonly Color Cizgi      = Color.FromArgb(0xE5, 0xE7, 0xEB);  // Border
+        public static readonly Color CizgiAcik  = Color.FromArgb(0xF0, 0xF0, 0xF5);  // BorderLight
+
+        // Metin
+        public static readonly Color Metin   = Color.FromArgb(0x11, 0x18, 0x27);     // TextPrimary
+        public static readonly Color Ikincil = Color.FromArgb(0x6B, 0x72, 0x80);     // TextSecondary
+        public static readonly Color Solgun  = Color.FromArgb(0x9C, 0xA3, 0xAF);     // TextMuted
+
+        // Koyu yesil panel uzerindeki metin tonlari (MarkaDerin ile beyazin karisimi)
+        public static readonly Color PanelMetin  = Color.FromArgb(0x8F, 0xAF, 0xA7);
+        public static readonly Color PanelSolgun = Color.FromArgb(0x5D, 0x8C, 0x80);
+        public static readonly Color PanelTamam  = Color.FromArgb(0x6E, 0xE7, 0xB7);
+
+        // Durum
+        public static readonly Color Basari = Color.FromArgb(0x05, 0x96, 0x69);      // Success
+        public static readonly Color Uyari  = Color.FromArgb(0xF5, 0x9E, 0x0B);      // Warning
+        public static readonly Color Hata   = Color.FromArgb(0xEF, 0x44, 0x44);      // Error
+
+        // Yazi tipleri — PusulaFix: Segoe UI + Cascadia Code, taban 13.5px (~10pt)
         public static Font Baslik  = new Font("Segoe UI Semibold", 15F);
         public static Font AltYazi = new Font("Segoe UI", 9F);
-        public static Font Govde   = new Font("Segoe UI", 9.5F);
-        public static Font Kucuk   = new Font("Segoe UI", 8.25F);
-        public static Font Mono    = new Font("Consolas", 10F);
-        public static Font Dugme   = new Font("Segoe UI Semibold", 9.75F);
+        public static Font Govde   = new Font("Segoe UI", 10F);
+        public static Font Kucuk   = new Font("Segoe UI", 8.5F);
+        public static Font Vurgu   = new Font("Segoe UI Semibold", 8.5F);
+        public static Font Dugme   = new Font("Segoe UI Semibold", 10F);
+        public static Font Mono    = MonoBul();
+
+        static Font MonoBul()
+        {
+            // PusulaFix "Cascadia Code" kullaniyor; kurulu degilse Consolas.
+            try
+            {
+                Font f = new Font("Cascadia Code", 9.5F);
+                if (f.Name.IndexOf("Cascadia", StringComparison.OrdinalIgnoreCase) >= 0) return f;
+            }
+            catch { }
+            return new Font("Consolas", 9.5F);
+        }
+
+        /// Yuvarlak kose yolu — WinForms'ta yerlesik degil, elle ciziliyor.
+        public static GraphicsPath Yuvarlak(Rectangle r, int yaricap)
+        {
+            GraphicsPath yol = new GraphicsPath();
+            int c = yaricap * 2;
+            if (yaricap <= 0) { yol.AddRectangle(r); return yol; }
+            yol.AddArc(r.X, r.Y, c, c, 180, 90);
+            yol.AddArc(r.Right - c, r.Y, c, c, 270, 90);
+            yol.AddArc(r.Right - c, r.Bottom - c, c, c, 0, 90);
+            yol.AddArc(r.X, r.Bottom - c, c, c, 90, 90);
+            yol.CloseFigure();
+            return yol;
+        }
     }
 
-    /// Duz, modern buton — WinForms varsayilani kurumsal durmuyor.
+    /// PusulaFix dugme dili: yuvarlak kose (5), marka yesili, beyaz yazi.
     class DuzDugme : Button
     {
         public bool Ikincil = false;
+        bool uzerinde = false;
+
         public DuzDugme()
         {
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
+            BackColor = Color.Transparent;
             Font = Tema.Dugme;
             Cursor = Cursors.Hand;
             Height = 38;
-            SetStyle(ControlStyles.OptimizedDoubleBuffer, true);
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
+            MouseEnter += delegate { uzerinde = true; Invalidate(); };
+            MouseLeave += delegate { uzerinde = false; Invalidate(); };
         }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            Color zemin = Ikincil ? Color.White : Tema.Kenar;
-            Color yazi  = Ikincil ? Tema.Metin : Color.White;
-            if (!Enabled) { zemin = Color.FromArgb(224, 224, 228); yazi = Tema.Solgun; }
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
 
-            using (SolidBrush b = new SolidBrush(zemin))
-                g.FillRectangle(b, 0, 0, Width, Height);
-            if (Ikincil && Enabled)
-                using (Pen p = new Pen(Tema.Cizgi))
-                    g.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+            Color zemin, yazi;
+            if (!Enabled)      { zemin = Color.FromArgb(0xE5, 0xE7, 0xEB); yazi = Tema.Solgun; }
+            else if (Ikincil)  { zemin = uzerinde ? Tema.Hover : Color.White; yazi = Tema.Metin; }
+            else               { zemin = uzerinde ? Tema.MarkaKoyu : Tema.Marka; yazi = Color.White; }
 
+            using (GraphicsPath yol = Tema.Yuvarlak(r, 5))
+            {
+                using (SolidBrush b = new SolidBrush(zemin)) g.FillPath(b, yol);
+                if (Ikincil && Enabled)
+                    using (Pen p = new Pen(Tema.Cizgi)) g.DrawPath(p, yol);
+            }
             TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height), yazi,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
         }
     }
 
-    /// Ince ilerleme cubugu.
+    /// TextBox'in kosesi yuvarlanamadigi icin kenarligi bu panel ciziyor;
+    /// kutu kenarliksiz olarak icine yerlestiriliyor.
+    class GirisKabi : Panel
+    {
+        public readonly TextBox Kutu = new TextBox();
+
+        public GirisKabi(bool sifre)
+        {
+            Height = 34;
+            BackColor = Color.White;
+            SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+
+            Kutu.BorderStyle = BorderStyle.None;
+            Kutu.Font = Tema.Mono;
+            Kutu.ForeColor = Tema.Metin;
+            Kutu.BackColor = Color.White;
+            Kutu.UseSystemPasswordChar = sifre;
+            Controls.Add(Kutu);
+
+            Kutu.GotFocus += delegate { Invalidate(); };
+            Kutu.LostFocus += delegate { Invalidate(); };
+        }
+
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            Kutu.SetBounds(11, (Height - Kutu.PreferredHeight) / 2 + 1, Width - 22, Kutu.PreferredHeight);
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(Tema.Zemin);
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (GraphicsPath yol = Tema.Yuvarlak(r, 5))
+            {
+                using (SolidBrush b = new SolidBrush(Color.White)) g.FillPath(b, yol);
+                using (Pen p = new Pen(Kutu.Focused ? Tema.Marka : Tema.Cizgi)) g.DrawPath(p, yol);
+            }
+        }
+    }
+
+    /// Ince, yuvarlak uclu ilerleme cubugu.
     class Ilerleme : Control
     {
         int _deger;
@@ -104,14 +207,23 @@ namespace PusulaKurulum
             get { return _deger; }
             set { _deger = Math.Max(0, Math.Min(100, value)); Invalidate(); }
         }
-        public Ilerleme() { Height = 4; SetStyle(ControlStyles.OptimizedDoubleBuffer, true); }
+        public Ilerleme() { Height = 6; SetStyle(ControlStyles.OptimizedDoubleBuffer, true); }
         protected override void OnPaint(PaintEventArgs e)
         {
-            using (SolidBrush b = new SolidBrush(Tema.Cizgi))
-                e.Graphics.FillRectangle(b, 0, 0, Width, Height);
-            int w = (int)(Width * (_deger / 100.0));
-            using (SolidBrush b = new SolidBrush(Tema.Kenar))
-                e.Graphics.FillRectangle(b, 0, 0, w, Height);
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (GraphicsPath yol = Tema.Yuvarlak(r, Height / 2))
+            using (SolidBrush b = new SolidBrush(Tema.CizgiAcik))
+                g.FillPath(b, yol);
+
+            int w = (int)((Width - 1) * (_deger / 100.0));
+            if (w > Height)
+            {
+                using (GraphicsPath yol = Tema.Yuvarlak(new Rectangle(0, 0, w, Height - 1), Height / 2))
+                using (SolidBrush b = new SolidBrush(Tema.Marka))
+                    g.FillPath(b, yol);
+            }
         }
     }
 
@@ -138,7 +250,7 @@ namespace PusulaKurulum
         // ── Kurulum durumu ──
         string indirilenMsi = "";
         bool   kurulumTamam = false;
-        TextBox kutuKullanici, kutuSifre;
+        GirisKabi kutuKullanici, kutuSifre;
 
         public AnaForm()
         {
@@ -192,7 +304,7 @@ namespace PusulaKurulum
         {
             kenar = new Panel();
             kenar.SetBounds(0, 0, 196, ClientSize.Height);
-            kenar.BackColor = Tema.Kenar;
+            kenar.BackColor = Tema.MarkaDerin;
             Controls.Add(kenar);
 
             Label logo = new Label();
@@ -205,7 +317,7 @@ namespace PusulaKurulum
             Label logoAlt = new Label();
             logoAlt.Text = "Bağlantı Kurulumu";
             logoAlt.Font = Tema.Kucuk;
-            logoAlt.ForeColor = Color.FromArgb(150, 150, 158);
+            logoAlt.ForeColor = Tema.PanelMetin;
             logoAlt.SetBounds(27, 54, 160, 16);
             kenar.Controls.Add(logoAlt);
 
@@ -216,7 +328,7 @@ namespace PusulaKurulum
                 Label nokta = new Label();
                 nokta.Text = "○";
                 nokta.Font = new Font("Segoe UI", 9F);
-                nokta.ForeColor = Color.FromArgb(110, 110, 118);
+                nokta.ForeColor = Tema.PanelSolgun;
                 nokta.SetBounds(26, y, 18, 20);
                 kenar.Controls.Add(nokta);
                 adimNokta[i] = nokta;
@@ -224,7 +336,7 @@ namespace PusulaKurulum
                 Label e = new Label();
                 e.Text = adlar[i];
                 e.Font = Tema.Kucuk;
-                e.ForeColor = Color.FromArgb(140, 140, 148);
+                e.ForeColor = Tema.PanelMetin;
                 e.SetBounds(48, y + 2, 140, 18);
                 kenar.Controls.Add(e);
                 adimEtiket[i] = e;
@@ -245,7 +357,7 @@ namespace PusulaKurulum
 
             bAlt = new Label();
             bAlt.Font = Tema.AltYazi;
-            bAlt.ForeColor = Tema.Solgun;
+            bAlt.ForeColor = Tema.Ikincil;
             bAlt.SetBounds(35, 62, 396, 36);
             icerik.Controls.Add(bAlt);
 
@@ -290,10 +402,10 @@ namespace PusulaKurulum
             {
                 bool tamam = k < i, aktif = k == i;
                 adimNokta[k].Text = tamam ? "✓" : (aktif ? "●" : "○");
-                adimNokta[k].ForeColor = tamam ? Color.FromArgb(52, 199, 123)
-                                       : (aktif ? Color.White : Color.FromArgb(110, 110, 118));
+                adimNokta[k].ForeColor = tamam ? Tema.PanelTamam
+                                       : (aktif ? Color.White : Tema.PanelSolgun);
                 adimEtiket[k].ForeColor = aktif ? Color.White
-                                        : (tamam ? Color.FromArgb(175, 175, 182) : Color.FromArgb(120, 120, 128));
+                                        : (tamam ? Tema.PanelMetin : Tema.PanelSolgun);
                 adimEtiket[k].Font = aktif ? new Font("Segoe UI Semibold", 8.25F) : Tema.Kucuk;
             }
         }
@@ -399,9 +511,9 @@ namespace PusulaKurulum
             if (i < 0 || i >= islemNokta.Count) return;
             Label n = islemNokta[i];
             if (durum == 0) { n.Text = "→"; n.ForeColor = Tema.Metin; }
-            else if (durum == 1) { n.Text = "✓"; n.ForeColor = Tema.Yesil; }
-            else if (durum == 2) { n.Text = "✕"; n.ForeColor = Tema.Kirmizi; }
-            else { n.Text = "–"; n.ForeColor = Tema.Amber; }
+            else if (durum == 1) { n.Text = "✓"; n.ForeColor = Tema.Basari; }
+            else if (durum == 2) { n.Text = "✕"; n.ForeColor = Tema.Hata; }
+            else { n.Text = "–"; n.ForeColor = Tema.Uyari; }
             islemMetin[i].ForeColor = Tema.Metin;
             if (metin != null && metin.Length > 0) islemMetin[i].Text = metin;
             Application.DoEvents();
@@ -471,7 +583,7 @@ namespace PusulaKurulum
 
             kurulumTamam = sorunsuz;
             durumMetni.Text = sorunsuz ? "Kurulum tamamlandı." : "Kurulum bitti, bazı adımlar atlandı.";
-            durumMetni.ForeColor = sorunsuz ? Tema.Yesil : Tema.Amber;
+            durumMetni.ForeColor = sorunsuz ? Tema.Basari : Tema.Uyari;
             dugmeIleri.Enabled = true;
             dugmeIleri.Text = "Devam";
         }
@@ -542,22 +654,17 @@ namespace PusulaKurulum
             Label l1 = new Label();
             l1.Text = "Kullanıcı adı"; l1.Font = Tema.Kucuk; l1.ForeColor = Tema.Solgun;
             l1.SetBounds(0, y, 200, 16); govde.Controls.Add(l1);
-            kutuKullanici = new TextBox();
-            kutuKullanici.SetBounds(0, y + 20, 396, 26);
-            kutuKullanici.BorderStyle = BorderStyle.FixedSingle;
-            kutuKullanici.Font = Tema.Mono;
-            kutuKullanici.Text = ayKullanici;
+            kutuKullanici = new GirisKabi(false);
+            kutuKullanici.SetBounds(0, y + 20, 396, 34);
+            kutuKullanici.Kutu.Text = ayKullanici;
             govde.Controls.Add(kutuKullanici);
 
             y += 60;
             Label l2 = new Label();
             l2.Text = "Şifre"; l2.Font = Tema.Kucuk; l2.ForeColor = Tema.Solgun;
             l2.SetBounds(0, y, 200, 16); govde.Controls.Add(l2);
-            kutuSifre = new TextBox();
-            kutuSifre.SetBounds(0, y + 20, 396, 26);
-            kutuSifre.BorderStyle = BorderStyle.FixedSingle;
-            kutuSifre.Font = Tema.Mono;
-            kutuSifre.UseSystemPasswordChar = true;
+            kutuSifre = new GirisKabi(true);
+            kutuSifre.SetBounds(0, y + 20, 396, 34);
             govde.Controls.Add(kutuSifre);
 
             y += 66;
@@ -576,8 +683,8 @@ namespace PusulaKurulum
 
         bool KimlikKaydet()
         {
-            string k = kutuKullanici.Text.Trim();
-            string s = kutuSifre.Text;
+            string k = kutuKullanici.Kutu.Text.Trim();
+            string s = kutuSifre.Kutu.Text;
             if (k.Length == 0)
             {
                 MessageBox.Show("Kullanıcı adı boş bırakılamaz.", "Eksik bilgi",
