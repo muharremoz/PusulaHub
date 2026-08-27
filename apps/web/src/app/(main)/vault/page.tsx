@@ -1,10 +1,9 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
+import { ListeKarti, ListeThead, ListeBosSatir, ListeAksiyonButonu } from "@/components/shared/liste-karti"
 import { MetinFiltre } from "@/components/shared/liste-filtreleri"
 import { PageContainer } from "@/components/layout/page-container"
-import { StatsCard } from "@/components/shared/stats-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -54,7 +53,6 @@ import {
   Globe,
   ShieldCheck,
   Sparkles,
-  Lock,
   Activity,
   Star,
   ArrowUpDown,
@@ -1065,45 +1063,8 @@ export default function VaultPage() {
     }
   }
 
-  // KPI hesaplamaları
-  const expiredCount = entries.filter((e) => {
-    const days = getPasswordAgeDays(e.passwordChangedAt)
-    return days !== null && days >= PASSWORD_MAX_AGE_DAYS
-  }).length
-
   return (
     <PageContainer title="Şifre Kasası" description="Sunucu ve servis kimlik bilgileri">
-
-      {/* ── KPI Satırı ── */}
-      <div className="grid grid-cols-4 gap-3 mb-5">
-        <StatsCard
-          title="TOPLAM GİRİŞ"
-          value={loading ? "—" : entries.length}
-          icon={<KeyRound className="h-4 w-4" />}
-          subtitle="Tüm kategoriler"
-        />
-        <StatsCard
-          title="GÜÇLÜ ŞİFRE"
-          value={loading ? "—" : entries.filter((e) => passwordScore(e.password) >= 4).length}
-          icon={<ShieldCheck className="h-4 w-4" />}
-          trend={{ value: "Güç skoru 4 ve üzeri", positive: true }}
-          subtitle="Güvenli girişler"
-        />
-        <StatsCard
-          title="ZAYIF ŞİFRE"
-          value={loading ? "—" : entries.filter((e) => passwordScore(e.password) <= 2).length}
-          icon={<Lock className="h-4 w-4" />}
-          trend={{ value: "Güncelleme gerekiyor", positive: false }}
-          subtitle="Risk altındaki girişler"
-        />
-        <StatsCard
-          title="SÜRESİ DOLAN"
-          value={loading ? "—" : expiredCount}
-          icon={<AlertTriangle className="h-4 w-4" />}
-          trend={expiredCount > 0 ? { value: `${PASSWORD_MAX_AGE_DAYS}+ gün`, positive: false } : undefined}
-          subtitle={`${PASSWORD_MAX_AGE_DAYS} günü aşan`}
-        />
-      </div>
 
       <div className="flex gap-4">
 
@@ -1186,6 +1147,12 @@ export default function VaultPage() {
         ikon={<ShieldCheck className="size-3.5" />}
         toplam={entries.length}
         filtreli={filtered.length}
+        aksiyon={
+          <ListeAksiyonButonu onClick={() => { setEditing(null); setSheetOpen(true) }}>
+            <Plus className="size-3.5" />
+            Yeni Giriş
+          </ListeAksiyonButonu>
+        }
       >
         <div className="overflow-x-auto">
           <table className="w-full text-[14px] font-medium leading-[20px]">
