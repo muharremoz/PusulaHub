@@ -1,4 +1,4 @@
-/*  Pusula Bağlantı Kurulumu  —  WPF
+﻿/*  Pusula Bağlantı Kurulumu  —  WPF
  *  --------------------------------
  *  Musteriye giden tek dosya. Sihirbaz akisi:
  *
@@ -24,8 +24,17 @@
  *             kullanici bir daha sormaz.
  *    · VPN  : FortiClient'in kimlik bilgisi alan bir komut satiri ya da
  *             API'si YOK; DATA1 alani da makineye bagli sifreli oldugu
- *             icin disaridan yazilamiyor. Bu yuzden VPN sifresi ilk
- *             baglantida FortiClient icinde bir kez elle girilir.
+ *             icin disaridan yazilamiyor.
+ *
+ *  VPN tarafinda sahada olculen gercek akis (2026-08-27) — musteriye
+ *  onceden soylenmezse destek cagrisina donuyor, son sayfada bire bir
+ *  anlatiliyor:
+ *    1. Kayit defterine promptusername=0 yazmak "Save login" secmeye
+ *       YETMIYOR. FortiClient radyo dugmesini DATA1'de kayitli kullanici
+ *       adi var mi diye belirliyor; olmayinca "Prompt on login"de kaliyor.
+ *       Kullanici Edit'ten kendisi secip kullanici adini yaziyor.
+ *    2. Sifre kaydetme secenegi ILK baglantida hic cikmiyor; ancak
+ *       ikinci baglantida beliriyor.
  */
 
 using System;
@@ -158,7 +167,7 @@ namespace PusulaKurulum
         {
             Title  = "Pusula Bağlantı Kurulumu";
             Width  = 720;
-            Height = 520;
+            Height = 580;
             ResizeMode = ResizeMode.NoResize;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             Background = Tema.F("WindowBackgroundBrush");
@@ -684,8 +693,9 @@ namespace PusulaKurulum
 
             TextBlock not = new TextBlock();
             not.Text = "Şifreniz uzak masaüstü için Windows kimlik kasasına kaydedilir; "
-                     + "bir daha sorulmaz. VPN şifresini ise FortiClient içinde ilk "
-                     + "bağlantıda bir kez yazmanız gerekir (Fortinet buna izin veriyor).";
+                     + "bir daha sorulmaz. VPN tarafında ise Fortinet dışarıdan şifre "
+                     + "yazılmasına izin vermiyor — onu FortiClient içinde elle "
+                     + "gireceksiniz, nasıl yapılacağı son adımda anlatılıyor.";
             not.FontSize = 12;
             not.TextWrapping = TextWrapping.Wrap;
             not.Margin = new Thickness(0, 18, 0, 0);
@@ -745,19 +755,36 @@ namespace PusulaKurulum
         {
             AdimVurgula(3);
             bBaslik.Text = "Hazırsınız";
-            bAlt.Text = "Bağlanmak için aşağıdaki adımları izleyin.";
+            bAlt.Text = "Son olarak FortiClient'ta kullanıcı bilgilerinizi bir kez tanıtmanız gerekiyor.";
             govde.Children.Clear();
 
-            BittiSatiri("1", "FortiClient'ı açın, \"" + ayTunel + "\" bağlantısını seçin.", false);
-            BittiSatiri("2", ayKullanici, true);
-            BittiSatiri("",  "Şifrenizi bir kez yazın ve \"kaydet\" işaretleyin.", false);
-            BittiSatiri("3", "Bağlandıktan sonra masaüstündeki \"" + ayTunel
-                           + "\" kısayoluna çift tıklayın.", false);
+            /*  Bu adimlar sahada olculdu, tahmin degil. Iki tanesi
+             *  kacinilmaz ve musteriye onceden soylenmezse destek
+             *  cagrisina donuyor:
+             *   · Kullanici adini biz yazamiyoruz. FortiClient onu
+             *     DATA1 icinde makineye bagli sifreli tutuyor; kayit
+             *     defterindeki promptusername=0 tek basina "Save login"
+             *     secmeye yetmiyor, kullanici Edit'ten secmek zorunda.
+             *   · Sifre kaydetme secenegi ILK baglantida cikmiyor,
+             *     ancak ikinci baglantida beliriyor.                   */
+            BittiSatiri("1", "FortiClient'ı açın. \"" + ayTunel
+                           + "\" bağlantısının yanındaki düzenle (kalem) simgesine tıklayın.");
+            BittiSatiri("2", "Authentication satırında \"Save login\" seçeneğini işaretleyin. "
+                           + "Açılan kutuya kullanıcı adınızı yazıp Save deyin:");
+            KullaniciAdiKutusu();
+            BittiSatiri("3", "Bağlanın ve şifrenizi yazın. İlk bağlantıda şifre kaydetme "
+                           + "seçeneği çıkmaz — bu normaldir.");
+            BittiSatiri("4", "Bağlantıyı kesip ikinci kez bağlanın. Bu sefer şifreyi kaydetme "
+                           + "seçeneği çıkacak, işaretleyin.");
+            BittiSatiri("5", "Bağlantı kurulduktan sonra masaüstündeki \"" + ayTunel
+                           + "\" kısayoluna çift tıklayın.");
 
             TextBlock son = new TextBlock();
-            son.Text = "Sorun yaşarsanız bize ulaşın.";
+            son.Text = "Uzak masaüstü şifreniz kaydedildi, o bir daha sorulmayacak. "
+                     + "Sorun yaşarsanız bize ulaşın.";
             son.FontSize = 12;
-            son.Margin = new Thickness(0, 18, 0, 0);
+            son.TextWrapping = TextWrapping.Wrap;
+            son.Margin = new Thickness(0, 14, 0, 0);
             son.Foreground = Tema.F("TextMutedBrush");
             govde.Children.Add(son);
 
@@ -766,30 +793,53 @@ namespace PusulaKurulum
             durumMetni.Text = "";
         }
 
-        void BittiSatiri(string no, string metin, bool mono)
+        void BittiSatiri(string no, string metin)
         {
             Grid g = new Grid();
-            g.Margin = new Thickness(0, 0, 0, 12);
-            g.ColumnDefinitions.Add(Sutun(24));
+            g.Margin = new Thickness(0, 0, 0, 9);
+            g.ColumnDefinitions.Add(Sutun(22));
             g.ColumnDefinitions.Add(Sutun(-1));
 
             TextBlock n = new TextBlock();
             n.Text = no;
-            n.FontSize = 13;
+            n.FontSize = 12.5;
             n.FontWeight = FontWeights.SemiBold;
             n.Foreground = Tema.F("BrandPrimaryBrush");
             g.Children.Add(n);
 
             TextBlock m = new TextBlock();
-            m.Text = mono ? ("Kullanıcı adınız: " + metin) : metin;
-            m.FontSize = 13;
+            m.Text = metin;
+            m.FontSize = 12.5;
             m.TextWrapping = TextWrapping.Wrap;
             m.Foreground = Tema.F("TextPrimaryBrush");
-            if (mono) m.FontFamily = Tema.Mono;
             Grid.SetColumn(m, 1);
             g.Children.Add(m);
 
             govde.Children.Add(g);
+        }
+
+        /// Kullanici adi FortiClient'a ELLE yazilacagi icin one cikarilir;
+        /// duz metin arasinda kaybolursa yanlis yaziliyor.
+        void KullaniciAdiKutusu()
+        {
+            Border kutu = new Border();
+            kutu.Background = Tema.F("HoverBackgroundBrush");
+            kutu.BorderBrush = Tema.F("BrandPrimaryBrush");
+            kutu.BorderThickness = new Thickness(1);
+            kutu.CornerRadius = new CornerRadius(6);
+            kutu.Padding = new Thickness(12, 8, 12, 8);
+            kutu.Margin = new Thickness(22, 1, 0, 11);
+            kutu.HorizontalAlignment = HorizontalAlignment.Left;
+
+            TextBlock t = new TextBlock();
+            t.Text = ayKullanici;
+            t.FontFamily = Tema.Mono;
+            t.FontSize = 13.5;
+            t.FontWeight = FontWeights.SemiBold;
+            t.Foreground = Tema.F("BrandSecondaryBrush");
+            kutu.Child = t;
+
+            govde.Children.Add(kutu);
         }
 
         // ─────────────────────────────────────────────────────────
