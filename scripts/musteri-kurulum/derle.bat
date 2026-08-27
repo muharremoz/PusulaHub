@@ -1,10 +1,10 @@
 @echo off
-title PusulaKurulum derleme (WPF)
+title PusulaConnect derleme (WPF)
 
 rem  ==================================================================
 rem   KULLANIM
-rem     derle.bat              : ayarlar.ini gomulur, PusulaKurulum.exe
-rem     derle.bat 2311.ini     : 2311.ini gomulur, PusulaKurulum-2311.exe
+rem     derle.bat              : ayarlar.ini gomulur, PusulaConnect.exe
+rem     derle.bat 2311.ini     : 2311.ini gomulur, PusulaConnect-2311.exe
 rem
 rem   Ayarlar exe'ye GOMULUYOR; musteriye tek dosya gidiyor. Yine de
 rem   exe'nin yanina ayarlar.ini konursa gomuluyu ezer (sahada hizli
@@ -18,7 +18,7 @@ rem  ==================================================================
 
 set "INI=%~1"
 if not defined INI set "INI=ayarlar.ini"
-if "%~1"=="" (set "OUT=PusulaKurulum.exe") else (set "OUT=PusulaKurulum-%~n1.exe")
+if "%~1"=="" (set "OUT=PusulaConnect.exe") else (set "OUT=PusulaConnect-%~n1.exe")
 
 if not exist "%INI%" (
     echo HATA: ayar dosyasi bulunamadi: %INI%
@@ -71,7 +71,7 @@ echo Derleniyor...
   /r:"%WPFDIR%\PresentationFramework.dll" ^
   /r:"%WPFDIR%\PresentationCore.dll" ^
   /r:"%WPFDIR%\WindowsBase.dll" ^
-  PusulaKurulum.cs
+  PusulaConnect.cs
 
 if %errorlevel% neq 0 ( echo DERLEME BASARISIZ & pause & exit /b 1 )
 echo.

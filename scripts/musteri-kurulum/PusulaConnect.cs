@@ -1,5 +1,8 @@
-﻿/*  Pusula Bağlantı Kurulumu  —  WPF
- *  --------------------------------
+﻿/*  Pusula Connect  —  VPN + uzak masaüstü bağlantı kurucu (WPF)
+ *  -------------------------------------------------------------
+ *  Ad bilerek "Kurulum" degil: program Pusula uygulamasini KURMUYOR,
+ *  musterinin baglantisini kuruyor. Kardes projelerle de ayni kalipta
+ *  (PusulaHub, PusulaFix, PusulaCRM).
  *  Musteriye giden tek dosya. Sihirbaz akisi:
  *
  *      1. Karsilama      — ne yapilacagi ozetlenir
@@ -18,7 +21,7 @@
  *
  *  MUSTERIYE TEK DOSYA GIDER. Ayarlar (firma, kullanici, sunucular)
  *  exe'ye gomuluyor; her musteri kendi ini'siyle derleniyor:
- *      derle.bat 2311.ini  ->  PusulaKurulum-2311.exe
+ *      derle.bat 2311.ini  ->  PusulaConnect-2311.exe
  *  Exe'nin yanina ayarlar.ini konursa gomuluyu ezer — sahada bir deger
  *  degistirmek gerekince yeniden derleyip dosya gondermeye gerek kalmaz.
  *
@@ -59,7 +62,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
-namespace PusulaKurulum
+namespace PusulaConnect
 {
     // ═══════════════════════════════════════════════════════════════
     //  Tema — PusulaFix'in sozlugu
@@ -171,7 +174,7 @@ namespace PusulaKurulum
 
         public AnaPencere()
         {
-            Title  = "Pusula Bağlantı Kurulumu";
+            Title  = "Pusula Connect";
             Width  = 720;
             Height = 580;
             ResizeMode = ResizeMode.NoResize;

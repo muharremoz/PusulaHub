@@ -605,10 +605,10 @@ export default function CompaniesPage() {
         const d = await r.json().catch(() => null)
         throw new Error(d?.error ?? `Paket üretilemedi (HTTP ${r.status})`)
       }
-      triggerDownload(await r.blob(), `PusulaKurulum-${username}.zip`)
+      triggerDownload(await r.blob(), `PusulaConnect-${username}.zip`)
       toast.success("Kurulum paketi indirildi", {
         id: bekle,
-        description: "ZIP'i açıp PusulaKurulum.exe'yi çalıştırın; ayarlar.ini yanında kalmalı.",
+        description: "ZIP'i açıp PusulaConnect.exe'yi çalıştırın; ayarlar.ini yanında kalmalı.",
       })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Paket üretilemedi", { id: bekle })

@@ -7,7 +7,7 @@
  * ini biçimi ya da sabitler değiştiğinde iki paketin ayrışması demekti.
  *
  * İçerik:
- *   · PusulaKurulum.exe  — genel kurulum sihirbazı (değişmez, nötr)
+ *   · PusulaConnect.exe  — genel kurulum sihirbazı (değişmez, nötr)
  *   · ayarlar.ini        — o kullanıcıya özel değerler
  *
  * NEDEN ZIP, NEDEN TEK EXE DEĞİL: exe'ye ayar gömmek derleme gerektiriyor
@@ -36,8 +36,8 @@ export const GUVENLI_KULLANICI_ADI = /^[A-Za-z0-9._-]{1,64}$/
 /** Exe farklı çalışma dizinlerinde aranıyor: yerel dev ile konteyner farklı. */
 async function exeYolunuBul(): Promise<string | null> {
   const adaylar = [
-    path.join(process.cwd(), "kurulum", "PusulaKurulum.exe"),
-    path.join(process.cwd(), "apps", "web", "kurulum", "PusulaKurulum.exe"),
+    path.join(process.cwd(), "kurulum", "PusulaConnect.exe"),
+    path.join(process.cwd(), "apps", "web", "kurulum", "PusulaConnect.exe"),
   ]
   for (const y of adaylar) {
     try {
@@ -81,7 +81,7 @@ export async function kurulumPaketiUret(
 
   const ini = [
     `# ${firkod} / ${kullanici} icin uretildi - Pusula`,
-    `# Bu dosya PusulaKurulum.exe ile AYNI klasorde durmali.`,
+    `# Bu dosya PusulaConnect.exe ile AYNI klasorde durmali.`,
     `# Icerik saf ASCII: musteri Not Defteri ile acabilir.`,
     ``,
     `firma     = ${firkod}`,
@@ -104,9 +104,9 @@ export async function kurulumPaketiUret(
   // "çok eski" görünüyor.
   const simdi = new Date()
   const zip = createZip([
-    { name: "PusulaKurulum.exe", data: new Uint8Array(exe), date: simdi },
+    { name: "PusulaConnect.exe", data: new Uint8Array(exe), date: simdi },
     { name: "ayarlar.ini", data: new TextEncoder().encode(ini), date: simdi },
   ])
 
-  return { ok: true, zip, dosyaAdi: `PusulaKurulum-${kullanici}.zip` }
+  return { ok: true, zip, dosyaAdi: `PusulaConnect-${kullanici}.zip` }
 }

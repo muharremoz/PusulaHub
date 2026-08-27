@@ -1,5 +1,5 @@
 # Derleme ciktisi ve musteriye ozel dosyalar depoda tutulmaz.
-PusulaKurulum*.exe
+PusulaConnect*.exe
 *.msi
 
 # Musteriye ozel ayar dosyalari (ornegin 2311.ini). ayarlar.ini
