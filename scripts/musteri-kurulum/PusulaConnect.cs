@@ -66,8 +66,8 @@ using System.Reflection;
  *  ilk soru hangi yapiyi calistirdigi oluyor. Ozellikle bir duzeltmeden
  *  sonra eski exe elden ele dolasabiliyor.
  *  Degistirmeyi unutma: davranis degisen her yayinda artir.            */
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 [assembly: AssemblyTitle("Pusula Connect")]
 [assembly: AssemblyProduct("Pusula Connect")]
 [assembly: AssemblyCompany("Pusula")]
@@ -715,7 +715,18 @@ namespace PusulaConnect
                 try
                 {
                     MsiDogrula(yerel, "paketteki dosya");
-                    indirilenMsi = yerel;
+                    /*  Paketteki MSI YERELE KOPYALANIYOR, oldugu yerden
+                     *  kurulmuyor.
+                     *
+                     *  Sebep: msiexec'in sunucu sureci SYSTEM olarak
+                     *  calisiyor ve paketin durdugu yere erisemeyebiliyor.
+                     *  Sahada paket OneDrive ile esitlenen masaustunde
+                     *  duruyordu (2026-08-28, HAKBILIR); OneDrive'in
+                     *  "isteğe bagli dosyalar" yer tutucularini SYSTEM
+                     *  acamiyor. Ag suruculeri ve USB icin de ayni risk
+                     *  var. Yerel gecici klasore kopyalamak bu sinifin
+                     *  tamamini ortadan kaldiriyor.                     */
+                    indirilenMsi = YerelKopyaya(yerel);
                     Isaretle(0, 1, "Kurulum dosyası pakette bulundu");
                     cubuk.Deger = 25;
                 }
@@ -971,6 +982,38 @@ namespace PusulaConnect
                 }
             }
             Gunluk.Yaz("    imza dogru (MSI)");
+        }
+
+        /*  Dosyayi yerel gecici klasore kopyalar. Zaten oradaysa
+         *  dokunmadan geri doner. Kopyalama basarisiz olursa (yer yok
+         *  gibi) ozgun yol kullanilir — kurulum hic denenmemis olmaktansa
+         *  denenip hata vermesi yeglenir.                              */
+        static string YerelKopyaya(string kaynak)
+        {
+            try
+            {
+                string klasor = Path.Combine(Path.GetTempPath(), "PusulaConnect");
+                Directory.CreateDirectory(klasor);
+                string hedef = Path.Combine(klasor, Path.GetFileName(kaynak));
+
+                if (string.Equals(Path.GetFullPath(kaynak), Path.GetFullPath(hedef),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    Gunluk.Yaz("  dosya zaten yerel klasorde");
+                    return kaynak;
+                }
+
+                Gunluk.Yaz("  yerele kopyalaniyor: " + hedef);
+                File.Copy(kaynak, hedef, true);
+                Gunluk.Yaz("    kopyalandi (" + new FileInfo(hedef).Length.ToString("N0") + " bayt)");
+                return hedef;
+            }
+            catch (Exception ex)
+            {
+                Gunluk.Hata("YerelKopyaya", ex);
+                Gunluk.Yaz("  kopyalanamadi, dosya oldugu yerden kurulacak");
+                return kaynak;
+            }
         }
 
         string YanindakiMsi()
