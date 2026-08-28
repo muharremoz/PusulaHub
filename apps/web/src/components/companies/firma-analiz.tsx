@@ -175,7 +175,13 @@ export function raporHtml(d: FirmaAnalizYanit, ekNot?: string): string {
      <td class="n">${k.gun}</td><td class="n">${k.ortSaat}</td>
      <td class="n b">${sy(k.toplamSaat)}</td></tr>`).join("");
 
-  const yorumP = pusulaYorumu(d).map((t) => `<p>${esc(t)}</p>`).join("");
+  const yorumlar = pusulaYorumu(d);
+  /*  İlk paragraf "giriş": tam genişlik ve biraz iri. Kalanı iki
+   *  kolona akıyor — tek kolonda satırlar kartın solunda kalıp sağ
+   *  tarafı boş bırakıyordu, kolonu genişletmek ise satırı okunmaz
+   *  derecede uzatırdı.                                            */
+  const yorumGiris = yorumlar.length ? `<p class="lead">${esc(yorumlar[0])}</p>` : "";
+  const yorumP = yorumlar.slice(1).map((t) => `<p>${esc(t)}</p>`).join("");
   const notBlok = ekNot && ekNot.trim()
     ? `<div class="notk"><div class="notb">Pusula ekibinden not</div>` +
       esc(ekNot.trim()).split(/\n+/).map((t) => `<p>${t}</p>`).join("") + `</div>`
@@ -220,11 +226,21 @@ td.m{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
 .cub i.hs{background:#C6D3CD}
 .eks{display:flex;justify-content:space-between;color:#98A39E;font-size:10.5px;margin-top:6px;
  font-variant-numeric:tabular-nums}
-.analiz{background:#fff;border:1px solid #E1E6E3;border-left:3px solid #047857;
- border-radius:8px;padding:18px 20px;margin:0 0 8px}
-.analiz h2{margin:0 0 10px;font-size:16px;color:#047857}
-.analiz p{margin:0 0 9px;font-size:14px;line-height:1.65;max-width:76ch}
-.analiz p:last-child{margin-bottom:0}
+.analiz{background:linear-gradient(180deg,#F4FAF7 0%,#FFFFFF 55%);
+ border:1px solid #CFE3DA;border-radius:10px;padding:20px 22px 22px;margin:0 0 10px}
+.abas{display:flex;align-items:center;gap:11px;padding-bottom:12px;margin-bottom:14px;
+ border-bottom:1px solid #DCEAE3}
+.arozet{width:30px;height:30px;flex:none;border-radius:7px;background:#047857;color:#fff;
+ display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;
+ letter-spacing:-.02em}
+.aust{font-size:15.5px;font-weight:700;color:#064E3B;line-height:1.25}
+.aalt{font-size:11.5px;color:#5F8C7B;margin-top:1px}
+.analiz p{margin:0 0 10px;font-size:13.5px;line-height:1.7;color:#22322C}
+.analiz p.lead{font-size:15px;line-height:1.6;color:#111A16;margin-bottom:14px}
+.akol{column-count:2;column-gap:30px;column-rule:1px solid #E4EFE9}
+.akol p{break-inside:avoid;margin:0 0 11px}
+.akol p:last-child{margin-bottom:0}
+@media (max-width:720px){.akol{column-count:1}}
 .notk{background:#F0F7F4;border:1px solid #CFE3DA;border-radius:8px;padding:14px 18px;margin:0 0 8px}
 .notb{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#047857;font-weight:700;margin-bottom:6px}
 .notk p{margin:0 0 7px;font-size:13.5px;line-height:1.6;max-width:76ch}
@@ -234,7 +250,8 @@ td.m{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
 @media print{
   body{background:#fff}
   .k{max-width:none;padding:0}
-  .krt,.kart,.graf{break-inside:avoid}
+  .krt,.kart,.graf,.analiz,.notk{break-inside:avoid}
+  .analiz{background:#fff}
   h2{break-after:avoid}
 }
 </style></head><body><div class="k">
@@ -254,8 +271,15 @@ td.m{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
 </div>
 
 <section class="analiz">
-  <h2>Pusula Analizi</h2>
-  ${yorumP}
+  <div class="abas">
+    <span class="arozet">P</span>
+    <div>
+      <div class="aust">Pusula Analizi</div>
+      <div class="aalt">Dönem verilerinden çıkarılan değerlendirme</div>
+    </div>
+  </div>
+  ${yorumGiris}
+  ${yorumP ? `<div class="akol">${yorumP}</div>` : ""}
 </section>
 ${notBlok}
 
@@ -379,16 +403,33 @@ export function FirmaAnaliz({ firkod }: { firkod: string }) {
 
       {/* Rapora giren değerlendirme — burada da görünüyor ki gönderen
           kişi müşterinin ne okuyacağını önceden bilsin. */}
-      <div className="bg-card rounded-[5px] border border-l-[3px] border-l-primary p-3"
-        style={{ boxShadow: "var(--card-shadow)" }}>
-        <div className="text-primary mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
-          Pusula Analizi · rapora bu metin girer
+      <div className="bg-card rounded-[8px] border p-4" style={{ boxShadow: "var(--card-shadow)" }}>
+        <div className="mb-3 flex items-center gap-2.5 border-b pb-2.5">
+          <span className="bg-primary text-primary-foreground flex size-7 shrink-0 items-center justify-center rounded-[6px] text-[14px] font-bold">
+            P
+          </span>
+          <div>
+            <div className="text-[14px] leading-tight font-semibold">Pusula Analizi</div>
+            <div className="text-muted-foreground text-[11px]">Rapora bu metin girer</div>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          {pusulaYorumu(veri).map((t, i) => (
-            <p key={i} className="text-[13px] leading-relaxed">{t}</p>
-          ))}
-        </div>
+        {/* İlk paragraf giriş, kalanı iki kolon — kart genişliğini
+            doldursun, satır da okunmaz derecede uzamasın. */}
+        {(() => {
+          const y = pusulaYorumu(veri);
+          return (
+            <>
+              {y[0] && <p className="mb-3 text-[14px] leading-relaxed">{y[0]}</p>}
+              {y.length > 1 && (
+                <div className="gap-x-8 text-[13px] leading-relaxed [column-count:1] lg:[column-count:2]">
+                  {y.slice(1).map((t, i) => (
+                    <p key={i} className="mb-2.5 [break-inside:avoid]">{t}</p>
+                  ))}
+                </div>
+              )}
+            </>
+          );
+        })()}
         <div className="mt-3 border-t pt-2.5">
           <label className="text-muted-foreground mb-1 block text-[10px] font-medium tracking-wider uppercase">
             Ekibinizden not (isteğe bağlı — rapora eklenir)
