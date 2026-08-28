@@ -1046,7 +1046,8 @@ export async function POST(req: NextRequest) {
                         await saveCompanyUserSqlPassword(
                           payload.firmaId,
                           `${payload.firmaId}.${firstUser.username}`,
-                          firstUser.password)
+                          firstUser.password,
+                          loginName)
                         return created
                           ? `CREATE LOGIN [${loginName}]`
                           : `ALTER LOGIN [${loginName}] (mevcut — şifre güncellendi)`

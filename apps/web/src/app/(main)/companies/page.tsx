@@ -1713,6 +1713,10 @@ tr:nth-child(even) td{background:#fafafa}
         degismiyor, tek kaynaktan gosterilirse ekran yanlis sifre
         veriyordu (2026-08-28, firma 2311).                        */
     const sqlCredentials = accessInfo.sqlCredentials ?? {}
+    /*  Giriş adı SAKLANAN değerden; yoksa türetilir. Türetme tek
+        başına yanlış ad veriyordu — ad kuralı alt çizgiden noktaya
+        döndü ama mevcut girişler alt çizgili kaldı.               */
+    const sqlLogins = accessInfo.sqlLogins ?? {}
     const webServices = collectWebServices()
 
     const lines: string[] = [
@@ -1765,7 +1769,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (tabSQL.length > 0 && tabUsers[0]) {
       const firstUser = tabUsers[0]
       const sqlIp = tabSQL[0]?.ServerIP || ""
-      const sqlLogin = sqlLoginAdi(firkod, firstUser.username)
+      const sqlLogin = sqlLogins[firstUser.username] ?? sqlLoginAdi(firkod, firstUser.username)
       const sqlPw = sqlCredentials[firstUser.username] ?? ""
       lines.push("SQL Veritabanı Bilgileri:")
       if (sqlIp) lines.push(`Sunucu: ${sqlIp}`)
@@ -2485,6 +2489,10 @@ tr:nth-child(even) td{background:#fafafa}
         degismiyor, tek kaynaktan gosterilirse ekran yanlis sifre
         veriyordu (2026-08-28, firma 2311).                        */
     const sqlCredentials = accessInfo.sqlCredentials ?? {}
+    /*  Giriş adı SAKLANAN değerden; yoksa türetilir. Türetme tek
+        başına yanlış ad veriyordu — ad kuralı alt çizgiden noktaya
+        döndü ama mevcut girişler alt çizgili kaldı.               */
+    const sqlLogins = accessInfo.sqlLogins ?? {}
                   const webServices = collectWebServices()
                   return (
                     <div className="flex gap-2 min-h-[320px]">
@@ -2608,7 +2616,7 @@ tr:nth-child(even) td{background:#fafafa}
                             <AccessDetailHeader title={`Veritabanları (${tabSQL.length})`} />
                             <div className="divide-y divide-border/40">
                               {tabUsers[0] && (() => {
-                                const sqlLogin = sqlLoginAdi(firkod, tabUsers[0].username)
+                                const sqlLogin = sqlLogins[tabUsers[0].username] ?? sqlLoginAdi(firkod, tabUsers[0].username)
                                 const sqlPw    = sqlCredentials[tabUsers[0].username] ?? ""
                                 return (
                                   <>

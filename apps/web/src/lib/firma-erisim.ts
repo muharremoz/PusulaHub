@@ -1,7 +1,7 @@
 import "server-only"
 
 import { getSupabaseServer } from "@/lib/supabase/server"
-import { getCompanyCredentials, getCompanySqlCredentials, type SupabaseLike } from "@/lib/firma-credentials"
+import { getCompanyCredentials, getCompanySqlCredentials, getCompanySqlLogins, type SupabaseLike } from "@/lib/firma-credentials"
 import { decrypt } from "@/lib/crypto"
 
 /**
@@ -65,6 +65,12 @@ export interface FirmaErisimBilgisi {
    * başlıyor ama AD şifresi değişince bu değişmiyor.
    */
   sqlCredentials: Record<string, string>
+
+  /**
+   * SQL giriş adları (username → gerçek login). Türetilmez; ad kuralı
+   * değiştiği için türetme mevcut firmalarda yanlış ad veriyordu.
+   */
+  sqlLogins: Record<string, string>
 }
 
 interface ServerRow {
@@ -148,13 +154,14 @@ export async function getFirmaErisim(
     return { name: s.name, ip: s.ip, port: 1433, username: s.sql_username ?? null, password: sifre }
   }
 
-  const [adRow, winRow, iisRow, sql, credentials, sqlCredentials] = await Promise.all([
+  const [adRow, winRow, iisRow, sql, credentials, sqlCredentials, sqlLogins] = await Promise.all([
     fetchServer(comp.ad_server_id),
     fetchServer(comp.windows_server_id),
     fetchIisServer(),
     fetchSqlServer(),
     getCompanyCredentials(firkod, sb),
     getCompanySqlCredentials(firkod, sb),
+    getCompanySqlLogins(firkod, sb),
   ])
 
   return {
@@ -167,5 +174,6 @@ export async function getFirmaErisim(
     sql,
     credentials,
     sqlCredentials,
+    sqlLogins,
   }
 }
