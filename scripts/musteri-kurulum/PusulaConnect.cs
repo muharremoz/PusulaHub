@@ -66,8 +66,8 @@ using System.Reflection;
  *  ilk soru hangi yapiyi calistirdigi oluyor. Ozellikle bir duzeltmeden
  *  sonra eski exe elden ele dolasabiliyor.
  *  Degistirmeyi unutma: davranis degisen her yayinda artir.            */
-[assembly: AssemblyVersion("1.4.0.0")]
-[assembly: AssemblyFileVersion("1.4.0.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 [assembly: AssemblyTitle("Pusula Connect")]
 [assembly: AssemblyProduct("Pusula Connect")]
 [assembly: AssemblyCompany("Pusula")]
@@ -261,6 +261,9 @@ namespace PusulaConnect
         string ayFirma = "", ayKullanici = "", ayVpn = "vpn.pusulanet.net:17443";
         string ayRdp = "10.15.2.5", ayTunel = "Pusula", ayDomain = "PUSULADC";
         string ayMsiUrl = "";
+        /*  ARM makineler icin AYRI kurulum dosyasi. Fortinet ARM'i ayri
+         *  bir paketle dagitiyor; x64 paketi ARM'de kurulamiyor.       */
+        string ayMsiUrlArm = "";
 
         // ── Arayuz ──
         TextBlock[] adimNokta  = new TextBlock[4];
@@ -301,6 +304,8 @@ namespace PusulaConnect
                      + " vpn=" + ayVpn + " rdp=" + ayRdp + " tunel=" + ayTunel
                      + " domain=" + ayDomain);
             Gunluk.Yaz("msiurl : " + (ayMsiUrl.Length > 0 ? ayMsiUrl : "(tanimsiz)"));
+            Gunluk.Yaz("msiurl_arm : " + (ayMsiUrlArm.Length > 0 ? ayMsiUrlArm : "(tanimsiz)"));
+            Gunluk.Yaz("islemci: " + (ArmMi() ? "ARM" : "x64/x86"));
             ArayuzKur();
             SayfaKarsilama();
         }
@@ -712,7 +717,11 @@ namespace PusulaConnect
 
             /*  ARM ise indirmeye HIC baslanmiyor: paket x64 ve ARM'de
              *  kurulamiyor, 131 MB'i bosuna indirmenin anlami yok.     */
-            if (ArmMi())
+            /*  ARM ise: uygun bir kurulum dosyamiz varsa normal akisa
+             *  devam ediliyor (asagida mimariye gore adres seciliyor).
+             *  Yoksa indirmeye hic baslanmiyor — paket x64 ve ARM'de
+             *  kurulamiyor, 131 MB'i bosuna indirmenin anlami yok.     */
+            if (ArmMi() && ayMsiUrlArm.Length == 0 && YanindakiMsi().Length == 0)
             {
                 armAtlandi = true;
                 Gunluk.Yaz("ARM islemci tespit edildi — FortiClient (x64) bu makineye kurulamaz");
@@ -775,15 +784,27 @@ namespace PusulaConnect
                     sorunsuz = false;
                 }
             }
-            else if (ayMsiUrl.Length == 0)
-            {
-                Isaretle(0, 2, "Kurulum dosyası yok ve indirme adresi tanımsız");
-                sorunsuz = false;
-            }
             else
             {
-                try { indirilenMsi = MsiIndir(ayMsiUrl); Isaretle(0, 1, "FortiClient VPN indirildi"); }
-                catch (Exception ex) { Isaretle(0, 2, "İndirme hatası: " + KisaHata(ex)); sorunsuz = false; }
+                /*  Adres MIMARIYE gore seciliyor. ARM makineye x64 paketi
+                 *  indirmek bosuna 131 MB ve sonunda 1603 demek.        */
+                bool arm = ArmMi();
+                string adres = arm ? ayMsiUrlArm : ayMsiUrl;
+                Gunluk.Yaz("  secilen adres (" + (arm ? "ARM" : "x64") + "): "
+                         + (adres.Length > 0 ? adres : "(tanimsiz)"));
+
+                if (adres.Length == 0)
+                {
+                    Isaretle(0, 2, arm
+                        ? "ARM işlemci için kurulum dosyası tanımlı değil"
+                        : "Kurulum dosyası yok ve indirme adresi tanımsız");
+                    sorunsuz = false;
+                }
+                else
+                {
+                    try { indirilenMsi = MsiIndir(adres); Isaretle(0, 1, "FortiClient VPN indirildi"); }
+                    catch (Exception ex) { Isaretle(0, 2, "İndirme hatası: " + KisaHata(ex)); sorunsuz = false; }
+                }
             }
 
             // ── 2) Kurulum ──
@@ -1108,13 +1129,36 @@ namespace PusulaConnect
             }
         }
 
+        /*  Paketin yanindaki .msi — MIMARIYE gore seciliyor.
+         *  Adinda "arm" gecen dosya ARM makineler icin, gecmeyen x64
+         *  icin. Ayni klasorde ikisi birden bulunabilsin diye boyle:
+         *  tek bir paket her iki makineye de gonderilebiliyor.        */
         string YanindakiMsi()
         {
             try
             {
+                bool arm = ArmMi();
                 string[] d = Directory.GetFiles(Klasor(), "*.msi");
+                string yedek = "";
                 for (int i = 0; i < d.Length; i++)
-                    if (Path.GetFileName(d[i]).ToLowerInvariant().Contains("forti")) return d[i];
+                {
+                    string ad = Path.GetFileName(d[i]).ToLowerInvariant();
+                    if (ad.IndexOf("forti", StringComparison.Ordinal) < 0) continue;
+                    bool dosyaArm = ad.IndexOf("arm", StringComparison.Ordinal) >= 0;
+                    if (dosyaArm == arm) return d[i];   // mimari eslesti
+                    if (yedek.Length == 0) yedek = d[i];
+                }
+                /*  Eslesme yoksa dosya KULLANILMIYOR — iki yonde de.
+                 *  Adinda "arm" gecen paketi x64 makinede calistirmak da,
+                 *  x64 paketini ARM'de calistirmak da kurulamayacagi
+                 *  bilinen bir denemedir; 1603 alip kullaniciyi
+                 *  saskina cevirmektense hic denememek dogru.
+                 *
+                 *  (Test bunu yakaladi: koruma once yalniz ARM tarafinda
+                 *  vardi, x64 makinede ARM paketi secilebiliyordu.)     */
+                if (yedek.Length > 0)
+                    Gunluk.Yaz("  paketteki MSI bu islemciyle uyumsuz, kullanilmadi: "
+                             + Path.GetFileName(yedek));
             }
             catch { }
             return "";
