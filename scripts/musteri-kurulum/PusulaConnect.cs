@@ -66,8 +66,8 @@ using System.Reflection;
  *  ilk soru hangi yapiyi calistirdigi oluyor. Ozellikle bir duzeltmeden
  *  sonra eski exe elden ele dolasabiliyor.
  *  Degistirmeyi unutma: davranis degisen her yayinda artir.            */
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 [assembly: AssemblyTitle("Pusula Connect")]
 [assembly: AssemblyProduct("Pusula Connect")]
 [assembly: AssemblyCompany("Pusula")]
@@ -673,6 +673,15 @@ namespace PusulaConnect
             KurulumuYurut();
         }
 
+        /// Arayuzu gunceller, gunluge YAZMAZ — sik tekrarlanan ilerleme
+        /// metinleri gunlugu bogmasin diye.
+        void EkranaYaz(int i, string metin)
+        {
+            if (i < 0 || i >= islemMetin.Count) return;
+            islemMetin[i].Text = metin;
+            Nefes();
+        }
+
         void Isaretle(int i, int durum, string metin)   // 0=calisiyor 1=tamam 2=hata 3=atlandi
         {
             if (i < 0 || i >= islemNokta.Count) return;
@@ -864,6 +873,30 @@ namespace PusulaConnect
             return false;
         }
 
+        /*  msi gunlugunde taniyabildigimiz bir sebep var mi?
+         *  Sahada gorulen ikisi:
+         *   · difxapi.dll  — Windows surucu kurulum bileseni eksik;
+         *     FortiClient CA_InstallDrivers adiminda 1603 ile duruyor.
+         *     Makineye ozgu, kurulum programi cozemez.
+         *   · CopyMSIToTemp — MSI %TEMP% kokunde oldugunda FortiClient
+         *     dosyayi kendi uzerine kopyalamaya calisiyor. Bu bizim
+         *     hatamizdi, indirme alt klasore alinarak duzeltildi.       */
+        static string BilinenSebep(string msiLog)
+        {
+            try
+            {
+                if (!File.Exists(msiLog)) return null;
+                string t = File.ReadAllText(msiLog);
+                if (t.IndexOf("difxapi.dll", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "difxapi.dll yuklenemedi — bu makinede Windows'un surucu "
+                         + "kurulum bileseni eksik, FortiClient surucu adiminda duruyor.";
+                if (t.IndexOf("CopyMSIToTemp", StringComparison.OrdinalIgnoreCase) >= 0)
+                    return "Kurulum dosyasi gecici klasore kopyalanamadi.";
+            }
+            catch { }
+            return null;
+        }
+
         /*  msiexec gunlugu cok uzun (megabaytlar). Tamamini kopyalamak
          *  yerine ise yarayan satirlari suzuyoruz: hata satirlari ve
          *  kapanis ozeti. Musteri makinesinde dosya yerinde kaliyor,
@@ -889,6 +922,12 @@ namespace PusulaConnect
                     }
                 }
                 if (yazilan == 0) Gunluk.Yaz("    (gunlukte hata satiri bulunamadi)");
+
+                /*  Bilinen sebepler ayrica isaretleniyor: msi gunlugu uzun
+                 *  ve teknik, destek tarafinda "neden" sorusunu tek satirda
+                 *  cevaplayabilmek icin.                                  */
+                string sebep = BilinenSebep(msiLog);
+                if (sebep != null) Gunluk.Yaz("  TESHIS: " + sebep);
             }
             catch (Exception ex) { Gunluk.Hata("MsiGunlugunuAktar", ex); }
         }
@@ -952,7 +991,22 @@ namespace PusulaConnect
         bool indirmeBitti; Exception indirmeHatasi;
         string MsiIndir(string url)
         {
-            string hedef = Path.Combine(Path.GetTempPath(), "FortiClientVPN.msi");
+            /*  ALT KLASORE indiriliyor, %TEMP% kokune DEGIL.
+             *
+             *  Sahada yasandi (2026-08-28, HAKBILIR): FortiClient'in kendi
+             *  kurulumu CA_CopyMSIToTemp adiminda MSI'yi
+             *  %TEMP%\FortiClientVPN.msi'ye kopyalamaya calisiyor. Dosyayi
+             *  biz de tam oraya indirdigimiz icin kaynak ile hedef ayni yol
+             *  oluyor, kopyalama "error:2" ile patliyor ve kurulum 1603 ile
+             *  duruyor:
+             *
+             *    MSI_CopyMSIToTemp: failed (error:2)
+             *    ...\Temp\FortiClientVPN.msi ==> ...\Temp\\FortiClientVPN.msi
+             *
+             *  Alt klasorde hedef farkli yol oluyor ve adim gecebiliyor.  */
+            string indirmeKlasoru = Path.Combine(Path.GetTempPath(), "PusulaConnect");
+            Directory.CreateDirectory(indirmeKlasoru);
+            string hedef = Path.Combine(indirmeKlasoru, "FortiClientVPN.msi");
             if (File.Exists(hedef)) { try { File.Delete(hedef); } catch { } }
 
             indirmeBitti = false; indirmeHatasi = null;
@@ -960,11 +1014,20 @@ namespace PusulaConnect
                 SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
 
             WebClient wc = new WebClient();
+            /*  Ilerleme olayi saniyede onlarca kez tetikleniyor ve Isaretle()
+             *  her cagrida gunluge satir yaziyordu; tek indirmede gunluk
+             *  760 KB'a cikti, asil teshis satirlari o yiginin icinde
+             *  kayboldu. Ekran her olayda guncelleniyor, gunluge yalniz
+             *  %10'luk adimlarda yaziliyor.                              */
+            int sonKayit = -1;
             wc.DownloadProgressChanged += delegate(object s, DownloadProgressChangedEventArgs e)
             {
                 cubuk.Deger = e.ProgressPercentage * 0.25;
-                Isaretle(0, 0, "FortiClient VPN indiriliyor — %" + e.ProgressPercentage
-                    + "  (" + (e.BytesReceived / 1048576) + " / " + (e.TotalBytesToReceive / 1048576) + " MB)");
+                string metin = "FortiClient VPN indiriliyor — %" + e.ProgressPercentage
+                    + "  (" + (e.BytesReceived / 1048576) + " / " + (e.TotalBytesToReceive / 1048576) + " MB)";
+                int dilim = e.ProgressPercentage / 10;
+                if (dilim != sonKayit) { sonKayit = dilim; Isaretle(0, 0, metin); }
+                else EkranaYaz(0, metin);
             };
             wc.DownloadFileCompleted += delegate(object s, AsyncCompletedEventArgs e)
             {
