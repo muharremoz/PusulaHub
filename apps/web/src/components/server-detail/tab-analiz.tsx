@@ -26,6 +26,20 @@ const trTarih = (t: string) => {
 const GUN_KISA = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
 const gunKisa = (t: string) => GUN_KISA[new Date(t + "T12:00:00Z").getUTCDay()];
 
+/** Iki tablonun da baslik hucresi — bicim tek yerden gelsin diye. */
+function Th({ children, sag = false }: { children: React.ReactNode; sag?: boolean }) {
+  return (
+    <th
+      className={cn(
+        "text-muted-foreground px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase whitespace-nowrap",
+        sag ? "text-right" : "text-left",
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
 function OzetKart({
   ikon: Ikon, deger, etiket, alt, ton = "notr",
 }: {
@@ -210,21 +224,20 @@ export function TabAnaliz({ serverId }: { serverId: string }) {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b">
-                <th className="text-muted-foreground px-3 py-1.5 text-left text-[10px] font-medium tracking-wider uppercase">Firma</th>
-                <th className="text-muted-foreground px-3 py-1.5 text-right text-[10px] font-medium tracking-wider uppercase">Kullanıcı</th>
-                <th className="text-muted-foreground px-3 py-1.5 text-right text-[10px] font-medium tracking-wider uppercase">Günlük ort.</th>
-                <th className="text-muted-foreground px-3 py-1.5 text-right text-[10px] font-medium tracking-wider uppercase">Kişi başı</th>
-                <th className="text-muted-foreground px-3 py-1.5 text-right text-[10px] font-medium tracking-wider uppercase">Toplam</th>
-                <th className="text-muted-foreground px-3 py-1.5 text-right text-[10px] font-medium tracking-wider uppercase">Bağlı</th>
+                <Th>Firma No</Th>
+                <Th>Firma</Th>
+                <Th sag>Kullanıcı</Th>
+                <Th sag>Günlük ort.</Th>
+                <Th sag>Kişi başı</Th>
+                <Th sag>Toplam</Th>
+                <Th sag>Bağlı</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/40">
               {kullanan.map((f) => (
                 <tr key={f.firma} className="hover:bg-muted/20 transition-colors">
-                  <td className="px-3 py-1.5">
-                    <span className="text-primary font-mono text-[11px] font-semibold">{f.firma}</span>
-                    <span className="ml-2 text-[13px]">{f.ad ?? "—"}</span>
-                  </td>
+                  <td className="text-primary px-3 py-1.5 font-mono text-[12px] font-semibold whitespace-nowrap">{f.firma}</td>
+                  <td className="px-3 py-1.5">{f.ad ?? "—"}</td>
                   <td className="px-3 py-1.5 text-right tabular-nums">
                     {f.kullanan}
                     {f.kullanan !== f.kullanici && (
@@ -257,15 +270,28 @@ export function TabAnaliz({ serverId }: { serverId: string }) {
               {veri.atillar.length} hesap
             </span>
           </div>
-          <div className="max-h-72 overflow-y-auto">
+          <div className="max-h-72 overflow-auto">
             <table className="w-full text-[13px]">
+              {/* Iki liste de ayni kolon duzeninde: once firma no, sonra
+                  firma adi. Once firma no ile ad tek hucrede birlikteydi,
+                  iki tablo farkli okunuyordu. */}
+              <thead className="bg-card sticky top-0">
+                <tr className="border-b">
+                  <Th>Firma No</Th>
+                  <Th>Firma</Th>
+                  <Th>Kullanıcı</Th>
+                  <Th sag>Son bağlantı</Th>
+                  <Th sag>Durum</Th>
+                </tr>
+              </thead>
               <tbody className="divide-y divide-border/40">
                 {veri.atillar.map((a) => (
                   <tr key={a.kullanici} className="hover:bg-muted/20 transition-colors">
+                    <td className="text-primary px-3 py-1.5 font-mono text-[12px] font-semibold whitespace-nowrap">{a.firma}</td>
+                    <td className="px-3 py-1.5">{a.ad ?? "—"}</td>
                     <td className="px-3 py-1.5 font-mono text-[12px]">{a.kullanici}</td>
-                    <td className="text-muted-foreground px-3 py-1.5 text-[12px]">
-                      <span className="text-primary font-mono text-[11px]">{a.firma}</span>
-                      {a.ad && <span className="ml-2">{a.ad}</span>}
+                    <td className="text-muted-foreground px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
+                      {a.sonBaglanti ? trTarih(a.sonBaglanti) : "—"}
                     </td>
                     <td className="px-3 py-1.5 text-right whitespace-nowrap">
                       {a.gecenGun != null ? (
