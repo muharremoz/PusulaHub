@@ -18,7 +18,7 @@ import { Download, Clock, Users, CalendarDays, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { FirmaAnalizYanit } from "@/app/api/companies/[firkod]/analiz/route";
+import type { FirmaAnalizYanit, FirmaAnalizGun } from "@/app/api/companies/[firkod]/analiz/route";
 
 const DONEMLER = [30, 90, 180] as const;
 
@@ -35,11 +35,125 @@ const trAy = (ay: string) => {
 };
 
 const sy = (n: number) => n.toLocaleString("tr-TR");
+/** Ondalıklı sayı — Türkçe virgülle. Müşteriye giden metinde "9.1" değil "9,1". */
+const sd = (n: number, basamak = 1) =>
+  n.toLocaleString("tr-TR", { minimumFractionDigits: basamak, maximumFractionDigits: basamak });
+
+/* ══════════════════════════════════════════════════════════
+   Pusula analizi — veriden üretilen değerlendirme
+   ══════════════════════════════════════════════════════════
+   Rakamlar tek başına bir şey söylemiyor: 2.249 saat çok mu az mı,
+   müşteri bilmiyor. Bu bölüm sayıyı cümleye çeviriyor.
+
+   İki kural: (1) her cümle veriden türer, süsleme yok. (2) dili
+   ölçülüdür — "mükemmel kullanım" gibi pazarlama ifadeleri yerine
+   ne görüldüğü söylenir. Abartılı bir değerlendirme, müşteri kendi
+   gerçeğini bildiği için güveni azaltır.
+   ══════════════════════════════════════════════════════════ */
+export function pusulaYorumu(d: FirmaAnalizYanit): string[] {
+  const p: string[] = [];
+  const o = d.ozet;
+  const isGunleri = d.gunler.filter((g) => !g.haftaSonu);
+  const haftaSonu = d.gunler.filter((g) => g.haftaSonu);
+
+  /* 1) Genel yoğunluk */
+  const yogunluk =
+    o.kisiBasiGunlukSaat >= 8 ? "tam iş günü boyunca"
+    : o.kisiBasiGunlukSaat >= 6 ? "mesai saatleri boyunca"
+    : o.kisiBasiGunlukSaat >= 3.5 ? "günün önemli bir bölümünde"
+    : "gün içinde belirli aralıklarla";
+  p.push(
+    `Bu dönemde ${d.donem.gun} günlük süre içinde ${o.kullanici} kullanıcınız ` +
+    `toplam ${sy(o.toplamSaat)} saat çalıştı. Kullanıcılarınız bağlandıkları günlerde ` +
+    `ortalama ${sd(o.kisiBasiGunlukSaat)} saat sistemde kaldı; bu, sistemin ${yogunluk} ` +
+    `kullanıldığı anlamına geliyor.`,
+  );
+
+  /* 2) Düzenlilik — çalışılan gün / dönemdeki iş günü */
+  if (isGunleri.length > 0) {
+    const beklenenIsGunu = Math.round((d.donem.gun / 7) * 5);
+    const oran = Math.min(100, Math.round((isGunleri.length / Math.max(1, beklenenIsGunu)) * 100));
+    const nitelik =
+      oran >= 90 ? "neredeyse her iş günü"
+      : oran >= 70 ? "iş günlerinin büyük bölümünde"
+      : oran >= 40 ? "iş günlerinin yaklaşık yarısında"
+      : "belirli günlerde";
+    p.push(
+      `Sistem ${nitelik} kullanıldı: dönemdeki ${beklenenIsGunu} iş gününün ` +
+      `${isGunleri.length} tanesinde kayıt oluştu. Günlük ortalama ${sd(o.gunlukOrtKisi)} ` +
+      `kullanıcınız bağlandı.`,
+    );
+  }
+
+  /* 3) Eğilim — dönemin ilk yarısı ile son yarısı */
+  if (isGunleri.length >= 8) {
+    const orta = Math.floor(isGunleri.length / 2);
+    const ilk = isGunleri.slice(0, orta);
+    const son = isGunleri.slice(orta);
+    const ortSaat = (a: FirmaAnalizGun[]) => a.reduce((x, g) => x + g.saat, 0) / a.length;
+    const a1 = ortSaat(ilk), a2 = ortSaat(son);
+    const fark = a1 > 0 ? ((a2 - a1) / a1) * 100 : 0;
+    if (Math.abs(fark) >= 15) {
+      p.push(
+        fark > 0
+          ? `Kullanım dönem boyunca arttı: tüm kullanıcıların günlük toplamı ilk yarıda ` +
+            `ortalama ${sd(a1)} saat iken son yarıda ${sd(a2)} saate çıktı ` +
+            `(%${Math.round(fark)} artış).`
+          : `Kullanım dönem boyunca azaldı: tüm kullanıcıların günlük toplamı ilk yarıda ` +
+            `ortalama ${sd(a1)} saat iken son yarıda ${sd(a2)} saate indi ` +
+            `(%${Math.round(Math.abs(fark))} azalış).`,
+      );
+    } else {
+      p.push(
+        `Kullanım dönem boyunca dengeli seyretti; tüm kullanıcıların günlük toplamı ` +
+        `${sd(a2)} saat civarında kaldı, belirgin bir artış ya da düşüş görülmedi.`,
+      );
+    }
+  }
+
+  /* 4) Kullanıcı dağılımı — yük tek kişide mi toplanıyor */
+  if (d.kullanicilar.length >= 2) {
+    const enUst = d.kullanicilar[0];
+    const pay = o.toplamSaat > 0 ? Math.round((enUst.toplamSaat / o.toplamSaat) * 100) : 0;
+    const ad = enUst.adSoyad ? `${enUst.adSoyad} (${enUst.kullanici})` : enUst.kullanici;
+    if (pay >= 55) {
+      p.push(
+        `Çalışma süresinin %${pay}'i tek bir kullanıcıda toplanıyor: ${ad}. ` +
+        `Diğer ${d.kullanicilar.length - 1} kullanıcı daha sınırlı sürelerle bağlandı.`,
+      );
+    } else {
+      p.push(
+        `Çalışma süresi kullanıcılar arasında dengeli dağılmış durumda; ` +
+        `en yoğun kullanıcı ${ad} toplamın %${pay}'ini oluşturuyor.`,
+      );
+    }
+  }
+
+  /* 5) Hafta sonu — yalnız anlamlı bir pay varsa söylenir */
+  if (haftaSonu.length > 0) {
+    const hsSaat = haftaSonu.reduce((a, g) => a + g.saat, 0);
+    const pay = o.toplamSaat > 0 ? Math.round((hsSaat / o.toplamSaat) * 100) : 0;
+    if (pay >= 8)
+      p.push(
+        `Çalışmanın %${pay}'i hafta sonlarında gerçekleşti (${haftaSonu.length} gün, ` +
+        `${Math.round(hsSaat)} saat) — sistem hafta içiyle sınırlı kalmıyor.`,
+      );
+  }
+
+  /* 6) Zirve gün */
+  if (o.enYogunGun)
+    p.push(
+      `En yoğun gün ${trTarih(o.enYogunGun.tarih)} oldu: ${o.enYogunGun.kisi} kullanıcı, ` +
+      `${sd(o.enYogunGun.saat)} saat.`,
+    );
+
+  return p;
+}
 
 /* ══════════════════════════════════════════════════════════
    Müşteriye giden rapor — kendi kendine yeten tek HTML
    ══════════════════════════════════════════════════════════ */
-export function raporHtml(d: FirmaAnalizYanit): string {
+export function raporHtml(d: FirmaAnalizYanit, ekNot?: string): string {
   const esc = (t: string) =>
     t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const baslik = d.firmaAdi ? `${esc(d.firmaAdi)} (${d.firkod})` : `Firma ${d.firkod}`;
@@ -60,6 +174,12 @@ export function raporHtml(d: FirmaAnalizYanit): string {
      <td class="n">${k.sonGun ? trTarih(k.sonGun) : "—"}</td>
      <td class="n">${k.gun}</td><td class="n">${k.ortSaat}</td>
      <td class="n b">${sy(k.toplamSaat)}</td></tr>`).join("");
+
+  const yorumP = pusulaYorumu(d).map((t) => `<p>${esc(t)}</p>`).join("");
+  const notBlok = ekNot && ekNot.trim()
+    ? `<div class="notk"><div class="notb">Pusula ekibinden not</div>` +
+      esc(ekNot.trim()).split(/\n+/).map((t) => `<p>${t}</p>`).join("") + `</div>`
+    : "";
 
   const sunSat = d.sunucular.map((s) =>
     `<tr><td>${esc(s.ad)}</td><td class="n">${s.kisi}</td><td class="n b">${sy(s.saat)}</td></tr>`).join("");
@@ -100,6 +220,15 @@ td.m{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
 .cub i.hs{background:#C6D3CD}
 .eks{display:flex;justify-content:space-between;color:#98A39E;font-size:10.5px;margin-top:6px;
  font-variant-numeric:tabular-nums}
+.analiz{background:#fff;border:1px solid #E1E6E3;border-left:3px solid #047857;
+ border-radius:8px;padding:18px 20px;margin:0 0 8px}
+.analiz h2{margin:0 0 10px;font-size:16px;color:#047857}
+.analiz p{margin:0 0 9px;font-size:14px;line-height:1.65;max-width:76ch}
+.analiz p:last-child{margin-bottom:0}
+.notk{background:#F0F7F4;border:1px solid #CFE3DA;border-radius:8px;padding:14px 18px;margin:0 0 8px}
+.notb{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#047857;font-weight:700;margin-bottom:6px}
+.notk p{margin:0 0 7px;font-size:13.5px;line-height:1.6;max-width:76ch}
+.notk p:last-child{margin-bottom:0}
 .dip{margin-top:36px;padding-top:16px;border-top:1px solid #E1E6E3;color:#5F6B66;font-size:12px;max-width:74ch}
 .dip p{margin:0 0 7px}
 @media print{
@@ -123,6 +252,12 @@ td.m{font-family:"Cascadia Code",Consolas,monospace;font-size:12.5px}
   <div class="kart"><div class="s">${d.ozet.kisiBasiGunlukSaat}</div><div class="e">Kişi başı saat / gün</div></div>
   <div class="kart"><div class="s">${d.ozet.calisilanGun}</div><div class="e">Çalışılan gün</div></div>
 </div>
+
+<section class="analiz">
+  <h2>Pusula Analizi</h2>
+  ${yorumP}
+</section>
+${notBlok}
 
 <h2>Günlük çalışma süresi</h2>
 <p class="not">Her sütun bir günü gösterir; yükseklik o gün kayıtlara geçen toplam çalışma saatidir. Açık renkli sütunlar hafta sonlarıdır.</p>
@@ -161,6 +296,7 @@ export function FirmaAnaliz({ firkod }: { firkod: string }) {
   const [gun, setGun] = useState<number>(90);
   const [veri, setVeri] = useState<FirmaAnalizYanit | null>(null);
   const [yukleniyor, setYukleniyor] = useState(true);
+  const [ekNot, setEkNot] = useState("");
 
   useEffect(() => {
     let iptal = false;
@@ -181,7 +317,7 @@ export function FirmaAnaliz({ firkod }: { firkod: string }) {
 
   const raporIndir = useCallback(() => {
     if (!veri) return;
-    const blob = new Blob([raporHtml(veri)], { type: "text/html;charset=utf-8" });
+    const blob = new Blob([raporHtml(veri, ekNot)], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -191,7 +327,7 @@ export function FirmaAnaliz({ firkod }: { firkod: string }) {
     toast.success("Rapor indirildi", {
       description: "Dosyayı müşteriye gönderebilir, tarayıcıda açıp PDF'e basabilirsiniz.",
     });
-  }, [veri]);
+  }, [veri, ekNot]);
 
   if (yukleniyor)
     return (
@@ -239,6 +375,32 @@ export function FirmaAnaliz({ firkod }: { firkod: string }) {
         <Kart ikon={TrendingUp} deger={o.gunlukOrtKisi} etiket="Günlük ort. kişi" />
         <Kart ikon={Clock} deger={`${o.kisiBasiGunlukSaat} sa`} etiket="Kişi başı / gün" />
         <Kart ikon={CalendarDays} deger={o.calisilanGun} etiket="Çalışılan gün" />
+      </div>
+
+      {/* Rapora giren değerlendirme — burada da görünüyor ki gönderen
+          kişi müşterinin ne okuyacağını önceden bilsin. */}
+      <div className="bg-card rounded-[5px] border border-l-[3px] border-l-primary p-3"
+        style={{ boxShadow: "var(--card-shadow)" }}>
+        <div className="text-primary mb-1.5 text-[10px] font-semibold tracking-wider uppercase">
+          Pusula Analizi · rapora bu metin girer
+        </div>
+        <div className="space-y-1.5">
+          {pusulaYorumu(veri).map((t, i) => (
+            <p key={i} className="text-[13px] leading-relaxed">{t}</p>
+          ))}
+        </div>
+        <div className="mt-3 border-t pt-2.5">
+          <label className="text-muted-foreground mb-1 block text-[10px] font-medium tracking-wider uppercase">
+            Ekibinizden not (isteğe bağlı — rapora eklenir)
+          </label>
+          <textarea
+            value={ekNot}
+            onChange={(e) => setEkNot(e.target.value)}
+            rows={2}
+            placeholder="Müşteriye iletmek istediğiniz not…"
+            className="border-border focus:border-primary/50 focus:ring-primary/20 w-full resize-none rounded-[5px] border bg-transparent px-2.5 py-1.5 text-[13px] outline-none focus:ring-2"
+          />
+        </div>
       </div>
 
       {/* Günlük süre — items-stretch şart, items-end olsaydı yüzde
