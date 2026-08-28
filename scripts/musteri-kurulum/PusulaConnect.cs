@@ -702,9 +702,20 @@ namespace PusulaConnect
             string yerel = YanindakiMsi();
             if (yerel.Length > 0)
             {
-                indirilenMsi = yerel;
-                Isaretle(0, 1, "Kurulum dosyası pakette bulundu");
-                cubuk.Deger = 25;
+                // Yanindaki dosya da indirilen kadar suphelidir.
+                try
+                {
+                    MsiDogrula(yerel, "paketteki dosya");
+                    indirilenMsi = yerel;
+                    Isaretle(0, 1, "Kurulum dosyası pakette bulundu");
+                    cubuk.Deger = 25;
+                }
+                catch (Exception ex)
+                {
+                    Gunluk.Hata("YanindakiMsi", ex);
+                    Isaretle(0, 2, "Paketteki dosya bozuk: " + KisaHata(ex));
+                    sorunsuz = false;
+                }
             }
             else if (ayMsiUrl.Length == 0)
             {
@@ -882,6 +893,47 @@ namespace PusulaConnect
             catch (Exception ex) { Gunluk.Hata("MsiGunlugunuAktar", ex); }
         }
 
+        /*  MSI GERCEKTEN MSI MI?
+         *
+         *  Sahada bunun yoklugu pahaliya mal oldu: sunucu HTML hata
+         *  sayfasi dondugunde WebClient bunu basariyla "indirdi" sayiyor,
+         *  dosya diske yaziliyor ve program kuruluma geciyordu. Ekranda
+         *  yesil tik goruluyor, gercekte elde MSI degil birkac KB'lik
+         *  HTML vardi.
+         *
+         *  Ayni kontrol paketin YANINDAKI dosyaya da uygulaniyor: orasi
+         *  indirmeden gecildigi icin uzun sure denetimsizdi, oysa yarim
+         *  kopyalanmis bir .msi ayni sessiz hatayi verir.
+         *
+         *  Iki olcut: makul boyut ve dosya imzasi. MSI bir OLE bilesik
+         *  dosyasi, ilk 8 bayti daima D0 CF 11 E0 A1 B1 1A E1.          */
+        static void MsiDogrula(string yol, string neyin)
+        {
+            FileInfo bilgi = new FileInfo(yol);
+            Gunluk.Yaz("  dogrulama (" + neyin + "): " + yol);
+            Gunluk.Yaz("    boyut: " + (bilgi.Exists ? bilgi.Length.ToString("N0") + " bayt" : "DOSYA YOK"));
+
+            if (!bilgi.Exists || bilgi.Length < 1024 * 1024)
+                throw new Exception(neyin + " geçersiz ("
+                    + (bilgi.Exists ? bilgi.Length + " bayt" : "dosya yok") + ")");
+
+            byte[] imza = new byte[8];
+            using (FileStream fs = File.OpenRead(yol))
+                if (fs.Read(imza, 0, 8) != 8) throw new Exception(neyin + " okunamadı");
+
+            byte[] beklenen = { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+            for (int i = 0; i < 8; i++)
+            {
+                if (imza[i] != beklenen[i])
+                {
+                    Gunluk.Yaz("    imza uyusmadi: " + BitConverter.ToString(imza));
+                    Gunluk.Yaz("    (dosya MSI degil; sunucu hata sayfasi ya da yarim kopya olabilir)");
+                    throw new Exception(neyin + " kurulum paketi değil");
+                }
+            }
+            Gunluk.Yaz("    imza dogru (MSI)");
+        }
+
         string YanindakiMsi()
         {
             try
@@ -927,38 +979,9 @@ namespace PusulaConnect
             wc.Dispose();
             if (indirmeHatasi != null) throw indirmeHatasi;
 
-            /*  INDIRME DOGRULAMASI — sahada bunun yoklugu paha1liya mal
-             *  oldu: sunucu hata sayfasi (HTML) dondugunde WebClient bunu
-             *  basariyla "indirdi" sayiyor, dosya diske yaziliyor ve
-             *  program kuruluma geciyordu. Ekranda yesil tik goruluyor,
-             *  gercekte elde MSI degil birkac KB'lik HTML vardi.
-             *
-             *  Iki kontrol: makul boyut ve dosya imzasi. MSI bir OLE
-             *  bilesik dosyasi, ilk 8 bayti daima D0 CF 11 E0 A1 B1 1A E1.  */
-            FileInfo bilgi = new FileInfo(hedef);
             double sn = (DateTime.Now - t0).TotalSeconds;
-            Gunluk.Yaz("  indirme bitti: " + (bilgi.Exists ? bilgi.Length.ToString("N0") : "DOSYA YOK")
-                     + " bayt, " + sn.ToString("F1") + " sn");
-
-            if (!bilgi.Exists || bilgi.Length < 1024 * 1024)
-                throw new Exception("İndirilen dosya geçersiz ("
-                    + (bilgi.Exists ? bilgi.Length + " bayt" : "dosya oluşmadı") + ")");
-
-            byte[] imza = new byte[8];
-            using (FileStream fs = File.OpenRead(hedef))
-                if (fs.Read(imza, 0, 8) != 8) throw new Exception("İndirilen dosya okunamadı");
-
-            byte[] beklenen = { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
-            for (int i = 0; i < 8; i++)
-            {
-                if (imza[i] != beklenen[i])
-                {
-                    Gunluk.Yaz("  imza uyusmadi: " + BitConverter.ToString(imza));
-                    Gunluk.Yaz("  (sunucu MSI yerine baska bir sey dondurmus olabilir)");
-                    throw new Exception("İndirilen dosya kurulum paketi değil");
-                }
-            }
-            Gunluk.Yaz("  dosya imzasi dogru (MSI)");
+            Gunluk.Yaz("  indirme bitti: " + sn.ToString("F1") + " sn");
+            MsiDogrula(hedef, "indirilen dosya");
             return hedef;
         }
 
