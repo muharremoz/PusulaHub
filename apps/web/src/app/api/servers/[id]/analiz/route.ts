@@ -104,15 +104,27 @@ export async function GET(
     const bugun = new Date().toISOString().slice(0, 10)
     const basla = new Date(Date.now() - 120 * 86400_000).toISOString().slice(0, 10)
 
-    const [usageRes, adRes, compRes] = await Promise.all([
-      sb.schema("hub").from("user_daily_usage")
+    /*  SAYFALAMA ZORUNLU: Supabase tek istekte en fazla 1000 satir
+     *  donuyor. Terminal 1'in 120 gunluk kaydi 2900 satiri asiyor;
+     *  sayfalama olmadan toplamlar sessizce kesiliyordu.              */
+    type UsageRow = { date: string; username: string; sample_count: number }
+    const usage: UsageRow[] = []
+    for (let bas = 0; ; bas += 1000) {
+      const { data, error } = await sb.schema("hub").from("user_daily_usage")
         .select("date, username, sample_count")
-        .eq("server", sunucu).gte("date", basla).order("date", { ascending: false }),
+        .eq("server", sunucu).gte("date", basla)
+        .order("date", { ascending: false })
+        .range(bas, bas + 999)
+      if (error) throw error
+      const parca = (data ?? []) as UsageRow[]
+      usage.push(...parca)
+      if (parca.length < 1000) break
+    }
+
+    const [adRes, compRes] = await Promise.all([
       sb.schema("hub").from("ad_users").select("username, display_name, ou, enabled"),
       sb.schema("hub").from("companies").select("company_id, name"),
     ])
-
-    const usage = (usageRes.data ?? []) as { date: string; username: string; sample_count: number }[]
     const adUsers = (adRes.data ?? []) as
       { username: string; display_name: string | null; ou: string | null; enabled: boolean }[]
     const firmaAdi = new Map(
@@ -173,8 +185,12 @@ export async function GET(
        o yüzden AD'deki herkes alınıp kullanımıyla eşleştiriliyor. */
     const atilEsik = new Date(Date.now() - ATIL_GUN * 86400_000).toISOString().slice(0, 10)
 
+    /*  Firma adi icin yedek: hub.companies 74 kullanicinin ancak
+     *  12'sine karsilik geliyor. AD'deki display_name pratikte firma
+     *  adini tasiyor ("TIKIZ GOLD" gibi), o yuzden ikinci kaynak o.   */
     const firmaHar = new Map<string, {
       kullanici: number; kullanan: number; ornek: number; gun: number; bagli: number
+      yedekAd: string | null
     }>()
     const atillar: AnalizAtil[] = []
     let aktifSayi = 0
@@ -184,9 +200,10 @@ export async function GET(
       const k = sade(u.username)
       const f = u.ou ?? k.match(/^(\d+)\./)?.[1] ?? "—"
       if (!firmaHar.has(f))
-        firmaHar.set(f, { kullanici: 0, kullanan: 0, ornek: 0, gun: 0, bagli: 0 })
+        firmaHar.set(f, { kullanici: 0, kullanan: 0, ornek: 0, gun: 0, bagli: 0, yedekAd: null })
       const fh = firmaHar.get(f)!
       fh.kullanici++
+      if (!fh.yedekAd && u.display_name) fh.yedekAd = u.display_name
       if (oturum.has(k)) fh.bagli++
 
       const o = kul.get(k)
@@ -212,7 +229,7 @@ export async function GET(
     const firmalar: AnalizFirma[] = [...firmaHar.entries()]
       .map(([firma, v]) => ({
         firma,
-        ad: firmaAdi.get(firma) ?? null,
+        ad: firmaAdi.get(firma) ?? v.yedekAd ?? null,
         kullanici: v.kullanici,
         kullanan: v.kullanan,
         gunlukOrt: +(v.gun / gunSayisi).toFixed(1),

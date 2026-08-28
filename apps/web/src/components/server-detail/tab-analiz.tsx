@@ -71,9 +71,14 @@ function GunlukSeri({ gunler }: { gunler: AnalizYanit["gunler"] }) {
         </span>
       </div>
 
-      <div className="flex h-28 items-end gap-[3px]">
+      {/*  items-end KULLANILMIYOR: hizalama sutunu icerige gore
+           boyutlandiriyordu, icerideki cubuk ise yuzde yukseklik
+           istiyor — belirsiz yukseklige gore yuzde 0 cikiyor ve
+           grafik bombos goruniyordu. Sutunlar h-28'i doldurmali,
+           cubuk zaten justify-end ile alta yasliyor.                */}
+      <div className="flex h-28 items-stretch gap-[3px]">
         {gunler.map((g) => (
-          <div key={g.tarih} className="group relative flex flex-1 flex-col justify-end">
+          <div key={g.tarih} className="group relative flex min-w-0 flex-1 flex-col justify-end">
             <div
               className={cn(
                 "w-full rounded-t-[2px] transition-colors",
