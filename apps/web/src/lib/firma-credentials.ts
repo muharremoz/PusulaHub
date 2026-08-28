@@ -25,6 +25,53 @@ export async function saveCompanyUserPassword(companyId: string, username: strin
 }
 
 /**
+ * SQL Server giriş şifresini kaydeder — AD/RDP şifresinden AYRI kolonda.
+ *
+ * NEDEN AYRI: ikisi kurulum anında aynı oluyor ama farklı hesaplar. AD
+ * şifresi değişince SQL girişininki değişmiyor; tek kolonda tutulunca
+ * ekran SQL şifresi diye yanlış değeri gösteriyordu (2026-08-28, firma
+ * 2311'de yaşandı). Satır yoksa oluşturulmaz — SQL girişi olmayan
+ * kullanıcı için anlamsız.
+ */
+export async function saveCompanyUserSqlPassword(
+  companyId: string, username: string, password: string,
+): Promise<void> {
+  if (!companyId || !username || !password) return
+  const sb = await getSupabaseServer()
+  const enc = encrypt(password)
+  const { data: existing } = await sb.schema("hub").from("company_user_credentials")
+    .select("id").eq("company_id", companyId).eq("username", username).maybeSingle()
+  if (existing) {
+    await sb.schema("hub").from("company_user_credentials")
+      .update({ sql_password: enc, updated_at: new Date().toISOString() })
+      .eq("id", (existing as { id: string }).id)
+  } else {
+    await sb.schema("hub").from("company_user_credentials")
+      .insert({ company_id: companyId, username, password: enc, sql_password: enc })
+  }
+}
+
+/**
+ * Firmanın saklı SQL giriş şifreleri (username → düz şifre).
+ * Yalnız `sql_password` DOLU olan satırlar döner; boş olanlar "kayıtlı
+ * değil" demektir ve arayüzde öyle gösterilir.
+ */
+export async function getCompanySqlCredentials(
+  companyId: string, client?: SupabaseLike,
+): Promise<Record<string, string>> {
+  if (!companyId) return {}
+  const sb = client ?? (await getSupabaseServer())
+  const { data } = await sb.schema("hub").from("company_user_credentials")
+    .select("username, sql_password").eq("company_id", companyId)
+  const out: Record<string, string> = {}
+  for (const r of (data ?? []) as { username: string; sql_password: string | null }[]) {
+    if (!r.sql_password) continue
+    try { const pw = decrypt(r.sql_password); if (pw) out[r.username] = pw } catch { /* key değişmiş */ }
+  }
+  return out
+}
+
+/**
  * Firmanın tüm saklı şifrelerini decrypt edip Map döner (username → düz şifre).
  *
  * `client` verilmezse oturum tabanlı istemci kullanılır (Hub UI akışı).

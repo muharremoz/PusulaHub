@@ -1709,6 +1709,10 @@ tr:nth-child(even) td{background:#fafafa}
     const rdpHost = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
     const rdpTarget = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
     const credentials = accessInfo.credentials ?? {}
+    /*  SQL giris sifresi AYRI kaynaktan: AD sifresi degisince bu
+        degismiyor, tek kaynaktan gosterilirse ekran yanlis sifre
+        veriyordu (2026-08-28, firma 2311).                        */
+    const sqlCredentials = accessInfo.sqlCredentials ?? {}
     const webServices = collectWebServices()
 
     const lines: string[] = [
@@ -1762,11 +1766,11 @@ tr:nth-child(even) td{background:#fafafa}
       const firstUser = tabUsers[0]
       const sqlIp = tabSQL[0]?.ServerIP || ""
       const sqlLogin = sqlLoginAdi(firkod, firstUser.username)
-      const sqlPw = credentials[firstUser.username] ?? ""
+      const sqlPw = sqlCredentials[firstUser.username] ?? ""
       lines.push("SQL Veritabanı Bilgileri:")
       if (sqlIp) lines.push(`Sunucu: ${sqlIp}`)
       lines.push(`Kullanıcı Adı: ${sqlLogin}`)
-      if (sqlPw) lines.push(`Şifre: ${sqlPw}`)
+      lines.push(sqlPw ? `Şifre: ${sqlPw}` : "Şifre: (kayıtlı değil)")
       lines.push("Veritabanları:")
       tabSQL.forEach((d) => lines.push(`  • ${d.Name}`))
       lines.push("")
@@ -2477,6 +2481,10 @@ tr:nth-child(even) td{background:#fafafa}
                   const rdpTarget   = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
                   const sqlIp       = tabSQL[0]?.ServerIP || ""
                   const credentials = accessInfo.credentials ?? {}
+    /*  SQL giris sifresi AYRI kaynaktan: AD sifresi degisince bu
+        degismiyor, tek kaynaktan gosterilirse ekran yanlis sifre
+        veriyordu (2026-08-28, firma 2311).                        */
+    const sqlCredentials = accessInfo.sqlCredentials ?? {}
                   const webServices = collectWebServices()
                   return (
                     <div className="flex gap-2 min-h-[320px]">
@@ -2601,10 +2609,18 @@ tr:nth-child(even) td{background:#fafafa}
                             <div className="divide-y divide-border/40">
                               {tabUsers[0] && (() => {
                                 const sqlLogin = sqlLoginAdi(firkod, tabUsers[0].username)
-                                const sqlPw    = credentials[tabUsers[0].username] ?? ""
+                                const sqlPw    = sqlCredentials[tabUsers[0].username] ?? ""
                                 return (
                                   <>
                                     <AccessDetailRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
+                                    {!sqlPw && (
+                                      <div className="flex items-center gap-3 px-3 py-2">
+                                        <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">Şifre</span>
+                                        <span className="text-[10px] text-muted-foreground italic">
+                                          kaydedilmemiş — AD şifresiyle aynı olduğu varsayılamaz
+                                        </span>
+                                      </div>
+                                    )}
                                     {sqlPw && (
                                       <div className="group flex items-center gap-3 px-3 py-2">
                                         <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">Şifre</span>

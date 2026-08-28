@@ -8,7 +8,7 @@ import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/l
 import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginAdi } from "@/lib/firma-adlandirma"
-import { saveCompanyUserPassword } from "@/lib/firma-credentials"
+import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import {
@@ -1037,6 +1037,16 @@ export async function POST(req: NextRequest) {
                       `SQL login oluşturuluyor: ${loginName}`,
                       async () => {
                         const { created } = await ensureSqlLogin(masterPool, loginName, firstUser.password)
+                        /*  SQL sifresi AYRI kolona da yaziliyor. Su an AD
+                         *  sifresiyle ayni, ama ikisi ayri hesap: AD tarafi
+                         *  degistiginde bu deger oldugu gibi kalmali ki
+                         *  ekran SQL icin yanlis sifre gostermesin.        */
+                        // Kimlik satirlari TAM AD adiyla saklaniyor
+                        // ("2311.iremtoptan1"), kisa adla degil.
+                        await saveCompanyUserSqlPassword(
+                          payload.firmaId,
+                          `${payload.firmaId}.${firstUser.username}`,
+                          firstUser.password)
                         return created
                           ? `CREATE LOGIN [${loginName}]`
                           : `ALTER LOGIN [${loginName}] (mevcut — şifre güncellendi)`

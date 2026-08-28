@@ -1,7 +1,7 @@
 import "server-only"
 
 import { getSupabaseServer } from "@/lib/supabase/server"
-import { getCompanyCredentials, type SupabaseLike } from "@/lib/firma-credentials"
+import { getCompanyCredentials, getCompanySqlCredentials, type SupabaseLike } from "@/lib/firma-credentials"
 import { decrypt } from "@/lib/crypto"
 
 /**
@@ -57,6 +57,14 @@ export interface FirmaErisimBilgisi {
 
   /** Tam kullanıcı adı ("2507.vefa1") → düz şifre. */
   credentials: Record<string, string>
+
+  /**
+   * SQL Server giriş şifreleri — AD/RDP şifresinden AYRI saklanır.
+   * Yalnız kaydı olan kullanıcılar bulunur; eksik olması "kayıtlı değil"
+   * demektir, "AD şifresiyle aynı" demek DEĞİLDİR. İkisi kurulumda aynı
+   * başlıyor ama AD şifresi değişince bu değişmiyor.
+   */
+  sqlCredentials: Record<string, string>
 }
 
 interface ServerRow {
@@ -140,12 +148,13 @@ export async function getFirmaErisim(
     return { name: s.name, ip: s.ip, port: 1433, username: s.sql_username ?? null, password: sifre }
   }
 
-  const [adRow, winRow, iisRow, sql, credentials] = await Promise.all([
+  const [adRow, winRow, iisRow, sql, credentials, sqlCredentials] = await Promise.all([
     fetchServer(comp.ad_server_id),
     fetchServer(comp.windows_server_id),
     fetchIisServer(),
     fetchSqlServer(),
     getCompanyCredentials(firkod, sb),
+    getCompanySqlCredentials(firkod, sb),
   ])
 
   return {
@@ -157,5 +166,6 @@ export async function getFirmaErisim(
     iis: iisRow ? { name: iisRow.name, ip: iisRow.ip, dns: iisRow.dns ?? null } : null,
     sql,
     credentials,
+    sqlCredentials,
   }
 }
