@@ -135,6 +135,7 @@ import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
 import { Checkbox } from "@/components/shared/form"
 import { FirmaAnaliz } from "@/components/companies/firma-analiz";
+import { sqlLoginAdi } from "@/lib/firma-adlandirma";
 
 function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
@@ -1760,7 +1761,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (tabSQL.length > 0 && tabUsers[0]) {
       const firstUser = tabUsers[0]
       const sqlIp = tabSQL[0]?.ServerIP || ""
-      const sqlLogin = `${firkod}_${shortUsername(firkod, firstUser.username)}`
+      const sqlLogin = sqlLoginAdi(firkod, firstUser.username)
       const sqlPw = credentials[firstUser.username] ?? ""
       lines.push("SQL Veritabanı Bilgileri:")
       if (sqlIp) lines.push(`Sunucu: ${sqlIp}`)
@@ -2599,7 +2600,7 @@ tr:nth-child(even) td{background:#fafafa}
                             <AccessDetailHeader title={`Veritabanları (${tabSQL.length})`} />
                             <div className="divide-y divide-border/40">
                               {tabUsers[0] && (() => {
-                                const sqlLogin = `${firkod}_${shortUsername(firkod, tabUsers[0].username)}`
+                                const sqlLogin = sqlLoginAdi(firkod, tabUsers[0].username)
                                 const sqlPw    = credentials[tabUsers[0].username] ?? ""
                                 return (
                                   <>

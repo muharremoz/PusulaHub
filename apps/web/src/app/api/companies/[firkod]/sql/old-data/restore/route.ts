@@ -32,6 +32,7 @@ import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
 import { restoreBackupOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
+import { sqlLoginArama } from "@/lib/firma-adlandirma"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { buildPullBakFromDepo, buildDeleteFile } from "@/lib/sql-backup-powershell"
 
@@ -116,16 +117,21 @@ export async function POST(
         await withSqlConnection(
           { server: sqlTarget.ip, user: sqlTarget.username, password: sqlTarget.password, database: "master", requestTimeout: 600000 },
           async (masterPool) => {
+            /*  Hem NOKTALI (yeni) hem ALT CIZGILI (eski) giris adini
+             *  yakalar: ad kurali degisti ama once kurulan firmalarin
+             *  girisleri alt cizgili kaldi. Onceki sorgu alt cizgiyi
+             *  ESCAPE ile birebir ariyordu, yani yeni firmalarin
+             *  girisini HIC bulamazdi.                                 */
             const lg = await masterPool.request()
-              .input("p", firkod + "\\_%")
-              .query<{ name: string }>(`SELECT TOP 1 name FROM sys.sql_logins WHERE name LIKE @p ESCAPE '\\' ORDER BY LEN(name)`)
+              .input("p", sqlLoginArama(firkod))
+              .query<{ name: string }>(`SELECT TOP 1 name FROM sys.sql_logins WHERE name LIKE @p ORDER BY LEN(name)`)
             firmaLogin = lg.recordset[0]?.name ?? null
 
             if (!firmaLogin) {
               // Login yoksa restore'u İPTAL ETME — DB'ler yine yüklensin, sadece
               // owner/sirket adımları atlanır (uyarı). Login sonradan oluşturulup
               // owner manuel atanabilir. (Örn. sihirbazı SQL adımında yarıda kalan firma.)
-              step("login_check", `Firma SQL login'i (${firkod}_*) bulunamadı — DB owner/sirket adımları atlanacak`, "error", {
+              step("login_check", `Firma SQL login'i (${firkod}.* / ${firkod}_*) bulunamadı — DB owner/sirket adımları atlanacak`, "error", {
                 error: "DB'ler restore edilecek ama owner firma login'ine devredilmeyecek. Login'i sihirbaz kullanıcı akışından veya manuel oluşturup owner'ı atayın.",
               })
             } else {

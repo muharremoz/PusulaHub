@@ -7,6 +7,7 @@ import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
+import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
@@ -1026,7 +1027,10 @@ export async function POST(req: NextRequest) {
                   // Şart: en az 1 başarılı restore + payload.users[0] mevcut
                   const firstUser = payload.users[0]
                   if (restoredDbNames.length > 0 && firstUser && firstUser.username && firstUser.password) {
-                    const loginName = `${payload.firmaId}_${firstUser.username}`
+                    // Ad kurali tek kaynaktan: lib/firma-adlandirma.
+                    // NOKTA ile uretiliyor — AD/RDP kullanici adiyla ayni
+                    // olsun diye (eskiden alt cizgiydi ve karisiyordu).
+                    const loginName = sqlLoginAdi(payload.firmaId, firstUser.username)
 
                     const loginOk = await runSqlStep(
                       `sql_login_${loginName}`,
