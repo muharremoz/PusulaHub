@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 import type { Server } from "@/types";
 import type { AgentReport } from "@/lib/agent-types";
+import type { AnalizYanit } from "@/app/api/servers/[id]/analiz/route";
 
 type RamPayload = AgentReport["metrics"]["ram"] | null;
 
@@ -15,6 +16,10 @@ interface Props {
   ram?: RamPayload;
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Özet kartından Analiz sekmesine geçiş. */
+  onAnalizAc?: () => void;
+  /** Kullanım geçmişi var mı — sayfa Analiz sekmesini buna göre gösteriyor. */
+  onAnalizVeri?: (varMi: boolean) => void;
 }
 
 function fmtGB(mb: number) {
@@ -180,7 +185,142 @@ function RamBreakdownCard({ ram }: { ram: NonNullable<RamPayload> }) {
   );
 }
 
-export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }: Props) {
+/* ══════════════════════════════════════════════════════════
+   Kullanım özeti — Analiz sekmesinin kısa hâli
+   ══════════════════════════════════════════════════════════
+   Burada eskiden "Haftalık Ortalama (CPU)" başlıklı, içi hiç
+   doldurulmamış ("Veri toplanıyor...") bir panel duruyordu.
+   Yerine sunucunun asıl merak edilen tarafı kondu: kaç kişi
+   kullanıyor, yoğunluğu ne. Ayrıntı Analiz sekmesinde. */
+function AnalizOzeti({ serverId, onAc, onVeri }: {
+  serverId: string; onAc?: () => void; onVeri?: (varMi: boolean) => void;
+}) {
+  const [veri, setVeri] = useState<AnalizYanit | null>(null);
+  const [yukleniyor, setYukleniyor] = useState(true);
+
+  useEffect(() => {
+    let iptal = false;
+    (async () => {
+      try {
+        const r = await fetch(`/api/servers/${serverId}/analiz`);
+        const d = await r.json();
+        if (!iptal && r.ok) { setVeri(d); onVeri?.(!!d?.veriVar); }
+      } catch { /* sessiz: ozet kritik degil */ }
+      finally { if (!iptal) setYukleniyor(false); }
+    })();
+    return () => { iptal = true; };
+  }, [serverId, onVeri]);
+
+  const kabuk = (ic: React.ReactNode) => (
+    <div
+      className="rounded-[5px] flex-1 flex flex-col overflow-hidden"
+      style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
+    >
+      <div className="px-3 py-2 bg-muted/20 border-b border-border shrink-0 flex items-center justify-between">
+        <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
+          Kullanım Özeti
+        </span>
+        {veri?.veriVar && onAc && (
+          <button
+            onClick={onAc}
+            className="text-primary text-[10px] font-medium hover:underline"
+          >
+            Ayrıntı →
+          </button>
+        )}
+      </div>
+      {ic}
+    </div>
+  );
+
+  if (yukleniyor)
+    return kabuk(
+      <div className="flex-1 px-3 py-3 space-y-2">
+        <div className="h-14 rounded-[5px] bg-muted/40 animate-pulse" />
+        <div className="h-20 rounded-[5px] bg-muted/40 animate-pulse" />
+      </div>,
+    );
+
+  if (!veri || !veri.veriVar)
+    return kabuk(
+      <div className="flex-1 flex items-center justify-center px-4 py-8 text-center">
+        <span className="text-[11px] text-muted-foreground">
+          Bu sunucuda kullanıcı oturumu geçmişi yok.
+        </span>
+      </div>,
+    );
+
+  const o = veri.ozet;
+  const enCok = Math.max(...veri.gunler.map((g) => g.kisi), 1);
+  const ilk3 = veri.firmalar.filter((f) => f.kullanan > 0).slice(0, 3);
+
+  return kabuk(
+    <div className="flex-1 flex flex-col gap-3 px-3 py-3">
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { s: o.suAnBagli, e: "Şu an bağlı", vurgu: true },
+          { s: o.gunlukOrtKisi, e: "Günlük ort." },
+          { s: `${o.kisiBasiSaat} sa`, e: "Kişi başı" },
+        ].map((k) => (
+          <div key={k.e} className="text-center">
+            <div className={cn("text-xl font-bold tabular-nums",
+              k.vurgu && "text-emerald-600 dark:text-emerald-400")}>{k.s}</div>
+            <div className="text-[10px] text-muted-foreground tracking-wide uppercase mt-0.5">{k.e}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Son 30 günün kişi sayısı — Analiz sekmesindeki grafiğin küçüğü.
+          items-stretch şart: items-end olsaydı yüzde yükseklik 0'a düşer,
+          çubuklar görünmezdi (aynı hata Analiz sekmesinde yaşandı). */}
+      {veri.gunler.length > 0 && (
+        <div>
+          <div className="flex h-14 items-stretch gap-[2px]">
+            {veri.gunler.map((g) => (
+              <div key={g.tarih} className="flex min-w-0 flex-1 flex-col justify-end" title={`${g.kisi} kişi`}>
+                <div
+                  className={cn("w-full rounded-t-[1px]",
+                    g.haftaSonu ? "bg-muted-foreground/25" : "bg-primary/70")}
+                  style={{ height: `${Math.max(2, (g.kisi / enCok) * 100)}%` }}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            son {veri.gunler.length} gün · en yüksek {enCok} kişi
+          </div>
+        </div>
+      )}
+
+      {ilk3.length > 0 && (
+        <div className="border-t pt-2">
+          <div className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-1.5">
+            En çok kullanan
+          </div>
+          <div className="space-y-1">
+            {ilk3.map((f) => (
+              <div key={f.firma} className="flex items-baseline justify-between gap-2 text-[12px]">
+                <span className="truncate">
+                  <span className="text-primary font-mono text-[11px] font-semibold">{f.firma}</span>
+                  <span className="ml-1.5">{f.ad ?? "—"}</span>
+                </span>
+                <span className="text-muted-foreground shrink-0 tabular-nums">{f.gunlukOrt} kişi/gün</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {o.atil > 0 && (
+        <div className="text-[11px] text-amber-600 dark:text-amber-400">
+          {o.atil} hesap 30 gündür bağlanmamış
+        </div>
+      )}
+    </div>,
+  );
+}
+
+export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing, onAnalizAc, onAnalizVeri }: Props) {
 
   return (
     <div className="space-y-3">
@@ -290,21 +430,9 @@ export function TabOverview({ server, sessionCount, ram, onRefresh, refreshing }
           {ram && ram.totalMB > 0 && <RamBreakdownCard ram={ram} />}
         </div>
 
-        {/* Right column: Weekly Stats Chart */}
+        {/* Sağ kolon: kullanım özeti (Analiz sekmesinin kısa hâli) */}
         <div className="rounded-[8px] p-2 flex flex-col" style={{ backgroundColor: "var(--section-bg)" }}>
-          <div
-            className="rounded-[5px] flex-1 flex flex-col overflow-hidden"
-            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
-          >
-            <div className="px-3 py-2 bg-muted/20 border-b border-border shrink-0">
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-                Haftalık Ortalama (CPU)
-              </span>
-            </div>
-            <div className="flex-1 flex items-center justify-center px-4 py-8">
-              <span className="text-[11px] text-muted-foreground">Veri toplanıyor...</span>
-            </div>
-          </div>
+          <AnalizOzeti serverId={server.id} onAc={onAnalizAc} onVeri={onAnalizVeri} />
             </div>
       </div>
 

@@ -105,6 +105,10 @@ export default function ServerDetailPage({
   const { id } = use(params);
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  /*  Analiz sekmesi: canli oturum YOKKEN de gecmis veri olabilir.
+      Ozet karti veriyi zaten cekiyor, sonucu buraya bildiriyor ki
+      sekme ile ozetteki "Ayrinti" baglantisi ayrisamasin. */
+  const [analizVeriVar, setAnalizVeriVar] = useState(false);
   const [server, setServer] = useState<Server | null>(null);
   const [detail, setDetail] = useState<ServerDetailData>(EMPTY_DETAIL);
   const [firmaMap, setFirmaMap] = useState<Record<string, string>>({});
@@ -201,7 +205,7 @@ export default function ServerDetailPage({
     /*  Analiz yalniz oturum bildiren sunucularda anlamli (pratikte
         terminal/RDP makineleri). SQL ya da dosya sunucusunda surekli bos
         bir sekme gostermenin alemi yok.                                  */
-    ...(sessionCount > 0
+    ...(sessionCount > 0 || analizVeriVar
       ? [{ id: "analiz" as TabId, label: "Analiz", icon: ChartTab }]
       : []),
     { id: "companies", label: "Firmalar", icon: BuildingTab },
@@ -357,7 +361,7 @@ export default function ServerDetailPage({
         ) : (
           <>
             {activeTab === "overview" && (
-              <TabOverview server={server} sessionCount={sessionCount} ram={detail.ram} onRefresh={handleRefresh} refreshing={refreshing} />
+              <TabOverview server={server} sessionCount={sessionCount} ram={detail.ram} onRefresh={handleRefresh} refreshing={refreshing} onAnalizAc={() => setActiveTab("analiz")} onAnalizVeri={setAnalizVeriVar} />
             )}
             {activeTab === "sessions" && (
               <TabSessions sessions={detail.sessions} serverId={server.id} />
