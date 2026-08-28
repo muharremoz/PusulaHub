@@ -134,6 +134,7 @@ const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-pr
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
 import { Checkbox } from "@/components/shared/form"
+import { FirmaAnaliz } from "@/components/companies/firma-analiz";
 
 function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
@@ -2115,6 +2116,10 @@ tr:nth-child(even) td{background:#fafafa}
                   Veritabanları
                   <span className="ml-0.5 text-[10px] bg-muted rounded-[5px] px-1.5 py-0.5 font-medium">{tabSQL.length}</span>
                 </TabsTrigger>
+                <TabsTrigger value="analiz" className="text-[11px] h-7 gap-1.5">
+                  <Activity className="h-3.5 w-3.5" />
+                  Analiz
+                </TabsTrigger>
                 <TabsTrigger value="access" className="text-[11px] h-7 gap-1.5">
                   <KeyRound className="h-3.5 w-3.5" />
                   Erişim
@@ -2428,6 +2433,11 @@ tr:nth-child(even) td{background:#fafafa}
               {/* ── Erişim ─────────────────────────────────────────────────
                   Modal'a sığmayan erişim bilgileri burada, sayfa genişliğinde
                   ve kompakt tablo düzeninde. Veri sekmeye geçilince yükleniyor. */}
+              {/* Analiz — firmanın kendi kullanımı, müşteriye rapor üretilir */}
+              <TabsContent value="analiz" className="mt-0">
+                {selectedFirma && <FirmaAnaliz firkod={selectedFirma.firkod} />}
+              </TabsContent>
+
               <TabsContent value="access" className="mt-0 space-y-2">
                 <div className="flex items-center justify-end gap-2">
                   <button
