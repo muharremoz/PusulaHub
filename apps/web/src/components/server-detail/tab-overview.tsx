@@ -252,7 +252,7 @@ function AnalizOzeti({ serverId, onAc, onVeri }: {
 
   const o = veri.ozet;
   const enCok = Math.max(...veri.gunler.map((g) => g.kisi), 1);
-  const ilk3 = veri.firmalar.filter((f) => f.kullanan > 0).slice(0, 3);
+  const kullananlar = veri.firmalar.filter((f) => f.kullanan > 0);
 
   return kabuk(
     <div className="flex-1 flex flex-col gap-3 px-3 py-3">
@@ -292,31 +292,89 @@ function AnalizOzeti({ serverId, onAc, onVeri }: {
         </div>
       )}
 
-      {ilk3.length > 0 && (
-        <div className="border-t pt-2">
-          <div className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-1.5">
-            En çok kullanan
-          </div>
-          <div className="space-y-1">
-            {ilk3.map((f) => (
-              <div key={f.firma} className="flex items-baseline justify-between gap-2 text-[12px]">
-                <span className="truncate">
-                  <span className="text-primary font-mono text-[11px] font-semibold">{f.firma}</span>
-                  <span className="ml-1.5">{f.ad ?? "—"}</span>
-                </span>
-                <span className="text-muted-foreground shrink-0 tabular-nums">{f.gunlukOrt} kişi/gün</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/*  İki liste de Analiz sekmesiyle AYNI kolon düzeninde başlıyor
+           (Firma No, Firma) — özet ile ayrıntı arasında göz kaymasın.
+           Sığmayınca kaydırılıyor; kesip "ilk 3" göstermek, hangi
+           firmanın listede olmadığını gizliyordu. */}
+      {kullananlar.length > 0 && (
+        <MiniListe
+          baslik="En çok kullanan"
+          adet={`${kullananlar.length} firma`}
+          sutunlar={["Firma No", "Firma", "Kişi/gün"]}
+        >
+          {kullananlar.map((f) => (
+            <tr key={f.firma} className="hover:bg-muted/20 transition-colors">
+              <td className="text-primary px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap">{f.firma}</td>
+              <td className="px-2 py-1 truncate">{f.ad ?? "—"}</td>
+              <td className="px-2 py-1 text-right font-medium tabular-nums whitespace-nowrap">{f.gunlukOrt}</td>
+            </tr>
+          ))}
+        </MiniListe>
       )}
 
-      {o.atil > 0 && (
-        <div className="text-[11px] text-amber-600 dark:text-amber-400">
-          {o.atil} hesap 30 gündür bağlanmamış
-        </div>
+      {veri.atillar.length > 0 && (
+        <MiniListe
+          baslik="30 gündür bağlanmayanlar"
+          adet={`${veri.atillar.length} hesap`}
+          sutunlar={["Firma No", "Firma", "Kullanıcı"]}
+          uyari
+        >
+          {veri.atillar.map((a) => (
+            <tr key={a.kullanici} className="hover:bg-muted/20 transition-colors">
+              <td className="text-primary px-2 py-1 font-mono text-[11px] font-semibold whitespace-nowrap">{a.firma}</td>
+              <td className="px-2 py-1 truncate">{a.ad ?? "—"}</td>
+              <td className="text-muted-foreground px-2 py-1 text-right font-mono text-[11px] whitespace-nowrap">
+                {a.kullanici}
+              </td>
+            </tr>
+          ))}
+        </MiniListe>
       )}
     </div>,
+  );
+}
+
+/** Özet kartındaki iki küçük liste — başlık ve biçim tek yerden. */
+function MiniListe({
+  baslik, adet, sutunlar, uyari = false, children,
+}: {
+  baslik: string; adet: string; sutunlar: string[];
+  uyari?: boolean; children: React.ReactNode;
+}) {
+  return (
+    <div className="border-t pt-2">
+      <div className="mb-1 flex items-baseline justify-between">
+        <span className={cn(
+          "text-[10px] font-medium tracking-wider uppercase",
+          uyari ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
+        )}>
+          {baslik}
+        </span>
+        <span className="text-muted-foreground text-[10px] tabular-nums">{adet}</span>
+      </div>
+      <div className="max-h-36 overflow-auto rounded-[5px] border">
+        <table className="w-full table-fixed text-[12px]">
+          <thead className="bg-muted/30 sticky top-0">
+            <tr>
+              {sutunlar.map((c, i) => (
+                <th
+                  key={c}
+                  className={cn(
+                    "text-muted-foreground px-2 py-1 text-[9px] font-medium tracking-wider uppercase whitespace-nowrap",
+                    i === 0 && "w-[62px] text-left",
+                    i === 1 && "text-left",
+                    i === 2 && "w-[86px] text-right",
+                  )}
+                >
+                  {c}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/40">{children}</tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 
