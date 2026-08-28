@@ -26,6 +26,7 @@ const mkStaticTabIcon = (I: React.ElementType) => {
 const DashboardTab = mkTabIcon("layers");
 const MonitorTab   = mkTabIcon("monitor-check");
 const BuildingTab  = mkStaticTabIcon(Building2);
+const ChartTab     = mkTabIcon("chart-bar-increasing");
 const UsersTab     = mkTabIcon("users");
 const ShieldTab    = mkTabIcon("shield-check");
 const FileTab      = mkTabIcon("file-text");
@@ -45,6 +46,7 @@ import type { AgentReport } from "@/lib/agent-types";
 import { TabOverview } from "@/components/server-detail/tab-overview";
 
 const TabSessions  = dynamic(() => import("@/components/server-detail/tab-sessions").then((m) => m.TabSessions),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
+const TabAnaliz    = dynamic(() => import("@/components/server-detail/tab-analiz").then((m) => m.TabAnaliz),        { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 const TabCompanies = dynamic(() => import("@/components/server-detail/tab-companies").then((m) => m.TabCompanies),  { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 const TabUsers     = dynamic(() => import("@/components/server-detail/tab-users").then((m) => m.TabUsers),          { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 const TabSecurity  = dynamic(() => import("@/components/server-detail/tab-security").then((m) => m.TabSecurity),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
@@ -69,6 +71,7 @@ interface ServerDetailData {
 type TabId =
   | "overview"
   | "sessions"
+  | "analiz"
   | "companies"
   | "users"
   | "security"
@@ -195,6 +198,12 @@ export default function ServerDetailPage({
   }[] = [
     { id: "overview", label: "Genel Durum", icon: DashboardTab },
     { id: "sessions", label: "Oturumlar", icon: MonitorTab, count: sessionCount },
+    /*  Analiz yalniz oturum bildiren sunucularda anlamli (pratikte
+        terminal/RDP makineleri). SQL ya da dosya sunucusunda surekli bos
+        bir sekme gostermenin alemi yok.                                  */
+    ...(sessionCount > 0
+      ? [{ id: "analiz" as TabId, label: "Analiz", icon: ChartTab }]
+      : []),
     { id: "companies", label: "Firmalar", icon: BuildingTab },
     { id: "users", label: "Kullanıcılar", icon: UsersTab, count: userCount },
     { id: "security", label: "Güvenlik", icon: ShieldTab },
@@ -352,6 +361,9 @@ export default function ServerDetailPage({
             )}
             {activeTab === "sessions" && (
               <TabSessions sessions={detail.sessions} serverId={server.id} />
+            )}
+            {activeTab === "analiz" && (
+              <TabAnaliz serverId={server.id} />
             )}
             {activeTab === "companies" && (
               <TabCompanies companies={detail.ad?.companies ?? []} firmaMap={firmaMap} />
