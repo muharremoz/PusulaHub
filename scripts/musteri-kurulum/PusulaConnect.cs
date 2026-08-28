@@ -66,8 +66,8 @@ using System.Reflection;
  *  ilk soru hangi yapiyi calistirdigi oluyor. Ozellikle bir duzeltmeden
  *  sonra eski exe elden ele dolasabiliyor.
  *  Degistirmeyi unutma: davranis degisen her yayinda artir.            */
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 [assembly: AssemblyTitle("Pusula Connect")]
 [assembly: AssemblyProduct("Pusula Connect")]
 [assembly: AssemblyCompany("Pusula")]
@@ -702,9 +702,47 @@ namespace PusulaConnect
             Nefes();
         }
 
+        /// ARM makinede FortiClient kurulamiyor; kullaniciya bunu
+        /// soyleyip kalan adimlara gecmek icin isaretlenir.
+        bool armAtlandi = false;
+
         void KurulumuYurut()
         {
             bool sorunsuz = true;
+
+            /*  ARM ise indirmeye HIC baslanmiyor: paket x64 ve ARM'de
+             *  kurulamiyor, 131 MB'i bosuna indirmenin anlami yok.     */
+            if (ArmMi())
+            {
+                armAtlandi = true;
+                Gunluk.Yaz("ARM islemci tespit edildi — FortiClient (x64) bu makineye kurulamaz");
+                Isaretle(0, 3, "ARM işlemci — kurulum paketi bu makineyle uyumsuz");
+                Isaretle(1, 3, "FortiClient kurulamıyor (ARM desteği ayrı sürümde)");
+                cubuk.Deger = 50;
+
+                // VPN profili ve kısayol yine de yazılıyor: FortiClient
+                // sonradan uygun sürümle kurulursa profil hazır olur,
+                // uzak masaüstü kısayolu ise VPN'den bağımsız çalışır.
+                Isaretle(2, 0, null);
+                try { VpnProfiliYaz(ayTunel, ayVpn); Isaretle(2, 1, "VPN profili hazır: " + ayTunel); }
+                catch (Exception ex) { Isaretle(2, 2, "VPN profili: " + KisaHata(ex)); }
+
+                Isaretle(3, 0, null);
+                try
+                {
+                    string y = RdpYaz(ayTunel, ayRdp, ayDomain, ayKullanici);
+                    Isaretle(3, 1, "Kısayol: " + Path.GetFileName(y));
+                }
+                catch (Exception ex) { Isaretle(3, 2, "Kısayol: " + KisaHata(ex)); }
+
+                cubuk.Deger = 100;
+                Gunluk.Yaz("SONUC: ARM makine — FortiClient kurulmadi, profil ve kisayol yazildi");
+                durumMetni.Text = "Bu bilgisayar ARM işlemcili — VPN programı kurulamadı.";
+                durumMetni.Foreground = Tema.F("WarningBrush");
+                dugmeIleri.IsEnabled = true;
+                dugmeIleri.Content = "Devam";
+                return;
+            }
 
             // ── 1) MSI: once yanindaki dosya, yoksa indir ──
             Isaretle(0, 0, null);
@@ -988,6 +1026,60 @@ namespace PusulaConnect
          *  dokunmadan geri doner. Kopyalama basarisiz olursa (yer yok
          *  gibi) ozgun yol kullanilir — kurulum hic denenmemis olmaktansa
          *  denenip hata vermesi yeglenir.                              */
+        /*  ARM64 TESPITI
+         *
+         *  Sahada yasandi (2026-08-28, HAKBILIR — Snapdragon X Plus):
+         *  dagittigimiz FortiClient 7.0.14 x64 bir paket ve cekirdek modu
+         *  ag suruculeri kuruyor (ftsvnic, FortiFilter, ft_vnic). Windows
+         *  on ARM x64 UYGULAMALARI oykunuyor ama SURUCULERI oykunemiyor,
+         *  bu yuzden kurulum CA_InstallDrivers adiminda 1603 ile duruyor:
+         *
+         *    FCSetupWx: Failed to load C:\Windows\system32\difxapi.dll
+         *
+         *  (System32 ARM64 ikililerini tutuyor, x64 difxapi orada yok.)
+         *
+         *  Yapilandirmayla cozulecek bir sey degil. Onceden anlayip
+         *  soylemek, 131 MB indirip anlasilmaz bir hatayla bitirmekten
+         *  iyidir. Fortinet ARM'i ancak 7.4.3'ten itibaren ve "Beta"
+         *  olarak destekliyor, ayri bir kurulum dosyasiyla.
+         *
+         *  .NET Framework 4.0'da RuntimeInformation.OSArchitecture yok;
+         *  GetNativeSystemInfo kullaniliyor. "Native" onemli: 32 bit bir
+         *  surecte GetSystemInfo oykunulen mimariyi bildirir.           */
+        const ushort ISLEMCI_ARM64 = 12;
+        const ushort ISLEMCI_ARM   = 5;
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct SYSTEM_INFO
+        {
+            public ushort wProcessorArchitecture;
+            public ushort wReserved;
+            public uint dwPageSize;
+            public IntPtr lpMinimumApplicationAddress;
+            public IntPtr lpMaximumApplicationAddress;
+            public IntPtr dwActiveProcessorMask;
+            public uint dwNumberOfProcessors;
+            public uint dwProcessorType;
+            public uint dwAllocationGranularity;
+            public ushort wProcessorLevel;
+            public ushort wProcessorRevision;
+        }
+
+        [DllImport("kernel32.dll")]
+        static extern void GetNativeSystemInfo(ref SYSTEM_INFO lpSystemInfo);
+
+        static bool ArmMi()
+        {
+            try
+            {
+                SYSTEM_INFO si = new SYSTEM_INFO();
+                GetNativeSystemInfo(ref si);
+                return si.wProcessorArchitecture == ISLEMCI_ARM64
+                    || si.wProcessorArchitecture == ISLEMCI_ARM;
+            }
+            catch { return false; }
+        }
+
         static string YerelKopyaya(string kaynak)
         {
             try
@@ -1199,6 +1291,36 @@ namespace PusulaConnect
              *     secmeye yetmiyor, kullanici Edit'ten secmek zorunda.
              *   · Sifre kaydetme secenegi ILK baglantida cikmiyor,
              *     ancak ikinci baglantida beliriyor.                   */
+            if (armAtlandi)
+            {
+                bBaslik.Text = "VPN programı kurulamadı";
+                bAlt.Text = "Bu bilgisayar ARM işlemcili. Uzak masaüstü kısayolunuz hazır, "
+                          + "ancak VPN bağlantısı için bizimle iletişime geçmeniz gerekiyor.";
+                BittiSatiri("1", "Kullandığımız VPN programı ARM işlemcili bilgisayarlara "
+                               + "kurulamıyor; bu bir ayar sorunu değil, uyumluluk sınırı.");
+                BittiSatiri("2", "Size uygun bir bağlantı yöntemi hazırlayabilmemiz için "
+                               + "bizi arayın — bu bilgisayara özel bir çözüm gerekiyor.");
+                BittiSatiri("3", "Masaüstündeki \"" + ayTunel + "\" kısayolu oluşturuldu; "
+                               + "VPN bağlantısı sağlandıktan sonra çalışacak.");
+
+                TextBlock armSon = new TextBlock();
+                armSon.Text = "Kayıt dosyasını bize göndermeniz teşhisi hızlandırır.";
+                armSon.FontSize = 12;
+                armSon.Margin = new Thickness(0, 14, 0, 0);
+                armSon.Foreground = Tema.F("TextMutedBrush");
+                govde.Children.Add(armSon);
+
+                dugmeIleri.Content = "Kapat";
+                dugmeGeri.Visibility = Visibility.Visible;
+                dugmeGeri.Content = "Kaydı Masaüstüne Al";
+                dugmeGeri.MinWidth = 170;
+                dugmeGeri.Click -= KapatTiklandi;
+                dugmeGeri.Click -= KayitKaydet;
+                dugmeGeri.Click += KayitKaydet;
+                durumMetni.Text = "";
+                return;
+            }
+
             BittiSatiri("1", "FortiClient'ı açın. \"" + ayTunel
                            + "\" bağlantısının yanındaki düzenle (kalem) simgesine tıklayın.");
             BittiSatiri("2", "Authentication satırında \"Save login\" seçeneğini işaretleyin. "
