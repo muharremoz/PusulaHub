@@ -52,7 +52,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
@@ -61,6 +60,17 @@ using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using System.Reflection;
+
+/*  Surum numarasi gunluge yaziliyor: musteri "kurulum calismadi" dediginde
+ *  ilk soru hangi yapiyi calistirdigi oluyor. Ozellikle bir duzeltmeden
+ *  sonra eski exe elden ele dolasabiliyor.
+ *  Degistirmeyi unutma: davranis degisen her yayinda artir.            */
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
+[assembly: AssemblyTitle("Pusula Connect")]
+[assembly: AssemblyProduct("Pusula Connect")]
+[assembly: AssemblyCompany("Pusula")]
 
 namespace PusulaConnect
 {
@@ -113,6 +123,103 @@ namespace PusulaConnect
             SolidColorBrush f = new SolidColorBrush(c);
             f.Freeze();
             return f;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Gunluk (log)
+    // ═══════════════════════════════════════════════════════════════
+    /*  NEDEN VAR: sahada iki olay yasandi ve ikisinde de elimizde hicbir
+     *  iz yoktu — birinde indirme bozuktu ama ekran basarili gosterdi,
+     *  digerinde indirme tamamdi kurulum olmadi. Musteriden "ne oldu"
+     *  diye bilgi almak mumkun olmadigi icin program kendi kaydini
+     *  tutuyor.
+     *
+     *  Yer: %ProgramData%\PusulaConnect\kurulum.log — kullanicidan
+     *  bagimsiz, yonetici haklariyla yazilabilir ve makinede kalici.
+     *  Dosya eklemeli (append): musteri programi birkac kez calistirsa
+     *  da onceki denemenin izi kaybolmasin, asil teshis orada oluyor.  */
+    static class Gunluk
+    {
+        static string yol;
+        static readonly object kilit = new object();
+
+        public static string Yol { get { return yol; } }
+
+        public static void Baslat()
+        {
+            try
+            {
+                string klasor = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                    "PusulaConnect");
+                Directory.CreateDirectory(klasor);
+                yol = Path.Combine(klasor, "kurulum.log");
+
+                // Dosya sonsuza kadar buyumesin; 1 MB'i asinca bastan basla.
+                try
+                {
+                    FileInfo fi = new FileInfo(yol);
+                    if (fi.Exists && fi.Length > 1024 * 1024) fi.Delete();
+                }
+                catch { }
+
+                Yaz("");
+                Yaz("========================================================");
+                Yaz("PusulaConnect calisti");
+                Yaz("  surum   : " + Assembly.GetExecutingAssembly().GetName().Version);
+                Yaz("  makine  : " + Environment.MachineName);
+                Yaz("  kullanici: " + Environment.UserName);
+                Yaz("  isletim : " + Environment.OSVersion.VersionString
+                                   + (Environment.Is64BitOperatingSystem ? " (64 bit)" : " (32 bit)"));
+                Yaz("  yonetici: " + YoneticiMi());
+                Yaz("========================================================");
+            }
+            catch { yol = null; }   // gunluk yazilamiyorsa program yine de calissin
+        }
+
+        static string YoneticiMi()
+        {
+            try
+            {
+                System.Security.Principal.WindowsPrincipal p =
+                    new System.Security.Principal.WindowsPrincipal(
+                        System.Security.Principal.WindowsIdentity.GetCurrent());
+                return p.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
+                     ? "evet" : "HAYIR";
+            }
+            catch { return "bilinmiyor"; }
+        }
+
+        public static void Yaz(string satir)
+        {
+            if (yol == null) return;
+            try
+            {
+                lock (kilit)
+                    File.AppendAllText(yol,
+                        DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  " + satir + Environment.NewLine,
+                        Encoding.UTF8);
+            }
+            catch { }
+        }
+
+        public static void Hata(string nerede, Exception ex)
+        {
+            Yaz("HATA [" + nerede + "] " + ex.GetType().Name + ": " + ex.Message);
+            if (ex.InnerException != null)
+                Yaz("     ic hata: " + ex.InnerException.Message);
+        }
+
+        /// Gunlugu masaustune kopyalar — musterinin bize gonderebilmesi icin.
+        public static string MasaustuneKopyala()
+        {
+            if (yol == null || !File.Exists(yol)) return null;
+            string hedef = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                "PusulaConnect-kayit.txt");
+            File.Copy(yol, hedef, true);
+            return hedef;
         }
     }
 
@@ -190,6 +297,10 @@ namespace PusulaConnect
             panelTamam  = Tema.Karisim(Tema.R("SuccessBrush"), Colors.White, 0.45);
 
             AyarlariOku();
+            Gunluk.Yaz("ayarlar: firma=" + ayFirma + " kullanici=" + ayKullanici
+                     + " vpn=" + ayVpn + " rdp=" + ayRdp + " tunel=" + ayTunel
+                     + " domain=" + ayDomain);
+            Gunluk.Yaz("msiurl : " + (ayMsiUrl.Length > 0 ? ayMsiUrl : "(tanimsiz)"));
             ArayuzKur();
             SayfaKarsilama();
         }
@@ -415,7 +526,7 @@ namespace PusulaConnect
             dugmeGeri.Content = "Kapat";
             dugmeGeri.MinWidth = 96;
             dugmeGeri.Margin = new Thickness(0, 0, 10, 0);
-            dugmeGeri.Click += delegate { Close(); };
+            dugmeGeri.Click += KapatTiklandi;
             dugmeler.Children.Add(dugmeGeri);
 
             dugmeIleri = new Button();
@@ -573,6 +684,12 @@ namespace PusulaConnect
 
             islemMetin[i].Foreground = Tema.F("TextPrimaryBrush");
             if (metin != null && metin.Length > 0) islemMetin[i].Text = metin;
+
+            // Ekranda ne yazdiysa gunluge de yaz: musteri "ekranda su
+            // yaziyordu" dediginde kayitla karsilastirabilelim.
+            string[] durumAdi = { "calisiyor", "TAMAM", "HATA", "atlandi" };
+            Gunluk.Yaz("adim " + (i + 1) + " [" + durumAdi[durum] + "] "
+                     + (metin ?? islemMetin[i].Text));
             Nefes();
         }
 
@@ -604,19 +721,49 @@ namespace PusulaConnect
             Isaretle(1, 0, null);
             try
             {
-                if (Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Fortinet\FortiClient") != null)
+                string kanit;
+                if (FortiClientKurulu(out kanit))
+                {
+                    Gunluk.Yaz("  zaten kurulu -> " + kanit);
                     Isaretle(1, 1, "FortiClient VPN zaten kurulu");
+                }
                 else if (indirilenMsi.Length == 0)
                 { Isaretle(1, 3, "Kurulum atlandı (dosya yok)"); sorunsuz = false; }
                 else
                 {
+                    /*  /l*v ile msiexec'in KENDI ayrintili gunlugu aliniyor.
+                     *  Cikis kodu tek basina yetmiyor: "1603" gibi genel bir
+                     *  kod neyin patladigini soylemiyor, sebebi bu dosyada
+                     *  yaziyor. Sahada "indirdi ama kuramadi" vakasinda tam
+                     *  bu eksikti.                                          */
+                    string msiLog = Path.Combine(Path.GetTempPath(), "PusulaConnect-msi.log");
                     ProcessStartInfo psi = new ProcessStartInfo("msiexec.exe",
-                        "/i \"" + indirilenMsi + "\" /qn /norestart");
+                        "/i \"" + indirilenMsi + "\" /qn /norestart /l*v \"" + msiLog + "\"");
                     psi.UseShellExecute = false; psi.CreateNoWindow = true;
+                    Gunluk.Yaz("  msiexec basliyor: " + psi.Arguments);
                     Process p = Process.Start(psi);
                     while (!p.HasExited) { Nefes(); System.Threading.Thread.Sleep(120); }
-                    if (p.ExitCode == 0 || p.ExitCode == 3010) Isaretle(1, 1, "FortiClient VPN kuruldu");
-                    else { Isaretle(1, 2, "Kurulum hatası (kod " + p.ExitCode + ")"); sorunsuz = false; }
+                    Gunluk.Yaz("  msiexec cikis kodu: " + p.ExitCode);
+
+                    if (p.ExitCode == 0 || p.ExitCode == 3010)
+                    {
+                        Isaretle(1, 1, "FortiClient VPN kuruldu");
+                        // Kurulum "basarili" dedi ama urun ortada yok mu?
+                        string k2;
+                        if (!FortiClientKurulu(out k2))
+                        {
+                            Gunluk.Yaz("  UYARI: msiexec basarili dondu ama urun bulunamadi (" + k2 + ")");
+                            Isaretle(1, 2, "Kurulum tamamlanmadı (ürün bulunamadı)");
+                            sorunsuz = false;
+                        }
+                        else Gunluk.Yaz("  dogrulandi -> " + k2);
+                    }
+                    else
+                    {
+                        Isaretle(1, 2, "Kurulum hatası (kod " + p.ExitCode + ")");
+                        sorunsuz = false;
+                        MsiGunlugunuAktar(msiLog);
+                    }
                 }
             }
             catch (Exception ex) { Isaretle(1, 2, "Kurulum hatası: " + KisaHata(ex)); sorunsuz = false; }
@@ -638,10 +785,101 @@ namespace PusulaConnect
             catch (Exception ex) { Isaretle(3, 2, "Kısayol: " + KisaHata(ex)); sorunsuz = false; }
             cubuk.Deger = 100;
 
+            Gunluk.Yaz(sorunsuz ? "SONUC: kurulum tamamlandi"
+                                : "SONUC: kurulum bitti, bazi adimlar atlandi");
             durumMetni.Text = sorunsuz ? "Kurulum tamamlandı." : "Kurulum bitti, bazı adımlar atlandı.";
             durumMetni.Foreground = sorunsuz ? Tema.F("SuccessBrush") : Tema.F("WarningBrush");
             dugmeIleri.IsEnabled = true;
             dugmeIleri.Content = "Devam";
+        }
+
+        /*  FortiClient GERCEKTEN kurulu mu?
+         *
+         *  ONCEKI HALI HATALIYDI ve sahada yanlis sonuc verdi: yalnizca
+         *  HKLM\SOFTWARE\Fortinet\FortiClient anahtarinin varligina
+         *  bakiyordu. Ama bu programin kendisi VPN profilini
+         *  ...\FortiClient\Sslvpn\Tunnels\<tunel> altina yaziyor, yani o
+         *  anahtari KENDI olusturuyor. Sonuc: ilk calistirmada indirme
+         *  basarisiz olup kurulum atlansa bile 3. adim profili yaziyor;
+         *  musteri programi ikinci kez calistirdiginda "zaten kurulu"
+         *  yazip hicbir sey kurmadan basarili gorunuyordu.
+         *
+         *  Dogrusu urunun kendisini aramak: once calistirilabilir dosya,
+         *  sonra Windows Installer kayitlari. Hangi kanitla karar
+         *  verildigi gunluge yaziliyor.                                */
+        static bool FortiClientKurulu(out string kanit)
+        {
+            string[] adaylar = {
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                             @"Fortinet\FortiClient\FortiClient.exe"),
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                             @"Fortinet\FortiClient\FortiClient.exe"),
+            };
+            for (int i = 0; i < adaylar.Length; i++)
+                if (File.Exists(adaylar[i])) { kanit = "dosya: " + adaylar[i]; return true; }
+
+            string[] kaldirYollari = {
+                @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall",
+                @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall",
+            };
+            for (int i = 0; i < kaldirYollari.Length; i++)
+            {
+                try
+                {
+                    using (RegistryKey k = Registry.LocalMachine.OpenSubKey(kaldirYollari[i]))
+                    {
+                        if (k == null) continue;
+                        string[] altlar = k.GetSubKeyNames();
+                        for (int j = 0; j < altlar.Length; j++)
+                        {
+                            using (RegistryKey a = k.OpenSubKey(altlar[j]))
+                            {
+                                if (a == null) continue;
+                                object ad = a.GetValue("DisplayName");
+                                if (ad != null && ad.ToString().IndexOf("FortiClient",
+                                        StringComparison.OrdinalIgnoreCase) >= 0)
+                                {
+                                    kanit = "kayit: " + ad + " " + a.GetValue("DisplayVersion");
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            kanit = "urun bulunamadi";
+            return false;
+        }
+
+        /*  msiexec gunlugu cok uzun (megabaytlar). Tamamini kopyalamak
+         *  yerine ise yarayan satirlari suzuyoruz: hata satirlari ve
+         *  kapanis ozeti. Musteri makinesinde dosya yerinde kaliyor,
+         *  gerekirse tamami istenebilir.                               */
+        static void MsiGunlugunuAktar(string msiLog)
+        {
+            try
+            {
+                if (!File.Exists(msiLog)) { Gunluk.Yaz("  msi gunlugu olusmamis: " + msiLog); return; }
+                Gunluk.Yaz("  msi gunlugu: " + msiLog);
+                string[] satirlar = File.ReadAllLines(msiLog);
+                int yazilan = 0;
+                for (int i = 0; i < satirlar.Length && yazilan < 40; i++)
+                {
+                    string t = satirlar[i];
+                    if (t.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0
+                     || t.IndexOf("failed", StringComparison.OrdinalIgnoreCase) >= 0
+                     || t.IndexOf("Return value 3", StringComparison.Ordinal) >= 0
+                     || t.IndexOf("MainEngineThread is returning", StringComparison.Ordinal) >= 0)
+                    {
+                        Gunluk.Yaz("    | " + (t.Length > 220 ? t.Substring(0, 220) + "…" : t));
+                        yazilan++;
+                    }
+                }
+                if (yazilan == 0) Gunluk.Yaz("    (gunlukte hata satiri bulunamadi)");
+            }
+            catch (Exception ex) { Gunluk.Hata("MsiGunlugunuAktar", ex); }
         }
 
         string YanindakiMsi()
@@ -680,11 +918,47 @@ namespace PusulaConnect
             {
                 indirmeHatasi = e.Error; indirmeBitti = true;
             };
+            Gunluk.Yaz("  indirme basliyor: " + url);
+            Gunluk.Yaz("  hedef: " + hedef);
+            DateTime t0 = DateTime.Now;
             wc.DownloadFileAsync(new Uri(url), hedef);
 
             while (!indirmeBitti) { Nefes(); System.Threading.Thread.Sleep(60); }
             wc.Dispose();
             if (indirmeHatasi != null) throw indirmeHatasi;
+
+            /*  INDIRME DOGRULAMASI — sahada bunun yoklugu paha1liya mal
+             *  oldu: sunucu hata sayfasi (HTML) dondugunde WebClient bunu
+             *  basariyla "indirdi" sayiyor, dosya diske yaziliyor ve
+             *  program kuruluma geciyordu. Ekranda yesil tik goruluyor,
+             *  gercekte elde MSI degil birkac KB'lik HTML vardi.
+             *
+             *  Iki kontrol: makul boyut ve dosya imzasi. MSI bir OLE
+             *  bilesik dosyasi, ilk 8 bayti daima D0 CF 11 E0 A1 B1 1A E1.  */
+            FileInfo bilgi = new FileInfo(hedef);
+            double sn = (DateTime.Now - t0).TotalSeconds;
+            Gunluk.Yaz("  indirme bitti: " + (bilgi.Exists ? bilgi.Length.ToString("N0") : "DOSYA YOK")
+                     + " bayt, " + sn.ToString("F1") + " sn");
+
+            if (!bilgi.Exists || bilgi.Length < 1024 * 1024)
+                throw new Exception("İndirilen dosya geçersiz ("
+                    + (bilgi.Exists ? bilgi.Length + " bayt" : "dosya oluşmadı") + ")");
+
+            byte[] imza = new byte[8];
+            using (FileStream fs = File.OpenRead(hedef))
+                if (fs.Read(imza, 0, 8) != 8) throw new Exception("İndirilen dosya okunamadı");
+
+            byte[] beklenen = { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 };
+            for (int i = 0; i < 8; i++)
+            {
+                if (imza[i] != beklenen[i])
+                {
+                    Gunluk.Yaz("  imza uyusmadi: " + BitConverter.ToString(imza));
+                    Gunluk.Yaz("  (sunucu MSI yerine baska bir sey dondurmus olabilir)");
+                    throw new Exception("İndirilen dosya kurulum paketi değil");
+                }
+            }
+            Gunluk.Yaz("  dosya imzasi dogru (MSI)");
             return hedef;
         }
 
@@ -818,8 +1092,41 @@ namespace PusulaConnect
             govde.Children.Add(son);
 
             dugmeIleri.Content = "Kapat";
-            dugmeGeri.Visibility = Visibility.Collapsed;
+
+            /*  Kayit dosyasini musteri bize gonderebilsin diye ikincil
+             *  dugme burada "Kaydi Masaustune Al"a donusuyor. Kayit
+             *  %ProgramData% altinda ve musteriye o yolu tarif etmek
+             *  telefonda zor; masaustune tek tikla cikiyor.            */
+            dugmeGeri.Visibility = Visibility.Visible;
+            dugmeGeri.Content = "Kaydı Masaüstüne Al";
+            dugmeGeri.MinWidth = 170;
+            dugmeGeri.Click -= KapatTiklandi;
+            dugmeGeri.Click -= KayitKaydet;
+            dugmeGeri.Click += KayitKaydet;
+
             durumMetni.Text = "";
+        }
+
+        void KayitKaydet(object g, RoutedEventArgs e)
+        {
+            try
+            {
+                string yol = Gunluk.MasaustuneKopyala();
+                if (yol == null)
+                {
+                    MessageBox.Show("Kayıt dosyası bulunamadı.", "Pusula Connect",
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+                durumMetni.Text = "Kayıt masaüstüne alındı: " + Path.GetFileName(yol);
+                durumMetni.Foreground = Tema.F("SuccessBrush");
+            }
+            catch (Exception ex)
+            {
+                Gunluk.Hata("KayitKaydet", ex);
+                MessageBox.Show("Kayıt kopyalanamadı:\r\n" + ex.Message, "Pusula Connect",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         void BittiSatiri(string no, string metin)
@@ -872,6 +1179,8 @@ namespace PusulaConnect
         }
 
         // ─────────────────────────────────────────────────────────
+        void KapatTiklandi(object g, RoutedEventArgs e) { Close(); }
+
         void IleriTiklandi(object g, RoutedEventArgs e)
         {
             if (aktifAdim == 0) SayfaKurulum();
@@ -1016,8 +1325,23 @@ namespace PusulaConnect
         [STAThread]
         public static void Main()
         {
+            Gunluk.Baslat();
+
             Application uyg = new Application();
             uyg.ShutdownMode = ShutdownMode.OnMainWindowClose;
+
+            // Beklenmedik hata da kayda dussun; aksi halde pencere kapanir
+            // ve geriye hicbir iz kalmaz.
+            AppDomain.CurrentDomain.UnhandledException += delegate(object o, UnhandledExceptionEventArgs e)
+            {
+                Exception ex = e.ExceptionObject as Exception;
+                if (ex != null) Gunluk.Hata("YakalanmayanHata", ex);
+            };
+            uyg.DispatcherUnhandledException += delegate(object o,
+                System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+            {
+                Gunluk.Hata("ArayuzHatasi", e.Exception);
+            };
             try
             {
                 Tema.Yukle();
