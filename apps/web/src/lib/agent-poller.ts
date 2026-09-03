@@ -195,7 +195,9 @@ async function persistFailedLogons(serverId: string, serverName: string, report:
 }
 
 /* ── AD / IIS / SQL / UserProcesses verilerini hub'a yaz ── */
-async function persistHeavyData(serverName: string, report: AgentReport): Promise<void> {
+/*  force: kurulum sihirbazi / Yenile gibi "simdi yaz" cagrilarindan gelir —
+ *  SQL bolumu 5 dakikalik ritmi beklemez (kilit yine gecerli).            */
+async function persistHeavyData(serverName: string, report: AgentReport, force = false): Promise<void> {
   if (isReadOnly()) return
   try {
     // UserDailyUsage — running average (RPC). Sistem hesaplarını filtrele.
@@ -248,7 +250,7 @@ async function persistHeavyData(serverName: string, report: AgentReport): Promis
     }
 
     // SQL Databases — AGIR: kendi ritminde ve kilitli (bkz. HEAVY_SQL_INTERVAL_MS)
-    if (sqlCollectDue(serverName)) {
+    if (force ? !_sqlCollecting.has(serverName) : sqlCollectDue(serverName)) {
       _sqlCollecting.add(serverName)
       try {
         await persistSqlDatabases(serverName, report)
@@ -392,7 +394,10 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
 
     const hasSqlRole = Array.isArray(report.roles) && report.roles.some((r) => String(r).toUpperCase() === "SQL")
     if (report.ad?.companies || report.iis || report.sql || report.userProcesses || hasSqlRole) {
-      persistHeavyData(server.Name, report)
+      /*  force'ta BEKLENIR: cagiran (sihirbaz, Yenile) donusunde verinin
+       *  hub'a yazilmis olmasini istiyor. Normal poll'da beklenmez.       */
+      if (force) await persistHeavyData(server.Name, report, true)
+      else void persistHeavyData(server.Name, report)
     }
     if (report.logs?.failedLogins?.length) {
       persistFailedLogons(server.Id, server.Name, report)
@@ -503,6 +508,11 @@ async function pollAll(): Promise<void> {
   } catch (err) {
     console.error("[Poller] DB sorgu hatası:", err)
   }
+}
+
+/* ── Firma istatistiklerini simdi yeniden hesapla (sihirbaz sonu) ── */
+export async function refreshCompanyStats(): Promise<void> {
+  await updateCompanyUsage()
 }
 
 /* ── On-demand tek sunucu poll (UI "Yenile") ── */

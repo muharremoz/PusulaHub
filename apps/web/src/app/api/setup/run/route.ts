@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { serverAgentById, sqlServerById, serversWithRole } from "@/lib/hub-servers"
-import { execOnAgent } from "@/lib/agent-poller"
+import { execOnAgent, pollSingleAgent, refreshCompanyStats } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
@@ -1224,6 +1224,43 @@ export async function POST(req: NextRequest) {
             file_server_id:    payload.depoServerId ?? null,
           }).eq("company_id", payload.firmaId)
         } catch { /* hub.companies'te kayıt yoksa sessizce geç */ }
+
+        // ── Senkron: agent onbellegini zorla yenile + hub'a hemen yaz ──
+        // Agent AD/IIS/SQL listelerini 5 dk cache'ler, poller SQL'i ayrica
+        // 5 dk ritimle yazar; sihirbaz bitince kullanici/DB en kotu 10 dk
+        // sonra gorunuyordu. Burada ilgili sunucular force ile yoklanir,
+        // ardindan firma sayaclari yeniden hesaplanir. Hata kurulumu bozmaz.
+        const senkronHedefleri: { id: string | null | undefined; etiket: string }[] = [
+          { id: payload.serverId,        etiket: "Active Directory" },
+          { id: payload.sqlServerId,     etiket: "SQL" },
+          { id: payload.windowsServerId, etiket: "IIS / Terminal" },
+        ]
+        const senkronlanan = new Set<string>()
+        for (const h of senkronHedefleri) {
+          if (!h.id || senkronlanan.has(h.id)) continue
+          senkronlanan.add(h.id)
+          const stepId = `sync_${h.id}`
+          send("step", { stepId, label: `Hub senkronu: ${h.etiket}`, status: "running" })
+          try {
+            const ok = await pollSingleAgent(h.id, true)
+            send("step", {
+              stepId, label: `Hub senkronu: ${h.etiket}`,
+              status: ok ? "done" : "error",
+              ...(ok ? { output: "Agent yenilendi, veriler hub'a yazıldı" } : { error: "Agent'a ulaşılamadı — poller 10 dk içinde yakalar" }),
+            })
+          } catch (err) {
+            send("step", { stepId, label: `Hub senkronu: ${h.etiket}`, status: "error", error: err instanceof Error ? err.message : String(err) })
+          }
+        }
+        if (senkronlanan.size) {
+          send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "running" })
+          try {
+            await refreshCompanyStats()
+            send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "done", output: "Kullanıcı sayısı ve kullanım güncellendi" })
+          } catch (err) {
+            send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "error", error: err instanceof Error ? err.message : String(err) })
+          }
+        }
 
         send("done", {
           ok: true,
