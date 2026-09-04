@@ -361,7 +361,10 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
   const url = `http://${server.IP}:${port}/api/report${force ? "?force=1" : ""}`
   try {
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 10_000)
+    /*  force=1'de agent AD/IIS/SQL'i bastan topluyor — AD sunucusunda ~20 sn
+     *  olculdu. 10 sn'lik poll suresi bunu keser ve sihirbazin senkron
+     *  adimi "ulasilamadi" der (abort loglanmadigi icin sessizce). */
+    const timeout = setTimeout(() => controller.abort(), force ? 60_000 : 10_000)
     const resp = await fetch(url, { headers: { "X-Api-Key": server.ApiKey ?? "" }, signal: controller.signal })
     clearTimeout(timeout)
 
@@ -417,7 +420,7 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
     return true
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err)
-    if (!msg.includes("abort")) console.log(`[Poller] ${server.Name} (${server.IP}:${port}) — ${msg}`)
+    if (!msg.includes("abort") || force) console.log(`[Poller] ${server.Name} (${server.IP}:${port}) — ${force ? "force poll " : ""}${msg}`)
     markAgentOffline(server.Id)
     return false
   }
