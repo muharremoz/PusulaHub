@@ -19,7 +19,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
-import type { EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
+import type { BackupRun, BackupStorage, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 
 /**
  * Disk kartının ihtiyaç duyduğu asgari sunucu şekli. `@/types`'taki tam
@@ -154,33 +154,6 @@ function formatGB(gb: number): string {
   return `${Math.round(gb)} GB`
 }
 
-/** ISO → "2 sa önce" / "dün 19:13" */
-function formatAgo(iso: string | null, now: Date): string {
-  if (!iso) return "yok"
-  const t = new Date(iso).getTime()
-  if (!isFinite(t)) return "—"
-  const mins = Math.floor((now.getTime() - t) / 60000)
-  if (mins < 1)    return "az önce"
-  if (mins < 60)   return `${mins} dk önce`
-  if (mins < 1440) return `${Math.floor(mins / 60)} sa önce`
-  return `${Math.floor(mins / 1440)} g önce`
-}
-
-/**
- * Yedek tazeliği → renk.
- *
- * İş günde üç tur dönüyor (yaklaşık 09:00 / 15:00 / 19:00), yani en geniş
- * aralık gece ~14 saat. 20 saat geçmişse bir tur kaçmış demektir; 36 saat
- * geçmişse iş hiç çalışmıyor.
- */
-function backupColor(iso: string | null, now: Date): string {
-  if (!iso) return RED
-  const hrs = (now.getTime() - new Date(iso).getTime()) / 3_600_000
-  if (hrs > 36) return RED
-  if (hrs > 20) return AMBER
-  return TXT
-}
-
 /* ══════════════════════════════════════════════════════════
    Fiziksel sunucu
 ══════════════════════════════════════════════════════════ */
@@ -250,7 +223,14 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
 /** Kaç sunucu satırı gösterilir — en dolular önce */
 const MAX_DISK_ROWS = 6
 
-export function DiskCard({ host, servers }: { host: EsxiHost | null; servers: DiskCardServer[] }) {
+export function DiskCard({
+  host, servers, backupStorage,
+}: {
+  host: EsxiHost | null
+  servers: DiskCardServer[]
+  /** Musteri yedeklerinin yazildigi SFTP sunucusu — dolarsa yedek durur */
+  backupStorage: BackupStorage | null
+}) {
   /*  Her diski ayrı satır yapıp en dolulara göre sıralıyoruz: ekranda yer
    *  sınırlı, dolmak üzere olan disk her zaman görünsün.                 */
   const rows = servers
@@ -285,7 +265,17 @@ export function DiskCard({ host, servers }: { host: EsxiHost | null; servers: Di
         />
       ))}
 
-      {ds.length > 0 && rows.length > 0 && <Divider />}
+      {/*  Yedek deposu once geliyor: dolarsa musteri yedekleri durur,
+           sanal makine disklerinden daha kritik.                       */}
+      {backupStorage && (
+        <Meter
+          name="Yedek deposu"
+          value={`${formatGB(backupStorage.freeGB)} boş`}
+          percent={backupStorage.percent}
+        />
+      )}
+
+      {(ds.length > 0 || backupStorage) && rows.length > 0 && <Divider />}
 
       {rows.length > 0 ? (
         rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} />)
@@ -302,45 +292,67 @@ export function DiskCard({ host, servers }: { host: EsxiHost | null; servers: Di
    İmaj yedekleri
 ══════════════════════════════════════════════════════════ */
 
-export function BackupImageCard({ backups, now }: { backups: EsxiVmBackup[]; now: Date | null }) {
-  const ref = now ?? new Date()
-
-  /*  Sıralama önem sırasına göre: hiç yedeği olmayan en üstte, sonra en
-   *  eskiler. Ekranda ilk görülen satır en çok ilgilenilmesi gereken olsun. */
-  const sorted = [...backups].sort((a, b) => {
-    if (!a.lastBackupAt && b.lastBackupAt) return -1
-    if (a.lastBackupAt && !b.lastBackupAt) return 1
-    if (!a.lastBackupAt && !b.lastBackupAt) return a.vmName.localeCompare(b.vmName, "tr")
-    return new Date(a.lastBackupAt!).getTime() - new Date(b.lastBackupAt!).getTime()
-  })
-
-  const missing = backups.filter((b) => !b.lastBackupAt).length
-  const running = backups.some((b) => b.running)
+/*  `now` YOK: turlar sunucuda, sunucunun saatiyle hesaplaniyor
+ *  (bkz. computeTodayRuns).                                            */
+export function BackupImageCard({
+  backups, runs, vmsInJob,
+}: {
+  backups: EsxiVmBackup[]
+  runs: BackupRun[] | null
+  vmsInJob: number
+}) {
+  /*  Yedek isine hic girmemis makineler tur kapsamina KATILMIYOR (turu
+   *  haksiz yere eksik gosterirlerdi); ayri bir uyari satiri oluyorlar. */
+  const missing = backups.filter((b) => b.times.length === 0)
+  const running = backups.find((b) => b.running)
+  const kisaAd = (s: string) => s.replace(/\s*\(.*?\)\s*$/, "")
+  const saat = (iso: string) =>
+    new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
 
   return (
     <Card>
-      <Title accent={missing > 0 ? RED : running ? FLOW : undefined}>İmaj Yedekleri</Title>
+      <Title accent={missing.length > 0 ? RED : running ? FLOW : undefined}>
+        İmaj Yedekleri
+      </Title>
 
       <div className="mt-1.5">
-        {sorted.slice(0, 8).map((b) => (
-          <Row
-            key={b.vmName}
-            /*  Sanal makine adları "RDP Terminal (10.15.2.5)" biçiminde;
-             *  IP kısmı dar kartta yer yiyor, atılıyor.                   */
-            name={b.vmName.replace(/\s*\(.*?\)\s*$/, "")}
-            value={b.running ? "alınıyor…" : formatAgo(b.lastBackupAt, ref)}
-            color={b.running ? FLOW : backupColor(b.lastBackupAt, ref)}
-          />
-        ))}
+        {runs && runs.length > 0 ? (
+          runs.map((r) => (
+            <Row
+              key={r.at}
+              name={saat(r.at)}
+              /*  Tam kapsam beyaz, eksik kapsam kehribar. Farkli Veeam
+               *  isleri farkli makine kumesini kapsadigi icin eksik
+               *  kapsam tek basina ARIZA degil — bu yuzden kirmizi degil. */
+              value={`${r.vmCount}/${vmsInJob}`}
+              color={r.vmCount >= vmsInJob ? TXT : AMBER}
+            />
+          ))
+        ) : (
+          <div
+            className="py-1 font-mono text-[10px] uppercase"
+            style={{ color: TXT_DIM, letterSpacing: "0.14em" }}
+          >
+            bugün tur yok
+          </div>
+        )}
       </div>
 
-      {missing > 0 && (
-        <>
-          <Divider />
-          <div className="text-[10px] leading-snug" style={{ color: RED }}>
-            {missing} sanal makine yedek işinde değil
-          </div>
-        </>
+      <Divider />
+
+      <Row
+        name="Bugün"
+        value={`${runs?.length ?? 0} tur`}
+        /*  Gun icinde hic tur donmediyse dikkat: is duruyor olabilir.   */
+        color={(runs?.length ?? 0) === 0 ? RED : TXT_DIM}
+      />
+
+      {running && <Row name="Şu an" value={`${kisaAd(running.vmName)} alınıyor`} color={FLOW} />}
+
+      {missing.length > 0 && (
+        <div className="pt-1.5 text-[10px] leading-snug" style={{ color: RED }}>
+          Yedek işinde değil: {missing.map((m) => kisaAd(m.vmName)).join(", ")}
+        </div>
       )}
     </Card>
   )

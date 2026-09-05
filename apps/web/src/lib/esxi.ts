@@ -99,8 +99,26 @@ export interface EsxiVmBackup {
   lastBackupAt: string | null
   /** Şu an yedek alınıyor mu (aktif anlık görüntü var) */
   running: boolean
-  /** Günlükte görülen yedek sayısı — sıklık göstergesi */
-  seenCount: number
+  /** Günlükte görülen TÜM yedek zamanları (ISO, eskiden yeniye) */
+  times: string[]
+}
+
+/**
+ * Bugün gerçekten dönmüş bir yedek turu.
+ *
+ * ── Neden "program" değil de "bugün olan"? ─────────────────────────────
+ * Sabit saatli bir program çıkarmayı denedik ve veri buna uymadı: bir
+ * günde 03:11, 12:03, 14:59, 16:39, 18:02 ve 22:04'te tur görülüyor ve
+ * her tur farklı makine kümesini kapsıyor (Veeam tarafında birden fazla
+ * iş var). Saat tahmin etmek panelin sessizce yanlış göstermesi
+ * demekti. Onun yerine yalnız ÖLÇÜLEN gösteriliyor: bugün hangi saatte
+ * kaç makinenin imajı alındı.
+ */
+export interface BackupRun {
+  /** Turun başlangıcı (ISO) */
+  at: string
+  /** Bu turda imajı alınan makine sayısı */
+  vmCount: number
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -448,8 +466,7 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
 
   const results: EsxiVmBackup[] = []
   for (const vm of vms) {
-    let lastBackupAt: string | null = null
-    let seenCount = 0
+    let times: string[] = []
     try {
       const path = `/folder/${encodeURIComponent(vm.folder)}/vmware.log?dsName=${encodeURIComponent(vm.ds)}`
       const res = await request({
@@ -458,18 +475,90 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
         timeoutMs: 15_000,
       })
       if (res.status === 200 || res.status === 206) {
-        const times = [...res.body.matchAll(VEEAM_SNAPSHOT)].map((m) => m[1])
-        seenCount = times.length
-        if (times.length) lastBackupAt = times[times.length - 1] + "Z"
+        /*  vmware.log zamanlari UTC ve saniye hassasiyetinde; "Z" ekleyip
+         *  ISO'ya cikariyoruz. Ayni yedek gunluge birkac satir birakiyor,
+         *  tekrarlar ayikleniyor.                                        */
+        times = [...new Set([...res.body.matchAll(VEEAM_SNAPSHOT)].map((m) => m[1] + "Z"))]
+        times.sort()
       }
     } catch { /* günlük okunamadı — yedek durumu bilinmiyor sayılır */ }
 
-    results.push({ vmName: vm.name, lastBackupAt, running: vm.running, seenCount })
+    results.push({
+      vmName: vm.name,
+      lastBackupAt: times.length ? times[times.length - 1] : null,
+      running: vm.running,
+      times,
+    })
   }
 
   results.sort((a, b) => a.vmName.localeCompare(b.vmName, "tr"))
   backupCache = { at: Date.now(), data: results }
   return results
+}
+
+/**
+ * Bugünkü yedek turları.
+ *
+ * ── Saatler neden sabit yazılmıyor? ────────────────────────────────────
+ * İş şu an günde üç kez dönüyor ama bu Makdos tarafında değişebilir.
+ * Sabit saat yazmak, program değiştiğinde panelin sessizce yanlış
+ * göstermesi demek olurdu. Onun yerine geçmiş yedeklerin SAATİNDEN
+ * çıkarılıyor: son bir haftada en az iki gün tekrar eden saatler
+ * "program" sayılıyor.
+ *
+ * ── Bir tur ne zaman "başarılı"? ───────────────────────────────────────
+ * O turda yedek işindeki her makinenin yedeği alınmışsa. İşe hiç dahil
+ * olmayan makineler (hiç yedeği yok) beklenen sayıya KATILMIYOR; onlar
+ * ayrı bir uyarı olarak gösteriliyor, turu başarısız göstermeleri
+ * yanıltıcı olurdu.
+ *
+ * Zaman toleransı ±90 dk: iş sırayla makineleri dolaştığı için aynı turun
+ * ilk ve son makinesi arasında yarım saati aşan fark olabiliyor.
+ */
+/**
+ * Bugünkü yedek turları ve yedek işindeki makine sayısı.
+ *
+ * Turlar zaman kümelemesiyle bulunuyor: aynı tur makineleri sırayla
+ * dolaştığı için 12:03 ile 12:22 tek tur sayılmalı. Pencere kümenin İLK
+ * noktasına göre ölçülüyor; son noktaya göre ölçülürse 70'er dakika
+ * arayla dizilen zamanlar zincirleme birleşip günün yarısını tek tur
+ * yapıyor (yaşandı).
+ */
+export function computeTodayRuns(
+  vms: EsxiVmBackup[], now = new Date(),
+): { runs: BackupRun[]; vmsInJob: number } {
+  const inJob = vms.filter((v) => v.times.length > 0)
+  if (!inJob.length) return { runs: [], vmsInJob: 0 }
+
+  const today = now.toDateString()
+  /*  (zaman, makine) çiftleri — aynı makine bir turda günlüğe birkaç
+   *  satır bırakabiliyor, makine adıyla tekilleştiriliyor.              */
+  const points: { t: number; vm: string }[] = []
+  for (const v of inJob) {
+    for (const iso of v.times) {
+      const d = new Date(iso)
+      if (!isFinite(d.getTime()) || d.toDateString() !== today) continue
+      points.push({ t: d.getTime(), vm: v.vmName })
+    }
+  }
+  if (!points.length) return { runs: [], vmsInJob: inJob.length }
+  points.sort((a, b) => a.t - b.t)
+
+  const WINDOW_MS = 75 * 60_000
+  const runs: BackupRun[] = []
+  let startT = points[0].t
+  let vmSet = new Set<string>()
+  for (const pt of points) {
+    if (pt.t - startT > WINDOW_MS) {
+      runs.push({ at: new Date(startT).toISOString(), vmCount: vmSet.size })
+      startT = pt.t
+      vmSet = new Set<string>()
+    }
+    vmSet.add(pt.vm)
+  }
+  runs.push({ at: new Date(startT).toISOString(), vmCount: vmSet.size })
+
+  return { runs, vmsInJob: inJob.length }
 }
 
 export function invalidateEsxiCache(): void {

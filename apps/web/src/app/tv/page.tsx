@@ -36,7 +36,7 @@ import { AlarmBanner } from "./_components/alarm-banner"
 import { AlarmControls } from "./_components/alarm-controls"
 import { useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_components/mock-data"
 import { useServerMetrics, useServerList } from "./_components/use-server-metrics"
-import { useEsxi } from "./_components/use-esxi"
+import { useBackupStorage, useEsxi } from "./_components/use-esxi"
 import { PhysicalHostCard, DiskCard, BackupImageCard } from "./_components/infra-cards"
 
 const PAGE   = "#0B0B0D"
@@ -79,6 +79,7 @@ export default function TvAgacPage() {
    *  ve ekranin bu kosesi her zaman dogru olmali.                   */
   const esxi        = useEsxi()
   const serverList  = useServerList()
+  const backupDisk  = useBackupStorage()
   const mockMetrics = useMockServerMetrics(mock)
   const metrics     = mock ? mockMetrics : realMetrics
 
@@ -196,11 +197,11 @@ export default function TvAgacPage() {
           surekli goz onunde duruyorlar. */}
       <div className="pointer-events-none absolute right-[286px] top-6 flex w-[262px] select-none flex-col gap-3">
         {esxi && <PhysicalHostCard host={esxi.host} />}
-        {(esxi || serverList.length > 0) && (
-          <DiskCard host={esxi?.host ?? null} servers={serverList} />
+        {(esxi || serverList.length > 0 || backupDisk) && (
+          <DiskCard host={esxi?.host ?? null} servers={serverList} backupStorage={backupDisk} />
         )}
         {esxi?.backups && esxi.backups.length > 0 && (
-          <BackupImageCard backups={esxi.backups} now={now} />
+          <BackupImageCard backups={esxi.backups} runs={esxi.runs} vmsInJob={esxi.vmsInJob} />
         )}
       </div>
     </div>

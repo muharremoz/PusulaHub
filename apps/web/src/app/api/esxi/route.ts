@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { fetchEsxiBackups, fetchEsxiHost, esxiConfigured } from "@/lib/esxi"
+import { computeTodayRuns, fetchEsxiBackups, fetchEsxiHost, esxiConfigured } from "@/lib/esxi"
 
 /**
  * GET /api/esxi
@@ -36,7 +36,15 @@ export async function GET() {
       return NextResponse.json({ ok: false, reason: "ESXi'ye ulaşılamadı" }, { status: 200 })
     }
 
-    const res = NextResponse.json({ ok: true, fetchedAt: new Date().toISOString(), host, backups })
+    /*  Turlar burada hesaplaniyor, istemcide degil: kumeleme tum
+     *  makinelerin gecmisine bakiyor ve TV her 60 sn'de yeniden
+     *  hesaplamak zorunda kalmasin.                                     */
+    const cycle = backups ? computeTodayRuns(backups) : null
+
+    const res = NextResponse.json({
+      ok: true, fetchedAt: new Date().toISOString(), host, backups,
+      runs: cycle?.runs ?? null, vmsInJob: cycle?.vmsInJob ?? 0,
+    })
     res.headers.set("Cache-Control", "no-store")
     return res
   } catch (err) {
