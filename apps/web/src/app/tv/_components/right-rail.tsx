@@ -313,7 +313,7 @@ export function RightRail({ bandwidth, offlineFirms, domains }: Props) {
     <>
       {/* Sağdan sola sönen karartı — kartların okunabilirlik zemini */}
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-[26%]"
+        className="pointer-events-none absolute inset-y-0 right-0 w-[38%]"
         style={{
           background:
             "linear-gradient(270deg, rgba(6,8,14,0.94) 0%, rgba(6,8,14,0.72) 38%, rgba(6,8,14,0.30) 70%, rgba(6,8,14,0) 100%)",

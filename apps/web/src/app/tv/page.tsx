@@ -186,9 +186,15 @@ export default function TvAgacPage() {
         domains={domains}
       />
 
-      {/* Altyapi seridi — sol alt. Kure ortada, saat sol USTTE; bu kose bos.
-          Kartlar tiklamayi gecirir, arkadaki sahneye tiklamayi engellemez. */}
-      <div className="pointer-events-none absolute bottom-24 left-9 flex w-[268px] select-none flex-col gap-3">
+      {/* Altyapi sutunu — izleme kartlarinin SOLUNDA, ayri bir sutun.
+          Alti kart tek sutunda 1124px tutuyordu ve 1080px ekrana
+          sigmiyordu; uretimde disk karti sunucu satirlariyla daha da
+          buyuyecek. Ikinci sutun kartlari sikistirmadan cozuyor.
+          Kure ekranin solunda kaliyor, cakisma yok.
+          Ucu de sessizce bozulan seyleri gosteriyor (guc kaynagi, dolan
+          disk, yedeksiz sanal makine) — hicbiri alarm uretmedigi icin
+          surekli goz onunde duruyorlar. */}
+      <div className="pointer-events-none absolute right-[286px] top-6 flex w-[262px] select-none flex-col gap-3">
         {esxi && <PhysicalHostCard host={esxi.host} />}
         {(esxi || serverList.length > 0) && (
           <DiskCard host={esxi?.host ?? null} servers={serverList} />
