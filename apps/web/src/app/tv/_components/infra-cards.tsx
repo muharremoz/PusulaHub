@@ -301,58 +301,76 @@ export function BackupImageCard({
   runs: BackupRun[] | null
   vmsInJob: number
 }) {
-  /*  Yedek isine hic girmemis makineler tur kapsamina KATILMIYOR (turu
-   *  haksiz yere eksik gosterirlerdi); ayri bir uyari satiri oluyorlar. */
-  const missing = backups.filter((b) => b.times.length === 0)
-  const running = backups.find((b) => b.running)
   const kisaAd = (s: string) => s.replace(/\s*\(.*?\)\s*$/, "")
-  const saat = (iso: string) =>
-    new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+  const bugun = new Date().toDateString()
+
+  /**
+   * Yedegin ne kadar taze oldugu.
+   *
+   * Is gun icinde birkac kez donuyor ve en genis araligi gece; 20 saati
+   * gecen bir yedek bir turun kacirildigini, 36 saati gecen ise isin hic
+   * calismadigini gosterir.
+   */
+  const durum = (iso: string | null) => {
+    if (!iso) return { metin: "yok", renk: RED }
+    const d = new Date(iso)
+    const saat = (Date.now() - d.getTime()) / 3_600_000
+    /*  Bugunse saat, degilse gun farki — TV'de "11:54" bir bakista
+     *  okunuyor, "3 sa once" ise turu degil sureyi anlatiyor.           */
+    const metin = d.toDateString() === bugun
+      ? d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+      : `${Math.max(1, Math.floor(saat / 24))} g önce`
+    return { metin, renk: saat > 36 ? RED : saat > 20 ? AMBER : TXT }
+  }
+
+  /*  Sorunlular ustte: once hic yedegi olmayanlar, sonra en eskiler.
+   *  Ekranda ilk goze carpan satir ilgilenilmesi gereken olsun.         */
+  const sirali = [...backups].sort((a, b) => {
+    const ta = a.lastBackupAt ? new Date(a.lastBackupAt).getTime() : 0
+    const tb = b.lastBackupAt ? new Date(b.lastBackupAt).getTime() : 0
+    return ta - tb
+  })
+
+  const yedeksiz = backups.filter((b) => b.times.length === 0).length
+  const running  = backups.find((b) => b.running)
 
   return (
     <Card>
-      <Title accent={missing.length > 0 ? RED : running ? FLOW : undefined}>
+      <Title accent={yedeksiz > 0 ? RED : running ? FLOW : undefined}>
         İmaj Yedekleri
       </Title>
 
       <div className="mt-1.5">
-        {runs && runs.length > 0 ? (
-          runs.map((r) => (
+        {sirali.map((b) => {
+          const d = durum(b.lastBackupAt)
+          return (
             <Row
-              key={r.at}
-              name={saat(r.at)}
-              /*  Tam kapsam beyaz, eksik kapsam kehribar. Farkli Veeam
-               *  isleri farkli makine kumesini kapsadigi icin eksik
-               *  kapsam tek basina ARIZA degil — bu yuzden kirmizi degil. */
-              value={`${r.vmCount}/${vmsInJob}`}
-              color={r.vmCount >= vmsInJob ? TXT : AMBER}
+              key={b.vmName}
+              name={kisaAd(b.vmName)}
+              value={b.running ? "alınıyor…" : d.metin}
+              color={b.running ? FLOW : d.renk}
             />
-          ))
-        ) : (
-          <div
-            className="py-1 font-mono text-[10px] uppercase"
-            style={{ color: TXT_DIM, letterSpacing: "0.14em" }}
-          >
-            bugün tur yok
-          </div>
-        )}
+          )
+        })}
       </div>
 
       <Divider />
 
       <Row
         name="Bugün"
-        value={`${runs?.length ?? 0} tur`}
+        value={`${runs?.length ?? 0} tur · son ${
+          runs && runs.length
+            ? new Date(runs[runs.length - 1].at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+            : "—"
+        }`}
         /*  Gun icinde hic tur donmediyse dikkat: is duruyor olabilir.   */
         color={(runs?.length ?? 0) === 0 ? RED : TXT_DIM}
       />
 
-      {running && <Row name="Şu an" value={`${kisaAd(running.vmName)} alınıyor`} color={FLOW} />}
-
-      {missing.length > 0 && (
-        <div className="pt-1.5 text-[10px] leading-snug" style={{ color: RED }}>
-          Yedek işinde değil: {missing.map((m) => kisaAd(m.vmName)).join(", ")}
-        </div>
+      {/*  vmsInJob: turun kapsami buna gore okunuyor. Yedegi hic
+           alinmamis makineler bu sayiya dahil DEGIL.                    */}
+      {yedeksiz > 0 && (
+        <Row name="Yedek işinde" value={`${vmsInJob}/${backups.length} makine`} color={RED} />
       )}
     </Card>
   )
