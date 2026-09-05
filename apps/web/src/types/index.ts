@@ -23,6 +23,12 @@ export interface Server {
    * farklı şeyler).
    */
   activeSessions?: number;
+  /**
+   * Sunucudaki BÜTÜN diskler. `disk` alanı yalnız ilk diskin yüzdesini
+   * verdiği için ikinci bir veri diski olan sunucularda eksik kalıyordu;
+   * /tv disk panelinde hepsi gösteriliyor. Agent bildirmiyorsa undefined.
+   */
+  disks?: { drive: string; totalGB: number; usedGB: number; percent: number }[];
 }
 
 export interface ADUser {

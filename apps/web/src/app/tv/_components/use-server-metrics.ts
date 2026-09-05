@@ -33,6 +33,7 @@ export interface ServerMetrics {
 
 /** API yanıtından ihtiyacımız olan alanlar */
 interface ServerRow {
+  id:   string
   name: string
   ip:   string
   cpu:  number
@@ -40,6 +41,7 @@ interface ServerRow {
   disk: number
   uptime: string
   activeSessions?: number
+  disks?: { drive: string; totalGB: number; usedGB: number; percent: number }[]
 }
 
 /**
@@ -47,6 +49,41 @@ interface ServerRow {
  * eşleşmesi ikisinden biriyle tutabilsin.
  */
 export type MetricsMap = Map<string, ServerMetrics>
+
+/**
+ * Ham sunucu listesi — disk panelinde her sunucunun BÜTÜN diskleri lazım,
+ * `MetricsMap` ise yalnız ilk diskin yüzdesini taşıyor.
+ *
+ * Ayrı bir istek atıyor ama `/api/servers` yanıtı 5 sn `max-age` ile
+ * geldiği için tarayıcı ikinci çağrıyı önbellekten karşılıyor; sunucuya
+ * fazladan yük binmiyor.
+ */
+export function useServerList(enabled = true): ServerRow[] {
+  const [list, setList] = useState<ServerRow[]>([])
+
+  useEffect(() => {
+    if (!enabled) return
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const res = await fetch("/api/servers", { cache: "no-store" })
+        if (!res.ok) return
+        const json = await res.json()
+        if (cancelled) return
+        setList(Array.isArray(json) ? json : (json.servers ?? []))
+      } catch {
+        /* ağ hatası — mevcut liste dursun */
+      }
+    }
+
+    load()
+    const t = setInterval(load, POLL_MS)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [enabled])
+
+  return list
+}
 
 export function useServerMetrics(enabled = true): MetricsMap {
   const [map, setMap] = useState<MetricsMap>(new Map())

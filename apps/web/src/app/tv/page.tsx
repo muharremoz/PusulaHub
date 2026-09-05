@@ -35,7 +35,9 @@ import { RightRail } from "./_components/right-rail"
 import { AlarmBanner } from "./_components/alarm-banner"
 import { AlarmControls } from "./_components/alarm-controls"
 import { useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_components/mock-data"
-import { useServerMetrics } from "./_components/use-server-metrics"
+import { useServerMetrics, useServerList } from "./_components/use-server-metrics"
+import { useEsxi } from "./_components/use-esxi"
+import { PhysicalHostCard, DiskCard, BackupImageCard } from "./_components/infra-cards"
 
 const PAGE   = "#0B0B0D"
 const PANEL  = "#141417"
@@ -72,6 +74,11 @@ export default function TvAgacPage() {
 
   /* Sunucu metrikleri: mock modda sahte, aksi halde /api/servers */
   const realMetrics = useServerMetrics(!mock)
+  /*  Altyapi panelleri: fiziksel sunucu (ESXi) + sunucu diskleri.
+   *  Mock modda da gercek veri gosteriliyor — bunlarin sahtesi yok
+   *  ve ekranin bu kosesi her zaman dogru olmali.                   */
+  const esxi        = useEsxi()
+  const serverList  = useServerList()
   const mockMetrics = useMockServerMetrics(mock)
   const metrics     = mock ? mockMetrics : realMetrics
 
@@ -178,6 +185,18 @@ export default function TvAgacPage() {
         offlineFirms={mockFirms ?? offlineFirms}
         domains={domains}
       />
+
+      {/* Altyapi seridi — sol alt. Kure ortada, saat sol USTTE; bu kose bos.
+          Kartlar tiklamayi gecirir, arkadaki sahneye tiklamayi engellemez. */}
+      <div className="pointer-events-none absolute bottom-24 left-9 flex w-[268px] select-none flex-col gap-3">
+        {esxi && <PhysicalHostCard host={esxi.host} />}
+        {(esxi || serverList.length > 0) && (
+          <DiskCard host={esxi?.host ?? null} servers={serverList} />
+        )}
+        {esxi?.backups && esxi.backups.length > 0 && (
+          <BackupImageCard backups={esxi.backups} now={now} />
+        )}
+      </div>
     </div>
   )
 }

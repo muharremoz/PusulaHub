@@ -71,6 +71,11 @@ export async function GET() {
         lastChecked: agent ? agent.lastSeen : (r.last_checked ?? "—"),
         roles: (roleMap.get(r.id) ?? []) as Server["roles"],
         activeSessions,
+        /*  Tüm diskler: `disk` alanı yalnız ilki. Agent yoksa undefined —
+         *  DB'de disk dizisi tutulmuyor, tek yüzde var.                   */
+        disks: m?.disks?.map((d) => ({
+          drive: d.drive, totalGB: d.totalGB, usedGB: d.usedGB, percent: d.percent,
+        })),
       }
     })
 
