@@ -30,6 +30,8 @@ const RENK = {
   cam:        0x8fc7de,
   /** Kapı çerçevesi/dikmeleri — duvardan açık, cam kenarını çiziyor */
   cerceve:    0x59616d,
+  /** Bitki platformu — zeminden ayrılsın ama duvardan koyu kalsın */
+  platform:   0x2f353d,
   /** Saksı — zeminden biraz açık, gövdesi seçilsin */
   saksi:      0x39404a,
   /** Yaprak; iki ton arasında değişiyor, hepsi tek renk olunca yapay duruyor */
@@ -65,6 +67,17 @@ const CAM_KAL    = DUVAR_KAL * 0.45
 /** Dikme ve orta kayıt — kapıyı çift kanatlı gösteriyor */
 const CERCEVE    = 0.09
 
+/** Bitkilerin üzerinde durduğu alçak platform */
+const PLATFORM_Y = 0.12
+/**
+ * Bitkinin platform üstünde kalabileceği en yüksek nokta.
+ *
+ * Duvarı AŞMAMALI: aşınca kat siluetini bozuyor ve bitki duvarın
+ * arkasından fırlamış gibi duruyor. Pay bırakılıyor ki en uzun yaprak
+ * bile duvar hizasının altında kalsın.
+ */
+const BITKI_MAX  = DUVAR_Y - PLATFORM_Y - 0.18
+
 export class PlanSahne {
   private sahne   = new THREE.Scene()
   private kamera:   THREE.PerspectiveCamera
@@ -77,6 +90,8 @@ export class PlanSahne {
   private sonX    = 0
   private sonKare = 0
   private nesneler: THREE.Mesh[] = []
+  /** Buzlu cam dokusu — iki kapı da aynısını kullanıyor, bir kez üretiliyor */
+  private camDoku: THREE.CanvasTexture | null = null
 
   constructor(kap: HTMLElement) {
     this.kap = kap
@@ -182,6 +197,19 @@ export class PlanSahne {
      *  canlandırıyor.                                                   */
     const uc  = BOY / 2 - 1.3   // uçtan içeri
     const ara = 0.85            // aralarındaki mesafe
+    const boy = (adet - 1) * ara + 0.8   // platform uzunluğu
+
+    /*  Saksılar doğrudan zeminde değil, alçak bir platformun üstünde:
+     *  yere serpiştirilmiş gibi değil, düzenlenmiş bir yeşil alan gibi
+     *  duruyorlar.                                                      */
+    for (const yon of [1, -1]) {
+      const merkez = yon * (uc - ((adet - 1) * ara) / 2)
+      const p = this.kutu(0.72, PLATFORM_Y, boy, RENK.platform)
+      p.position.set(yon * x, PLATFORM_Y / 2, merkez)
+      p.receiveShadow = true
+      p.castShadow = true
+    }
+
     for (let i = 0; i < adet; i++) {
       this.bitki(-x,  uc - i * ara, i)          // sol duvar → ön uç
       this.bitki( x, -uc + i * ara, i + adet)   // sağ duvar → arka uç
@@ -199,12 +227,13 @@ export class PlanSahne {
     /*  Deterministik "rastgelelik": her yenilemede aynı görünsün.      */
     const r = (n: number) => (Math.sin(tohum * 12.9898 + n * 78.233) + 1) / 2
 
-    const saksiY = 0.26 + r(1) * 0.06
+    const saksiY = 0.22 + r(1) * 0.05
     const saksi = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.15, 0.2, saksiY, 8),
+      new THREE.CylinderGeometry(0.14, 0.19, saksiY, 8),
       new THREE.MeshStandardMaterial({ color: RENK.saksi, roughness: 0.9, flatShading: true }),
     )
-    saksi.position.set(x, saksiY / 2, z)
+    /*  Platformun ÜSTÜNE oturuyor.                                     */
+    saksi.position.set(x, PLATFORM_Y + saksiY / 2, z)
     saksi.castShadow = true
     saksi.receiveShadow = true
     this.sahne.add(saksi)
@@ -212,15 +241,19 @@ export class PlanSahne {
 
     const yaprakRenk = r(2) > 0.5 ? RENK.yaprakA : RENK.yaprakB
     for (let k = 0; k < 3; k++) {
-      const boyut = 0.17 + r(k + 3) * 0.1
+      const boyut = 0.14 + r(k + 3) * 0.07
       const yaprak = new THREE.Mesh(
         new THREE.IcosahedronGeometry(boyut, 0),
         new THREE.MeshStandardMaterial({ color: yaprakRenk, roughness: 0.75, flatShading: true }),
       )
+      /*  Yaprak kümesinin tepesi BITKI_MAX ile sınırlanıyor; yarıçap da
+       *  hesaba katılıyor, yoksa küme merkezi sınırın altında kalsa bile
+       *  üst ucu duvarı aşıyor.                                         */
+      const yukseklik = Math.min(saksiY + 0.06 + k * 0.11, BITKI_MAX - boyut)
       yaprak.position.set(
-        x + (r(k + 6) - 0.5) * 0.24,
-        saksiY + 0.1 + k * 0.13,
-        z + (r(k + 9) - 0.5) * 0.24,
+        x + (r(k + 6) - 0.5) * 0.2,
+        PLATFORM_Y + yukseklik,
+        z + (r(k + 9) - 0.5) * 0.2,
       )
       yaprak.rotation.set(r(k + 12) * 3, r(k + 15) * 3, 0)
       yaprak.castShadow = true
@@ -253,6 +286,45 @@ export class PlanSahne {
     this.camKapi(z)
   }
 
+  /**
+   * Buzlu cam dokusu — yatay bantlar.
+   *
+   * `alphaMap` olarak kullanılıyor: açık bantlar camı yoğunlaştırıyor,
+   * koyu aralıklar saydam bırakıyor. Ofis camlarındaki buzlu film ile
+   * aynı okuma.
+   *
+   * Bantların kenarı BİLEREK yumuşak (üç kademeli geçiş): sert kenar
+   * uzaktan bakınca titriyor (moiré), yumuşak geçiş camı gerçekten buzlu
+   * gösteriyor. Doku iki kapıda ortak, bir kez üretilip saklanıyor.
+   */
+  private buzluDoku(): THREE.CanvasTexture {
+    if (this.camDoku) return this.camDoku
+
+    const yuk = 128
+    const c = document.createElement("canvas")
+    c.width = 4
+    c.height = yuk
+    const ctx = c.getContext("2d")!
+
+    const bant = 10   // bir bandın piksel yüksekliği
+    for (let i = 0; i < yuk; i++) {
+      const konum = i % bant
+      /*  0-1 arası üçgen dalga → bant ortasında yoğun, kenarında ince. */
+      const t = konum < bant / 2 ? konum / (bant / 2) : 2 - konum / (bant / 2)
+      const v = Math.round(70 + t * 150)
+      ctx.fillStyle = `rgb(${v},${v},${v})`
+      ctx.fillRect(0, i, 4, 1)
+    }
+
+    const t = new THREE.CanvasTexture(c)
+    t.wrapS = THREE.RepeatWrapping
+    t.wrapT = THREE.RepeatWrapping
+    t.magFilter = THREE.LinearFilter
+    t.minFilter = THREE.LinearMipmapLinearFilter
+    this.camDoku = t
+    return t
+  }
+
   private camKapi(z: number) {
     /*  Cam gölge DÜŞÜRMÜYOR: saydam yüzeyin opak bir gölge bırakması
      *  kapıyı duvar gibi gösteriyordu.                                  */
@@ -261,13 +333,17 @@ export class PlanSahne {
       new THREE.MeshPhysicalMaterial({
         color: RENK.cam,
         transparent: true,
-        opacity: 0.22,
-        roughness: 0.06,
+        /*  Saydamlığı `alphaMap` belirliyor; buradaki değer onun üst
+         *  sınırı. Düz saydam camda kapı boşlukla karışıyordu, bantlı
+         *  doku hem cam olduğunu belli ediyor hem yüzeyi görünür kılıyor. */
+        opacity: 0.62,
+        alphaMap: this.buzluDoku(),
+        roughness: 0.35,
         metalness: 0,
         /*  Hafif yansıma cama "yüzey" hissi veriyor; olmayınca renkli
          *  bir tül gibi duruyor.                                        */
         clearcoat: 0.8,
-        clearcoatRoughness: 0.1,
+        clearcoatRoughness: 0.25,
       }),
     )
     cam.position.set(0, (DUVAR_Y - 0.06) / 2, z)
@@ -352,6 +428,7 @@ export class PlanSahne {
       m.geometry.dispose()
       ;(m.material as THREE.Material).dispose()
     }
+    this.camDoku?.dispose()
     this.cizici.dispose()
     this.cizici.domElement.remove()
   }
