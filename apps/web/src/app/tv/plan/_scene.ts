@@ -1,91 +1,60 @@
 /**
  * Kat planı sahnesi — saf three.js.
  *
+ * ── Şu an ne var? ──────────────────────────────────────────────────────
+ * BOŞ BİR KAT: zemin + dört duvar. Odalar (sunucu blokları) bilerek yok.
+ * Adım adım kuruyoruz; önce mekânın kendisi doğru görünsün, sonra içi
+ * doldurulsun. Bir önceki sürümde bloklar vardı ama mekân yoktu ve sonuç
+ * kat planı gibi değil, havada duran kutular gibi okunuyordu.
+ *
  * ── Neden react-three-fiber yok? ───────────────────────────────────────
  * r3f'in JSX tipleri bu projenin TypeScript kurulumunu kırıyor (daha önce
  * denendi ve geri alındı). Sahne bu yüzden React'ten BAĞIMSIZ, imperatif
  * bir modül: React yalnız kabı (div) veriyor ve `PlanSahne` örneğini
  * yönetiyor. Böylece her karede React render'ı tetiklenmiyor — TV'de
  * saatlerce dönecek bir sayfa için bu önemli.
- *
- * ── Etiketler neden DOM? ───────────────────────────────────────────────
- * three.js'te metin çizmek pahalı ve çirkin (texture atlas ya da font
- * yükleyici gerekiyor). Etiketler normal `div` olarak duruyor, her karede
- * dünya koordinatı ekrana yansıtılıp `transform` ile taşınıyor. Yazı tipi
- * ve renkler sayfanın geri kalanıyla birebir aynı kalıyor, uzaktan da
- * net okunuyor.
  */
 
 import * as THREE from "three"
 
-/* ══════════════════════════════════════════════════════════
-   Renkler — /tv ile aynı dil
-   ──────────────────────────────────────────────────────────
-   Bu sayfada YEŞİL "ayakta" demek ve bilerek kullanılıyor: kat
-   planında bakılan tek şey blokların durumu, /tv'deki gibi başka
-   anlam taşıyan bir renk yok.
-══════════════════════════════════════════════════════════ */
 const RENK = {
-  zemin:    0x131519,
-  taban:    0x212429,
-  /*  Parlak degil DERIN tonlar. Ilk denemede tailwind'in acik tonlari
-   *  (0x34d399 vb.) kullanildi ve bloklar duz boyanmis gibi durdu —
-   *  3B hacim kayboluyordu. Koyu renk + gucli yonlu isik, yan yuzlerde
-   *  gercek bir ton farki birakiyor.                                   */
-  online:   0x0e9f6e,
-  warning:  0xd08700,
-  offline:  0xdc4a4a,
-  bilinmez: 0x3f3f46,
+  /** Zeminin üst yüzü — odalar bunun üstüne oturacak */
+  zemin:      0x2b3038,
+  /** Zemin plakasının yan yüzü; üstten koyu olunca kalınlık hissi doğuyor */
+  zeminKenar: 0x1d2025,
+  /** Duvar gövdesi */
+  duvar:      0x3a404a,
+  /** Duvar üst kenarı — ince açık şerit, siluet koyu sahnede kaybolmasın */
+  duvarUst:   0x4d545f,
 } as const
 
-export type PlanDurum = "online" | "warning" | "offline" | "bilinmez"
+/* Kat ölçüleri (dünya birimi) — odalar geldiğinde ızgara buna göre kurulacak */
+const EN        = 20
+const BOY       = 14
+const KALINLIK  = 0.4     // zemin plakası
+const DUVAR_KAL = 0.35
 
-export interface PlanBlok {
-  id:      string
-  ad:      string
-  durum:   PlanDurum
-  /** 0-100 — bloğun yüksekliğini belirler */
-  yuk:     number
-  /** Izgarada kapladığı alan (birim kare) */
-  en:      number
-  boy:     number
-  /** Izgara konumu (sol üst köşe) */
-  x:       number
-  z:       number
-}
-
-interface Secim {
-  id: string
-  /** Ekran koordinatı — detay kartı buraya konumlanıyor */
-  ekranX: number
-  ekranY: number
-}
-
-const BIRIM      = 1.6      // bir ızgara karesinin dünya boyutu
-const ARALIK     = 0.14     // bloklar arası boşluk
-const TABAN_Y    = 0.22     // en düşük blok yüksekliği
-const YUK_CARPAN = 0.9      // %100 yükte eklenen yükseklik
+/**
+ * Duvar yüksekliği bilerek DÜŞÜK.
+ *
+ * Tam boy duvar üstten bakışta içeriyi kapatıyor ve kat bir kutuya
+ * dönüşüyor. Alçak duvar mekânı çevreliyor ama içerisi tamamen görünür
+ * kalıyor — mimari maketlerin mantığı.
+ */
+const DUVAR_Y = 1.15
 
 export class PlanSahne {
-  private sahne     = new THREE.Scene()
-  private kamera:     THREE.PerspectiveCamera
-  private cizici:     THREE.WebGLRenderer
-  private raycaster = new THREE.Raycaster()
-  private fare      = new THREE.Vector2(-10, -10)
-  private bloklar   = new Map<string, THREE.Mesh>()
-  private etiketler = new Map<string, HTMLDivElement>()
-  private kap:        HTMLElement
-  private etiketKat:  HTMLDivElement
-  private animId    = 0
-  private aci       = Math.PI * 0.25   // kameranın yatay açısı
-  private surukle   = false
-  private sonX      = 0
-  private uzerinde: string | null = null
-  private secili:   string | null = null
-  private sonKare   = 0
-
-  /** Seçim değişince React'e haber verilir (detay kartı için) */
-  onSecim: (s: Secim | null) => void = () => {}
+  private sahne   = new THREE.Scene()
+  private kamera:   THREE.PerspectiveCamera
+  private cizici:   THREE.WebGLRenderer
+  private kap:      HTMLElement
+  private animId  = 0
+  private aci     = Math.PI * 0.25   // kameranın yatay açısı
+  private mesafe  = 30
+  private surukle = false
+  private sonX    = 0
+  private sonKare = 0
+  private nesneler: THREE.Mesh[] = []
 
   constructor(kap: HTMLElement) {
     this.kap = kap
@@ -94,186 +63,106 @@ export class PlanSahne {
     this.cizici.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.cizici.shadowMap.enabled = true
     this.cizici.shadowMap.type = THREE.PCFSoftShadowMap
+    /*  Ton eşleme: ham çıktı koyu sahnelerde sert ve "yanmış" görünüyor,
+     *  ACESFilmic yumuşak bir geçiş veriyor.                            */
+    this.cizici.toneMapping = THREE.ACESFilmicToneMapping
+    this.cizici.toneMappingExposure = 1.15
     kap.appendChild(this.cizici.domElement)
 
-    /*  Etiketler ayrı bir katmanda; canvas tıklamayı yutmasın diye
-     *  `pointer-events:none`.                                          */
-    this.etiketKat = document.createElement("div")
-    this.etiketKat.style.cssText =
-      "position:absolute;inset:0;pointer-events:none;overflow:hidden"
-    kap.appendChild(this.etiketKat)
+    this.kamera = new THREE.PerspectiveCamera(32, 1, 0.1, 300)
+    this.mesafe = Math.max(EN, BOY) * 1.5
 
-    this.kamera = new THREE.PerspectiveCamera(30, 1, 0.1, 200)
+    this.isikKur()
+    this.katKur()
 
-    /*  Işık: tek yönlü ana ışık gölge üretiyor, yumuşak ortam ışığı
-     *  blokların yan yüzlerini tamamen karartmıyor.                    */
-    /*  Ortam isigi dusuk tutuluyor: yuksek olunca butun yuzler ayni
-     *  parlaklikta oluyor ve bloklar yassi gorunuyor.                  */
-    this.sahne.add(new THREE.AmbientLight(0xffffff, 0.62))
-    const ana = new THREE.DirectionalLight(0xffffff, 2.6)
-    ana.position.set(6, 12, 5)
-    ana.castShadow = true
-    ana.shadow.mapSize.set(2048, 2048)
-    ana.shadow.camera.left = -20
-    ana.shadow.camera.right = 20
-    ana.shadow.camera.top = 20
-    ana.shadow.camera.bottom = -20
-    this.sahne.add(ana)
-
-    kap.addEventListener("pointermove", this.fareHareket)
-    kap.addEventListener("pointerdown", this.fareBasti)
-    window.addEventListener("pointerup", this.fareBirakti)
-    kap.addEventListener("pointerleave", this.fareCikti)
+    kap.addEventListener("pointerdown", this.basti)
+    kap.addEventListener("pointermove", this.hareket)
+    window.addEventListener("pointerup", this.birakti)
 
     this.boyutla()
     this.dongu()
   }
 
-  /* ── Blokları kur / güncelle ───────────────────────────────────── */
-  guncelle(veri: PlanBlok[]) {
-    const kalanlar = new Set(this.bloklar.keys())
+  /* ── Işık ──────────────────────────────────────────────────────── */
+  private isikKur() {
+    /*  Üç kaynak: yarımküre ışığı yüzeylere doğal bir ton farkı veriyor
+     *  (üstten soğuk, alttan koyu), yönlü ışık gölgeyi çiziyor, zayıf
+     *  dolgu ışığı da gölgede kalan yüzleri tamamen siyah bırakmıyor.  */
+    this.sahne.add(new THREE.HemisphereLight(0x9fb4d8, 0x0b0b0d, 0.85))
 
-    /*  Izgara merkezi: bloklar sahnenin ortasında dursun.              */
-    const maxX = Math.max(1, ...veri.map((b) => b.x + b.en))
-    const maxZ = Math.max(1, ...veri.map((b) => b.z + b.boy))
-    const kayX = (maxX * BIRIM) / 2
-    const kayZ = (maxZ * BIRIM) / 2
+    const ana = new THREE.DirectionalLight(0xffffff, 2.4)
+    ana.position.set(14, 22, 10)
+    ana.castShadow = true
+    ana.shadow.mapSize.set(2048, 2048)
+    ana.shadow.camera.left   = -26
+    ana.shadow.camera.right  =  26
+    ana.shadow.camera.top    =  26
+    ana.shadow.camera.bottom = -26
+    ana.shadow.camera.far    =  80
+    /*  Gölge aknesi (yüzeyde çizgi çizgi lekeler) için küçük kaydırma. */
+    ana.shadow.bias = -0.0006
+    this.sahne.add(ana)
 
-    this.tabanKur(maxX, maxZ)
-
-    for (const b of veri) {
-      kalanlar.delete(b.id)
-      const h = TABAN_Y + (Math.max(0, Math.min(100, b.yuk)) / 100) * YUK_CARPAN
-      const w = b.en * BIRIM - ARALIK
-      const d = b.boy * BIRIM - ARALIK
-      const px = b.x * BIRIM + (b.en * BIRIM) / 2 - kayX
-      const pz = b.z * BIRIM + (b.boy * BIRIM) / 2 - kayZ
-
-      let m = this.bloklar.get(b.id)
-      if (!m) {
-        m = new THREE.Mesh(
-          new THREE.BoxGeometry(1, 1, 1),
-          new THREE.MeshStandardMaterial({ roughness: 0.72, metalness: 0.04 }),
-        )
-        m.castShadow = true
-        m.receiveShadow = true
-        this.sahne.add(m)
-        this.bloklar.set(b.id, m)
-      }
-      m.userData.id = b.id
-      m.scale.set(w, h, d)
-      m.position.set(px, h / 2, pz)
-
-      const renk = new THREE.Color(RENK[b.durum === "bilinmez" ? "bilinmez" : b.durum])
-      const mat = m.material as THREE.MeshStandardMaterial
-      mat.color.copy(renk)
-      /*  Kendi ışığı: koyu zeminde blok "yanıyor" gibi dursun, ama
-       *  seçili/üzerinde olan daha parlak olsun diye taban düşük.      */
-      mat.emissive.copy(renk)
-      mat.emissiveIntensity = 0.06
-
-      this.etiketKur(b, px, h, pz)
-    }
-
-    /*  Listeden çıkan sunucu varsa sahneden de gitsin.                 */
-    for (const id of kalanlar) {
-      const m = this.bloklar.get(id)
-      if (m) { this.sahne.remove(m); m.geometry.dispose(); (m.material as THREE.Material).dispose() }
-      this.bloklar.delete(id)
-      this.etiketler.get(id)?.remove()
-      this.etiketler.delete(id)
-    }
+    const dolgu = new THREE.DirectionalLight(0xffffff, 0.35)
+    dolgu.position.set(-12, 8, -10)
+    this.sahne.add(dolgu)
   }
 
-  private taban: THREE.Mesh | null = null
+  /* ── Zemin + dört duvar ────────────────────────────────────────── */
+  private katKur() {
+    /*  Zemin iki parça: alttaki koyu plaka kalınlığı, üstteki ince
+     *  yüzey de odaların oturacağı düzlemi veriyor. Tek parça kutuda
+     *  yan yüz ile üst yüz aynı renk oluyor ve plaka kâğıt gibi
+     *  duruyordu.                                                      */
+    const plaka = this.kutu(EN, KALINLIK, BOY, RENK.zeminKenar)
+    plaka.position.y = -KALINLIK / 2
+    plaka.receiveShadow = true
 
-  private tabanKur(maxX: number, maxZ: number) {
-    const w = maxX * BIRIM + 1.2
-    const d = maxZ * BIRIM + 1.2
-    if (!this.taban) {
-      this.taban = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 1, 1),
-        new THREE.MeshStandardMaterial({ color: RENK.taban, roughness: 0.9, metalness: 0 }),
-      )
-      this.taban.receiveShadow = true
-      this.sahne.add(this.taban)
-    }
-    this.taban.scale.set(w, 0.25, d)
-    this.taban.position.set(0, -0.125, 0)
+    const yuzey = this.kutu(EN - 0.06, 0.04, BOY - 0.06, RENK.zemin)
+    yuzey.position.y = 0.02
+    yuzey.receiveShadow = true
 
-    /*  Kamerayı zemin boyutuna göre uzaklaştır: sunucu sayısı artınca
-     *  plan taşmasın.                                                  */
-    this.mesafe = Math.max(w, d) * 1.55
+    /*  Duvarlar zeminin KENARINA oturuyor: dıştan bakınca plaka ile
+     *  duvar tek gövde gibi görünsün.                                  */
+    const yariEn  = EN / 2 - DUVAR_KAL / 2
+    const yariBoy = BOY / 2 - DUVAR_KAL / 2
+
+    /*  Ön/arka duvarlar tam genişlikte, yan duvarlar aradaki farkı
+     *  tamamlıyor — köşelerde ne boşluk ne de üst üste binme kalıyor.  */
+    this.duvar(EN, DUVAR_KAL, 0, -yariBoy)
+    this.duvar(EN, DUVAR_KAL, 0,  yariBoy)
+    this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2, -yariEn, 0)
+    this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2,  yariEn, 0)
   }
 
-  private mesafe = 14
+  private duvar(w: number, d: number, x: number, z: number) {
+    const g = this.kutu(w, DUVAR_Y, d, RENK.duvar)
+    g.position.set(x, DUVAR_Y / 2, z)
+    g.castShadow = true
+    g.receiveShadow = true
 
-  private etiketKur(b: PlanBlok, px: number, h: number, pz: number) {
-    let el = this.etiketler.get(b.id)
-    if (!el) {
-      el = document.createElement("div")
-      el.style.cssText =
-        "position:absolute;transform-origin:0 0;white-space:nowrap;font-weight:600;" +
-        "letter-spacing:0.01em;text-shadow:0 1px 3px rgba(0,0,0,0.8)"
-      this.etiketKat.appendChild(el)
-      this.etiketler.set(b.id, el)
-    }
-    el.textContent = b.ad
-    el.dataset.px = String(px)
-    el.dataset.py = String(h + 0.12)
-    el.dataset.pz = String(pz)
+    const ust = this.kutu(w, 0.05, d, RENK.duvarUst)
+    ust.position.set(x, DUVAR_Y + 0.02, z)
   }
 
-  /* ── Etkileşim ─────────────────────────────────────────────────── */
-  private fareHareket = (e: PointerEvent) => {
-    const r = this.kap.getBoundingClientRect()
-    this.fare.x = ((e.clientX - r.left) / r.width) * 2 - 1
-    this.fare.y = -((e.clientY - r.top) / r.height) * 2 + 1
-    if (this.surukle) {
-      this.aci -= (e.clientX - this.sonX) * 0.005
-      this.sonX = e.clientX
-    }
+  private kutu(w: number, h: number, d: number, renk: number): THREE.Mesh {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, h, d),
+      new THREE.MeshStandardMaterial({ color: renk, roughness: 0.85, metalness: 0.02 }),
+    )
+    this.sahne.add(m)
+    this.nesneler.push(m)
+    return m
   }
-  private fareBasti = (e: PointerEvent) => { this.surukle = true; this.sonX = e.clientX; this.basSaat = performance.now() }
-  private fareCikti = () => { this.fare.set(-10, -10) }
-  private basSaat = 0
 
-  private fareBirakti = (e: PointerEvent) => {
+  /* ── Etkileşim: yatay sürükleme ile döndürme ───────────────────── */
+  private basti   = (e: PointerEvent) => { this.surukle = true; this.sonX = e.clientX }
+  private hareket = (e: PointerEvent) => {
     if (!this.surukle) return
-    this.surukle = false
-    /*  Sürükleyip bıraktıysa seçim yapma; yalnız kısa tık seçsin.      */
-    if (performance.now() - this.basSaat > 250) return
-    const r = this.kap.getBoundingClientRect()
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return
-
-    /*  Işın BURADA atılıyor, `uzerinde` değerine güvenilmiyor: o değer
-     *  son `pointermove` ile hesaplanıyor ve dokunmatik ekranda (ya da
-     *  fare hiç kıpırdamadan yapılan tıkta) hareket olayı hiç gelmiyor,
-     *  seçim sessizce boşa düşüyordu.                                  */
-    this.fare.x = ((e.clientX - r.left) / r.width) * 2 - 1
-    this.fare.y = -((e.clientY - r.top) / r.height) * 2 + 1
-    this.raycaster.setFromCamera(this.fare, this.kamera)
-    const vurus = this.raycaster.intersectObjects([...this.bloklar.values()])
-    this.secili = vurus.length ? (vurus[0].object.userData.id as string) : null
-    this.secimBildir()
+    this.aci -= (e.clientX - this.sonX) * 0.005
+    this.sonX = e.clientX
   }
-
-  private secimBildir() {
-    if (!this.secili) { this.onSecim(null); return }
-    const m = this.bloklar.get(this.secili)
-    if (!m) { this.onSecim(null); return }
-    const v = m.position.clone()
-    v.y += m.scale.y
-    v.project(this.kamera)
-    const r = this.kap.getBoundingClientRect()
-    this.onSecim({
-      id: this.secili,
-      ekranX: ((v.x + 1) / 2) * r.width,
-      ekranY: ((-v.y + 1) / 2) * r.height,
-    })
-  }
-
-  secimiTemizle() { this.secili = null; this.onSecim(null) }
+  private birakti = () => { this.surukle = false }
 
   /* ── Döngü ─────────────────────────────────────────────────────── */
   private dongu = () => {
@@ -284,52 +173,15 @@ export class PlanSahne {
 
     /*  Sürüklenmiyorken çok yavaş dönüyor: TV'de sabit görüntü ölü
      *  duruyor, hızlı dönüş ise okumayı zorlaştırıyor.                 */
-    if (!this.surukle) this.aci += dt * 0.035
+    if (!this.surukle) this.aci += dt * 0.03
 
     this.kamera.position.set(
       Math.sin(this.aci) * this.mesafe,
-      this.mesafe * 0.72,
+      this.mesafe * 0.62,
       Math.cos(this.aci) * this.mesafe,
     )
     this.kamera.lookAt(0, 0, 0)
-
-    /*  Üzerinde durulan blok                                           */
-    this.raycaster.setFromCamera(this.fare, this.kamera)
-    const kesisim = this.raycaster.intersectObjects([...this.bloklar.values()])
-    const yeni = kesisim.length ? (kesisim[0].object.userData.id as string) : null
-    if (yeni !== this.uzerinde) {
-      this.uzerinde = yeni
-      this.kap.style.cursor = yeni ? "pointer" : "default"
-    }
-
-    for (const [id, m] of this.bloklar) {
-      const mat = m.material as THREE.MeshStandardMaterial
-      const hedef = id === this.secili ? 0.45 : id === this.uzerinde ? 0.24 : 0.06
-      mat.emissiveIntensity += (hedef - mat.emissiveIntensity) * 0.15
-    }
-
-    this.etiketleriTasi()
-    if (this.secili) this.secimBildir()
     this.cizici.render(this.sahne, this.kamera)
-  }
-
-  private etiketleriTasi() {
-    const r = this.kap.getBoundingClientRect()
-    const v = new THREE.Vector3()
-    for (const [id, el] of this.etiketler) {
-      v.set(Number(el.dataset.px), Number(el.dataset.py), Number(el.dataset.pz))
-      v.project(this.kamera)
-      /*  Arkada kalan etiket gizlensin (z > 1 kameranın arkası).       */
-      if (v.z > 1) { el.style.display = "none"; continue }
-      el.style.display = "block"
-      const x = ((v.x + 1) / 2) * r.width
-      const y = ((-v.y + 1) / 2) * r.height
-      el.style.transform = `translate(-50%,-100%) translate(${x}px,${y}px)`
-      const vurgulu = id === this.secili || id === this.uzerinde
-      el.style.color = vurgulu ? "#FFFFFF" : "#E4E4E7"
-      /*  TV'ye uzaktan bakiliyor: 12px okunmuyordu.                    */
-      el.style.fontSize = vurgulu ? "17px" : "15px"
-    }
   }
 
   boyutla() {
@@ -343,50 +195,14 @@ export class PlanSahne {
 
   yokEt() {
     cancelAnimationFrame(this.animId)
-    this.kap.removeEventListener("pointermove", this.fareHareket)
-    this.kap.removeEventListener("pointerdown", this.fareBasti)
-    window.removeEventListener("pointerup", this.fareBirakti)
-    this.kap.removeEventListener("pointerleave", this.fareCikti)
-    for (const m of this.bloklar.values()) {
-      m.geometry.dispose(); (m.material as THREE.Material).dispose()
+    this.kap.removeEventListener("pointerdown", this.basti)
+    this.kap.removeEventListener("pointermove", this.hareket)
+    window.removeEventListener("pointerup", this.birakti)
+    for (const m of this.nesneler) {
+      m.geometry.dispose()
+      ;(m.material as THREE.Material).dispose()
     }
-    this.taban?.geometry.dispose()
     this.cizici.dispose()
     this.cizici.domElement.remove()
-    this.etiketKat.remove()
   }
-}
-
-/* ══════════════════════════════════════════════════════════
-   Yerleşim
-══════════════════════════════════════════════════════════ */
-
-/**
- * Sunucuları ızgaraya diz.
- *
- * Blok boyutu sunucunun BÜYÜKLÜĞÜNÜ anlatıyor (oturum sayısı varsa ona,
- * yoksa RAM'e göre): terminal sunucuları planda büyük duruyor, tek işlevli
- * makineler küçük. Böylece plan sadece renk değil, alan olarak da bilgi
- * veriyor.
- */
-export function yerlesimKur(
-  girdi: { id: string; ad: string; durum: PlanDurum; yuk: number; buyukluk: number }[],
-  sutun = 3,
-): PlanBlok[] {
-  const out: PlanBlok[] = []
-  /*  Basit satır-sütun yerleşimi: her blok 2x2 ya da 1x1 kare kaplıyor
-   *  ve sütun sınırına gelince alt satıra geçiyor.                     */
-  let x = 0
-  let z = 0
-  let satirYuksek = 0
-  for (const g of girdi) {
-    const buyuk = g.buyukluk >= 60
-    const en = buyuk ? 2 : 1
-    const boy = buyuk ? 2 : 1
-    if (x + en > sutun) { x = 0; z += satirYuksek || 1; satirYuksek = 0 }
-    out.push({ id: g.id, ad: g.ad, durum: g.durum, yuk: g.yuk, en, boy, x, z })
-    x += en
-    satirYuksek = Math.max(satirYuksek, boy)
-  }
-  return out
 }
