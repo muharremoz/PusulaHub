@@ -64,19 +64,16 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function Title({ children, accent }: { children: React.ReactNode; accent?: string }) {
+  /*  `accent` verilince basligin KENDISI o renge boyaniyor. Once saga
+   *  bir nokta konuyordu; kartlarda ikon kullanmama karariyla kalkti —
+   *  uyariyi rengin kendisi tasiyor, satirdaki kirmizi deger zaten
+   *  nedenini soyluyor.                                               */
   return (
-    <div className="flex items-center justify-between gap-2">
-      <div
-        className="text-[9px] font-medium uppercase"
-        style={{ color: TXT_DIM, letterSpacing: "0.26em" }}
-      >
-        {children}
-      </div>
-      {accent && (
-        <span className="font-mono text-[9px] uppercase tracking-wider" style={{ color: accent }}>
-          ●
-        </span>
-      )}
+    <div
+      className="truncate text-[9px] font-medium uppercase"
+      style={{ color: accent ?? TXT_DIM, letterSpacing: "0.26em" }}
+    >
+      {children}
     </div>
   )
 }
@@ -319,16 +316,16 @@ function TurKutusu({ saat, durum }: { saat: string; durum: TurDurumu }) {
     : durum === "yok"      ? "rgba(248,113,113,0.14)"
     : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
     :                        "rgba(255,255,255,0.04)"
-  const isaret =
-    durum === "var" ? "✓" : durum === "yok" ? "✕" : durum === "aliniyor" ? "●" : "·"
+  /*  Isaret YOK — durumu rengin kendisi anlatiyor. Kartlarda ikon
+   *  kullanilmiyor; 9 piksellik bir gliften cok renk okunuyor zaten.  */
   return (
     <span
-      className={`flex flex-1 items-center justify-center gap-[2px] rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums${
+      className={`flex flex-1 items-center justify-center rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums${
         durum === "aliniyor" ? " animate-pulse" : ""
       }`}
       style={{ color: renk, background: zemin }}
     >
-      {isaret}{saat}
+      {saat}
     </span>
   )
 }
@@ -398,18 +395,37 @@ export function BackupImageCard({
 
   const eksik = list.some((x) => x.status === "missed" || x.status === "partial")
 
-  /*  Şu an dönen tur: makine yedek alıyorsa VE turun saatindeysek.     */
-  const turDurumu = (vmName: string, x: BackupSlot): TurDurumu => {
-    const slotMs = new Date(x.at).getTime()
-    const suAnda = Math.abs(slotMs - nowMs) <= TUR_TOLERANS_MS
-    const b = backups.find((y) => y.vmName === vmName)
-    if (b?.running && suAnda)   return "aliniyor"
-    if (x.vms.includes(vmName)) return "var"
-    if (x.status === "pending") return "bekliyor"
+  /**
+   * Süren yedeğin AİT OLDUĞU tur — makinenin son izine en yakın tur.
+   *
+   * Önce "turun saatine 45 dk yakınsa" deniyordu ve yanlıştı: Veeam'in
+   * haftalık tam yedeği saatlerce sürüyor, tolerans dolunca kutu sönüp
+   * yeşile dönüyordu — yedek hâlâ sürerken "tamam" demiş oluyorduk.
+   * Günlükteki iz yedeğin BAŞLANGICI olduğu için, süre ne olursa olsun
+   * doğru turu işaret ediyor.
+   *
+   * Karşılaştırma seçili günle sınırlı DEĞİL: bütün turlar arasından en
+   * yakını bulunup sonra "o mu" diye bakılıyor. Yoksa Dün görünümünde
+   * bugün süren yedek yanlış bir kutuyu yakardı.
+   */
+  const surenTur = (b: EsxiVmBackup): string | null => {
+    if (!b.running || !b.times.length || !slots?.length) return null
+    const sonIz = new Date(b.times[b.times.length - 1]).getTime()
+    let enYakin = slots[0]
+    for (const y of slots) {
+      if (Math.abs(new Date(y.at).getTime() - sonIz) < Math.abs(new Date(enYakin.at).getTime() - sonIz)) enYakin = y
+    }
+    return enYakin.at
+  }
+
+  const turDurumu = (b: EsxiVmBackup, x: BackupSlot): TurDurumu => {
+    if (surenTur(b) === x.at)     return "aliniyor"
+    if (x.vms.includes(b.vmName)) return "var"
+    if (x.status === "pending")   return "bekliyor"
     /*  Makine o tarihte yedek isinde degildi (ilk yedegi daha sonra).
      *  Terminal 2 ise bugun eklendi; dunu kirmizi gostermek yanlis.    */
-    const ilk = b?.times.length ? new Date(b.times[0]).getTime() : NaN
-    if (isFinite(ilk) && ilk > slotMs + TUR_TOLERANS_MS) return "bekliyor"
+    const ilk = b.times.length ? new Date(b.times[0]).getTime() : NaN
+    if (isFinite(ilk) && ilk > new Date(x.at).getTime() + TUR_TOLERANS_MS) return "bekliyor"
     return "yok"
   }
 
@@ -417,13 +433,10 @@ export function BackupImageCard({
     <Card>
       <div className="flex items-center justify-between gap-2">
         <div
-          className="flex min-w-0 items-center gap-1.5 text-[9px] font-medium uppercase"
-          style={{ color: TXT_DIM, letterSpacing: "0.26em" }}
+          className="min-w-0 truncate text-[9px] font-medium uppercase"
+          style={{ color: eksik || yedeksiz.length > 0 ? RED : TXT_DIM, letterSpacing: "0.26em" }}
         >
-          <span className="truncate">İmaj Yedekleri</span>
-          {(eksik || yedeksiz.length > 0) && (
-            <span className="font-mono text-[9px]" style={{ color: RED }}>●</span>
-          )}
+          İmaj Yedekleri
         </div>
         <GunSecici gun={gun} onChange={setGun} />
       </div>
@@ -446,7 +459,7 @@ export function BackupImageCard({
                   <TurKutusu
                     key={x.at}
                     saat={new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
-                    durum={turDurumu(b.vmName, x)}
+                    durum={turDurumu(b, x)}
                   />
                 ))}
               </div>
