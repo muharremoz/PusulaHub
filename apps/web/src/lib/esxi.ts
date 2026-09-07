@@ -411,6 +411,10 @@ const BACKUP_TTL_MS = 10 * 60_000
  */
 const LOG_TAIL_BYTES = 500_000
 
+/*  Türkiye UTC+3 ve yaz saati yok. Sunucu hangi bölgede çalışırsa
+ *  çalışsın (Coolify kabı UTC) program saatleri aynı çıksın diye sabit. */
+const TR_OFFSET_MS = 3 * 3_600_000
+
 /** Veeam'in günlüğe bıraktığı iz — imaj yedeği bunu oluşturur. */
 const TS = String.raw`(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)\.\d+Z`
 
@@ -445,6 +449,16 @@ function parseBackupTimes(body: string): string[] {
   const out: number[] = []
   for (const t of raw) if (!out.length || t - out[out.length - 1] > 5 * 60_000) out.push(t)
   return out.map((t) => new Date(t).toISOString().replace(/\.\d+Z$/, "Z"))
+}
+
+/** Verilen zamanlar kaç ayrı güne yayılıyor (TR saatiyle) */
+function gunSayisi(times: string[]): number {
+  const gunler = new Set<string>()
+  for (const iso of times) {
+    const t = new Date(iso).getTime()
+    if (isFinite(t)) gunler.add(new Date(t + TR_OFFSET_MS).toISOString().slice(0, 10))
+  }
+  return gunler.size
 }
 
 /**
@@ -494,21 +508,70 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
     return out
   })
 
-  const results: EsxiVmBackup[] = []
-  for (const vm of vms) {
-    let times: string[] = []
+  /** Bir günlük dosyasının son parçası — okunamazsa null */
+  const gunlukOku = async (folder: string, ds: string, dosya: string): Promise<string | null> => {
     try {
-      const path = `/folder/${encodeURIComponent(vm.folder)}/vmware.log?dsName=${encodeURIComponent(vm.ds)}`
+      const path = `/folder/${encodeURIComponent(folder)}/${encodeURIComponent(dosya)}?dsName=${encodeURIComponent(ds)}`
       const res = await request({
         path,
         headers: { Authorization: auth, Range: `bytes=-${LOG_TAIL_BYTES}` },
         timeoutMs: 15_000,
       })
-      if (res.status === 200 || res.status === 206) {
-        /*  vmware.log zamanlari UTC; ayristirma parseBackupTimes'ta.     */
-        times = parseBackupTimes(res.body)
+      return res.status === 200 || res.status === 206 ? res.body : null
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * En son devredilmiş günlük — "vmware-13.log" gibi, numarası en büyük olan.
+   *
+   * ESXi'nin `/folder` ucu dizin listesini HTML olarak veriyor; ad
+   * listesinden numarayı çekmek yeterli.
+   */
+  const sonDevredilen = async (folder: string, ds: string): Promise<string | null> => {
+    try {
+      const path = `/folder/${encodeURIComponent(folder)}?dsName=${encodeURIComponent(ds)}`
+      const res = await request({ path, headers: { Authorization: auth }, timeoutMs: 15_000 })
+      if (res.status !== 200) return null
+      const nolar = [...res.body.matchAll(/vmware-(\d+)\.log/g)].map((m) => Number(m[1]))
+      if (!nolar.length) return null
+      return `vmware-${Math.max(...nolar)}.log`
+    } catch {
+      return null
+    }
+  }
+
+  const results: EsxiVmBackup[] = []
+  for (const vm of vms) {
+    let times: string[] = []
+
+    /*  vmware.log zamanlari UTC; ayristirma parseBackupTimes'ta.        */
+    const govde = await gunlukOku(vm.folder, vm.ds, "vmware.log")
+    if (govde !== null) times = parseBackupTimes(govde)
+
+    /*
+     * Devredilmiş günlüğe düşme.
+     *
+     * `vmware.log` makine yeniden başladığında ya da dosya büyüdüğünde
+     * devrediyor ve geçmiş `vmware-N.log`'a taşınıyor. RDP Terminal'in
+     * günlüğü dün 22:00 turunda devretmişti: yeni dosya 8 KB'tı, içinde
+     * tek bir yedek izi yoktu ve panel makineyi "hiç yedeklenmiyor" diye
+     * kırmızı gösteriyordu — oysa 204 gündür günde dört kez yedekleniyor.
+     *
+     * Bu yüzden elimizdeki iz iki günden kısaysa bir önceki günlüğe de
+     * bakılıyor. Koşullu: günlüğü zaten derin olan makineler için fazladan
+     * istek atılmıyor.
+     */
+    if (gunSayisi(times) < 2) {
+      const onceki = await sonDevredilen(vm.folder, vm.ds)
+      if (onceki) {
+        const eskiGovde = await gunlukOku(vm.folder, vm.ds, onceki)
+        if (eskiGovde !== null) {
+          times = [...new Set([...parseBackupTimes(eskiGovde), ...times])].sort()
+        }
       }
-    } catch { /* günlük okunamadı — yedek durumu bilinmiyor sayılır */ }
+    }
 
     results.push({
       vmName: vm.name,
@@ -523,9 +586,6 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
   return results
 }
 
-/*  Türkiye UTC+3 ve yaz saati yok. Sunucu hangi bölgede çalışırsa
- *  çalışsın (Coolify kabı UTC) program saatleri aynı çıksın diye sabit. */
-const TR_OFFSET_MS = 3 * 3_600_000
 const HOUR_MS      = 3_600_000
 const DAY_MS       = 86_400_000
 
