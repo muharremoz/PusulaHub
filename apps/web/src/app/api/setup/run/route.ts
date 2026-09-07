@@ -9,6 +9,7 @@ import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
+import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import {
@@ -1123,6 +1124,26 @@ export async function POST(req: NextRequest) {
                         }),
                       )
                     }
+                  }
+
+                  /*
+                   * SQL Backup Master — yeni veritabanlarini yedek gorevine ekle.
+                   *
+                   * KRITIK DEGIL: `runStep` sonucu bilerek kontrol edilmiyor.
+                   * Ucuncu parti urunun veri dosyasini duzenliyoruz (bkz.
+                   * lib/sql-backup-master.ts) ve bu yol kirilgan — urun
+                   * guncellemesi semayi degistirebilir, masaustu arayuzu acik
+                   * olabilir. Basarisiz olursa kurulum DURMAZ; adim ekranda
+                   * kirmizi kalir ve "Elle Yapilacak Adimlar" modali eski elle
+                   * akisi gostermeye devam eder.
+                   */
+                  if (sqlTarget?.agent && restoredDbNames.length > 0) {
+                    await runStep(
+                      sqlTarget.agent,
+                      "sbm_add",
+                      `SQL Backup Master yedek görevine ekleniyor (${restoredDbNames.length} veritabanı)`,
+                      buildAddDatabasesToBackupJobs(restoredDbNames),
+                    )
                   }
                 },
               )

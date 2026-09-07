@@ -77,9 +77,16 @@ interface Props {
   onError?:       (msg: string) => void
   /** Adım hatasında adım detayıyla çağrılır (şifre hatası tespiti için) */
   onStepError?:   (step: ProvisionStep) => void
+  /**
+   * HER adım güncellemesinde çağrılır (running/done/error farketmez).
+   * `onStepError` yalnız hatayı veriyor; kritik olmayan bir adımın
+   * BAŞARILI olup olmadığını bilmek gerektiğinde bu kullanılıyor
+   * (ör. SQL Backup Master eklemesi — sonuca göre modal değişiyor).
+   */
+  onStep?:        (step: ProvisionStep) => void
 }
 
-export function AdProvisionRunner({ payload, autoStart = true, onComplete, onError, onStepError }: Props) {
+export function AdProvisionRunner({ payload, autoStart = true, onComplete, onError, onStepError, onStep }: Props) {
   const [steps, setSteps]           = useState<ProvisionStep[]>([])
   const [completed, setCompleted]   = useState(false)
   const [fatalError, setFatalError] = useState<string | null>(null)
@@ -150,6 +157,12 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
           stepId: data.stepId,
           label:  data.label,
           status: data.status,
+          error:  data.error,
+        })
+        onStep?.({
+          stepId: data.stepId!,
+          label:  data.label!,
+          status: data.status!,
           error:  data.error,
         })
         if (data.status === "error" && data.error) {

@@ -126,6 +126,9 @@ export function StepRun({
    *  burada. Banner'daki düğmeyle tekrar açılabiliyor — kapatıp sonra
    *  "neydi o" diye aranmasın.                                          */
   const [showManual, setShowManual] = useState(false)
+  /*  SQL Backup Master eklemesi kritik olmayan bir adim: basarisiz olsa
+   *  da kurulum devam ediyor. Sonucu modalda gostermek icin izleniyor.  */
+  const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "hata">("yok")
   const [copied, setCopied]         = useState(false)
 
   // Şifre yeniden deneme
@@ -345,6 +348,11 @@ export function StepRun({
         }}
         onError={() => setHasError(true)}
         onStepError={handleStepError}
+        onStep={(st) => {
+          if (st.stepId !== "sbm_add") return
+          if (st.status === "done")  setSbmDurum("tamam")
+          if (st.status === "error") setSbmDurum("hata")
+        }}
       />
 
       {/* Tamamlama banner */}
@@ -452,11 +460,26 @@ export function StepRun({
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
                   <span className="font-semibold text-foreground">{sqlServer?.name ?? "SQL sunucusu"}</span>{" "}
-                  üzerinde aşağıdaki veritabanları{" "}
-                  <span className="font-semibold text-foreground">Spare Backup</span> ve{" "}
-                  <span className="font-semibold text-foreground">SQL Backup Master</span> yedek
-                  görevlerine eklenmeli.
+                  üzerinde aşağıdaki veritabanları için:
                 </p>
+
+                {/*  Iki yedek yazilimi ayri ayri: SQL Backup Master'a sihirbaz
+                     kendisi ekliyor (kritik olmayan adim), Spare Backup elle
+                     kaliyor. Otomatik olan basarisizsa elle listeye donuyor —
+                     sessizce "tamam" demiyoruz.                             */}
+                <ul className="mt-1.5 space-y-1">
+                  <li className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">Spare Backup</span> — elle eklenmeli
+                  </li>
+                  <li className="text-[11px] text-muted-foreground">
+                    <span className="font-semibold text-foreground">SQL Backup Master</span>{" "}
+                    {sbmDurum === "tamam"
+                      ? <span className="font-medium text-emerald-700 dark:text-emerald-400">— otomatik eklendi</span>
+                      : sbmDurum === "hata"
+                        ? <span className="font-medium text-red-600 dark:text-red-400">— eklenemedi, elle eklenmeli</span>
+                        : <span>— elle eklenmeli</span>}
+                  </li>
+                </ul>
                 <ul className="mt-2 space-y-1">
                   {restoredDbNames.map((db) => (
                     <li
