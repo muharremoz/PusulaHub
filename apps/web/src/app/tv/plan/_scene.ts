@@ -199,20 +199,28 @@ export class PlanSahne {
     const ara = 0.85            // aralarındaki mesafe
     const boy = (adet - 1) * ara + 0.8   // platform uzunluğu
 
-    /*  Saksılar doğrudan zeminde değil, alçak bir platformun üstünde:
-     *  yere serpiştirilmiş gibi değil, düzenlenmiş bir yeşil alan gibi
-     *  duruyorlar.                                                      */
-    for (const yon of [1, -1]) {
-      const merkez = yon * (uc - ((adet - 1) * ara) / 2)
+    /*  İki küme ve platformları TEK YERDE tanımlanıyor.
+     *
+     *  Önce platformlar ayrı bir döngüde, işaret çarpımıyla
+     *  konumlanıyordu ve ters köşeye düşüyorlardı: saksılar çapraz,
+     *  platformlar ters çaprazdı. Konumu tek kaynaktan üretmek bu tür
+     *  sessiz uyuşmazlığı baştan engelliyor.                            */
+    const kumeler = [
+      { x: -x, ilk:  uc, yon: -1 },   // sol duvar → ön uç, geriye doğru
+      { x:  x, ilk: -uc, yon:  1 },   // sağ duvar → arka uç, ileriye doğru
+    ]
+
+    for (const [k, kume] of kumeler.entries()) {
+      /*  Platform kümenin ORTASINA hizalanıyor.                        */
+      const merkez = kume.ilk + kume.yon * ((adet - 1) * ara) / 2
       const p = this.kutu(0.72, PLATFORM_Y, boy, RENK.platform)
-      p.position.set(yon * x, PLATFORM_Y / 2, merkez)
+      p.position.set(kume.x, PLATFORM_Y / 2, merkez)
       p.receiveShadow = true
       p.castShadow = true
-    }
 
-    for (let i = 0; i < adet; i++) {
-      this.bitki(-x,  uc - i * ara, i)          // sol duvar → ön uç
-      this.bitki( x, -uc + i * ara, i + adet)   // sağ duvar → arka uç
+      for (let i = 0; i < adet; i++) {
+        this.bitki(kume.x, kume.ilk + kume.yon * i * ara, k * adet + i)
+      }
     }
   }
 
