@@ -7,7 +7,9 @@ import type { WizardServiceDto } from "@/app/api/services/route"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { CompanyServiceDto } from "@/app/api/companies/[firkod]/services/route"
-import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle } from "lucide-react"
+import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle, Database, ListChecks } from "lucide-react"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Icon } from "@/components/shared/icon"
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
@@ -120,6 +122,10 @@ export function StepRun({
   const [fwItems, setFwItems]       = useState<FwItem[]>(FW_ITEMS.map((i) => ({ ...i, checked: false })))
   const [showFw, setShowFw]         = useState(false)
   const [showMsg, setShowMsg]       = useState(false)
+  /*  Kurulum bitince kendiliğinden açılır: sihirbazın YAPAMADIĞI iki adım
+   *  burada. Banner'daki düğmeyle tekrar açılabiliyor — kapatıp sonra
+   *  "neydi o" diye aranmasın.                                          */
+  const [showManual, setShowManual] = useState(false)
   const [copied, setCopied]         = useState(false)
 
   // Şifre yeniden deneme
@@ -333,6 +339,7 @@ export function StepRun({
         }}
         onComplete={() => {
           setCompleted(true)
+          setShowManual(true)
           onConfetti()
           onComplete()
         }}
@@ -372,6 +379,13 @@ export function StepRun({
               <MessageSquare className="size-3.5" />
               Kullanıcı Mesajı
             </button>
+            <button
+              onClick={() => setShowManual(true)}
+              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-amber-300 bg-amber-500/15 text-amber-700 dark:text-amber-400 hover:bg-amber-500/25 transition-colors"
+            >
+              <ListChecks className="size-3.5" />
+              Elle Adımlar
+            </button>
           </div>
         </div>
       )}
@@ -388,6 +402,85 @@ export function StepRun({
           </div>
         </div>
       )}
+
+      {/*
+        Kurulum sonrası elle yapılacak adımlar.
+
+        Sihirbaz AD, klasör, dosya ve SQL restore işlerini yapıyor ama iki şey
+        onun erişemediği sistemlerde: güvenlik duvarı kuralı ve yedekleme
+        yazılımlarının görev listeleri. İkisi de unutulduğunda sessizce
+        sorun çıkarıyor — firma bağlanamıyor ya da yedeği hiç alınmıyor.
+        Bu yüzden kurulum biter bitmez kendiliğinden açılıyor.
+      */}
+      <Dialog open={showManual} onOpenChange={setShowManual}>
+        <DialogContent className="rounded-[8px] max-w-md p-0 gap-0">
+          <DialogHeader className="px-5 py-4 border-b border-border/50">
+            <DialogTitle className="text-[13px] font-semibold flex items-center gap-2">
+              <Icon name="badge-alert" size={16} />
+              Elle Yapılacak Adımlar
+            </DialogTitle>
+            <DialogDescription className="text-[11px]">
+              <span className="font-mono font-semibold">{firmaId}</span> kurulumu tamamlandı.
+              Sihirbazın yapamadığı adımlar aşağıda.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-5 py-4 space-y-2.5">
+            {/* 1) Guvenlik duvari kurali */}
+            <div className="rounded-[5px] border border-orange-500/25 bg-orange-500/10 px-3 py-2.5">
+              {/*  <p> DEGIL: Icon bileseni <div> render ediyor ve <div> bir
+                   <p> icinde gecersiz — hydration hatasi veriyordu.        */}
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-orange-700 dark:text-orange-400">
+                <Icon name="shield-check" size={14} />
+                Firewall kuralı
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Firma kuralında RDP sunucusu olarak{" "}
+                <span className="font-semibold text-foreground">{serverName || serverId}</span> seçilmeli.
+              </p>
+              {serverDns && (
+                <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">{serverDns}</p>
+              )}
+            </div>
+
+            {/* 2) Yedek gorevleri — SQL kurulmadiysa hic gosterilmiyor */}
+            {restoredDbNames.length > 0 && (
+              <div className="rounded-[5px] border border-sky-500/25 bg-sky-500/10 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 dark:text-sky-400">
+                  <Database className="size-3.5" />
+                  Yedek görevleri
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground">{sqlServer?.name ?? "SQL sunucusu"}</span>{" "}
+                  üzerinde aşağıdaki veritabanları{" "}
+                  <span className="font-semibold text-foreground">Spare Backup</span> ve{" "}
+                  <span className="font-semibold text-foreground">SQL Backup Master</span> yedek
+                  görevlerine eklenmeli.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {restoredDbNames.map((db) => (
+                    <li
+                      key={db}
+                      className="rounded-[5px] bg-background/60 px-2 py-1 font-mono text-[10px] text-foreground"
+                    >
+                      {db}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end px-5 py-3 border-t border-border/50 bg-muted/20">
+            <button
+              onClick={() => setShowManual(false)}
+              className="text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
+            >
+              Anladım
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Şifre yeniden deneme modal */}
       {pwRetry && createPortal(
