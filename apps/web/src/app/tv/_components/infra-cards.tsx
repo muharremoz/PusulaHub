@@ -8,7 +8,10 @@
  *   beyaz   → normal değer
  *   kehribar→ dikkat, arıza değil
  *   kırmızı → kritik
- * Yeşil kullanılmıyor; bu sayfada yeşil "monitör ayakta" demek.
+ * Yeşil yalnız İMAJ YEDEKLERİ kartındaki onay işaretlerinde: orada
+ * "tur döndü mü" sorusunun cevabı ikili ve göz tek bakışta eksik kutuyu
+ * arıyor. Kartların geri kalanında yeşil yok — bu sayfada yeşil
+ * "monitör ayakta" demek ve anlamı bulanıklaşmasın.
  *
  * ── Neden bu üç kart? ──────────────────────────────────────────────────
  * Üçü de "sessizce bozulan" şeyler: güç kaynağı aylarca arızalı kalabilir,
@@ -38,6 +41,7 @@ const TXT_DIM = "#8B8B93"
 const AMBER   = "#FBBF24"
 const RED     = "#F87171"
 const FLOW    = "#7DD3FC"
+const GREEN   = "#34D399"
 
 /** Disk/bellek doluluk eşikleri — üstünde renk değişir */
 const WARN_PCT = 80
@@ -295,62 +299,111 @@ function slotEtiketi(iso: string, now: Date): string {
 }
 
 /**
- * İmaj yedekleri — programın son dört turu.
+ * Tek tur kutusu — o makinenin o turda yedeği alındı mı.
  *
- * ── Neden tur listesi, makine listesi değil? ───────────────────────────
- * Önce her makinenin son yedeği listeleniyordu. Sorun şuydu: iş günde
- * dört kez dönüyor ve makinelerin hepsi aynı turda yedekleniyor, yani
- * sekiz satır aynı bilgiyi sekiz kez söylüyordu. Asıl soru "hangi tur
- * eksik kaldı" — kart artık onu gösteriyor.
+ * `bekliyor`: turun saati henüz gelmedi ya da tur sürüyor. Sonucu belli
+ * olmayan turu kırmızı göstermek yanlış alarm olurdu.
+ */
+function TurKutusu({ saat, durum }: { saat: string; durum: "var" | "yok" | "bekliyor" }) {
+  const renk =
+    durum === "var" ? GREEN : durum === "yok" ? RED : TXT_DIM
+  const zemin =
+    durum === "var"  ? "rgba(52,211,153,0.12)"
+    : durum === "yok" ? "rgba(248,113,113,0.14)"
+    :                   "rgba(255,255,255,0.04)"
+  return (
+    <span
+      className="flex flex-1 items-center justify-center gap-[2px] rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums"
+      style={{ color: renk, background: zemin }}
+    >
+      {durum === "var" ? "✓" : durum === "yok" ? "✕" : "·"}
+      {saat}
+    </span>
+  )
+}
+
+/**
+ * İmaj yedekleri — makine × tur ızgarası.
  *
- * Yedeği hiç alınmayan makineler ayrı: onlar bir turun kaçması değil,
- * işe hiç eklenmemiş olmaları demek ve bambaşka bir iş gerektiriyor.
+ * ── Neden ızgara? ─────────────────────────────────────────────────────
+ * Tek satırlık "7/7" özeti turun eksik olduğunu söylüyor ama HANGİ
+ * makinenin kaçırdığını söylemiyordu. Ekranın başındaki kişi tam da onu
+ * soruyor. Her makinenin altında günün dört turu duruyor: eksik kutu
+ * kırmızı ve tek bakışta bulunuyor.
+ *
+ * Hiç yedeği olmayan makineler ızgaraya GİRMİYOR — onların sorunu bir
+ * turu kaçırmak değil, yedek işine hiç eklenmemiş olmaları. Dört kırmızı
+ * kutuyla göstermek bambaşka bir hatayla karıştırırdı; altta ayrı satır
+ * olarak duruyorlar.
  */
 export function BackupImageCard({
-  backups, slots, nextAt, vmsInJob,
+  backups, slots, nextAt,
 }: {
   backups: EsxiVmBackup[]
   slots: BackupSlot[] | null
   nextAt: string | null
-  vmsInJob: number
+  /** Kartta kullanılmıyor; ızgara makine bazlı, sayı özeti gereksiz kaldı */
+  vmsInJob?: number
 }) {
   const now      = new Date()
   const kisaAd   = (x: string) => x.replace(/\s*\(.*?\)\s*$/, "")
+  const list     = slots ?? []
+  const isinde   = backups.filter((b) => b.times.length > 0)
   const yedeksiz = backups.filter((b) => b.times.length === 0)
   const running  = backups.find((b) => b.running)
-  const list     = slots ?? []
-  const sorunlu  = list.some((x) => x.status === "missed" || x.status === "partial")
 
-  const durumRengi = (x: BackupSlot) =>
-    x.status === "ok"      ? TXT
-    : x.status === "partial" ? AMBER
-    : x.status === "missed"  ? RED
-    :                          TXT_DIM
+  const eksik = list.some((x) => x.status === "missed" || x.status === "partial")
 
-  const durumMetni = (x: BackupSlot) =>
-    x.status === "pending" ? "bekliyor"
-    : x.status === "missed" ? "alınmadı"
-    :                         `${x.vmCount}/${vmsInJob}`
+  /*  Turlar iki güne yayılabiliyor (gece 22:00 ile bugün 12:00 aynı
+   *  döngüde). Kutularda yalnız saat var, kapsanan aralık başlıkta.     */
+  const aralik = list.length
+    ? `${slotEtiketi(list[0].at, now)} → ${slotEtiketi(list[list.length - 1].at, now)}`
+    : null
 
   return (
     <Card>
-      <Title accent={sorunlu || yedeksiz.length > 0 ? RED : running ? FLOW : undefined}>
+      <Title accent={eksik || yedeksiz.length > 0 ? RED : running ? FLOW : undefined}>
         İmaj Yedekleri
       </Title>
 
-      <div className="mt-1.5">
-        {list.length > 0 ? (
-          list.map((x) => (
-            <Row key={x.at} name={slotEtiketi(x.at, now)} value={durumMetni(x)} color={durumRengi(x)} />
-          ))
-        ) : (
-          /*  Program çıkarılamadı: günlükler iki günden kısa ya da iş hiç
-           *  dönmemiş. Sayıyı uydurmak yerine bunu söylüyoruz.          */
-          <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
-            program çıkarılamadı
+      {list.length === 0 ? (
+        /*  Program çıkarılamadı: günlükler iki günden kısa ya da iş hiç
+         *  dönmemiş. Sayı uydurmak yerine bunu söylüyoruz.              */
+        <div className="mt-2 py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+          program çıkarılamadı
+        </div>
+      ) : (
+        <>
+          {aralik && (
+            <div className="mt-1.5 font-mono text-[9px]" style={{ color: TXT_DIM }}>
+              {aralik}
+            </div>
+          )}
+
+          <div className="mt-1.5 flex flex-col gap-1.5">
+            {isinde.map((b) => (
+              <div key={b.vmName}>
+                <div className="truncate text-[11px]" style={{ color: TXT }}>
+                  {kisaAd(b.vmName)}
+                </div>
+                <div className="mt-[3px] flex gap-1">
+                  {list.map((x) => (
+                    <TurKutusu
+                      key={x.at}
+                      saat={new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                      durum={
+                        x.vms.includes(b.vmName) ? "var"
+                        : x.status === "pending" ? "bekliyor"
+                        :                          "yok"
+                      }
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <Divider />
 
@@ -367,14 +420,9 @@ export function BackupImageCard({
       {/*  Yedek işine hiç girmemiş makineler — tur sorunu değil, eksik
            yapılandırma. Adlarıyla gösteriliyor ki hangisi olduğu
            sorulmasın.                                                   */}
-      {yedeksiz.length > 0 && (
-        <>
-          <Divider />
-          {yedeksiz.map((b) => (
-            <Row key={b.vmName} name={kisaAd(b.vmName)} value="yedek yok" color={RED} />
-          ))}
-        </>
-      )}
+      {yedeksiz.map((b) => (
+        <Row key={b.vmName} name={kisaAd(b.vmName)} value="yedek yok" color={RED} />
+      ))}
     </Card>
   )
 }

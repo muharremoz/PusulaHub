@@ -55,6 +55,8 @@ export interface BackupSlot {
   at: string
   /** O turda yedegi alinan makine sayisi */
   vmCount: number
+  /** O turda yedegi alinan makinelerin adlari */
+  vms: string[]
   status: "ok" | "partial" | "missed" | "pending"
 }
 

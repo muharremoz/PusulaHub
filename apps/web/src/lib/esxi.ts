@@ -612,6 +612,8 @@ export interface BackupSlot {
   at: string
   /** O turda yedeği alınan makine sayısı */
   vmCount: number
+  /** O turda yedeği alınan makinelerin adları — kart makine bazlı çiziyor */
+  vms: string[]
   status: "ok" | "partial" | "missed" | "pending"
 }
 
@@ -710,7 +712,7 @@ export function computeBackupCycle(
       : vmCount === 0           ? "missed"
       : vmCount >= inJob.length ? "ok"
       :                           "partial"
-    return { at: new Date(t).toISOString(), vmCount, status }
+    return { at: new Date(t).toISOString(), vmCount, vms: [...vmSet], status }
   })
 
   return {
