@@ -197,8 +197,8 @@ export default function TvAgacPage() {
           surekli goz onunde duruyorlar. */}
       <div className="pointer-events-none absolute right-[306px] top-6 flex w-[262px] select-none flex-col gap-4">
         {esxi && <PhysicalHostCard host={esxi.host} />}
-        {(esxi || serverList.length > 0 || backupDisk) && (
-          <DiskCard host={esxi?.host ?? null} servers={serverList} backupStorage={backupDisk} />
+        {(serverList.length > 0 || backupDisk) && (
+          <DiskCard servers={serverList} backupStorage={backupDisk} />
         )}
         {esxi?.backups && esxi.backups.length > 0 && (
           <BackupImageCard backups={esxi.backups} runs={esxi.runs} vmsInJob={esxi.vmsInJob} />

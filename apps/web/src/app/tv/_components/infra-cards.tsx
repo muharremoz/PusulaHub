@@ -161,6 +161,7 @@ function formatGB(gb: number): string {
 export function PhysicalHostCard({ host }: { host: EsxiHost }) {
   const cpuPct = host.cpuTotalMhz ? Math.round((host.cpuUsedMhz / host.cpuTotalMhz) * 100) : 0
   const ramPct = host.ramTotalGB  ? Math.round((host.ramUsedGB / host.ramTotalGB) * 100)   : 0
+  const datastores = host.datastores.filter((d) => d.capacityGB > 50)
 
   return (
     <Card>
@@ -187,6 +188,21 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
         value={`${host.ramUsedGB.toFixed(0)} / ${host.ramTotalGB.toFixed(0)} GB`}
         percent={ramPct}
       />
+
+      {/*  Host'un kendi veri depolari islemci/bellekle ayni yerde: ucu de
+           bu makinenin kapasitesi. Disk Dolulugu karti kayitli sunuculara
+           (isletim sistemi icinden okunan diskler) ayrildi — o baska bir
+           katman ve karisitiriliyordu.
+           50 GB alti elenir: ESXi'nin onyukleme bankalari ve scratch
+           bolumleri gercek depolama degil, satir israfi.                */}
+      {datastores.map((d) => (
+        <Meter
+          key={d.name}
+          name={d.name}
+          value={`${formatGB(d.freeGB)} boş`}
+          percent={d.percent}
+        />
+      ))}
 
       <Divider />
 
@@ -224,9 +240,8 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
 const MAX_DISK_ROWS = 6
 
 export function DiskCard({
-  host, servers, backupStorage,
+  servers, backupStorage,
 }: {
-  host: EsxiHost | null
   servers: DiskCardServer[]
   /** Musteri yedeklerinin yazildigi SFTP sunucusu — dolarsa yedek durur */
   backupStorage: BackupStorage | null
@@ -250,20 +265,9 @@ export function DiskCard({
     .sort((a, b) => b.percent - a.percent)
     .slice(0, MAX_DISK_ROWS)
 
-  const ds = host?.datastores.filter((d) => d.capacityGB > 50) ?? []
-
   return (
     <Card>
       <Title>Disk Doluluğu</Title>
-
-      {ds.map((d) => (
-        <Meter
-          key={d.name}
-          name={d.name}
-          value={`${formatGB(d.freeGB)} boş`}
-          percent={d.percent}
-        />
-      ))}
 
       {/*  Yedek deposu once geliyor: dolarsa musteri yedekleri durur,
            sanal makine disklerinden daha kritik.                       */}
@@ -275,7 +279,7 @@ export function DiskCard({
         />
       )}
 
-      {(ds.length > 0 || backupStorage) && rows.length > 0 && <Divider />}
+      {backupStorage && rows.length > 0 && <Divider />}
 
       {rows.length > 0 ? (
         rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} />)
