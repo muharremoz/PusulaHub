@@ -173,13 +173,18 @@ export class PlanSahne {
   private bitkileriKur() {
     const x = EN / 2 - 0.85
     const adet = 4
+    /*  Bitkiler duvar boyunca EŞİT DAĞILMIYOR, uçlara kümeleniyor:
+     *  boydan boya dizilince süs değil sınır çizgisi gibi duruyorlardı.
+     *
+     *  İki küme ÇAPRAZ: sol duvardakiler ön uçta, sağ duvardakiler arka
+     *  uçta. Aynı hizada olunca kat simetrik ve durgun görünüyordu;
+     *  çapraz yerleşim göze bir yön veriyor ve katın iki ucunu birden
+     *  canlandırıyor.                                                   */
+    const uc  = BOY / 2 - 1.3   // uçtan içeri
+    const ara = 0.85            // aralarındaki mesafe
     for (let i = 0; i < adet; i++) {
-      /*  Duvar boyunca eşit aralık, uçlarda köşeye yapışmasın diye
-       *  içeriden başlıyor.                                            */
-      const t = (i + 1) / (adet + 1)
-      const z = -BOY / 2 + 1.4 + t * (BOY - 2.8)
-      this.bitki(-x, z, i)
-      this.bitki( x, z, i + adet)
+      this.bitki(-x,  uc - i * ara, i)          // sol duvar → ön uç
+      this.bitki( x, -uc + i * ara, i + adet)   // sağ duvar → arka uç
     }
   }
 
@@ -227,9 +232,10 @@ export class PlanSahne {
   /**
    * Ortasında cam kapı olan uzun duvar.
    *
-   * Duvar ikiye bölünüyor, aradaki boşluğa cam kanatlar ve çerçeve
-   * giriyor. Üstteki açık şerit boşluğun ÜZERİNDEN de geçiyor: kesilirse
-   * duvarın silueti ortadan ikiye ayrılıyor ve kat parçalı görünüyor.
+   * Duvar ikiye bölünüyor, aradaki boşluğa tek parça cam giriyor.
+   * Kapının ÜSTÜ tamamen açık: üzerinden lento geçirmek girişi bir
+   * pencere gibi gösteriyordu, oysa burası boydan boya bir açıklık.
+   * Üstteki açık şerit de bu yüzden yalnız duvar parçalarının üzerinde.
    */
   private kapiliDuvar(z: number) {
     const parca = (EN - KAPI_EN) / 2
@@ -238,9 +244,11 @@ export class PlanSahne {
     this.duvar(parca, DUVAR_KAL, -kayma, z, false)
     this.duvar(parca, DUVAR_KAL,  kayma, z, false)
 
-    /*  Üst şerit kesintisiz                                            */
-    const ust = this.kutu(EN, 0.05, DUVAR_KAL, RENK.duvarUst)
-    ust.position.set(0, DUVAR_Y + 0.02, z)
+    /*  Üst şerit kapı boşluğunda kesiliyor — iki ayrı parça.           */
+    for (const x of [-kayma, kayma]) {
+      const ust = this.kutu(parca, 0.05, DUVAR_KAL, RENK.duvarUst)
+      ust.position.set(x, DUVAR_Y + 0.02, z)
+    }
 
     this.camKapi(z)
   }
@@ -266,8 +274,9 @@ export class PlanSahne {
     this.sahne.add(cam)
     this.nesneler.push(cam)
 
-    /*  Dikmeler (iki kenar) + orta kayıt: çift kanatlı kapı okuması.   */
-    for (const x of [-KAPI_EN / 2 + CERCEVE / 2, 0, KAPI_EN / 2 - CERCEVE / 2]) {
+    /*  Yalnız iki kenar dikmesi. Ortada kayıt vardı ve camı ikiye
+     *  bölüyordu; tek parça cam daha temiz duruyor.                    */
+    for (const x of [-KAPI_EN / 2 + CERCEVE / 2, KAPI_EN / 2 - CERCEVE / 2]) {
       const dikme = this.kutu(CERCEVE, DUVAR_Y, DUVAR_KAL * 0.9, RENK.cerceve)
       dikme.position.set(x, DUVAR_Y / 2, z)
       dikme.castShadow = true
