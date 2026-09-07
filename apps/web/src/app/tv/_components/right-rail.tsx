@@ -320,7 +320,7 @@ export function RightRail({ bandwidth, offlineFirms, domains }: Props) {
         }}
       />
 
-      <div className="pointer-events-none absolute right-6 top-6 flex w-[262px] select-none flex-col gap-3">
+      <div className="pointer-events-none absolute right-6 top-6 flex w-[262px] select-none flex-col gap-4">
         <TrafficCard data={bandwidth} />
         <BackupsCard data={offlineFirms} />
         <DomainsCard data={domains} />
