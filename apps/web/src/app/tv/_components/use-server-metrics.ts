@@ -32,7 +32,7 @@ export interface ServerMetrics {
 }
 
 /** API yanıtından ihtiyacımız olan alanlar */
-interface ServerRow {
+export interface ServerRow {
   id:   string
   name: string
   ip:   string
@@ -42,6 +42,10 @@ interface ServerRow {
   uptime: string
   activeSessions?: number
   disks?: { drive: string; totalGB: number; usedGB: number; percent: number }[]
+  /*  Kat planı (/tv/plan) için: blok rengi duruma, rozeti role göre. */
+  status?: "online" | "warning" | "offline"
+  roles?:  string[]
+  os?:     string
 }
 
 /**
