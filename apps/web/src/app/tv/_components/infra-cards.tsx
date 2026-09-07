@@ -19,7 +19,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
-import type { BackupRun, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
+import type { BackupSlot, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 
 /**
  * Disk kartının ihtiyaç duyduğu asgari sunucu şekli. `@/types`'taki tam
@@ -278,85 +278,102 @@ export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
    İmaj yedekleri
 ══════════════════════════════════════════════════════════ */
 
-/*  `now` YOK: turlar sunucuda, sunucunun saatiyle hesaplaniyor
- *  (bkz. computeTodayRuns).                                            */
+/*  `now` YOK: program ve tur sonuclari sunucuda hesaplaniyor
+ *  (bkz. computeBackupCycle).                                          */
+
+/** Saat etiketi — "22:00", gun degisiyorsa "Dun 22:00" */
+function slotEtiketi(iso: string, now: Date): string {
+  const d    = new Date(iso)
+  const saat = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+  const fark = Math.round(
+    (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() -
+     new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86_400_000,
+  )
+  if (fark === 0) return saat
+  if (fark === 1) return `Dün ${saat}`
+  return `${fark} gün önce ${saat}`
+}
+
+/**
+ * İmaj yedekleri — programın son dört turu.
+ *
+ * ── Neden tur listesi, makine listesi değil? ───────────────────────────
+ * Önce her makinenin son yedeği listeleniyordu. Sorun şuydu: iş günde
+ * dört kez dönüyor ve makinelerin hepsi aynı turda yedekleniyor, yani
+ * sekiz satır aynı bilgiyi sekiz kez söylüyordu. Asıl soru "hangi tur
+ * eksik kaldı" — kart artık onu gösteriyor.
+ *
+ * Yedeği hiç alınmayan makineler ayrı: onlar bir turun kaçması değil,
+ * işe hiç eklenmemiş olmaları demek ve bambaşka bir iş gerektiriyor.
+ */
 export function BackupImageCard({
-  backups, runs, vmsInJob,
+  backups, slots, nextAt, vmsInJob,
 }: {
   backups: EsxiVmBackup[]
-  runs: BackupRun[] | null
+  slots: BackupSlot[] | null
+  nextAt: string | null
   vmsInJob: number
 }) {
-  const kisaAd = (s: string) => s.replace(/\s*\(.*?\)\s*$/, "")
-  const bugun = new Date().toDateString()
-
-  /**
-   * Yedegin ne kadar taze oldugu.
-   *
-   * Is gun icinde birkac kez donuyor ve en genis araligi gece; 20 saati
-   * gecen bir yedek bir turun kacirildigini, 36 saati gecen ise isin hic
-   * calismadigini gosterir.
-   */
-  const durum = (iso: string | null) => {
-    if (!iso) return { metin: "yok", renk: RED }
-    const d = new Date(iso)
-    const saat = (Date.now() - d.getTime()) / 3_600_000
-    /*  Bugunse saat, degilse gun farki — TV'de "11:54" bir bakista
-     *  okunuyor, "3 sa once" ise turu degil sureyi anlatiyor.           */
-    const metin = d.toDateString() === bugun
-      ? d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-      : `${Math.max(1, Math.floor(saat / 24))} g önce`
-    return { metin, renk: saat > 36 ? RED : saat > 20 ? AMBER : TXT }
-  }
-
-  /*  Sorunlular ustte: once hic yedegi olmayanlar, sonra en eskiler.
-   *  Ekranda ilk goze carpan satir ilgilenilmesi gereken olsun.         */
-  const sirali = [...backups].sort((a, b) => {
-    const ta = a.lastBackupAt ? new Date(a.lastBackupAt).getTime() : 0
-    const tb = b.lastBackupAt ? new Date(b.lastBackupAt).getTime() : 0
-    return ta - tb
-  })
-
-  const yedeksiz = backups.filter((b) => b.times.length === 0).length
+  const now      = new Date()
+  const kisaAd   = (x: string) => x.replace(/\s*\(.*?\)\s*$/, "")
+  const yedeksiz = backups.filter((b) => b.times.length === 0)
   const running  = backups.find((b) => b.running)
+  const list     = slots ?? []
+  const sorunlu  = list.some((x) => x.status === "missed" || x.status === "partial")
+
+  const durumRengi = (x: BackupSlot) =>
+    x.status === "ok"      ? TXT
+    : x.status === "partial" ? AMBER
+    : x.status === "missed"  ? RED
+    :                          TXT_DIM
+
+  const durumMetni = (x: BackupSlot) =>
+    x.status === "pending" ? "bekliyor"
+    : x.status === "missed" ? "alınmadı"
+    :                         `${x.vmCount}/${vmsInJob}`
 
   return (
     <Card>
-      <Title accent={yedeksiz > 0 ? RED : running ? FLOW : undefined}>
+      <Title accent={sorunlu || yedeksiz.length > 0 ? RED : running ? FLOW : undefined}>
         İmaj Yedekleri
       </Title>
 
       <div className="mt-1.5">
-        {sirali.map((b) => {
-          const d = durum(b.lastBackupAt)
-          return (
-            <Row
-              key={b.vmName}
-              name={kisaAd(b.vmName)}
-              value={b.running ? "alınıyor…" : d.metin}
-              color={b.running ? FLOW : d.renk}
-            />
-          )
-        })}
+        {list.length > 0 ? (
+          list.map((x) => (
+            <Row key={x.at} name={slotEtiketi(x.at, now)} value={durumMetni(x)} color={durumRengi(x)} />
+          ))
+        ) : (
+          /*  Program çıkarılamadı: günlükler iki günden kısa ya da iş hiç
+           *  dönmemiş. Sayıyı uydurmak yerine bunu söylüyoruz.          */
+          <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+            program çıkarılamadı
+          </div>
+        )}
       </div>
 
       <Divider />
 
       <Row
-        name="Bugün"
-        value={`${runs?.length ?? 0} tur · son ${
-          runs && runs.length
-            ? new Date(runs[runs.length - 1].at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-            : "—"
-        }`}
-        /*  Gun icinde hic tur donmediyse dikkat: is duruyor olabilir.   */
-        color={(runs?.length ?? 0) === 0 ? RED : TXT_DIM}
+        name={running ? "Şu an" : "Sıradaki"}
+        value={
+          running        ? "alınıyor…"
+          : nextAt       ? new Date(nextAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+          :                "—"
+        }
+        color={running ? FLOW : TXT_DIM}
       />
 
-      {/*  vmsInJob: turun kapsami buna gore okunuyor. Yedegi hic
-           alinmamis makineler bu sayiya dahil DEGIL.                    */}
-      {yedeksiz > 0 && (
-        <Row name="Yedek işinde" value={`${vmsInJob}/${backups.length} makine`} color={RED} />
+      {/*  Yedek işine hiç girmemiş makineler — tur sorunu değil, eksik
+           yapılandırma. Adlarıyla gösteriliyor ki hangisi olduğu
+           sorulmasın.                                                   */}
+      {yedeksiz.length > 0 && (
+        <>
+          <Divider />
+          {yedeksiz.map((b) => (
+            <Row key={b.vmName} name={kisaAd(b.vmName)} value="yedek yok" color={RED} />
+          ))}
+        </>
       )}
     </Card>
   )

@@ -103,24 +103,6 @@ export interface EsxiVmBackup {
   times: string[]
 }
 
-/**
- * Bugün gerçekten dönmüş bir yedek turu.
- *
- * ── Neden "program" değil de "bugün olan"? ─────────────────────────────
- * Sabit saatli bir program çıkarmayı denedik ve veri buna uymadı: bir
- * günde 03:11, 12:03, 14:59, 16:39, 18:02 ve 22:04'te tur görülüyor ve
- * her tur farklı makine kümesini kapsıyor (Veeam tarafında birden fazla
- * iş var). Saat tahmin etmek panelin sessizce yanlış göstermesi
- * demekti. Onun yerine yalnız ÖLÇÜLEN gösteriliyor: bugün hangi saatte
- * kaç makinenin imajı alındı.
- */
-export interface BackupRun {
-  /** Turun başlangıcı (ISO) */
-  at: string
-  /** Bu turda imajı alınan makine sayısı */
-  vmCount: number
-}
-
 /* ══════════════════════════════════════════════════════════
    HTTPS yardımcıları
 ══════════════════════════════════════════════════════════ */
@@ -412,10 +394,58 @@ export async function fetchEsxiHost(force = false): Promise<EsxiHost | null> {
 ══════════════════════════════════════════════════════════ */
 
 let backupCache: { at: number; data: EsxiVmBackup[] } | null = null
-const BACKUP_TTL_MS = 5 * 60_000
+const BACKUP_TTL_MS = 10 * 60_000
+
+/**
+ * `vmware.log` dosyasindan okunan son parca.
+ *
+ * 200 KB idi ve iki gunu zor kapsiyordu; program saatlerini "en az iki
+ * ayri gunde tekrar eden saat" diye cikardigimiz icin gunun ilk turu
+ * (12:00) veri penceresine tek gun dustugu icin programdan sessizce
+ * dusuyordu. 500 KB dort-bes gun geri gidiyor.
+ *
+ * Maliyet: makine basina en fazla 500 KB, 10 dakikada bir. Gunluk
+ * dosyalari zaten 2 MB'ta donuyor, bu okuma host icin sirali tek bir
+ * dosya okumasi. TTL 5 -> 10 dk cikarildi: turlar 3 saat arayla, 10
+ * dakikalik tazelik fazlasiyla yetiyor.
+ */
+const LOG_TAIL_BYTES = 500_000
 
 /** Veeam'in günlüğe bıraktığı iz — imaj yedeği bunu oluşturur. */
-const VEEAM_SNAPSHOT = /(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)[\s\S]{0,300}?VEEAM BACKUP TEMPORARY SNAPSHOT/g
+const TS = String.raw`(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)\.\d+Z`
+
+/**
+ * Bir yedek = bir "TakeSnapshot start" satırı.
+ *
+ * ÖNCEKİ DESEN YANLIŞTI: `(zaman)[\s\S]{0,300}?VEEAM…` zaman damgasını 300
+ * karakter ÖNCEKİ satırdan da yakalayabiliyordu. Yedekle ilgisi olmayan
+ * satırların saatleri "yedek zamanı" olarak listeye giriyor, günde 4 olan
+ * tur 7-8 görünüyordu. Desen artık satır başına sabit (`^`, `m` bayrağı)
+ * ve yalnız anlık görüntünün AÇILDIĞI satırı sayıyor — kapanış satırı
+ * aynı yedeği ikinci kez saymasın.
+ */
+const VEEAM_START = new RegExp(
+  "^" + TS + "\\s.*SnapshotVMX_TakeSnapshot start:\\s*'VEEAM BACKUP TEMPORARY SNAPSHOT'",
+  "gm",
+)
+
+/** Geri düşüş: imza değişirse VEEAM geçen her satırın KENDİ zamanı. */
+const VEEAM_ANY = new RegExp("^" + TS + "\\s[^\\n]*VEEAM BACKUP TEMPORARY SNAPSHOT", "gm")
+
+/** Bir günlük metninden yedek zamanları (ISO, saniye hassasiyetinde). */
+function parseBackupTimes(body: string): string[] {
+  const pick = (re: RegExp) => [...body.matchAll(re)].map((m) => m[1] + "Z")
+
+  const starts = pick(VEEAM_START)
+  if (starts.length) return [...new Set(starts)].sort()
+
+  /*  Geri düşüşte aynı yedek birkaç satır bırakıyor; 5 dakikadan yakın
+   *  olanlar tek yedek sayılıyor.                                       */
+  const raw = pick(VEEAM_ANY).map((x) => new Date(x).getTime()).filter(isFinite).sort((a, b) => a - b)
+  const out: number[] = []
+  for (const t of raw) if (!out.length || t - out[out.length - 1] > 5 * 60_000) out.push(t)
+  return out.map((t) => new Date(t).toISOString().replace(/\.\d+Z$/, "Z"))
+}
 
 /**
  * Her sanal makine için son imaj yedeği zamanı.
@@ -471,15 +501,12 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
       const path = `/folder/${encodeURIComponent(vm.folder)}/vmware.log?dsName=${encodeURIComponent(vm.ds)}`
       const res = await request({
         path,
-        headers: { Authorization: auth, Range: "bytes=-200000" },
+        headers: { Authorization: auth, Range: `bytes=-${LOG_TAIL_BYTES}` },
         timeoutMs: 15_000,
       })
       if (res.status === 200 || res.status === 206) {
-        /*  vmware.log zamanlari UTC ve saniye hassasiyetinde; "Z" ekleyip
-         *  ISO'ya cikariyoruz. Ayni yedek gunluge birkac satir birakiyor,
-         *  tekrarlar ayikleniyor.                                        */
-        times = [...new Set([...res.body.matchAll(VEEAM_SNAPSHOT)].map((m) => m[1] + "Z"))]
-        times.sort()
+        /*  vmware.log zamanlari UTC; ayristirma parseBackupTimes'ta.     */
+        times = parseBackupTimes(res.body)
       }
     } catch { /* günlük okunamadı — yedek durumu bilinmiyor sayılır */ }
 
@@ -496,69 +523,142 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
   return results
 }
 
+/*  Türkiye UTC+3 ve yaz saati yok. Sunucu hangi bölgede çalışırsa
+ *  çalışsın (Coolify kabı UTC) program saatleri aynı çıksın diye sabit. */
+const TR_OFFSET_MS = 3 * 3_600_000
+const HOUR_MS      = 3_600_000
+const DAY_MS       = 86_400_000
+
 /**
- * Bugünkü yedek turları.
+ * Programın bir turu ne kadar sarkabilir.
+ *
+ * İş makineleri sırayla dolaşıyor: 12:00 turunda ilk makine 11:58'de,
+ * sonuncusu 12:17'de yedekleniyor. 45 dakika bu yayılmayı rahat alıyor
+ * ama bir sonraki tura (3 saat sonra) taşmıyor.
+ */
+const SLOT_GRACE_MS = 45 * 60_000
+
+/** Kartta kaç tur gösterilir — bir günlük döngü */
+const SHOWN_SLOTS = 4
+
+/**
+ * Bir program turunun sonucu.
+ *
+ * `pending`: saati henüz gelmedi ya da tur sürüyor.
+ * `missed` : saati geçti, hiçbir makinenin yedeği alınmadı.
+ */
+export interface BackupSlot {
+  /** Programdaki nominal saat (ISO) */
+  at: string
+  /** O turda yedeği alınan makine sayısı */
+  vmCount: number
+  status: "ok" | "partial" | "missed" | "pending"
+}
+
+export interface BackupCycle {
+  /** Son turlar, eskiden yeniye */
+  slots: BackupSlot[]
+  /** Programda tekrar eden saatler (TR saati, 0-23) */
+  slotHours: number[]
+  /** Yedek işindeki makine sayısı — hiç yedeği olmayanlar hariç */
+  vmsInJob: number
+  /** Sıradaki turun zamanı (ISO) */
+  nextAt: string | null
+}
+
+/**
+ * Yedek programı ve son turların durumu.
  *
  * ── Saatler neden sabit yazılmıyor? ────────────────────────────────────
- * İş şu an günde üç kez dönüyor ama bu Makdos tarafında değişebilir.
- * Sabit saat yazmak, program değiştiğinde panelin sessizce yanlış
- * göstermesi demek olurdu. Onun yerine geçmiş yedeklerin SAATİNDEN
- * çıkarılıyor: son bir haftada en az iki gün tekrar eden saatler
- * "program" sayılıyor.
+ * İş şu an günde dört kez dönüyor (TR ~12:00 · 15:00 · 18:00 · 22:00) ama
+ * bu Makdos tarafında değişebilir. Sabit saat yazmak, program
+ * değiştiğinde panelin sessizce yanlış göstermesi demek olurdu. Saatler
+ * geçmiş yedeklerden çıkarılıyor: en yakın tam saate yuvarlanıp, EN AZ
+ * İKİ AYRI GÜNDE tekrar eden saatler "program" sayılıyor. Tek seferlik
+ * elle alınmış bir yedek böylece programa karışmıyor.
+ *
+ * ── Neden "bugünün turları" değil? ─────────────────────────────────────
+ * Önce günlük sayılıyordu. Sabah 10:00'da ilk tur 12:00'de olduğu için
+ * kart "bugün 0 tur" deyip kırmızı yanıyordu — oysa gece 22:00 turu
+ * sorunsuz dönmüştü. Şimdi gün sınırı değil, SON DÖRT TUR gösteriliyor:
+ * ekran her saatte doğru şeyi söylüyor.
  *
  * ── Bir tur ne zaman "başarılı"? ───────────────────────────────────────
  * O turda yedek işindeki her makinenin yedeği alınmışsa. İşe hiç dahil
  * olmayan makineler (hiç yedeği yok) beklenen sayıya KATILMIYOR; onlar
  * ayrı bir uyarı olarak gösteriliyor, turu başarısız göstermeleri
  * yanıltıcı olurdu.
- *
- * Zaman toleransı ±90 dk: iş sırayla makineleri dolaştığı için aynı turun
- * ilk ve son makinesi arasında yarım saati aşan fark olabiliyor.
  */
-/**
- * Bugünkü yedek turları ve yedek işindeki makine sayısı.
- *
- * Turlar zaman kümelemesiyle bulunuyor: aynı tur makineleri sırayla
- * dolaştığı için 12:03 ile 12:22 tek tur sayılmalı. Pencere kümenin İLK
- * noktasına göre ölçülüyor; son noktaya göre ölçülürse 70'er dakika
- * arayla dizilen zamanlar zincirleme birleşip günün yarısını tek tur
- * yapıyor (yaşandı).
- */
-export function computeTodayRuns(
+export function computeBackupCycle(
   vms: EsxiVmBackup[], now = new Date(),
-): { runs: BackupRun[]; vmsInJob: number } {
+): BackupCycle {
   const inJob = vms.filter((v) => v.times.length > 0)
-  if (!inJob.length) return { runs: [], vmsInJob: 0 }
+  const bos: BackupCycle = { slots: [], slotHours: [], vmsInJob: inJob.length, nextAt: null }
+  if (!inJob.length) return bos
 
-  const today = now.toDateString()
-  /*  (zaman, makine) çiftleri — aynı makine bir turda günlüğe birkaç
-   *  satır bırakabiliyor, makine adıyla tekilleştiriliyor.              */
+  /*  (zaman, makine) çiftleri — bir makine bir turda günlüğe birkaç satır
+   *  bırakabiliyor, makine adıyla tekilleştiriliyor.                     */
   const points: { t: number; vm: string }[] = []
   for (const v of inJob) {
     for (const iso of v.times) {
-      const d = new Date(iso)
-      if (!isFinite(d.getTime()) || d.toDateString() !== today) continue
-      points.push({ t: d.getTime(), vm: v.vmName })
+      const t = new Date(iso).getTime()
+      if (isFinite(t)) points.push({ t, vm: v.vmName })
     }
   }
-  if (!points.length) return { runs: [], vmsInJob: inJob.length }
-  points.sort((a, b) => a.t - b.t)
+  if (!points.length) return bos
 
-  const WINDOW_MS = 75 * 60_000
-  const runs: BackupRun[] = []
-  let startT = points[0].t
-  let vmSet = new Set<string>()
+  /*  Program saatleri: her yedeği en yakın tam saate yuvarla, o saatin
+   *  kaç AYRI günde göründüğüne bak. TR ofseti tam saat olduğu için
+   *  yuvarlama UTC üzerinde yapılabiliyor, sonuç aynı.                  */
+  const daysByHour = new Map<number, Set<string>>()
   for (const pt of points) {
-    if (pt.t - startT > WINDOW_MS) {
-      runs.push({ at: new Date(startT).toISOString(), vmCount: vmSet.size })
-      startT = pt.t
-      vmSet = new Set<string>()
-    }
-    vmSet.add(pt.vm)
+    const slot = Math.round(pt.t / HOUR_MS) * HOUR_MS
+    const tr   = new Date(slot + TR_OFFSET_MS)
+    const h    = tr.getUTCHours()
+    const gun  = tr.toISOString().slice(0, 10)
+    const set  = daysByHour.get(h) ?? new Set<string>()
+    set.add(gun)
+    daysByHour.set(h, set)
   }
-  runs.push({ at: new Date(startT).toISOString(), vmCount: vmSet.size })
+  const slotHours = [...daysByHour.entries()]
+    .filter(([, gunler]) => gunler.size >= 2)
+    .map(([h]) => h)
+    .sort((a, b) => a - b)
+  if (!slotHours.length) return bos
 
-  return { runs, vmsInJob: inJob.length }
+  /*  Son iki günün ve yarının program anları — "sıradaki" gece yarısını
+   *  geçtiğinde de bulunabilsin diye ileriye bir gün bakılıyor.         */
+  const nowMs    = now.getTime()
+  const bugunTR  = Math.floor((nowMs + TR_OFFSET_MS) / DAY_MS) * DAY_MS - TR_OFFSET_MS
+  const anlar: number[] = []
+  for (let d = -2; d <= 1; d++) {
+    for (const h of slotHours) anlar.push(bugunTR + d * DAY_MS + h * HOUR_MS)
+  }
+  anlar.sort((a, b) => a - b)
+
+  const gecmis = anlar.filter((t) => t <= nowMs).slice(-SHOWN_SLOTS)
+  const next   = anlar.find((t) => t > nowMs) ?? null
+
+  const slots: BackupSlot[] = gecmis.map((t) => {
+    const vmSet = new Set<string>()
+    for (const pt of points) if (Math.abs(pt.t - t) <= SLOT_GRACE_MS) vmSet.add(pt.vm)
+    const vmCount = vmSet.size
+    /*  Tur daha yeni başlamışsa sonucu belli değil — "kaçırıldı" deme.  */
+    const bitti = nowMs > t + SLOT_GRACE_MS
+    const status: BackupSlot["status"] =
+      !bitti                    ? "pending"
+      : vmCount === 0           ? "missed"
+      : vmCount >= inJob.length ? "ok"
+      :                           "partial"
+    return { at: new Date(t).toISOString(), vmCount, status }
+  })
+
+  return {
+    slots,
+    slotHours,
+    vmsInJob: inJob.length,
+    nextAt: next === null ? null : new Date(next).toISOString(),
+  }
 }
 
 export function invalidateEsxiCache(): void {

@@ -49,16 +49,22 @@ export interface EsxiVmBackup {
   times: string[]
 }
 
-/** Bugun donmus bir yedek turu */
-export interface BackupRun {
+/** Programdaki bir yedek turunun sonucu */
+export interface BackupSlot {
+  /** Nominal saat (ISO) */
   at: string
+  /** O turda yedegi alinan makine sayisi */
   vmCount: number
+  status: "ok" | "partial" | "missed" | "pending"
 }
 
 export interface EsxiData {
   host: EsxiHost
   backups: EsxiVmBackup[] | null
-  runs: BackupRun[] | null
+  /** Son turlar, eskiden yeniye */
+  slots: BackupSlot[] | null
+  /** Siradaki turun zamani (ISO) */
+  nextAt: string | null
   /** Yedek isinde olan makine sayisi — turun kapsami buna gore okunur */
   vmsInJob: number
 }
@@ -78,7 +84,13 @@ export function useEsxi(): EsxiData | null {
         /*  ok:false → kimlik yok ya da host kapalı. Mevcut veriyi SİLME:
          *  geçici bir kesintide kart boşalmasın, son bilinen değer dursun. */
         if (!json?.ok || !json.host) return
-        setData({ host: json.host, backups: json.backups ?? null, runs: json.runs ?? null, vmsInJob: json.vmsInJob ?? 0 })
+        setData({
+          host:     json.host,
+          backups:  json.backups ?? null,
+          slots:    json.slots ?? null,
+          nextAt:   json.nextAt ?? null,
+          vmsInJob: json.vmsInJob ?? 0,
+        })
       } catch {
         /* ağ hatası — mevcut değerler dursun */
       }

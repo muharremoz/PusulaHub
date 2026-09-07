@@ -200,7 +200,12 @@ export default function TvAgacPage() {
         {esxi && <PhysicalHostCard host={esxi.host} />}
         {serverList.length > 0 && <DiskCard servers={serverList} />}
         {esxi?.backups && esxi.backups.length > 0 && (
-          <BackupImageCard backups={esxi.backups} runs={esxi.runs} vmsInJob={esxi.vmsInJob} />
+          <BackupImageCard
+            backups={esxi.backups}
+            slots={esxi.slots}
+            nextAt={esxi.nextAt}
+            vmsInJob={esxi.vmsInJob}
+          />
         )}
       </div>
     </div>
