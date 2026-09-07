@@ -185,6 +185,7 @@ export default function TvAgacPage() {
         bandwidth={mockBandwidth ?? bandwidth}
         offlineFirms={mockFirms ?? offlineFirms}
         domains={domains}
+        backupStorage={backupDisk}
       />
 
       {/* Altyapi sutunu — izleme kartlarinin SOLUNDA, ayri bir sutun.
@@ -197,9 +198,7 @@ export default function TvAgacPage() {
           surekli goz onunde duruyorlar. */}
       <div className="pointer-events-none absolute right-[306px] top-6 flex w-[262px] select-none flex-col gap-4">
         {esxi && <PhysicalHostCard host={esxi.host} />}
-        {(serverList.length > 0 || backupDisk) && (
-          <DiskCard servers={serverList} backupStorage={backupDisk} />
-        )}
+        {serverList.length > 0 && <DiskCard servers={serverList} />}
         {esxi?.backups && esxi.backups.length > 0 && (
           <BackupImageCard backups={esxi.backups} runs={esxi.runs} vmsInJob={esxi.vmsInJob} />
         )}

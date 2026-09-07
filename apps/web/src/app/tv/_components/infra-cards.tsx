@@ -19,7 +19,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
-import type { BackupRun, BackupStorage, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
+import type { BackupRun, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 
 /**
  * Disk kartının ihtiyaç duyduğu asgari sunucu şekli. `@/types`'taki tam
@@ -239,13 +239,7 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
 /** Kaç sunucu satırı gösterilir — en dolular önce */
 const MAX_DISK_ROWS = 6
 
-export function DiskCard({
-  servers, backupStorage,
-}: {
-  servers: DiskCardServer[]
-  /** Musteri yedeklerinin yazildigi SFTP sunucusu — dolarsa yedek durur */
-  backupStorage: BackupStorage | null
-}) {
+export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
   /*  Her diski ayrı satır yapıp en dolulara göre sıralıyoruz: ekranda yer
    *  sınırlı, dolmak üzere olan disk her zaman görünsün.                 */
   const rows = servers
@@ -268,18 +262,6 @@ export function DiskCard({
   return (
     <Card>
       <Title>Disk Doluluğu</Title>
-
-      {/*  Yedek deposu once geliyor: dolarsa musteri yedekleri durur,
-           sanal makine disklerinden daha kritik.                       */}
-      {backupStorage && (
-        <Meter
-          name="Yedek deposu"
-          value={`${formatGB(backupStorage.freeGB)} boş`}
-          percent={backupStorage.percent}
-        />
-      )}
-
-      {backupStorage && rows.length > 0 && <Divider />}
 
       {rows.length > 0 ? (
         rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} />)

@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Sağ şerit — trafik, çevrimdışı yedekler ve domain yenileme kartları.
+ * Sağ şerit — trafik, Spare Backup ve domain yenileme kartları.
  *
  * ── Okunabilirlik ──────────────────────────────────────────────────────
  * Arkada hareketli bir yıldız alanı var; üstüne düz yazı koyunca yıldızlar
@@ -24,6 +24,7 @@
 import type { BandwidthData } from "@/lib/bandwidth"
 import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
 import type { DomainExpiry } from "@/lib/domain-expiry"
+import type { BackupStorage } from "./use-esxi"
 
 const FLOW    = "#7DD3FC"
 const TXT     = "#D4D4D8"
@@ -33,6 +34,10 @@ const RED     = "#F87171"
 
 /** Listelerde en fazla kaç satır gösterilir */
 const MAX_ROWS = 4
+
+/** Disk doluluk eşikleri — üstünde renk değişir */
+const WARN_PCT = 80
+const CRIT_PCT = 90
 
 /* ══════════════════════════════════════════════════════════
    Ortak parçalar
@@ -92,6 +97,35 @@ function Divider() {
   return <div className="my-2.5 border-t" style={{ borderColor: "rgba(255,255,255,0.08)" }} />
 }
 
+/** İnce doluluk çubuğu — yüzdeye göre renklenir */
+function Bar({ percent, color }: { percent: number; color: string }) {
+  const w = Math.max(0, Math.min(100, percent))
+  return (
+    <div
+      className="mt-1 h-[3px] w-full overflow-hidden rounded-full"
+      style={{ background: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="h-full rounded-full" style={{ width: `${w}%`, background: color }} />
+    </div>
+  )
+}
+
+/** Ad + değer + altında çubuk (altyapı kartlarıyla aynı görünüm) */
+function Meter({ name, value, percent }: { name: string; value: string; percent: number }) {
+  const color = percent >= CRIT_PCT ? RED : percent >= WARN_PCT ? AMBER : TXT
+  return (
+    <div className="py-[3px]">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: TXT }}>{name}</span>
+        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums" style={{ color }}>
+          {value}
+        </span>
+      </div>
+      <Bar percent={percent} color={color} />
+    </div>
+  )
+}
+
 function Empty({ text }: { text: string }) {
   return (
     <div
@@ -118,6 +152,13 @@ function formatTraffic(gb: number): string {
   if (!isFinite(gb)) return "—"
   if (gb >= 1000) return `${(gb / 1000).toFixed(2)} TB`
   if (gb < 100)   return `${gb.toFixed(1)} GB`
+  return `${Math.round(gb)} GB`
+}
+
+/** GB → 1000 üstü TB */
+function formatGB(gb: number): string {
+  if (!isFinite(gb)) return "—"
+  if (gb >= 1000) return `${(gb / 1000).toFixed(2)} TB`
   return `${Math.round(gb)} GB`
 }
 
@@ -203,10 +244,21 @@ function TrafficCard({ data }: { data: BandwidthData | null }) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   Çevrimdışı yedekler
+   Spare Backup — çevrimdışı firmalar + deponun diski
 ══════════════════════════════════════════════════════════ */
 
-function BackupsCard({ data }: { data: SpareBackupOffline | null }) {
+/**
+ * Tek kartta iki soru: yedek GELIYOR mu (cevrimdisi firmalar) ve yedegin
+ * YAZACAGI yer var mi (depo diski). Ikisi de ayni servisin durumu; disk
+ * dolunca firmalar tek tek cevrimdisina dusecek, yan yana duruncaya
+ * kadar bu bag ekranda gorunmuyordu.
+ */
+function BackupsCard({
+  data, storage,
+}: {
+  data: SpareBackupOffline | null
+  storage: BackupStorage | null
+}) {
   const list  = data?.offline ?? []
   const count = list.length
   const shown = list.slice(0, MAX_ROWS)
@@ -214,7 +266,7 @@ function BackupsCard({ data }: { data: SpareBackupOffline | null }) {
 
   return (
     <Card>
-      <Title>Çevrimdışı Yedekler</Title>
+      <Title>Spare Backup</Title>
 
       {!data ? (
         <div className="mt-2"><Empty text="Servise ulaşılamadı" /></div>
@@ -253,6 +305,19 @@ function BackupsCard({ data }: { data: SpareBackupOffline | null }) {
               +{rest} firma daha
             </div>
           )}
+        </>
+      )}
+
+      {/*  Depo diski en altta: firma listesi haber, disk ise zemin.
+           Ulasilamiyorsa satir hic cizilmiyor - bos kutu durmasin.   */}
+      {storage && (
+        <>
+          <Divider />
+          <Meter
+            name="Depo diski"
+            value={`${formatGB(storage.freeGB)} boş`}
+            percent={storage.percent}
+          />
         </>
       )}
     </Card>
@@ -306,9 +371,11 @@ interface Props {
   bandwidth:    BandwidthData | null
   offlineFirms: SpareBackupOffline | null
   domains:      DomainExpiry[] | null
+  /** Spare Backup deposunun disk dolulugu - ayni kartta gosteriliyor */
+  backupStorage: BackupStorage | null
 }
 
-export function RightRail({ bandwidth, offlineFirms, domains }: Props) {
+export function RightRail({ bandwidth, offlineFirms, domains, backupStorage }: Props) {
   return (
     <>
       {/* Sağdan sola sönen karartı — kartların okunabilirlik zemini */}
@@ -322,7 +389,7 @@ export function RightRail({ bandwidth, offlineFirms, domains }: Props) {
 
       <div className="pointer-events-none absolute right-6 top-6 flex w-[262px] select-none flex-col gap-4">
         <TrafficCard data={bandwidth} />
-        <BackupsCard data={offlineFirms} />
+        <BackupsCard data={offlineFirms} storage={backupStorage} />
         <DomainsCard data={domains} />
       </div>
     </>
