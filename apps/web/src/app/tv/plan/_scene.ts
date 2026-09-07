@@ -30,13 +30,6 @@ const RENK = {
   cam:        0x8fc7de,
   /** Kapı çerçevesi/dikmeleri — duvardan açık, cam kenarını çiziyor */
   cerceve:    0x59616d,
-  /** Bitki platformu — zeminden ayrılsın ama duvardan koyu kalsın */
-  platform:   0x2f353d,
-  /** Saksı — zeminden biraz açık, gövdesi seçilsin */
-  saksi:      0x39404a,
-  /** Yaprak; iki ton arasında değişiyor, hepsi tek renk olunca yapay duruyor */
-  yaprakA:    0x2f7d52,
-  yaprakB:    0x3f9a63,
 } as const
 
 /* Kat ölçüleri (dünya birimi) — odalar geldiğinde ızgara buna göre kurulacak */
@@ -66,17 +59,6 @@ const KAPI_EN    = EN / 4
 const CAM_KAL    = DUVAR_KAL * 0.45
 /** Dikme ve orta kayıt — kapıyı çift kanatlı gösteriyor */
 const CERCEVE    = 0.09
-
-/** Bitkilerin üzerinde durduğu alçak platform */
-const PLATFORM_Y = 0.12
-/**
- * Bitkinin platform üstünde kalabileceği en yüksek nokta.
- *
- * Duvarı AŞMAMALI: aşınca kat siluetini bozuyor ve bitki duvarın
- * arkasından fırlamış gibi duruyor. Pay bırakılıyor ki en uzun yaprak
- * bile duvar hizasının altında kalsın.
- */
-const BITKI_MAX  = DUVAR_Y - PLATFORM_Y - 0.18
 
 export class PlanSahne {
   private sahne   = new THREE.Scene()
@@ -171,103 +153,6 @@ export class PlanSahne {
     this.kapiliDuvar( yariBoy)
     this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2, -yariEn, 0)
     this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2,  yariEn, 0)
-
-    this.bitkileriKur()
-  }
-
-  /**
-   * Yan duvarların dibine saksılı bitkiler.
-   *
-   * Kat boş bir tepsiye benziyordu; bitkiler ölçek veriyor — yanlarında
-   * duran şeye bakınca duvarın ne kadar yüksek olduğu anlaşılıyor. Ayrıca
-   * odalar geldiğinde aradaki koridor boşluklarını doldurmuş oluyorlar.
-   *
-   * Yalnız YAN duvarlarda: ön/arka duvarların ortası kapı, oraya bitki
-   * koymak girişi tıkamak olurdu.
-   */
-  private bitkileriKur() {
-    const x = EN / 2 - 0.85
-    const adet = 4
-    /*  Bitkiler duvar boyunca EŞİT DAĞILMIYOR, uçlara kümeleniyor:
-     *  boydan boya dizilince süs değil sınır çizgisi gibi duruyorlardı.
-     *
-     *  İki küme ÇAPRAZ: sol duvardakiler ön uçta, sağ duvardakiler arka
-     *  uçta. Aynı hizada olunca kat simetrik ve durgun görünüyordu;
-     *  çapraz yerleşim göze bir yön veriyor ve katın iki ucunu birden
-     *  canlandırıyor.                                                   */
-    const uc  = BOY / 2 - 1.3   // uçtan içeri
-    const ara = 0.85            // aralarındaki mesafe
-    const boy = (adet - 1) * ara + 0.8   // platform uzunluğu
-
-    /*  İki küme ve platformları TEK YERDE tanımlanıyor.
-     *
-     *  Önce platformlar ayrı bir döngüde, işaret çarpımıyla
-     *  konumlanıyordu ve ters köşeye düşüyorlardı: saksılar çapraz,
-     *  platformlar ters çaprazdı. Konumu tek kaynaktan üretmek bu tür
-     *  sessiz uyuşmazlığı baştan engelliyor.                            */
-    const kumeler = [
-      { x: -x, ilk:  uc, yon: -1 },   // sol duvar → ön uç, geriye doğru
-      { x:  x, ilk: -uc, yon:  1 },   // sağ duvar → arka uç, ileriye doğru
-    ]
-
-    for (const [k, kume] of kumeler.entries()) {
-      /*  Platform kümenin ORTASINA hizalanıyor.                        */
-      const merkez = kume.ilk + kume.yon * ((adet - 1) * ara) / 2
-      const p = this.kutu(0.72, PLATFORM_Y, boy, RENK.platform)
-      p.position.set(kume.x, PLATFORM_Y / 2, merkez)
-      p.receiveShadow = true
-      p.castShadow = true
-
-      for (let i = 0; i < adet; i++) {
-        this.bitki(kume.x, kume.ilk + kume.yon * i * ara, k * adet + i)
-      }
-    }
-  }
-
-  /**
-   * Tek saksı: konik gövde + üç düşük poligonlu yaprak kümesi.
-   *
-   * `flatShading` bilerek: yüzeyler ayrı ayrı ışık aldığı için küçük
-   * nesnede bile hacim okunuyor, pürüzsüz küre koyu sahnede yassı bir
-   * leke gibi duruyordu.
-   */
-  private bitki(x: number, z: number, tohum: number) {
-    /*  Deterministik "rastgelelik": her yenilemede aynı görünsün.      */
-    const r = (n: number) => (Math.sin(tohum * 12.9898 + n * 78.233) + 1) / 2
-
-    const saksiY = 0.22 + r(1) * 0.05
-    const saksi = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.19, saksiY, 8),
-      new THREE.MeshStandardMaterial({ color: RENK.saksi, roughness: 0.9, flatShading: true }),
-    )
-    /*  Platformun ÜSTÜNE oturuyor.                                     */
-    saksi.position.set(x, PLATFORM_Y + saksiY / 2, z)
-    saksi.castShadow = true
-    saksi.receiveShadow = true
-    this.sahne.add(saksi)
-    this.nesneler.push(saksi)
-
-    const yaprakRenk = r(2) > 0.5 ? RENK.yaprakA : RENK.yaprakB
-    for (let k = 0; k < 3; k++) {
-      const boyut = 0.14 + r(k + 3) * 0.07
-      const yaprak = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(boyut, 0),
-        new THREE.MeshStandardMaterial({ color: yaprakRenk, roughness: 0.75, flatShading: true }),
-      )
-      /*  Yaprak kümesinin tepesi BITKI_MAX ile sınırlanıyor; yarıçap da
-       *  hesaba katılıyor, yoksa küme merkezi sınırın altında kalsa bile
-       *  üst ucu duvarı aşıyor.                                         */
-      const yukseklik = Math.min(saksiY + 0.06 + k * 0.11, BITKI_MAX - boyut)
-      yaprak.position.set(
-        x + (r(k + 6) - 0.5) * 0.2,
-        PLATFORM_Y + yukseklik,
-        z + (r(k + 9) - 0.5) * 0.2,
-      )
-      yaprak.rotation.set(r(k + 12) * 3, r(k + 15) * 3, 0)
-      yaprak.castShadow = true
-      this.sahne.add(yaprak)
-      this.nesneler.push(yaprak)
-    }
   }
 
   /**
