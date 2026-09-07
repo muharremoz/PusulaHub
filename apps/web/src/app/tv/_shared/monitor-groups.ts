@@ -81,6 +81,7 @@ const MAP: Record<string, TreeKey> = {
      çözümlenmediğini test ediyor. Uygulamalardan ayrı bir şey. */
   "IIS":               "dns",      // iis.databag.net
   "PS1":               "dns",      // ps1.databag.net
+  "PS2":               "dns",      // ps2.databag.net
   "Pusula VPN":        "dns",      // vpn.pusulanet.net
   "Pusulanet.net":     "dns",
   "Pusulayazilim.net": "dns",
