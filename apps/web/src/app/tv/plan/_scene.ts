@@ -26,13 +26,22 @@ const RENK = {
   duvar:      0x3a404a,
   /** Duvar üst kenarı — ince açık şerit, siluet koyu sahnede kaybolmasın */
   duvarUst:   0x4d545f,
+  /** Cam kanat — soğuk ve saydam */
+  cam:        0x8fc7de,
+  /** Kapı çerçevesi/dikmeleri — duvardan açık, cam kenarını çiziyor */
+  cerceve:    0x59616d,
+  /** Saksı — zeminden biraz açık, gövdesi seçilsin */
+  saksi:      0x39404a,
+  /** Yaprak; iki ton arasında değişiyor, hepsi tek renk olunca yapay duruyor */
+  yaprakA:    0x2f7d52,
+  yaprakB:    0x3f9a63,
 } as const
 
 /* Kat ölçüleri (dünya birimi) — odalar geldiğinde ızgara buna göre kurulacak */
 const EN        = 20
 const BOY       = 14
 const KALINLIK  = 0.4     // zemin plakası
-const DUVAR_KAL = 0.35
+const DUVAR_KAL = 0.18
 
 /**
  * Duvar yüksekliği bilerek DÜŞÜK.
@@ -42,6 +51,19 @@ const DUVAR_KAL = 0.35
  * kalıyor — mimari maketlerin mantığı.
  */
 const DUVAR_Y = 1.15
+
+/**
+ * Ön ve arka duvarın ortasındaki cam kapı.
+ *
+ * Genişlik kat eninin dörtte biri: dar bir aralık duvarda kaza gibi
+ * duruyordu, bu ölçüde giriş olduğu belli oluyor. Kapı duvarın TAM
+ * yüksekliğinde — alçak duvarda daha kısa bir kapı orantısız görünüyor.
+ */
+const KAPI_EN    = EN / 4
+/** Cam, duvardan ince: kanat çerçevenin içine gömülü dursun */
+const CAM_KAL    = DUVAR_KAL * 0.45
+/** Dikme ve orta kayıt — kapıyı çift kanatlı gösteriyor */
+const CERCEVE    = 0.09
 
 export class PlanSahne {
   private sahne   = new THREE.Scene()
@@ -127,22 +149,141 @@ export class PlanSahne {
     const yariEn  = EN / 2 - DUVAR_KAL / 2
     const yariBoy = BOY / 2 - DUVAR_KAL / 2
 
-    /*  Ön/arka duvarlar tam genişlikte, yan duvarlar aradaki farkı
-     *  tamamlıyor — köşelerde ne boşluk ne de üst üste binme kalıyor.  */
-    this.duvar(EN, DUVAR_KAL, 0, -yariBoy)
-    this.duvar(EN, DUVAR_KAL, 0,  yariBoy)
+    /*  Ön/arka duvarlar tam genişlikte ama ORTALARI açık: oraya cam
+     *  kapı giriyor. Yan duvarlar aradaki farkı tamamlıyor — köşelerde
+     *  ne boşluk ne de üst üste binme kalıyor.                          */
+    this.kapiliDuvar(-yariBoy)
+    this.kapiliDuvar( yariBoy)
     this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2, -yariEn, 0)
     this.duvar(DUVAR_KAL, BOY - DUVAR_KAL * 2,  yariEn, 0)
+
+    this.bitkileriKur()
   }
 
-  private duvar(w: number, d: number, x: number, z: number) {
+  /**
+   * Yan duvarların dibine saksılı bitkiler.
+   *
+   * Kat boş bir tepsiye benziyordu; bitkiler ölçek veriyor — yanlarında
+   * duran şeye bakınca duvarın ne kadar yüksek olduğu anlaşılıyor. Ayrıca
+   * odalar geldiğinde aradaki koridor boşluklarını doldurmuş oluyorlar.
+   *
+   * Yalnız YAN duvarlarda: ön/arka duvarların ortası kapı, oraya bitki
+   * koymak girişi tıkamak olurdu.
+   */
+  private bitkileriKur() {
+    const x = EN / 2 - 0.85
+    const adet = 4
+    for (let i = 0; i < adet; i++) {
+      /*  Duvar boyunca eşit aralık, uçlarda köşeye yapışmasın diye
+       *  içeriden başlıyor.                                            */
+      const t = (i + 1) / (adet + 1)
+      const z = -BOY / 2 + 1.4 + t * (BOY - 2.8)
+      this.bitki(-x, z, i)
+      this.bitki( x, z, i + adet)
+    }
+  }
+
+  /**
+   * Tek saksı: konik gövde + üç düşük poligonlu yaprak kümesi.
+   *
+   * `flatShading` bilerek: yüzeyler ayrı ayrı ışık aldığı için küçük
+   * nesnede bile hacim okunuyor, pürüzsüz küre koyu sahnede yassı bir
+   * leke gibi duruyordu.
+   */
+  private bitki(x: number, z: number, tohum: number) {
+    /*  Deterministik "rastgelelik": her yenilemede aynı görünsün.      */
+    const r = (n: number) => (Math.sin(tohum * 12.9898 + n * 78.233) + 1) / 2
+
+    const saksiY = 0.26 + r(1) * 0.06
+    const saksi = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.15, 0.2, saksiY, 8),
+      new THREE.MeshStandardMaterial({ color: RENK.saksi, roughness: 0.9, flatShading: true }),
+    )
+    saksi.position.set(x, saksiY / 2, z)
+    saksi.castShadow = true
+    saksi.receiveShadow = true
+    this.sahne.add(saksi)
+    this.nesneler.push(saksi)
+
+    const yaprakRenk = r(2) > 0.5 ? RENK.yaprakA : RENK.yaprakB
+    for (let k = 0; k < 3; k++) {
+      const boyut = 0.17 + r(k + 3) * 0.1
+      const yaprak = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(boyut, 0),
+        new THREE.MeshStandardMaterial({ color: yaprakRenk, roughness: 0.75, flatShading: true }),
+      )
+      yaprak.position.set(
+        x + (r(k + 6) - 0.5) * 0.24,
+        saksiY + 0.1 + k * 0.13,
+        z + (r(k + 9) - 0.5) * 0.24,
+      )
+      yaprak.rotation.set(r(k + 12) * 3, r(k + 15) * 3, 0)
+      yaprak.castShadow = true
+      this.sahne.add(yaprak)
+      this.nesneler.push(yaprak)
+    }
+  }
+
+  /**
+   * Ortasında cam kapı olan uzun duvar.
+   *
+   * Duvar ikiye bölünüyor, aradaki boşluğa cam kanatlar ve çerçeve
+   * giriyor. Üstteki açık şerit boşluğun ÜZERİNDEN de geçiyor: kesilirse
+   * duvarın silueti ortadan ikiye ayrılıyor ve kat parçalı görünüyor.
+   */
+  private kapiliDuvar(z: number) {
+    const parca = (EN - KAPI_EN) / 2
+    const kayma = (KAPI_EN + parca) / 2
+
+    this.duvar(parca, DUVAR_KAL, -kayma, z, false)
+    this.duvar(parca, DUVAR_KAL,  kayma, z, false)
+
+    /*  Üst şerit kesintisiz                                            */
+    const ust = this.kutu(EN, 0.05, DUVAR_KAL, RENK.duvarUst)
+    ust.position.set(0, DUVAR_Y + 0.02, z)
+
+    this.camKapi(z)
+  }
+
+  private camKapi(z: number) {
+    /*  Cam gölge DÜŞÜRMÜYOR: saydam yüzeyin opak bir gölge bırakması
+     *  kapıyı duvar gibi gösteriyordu.                                  */
+    const cam = new THREE.Mesh(
+      new THREE.BoxGeometry(KAPI_EN - CERCEVE * 2, DUVAR_Y - 0.06, CAM_KAL),
+      new THREE.MeshPhysicalMaterial({
+        color: RENK.cam,
+        transparent: true,
+        opacity: 0.22,
+        roughness: 0.06,
+        metalness: 0,
+        /*  Hafif yansıma cama "yüzey" hissi veriyor; olmayınca renkli
+         *  bir tül gibi duruyor.                                        */
+        clearcoat: 0.8,
+        clearcoatRoughness: 0.1,
+      }),
+    )
+    cam.position.set(0, (DUVAR_Y - 0.06) / 2, z)
+    this.sahne.add(cam)
+    this.nesneler.push(cam)
+
+    /*  Dikmeler (iki kenar) + orta kayıt: çift kanatlı kapı okuması.   */
+    for (const x of [-KAPI_EN / 2 + CERCEVE / 2, 0, KAPI_EN / 2 - CERCEVE / 2]) {
+      const dikme = this.kutu(CERCEVE, DUVAR_Y, DUVAR_KAL * 0.9, RENK.cerceve)
+      dikme.position.set(x, DUVAR_Y / 2, z)
+      dikme.castShadow = true
+    }
+  }
+
+  private duvar(w: number, d: number, x: number, z: number, ustSerit = true) {
     const g = this.kutu(w, DUVAR_Y, d, RENK.duvar)
     g.position.set(x, DUVAR_Y / 2, z)
     g.castShadow = true
     g.receiveShadow = true
 
-    const ust = this.kutu(w, 0.05, d, RENK.duvarUst)
-    ust.position.set(x, DUVAR_Y + 0.02, z)
+    if (ustSerit) {
+      const ust = this.kutu(w, 0.05, d, RENK.duvarUst)
+      ust.position.set(x, DUVAR_Y + 0.02, z)
+    }
   }
 
   private kutu(w: number, h: number, d: number, renk: number): THREE.Mesh {
