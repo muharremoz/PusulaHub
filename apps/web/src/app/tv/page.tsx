@@ -196,7 +196,11 @@ export default function TvAgacPage() {
           Ucu de sessizce bozulan seyleri gosteriyor (guc kaynagi, dolan
           disk, yedeksiz sanal makine) — hicbiri alarm uretmedigi icin
           surekli goz onunde duruyorlar. */}
-      <div className="pointer-events-none absolute right-[306px] top-6 flex w-[262px] select-none flex-col gap-4">
+      {/*  z-20: Nexus'un SVG katmani z-10 ile ustte duruyordu ve imaj
+            yedekleri kartindaki gun secicisine tiklama SVG'ye gidiyordu.
+            Sutun pointer-events-none kaliyor; yalniz secici kendi icin
+            geri aciyor, kalan alan tiklamayi kureye gecirmeye devam eder. */}
+      <div className="pointer-events-none absolute right-[306px] top-6 z-20 flex w-[262px] select-none flex-col gap-4">
         {esxi && <PhysicalHostCard host={esxi.host} />}
         {serverList.length > 0 && <DiskCard servers={serverList} />}
         {esxi?.backups && esxi.backups.length > 0 && (

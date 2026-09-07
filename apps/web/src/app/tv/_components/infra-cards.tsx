@@ -22,6 +22,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
+import { useState } from "react"
 import type { BackupSlot, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 
 /**
@@ -109,11 +110,20 @@ function Meter({ name, value, percent }: { name: string; value: string; percent:
   )
 }
 
-function Row({ name, value, color = TXT }: { name: string; value: string; color?: string }) {
+function Row({
+  name, value, color = TXT, yanipSon = false,
+}: {
+  name: string; value: string; color?: string
+  /** Süren bir iş — değer yanıp söner (şu an alınan yedek) */
+  yanipSon?: boolean
+}) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-[3px]">
       <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: TXT }}>{name}</span>
-      <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums" style={{ color }}>
+      <span
+        className={`shrink-0 font-mono text-[11px] font-semibold tabular-nums${yanipSon ? " animate-pulse" : ""}`}
+        style={{ color }}
+      >
         {value}
       </span>
     </div>
@@ -285,45 +295,70 @@ export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
 /*  `now` YOK: program ve tur sonuclari sunucuda hesaplaniyor
  *  (bkz. computeBackupCycle).                                          */
 
-/** Saat etiketi — "22:00", gun degisiyorsa "Dun 22:00" */
-function slotEtiketi(iso: string, now: Date): string {
-  const d    = new Date(iso)
-  const saat = d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-  const fark = Math.round(
-    (new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() -
-     new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86_400_000,
-  )
-  if (fark === 0) return saat
-  if (fark === 1) return `Dün ${saat}`
-  return `${fark} gün önce ${saat}`
-}
+/**  Bir turun ne kadar sarkabilecegi — lib'deki SLOT_GRACE_MS ile ayni.
+ *   Burada yalniz "su an hangi tur donuyor" sorusu icin kullaniliyor.  */
+const TUR_TOLERANS_MS = 45 * 60_000
+
+type TurDurumu = "var" | "yok" | "bekliyor" | "aliniyor"
 
 /**
- * Tek tur kutusu — o makinenin o turda yedeği alındı mı.
+ * Tek tur kutusu.
  *
- * `bekliyor`: turun saati henüz gelmedi ya da tur sürüyor. Sonucu belli
- * olmayan turu kırmızı göstermek yanlış alarm olurdu.
+ * `bekliyor`: turun saati henüz gelmedi. Sonucu belli olmayan turu
+ * kırmızı göstermek yanlış alarm olurdu.
+ * `aliniyor` : şu an alınıyor — yanıp sönüyor.
  */
-function TurKutusu({ saat, durum }: { saat: string; durum: "var" | "yok" | "bekliyor" }) {
+function TurKutusu({ saat, durum }: { saat: string; durum: TurDurumu }) {
   const renk =
-    durum === "var" ? GREEN : durum === "yok" ? RED : TXT_DIM
+    durum === "var"        ? GREEN
+    : durum === "yok"      ? RED
+    : durum === "aliniyor" ? FLOW
+    :                        TXT_DIM
   const zemin =
-    durum === "var"  ? "rgba(52,211,153,0.12)"
-    : durum === "yok" ? "rgba(248,113,113,0.14)"
-    :                   "rgba(255,255,255,0.04)"
+    durum === "var"        ? "rgba(52,211,153,0.12)"
+    : durum === "yok"      ? "rgba(248,113,113,0.14)"
+    : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
+    :                        "rgba(255,255,255,0.04)"
+  const isaret =
+    durum === "var" ? "✓" : durum === "yok" ? "✕" : durum === "aliniyor" ? "●" : "·"
   return (
     <span
-      className="flex flex-1 items-center justify-center gap-[2px] rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums"
+      className={`flex flex-1 items-center justify-center gap-[2px] rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums${
+        durum === "aliniyor" ? " animate-pulse" : ""
+      }`}
       style={{ color: renk, background: zemin }}
     >
-      {durum === "var" ? "✓" : durum === "yok" ? "✕" : "·"}
-      {saat}
+      {isaret}{saat}
     </span>
   )
 }
 
+/** Gün seçici — kart içinde tıklanabilir tek eleman */
+function GunSecici({ gun, onChange }: { gun: "bugun" | "dun"; onChange: (g: "bugun" | "dun") => void }) {
+  return (
+    /*  Sütun `pointer-events-none`: kartın altındaki boşluğa tıklayınca
+     *  küre genel görünüme dönsün. Seçici bunu YALNIZ kendisi için
+     *  geri açıyor, kartın geri kalanı tıklamayı geçirmeye devam eder. */
+    <div className="pointer-events-auto flex shrink-0 gap-[2px]">
+      {([["bugun", "Bugün"], ["dun", "Dün"]] as const).map(([k, etiket]) => (
+        <button
+          key={k}
+          onClick={() => onChange(k)}
+          className="rounded-[4px] px-1.5 py-[1px] text-[9px] font-medium uppercase tracking-wider transition-colors"
+          style={{
+            color: gun === k ? TXT : TXT_DIM,
+            background: gun === k ? "rgba(255,255,255,0.10)" : "transparent",
+          }}
+        >
+          {etiket}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 /**
- * İmaj yedekleri — makine × tur ızgarası.
+ * İmaj yedekleri — seçili günün makine × tur ızgarası.
  *
  * ── Neden ızgara? ─────────────────────────────────────────────────────
  * Tek satırlık "7/7" özeti turun eksik olduğunu söylüyor ama HANGİ
@@ -345,64 +380,79 @@ export function BackupImageCard({
   /** Kartta kullanılmıyor; ızgara makine bazlı, sayı özeti gereksiz kaldı */
   vmsInJob?: number
 }) {
+  const [gun, setGun] = useState<"bugun" | "dun">("bugun")
+
   const now      = new Date()
+  const nowMs    = now.getTime()
   const kisaAd   = (x: string) => x.replace(/\s*\(.*?\)\s*$/, "")
-  const list     = slots ?? []
   const isinde   = backups.filter((b) => b.times.length > 0)
   const yedeksiz = backups.filter((b) => b.times.length === 0)
   const running  = backups.find((b) => b.running)
 
+  /*  Sunucu iki günlük pencere gönderiyor; gün seçimi burada.          */
+  const bugunKey = now.toDateString()
+  const dunKey   = new Date(nowMs - 86_400_000).toDateString()
+  const list     = (slots ?? []).filter(
+    (x) => new Date(x.at).toDateString() === (gun === "bugun" ? bugunKey : dunKey),
+  )
+
   const eksik = list.some((x) => x.status === "missed" || x.status === "partial")
 
-  /*  Turlar iki güne yayılabiliyor (gece 22:00 ile bugün 12:00 aynı
-   *  döngüde). Kutularda yalnız saat var, kapsanan aralık başlıkta.     */
-  const aralik = list.length
-    ? `${slotEtiketi(list[0].at, now)} → ${slotEtiketi(list[list.length - 1].at, now)}`
-    : null
+  /*  Şu an dönen tur: makine yedek alıyorsa VE turun saatindeysek.     */
+  const turDurumu = (vmName: string, x: BackupSlot): TurDurumu => {
+    const slotMs = new Date(x.at).getTime()
+    const suAnda = Math.abs(slotMs - nowMs) <= TUR_TOLERANS_MS
+    const b = backups.find((y) => y.vmName === vmName)
+    if (b?.running && suAnda)   return "aliniyor"
+    if (x.vms.includes(vmName)) return "var"
+    if (x.status === "pending") return "bekliyor"
+    /*  Makine o tarihte yedek isinde degildi (ilk yedegi daha sonra).
+     *  Terminal 2 ise bugun eklendi; dunu kirmizi gostermek yanlis.    */
+    const ilk = b?.times.length ? new Date(b.times[0]).getTime() : NaN
+    if (isFinite(ilk) && ilk > slotMs + TUR_TOLERANS_MS) return "bekliyor"
+    return "yok"
+  }
 
   return (
     <Card>
-      <Title accent={eksik || yedeksiz.length > 0 ? RED : running ? FLOW : undefined}>
-        İmaj Yedekleri
-      </Title>
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className="flex min-w-0 items-center gap-1.5 text-[9px] font-medium uppercase"
+          style={{ color: TXT_DIM, letterSpacing: "0.26em" }}
+        >
+          <span className="truncate">İmaj Yedekleri</span>
+          {(eksik || yedeksiz.length > 0) && (
+            <span className="font-mono text-[9px]" style={{ color: RED }}>●</span>
+          )}
+        </div>
+        <GunSecici gun={gun} onChange={setGun} />
+      </div>
 
       {list.length === 0 ? (
-        /*  Program çıkarılamadı: günlükler iki günden kısa ya da iş hiç
-         *  dönmemiş. Sayı uydurmak yerine bunu söylüyoruz.              */
+        /*  Program çıkarılamadı ya da o gün hiç tur yok. Sayı uydurmak
+         *  yerine bunu söylüyoruz.                                      */
         <div className="mt-2 py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
-          program çıkarılamadı
+          {slots && slots.length ? "o gün tur yok" : "program çıkarılamadı"}
         </div>
       ) : (
-        <>
-          {aralik && (
-            <div className="mt-1.5 font-mono text-[9px]" style={{ color: TXT_DIM }}>
-              {aralik}
-            </div>
-          )}
-
-          <div className="mt-1.5 flex flex-col gap-1.5">
-            {isinde.map((b) => (
-              <div key={b.vmName}>
-                <div className="truncate text-[11px]" style={{ color: TXT }}>
-                  {kisaAd(b.vmName)}
-                </div>
-                <div className="mt-[3px] flex gap-1">
-                  {list.map((x) => (
-                    <TurKutusu
-                      key={x.at}
-                      saat={new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
-                      durum={
-                        x.vms.includes(b.vmName) ? "var"
-                        : x.status === "pending" ? "bekliyor"
-                        :                          "yok"
-                      }
-                    />
-                  ))}
-                </div>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {isinde.map((b) => (
+            <div key={b.vmName}>
+              <div className="truncate text-[11px]" style={{ color: TXT }}>
+                {kisaAd(b.vmName)}
               </div>
-            ))}
-          </div>
-        </>
+              <div className="mt-[3px] flex gap-1">
+                {list.map((x) => (
+                  <TurKutusu
+                    key={x.at}
+                    saat={new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                    durum={turDurumu(b.vmName, x)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
       <Divider />
@@ -415,6 +465,7 @@ export function BackupImageCard({
           :                "—"
         }
         color={running ? FLOW : TXT_DIM}
+        yanipSon={Boolean(running)}
       />
 
       {/*  Yedek işine hiç girmemiş makineler — tur sorunu değil, eksik

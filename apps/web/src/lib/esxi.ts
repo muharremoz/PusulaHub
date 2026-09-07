@@ -598,9 +598,6 @@ const DAY_MS       = 86_400_000
  */
 const SLOT_GRACE_MS = 45 * 60_000
 
-/** Kartta kaç tur gösterilir — bir günlük döngü */
-const SHOWN_SLOTS = 4
-
 /**
  * Bir program turunun sonucu.
  *
@@ -639,11 +636,12 @@ export interface BackupCycle {
  * İKİ AYRI GÜNDE tekrar eden saatler "program" sayılıyor. Tek seferlik
  * elle alınmış bir yedek böylece programa karışmıyor.
  *
- * ── Neden "bugünün turları" değil? ─────────────────────────────────────
- * Önce günlük sayılıyordu. Sabah 10:00'da ilk tur 12:00'de olduğu için
- * kart "bugün 0 tur" deyip kırmızı yanıyordu — oysa gece 22:00 turu
- * sorunsuz dönmüştü. Şimdi gün sınırı değil, SON DÖRT TUR gösteriliyor:
- * ekran her saatte doğru şeyi söylüyor.
+ * ── Neden iki günlük pencere? ──────────────────────────────────────────
+ * Kart gün seçimi sunuyor (Bugün / Dün) ve varsayılanı bugün. Sabah
+ * 10:00'da bugünün dört turu da henüz dönmemiş olabilir; bunlar
+ * "bekliyor" olarak gösteriliyor, kırmızı DEĞİL — saati gelmemiş turu
+ * kaçırılmış saymak yanlış alarm olurdu. Dün'e geçince tam bir günün
+ * sonucu görülüyor.
  *
  * ── Bir tur ne zaman "başarılı"? ───────────────────────────────────────
  * O turda yedek işindeki her makinenin yedeği alınmışsa. İşe hiç dahil
@@ -688,30 +686,44 @@ export function computeBackupCycle(
     .sort((a, b) => a - b)
   if (!slotHours.length) return bos
 
-  /*  Son iki günün ve yarının program anları — "sıradaki" gece yarısını
-   *  geçtiğinde de bulunabilsin diye ileriye bir gün bakılıyor.         */
+  /*  Dün ve bugünün TÜM program anları döndürülüyor — kart gün seçimi
+   *  yapıyor ve günün henüz gelmemiş turlarını da "bekliyor" olarak
+   *  gösteriyor. "Sıradaki" gece yarısını geçtiğinde yarının ilk turuna
+   *  düşebilsin diye ileriye bir gün daha bakılıyor.                    */
   const nowMs    = now.getTime()
   const bugunTR  = Math.floor((nowMs + TR_OFFSET_MS) / DAY_MS) * DAY_MS - TR_OFFSET_MS
   const anlar: number[] = []
-  for (let d = -2; d <= 1; d++) {
+  for (let d = -1; d <= 1; d++) {
     for (const h of slotHours) anlar.push(bugunTR + d * DAY_MS + h * HOUR_MS)
   }
   anlar.sort((a, b) => a - b)
 
-  const gecmis = anlar.filter((t) => t <= nowMs).slice(-SHOWN_SLOTS)
-  const next   = anlar.find((t) => t > nowMs) ?? null
+  const next = anlar.find((t) => t > nowMs) ?? null
+  /*  Dün 00:00 ile yarın 00:00 arası — iki günlük pencere.             */
+  const pencere = anlar.filter((t) => t >= bugunTR - DAY_MS && t < bugunTR + DAY_MS)
 
-  const slots: BackupSlot[] = gecmis.map((t) => {
+  const slots: BackupSlot[] = pencere.map((t) => {
     const vmSet = new Set<string>()
     for (const pt of points) if (Math.abs(pt.t - t) <= SLOT_GRACE_MS) vmSet.add(pt.vm)
     const vmCount = vmSet.size
+
+    /*  Beklenen makine sayisi TUR BAZLI.
+     *
+     *  Once genel `inJob.length` kullaniliyordu. Terminal 2 yedek isine
+     *  bugun eklenince DUNUN butun turlari geriye donuk "eksik" oldu —
+     *  oysa o gun makine iste yoktu. Bir makine ancak ILK yedeginden
+     *  sonraki turlarda bekleniyor.                                     */
+    const beklenen = inJob.filter((v) => {
+      const ilk = new Date(v.times[0]).getTime()
+      return isFinite(ilk) && ilk <= t + SLOT_GRACE_MS
+    }).length
     /*  Tur daha yeni başlamışsa sonucu belli değil — "kaçırıldı" deme.  */
     const bitti = nowMs > t + SLOT_GRACE_MS
     const status: BackupSlot["status"] =
       !bitti                    ? "pending"
-      : vmCount === 0           ? "missed"
-      : vmCount >= inJob.length ? "ok"
-      :                           "partial"
+      : vmCount === 0         ? "missed"
+      : vmCount >= beklenen   ? "ok"
+      :                         "partial"
     return { at: new Date(t).toISOString(), vmCount, vms: [...vmSet], status }
   })
 
