@@ -34,6 +34,7 @@ import { restoreBackupOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginArama } from "@/lib/firma-adlandirma"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
+import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
 import { buildPullBakFromDepo, buildDeleteFile } from "@/lib/sql-backup-powershell"
 
 interface FileReq {
@@ -52,12 +53,16 @@ export async function POST(
   if (gate) return gate
   const { firkod } = await params
 
-  let body: { files?: FileReq[]; source?: "depo" | "sql"; path?: string }
+  let body: { files?: FileReq[]; source?: "depo" | "sql"; path?: string; yedekAl?: boolean }
   try { body = await req.json() } catch { return json({ error: "Geçersiz JSON" }, 400) }
   const files = (body.files ?? []).filter((f) => f.fileName && f.databaseName)
   if (!files.length) return json({ error: "En az bir yedek dosyası seçilmeli" }, 400)
 
   const source = body.source === "sql" ? "sql" : "depo"
+  /*  Yedeklensin mi? Varsayılan EVET — istek gövdesinde açıkça `false`
+   *  gelmedikçe yedek isteniyor sayılıyor. Yedeği unutmak, gereksiz
+   *  yedek almaktan pahalı.                                            */
+  const yedekAl = body.yedekAl !== false
   const sourceDir = (body.path ?? "").trim().replace(/[\\/]+$/, "") || `D:\\Eski Datalar\\${firkod}`
 
   // SQL hedefi (bağlantı creds)
@@ -142,6 +147,10 @@ export async function POST(
               .query<{ c: number }>(`SELECT COUNT(*) c FROM sys.databases WHERE name = 'sirket'`)
             const sirketExists = (hasSirket.recordset[0]?.c ?? 0) > 0
 
+            /*  Yedek görevine eklenecek adlar; guvenlik kaydı başarılı
+             *  olanlar buraya giriyor.                                  */
+            const eklenecek: string[] = []
+
             for (const f of files) {
               const targetDb = `${firkod}_${f.databaseName}`
               // SQL sunucusundaki dosya yerinde kalır; Depo'dakinin kopyası
@@ -206,10 +215,11 @@ export async function POST(
                   await withSqlConnection(
                     { server: sqlTarget.ip, user: sqlTarget.username, password: sqlTarget.password, database: "sirket", requestTimeout: 120000 },
                     async (sirketPool) => {
-                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "" })
+                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl })
                     },
                   )
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklendi: ${targetDb}`, "done")
+                  if (yedekAl) eklenecek.push(targetDb)
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
@@ -220,6 +230,36 @@ export async function POST(
               // olabilir, ona dokunulmaz.
               if (!isLocal) {
                 await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+              }
+            }
+
+            /*
+             * SQL Backup Master — yedek görevine ekle.
+             *
+             * KRİTİK DEĞİL: hata restore'u geçersiz kılmıyor, yalnız adım
+             * kırmızı görünüyor ve elle eklenmesi gerektiği anlaşılıyor.
+             * Üçüncü parti ürünün veri dosyasını düzenliyoruz (bkz.
+             * lib/sql-backup-master.ts) ve bu yol kırılgan.
+             *
+             * `yedekAl` kapalıysa buraya hiç girilmiyor: `guvenlik.YedekAl`
+             * de 0 yazıldı, iki taraf tutarlı kalıyor.
+             */
+            if (eklenecek.length > 0) {
+              const etiket = `SQL Backup Master yedek görevine ekleniyor (${eklenecek.length} veritabanı)`
+              step("sbm_add", etiket, "running")
+              try {
+                const r = await execOnAgent(
+                  sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey,
+                  buildAddDatabasesToBackupJobs(eklenecek), 90,
+                )
+                const hata = (r.stderr ?? "").trim()
+                if (r.exitCode !== 0 || hata) {
+                  step("sbm_add", "Yedek görevine eklenemedi — elle eklenmeli", "error", { error: hata || `exit ${r.exitCode}` })
+                } else {
+                  step("sbm_add", `Yedek görevine eklendi: ${eklenecek.length} veritabanı`, "done")
+                }
+              } catch (err) {
+                step("sbm_add", "Yedek görevine eklenemedi — elle eklenmeli", "error", { error: err instanceof Error ? err.message : String(err) })
               }
             }
           },

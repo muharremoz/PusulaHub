@@ -63,6 +63,18 @@ export interface InsertGuvenlikArgs {
   firmaId:     string
   /** Pusula program kodu (011, 909, 111, 016…) — PrgTur kolonuna */
   programCode: string
+  /**
+   * `YedekAl` kolonu — bu veritabanının yedeği alınsın mı.
+   *
+   * Varsayılan `true`: yeni kurulan firmalarda yedek her zaman isteniyor.
+   * `false` yalnız ESKİ YIL datası eklenirken kullanılıyor; o kayıtların
+   * yedeklenmesi hem gereksiz hem yedek boyutunu şişiriyor.
+   *
+   * Bu alan SQL Backup Master'ın görev listesiyle aynı anlama gelmeli —
+   * ikisi ayrışırsa `guvenlik` "yedekleniyor" der ama dosya hiçbir yere
+   * gitmez. Çağıran taraf ikisini birlikte ayarlamalı.
+   */
+  yedekAl?:    boolean
 }
 
 /**
@@ -102,7 +114,7 @@ export async function insertGuvenlikRow(
   req.input("KOD",             sql.Int,      safeKod)
   req.input("ReyonYolu",       sql.NVarChar, "C:\\PUSULA\\")
   req.input("Akod",            sql.NVarChar, "B")
-  req.input("YedekAl",         sql.Bit,      1)
+  req.input("YedekAl",         sql.Bit,      args.yedekAl === false ? 0 : 1)
   req.input("PusulaFirmaId",   sql.Int,      safeKod)
   req.input("TopluRapordaCik", sql.Bit,      0)
 

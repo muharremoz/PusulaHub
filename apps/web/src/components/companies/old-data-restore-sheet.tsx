@@ -48,6 +48,16 @@ export function OldDataRestoreSheet({
   // Kaynak: Depo mu SQL sunucusu mu, hangi klasör. Varsayılan eski davranış
   // (Depo · D:\Eski Datalar\{firkod}) — normal/şablon DB için değiştirilebilir.
   const [source, setSource]     = useState<Source>("depo")
+  /**
+   * Yedek görevine eklensin mi.
+   *
+   * Varsayılan AÇIK: yedeği unutmak, gereksiz yedek almaktan pahalı.
+   * Buradan bazen eski yıl datası yükleniyor; o durumda kapatılıyor ve
+   * hem `sirket.guvenlik.YedekAl` 0 yazılıyor hem de veritabanı SQL
+   * Backup Master görevine hiç eklenmiyor. İkisi birlikte ayarlanıyor,
+   * yoksa "yedekleniyor" yazan ama yedeği alınmayan kayıt oluşuyor.
+   */
+  const [yedekAl, setYedekAl]   = useState(true)
   const [pathInput, setPathInput] = useState("")
   const [scannedServer, setScannedServer] = useState("")
   const [files, setFiles]       = useState<FileRow[]>([])
@@ -107,6 +117,7 @@ export function OldDataRestoreSheet({
       startedRef.current = false
       setSteps([]); setRunError(null); setPhase("scan")
       setSource("depo"); setPathInput("")
+      setYedekAl(true)
       doScan({ source: "depo", path: "" })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -139,6 +150,7 @@ export function OldDataRestoreSheet({
           source,
           path: pathInput.trim(),
           files: selectedFiles.map((f) => ({ fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode })),
+          yedekAl,
         }),
       })
       if (!resp.ok || !resp.body) {
@@ -360,8 +372,21 @@ export function OldDataRestoreSheet({
         <div className="px-5 py-3 border-t border-border/50 flex items-center justify-between gap-2">
           {phase === "select" && (
             <>
-              <span className="text-[11px] text-muted-foreground">{selectedFiles.length} dosya seçildi</span>
-              <Button size="sm" disabled={!canRun} onClick={runRestore} className="rounded-[5px] h-8 text-[13px] gap-1.5">
+              <div className="min-w-0 flex flex-col gap-1">
+                <span className="text-[11px] text-muted-foreground">{selectedFiles.length} dosya seçildi</span>
+                {/*  Eski yıl datası yüklenirken kapatılıyor: hem guvenlik
+                     kaydı hem yedek görevi birlikte devre dışı kalıyor.  */}
+                <label className="flex cursor-pointer items-center gap-1.5 select-none">
+                  <Checkbox checked={yedekAl} onCheckedChange={(c) => setYedekAl(!!c)} />
+                  <span className="text-[11px]">Yedek görevine ekle</span>
+                </label>
+                {!yedekAl && (
+                  <span className="text-[9px] text-amber-600 dark:text-amber-400">
+                    Yedeği alınmayacak · güvenlik kaydı YedekAl = false
+                  </span>
+                )}
+              </div>
+              <Button size="sm" disabled={!canRun} onClick={runRestore} className="rounded-[5px] h-8 text-[13px] gap-1.5 shrink-0">
                 <HardDriveDownload className="h-3.5 w-3.5" /> Geri Yükle
               </Button>
             </>
