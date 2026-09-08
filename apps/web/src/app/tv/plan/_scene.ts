@@ -46,21 +46,25 @@ const ODA_Y   = 0.55
 /** Odalar arası koridor */
 const KORIDOR = 0.7
 
+/** Kata yerleşecek bir oda — /tv ağacındaki bir gövde */
+export interface PlanOda {
+  key:   string
+  /** Oda yüzeyine yazılan ad — "DATACENTER" */
+  ad:    string
+  /** Gövdedeki monitör sayısı; odanın büyüklüğünü belirliyor */
+  adet:  number
+}
+
 /**
- * Oda yerleşimi — bantlar hâlinde.
+ * Bant düzeni: her bantta kaç oda olacağı.
  *
- * Genişlikler ELLE yazılıyor, otomatik bölünmüyor: eşit parçalara ayırmak
- * ofis planı değil tablo gibi duruyordu. Farklı genişlikler referanstaki
- * organik dağılımı veriyor.
- *
- * Her bant kendi içinde ORTALANIYOR; sağa sola yaslamak bir kenarı boş
- * bırakıp planı yamuk gösteriyordu.
+ * Odalar tek sıraya dizilirse plan bir şerit gibi duruyor; iki-ikili
+ * bantlar referanstaki ofis kat planı okumasını veriyor. Son bantta tek
+ * oda kalırsa ortalanıyor ve bilerek geniş bırakılıyor — boşluk
+ * doldurmaya çalışmak yamuk bir hizalama üretiyordu.
  */
-const BANTLAR: { z: number; derinlik: number; genislikler: number[] }[] = [
-  { z: -5.4, derinlik: 3.6, genislikler: [5.4, 4.6, 3.8, 3.2] },
-  { z: -0.8, derinlik: 3.6, genislikler: [4.2, 5.0, 4.4, 3.2] },
-  { z:  3.9, derinlik: 3.8, genislikler: [5.8, 3.8, 4.6, 2.8] },
-]
+const BANT_DERINLIK = 4.4
+const BANT_ARALIK   = 0.9
 
 export class PlanSahne {
   private sahne   = new THREE.Scene()
@@ -74,6 +78,9 @@ export class PlanSahne {
   private sonX    = 0
   private sonKare = 0
   private nesneler: THREE.Mesh[] = []
+  /** Odalar ayrı tutuluyor: veri değişince yalnız bunlar yenileniyor */
+  private odaNesneleri: THREE.Mesh[] = []
+  private odaDokulari: THREE.CanvasTexture[] = []
 
   constructor(kap: HTMLElement) {
     this.kap = kap
@@ -93,7 +100,6 @@ export class PlanSahne {
 
     this.isikKur()
     this.plakaKur()
-    this.odalariKur()
 
     kap.addEventListener("pointerdown", this.basti)
     kap.addEventListener("pointermove", this.hareket)
@@ -160,30 +166,116 @@ export class PlanSahne {
   }
 
   /* ── Odalar ────────────────────────────────────────────────────── */
-  private odalariKur() {
-    /*  Bordürün içinde kalan kullanılabilir genişlik.                  */
+
+  /**
+   * Odaları kur / yenile.
+   *
+   * Veri değişince (monitör eklenince, gövde boşalınca) eski odalar
+   * atılıp yenileri kuruluyor. Oda sayısı tek haneli, yeniden kurmak
+   * güncellemeden basit ve her karede değil yalnız veri değişince oluyor.
+   */
+  guncelle(odalar: PlanOda[]) {
+    for (const m of this.odaNesneleri) {
+      this.sahne.remove(m)
+      m.geometry.dispose()
+      const mat = m.material
+      if (Array.isArray(mat)) mat.forEach((x) => x.dispose())
+      else mat.dispose()
+    }
+    this.odaNesneleri = []
+    for (const d of this.odaDokulari) d.dispose()
+    this.odaDokulari = []
+
+    if (!odalar.length) return
+
+    /*  Bordürün içinde kalan kullanılabilir alan.                      */
     const icEn = EN - BORDUR_EN * 2 - KORIDOR * 2
 
-    for (const bant of BANTLAR) {
-      const toplam =
-        bant.genislikler.reduce((a, b) => a + b, 0) +
-        KORIDOR * (bant.genislikler.length - 1)
+    /*  İkişerli bantlar; tek kalan son bantta yalnız başına.           */
+    const bantlar: PlanOda[][] = []
+    for (let i = 0; i < odalar.length; i += 2) bantlar.push(odalar.slice(i, i + 2))
 
-      /*  Bandı ortala; artan boşluk iki yana eşit dağılsın.            */
-      let x = -toplam / 2
-      for (const w of bant.genislikler) {
-        const oda = this.kutu(w, ODA_Y, bant.derinlik, RENK.oda)
-        oda.position.set(x + w / 2, ODA_Y / 2, bant.z)
-        oda.castShadow = true
-        oda.receiveShadow = true
+    const toplamZ = bantlar.length * BANT_DERINLIK + (bantlar.length - 1) * BANT_ARALIK
+    let z = -toplamZ / 2 + BANT_DERINLIK / 2
+
+    for (const bant of bantlar) {
+      /*  Genişlik monitör sayısıyla orantılı: kalabalık gövde büyük oda.
+       *  Taban pay veriliyor, yoksa tek monitörlü gövde çizgiye
+       *  dönüşüyor ve adı sığmıyor.                                    */
+      const agirlik = bant.map((o) => 1 + o.adet)
+      const toplamA = agirlik.reduce((a, b) => a + b, 0)
+      const kullanilabilir = icEn - KORIDOR * (bant.length - 1)
+
+      let x = -(kullanilabilir + KORIDOR * (bant.length - 1)) / 2
+      bant.forEach((oda, i) => {
+        const w = (agirlik[i] / toplamA) * kullanilabilir
+        this.odaKur(oda, x + w / 2, z, w, BANT_DERINLIK)
         x += w + KORIDOR
-      }
+      })
 
-      /*  Bant taşarsa sessizce üst üste binmesin — geliştirirken görün. */
-      if (toplam > icEn) {
-        console.warn(`[plan] bant z=${bant.z} plakayı taşıyor: ${toplam.toFixed(1)} > ${icEn.toFixed(1)}`)
-      }
+      z += BANT_DERINLIK + BANT_ARALIK
     }
+  }
+
+  /**
+   * Tek oda: gövde + üst yüzeye YATIK ad.
+   *
+   * Ad, üst yüze doku olarak basılıyor — havada duran bir etiket değil,
+   * zeminle aynı düzlemde duran yazı. Referansı kat planı gibi gösteren
+   * asıl şey bu.
+   */
+  private odaKur(oda: PlanOda, x: number, z: number, w: number, d: number) {
+    const doku = this.adDokusu(oda.ad, w, d)
+    this.odaDokulari.push(doku)
+
+    const yan = new THREE.MeshStandardMaterial({ color: RENK.oda, roughness: 0.85, metalness: 0.02 })
+    const ust = new THREE.MeshStandardMaterial({ map: doku, roughness: 0.8, metalness: 0.02 })
+    /*  BoxGeometry malzeme sırası: +x, -x, +y, -y, +z, -z.
+     *  Yalnız ÜST yüz (+y, indis 2) dokulu.                            */
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(w, ODA_Y, d),
+      [yan, yan, ust, yan, yan, yan],
+    )
+    m.position.set(x, ODA_Y / 2, z)
+    m.castShadow = true
+    m.receiveShadow = true
+    m.userData.key = oda.key
+    this.sahne.add(m)
+    this.odaNesneleri.push(m)
+  }
+
+  /**
+   * Oda üst yüzü için doku: zemin rengi + ortada ad.
+   *
+   * Çözünürlük odanın dünya boyutuyla orantılı (birim başına sabit
+   * piksel): büyük odada yazı bulanıklaşmıyor, küçük odada boşuna
+   * bellek harcanmıyor.
+   */
+  private adDokusu(ad: string, w: number, d: number): THREE.CanvasTexture {
+    const PX = 64
+    const c = document.createElement("canvas")
+    c.width  = Math.round(w * PX)
+    c.height = Math.round(d * PX)
+    const ctx = c.getContext("2d")!
+
+    ctx.fillStyle = `#${RENK.oda.toString(16).padStart(6, "0")}`
+    ctx.fillRect(0, 0, c.width, c.height)
+
+    ctx.fillStyle = "#B8BEC8"
+    ctx.font = `600 ${Math.round(PX * 0.42)}px ui-sans-serif, system-ui, sans-serif`
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+    /*  Harf aralığı: uzaktan bakılan bir planda sıkışık yazı okunmuyor. */
+    ctx.letterSpacing = "3px"
+    ctx.fillText(ad.toLocaleUpperCase("tr"), c.width / 2, c.height / 2)
+
+    const t = new THREE.CanvasTexture(c)
+    /*  Üst yüz UV'si dünya ekseniyle ters dönüyor; yazı baş aşağı
+     *  çıkmasın diye çevriliyor.                                       */
+    t.center.set(0.5, 0.5)
+    t.rotation = Math.PI
+    t.anisotropy = 4
+    return t
   }
 
   private kutu(w: number, h: number, d: number, renk: number): THREE.Mesh {
@@ -239,10 +331,13 @@ export class PlanSahne {
     this.kap.removeEventListener("pointerdown", this.basti)
     this.kap.removeEventListener("pointermove", this.hareket)
     window.removeEventListener("pointerup", this.birakti)
-    for (const m of this.nesneler) {
+    for (const m of [...this.nesneler, ...this.odaNesneleri]) {
       m.geometry.dispose()
-      ;(m.material as THREE.Material).dispose()
+      const mat = m.material
+      if (Array.isArray(mat)) mat.forEach((x) => x.dispose())
+      else mat.dispose()
     }
+    for (const d of this.odaDokulari) d.dispose()
     this.cizici.dispose()
     this.cizici.domElement.remove()
   }
