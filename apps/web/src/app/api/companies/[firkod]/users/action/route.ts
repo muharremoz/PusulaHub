@@ -13,9 +13,18 @@ import { saveCompanyUserPassword } from "@/lib/firma-credentials"
  * ⚠ Agent regex-parse yapıyor — çift tırnak YASAK. Tek tırnak + '' escape.
  */
 
+/**
+ * Office çalıştırma yetkisini taşıyan AD grubu.
+ *
+ * Terminal sunucularda AppLocker bu grubu arıyor: üye olmayan kullanıcı
+ * Office'i açamıyor. Grup adı burada ve AppLocker kuralında AYNI olmalı;
+ * değiştirilecekse iki yer birden değişmeli.
+ */
+const OFFICE_GRUBU = "Office_Kullanicilari"
+
 interface Body {
   username: string
-  action:   "reset-password" | "disable" | "enable" | "delete"
+  action:   "reset-password" | "disable" | "enable" | "delete" | "office-on" | "office-off"
   password?: string
 }
 
@@ -76,6 +85,12 @@ export async function POST(
       cmd = `Import-Module ActiveDirectory; Enable-ADAccount -Identity '${u}' -ErrorAction Stop; Write-Output 'OK'`
     } else if (body.action === "delete") {
       cmd = `Import-Module ActiveDirectory; Remove-ADUser -Identity '${u}' -Confirm:$false -ErrorAction Stop; Write-Output 'OK'`
+    } else if (body.action === "office-on") {
+      /*  Zaten üyeyse Add-ADGroupMember hata veriyor; tekrar tıklamada
+       *  kırmızı görünmesin diye üyelik önce kontrol ediliyor.          */
+      cmd = `Import-Module ActiveDirectory; $m = Get-ADGroupMember -Identity '${OFFICE_GRUBU}' | Where-Object { $_.SamAccountName -eq '${u}' }; if (-not $m) { Add-ADGroupMember -Identity '${OFFICE_GRUBU}' -Members '${u}' -ErrorAction Stop }; Write-Output 'OK'`
+    } else if (body.action === "office-off") {
+      cmd = `Import-Module ActiveDirectory; $m = Get-ADGroupMember -Identity '${OFFICE_GRUBU}' | Where-Object { $_.SamAccountName -eq '${u}' }; if ($m) { Remove-ADGroupMember -Identity '${OFFICE_GRUBU}' -Members '${u}' -Confirm:$false -ErrorAction Stop }; Write-Output 'OK'`
     } else {
       return NextResponse.json({ error: "Geçersiz aksiyon" }, { status: 400 })
     }

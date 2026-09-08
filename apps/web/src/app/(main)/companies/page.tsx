@@ -128,7 +128,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
@@ -653,6 +653,44 @@ export default function CompaniesPage() {
       setPwResetError(err instanceof Error ? err.message : String(err))
     } finally {
       setPwResetBusy(false)
+    }
+  }
+
+  /**
+   * Office çalıştırma yetkisi — kullanıcıyı `Office_Kullanicilari` AD
+   * grubuna ekler/çıkarır.
+   *
+   * Terminal sunucularda AppLocker bu grubu arıyor. Grup üyeliği OTURUM
+   * AÇARKEN belirlendiği için kullanıcı o an bağlıysa yetki hemen
+   * geçerli olmuyor; bilgi mesajı bunu söylüyor, "çalışmadı" sanılmasın.
+   */
+  async function toggleOffice(usr: { username: string; groups?: string[] }) {
+    if (!selectedFirma) return
+    const acik = (usr.groups ?? []).includes("Office_Kullanicilari")
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/users/action`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ username: usr.username, action: acik ? "office-off" : "office-on" }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error ?? "İşlem başarısız")
+      /*  Listeyi yerinde güncelle: ajan raporu 5 dk'da bir yenileniyor,
+       *  o zamana kadar menü eski durumu gösterirdi.                    */
+      setTabUsers((prev) => prev.map((x) =>
+        x.username === usr.username
+          ? { ...x, groups: acik
+              ? (x.groups ?? []).filter((g) => g !== "Office_Kullanicilari")
+              : [...(x.groups ?? []), "Office_Kullanicilari"] }
+          : x,
+      ))
+      toast.success(acik ? "Office yetkisi kaldırıldı" : "Office yetkisi verildi", {
+        description: `${usr.username} · oturum açıkken değişmez, çıkıp girmeli`,
+      })
+    } catch (err) {
+      toast.error("Office yetkisi değiştirilemedi", {
+        description: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 
@@ -2209,6 +2247,18 @@ tr:nth-child(even) td{background:#fafafa}
                               onClick={() => openPwReset(usr)}
                             >
                               <KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla
+                            </DropdownMenuItem>
+                            {/*  Office yetkisi — AppLocker `Office_Kullanicilari`
+                                 grubuna bakıyor. Etiket mevcut duruma göre
+                                 değişiyor ki iki ayrı menü öğesi gerekmesin. */}
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2"
+                              onClick={() => toggleOffice(usr)}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              {(usr.groups ?? []).includes("Office_Kullanicilari")
+                                ? "Office Yetkisini Kaldır"
+                                : "Office Kullanabilsin"}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

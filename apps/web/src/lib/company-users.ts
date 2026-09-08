@@ -57,7 +57,10 @@ export async function listCompanyUsers(
         enabled:     !!u.enabled,
         lastLogin:   hasLogin ? raw : "",
         server:      serverLabel,
-        groups:      [],
+        /*  Ajan raporu grup üyeliğini zaten taşıyor; burada boş dizi
+         *  bırakılıyordu. Office yetkisi (`Office_Kullanicilari`) bu
+         *  listeden okunuyor, o yüzden artık aktarılıyor.               */
+        groups:      u.groups ?? [],
       })
     }
   }
