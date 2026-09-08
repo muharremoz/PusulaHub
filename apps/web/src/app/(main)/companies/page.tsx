@@ -2185,25 +2185,27 @@ tr:nth-child(even) td{background:#fafafa}
                   </Button>
                 </div>
                 <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
+                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kullanıcı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Ad Soyad</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">CPU</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">RAM</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Son Giriş</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Office</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-2.5 items-center gap-3">
+                        <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] px-3 py-2.5 items-center gap-3">
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px] w-3/4" />
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px] w-12" />
+                          <Skeleton className="h-3 rounded-[5px] w-10" />
                         </div>
                       ))
                     ) : tabUsers.length === 0 ? (
@@ -2211,7 +2213,7 @@ tr:nth-child(even) td{background:#fafafa}
                         <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
                       </div>
                     ) : tabUsers.map((usr) => (
-                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
+                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                         <span className="text-[11px] font-mono truncate">{usr.username}</span>
                         <span className="text-[11px] truncate">{usr.displayName}</span>
                         <span
@@ -2229,6 +2231,21 @@ tr:nth-child(even) td{background:#fafafa}
                             {usr.enabled ? "Aktif" : "Pasif"}
                           </span>
                         </div>
+                        {/*  Office yetkisi — AppLocker `Office_Kullanicilari`
+                             grubuna bakiyor. Menuden degistiriliyor, sutunda
+                             gorunuyor: yetkiyi ogrenmek icin menuyu acmak
+                             gerekmesin.                                     */}
+                        {(() => {
+                          const yetkili = (usr.groups ?? []).includes("Office_Kullanicilari")
+                          return (
+                            <div className="flex items-center gap-1.5">
+                              <div className={`h-1.5 w-1.5 rounded-full ${yetkili ? "bg-emerald-500" : "bg-gray-300"}`} />
+                              <span className={`text-[10px] ${yetkili ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                                {yetkili ? "Var" : "Yok"}
+                              </span>
+                            </div>
+                          )
+                        })()}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
