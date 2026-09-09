@@ -208,28 +208,37 @@ export async function attachDatabaseOnServer(
   targetDbName: string,
   hasLdf:       boolean,
 ): Promise<void> {
+  /*  CREATE DATABASE bir DDL ifadesi: FILENAME değeri parametre (@mdf)
+   *  KABUL ETMEZ — "Incorrect syntax near '@mdf'" ile patlar. Yol değişmez
+   *  olarak gömülmek zorunda, bu yüzden tırnak kaçışı burada elle yapılır.
+   *  DB adı da dosya adına giriyor; yol ayracı/tırnak içeren ad başka bir
+   *  klasöre yazmaya yol açabileceği için önce reddediliyor.              */
+  if (/[\\/:*?"<>|']/.test(targetDbName)) {
+    throw new Error(`Geçersiz veritabanı adı: ${targetDbName}`)
+  }
+
   const dataDir   = firmaDataDir(firmaId)
   const mdfPath   = `${dataDir}\\${targetDbName}.mdf`
   const ldfPath   = `${dataDir}\\${targetDbName}.ldf`
   const escapedDb = targetDbName.replace(/]/g, "]]")
+  const lit       = (s: string) => `N'${s.replace(/'/g, "''")}'`
 
   const fileClause = hasLdf
-    ? `(FILENAME = @mdf), (FILENAME = @ldf) FOR ATTACH`
-    : `(FILENAME = @mdf) FOR ATTACH_REBUILD_LOG`
-
-  const req = pool.request()
-  req.input("mdf", sql.NVarChar, mdfPath)
-  if (hasLdf) req.input("ldf", sql.NVarChar, ldfPath)
-  ;(req as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
+    ? `(FILENAME = ${lit(mdfPath)}), (FILENAME = ${lit(ldfPath)}) FOR ATTACH`
+    : `(FILENAME = ${lit(mdfPath)}) FOR ATTACH_REBUILD_LOG`
 
   // Aynı adda DB varsa düşür (idempotent — restore REPLACE ile aynı davranış).
-  await req.batch(`
-    IF DB_ID(N'${targetDbName.replace(/'/g, "''")}') IS NOT NULL
+  const dropReq = pool.request()
+  ;(dropReq as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
+  await dropReq.batch(`
+    IF DB_ID(${lit(targetDbName)}) IS NOT NULL
     BEGIN
       ALTER DATABASE [${escapedDb}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
       DROP DATABASE [${escapedDb}];
     END
   `)
 
-  await req.query(`CREATE DATABASE [${escapedDb}] ON ${fileClause}`)
+  const createReq = pool.request()
+  ;(createReq as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
+  await createReq.batch(`CREATE DATABASE [${escapedDb}] ON ${fileClause}`)
 }

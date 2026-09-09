@@ -61,15 +61,21 @@ function parseDatabaseName(fileName: string): string {
 }
 
 /**
- * MDF/LDF eşleştirme anahtarı: uzantı ve `_Data`/`_Log` eki atılmış küçük harf ad.
- *   `CANER22_Data.MDF` ve `CANER22_Log.LDF` → ikisi de `caner22`
- *   `ELIZ25.mdf`       ve `ELIZ25.ldf`      → ikisi de `eliz25`
+ * MDF/LDF eşleştirme anahtarı — uzantı ve SQL Server'ın dosya eki atılır.
+ *
+ *   CANER22_Data.MDF  ↔  CANER22_Log.LDF   → caner22
+ *   ELIZ25.mdf        ↔  ELIZ25.ldf        → eliz25
+ *   MAHMUT.MDF        ↔  MAHMUT_0.LDF      → mahmut
+ *
+ * Sayısal ek (`_0`, `_1`) yalnız LOG tarafında kırpılır: veri dosyasında da
+ * kırpılsaydı `DATA_2024.mdf` ile `DATA_2025.mdf` aynı anahtara düşerdi.
  */
-function pairKey(fileName: string): string {
-  return fileName
-    .replace(/\.[^.]+$/, "")
-    .replace(/_(data|dat|log)$/i, "")
-    .toLowerCase()
+function pairKey(fileName: string, isLog: boolean): string {
+  const base = fileName.replace(/\.[^.]+$/, "")
+  const trimmed = isLog
+    ? base.replace(/_(log|\d+)$/i, "")
+    : base.replace(/_(data|dat)$/i, "")
+  return trimmed.toLowerCase()
 }
 
 function toDateString(iso: string): string {
@@ -131,14 +137,14 @@ export async function POST(
      *  Boyut ikisinin toplamı — attach ederken ikisi de kopyalanacak.   */
     const ldfByKey = new Map<string, RawBackupItem>()
     for (const it of raw) {
-      if (ext(it) === ".ldf") ldfByKey.set(pairKey(it.Name), it)
+      if (ext(it) === ".ldf") ldfByKey.set(pairKey(it.Name, true), it)
     }
 
     const files: OldDataFile[] = raw
       .filter((it) => ext(it) === ".bak" || ext(it) === ".mdf")
       .map((it) => {
         const isMdf = ext(it) === ".mdf"
-        const ldf   = isMdf ? ldfByKey.get(pairKey(it.Name)) : undefined
+        const ldf   = isMdf ? ldfByKey.get(pairKey(it.Name, false)) : undefined
         return {
           fileName:     it.Name,
           databaseName: parseDatabaseName(it.Name),
