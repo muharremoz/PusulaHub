@@ -241,4 +241,15 @@ export async function attachDatabaseOnServer(
   const createReq = pool.request()
   ;(createReq as unknown as { timeout?: number }).timeout = 10 * 60 * 1000
   await createReq.batch(`CREATE DATABASE [${escapedDb}] ON ${fileClause}`)
+
+  /*  Salt-okunur bayrağı DB dosyasının başlığında taşınır: kaynak veritabanı
+   *  read-only durumdayken ayrılmışsa attach sonrası da öyle gelir. Bu haliyle
+   *  owner atanamaz ("Failed to update database ... because the database is
+   *  read-only") ve uygulama yazamaz — bu yüzden yazılabilir yapılıyor.     */
+  const rwReq = pool.request()
+  ;(rwReq as unknown as { timeout?: number }).timeout = 5 * 60 * 1000
+  await rwReq.batch(`
+    IF EXISTS (SELECT 1 FROM sys.databases WHERE name = ${lit(targetDbName)} AND is_read_only = 1)
+      ALTER DATABASE [${escapedDb}] SET READ_WRITE WITH ROLLBACK IMMEDIATE;
+  `)
 }

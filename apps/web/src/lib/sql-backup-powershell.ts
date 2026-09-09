@@ -86,6 +86,26 @@ export function buildCheckFilesExist(paths: string[]): string {
  * Hedef klasör yoksa oluşturulur. Var olan hedef dosyaların üzerine yazar
  * (-Force) — sihirbaz tekrar çalıştığında idempotent. Çıktı: 'OK' veya hata.
  */
+/**
+ * Kopyalanan MDF/LDF'lere SQL Server hizmet hesabı için tam yetki verir.
+ *
+ * SQL Server kendi oluşturduğu veri dosyalarına `NT SERVICE\MSSQLSERVER` (ya
+ * da adlandırılmış örnekte `NT SERVICE\MSSQL$X`) için AÇIK bir ACE koyar.
+ * Bizim kopyaladığımız dosyalarda yalnız klasörden miras alınan izinler olur;
+ * hizmet hesabı listede yoksa dosya salt-okunur açılabilir ama YAZILAMAZ:
+ * attach başarılı olur, ardından `SET READ_WRITE` "Operating system error 5:
+ * Access is denied" ile düşer ve DB salt-okunur kalır.
+ *
+ * Hesap adı örneğe göre değiştiği için servis `sqlservr.exe` yolundan bulunur.
+ */
+function psGrantSqlService(destPaths: string[]): string[] {
+  const list = destPaths.map((p) => `'${psQuote(p)}'`).join(", ")
+  return [
+    `$svc = Get-CimInstance Win32_Service -ErrorAction SilentlyContinue | Where-Object { $_.PathName -like '*sqlservr.exe*' } | Select-Object -First 1`,
+    `if ($svc -and $svc.StartName) { foreach ($t in @(${list})) { if (Test-Path -LiteralPath $t) { $null = icacls $t /grant ($svc.StartName + ':(F)') } } }`,
+  ]
+}
+
 export function buildCopyAttachFiles(opts: {
   srcMdf:   string
   srcLdf?:  string
@@ -109,6 +129,10 @@ export function buildCopyAttachFiles(opts: {
       `if (Test-Path -LiteralPath '${sl}') { Copy-Item -LiteralPath '${sl}' -Destination (Join-Path '${dd}' '${dl}') -Force }`,
     )
   }
+  lines.push(...psGrantSqlService([
+    `${opts.destDir}\\${opts.destMdf}`,
+    ...(opts.destLdf ? [`${opts.destDir}\\${opts.destLdf}`] : []),
+  ]))
   lines.push(`Write-Output 'OK'`)
   return lines.join("; ")
 }
@@ -236,6 +260,10 @@ export function buildPullAttachFilesFromDepo(opts: {
     )
   }
   lines.push(
+    ...psGrantSqlService([
+      `${opts.destDir}\\${opts.destMdf}`,
+      ...(opts.destLdf ? [`${opts.destDir}\\${opts.destLdf}`] : []),
+    ]).map((l) => `  ${l}`),
     `  Write-Output 'OK'`,
     `} finally {`,
     `  cmd /c ('net use ' + $share + ' /delete >nul 2>&1') | Out-Null`,
