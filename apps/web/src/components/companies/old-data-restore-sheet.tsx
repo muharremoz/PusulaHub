@@ -21,6 +21,10 @@ interface FileRow {
   fileName:     string
   databaseName: string
   fileSizeMB:   number
+  /** ".bak" → RESTORE, ".mdf" → ATTACH */
+  kind:         "bak" | "mdf"
+  /** kind="mdf" ve klasörde eşi varsa log dosyasının adı */
+  ldfFileName?: string
   date:         string
   selected:     boolean
   programCode:  string
@@ -99,6 +103,7 @@ export function OldDataRestoreSheet({
       if (!path.trim()) setPathInput(data.folder)
       setFiles(data.files.map((f) => ({
         fileName: f.fileName, databaseName: f.databaseName, fileSizeMB: f.fileSizeMB, date: f.date,
+        kind: f.kind ?? "bak", ldfFileName: f.ldfFileName,
         selected: false, programCode: progs.length === 1 ? progs[0].programCode : "",
       })))
       setPhase("select")
@@ -149,7 +154,10 @@ export function OldDataRestoreSheet({
         body: JSON.stringify({
           source,
           path: pathInput.trim(),
-          files: selectedFiles.map((f) => ({ fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode })),
+          files: selectedFiles.map((f) => ({
+            fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode,
+            kind: f.kind, ldfFileName: f.ldfFileName,
+          })),
           yedekAl,
         }),
       })
@@ -280,7 +288,7 @@ export function OldDataRestoreSheet({
               files.length === 0 ? (
                 <div className="rounded-[5px] border border-border/50 px-4 py-8 text-center">
                   <Database className="h-6 w-6 mx-auto text-muted-foreground/50 mb-2" />
-                  <p className="text-[11px] text-muted-foreground">Bu klasörde .bak dosyası bulunamadı.</p>
+                  <p className="text-[11px] text-muted-foreground">Bu klasörde .bak veya .mdf dosyası bulunamadı.</p>
                   <p className="text-[10px] text-muted-foreground/70 mt-1 font-mono">{folder}</p>
                 </div>
               ) : (
@@ -294,8 +302,20 @@ export function OldDataRestoreSheet({
                         <div className="flex items-center gap-2">
                           <Checkbox checked={f.selected} onCheckedChange={(c) => updateFile(f.fileName, { selected: !!c })} />
                           <div className="min-w-0 flex-1">
-                            <p className="text-[11px] font-mono truncate">{f.fileName}</p>
-                            <p className="text-[9px] text-muted-foreground">{formatSize(f.fileSizeMB)} · {f.date}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="text-[11px] font-mono truncate">{f.fileName}</p>
+                              {/*  .mdf satirlari attach ile kurulur; kullanici
+                                  restore ile karistirmasin diye rozetlenir.  */}
+                              {f.kind === "mdf" && (
+                                <span className="inline-flex shrink-0 rounded-[5px] bg-sky-500/15 px-1.5 py-0.5 text-[9px] font-medium text-sky-700 dark:text-sky-400">
+                                  ATTACH
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[9px] text-muted-foreground">
+                              {formatSize(f.fileSizeMB)} · {f.date}
+                              {f.kind === "mdf" && (f.ldfFileName ? ` · + ${f.ldfFileName}` : " · log yok, yeniden üretilecek")}
+                            </p>
                           </div>
                         </div>
                         {f.selected && (

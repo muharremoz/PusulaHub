@@ -3,7 +3,8 @@
  * Body: { source?: "depo" | "sql", path?: string }
  *
  * Firma detayındaki "Yeni Veritabanı Ekle" akışı için bir klasördeki `.bak`
- * dosyalarını listeler.
+ * (RESTORE) ve `.mdf` (ATTACH) dosyalarını listeler. `.ldf` kendi başına
+ * gösterilmez; aynı adlı `.mdf`in eşi olarak iliştirilir.
  *
  *   source="depo" (varsayılan) → Companies.FileServerId sunucusu
  *   source="sql"               → firmanın SQL sunucusu
@@ -22,11 +23,17 @@ import { requirePermission } from "@/lib/require-permission"
 import { execOnAgent } from "@/lib/agent-poller"
 import { buildListBackupFiles, parseBackupListOutput, type RawBackupItem } from "@/lib/sql-backup-powershell"
 
+/** `.bak` → RESTORE, `.mdf` → CREATE DATABASE ... FOR ATTACH */
+export type OldDataKind = "bak" | "mdf"
+
 export interface OldDataFile {
   fileName:     string
-  databaseName: string   // .bak adından türetilen baz ad (firma prefix'siz)
+  databaseName: string   // dosya adından türetilen baz ad (firma prefix'siz)
   fileSizeMB:   number
   date:         string
+  kind:         OldDataKind
+  /** kind="mdf" ve aynı adlı log dosyası varsa onun adı; yoksa boş. */
+  ldfFileName?: string
 }
 
 export type ScanSource = "depo" | "sql"
@@ -39,11 +46,30 @@ export interface OldDataScanResponse {
   files:  OldDataFile[]
 }
 
-/** `ELIZ25_20260410.bak` → `ELIZ25` */
+/**
+ * `ELIZ25_20260410.bak` → `ELIZ25`
+ * `ELIZ25.mdf`          → `ELIZ25`
+ * `CANER22_Data.MDF`    → `CANER22`
+ *
+ * SQL Server'ın yerleşik adlandırması veri dosyasına `_Data`, log dosyasına
+ * `_Log` ekler; DB adı bu ekler atılınca çıkar.
+ */
 function parseDatabaseName(fileName: string): string {
-  const base = fileName.replace(/\.bak$/i, "")
+  const base = fileName.replace(/\.[^.]+$/, "").replace(/_(data|dat)$/i, "")
   const m = base.match(/^(.+?)_\d{8}$/)
   return (m ? m[1] : base).trim()
+}
+
+/**
+ * MDF/LDF eşleştirme anahtarı: uzantı ve `_Data`/`_Log` eki atılmış küçük harf ad.
+ *   `CANER22_Data.MDF` ve `CANER22_Log.LDF` → ikisi de `caner22`
+ *   `ELIZ25.mdf`       ve `ELIZ25.ldf`      → ikisi de `eliz25`
+ */
+function pairKey(fileName: string): string {
+  return fileName
+    .replace(/\.[^.]+$/, "")
+    .replace(/_(data|dat|log)$/i, "")
+    .toLowerCase()
 }
 
 function toDateString(iso: string): string {
@@ -101,14 +127,27 @@ export async function POST(
     const ext = (it: RawBackupItem) =>
       (it.Extension || (it.Name.match(/\.[^.]+$/)?.[0] ?? "")).toLowerCase()
 
+    /*  .ldf'ler kendi başına listelenmez; .mdf'in eşi olarak iliştirilir.
+     *  Boyut ikisinin toplamı — attach ederken ikisi de kopyalanacak.   */
+    const ldfByKey = new Map<string, RawBackupItem>()
+    for (const it of raw) {
+      if (ext(it) === ".ldf") ldfByKey.set(pairKey(it.Name), it)
+    }
+
     const files: OldDataFile[] = raw
-      .filter((it) => ext(it) === ".bak")
-      .map((it) => ({
-        fileName:     it.Name,
-        databaseName: parseDatabaseName(it.Name),
-        fileSizeMB:   (it.Length || 0) / (1024 * 1024),
-        date:         toDateString(it.LastWriteTime),
-      }))
+      .filter((it) => ext(it) === ".bak" || ext(it) === ".mdf")
+      .map((it) => {
+        const isMdf = ext(it) === ".mdf"
+        const ldf   = isMdf ? ldfByKey.get(pairKey(it.Name)) : undefined
+        return {
+          fileName:     it.Name,
+          databaseName: parseDatabaseName(it.Name),
+          fileSizeMB:   ((it.Length || 0) + (ldf?.Length || 0)) / (1024 * 1024),
+          date:         toDateString(it.LastWriteTime),
+          kind:         (isMdf ? "mdf" : "bak") as OldDataKind,
+          ...(ldf ? { ldfFileName: ldf.Name } : {}),
+        }
+      })
 
     const resp: OldDataScanResponse = { folder, source, server: serverName, files }
     return NextResponse.json(resp)

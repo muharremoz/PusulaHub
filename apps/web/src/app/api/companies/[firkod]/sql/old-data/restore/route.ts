@@ -30,17 +30,26 @@ import { requirePermission } from "@/lib/require-permission"
 import { execOnAgent } from "@/lib/agent-poller"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
-import { restoreBackupOnServer, firmaDataDir } from "@/lib/sql-restore"
+import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginArama } from "@/lib/firma-adlandirma"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
-import { buildPullBakFromDepo, buildDeleteFile } from "@/lib/sql-backup-powershell"
+import {
+  buildPullBakFromDepo,
+  buildPullAttachFilesFromDepo,
+  buildCopyAttachFiles,
+  buildDeleteFile,
+} from "@/lib/sql-backup-powershell"
 
 interface FileReq {
   fileName:     string
   databaseName: string   // baz ad (firma prefix'siz) — hedef = {firmaId}_{base}
   programCode:  string
+  /** ".bak" → RESTORE (varsayılan), ".mdf" → CREATE DATABASE ... FOR ATTACH */
+  kind?:        "bak" | "mdf"
+  /** kind="mdf" ise eşlik eden log dosyasının adı; yoksa log yeniden üretilir. */
+  ldfFileName?: string
 }
 
 interface AgentInfo { ip: string; port: number; apiKey: string }
@@ -151,12 +160,72 @@ export async function POST(
              *  olanlar buraya giriyor.                                  */
             const eklenecek: string[] = []
 
+            /*  `sonrakiAdimlar` bir fonksiyon bildirimi (hoisted) olduğu için
+             *  TS yukarıdaki `if (!sqlTarget) return` daralmasını içeride
+             *  göremiyor; bağlantı ayarını burada sabitliyoruz.            */
+            const sirketCfg = {
+              server: sqlTarget.ip, user: sqlTarget.username, password: sqlTarget.password,
+              database: "sirket", requestTimeout: 120000,
+            }
+
             for (const f of files) {
               const targetDb = `${firkod}_${f.databaseName}`
               // SQL sunucusundaki dosya yerinde kalır; Depo'dakinin kopyası
               // geçici klasöre alınır ve sonunda yalnız o silinir.
               const isLocal  = source === "sql"
               const localBak = isLocal ? `${sourceDir}\\${f.fileName}` : `${localDir}\\${f.fileName}`
+
+              /*  ATTACH dalı — ham .mdf/.ldf.
+               *
+               *  RESTORE'dan iki farkı var:
+               *   - Dosyalar geçici klasöre değil, firmanın kalıcı veri
+               *     klasörüne (`D:\SQLData\{firmaId}`) `{targetDb}.mdf`
+               *     adıyla kopyalanır: attach sonrası DB bu dosyalar
+               *     üzerinden çalışmaya devam eder.
+               *   - Bu yüzden sonunda temizlik YAPILMAZ.
+               *  Kaynak dosya (Depo'daki ya da SQL'deki) yerinde kalır.    */
+              if (f.kind === "mdf") {
+                const dataDir = firmaDataDir(firkod)
+                const hasLdf  = !!f.ldfFileName
+                const copyCmd = isLocal
+                  ? buildCopyAttachFiles({
+                      srcMdf:  `${sourceDir}\\${f.fileName}`,
+                      srcLdf:  hasLdf ? `${sourceDir}\\${f.ldfFileName}` : undefined,
+                      destDir: dataDir,
+                      destMdf: `${targetDb}.mdf`,
+                      destLdf: hasLdf ? `${targetDb}.ldf` : undefined,
+                    })
+                  : buildPullAttachFilesFromDepo({
+                      depoIp: depo!.ip, depoUser, depoPass, sourceDir,
+                      mdfName: f.fileName,
+                      ldfName: hasLdf ? f.ldfFileName : undefined,
+                      destDir: dataDir,
+                      destMdf: `${targetDb}.mdf`,
+                      destLdf: hasLdf ? `${targetDb}.ldf` : undefined,
+                    })
+
+                if (!isLocal && !depo) {
+                  step(`attach_${targetDb}`, `Depo sunucusu tanımlı değil: ${f.fileName}`, "error", { error: "MDF Depo'dan kopyalanamıyor." })
+                  continue
+                }
+
+                const attachLabel = `Veritabanı attach ediliyor: ${targetDb}`
+                step(`attach_${targetDb}`, attachLabel, "running")
+                try {
+                  const cp = await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, copyCmd, 900)
+                  if (cp.exitCode !== 0) {
+                    throw new Error(cp.stderr?.trim() || cp.stdout?.trim() || `Dosya kopyalama başarısız (exit=${cp.exitCode})`)
+                  }
+                  await attachDatabaseOnServer(masterPool, firkod, targetDb, hasLdf)
+                  step(`attach_${targetDb}`, `${attachLabel.replace(" ediliyor", " edildi")}${hasLdf ? "" : " (log yeniden üretildi)"}`, "done")
+                } catch (err) {
+                  step(`attach_${targetDb}`, `Attach başarısız: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
+                  continue
+                }
+
+                await sonrakiAdimlar(f, targetDb)
+                continue
+              }
 
               // 1) Depo'dan kopyala (dosya SQL sunucusunda değilse)
               if (!isLocal && depo) {
@@ -191,6 +260,20 @@ export async function POST(
                 continue
               }
 
+              await sonrakiAdimlar(f, targetDb)
+
+              // 6) geçici .bak temizliği — SADECE Depo'dan kopyaladığımız dosya.
+              // SQL sunucusundaki kaynak dosya kullanıcının kendi şablonu/yedeği
+              // olabilir, ona dokunulmaz.
+              if (!isLocal) {
+                await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
+              }
+            }
+
+            /*  RESTORE ve ATTACH sonrası ortak adımlar (3-5): DB owner,
+             *  sirket erişimi ve guvenlik kaydı. İki dal da aynı sırayı
+             *  uyguluyor, tek yerde tutuluyor.                            */
+            async function sonrakiAdimlar(f: FileReq, targetDb: string) {
               // 3) DB owner = firma login (login varsa)
               if (firmaLogin) {
                 step(`owner_${targetDb}`, `DB owner ayarlanıyor: [${targetDb}] → ${firmaLogin}`, "running")
@@ -213,7 +296,7 @@ export async function POST(
                 step(`guvenlik_${targetDb}`, `Güvenlik kaydı: ${targetDb} (${f.programCode || "—"})`, "running")
                 try {
                   await withSqlConnection(
-                    { server: sqlTarget.ip, user: sqlTarget.username, password: sqlTarget.password, database: "sirket", requestTimeout: 120000 },
+                    sirketCfg,
                     async (sirketPool) => {
                       await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl })
                     },
@@ -223,13 +306,6 @@ export async function POST(
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
-              }
-
-              // 6) geçici .bak temizliği — SADECE Depo'dan kopyaladığımız dosya.
-              // SQL sunucusundaki kaynak dosya kullanıcının kendi şablonu/yedeği
-              // olabilir, ona dokunulmaz.
-              if (!isLocal) {
-                await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildDeleteFile(localBak), 60).catch(() => {})
               }
             }
 

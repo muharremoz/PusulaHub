@@ -181,6 +181,69 @@ export function buildPullBakFromDepo(opts: {
   ].join("; ")
 }
 
+/**
+ * Depo sunucusundaki ham `.mdf` (+ varsa `.ldf`) dosyalarını SQL sunucusunun
+ * yerel diskine kimlik-doğrulamalı kopyalar ve HEDEF ADLA yeniden adlandırır.
+ *
+ * `buildPullBakFromDepo`'dan farkı: iki dosya birden taşır ve dosya adını
+ * `{firmaId}_{db}.mdf` biçimine çevirir — ATTACH sonrası DB bu dosyalar
+ * üzerinden çalışmaya devam edeceği için ad ve konum kalıcıdır (geçici
+ * klasöre alınıp silinemez).
+ */
+export function buildPullAttachFilesFromDepo(opts: {
+  depoIp:    string
+  depoUser:  string
+  depoPass:  string
+  /** Depo üzerindeki yerel klasör — sürücü harfiyle (örn. `D:\Eski Datalar\4646`) */
+  sourceDir: string
+  mdfName:   string
+  ldfName?:  string
+  destDir:   string
+  destMdf:   string   // sadece dosya adı (örn. 4646_ELIZ25.mdf)
+  destLdf?:  string
+}): string {
+  const ip   = psQuote(opts.depoIp)
+  const user = psQuote(opts.depoUser)
+  const pass = psQuote(opts.depoPass)
+  const dd   = psQuote(opts.destDir)
+  const dm   = psQuote(opts.destMdf)
+
+  const clean = opts.sourceDir.trim().replace(/[\\/]+$/, "")
+  const m = clean.match(/^([A-Za-z]):[\\/]?(.*)$/)
+  if (!m) throw new Error(`Geçersiz Depo klasörü: ${opts.sourceDir}`)
+  const drive = m[1].toLowerCase()
+  const rest  = psQuote(m[2].replace(/\//g, "\\"))
+
+  const share = `\\\\${ip}\\${drive}$`
+  const dir   = rest ? `${share}\\${rest}` : share
+
+  const lines = [
+    `$ErrorActionPreference='SilentlyContinue'`,
+    `$share='${share}'`,
+    `cmd /c ('net use ' + $share + ' /delete >nul 2>&1') | Out-Null`,
+    `$mt = (net use $share '${pass}' /user:'${user}' 2>&1 | Out-String)`,
+    `if ($LASTEXITCODE -ne 0) { throw ('Depo baglanti hatasi: ' + $mt.Trim()) }`,
+    `try {`,
+    `  $mdf='${dir}\\${psQuote(opts.mdfName)}'`,
+    `  if (-not (Test-Path -LiteralPath $mdf)) { throw ('MDF bulunamadi: ' + $mdf) }`,
+    `  if (-not (Test-Path -LiteralPath '${dd}')) { New-Item -ItemType Directory -Path '${dd}' -Force -ErrorAction Stop | Out-Null }`,
+    `  Copy-Item -LiteralPath $mdf -Destination (Join-Path '${dd}' '${dm}') -Force -ErrorAction Stop`,
+  ]
+  if (opts.ldfName && opts.destLdf) {
+    lines.push(
+      `  $ldf='${dir}\\${psQuote(opts.ldfName)}'`,
+      `  if (Test-Path -LiteralPath $ldf) { Copy-Item -LiteralPath $ldf -Destination (Join-Path '${dd}' '${psQuote(opts.destLdf)}') -Force -ErrorAction Stop }`,
+    )
+  }
+  lines.push(
+    `  Write-Output 'OK'`,
+    `} finally {`,
+    `  cmd /c ('net use ' + $share + ' /delete >nul 2>&1') | Out-Null`,
+    `}`,
+  )
+  return lines.join("; ")
+}
+
 /** Kopyalanan geçici .bak dosyasını siler (restore sonrası temizlik). */
 export function buildDeleteFile(filePath: string): string {
   const p = psQuote(filePath)
