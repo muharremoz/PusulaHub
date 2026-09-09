@@ -619,6 +619,15 @@ export async function POST(req: NextRequest) {
             buildCreateDir(mustelierSubdir),
           )
 
+          // Klasör adı firma adı olduğu için tooltip'te firma ID'si gösterilir
+          // (Depo'daki Resimler klasörünün tersi: orada klasör ID, tooltip ad).
+          await runStep(
+            winAgent,
+            "desktop_ini",
+            `Masaüstü: klasör açıklaması → ${payload.firmaId}`,
+            buildWriteDesktopIni(mustelierSubdir, payload.firmaId),
+          )
+
           // Her pusula servisi için exe kısayolu
           for (const s of pusulaServices) {
             const cfg = s.config as PusulaProgramConfig | null
