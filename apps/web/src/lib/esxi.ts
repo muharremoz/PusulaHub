@@ -451,6 +451,18 @@ function parseBackupTimes(body: string): string[] {
   return out.map((t) => new Date(t).toISOString().replace(/\.\d+Z$/, "Z"))
 }
 
+/**
+ * Program çıkarımı için yeterli sayılan gün sayısı.
+ *
+ * `computeBackupCycle` bir saati ancak >= 2 ayrı günde gördüyse program
+ * saati sayıyor; iki TAM günün her turu iki kez görmesi için elimizde
+ * üç ayrı güne yayılan iz olmalı.
+ */
+const YETERLI_GUN = 3
+
+/** Geçmiş toplarken en fazla kaç devredilmiş günlük okunur (VM başına) */
+const MAX_DEVREDILEN = 3
+
 /** Verilen zamanlar kaç ayrı güne yayılıyor (TR saatiyle) */
 function gunSayisi(times: string[]): number {
   const gunler = new Set<string>()
@@ -529,16 +541,15 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
    * ESXi'nin `/folder` ucu dizin listesini HTML olarak veriyor; ad
    * listesinden numarayı çekmek yeterli.
    */
-  const sonDevredilen = async (folder: string, ds: string): Promise<string | null> => {
+  const devredilenler = async (folder: string, ds: string): Promise<string[]> => {
     try {
       const path = `/folder/${encodeURIComponent(folder)}?dsName=${encodeURIComponent(ds)}`
       const res = await request({ path, headers: { Authorization: auth }, timeoutMs: 15_000 })
-      if (res.status !== 200) return null
-      const nolar = [...res.body.matchAll(/vmware-(\d+)\.log/g)].map((m) => Number(m[1]))
-      if (!nolar.length) return null
-      return `vmware-${Math.max(...nolar)}.log`
+      if (res.status !== 200) return []
+      const nolar = [...new Set([...res.body.matchAll(/vmware-(\d+)\.log/g)].map((m) => Number(m[1])))]
+      return nolar.sort((a, b) => b - a).map((n) => `vmware-${n}.log`)
     } catch {
-      return null
+      return []
     }
   }
 
@@ -555,21 +566,31 @@ export async function fetchEsxiBackups(force = false): Promise<EsxiVmBackup[] | 
      *
      * `vmware.log` makine yeniden başladığında ya da dosya büyüdüğünde
      * devrediyor ve geçmiş `vmware-N.log`'a taşınıyor. RDP Terminal'in
-     * günlüğü dün 22:00 turunda devretmişti: yeni dosya 8 KB'tı, içinde
+     * günlüğü bir gün 22:00 turunda devretmişti: yeni dosya 8 KB'tı, içinde
      * tek bir yedek izi yoktu ve panel makineyi "hiç yedeklenmiyor" diye
      * kırmızı gösteriyordu — oysa 204 gündür günde dört kez yedekleniyor.
      *
-     * Bu yüzden elimizdeki iz iki günden kısaysa bir önceki günlüğe de
-     * bakılıyor. Koşullu: günlüğü zaten derin olan makineler için fazladan
-     * istek atılmıyor.
+     * Eşik neden 2 değil de 3 gün: `computeBackupCycle` bir program saatini
+     * ancak EN AZ İKİ AYRI GÜNDE gördüyse geçerli sayıyor (tek seferlik
+     * gecikmeleri elemek için). ESXi host'u 09.09'da yeniden başlayınca
+     * bütün makinelerin günlüğü aynı anda devretti; elde "dün + bugün"
+     * kaldı, yani 2 gün. Eşik 2 olduğu için yedeğe hiç düşülmedi ama o iki
+     * günde 15/18/22 turları birer kez görüldüğünden elendiler ve kart
+     * sadece 12:00'yi çizdi. Üç gün istemek, iki tam günün her turu iki
+     * kez görmesini garantiliyor.
+     *
+     * Koşullu: günlüğü zaten derin olan makineler için fazladan istek
+     * atılmıyor. En fazla `MAX_DEVREDILEN` dosya geriye gidilir ve yeterli
+     * geçmişe ulaşılınca döngü kırılır.
      */
-    if (gunSayisi(times) < 2) {
-      const onceki = await sonDevredilen(vm.folder, vm.ds)
-      if (onceki) {
-        const eskiGovde = await gunlukOku(vm.folder, vm.ds, onceki)
+    if (gunSayisi(times) < YETERLI_GUN) {
+      const eskiler = await devredilenler(vm.folder, vm.ds)
+      for (const dosya of eskiler.slice(0, MAX_DEVREDILEN)) {
+        const eskiGovde = await gunlukOku(vm.folder, vm.ds, dosya)
         if (eskiGovde !== null) {
           times = [...new Set([...parseBackupTimes(eskiGovde), ...times])].sort()
         }
+        if (gunSayisi(times) >= YETERLI_GUN) break
       }
     }
 
