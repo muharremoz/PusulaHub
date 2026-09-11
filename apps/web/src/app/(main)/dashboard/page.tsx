@@ -33,6 +33,8 @@ interface DashboardData {
     offlineServers: number
     totalCompanies: number
     totalCompanyUsers: number
+    /** RDP sunucusu bazında firma/kullanıcı — eski API'de yok, opsiyonel */
+    byRdp?: RdpDagilimSatiri[]
   }
   failedLogons: {
     total24h: number
@@ -166,14 +168,14 @@ export default function DashboardPage() {
               icon={<StaticIcon I={Building2} />}
               loading={loading}
               value={data ? data.kpi.totalCompanies : 0}
-              extra={<span className="text-muted-foreground">toplam firma</span>}
+              extra={<RdpDagilim satirlar={data?.kpi.byRdp} alan="companies" bos="toplam firma" />}
             />
             <OzetMetrik
               title="KULLANICI"
               icon={<CardIcon name="users" />}
               loading={loading}
               value={data ? data.kpi.totalCompanyUsers : 0}
-              extra={<span className="text-muted-foreground">tüm firmalarda</span>}
+              extra={<RdpDagilim satirlar={data?.kpi.byRdp} alan="users" bos="tüm firmalarda" />}
             />
             <SpareBackupKpi loading={spareBackupLoading} data={spareBackup} />
           </div>
@@ -371,6 +373,38 @@ export default function DashboardPage() {
 }
 
 /* ─────────────────────────────────────────────────────────── */
+
+interface RdpDagilimSatiri { id: string; name: string; companies: number; users: number }
+
+/** "Terminal 1" → "T1"; kalıba uymayan ad olduğu gibi kalır. */
+function kisaRdpAdi(name: string): string {
+  const m = name.match(/terminal\s*(\d+)/i)
+  return m ? `T${m[1]}` : name
+}
+
+/**
+ * Firmalar / Kullanıcı metriğinin alt satırı — RDP sunucusu bazında dağılım
+ * ("T1 47 · T2 16 · T3 0"). Tam sunucu adları üzerine gelince görünür.
+ * Veri yoksa (eski API) eski alt metin gösterilir.
+ */
+function RdpDagilim({ satirlar, alan, bos }: {
+  satirlar?: RdpDagilimSatiri[]
+  alan: "companies" | "users"
+  bos: string
+}) {
+  if (!satirlar?.length) return <span className="text-muted-foreground">{bos}</span>
+  const baslik = satirlar.map((s) => `${s.name}: ${s[alan]}`).join("\n")
+  return (
+    <span className="text-muted-foreground" title={baslik}>
+      {satirlar.map((s, i) => (
+        <span key={s.id}>
+          {i > 0 && <span className="mx-1 text-muted-foreground/50">·</span>}
+          {kisaRdpAdi(s.name)} <span className="font-medium text-foreground tabular-nums">{s[alan]}</span>
+        </span>
+      ))}
+    </span>
+  )
+}
 
 /**
  * Genel Durum panelindeki tek metrik — başlık + büyük sayı + alt bilgi.

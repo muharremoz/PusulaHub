@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { resolveCreators } from "@/lib/hub-users"
+import { serversWithRole } from "@/lib/hub-servers"
 
 /**
  * GET /api/dashboard/summary — dashboard verisini tek atışta toplar.
@@ -69,13 +70,39 @@ export async function GET() {
       .select("id", { count: "exact", head: true }).not("company_id", "is", null).not("ad_server_id", "is", null)
     // AD kurulu firmaların OU'su altındaki ad_users sayısı
     const { data: adFirms } = await sb.schema("hub").from("companies")
-      .select("company_id").not("ad_server_id", "is", null).not("company_id", "is", null)
-    const adOus = [...new Set(((adFirms ?? []) as { company_id: string }[]).map((c) => c.company_id))]
+      .select("company_id, windows_server_id").not("ad_server_id", "is", null).not("company_id", "is", null)
+    const adFirmRows = (adFirms ?? []) as { company_id: string; windows_server_id: string | null }[]
+    const adOus = [...new Set(adFirmRows.map((c) => c.company_id))]
     let totalCompanyUsers = 0
     if (adOus.length) {
       const { count } = await sb.schema("hub").from("ad_users").select("id", { count: "exact", head: true }).in("ou", adOus)
       totalCompanyUsers = count ?? 0
     }
+
+    /* ── KPI 2b: RDP sunucusu bazında firma + kullanıcı (companies.windows_server_id) ──
+       Toplamlarla aynı tanım: AD kurulu firmalar ve OU'larındaki ad_users.
+       RDP rolündeki her sunucu listelenir (firmasız yeni terminal 0 ile görünür). */
+    const usersByOu = new Map<string, number>()
+    if (adOus.length) {
+      const { data: ouRows } = await sb.schema("hub").from("ad_users").select("ou").in("ou", adOus).limit(10000)
+      for (const r of (ouRows ?? []) as { ou: string }[]) usersByOu.set(r.ou, (usersByOu.get(r.ou) ?? 0) + 1)
+    }
+    const rdpServers = (await serversWithRole("RDP", "id, name")) as unknown as { id: string; name: string }[]
+    const firmsByServer = new Map<string, Set<string>>()
+    for (const c of adFirmRows) {
+      if (!c.windows_server_id) continue
+      const set = firmsByServer.get(c.windows_server_id) ?? new Set<string>()
+      set.add(c.company_id)
+      firmsByServer.set(c.windows_server_id, set)
+    }
+    const byRdp = rdpServers.map((s) => {
+      const firms = [...(firmsByServer.get(s.id) ?? [])]
+      return {
+        id: s.id, name: s.name,
+        companies: firms.length,
+        users: firms.reduce((a, f) => a + (usersByOu.get(f) ?? 0), 0),
+      }
+    })
 
     /* ── Son 24 saat failed RDP (hub) ── */
     const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString()
@@ -106,7 +133,7 @@ export async function GET() {
     }))
 
     return NextResponse.json({
-      kpi: { totalServers, onlineServers, offlineServers, totalCompanies: totalCompanies ?? 0, totalCompanyUsers },
+      kpi: { totalServers, onlineServers, offlineServers, totalCompanies: totalCompanies ?? 0, totalCompanyUsers, byRdp },
       failedLogons: {
         total24h: failedLogonTotal24h ?? 0,
         recent: failedLogons.map((f) => ({ timestamp: f.Timestamp, serverName: f.ServerName, username: f.Username, clientIp: f.ClientIp })),
