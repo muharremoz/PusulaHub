@@ -489,7 +489,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                   <p className="text-[10px] text-muted-foreground leading-relaxed">
                     Site adı sabittir: <span className="font-mono">{"<firmaKod>_RESIM"}</span>. Yayınlanan yol:{" "}
                     <span className="font-mono">{"\\\\<Depo>\\Resimler\\<firmaKod>" + (rSubFolder.trim() ? `\\${rSubFolder.trim()}` : "")}</span>.
-                    Paylaşıma Depo sunucusunun kayıtlı kullanıcısıyla (Connect as) erişilir.
+                    Paylaşıma AD sunucusunun kayıtlı domain kullanıcısıyla (Connect as) erişilir.
                   </p>
                 </Section>
 

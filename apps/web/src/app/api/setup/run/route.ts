@@ -99,6 +99,15 @@ async function allocatePort(
   /** IIS'te canlı olarak kullanılan portlar — sayaç (WizardPortAssignments)
    *  dışında elle kurulmuş siteleri de dışlamak için. Bkz: 26003 çakışması. */
   liveUsedPorts?: ReadonlySet<number>,
+  /** "first-free": aralıktaki ilk boş port (varsayılan).
+   *  "after-max":  aralıkta kullanılan en yüksek portun bir sonrası — RESIM
+   *  siteleri elle 20001'den sırayla açılmış; aradaki/baştaki boşluğa
+   *  (örn 20000) düşmek yerine sırayı sürdürür. */
+  strategy: "first-free" | "after-max" = "first-free",
+  /** Verilirse yeni satır eklenmez, bu kayıt yeni porta güncellenir — IIS'te
+   *  sitesi olmayan (yarım kalmış) eski bir atamayı yeniden kullanmak için.
+   *  Kaydın kendi eski portu "kullanılan" sayılmaz. */
+  replaceRowId?: number,
 ): Promise<{ ok: true; port: number } | { ok: false; error: string }> {
   const sb = await getSupabaseServer()
   const { data: range } = await sb.schema("hub").from("wizard_port_ranges")
@@ -107,16 +116,29 @@ async function allocatePort(
   if (!range.is_active)  return { ok: false, error: "Port aralığı pasif" }
 
   const { data: used } = await sb.schema("hub").from("wizard_port_assignments")
-    .select("port").eq("port_range_id", rangeId)
-  const usedSet = new Set(((used ?? []) as { port: number }[]).map((u) => u.port))
+    .select("id, port").eq("port_range_id", rangeId)
+  const usedSet = new Set(((used ?? []) as { id: number; port: number }[])
+    .filter((u) => u.id !== replaceRowId).map((u) => u.port))
 
-  for (let p = range.port_start; p <= range.port_end; p++) {
+  let start = range.port_start
+  if (strategy === "after-max") {
+    let max = -1
+    for (const p of [...usedSet, ...(liveUsedPorts ?? [])]) {
+      if (p >= range.port_start && p <= range.port_end && p > max) max = p
+    }
+    if (max >= 0) start = max + 1
+  }
+
+  for (let p = start; p <= range.port_end; p++) {
     if (usedSet.has(p)) continue
     if (liveUsedPorts?.has(p)) continue
     // UNIQUE(port_range_id, port) sayesinde race-safe: çakışma → sıradaki portu dene
-    const { error } = await sb.schema("hub").from("wizard_port_assignments").insert({
-      port_range_id: rangeId, service_id: serviceId, company_id: companyId, port: p, site_name: siteName,
-    })
+    const { error } = replaceRowId
+      ? await sb.schema("hub").from("wizard_port_assignments")
+          .update({ port: p, site_name: siteName, assigned_at: new Date().toISOString() }).eq("id", replaceRowId)
+      : await sb.schema("hub").from("wizard_port_assignments").insert({
+          port_range_id: rangeId, service_id: serviceId, company_id: companyId, port: p, site_name: siteName,
+        })
     if (!error) return { ok: true, port: p }
   }
   return { ok: false, error: "Aralıkta boş port kalmadı" }
@@ -334,35 +356,43 @@ export async function POST(req: NextRequest) {
   }
 
   // Resim paylaşımı — site Depo'daki \\<depo>\Resimler\<firmaId> paylaşımını
-  // yayınlar ve ona Depo sunucusunun kayıtlı kimliğiyle ("Connect as") erişir.
+  // yayınlar. Paylaşıma DOMAIN hesabıyla ("Connect as") erişilir: kullanıcı ve
+  // şifre AD sunucusunun kaydından (pusuladc\alusup) — Depo kaydındaki şifre
+  // domain şifresiyle aynı değil, onunla IIS 500 veriyor. Depo'dan yalnız IP alınır.
   // skipDepo'dan bağımsız: firma detayından yalnız Resim eklenirken klasör
   // adımları atlanır ama paylaşımın adresi ve kimliği yine gerekir.
   let resimDepo: { ip: string; user: string; password: string } | null = null
   if (resimServices.length > 0) {
-    type DepoCred = { ip: string; username: string | null; password: string | null; domain: string | null }
-    let row: DepoCred | null = null
+    const sb = await getSupabaseServer()
+    let depoIp: string | null = null
     if (payload.depoServerId) {
-      const sb = await getSupabaseServer()
-      const { data } = await sb.schema("hub").from("servers")
-        .select("ip, username, password, domain").eq("id", payload.depoServerId).maybeSingle()
-      row = (data as DepoCred | null) ?? null
+      const { data } = await sb.schema("hub").from("servers").select("ip").eq("id", payload.depoServerId).maybeSingle()
+      depoIp = (data as { ip: string } | null)?.ip ?? null
     } else {
-      row = ((await serversWithRole("File", "ip, username, password, domain"))[0] as unknown as DepoCred) ?? null
+      depoIp = ((await serversWithRole("File", "ip"))[0] as { ip?: string } | undefined)?.ip ?? null
     }
-    if (!row?.ip || !row.username || !row.password) {
+    type Cred = { username: string | null; password: string | null; domain: string | null }
+    const { data: adData } = await sb.schema("hub").from("servers")
+      .select("username, password, domain").eq("id", payload.serverId).maybeSingle()
+    const ad = adData as Cred | null
+    if (!depoIp) {
+      return new Response(JSON.stringify({ error: "Resim hizmeti için Depo sunucusu gerekli (yayınlanan paylaşım orada)." }),
+        { status: 400, headers: { "Content-Type": "application/json" } })
+    }
+    if (!ad?.username || !ad.password) {
       return new Response(JSON.stringify({
-        error: "Resim hizmeti için Depo sunucusu ve kayıtlı kullanıcı adı/şifresi gerekli (paylaşıma 'Connect as' ile erişilir). Sunucu ayarlarından ekleyin.",
+        error: "Resim hizmeti için AD sunucusunun kullanıcı adı/şifresi kayıtlı olmalı (paylaşıma bu domain hesabıyla 'Connect as' erişilir). Sunucu ayarlarından ekleyin.",
       }), { status: 400, headers: { "Content-Type": "application/json" } })
     }
-    const pw = decrypt(row.password)
+    const pw = decrypt(ad.password)
     if (!pw) {
-      return new Response(JSON.stringify({ error: "Depo şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin." }),
+      return new Response(JSON.stringify({ error: "AD şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin." }),
         { status: 500, headers: { "Content-Type": "application/json" } })
     }
     // Mevcut RESIM siteleri "pusuladc\alusup" kullanıyor — domain kısa adı + kullanıcı
-    const domainShort = (row.domain ?? "").split(".")[0]?.trim() ?? ""
-    const user = row.username.includes("\\") || !domainShort ? row.username : `${domainShort}\\${row.username}`
-    resimDepo = { ip: row.ip, user, password: pw }
+    const domainShort = (ad.domain ?? "").split(".")[0]?.trim() ?? ""
+    const user = ad.username.includes("\\") || !domainShort ? ad.username : `${domainShort}\\${ad.username}`
+    resimDepo = { ip: depoIp, user, password: pw }
   }
 
   // SQL sunucusu — 4. adımda seçildiyse. Tamamen opsiyonel; seçilmemişse
@@ -920,7 +950,9 @@ export async function POST(req: NextRequest) {
             const uncPath  = `\\\\${resimDepo.ip}\\Resimler\\${payload.firmaId}${sub ? `\\${sub}` : ""}`
             const portStep = `resim_port_${s.id}`
 
-            // i) Port — mevcut site > önceki kayıt > aralıktan yeni port
+            // i) Port — IIS'te site varsa portu korunur; yoksa aralıktaki sıradaki
+            //    port (en yüksek + 1). Sitesi olmayan eski bir kayıt (yarım kalmış
+            //    deneme) yeni satır açılmadan sıradaki porta güncellenir.
             send("step", { stepId: portStep, label: `Port atanıyor: ${siteName}`, status: "running" })
             const probe = await execOnAgent(iisAgent.ip, iisAgent.port, iisAgent.apiKey, buildGetIisSitePort(siteName), 60)
             if (probe.exitCode !== 0 || !/EXISTS:|NONE/.test(probe.stdout ?? "")) {
@@ -936,19 +968,17 @@ export async function POST(req: NextRequest) {
             const existingPort = Number((probe.stdout ?? "").match(/EXISTS:(\d+)/)?.[1] ?? NaN)
             const sbRes = await getSupabaseServer()
             const { data: prev } = await sbRes.schema("hub").from("wizard_port_assignments")
-              .select("port").eq("company_id", payload.firmaId).eq("service_id", s.id).limit(1).maybeSingle()
-            const prevPort = (prev as { port: number | null } | null)?.port ?? null
+              .select("id, port").eq("company_id", payload.firmaId).eq("service_id", s.id).limit(1).maybeSingle()
+            const prevRow = prev as { id: number; port: number | null } | null
 
             let alloc: { ok: true; port: number } | { ok: false; error: string }
             let note = ""
             if (Number.isFinite(existingPort)) {
               alloc = await claimPort(cfg.portRangeId, s.id, payload.firmaId, existingPort, siteName)
               note  = " (site zaten vardı, portu korundu)"
-            } else if (prevPort) {
-              alloc = { ok: true, port: prevPort }
-              note  = " (önceki kayıt)"
             } else {
-              alloc = await allocatePort(cfg.portRangeId, s.id, payload.firmaId, siteName, liveUsedPorts)
+              alloc = await allocatePort(cfg.portRangeId, s.id, payload.firmaId, siteName, liveUsedPorts, "after-max", prevRow?.id)
+              if (prevRow && alloc.ok && prevRow.port !== alloc.port) note = ` (eski yarım kayıt ${prevRow.port} → güncellendi)`
             }
             if (!alloc.ok) {
               send("step", { stepId: portStep, label: `Port atanıyor: ${siteName}`, status: "error", error: alloc.error })
