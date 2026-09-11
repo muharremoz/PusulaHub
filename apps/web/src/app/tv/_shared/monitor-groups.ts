@@ -60,6 +60,7 @@ const MAP: Record<string, TreeKey> = {
   "SQL SERVER":       "servers",   // 10.15.2.2 — ping
   "Terminal 1":       "servers",   // 10.15.2.5
   "Terminal 2":       "servers",   // 10.15.2.9
+  "Terminal 3 - Bilkar": "servers", // 10.15.2.12
   "Depo":             "servers",   // 10.15.2.200
   "Mobil":            "servers",   // 10.15.2.3
 
