@@ -13,11 +13,13 @@ import { requirePermission } from "@/lib/require-permission"
  * Hizmet türleri (Type):
  *   - "pusula-program": RDP sunucusunda klasör + param.txt
  *   - "iis-site":       IIS sunucusunda klasör + config + IIS site + port havuzundan port
+ *   - "iis-resim":      IIS sunucusunda Depo'daki \\<depo>\Resimler\<firmaId> paylaşımını
+ *                       port havuzundan bir portla yayınlayan site (klasör kopyalanmaz)
  *
  * Type-specific alanlar Config kolonunda JSON olarak tutulur. Şema TS tarafında.
  */
 
-export type ServiceType = "pusula-program" | "iis-site"
+export type ServiceType = "pusula-program" | "iis-site" | "iis-resim"
 
 export interface PusulaProgramConfig {
   sourceFolderPath: string
@@ -35,7 +37,14 @@ export interface IisSiteConfig {
   // Hedef yol sabittir: C:\Pusula\Service\<name>_<firmaKod>
 }
 
-export type ServiceConfig = PusulaProgramConfig | IisSiteConfig
+export interface IisResimConfig {
+  portRangeId: number                // WizardPortRanges.Id (RESIM aralığı)
+  /** Resimler\<firmaId> altındaki alt klasör (örn "PUSULAX"); null → firma klasörünün kendisi */
+  subFolder:   string | null
+  // Site adı sabittir: <firmaKod>_RESIM — Mobil'deki elle kurulmuş sitelerle aynı düzen
+}
+
+export type ServiceConfig = PusulaProgramConfig | IisSiteConfig | IisResimConfig
 
 export interface WizardServiceDto {
   id:           number
@@ -117,7 +126,27 @@ function validateConfig(type: ServiceType, raw: unknown):
     }
   }
 
+  if (type === "iis-resim") {
+    const portRangeId = Number(c.portRangeId)
+    if (!Number.isFinite(portRangeId) || portRangeId <= 0) {
+      return { ok: false, error: "config.portRangeId zorunlu" }
+    }
+    const subFolder = cleanSubFolder(c.subFolder)
+    if (subFolder === false) return { ok: false, error: "config.subFolder geçersiz (.., : ve özel karakter kullanılamaz)" }
+    return { ok: true, config: { portRangeId, subFolder } }
+  }
+
   return { ok: false, error: "Bilinmeyen type" }
+}
+
+/** Alt klasör yolunu normalize eder: baş/son ayraçlar atılır, / → \. Geçersizse false. */
+function cleanSubFolder(raw: unknown): string | null | false {
+  if (typeof raw !== "string") return null
+  const s = raw.trim().replace(/\//g, "\\").replace(/^\\+|\\+$/g, "")
+  if (!s) return null
+  if (/[:*?"<>|']/.test(s)) return false
+  if (s.split("\\").some((p) => !p.trim() || p === "." || p === "..")) return false
+  return s
 }
 
 /* ── GET ──────────────────────────────────────────────── */
@@ -163,8 +192,8 @@ export async function POST(req: NextRequest) {
 
     if (!name)     return NextResponse.json({ error: "name zorunlu" },     { status: 400 })
     if (!category) return NextResponse.json({ error: "category zorunlu" }, { status: 400 })
-    if (type !== "pusula-program" && type !== "iis-site") {
-      return NextResponse.json({ error: "type zorunlu (pusula-program | iis-site)" }, { status: 400 })
+    if (type !== "pusula-program" && type !== "iis-site" && type !== "iis-resim") {
+      return NextResponse.json({ error: "type zorunlu (pusula-program | iis-site | iis-resim)" }, { status: 400 })
     }
 
     const v = validateConfig(type, body.config)

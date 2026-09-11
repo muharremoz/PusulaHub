@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/combobox-select"
 import { cn } from "@/lib/utils"
-import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot } from "lucide-react"
+import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot, Images } from "lucide-react"
 import { toast } from "sonner"
 import type { WizardServiceDto, ServiceType } from "@/app/api/services/route"
 import type { PortRangeDto } from "@/app/api/port-ranges/route"
@@ -23,6 +23,7 @@ import type { PortRangeDto } from "@/app/api/port-ranges/route"
 const TYPE_OPTIONS: { value: ServiceType; label: string; icon: React.ReactNode; defaultCategory: string }[] = [
   { value: "pusula-program", label: "Pusula Programı",      icon: <Server className="size-3.5" />, defaultCategory: "Pusula Programları" },
   { value: "iis-site",       label: "IIS Sitesi",            icon: <Globe  className="size-3.5" />, defaultCategory: "API Hizmeti" },
+  { value: "iis-resim",      label: "Resim Paylaşımı",       icon: <Images className="size-3.5" />, defaultCategory: "API Hizmeti" },
 ]
 
 const IIS_CATEGORIES = ["API Hizmeti", "Entegrasyonlar"]
@@ -80,6 +81,9 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
   const [iSiteNamePattern,  setISiteNamePattern]  = useState("")
   const [iPortRangeId,      setIPortRangeId]      = useState<string>("")
 
+  /* ── iis-resim config (port aralığı iPortRangeId ile ortak) ── */
+  const [rSubFolder,        setRSubFolder]        = useState("")
+
   const [portRanges,        setPortRanges]        = useState<PortRangeDto[]>([])
   const [portRangesLoading, setPortRangesLoading] = useState(false)
 
@@ -101,11 +105,14 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
         setPParamFileName(editing.config.paramFileName ?? "")
         setPProgramCode(editing.config.programCode ?? "")
         setPExeName(editing.config.exeName ?? "")
-      } else if (editing.type === "iis-site" && editing.config && "portRangeId" in editing.config) {
+      } else if (editing.type === "iis-site" && editing.config && "sourceFolderPath" in editing.config && "portRangeId" in editing.config) {
         setISourceFolderPath(editing.config.sourceFolderPath ?? "")
         setIConfigFileName(editing.config.configFileName ?? "")
         setISiteNamePattern(editing.config.siteNamePattern ?? "")
         setIPortRangeId(String(editing.config.portRangeId ?? ""))
+      } else if (editing.type === "iis-resim" && editing.config && "subFolder" in editing.config) {
+        setIPortRangeId(String(editing.config.portRangeId ?? ""))
+        setRSubFolder(editing.config.subFolder ?? "")
       }
     } else {
       setType("pusula-program")
@@ -121,12 +128,13 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       setIConfigFileName("")
       setISiteNamePattern("")
       setIPortRangeId("")
+      setRSubFolder("")
     }
   }, [open, editing])
 
-  /* ── Port aralıklarını çek (iis-site seçilince) ── */
+  /* ── Port aralıklarını çek (iis-site / iis-resim seçilince) ── */
   useEffect(() => {
-    if (!open || type !== "iis-site") return
+    if (!open || (type !== "iis-site" && type !== "iis-resim")) return
     setPortRangesLoading(true)
     fetch("/api/port-ranges?onlyActive=true")
       .then((r) => r.json())
@@ -159,6 +167,9 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
     if (type === "iis-site") {
       return !!iSourceFolderPath.trim() && !!iPortRangeId
     }
+    if (type === "iis-resim") {
+      return !!iPortRangeId
+    }
     return false
   })()
 
@@ -166,19 +177,23 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
     if (!canSave) return
     setSaving(true)
     try {
-      const config = type === "pusula-program"
-        ? {
-            sourceFolderPath: pSourceFolderPath.trim(),
-            paramFileName:    pParamFileName.trim() || null,
-            programCode:      pProgramCode.trim() || null,
-            exeName:          pExeName.trim() || null,
-          }
+      const config =
+        type === "pusula-program" ? {
+          sourceFolderPath: pSourceFolderPath.trim(),
+          paramFileName:    pParamFileName.trim() || null,
+          programCode:      pProgramCode.trim() || null,
+          exeName:          pExeName.trim() || null,
+        }
+        : type === "iis-resim" ? {
+          portRangeId:      Number(iPortRangeId),
+          subFolder:        rSubFolder.trim() || null,
+        }
         : {
-            sourceFolderPath: iSourceFolderPath.trim(),
-            configFileName:   iConfigFileName.trim() || null,
-            siteNamePattern:  iSiteNamePattern.trim() || null,
-            portRangeId:      Number(iPortRangeId),
-          }
+          sourceFolderPath: iSourceFolderPath.trim(),
+          configFileName:   iConfigFileName.trim() || null,
+          siteNamePattern:  iSiteNamePattern.trim() || null,
+          portRangeId:      Number(iPortRangeId),
+        }
 
       const payload = {
         name:         name.trim(),
@@ -209,6 +224,35 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
     }
   }
 
+  /* iis-site ve iis-resim aynı port aralığı seçimini kullanır */
+  const portRangeSelect = (
+    <Select value={iPortRangeId} onValueChange={setIPortRangeId}>
+      <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
+        <SelectValue placeholder={portRangesLoading ? "Yükleniyor…" : "Port aralığı seçin…"} />
+      </SelectTrigger>
+      <SelectContent className="rounded-[5px]">
+        {portRanges.length === 0 && !portRangesLoading && (
+          <div className="px-2 py-3 text-[11px] text-muted-foreground text-center">
+            Tanımlı aralık yok. Önce /ports sayfasından ekleyin.
+          </div>
+        )}
+        {portRanges.map((r) => {
+          const free = r.totalPorts - r.usedCount
+          return (
+            <SelectItem key={r.id} value={String(r.id)} className="text-[13px]">
+              <div className="flex items-center gap-2 w-full">
+                <Waypoints className="size-3 text-muted-foreground shrink-0" />
+                <span className="font-medium">{r.name}</span>
+                <span className="text-muted-foreground font-mono ml-2">{r.portStart}–{r.portEnd}</span>
+                <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{free} boş</span>
+              </div>
+            </SelectItem>
+          )
+        })}
+      </SelectContent>
+    </Select>
+  )
+
   return (
     <Sheet open={open} onOpenChange={handleClose}>
       <SheetContent className="!w-[520px] !max-w-[520px]">
@@ -227,7 +271,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
 
             {/* ── Tip Seçimi ── */}
             <Section title="Hizmet Tipi">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 {TYPE_OPTIONS.map((t) => {
                   const active = type === t.value
                   return (
@@ -258,13 +302,18 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                   RDP rolündeki sunucuda klasör kopyalanır, varsa parametre dosyasına firma kodu yazılır.
                 </p>
               )}
+              {type === "iis-resim" && (
+                <p className="text-[10px] text-muted-foreground">
+                  Klasör kopyalanmaz. IIS sunucusunda firmanın Depo&apos;daki resim klasörünü port havuzundan bir portla dışarıya açan site kurulur.
+                </p>
+              )}
             </Section>
 
             {/* ── Temel Bilgiler ── */}
             <Section title="Temel Bilgiler">
               <Field label="Hizmet Adı">
                 <Input
-                  placeholder={type === "iis-site" ? "Pusula RFID" : "Toptan Satış"}
+                  placeholder={type === "iis-site" ? "Pusula RFID" : type === "iis-resim" ? "Resim" : "Toptan Satış"}
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="rounded-[5px] text-[13px] h-8"
@@ -272,7 +321,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
               </Field>
 
               <Field label="Kategori">
-                {type === "iis-site" ? (
+                {type === "iis-site" || type === "iis-resim" ? (
                   <Select value={category} onValueChange={setCategory}>
                     <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
                       <SelectValue placeholder="Kategori seçin…" />
@@ -412,31 +461,41 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
 
                 <Section title="Port Havuzu">
                   <Field label="Port Aralığı" hint="Sihirbaz çalıştığında bu havuzdan sıradaki boş port atanır.">
-                    <Select value={iPortRangeId} onValueChange={setIPortRangeId}>
-                      <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
-                        <SelectValue placeholder={portRangesLoading ? "Yükleniyor…" : "Port aralığı seçin…"} />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-[5px]">
-                        {portRanges.length === 0 && !portRangesLoading && (
-                          <div className="px-2 py-3 text-[11px] text-muted-foreground text-center">
-                            Tanımlı aralık yok. Önce /ports sayfasından ekleyin.
-                          </div>
-                        )}
-                        {portRanges.map((r) => {
-                          const free = r.totalPorts - r.usedCount
-                          return (
-                            <SelectItem key={r.id} value={String(r.id)} className="text-[13px]">
-                              <div className="flex items-center gap-2 w-full">
-                                <Waypoints className="size-3 text-muted-foreground shrink-0" />
-                                <span className="font-medium">{r.name}</span>
-                                <span className="text-muted-foreground font-mono ml-2">{r.portStart}–{r.portEnd}</span>
-                                <span className="ml-auto text-[10px] text-muted-foreground tabular-nums">{free} boş</span>
-                              </div>
-                            </SelectItem>
-                          )
-                        })}
-                      </SelectContent>
-                    </Select>
+                    {portRangeSelect}
+                  </Field>
+                </Section>
+              </>
+            )}
+
+            {/* ── Type-specific: iis-resim ── */}
+            {type === "iis-resim" && (
+              <>
+                <Section title="Paylaşım">
+                  <Field
+                    label="Alt Klasör (opsiyonel)"
+                    hint="Boş bırakılırsa firmanın resim klasörünün kendisi yayınlanır. Bazı firmalarda resimler PUSULAX alt klasöründe."
+                  >
+                    <div className="relative">
+                      <FolderOpen className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder="PUSULAX"
+                        value={rSubFolder}
+                        onChange={(e) => setRSubFolder(e.target.value)}
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+
+                  <p className="text-[10px] text-muted-foreground leading-relaxed">
+                    Site adı sabittir: <span className="font-mono">{"<firmaKod>_RESIM"}</span>. Yayınlanan yol:{" "}
+                    <span className="font-mono">{"\\\\<Depo>\\Resimler\\<firmaKod>" + (rSubFolder.trim() ? `\\${rSubFolder.trim()}` : "")}</span>.
+                    Paylaşıma Depo sunucusunun kayıtlı kullanıcısıyla (Connect as) erişilir.
+                  </p>
+                </Section>
+
+                <Section title="Port Havuzu">
+                  <Field label="Port Aralığı" hint="Sıradaki boş port atanır. Firmanın sitesi IIS'te zaten varsa portu korunur.">
+                    {portRangeSelect}
                   </Field>
                 </Section>
               </>

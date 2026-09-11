@@ -345,9 +345,11 @@ export function WizardShell() {
   const sqlServer = apiSqlServers.find((s) => s.id === selectedSqlServerId) ?? null
   const firmaId = selectedCompany?.firkod ?? ""
 
-  // Step 3 validation: iis-site hizmet seçildiyse IIS sunucusu da seçili olmalı
-  const hasIisSelected = apiServices.some((s) => s.type === "iis-site" && selectedServiceIds.includes(s.id))
+  // Step 3 validation: IIS'te kurulan hizmet (iis-site / iis-resim) seçildiyse IIS
+  // sunucusu, Pusula programı ya da Resim seçildiyse Depo sunucusu seçili olmalı
+  const hasIisSelected = apiServices.some((s) => (s.type === "iis-site" || s.type === "iis-resim") && selectedServiceIds.includes(s.id))
   const hasPusulaSelected = apiServices.some((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))
+  const hasResimSelected  = apiServices.some((s) => s.type === "iis-resim" && selectedServiceIds.includes(s.id))
 
   const canProceed =
     step === 0 ? selectedServerId !== null :
@@ -358,7 +360,7 @@ export function WizardShell() {
                 && apiExistingUsers.length < (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0)
                 && selectedWindowsServerId !== null :
     step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
-    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!hasPusulaSelected || selectedDepoServerId !== null) :
+    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) :
     true
 
   const go = (to: number) => {

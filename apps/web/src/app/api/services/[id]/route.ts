@@ -67,7 +67,27 @@ function validateConfig(type: ServiceType, raw: unknown):
     }
   }
 
+  if (type === "iis-resim") {
+    const portRangeId = Number(c.portRangeId)
+    if (!Number.isFinite(portRangeId) || portRangeId <= 0) {
+      return { ok: false, error: "config.portRangeId zorunlu" }
+    }
+    const subFolder = cleanSubFolder(c.subFolder)
+    if (subFolder === false) return { ok: false, error: "config.subFolder geçersiz (.., : ve özel karakter kullanılamaz)" }
+    return { ok: true, config: { portRangeId, subFolder } }
+  }
+
   return { ok: false, error: "Bilinmeyen type" }
+}
+
+/** Alt klasör yolunu normalize eder: baş/son ayraçlar atılır, / → \. Geçersizse false. */
+function cleanSubFolder(raw: unknown): string | null | false {
+  if (typeof raw !== "string") return null
+  const s = raw.trim().replace(/\//g, "\\").replace(/^\\+|\\+$/g, "")
+  if (!s) return null
+  if (/[:*?"<>|']/.test(s)) return false
+  if (s.split("\\").some((p) => !p.trim() || p === "." || p === "..")) return false
+  return s
 }
 
 interface PatchPayload {
@@ -105,7 +125,7 @@ export async function PATCH(
 
     if (!nextName)     return NextResponse.json({ error: "name boş olamaz" },     { status: 400 })
     if (!nextCategory) return NextResponse.json({ error: "category boş olamaz" }, { status: 400 })
-    if (nextType !== "pusula-program" && nextType !== "iis-site") {
+    if (nextType !== "pusula-program" && nextType !== "iis-site" && nextType !== "iis-resim") {
       return NextResponse.json({ error: "type geçersiz" }, { status: 400 })
     }
 

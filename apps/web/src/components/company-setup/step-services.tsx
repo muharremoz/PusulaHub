@@ -41,8 +41,14 @@ interface Props {
 
 function getSourcePath(svc: WizardServiceDto): string {
   if (svc.config && "sourceFolderPath" in svc.config) return svc.config.sourceFolderPath
+  if (svc.config && "subFolder" in svc.config) {
+    return `Depo\\Resimler\\{firmaKod}${svc.config.subFolder ? `\\${svc.config.subFolder}` : ""}`
+  }
   return "—"
 }
+
+/** IIS sunucusu isteyen türler — iis-resim de IIS'te site kurar. */
+const isIisType = (t: string) => t === "iis-site" || t === "iis-resim"
 
 export function StepServices({
   services, loading, error, selectedIds, onToggle, onToggleAll,
@@ -62,15 +68,17 @@ export function StepServices({
   const catItems = services.filter((s) => s.category === activeTab)
   const allSelected = catItems.length > 0 && catItems.every((s) => selectedIds.includes(s.id))
 
-  // Seçili hizmetler arasında iis-site var mı?
-  const hasIisSelected = services.some((s) => s.type === "iis-site" && selectedIds.includes(s.id))
+  // Seçili hizmetler arasında IIS'te kurulan (iis-site / iis-resim) var mı?
+  const hasIisSelected = services.some((s) => isIisType(s.type) && selectedIds.includes(s.id))
   // Aktif tab IIS hizmetlerini içeriyor mu? (henüz seçilmemiş olsa bile)
-  const activeTabHasIis = catItems.some((s) => s.type === "iis-site")
+  const activeTabHasIis = catItems.some((s) => isIisType(s.type))
   // IIS picker'ı göster: ya zaten seçili ya da aktif tab IIS kategorisi
   const showIisPicker = hasIisSelected || activeTabHasIis
 
-  // Pusula programı seçili mi? Seçiliyse depo sunucusu istenir.
+  // Pusula programı ya da Resim seçili mi? Seçiliyse depo sunucusu istenir
+  // (Resim: yayınlanan paylaşım Depo'da, Connect as kimliği de oradan).
   const hasPusulaSelected = services.some((s) => s.type === "pusula-program" && selectedIds.includes(s.id))
+  const hasResimSelected  = services.some((s) => s.type === "iis-resim" && selectedIds.includes(s.id))
 
   if (loading) {
     return (
@@ -212,9 +220,9 @@ export function StepServices({
                     "shrink-0",
                     isSelected ? "text-foreground" : "text-muted-foreground/70"
                   )}
-                  title={service.type === "iis-site" ? "IIS Sitesi" : "Pusula Programı"}
+                  title={service.type === "iis-site" ? "IIS Sitesi" : service.type === "iis-resim" ? "Resim Paylaşımı" : "Pusula Programı"}
                 >
-                  {service.type === "iis-site"
+                  {isIisType(service.type)
                     ? <Globe className="size-3" />
                     : <Server className="size-3" />}
                 </span>
@@ -375,8 +383,8 @@ export function StepServices({
         </div>
       )}
 
-      {/* Depo Sunucusu — Pusula programı seçildiyse resim klasörü için gerekli */}
-      {hasPusulaSelected && (
+      {/* Depo Sunucusu — Pusula programı (resim klasörü) veya Resim (yayınlanan paylaşım) için gerekli */}
+      {(hasPusulaSelected || hasResimSelected) && (
         <div>
           <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
             Depo Sunucusu

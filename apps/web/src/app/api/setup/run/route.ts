@@ -33,6 +33,8 @@ import {
   buildPatchWebConfig,
   buildPatchUsersXml,
   buildListIisUsedPorts,
+  buildGetIisSitePort,
+  buildCreateIisResimSite,
 } from "@/lib/setup-iisops"
 import {
   buildCreateShortcut,
@@ -43,6 +45,7 @@ import type {
   ServiceConfig,
   PusulaProgramConfig,
   IisSiteConfig,
+  IisResimConfig,
 } from "@/app/api/services/route"
 
 /**
@@ -117,6 +120,31 @@ async function allocatePort(
     if (!error) return { ok: true, port: p }
   }
   return { ok: false, error: "Aralıkta boş port kalmadı" }
+}
+
+/**
+ * Belirli bir portu firmaya kaydeder — IIS'te zaten kurulu olan ve portu
+ * KORUNMASI gereken site için (dışarıdaki port yönlendirmesi ona bağlı).
+ * Port aynı firmaya zaten kayıtlıysa sorun yok; başka firmadaysa hata.
+ */
+async function claimPort(
+  rangeId:   number,
+  serviceId: number,
+  companyId: string,
+  port:      number,
+  siteName:  string,
+): Promise<{ ok: true; port: number } | { ok: false; error: string }> {
+  const sb = await getSupabaseServer()
+  const { data: taken } = await sb.schema("hub").from("wizard_port_assignments")
+    .select("company_id").eq("port_range_id", rangeId).eq("port", port).limit(1).maybeSingle()
+  if (taken) {
+    const owner = (taken as { company_id: string }).company_id
+    return owner === companyId ? { ok: true, port } : { ok: false, error: `Port ${port} başka bir firmaya kayıtlı (${owner})` }
+  }
+  const { error } = await sb.schema("hub").from("wizard_port_assignments").insert({
+    port_range_id: rangeId, service_id: serviceId, company_id: companyId, port, site_name: siteName,
+  })
+  return error ? { ok: false, error: error.message } : { ok: true, port }
 }
 
 interface RunBackupFile {
@@ -237,6 +265,7 @@ export async function POST(req: NextRequest) {
   const services       = payload.services ?? []
   const pusulaServices = services.filter((s) => s.type === "pusula-program")
   const iisServices    = services.filter((s) => s.type === "iis-site")
+  const resimServices  = services.filter((s) => s.type === "iis-resim")
 
   // Windows/RDP sunucusu — yalnızca pusula-program varsa zorunlu
   let winAgent: AgentTarget | null = null
@@ -261,9 +290,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // IIS sunucusu — yalnızca iis-site varsa zorunlu
+  // IIS sunucusu — yalnızca iis-site / iis-resim varsa zorunlu
   let iisAgent: AgentTarget | null = null
-  if (iisServices.length > 0) {
+  if (iisServices.length > 0 || resimServices.length > 0) {
     if (!payload.iisServerId) {
       return new Response(JSON.stringify({ error: "IIS hizmetleri için iisServerId zorunlu" }), {
         status: 400,
@@ -302,6 +331,38 @@ export async function POST(req: NextRequest) {
       port:   depoSrv.agent_port,
       apiKey: depoSrv.api_key,
     }
+  }
+
+  // Resim paylaşımı — site Depo'daki \\<depo>\Resimler\<firmaId> paylaşımını
+  // yayınlar ve ona Depo sunucusunun kayıtlı kimliğiyle ("Connect as") erişir.
+  // skipDepo'dan bağımsız: firma detayından yalnız Resim eklenirken klasör
+  // adımları atlanır ama paylaşımın adresi ve kimliği yine gerekir.
+  let resimDepo: { ip: string; user: string; password: string } | null = null
+  if (resimServices.length > 0) {
+    type DepoCred = { ip: string; username: string | null; password: string | null; domain: string | null }
+    let row: DepoCred | null = null
+    if (payload.depoServerId) {
+      const sb = await getSupabaseServer()
+      const { data } = await sb.schema("hub").from("servers")
+        .select("ip, username, password, domain").eq("id", payload.depoServerId).maybeSingle()
+      row = (data as DepoCred | null) ?? null
+    } else {
+      row = ((await serversWithRole("File", "ip, username, password, domain"))[0] as unknown as DepoCred) ?? null
+    }
+    if (!row?.ip || !row.username || !row.password) {
+      return new Response(JSON.stringify({
+        error: "Resim hizmeti için Depo sunucusu ve kayıtlı kullanıcı adı/şifresi gerekli (paylaşıma 'Connect as' ile erişilir). Sunucu ayarlarından ekleyin.",
+      }), { status: 400, headers: { "Content-Type": "application/json" } })
+    }
+    const pw = decrypt(row.password)
+    if (!pw) {
+      return new Response(JSON.stringify({ error: "Depo şifresi çözülemedi. ENCRYPTION_KEY'i kontrol edin." }),
+        { status: 500, headers: { "Content-Type": "application/json" } })
+    }
+    // Mevcut RESIM siteleri "pusuladc\alusup" kullanıyor — domain kısa adı + kullanıcı
+    const domainShort = (row.domain ?? "").split(".")[0]?.trim() ?? ""
+    const user = row.username.includes("\\") || !domainShort ? row.username : `${domainShort}\\${row.username}`
+    resimDepo = { ip: row.ip, user, password: pw }
   }
 
   // SQL sunucusu — 4. adımda seçildiyse. Tamamen opsiyonel; seçilmemişse
@@ -405,6 +466,44 @@ export async function POST(req: NextRequest) {
           output: (result.stdout ?? "").trim(),
         })
         return true
+      }
+
+      /**
+       * Canlı IIS port envanteri — sayaç (WizardPortAssignments) dışında elle
+       * kurulmuş siteler de port kullanıyor olabilir. Tahsis edilen portun
+       * IIS'te gerçekten boş olduğunu garantiler. IIS ve Resim blokları
+       * paylaşır; bir kez taranır.
+       */
+      let livePortsCache: Set<number> | null = null
+      const scanLivePorts = async (agent: AgentTarget): Promise<Set<number>> => {
+        if (livePortsCache) return livePortsCache
+        const liveUsedPorts = new Set<number>()
+        send("step", { stepId: "iis_ports_scan", label: "IIS port envanteri alınıyor", status: "running" })
+        const portRes = await execOnAgent(agent.ip, agent.port, agent.apiKey, buildListIisUsedPorts(), 60)
+        const m = (portRes.stdout ?? "").match(/PORTS:([\d,]*)/)
+        if (portRes.exitCode === 0 && m) {
+          for (const seg of m[1].split(",")) {
+            const n = parseInt(seg, 10)
+            if (Number.isFinite(n)) liveUsedPorts.add(n)
+          }
+          send("step", {
+            stepId: "iis_ports_scan",
+            label:  "IIS port envanteri alınıyor",
+            status: "done",
+            output: `${liveUsedPorts.size} port kullanımda: ${[...liveUsedPorts].sort((a, b) => a - b).join(", ")}`,
+          })
+        } else {
+          // Canlı envanter alınamadı — kurulumu kesme ama net uyar.
+          // Sayaç (WizardPortAssignments) yine de devrede.
+          send("step", {
+            stepId: "iis_ports_scan",
+            label:  "IIS port envanteri alınamadı — yalnızca sayaç kullanılacak",
+            status: "done",
+            output: (portRes.stderr || portRes.stdout || `exit ${portRes.exitCode}`).slice(0, 200),
+          })
+        }
+        livePortsCache = liveUsedPorts
+        return liveUsedPorts
       }
 
       /** SQL bloğunda kullanılacak — async task'ı sarmalar, hata → step error. */
@@ -676,39 +775,8 @@ export async function POST(req: NextRequest) {
             buildCreateDir(iisFirmaRoot),
           ))) { controller.close(); return }
 
-          // 6a.5) Canlı IIS port envanteri — sayaç (WizardPortAssignments)
-          // dışında elle kurulmuş siteler de port kullanıyor olabilir.
-          // Tahsis edilen portun IIS'te gerçekten boş olduğunu garantiler.
-          const liveUsedPorts = new Set<number>()
-          {
-            send("step", { stepId: "iis_ports_scan", label: "IIS port envanteri alınıyor", status: "running" })
-            const portRes = await execOnAgent(
-              iisAgent.ip, iisAgent.port, iisAgent.apiKey,
-              buildListIisUsedPorts(), 60,
-            )
-            const m = (portRes.stdout ?? "").match(/PORTS:([\d,]*)/)
-            if (portRes.exitCode === 0 && m) {
-              for (const seg of m[1].split(",")) {
-                const n = parseInt(seg, 10)
-                if (Number.isFinite(n)) liveUsedPorts.add(n)
-              }
-              send("step", {
-                stepId: "iis_ports_scan",
-                label:  "IIS port envanteri alınıyor",
-                status: "done",
-                output: `${liveUsedPorts.size} port kullanımda: ${[...liveUsedPorts].sort((a, b) => a - b).join(", ")}`,
-              })
-            } else {
-              // Canlı envanter alınamadı — kurulumu kesme ama net uyar.
-              // Sayaç (WizardPortAssignments) yine de devrede.
-              send("step", {
-                stepId: "iis_ports_scan",
-                label:  "IIS port envanteri alınamadı — yalnızca sayaç kullanılacak",
-                status: "done",
-                output: (portRes.stderr || portRes.stdout || `exit ${portRes.exitCode}`).slice(0, 200),
-              })
-            }
-          }
+          // 6a.5) Canlı IIS port envanteri — bkz. scanLivePorts
+          const liveUsedPorts = await scanLivePorts(iisAgent)
 
           for (const s of iisServices) {
             const cfg = s.config as IisSiteConfig | null
@@ -823,6 +891,85 @@ export async function POST(req: NextRequest) {
 
             // Users.xml patch'i için listeye ekle — SQL restore sonrası işlenecek
             installedIisServices.push({ id: s.id, name: s.name, destPath })
+
+            servicesInstalled++
+          }
+        }
+
+        // ── 6b) Resim paylaşımı siteleri → IIS agent ────────────────
+        // Klasör kopyalanmaz: site Depo'daki \\<depo>\Resimler\<firmaId>
+        // paylaşımını yayınlar. Site önceden (elle) kurulmuşsa portu korunur —
+        // dışarıdaki port yönlendirmesi o porta bağlı.
+        if (resimServices.length > 0 && iisAgent && resimDepo) {
+          const liveUsedPorts = await scanLivePorts(iisAgent)
+          for (const s of resimServices) {
+            const cfg = s.config as IisResimConfig | null
+            if (!cfg?.portRangeId) {
+              send("step", {
+                stepId: `svc_skip_${s.id}`,
+                label:  `Hizmet config eksik: ${s.name}`,
+                status: "error",
+                error:  "iis-resim config'inde port aralığı tanımlı değil",
+              })
+              controller.close()
+              return
+            }
+
+            const siteName = `${payload.firmaId}_RESIM`
+            const sub      = cfg.subFolder?.trim() ?? ""
+            const uncPath  = `\\\\${resimDepo.ip}\\Resimler\\${payload.firmaId}${sub ? `\\${sub}` : ""}`
+            const portStep = `resim_port_${s.id}`
+
+            // i) Port — mevcut site > önceki kayıt > aralıktan yeni port
+            send("step", { stepId: portStep, label: `Port atanıyor: ${siteName}`, status: "running" })
+            const probe = await execOnAgent(iisAgent.ip, iisAgent.port, iisAgent.apiKey, buildGetIisSitePort(siteName), 60)
+            if (probe.exitCode !== 0 || !/EXISTS:|NONE/.test(probe.stdout ?? "")) {
+              // Site var mı bilemiyorsak port atamayız: var olan bir siteyi
+              // yeni porta taşıyıp yönlendirmeyi koparabiliriz.
+              send("step", {
+                stepId: portStep, label: `Port atanıyor: ${siteName}`, status: "error",
+                error: `IIS'te mevcut site kontrol edilemedi: ${(probe.stderr || probe.stdout || `exit ${probe.exitCode}`).slice(0, 200)}`,
+              })
+              controller.close()
+              return
+            }
+            const existingPort = Number((probe.stdout ?? "").match(/EXISTS:(\d+)/)?.[1] ?? NaN)
+            const sbRes = await getSupabaseServer()
+            const { data: prev } = await sbRes.schema("hub").from("wizard_port_assignments")
+              .select("port").eq("company_id", payload.firmaId).eq("service_id", s.id).limit(1).maybeSingle()
+            const prevPort = (prev as { port: number | null } | null)?.port ?? null
+
+            let alloc: { ok: true; port: number } | { ok: false; error: string }
+            let note = ""
+            if (Number.isFinite(existingPort)) {
+              alloc = await claimPort(cfg.portRangeId, s.id, payload.firmaId, existingPort, siteName)
+              note  = " (site zaten vardı, portu korundu)"
+            } else if (prevPort) {
+              alloc = { ok: true, port: prevPort }
+              note  = " (önceki kayıt)"
+            } else {
+              alloc = await allocatePort(cfg.portRangeId, s.id, payload.firmaId, siteName, liveUsedPorts)
+            }
+            if (!alloc.ok) {
+              send("step", { stepId: portStep, label: `Port atanıyor: ${siteName}`, status: "error", error: alloc.error })
+              controller.close()
+              return
+            }
+            send("step", { stepId: portStep, label: `Port atandı: ${siteName} → ${alloc.port}${note}`, status: "done" })
+
+            // ii) Site + havuz + Connect as + erişim testi
+            if (!(await runStep(
+              iisAgent,
+              `resim_site_${s.id}`,
+              `Resim sitesi: ${siteName} (port ${alloc.port}) → ${uncPath}`,
+              buildCreateIisResimSite({
+                siteName,
+                physicalPath: uncPath,
+                port:         alloc.port,
+                userName:     resimDepo.user,
+                password:     resimDepo.password,
+              }),
+            ))) { controller.close(); return }
 
             servicesInstalled++
           }

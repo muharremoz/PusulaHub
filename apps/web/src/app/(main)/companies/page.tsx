@@ -848,11 +848,14 @@ export default function CompaniesPage() {
   const newSvcSelected         = newSvcCatalog.filter((s) => newSvcSelectedIds.includes(s.id))
   const newSvcHasPusula        = newSvcSelected.some((s) => s.type === "pusula-program")
   const newSvcHasIis           = newSvcSelected.some((s) => s.type === "iis-site")
+  // Resim: IIS'te site kurar (IIS sunucusu) + Depo'daki paylaşımı yayınlar (Depo sunucusu)
+  const newSvcHasResim         = newSvcSelected.some((s) => s.type === "iis-resim")
   const newSvcValid =
     newSvcSelectedIds.length > 0 &&
     !!newSvcAdServerId &&
     (!newSvcHasPusula || (!!newSvcWindowsServerId && !!newSvcDepoServerId)) &&
-    (!newSvcHasIis || !!newSvcIisServerId)
+    (!(newSvcHasIis || newSvcHasResim) || !!newSvcIisServerId) &&
+    (!newSvcHasResim || !!newSvcDepoServerId)
 
   const newUserValid =
     !!newUserAdServerId &&
@@ -2336,7 +2339,7 @@ tr:nth-child(even) td{background:#fafafa}
                       </div>
                     ) : collectServices().map((svc) => {
                       const running = svc.status === "Started"
-                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
+                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
                       return (
                         <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                           <div className="flex items-center gap-2 min-w-0">
@@ -3623,7 +3626,7 @@ tr:nth-child(even) td{background:#fafafa}
                                     <span className={`size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-foreground border-foreground" : "border-border"}`}>
                                       {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
                                     </span>
-                                    {svc.type === "iis-site" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                    {svc.type === "iis-site" || svc.type === "iis-resim" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
                                     <span className={`text-[11px] font-medium flex-1 ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>{svc.name}</span>
                                     <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
                                       {svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : "—"}
@@ -3673,7 +3676,27 @@ tr:nth-child(even) td{background:#fafafa}
                           )}
 
                           {/* IIS sunucusu */}
-                          {newSvcHasIis && (
+                          {/* Resim tek başına seçildiyse Depo sunucusu (Pusula bloğu yoksa) */}
+                          {newSvcHasResim && !newSvcHasPusula && (
+                            <div className="space-y-1.5">
+                              <Label className="text-foreground/80 text-[12px] font-medium">Depo Sunucusu</Label>
+                              <Select value={newSvcDepoServerId} onValueChange={setNewSvcDepoServerId}>
+                                <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
+                                  <SelectValue placeholder={newSvcDepoServers.length ? "Seçin…" : "Sunucu yok"} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {newSvcDepoServers.map((s) => (
+                                    <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
+                                      {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-[10px] text-muted-foreground">Resim klasörü bu sunucudaki Resimler paylaşımından yayınlanır.</p>
+                            </div>
+                          )}
+
+                          {(newSvcHasIis || newSvcHasResim) && (
                             <div className="space-y-1.5">
                               <Label className="text-foreground/80 text-[12px] font-medium">IIS Sunucusu</Label>
                               <Select value={newSvcIisServerId} onValueChange={setNewSvcIisServerId}>
@@ -3704,8 +3727,8 @@ tr:nth-child(even) td{background:#fafafa}
                         payload={{
                           serverId:         newSvcAdServerId,
                           windowsServerId:  newSvcHasPusula ? newSvcWindowsServerId : undefined,
-                          iisServerId:      newSvcHasIis ? newSvcIisServerId : undefined,
-                          depoServerId:     newSvcHasPusula ? newSvcDepoServerId : undefined,
+                          iisServerId:      (newSvcHasIis || newSvcHasResim) ? newSvcIisServerId : undefined,
+                          depoServerId:     (newSvcHasPusula || newSvcHasResim) ? newSvcDepoServerId : undefined,
                           firmaId:          selectedFirma.firkod,
                           firmaName:        selectedFirma.firma,
                           users:            [],

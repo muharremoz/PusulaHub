@@ -180,7 +180,7 @@ export function StepRun({
         if (!r.ok) return
         const data = (await r.json()) as CompanyServiceDto[]
         if (mounted && Array.isArray(data)) {
-          setIisAssignments(data.filter((s) => s.type === "iis-site" && s.port != null))
+          setIisAssignments(data.filter((s) => (s.type === "iis-site" || s.type === "iis-resim") && s.port != null))
         }
       } catch { /* ignore */ }
     }

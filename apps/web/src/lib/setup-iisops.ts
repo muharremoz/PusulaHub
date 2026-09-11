@@ -206,6 +206,98 @@ export function buildListIisUsedPorts(): string {
   ].join("; ")
 }
 
+/* ── Sitenin mevcut portu ────────────────────────────────────────────── */
+/**
+ * Site varsa ilk binding'inin portunu döner: `EXISTS:20009`; yoksa `NONE`.
+ * Resim sitelerinin bir kısmı Hub'dan önce elle kurulmuş (Mobil'de
+ * 20001–20009). Böyle bir firmaya hizmet eklenirken sitenin portu
+ * değişirse dışarıdaki port yönlendirmesi kopar — o yüzden mevcut port
+ * korunur ve yalnız Hub kaydına alınır.
+ */
+export function buildGetIisSitePort(siteName: string): string {
+  const n = psQuote(siteName)
+  return [
+    `Import-Module WebAdministration -ErrorAction Stop`,
+    `$s = Get-Website | Where-Object { $_.Name -eq '${n}' }`,
+    `if($s){ $bi = [string]($s.Bindings.Collection | Select-Object -First 1).bindingInformation; Write-Output ('EXISTS:' + ($bi.Split(':')[1])) } else { Write-Output 'NONE' }`,
+  ].join("; ")
+}
+
+/* ── Resim paylaşımı sitesi (idempotent) ─────────────────────────────── */
+/**
+ * Depo'daki Resimler paylaşımını (\\<depo>\Resimler\<firmaId>) IIS'te bir
+ * port üzerinden yayınlar. Mobil'deki elle kurulmuş `<firmaId>_RESIM`
+ * siteleriyle aynı yapı:
+ *   - site adıyla aynı adda havuz: ApplicationPoolIdentity, v4.0, Integrated
+ *   - fiziksel yol UNC; paylaşıma "Connect as" kimliğiyle erişilir
+ *     (virtualDirectory userName/password, logonMethod ClearText)
+ *   - anonim erişim açık, dizin listeleme kapalı (IIS varsayılanı)
+ *
+ * Klasör Test-Path ile KONTROL EDİLMEZ: agent SYSTEM olarak çalışır ve
+ * bilgisayar hesabının paylaşıma yetkisi yok — yanlışlıkla "yok" derdi.
+ * Bunun yerine site kurulunca yerel bir HTTP isteği atılır: paylaşıma
+ * erişilemiyorsa IIS 500/401 döner ve adım hata verir. Dizin listeleme
+ * kapalı olduğu için sağlıklı sitede kök istek 403 döner.
+ */
+export function buildCreateIisResimSite(opts: {
+  siteName:     string
+  physicalPath: string
+  port:         number
+  /** Connect as kullanıcısı — DOMAIN\kullanıcı */
+  userName:     string
+  password:     string
+}): string {
+  const n  = psQuote(opts.siteName)
+  const p  = psQuote(opts.physicalPath)
+  const u  = psQuote(opts.userName)
+  const pw = psQuote(opts.password)
+  return [
+    `Import-Module WebAdministration -ErrorAction Stop`,
+    `$name='${n}'`,
+    `$path='${p}'`,
+    `$port=${opts.port}`,
+    `$u='${u}'`,
+    `$pw='${pw}'`,
+    // Havuz — site adıyla aynı, mevcut RESIM siteleri gibi
+    `$poolPath = 'IIS:\\AppPools\\' + $name`,
+    `if(-not (Test-Path $poolPath)){ New-WebAppPool -Name $name | Out-Null }`,
+    `Set-ItemProperty $poolPath -Name managedRuntimeVersion -Value 'v4.0'`,
+    `Set-ItemProperty $poolPath -Name managedPipelineMode -Value 'Integrated'`,
+    // Site — varsa yol/havuz/binding güncellenir (port çağıranın verdiği)
+    `$sitePath = 'IIS:\\Sites\\' + $name`,
+    `$existing = Get-Website | Where-Object { $_.Name -eq $name }`,
+    `if($existing){` +
+      `Set-ItemProperty $sitePath -Name physicalPath -Value $path -ErrorAction Stop; ` +
+      `Set-ItemProperty $sitePath -Name applicationPool -Value $name -ErrorAction Stop; ` +
+      `Set-ItemProperty $sitePath -Name bindings -Value @{protocol='http'; bindingInformation=('*:' + $port + ':')} -ErrorAction Stop; ` +
+      `$result='EXISTS'` +
+    `} else {` +
+      `New-Website -Name $name -PhysicalPath $path -Port $port -ApplicationPool $name -Force | Out-Null; ` +
+      `$result='CREATED'` +
+    `}`,
+    // Connect as — kök sanal dizin. XPath'teki tek tırnak [char]39 ile (çift tırnak yasak)
+    `$q=[char]39`,
+    `$vd='/system.applicationHost/sites/site[@name=' + $q + $name + $q + ']/application[@path=' + $q + '/' + $q + ']/virtualDirectory[@path=' + $q + '/' + $q + ']'`,
+    `Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $vd -Name userName -Value $u -ErrorAction Stop`,
+    `Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $vd -Name password -Value $pw -ErrorAction Stop`,
+    `Set-WebConfigurationProperty -PSPath 'MACHINE/WEBROOT/APPHOST' -Filter $vd -Name logonMethod -Value 'ClearText' -ErrorAction Stop`,
+    // Havuz + site başlat
+    `try{ if((Get-WebAppPoolState -Name $name).Value -ne 'Started'){ Start-WebAppPool -Name $name | Out-Null } }catch{}`,
+    `try{ if((Get-WebsiteState -Name $name).Value -ne 'Started'){ Start-Website -Name $name | Out-Null } }catch{}`,
+    `Start-Sleep -Milliseconds 800`,
+    `$state = (Get-WebsiteState -Name $name -ErrorAction SilentlyContinue).Value`,
+    `if($state -ne 'Started'){ throw ('Site olusturuldu ama baslatilamadi: ' + $name + ' (port ' + $port + ' kullaniliyor olabilir)') }`,
+    // Paylaşıma erişim testi — yerel istek
+    `$code=0`,
+    `try{ $r = Invoke-WebRequest -Uri ('http://127.0.0.1:' + $port + '/') -UseBasicParsing -TimeoutSec 15; $code=[int]$r.StatusCode }` +
+      `catch{ if($_.Exception.Response){ $code=[int]$_.Exception.Response.StatusCode } else { $code=-1 } }`,
+    `if($code -eq -1 -or $code -eq 401 -or $code -ge 500){ throw ('Site kuruldu ama paylasima erisilemedi (HTTP ' + $code + '): ' + $path + ' - Connect as kimligini ve klasoru kontrol edin') }`,
+    `$Error.Clear()`,
+    `$global:LASTEXITCODE=0`,
+    `Write-Output ($result + ':' + $state + ' HTTP ' + $code)`,
+  ].join("; ")
+}
+
 /* ── IIS sitesi oluştur (idempotent) ─────────────────────────────────── */
 /**
  * WebAdministration modülü kullanır. Site varsa yeniden oluşturmaz, sadece
