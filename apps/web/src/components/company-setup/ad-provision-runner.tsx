@@ -98,7 +98,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   const pusulaCount  = services.filter((s) => s.type === "pusula-program").length
   const iisCount     = services.filter((s) => s.type === "iis-site").length
   const resimCount   = services.filter((s) => s.type === "iis-resim").length
-  // pusula-program: dir + copy + (param) ≈ 2.5
+  // pusula-program: dir + copy + (param) + firmano.bak ≈ 3.5
   // iis-site: dir + copy + port + config + site ≈ 5
   // iis-resim: port + site ≈ 2
   // SQL: mode 0 → backupFiles * (restore + guvenlik?)
@@ -120,7 +120,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
     3 +
     payload.users.length * 2 +
     depoStepCount +
-    (serviceCount > 0 ? 1 + Math.round(pusulaCount * 2.5) + iisCount * 5 + resimCount * 2 + 1 : 0) +
+    (serviceCount > 0 ? 1 + Math.round(pusulaCount * 3.5) + iisCount * 5 + resimCount * 2 + 1 : 0) +
     desktopStepCount +
     sqlStepCount
   const doneCount = steps.filter((s) => s.status === "done").length

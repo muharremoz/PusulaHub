@@ -26,6 +26,7 @@ import {
   buildUpdateParamTxt,
   buildUpdateDataKoduXml,
   buildWriteDesktopIni,
+  buildWriteFirmanoBak,
 } from "@/lib/setup-fileops"
 import {
   buildReplaceInFile,
@@ -724,6 +725,16 @@ export async function POST(req: NextRequest) {
                   : buildUpdateParamTxt(paramFile, payload.firmaId),
               )
             }
+
+            // firmano.bak — eskiden Firmano.exe ile elle üretiliyordu.
+            // Sürücünün birim seri numarasına bağlı olduğu için hedef
+            // sunucuda üretilmeli; program bu dosya olmadan açılmıyor.
+            if (!(await runStep(
+              winAgent,
+              `svc_firmano_${s.id}`,
+              `firmano.bak yazılıyor: ${s.name}`,
+              buildWriteFirmanoBak(hizmetPath, payload.firmaId),
+            ))) { controller.close(); return }
 
             servicesInstalled++
           }

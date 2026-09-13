@@ -28,6 +28,46 @@ export function buildCreateDir(absolutePath: string): string {
   ].join("; ")
 }
 
+/* ── firmano.bak (Firmano.exe'nin ürettiği dosya) ───────────────────── */
+/**
+ * Program klasörüne `firmano.bak` yazar — eskiden `Firmano.exe` ile elle
+ * üretiliyordu (VB6, 2012). Biçimi 12 gerçek dosyadan çözüldü:
+ *
+ *   düz metin = <hedef sürücünün birim seri numarası, ondalık> + <firmaId, 7 hane sıfır dolgulu>
+ *   şifreli   = her karakterin ASCII değerine KONUM numarası eklenir (1'den başlar)
+ *   dosya     = şifreli metin + CRLF, ASCII
+ *
+ * Örnek: Terminal 1'in C: seri numarası 11109701, firma 2101 →
+ * düz metin `111097010002101` → dosya `2344>=799:;>>>@` + CRLF.
+ *
+ * Seri numarası **hedef sürücüye** bağlıdır: dosya başka bir makineye
+ * kopyalanırsa geçersiz olur, her sunucuda yeniden üretilmelidir.
+ * VB Long (işaretli 32 bit) olarak yazılır — 0x7FFFFFFF üstü seriler negatif
+ * görünür; eski örneklerde `-1539651687` gibi değerler bu yüzden var.
+ */
+export function buildWriteFirmanoBak(targetDir: string, firmaId: string): string {
+  const d = psQuote(targetDir)
+  const f = psQuote(firmaId)
+  return [
+    `$dir='${d}'`,
+    `$firma='${f}'`,
+    `if(-not (Test-Path -LiteralPath $dir)){throw ('Klasor bulunamadi: ' + $dir)}`,
+    // Hedef klasörün sürücüsü (ör. 'C:')
+    `$surucu=([IO.Path]::GetPathRoot((Resolve-Path -LiteralPath $dir).Path)).Substring(0,2)`,
+    `$vol=Get-CimInstance Win32_LogicalDisk | Where-Object { $_.DeviceID -eq $surucu }`,
+    `if(-not $vol -or -not $vol.VolumeSerialNumber){throw ('Birim seri numarasi okunamadi: ' + $surucu)}`,
+    // VB Long ile aynı: işaretli 32 bit
+    `$seri=[string][BitConverter]::ToInt32([BitConverter]::GetBytes([Convert]::ToUInt32($vol.VolumeSerialNumber,16)),0)`,
+    `$dolgu='0000000' + $firma`,
+    `$duz=$seri + $dolgu.Substring($dolgu.Length - 7)`,
+    `$sb=New-Object System.Text.StringBuilder`,
+    `for($i=0; $i -lt $duz.Length; $i++){ [void]$sb.Append([char]([int][char]$duz[$i] + $i + 1)) }`,
+    `$yol=Join-Path $dir 'firmano.bak'`,
+    `[IO.File]::WriteAllText($yol, $sb.ToString() + [char]13 + [char]10, [Text.Encoding]::ASCII)`,
+    `Write-Output ('WRITTEN seri=' + $seri + ' ' + (Get-Item -LiteralPath $yol).Length + ' bayt')`,
+  ].join("; ")
+}
+
 /* ── Klasör içeriğini kopyala (robocopy) ────────────────────────────── */
 /**
  * Kaynak klasör varsa içeriği (alt klasörler dahil) hedef klasöre kopyalanır.
