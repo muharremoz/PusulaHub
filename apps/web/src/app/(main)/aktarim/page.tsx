@@ -112,6 +112,18 @@ export default function AktarimPage() {
     return () => clearInterval(id)
   }, [reload])
 
+  async function handleRetry(id: string) {
+    try {
+      const r = await fetch(`/api/aktarim/${id}/retry`, { method: "POST" })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error((j as { error?: string })?.error ?? "Yeniden deneme başarısız")
+      toast.success("Aktarım yeniden başlatıldı", { description: "Yüklenen dosyalar sunucuda duruyor; yalnız eksikler gönderilir." })
+      reload()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Hata")
+    }
+  }
+
   async function handleDelete(id: string) {
     try {
       const r = await fetch(`/api/aktarim/${id}`, { method: "DELETE" })
@@ -168,6 +180,7 @@ export default function AktarimPage() {
           <SessionTable
             sessions={active}
             onDelete={(s) => setDeleteTarget(s)}
+            onRetry={handleRetry}
             isActive
           />
         )}
@@ -190,6 +203,7 @@ export default function AktarimPage() {
           <SessionTable
             sessions={past}
             onDelete={(s) => setDeleteTarget(s)}
+            onRetry={handleRetry}
             isActive={false}
           />
         )}
@@ -228,10 +242,11 @@ const GRID_ACTIVE = "grid-cols-[minmax(180px,1fr)_90px_minmax(180px,1.2fr)_minma
 const GRID_PAST   = "grid-cols-[minmax(180px,1fr)_90px_minmax(140px,1fr)_minmax(140px,1fr)_60px_40px] gap-x-4"
 
 function SessionTable({
-  sessions, onDelete, isActive,
+  sessions, onDelete, onRetry, isActive,
 }: {
   sessions: TransferSession[]
   onDelete: (s: TransferSession) => void
+  onRetry: (id: string) => void
   isActive: boolean
 }) {
   return (
@@ -258,6 +273,7 @@ function SessionTable({
             key={s.id}
             s={s}
             onDelete={onDelete}
+            onRetry={onRetry}
             isActiveTable={isActive}
           />
         ))}
@@ -267,10 +283,11 @@ function SessionTable({
 }
 
 function SessionRow({
-  s, onDelete, isActiveTable,
+  s, onDelete, onRetry, isActiveTable,
 }: {
   s: TransferSession
   onDelete: (s: TransferSession) => void
+  onRetry: (id: string) => void
   isActiveTable: boolean
 }) {
   const [copied, setCopied] = useState(false)
@@ -350,8 +367,17 @@ function SessionRow({
         </div>
       )}
 
-      {/* İşlem — sadece sil */}
-      <div className="flex items-center justify-end">
+      {/* İşlem — yarıda kalanlarda yeniden dene + sil */}
+      <div className="flex items-center justify-end gap-1">
+        {s.status === "push_failed" && (
+          <button
+            onClick={() => onRetry(s.id)}
+            className="px-1.5 py-0.5 rounded-[5px] border border-border/60 text-[10px] font-medium hover:bg-muted/40 transition-colors whitespace-nowrap"
+            title="Sunucuya aktarımı yeniden dener — yüklenen dosyalar kullanılır, müşteri baştan yüklemez"
+          >
+            Yeniden dene
+          </button>
+        )}
         <button
           onClick={() => onDelete(s)}
           className="flex items-center justify-center size-6 rounded-[5px] hover:bg-red-500/15 text-muted-foreground hover:text-red-600 dark:text-red-400 transition-colors"

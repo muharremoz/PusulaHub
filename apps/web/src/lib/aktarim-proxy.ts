@@ -101,6 +101,18 @@ export async function cancelSession(id: string): Promise<void> {
   if (!r.ok) throw new Error(`Ubuntu cancelSession: HTTP ${r.status}`)
 }
 
+/** Yarıda kalan aktarımı yeniden dener — staging duruyorsa müşteri yeniden yüklemez. */
+export async function retryPush(id: string): Promise<void> {
+  const r = await fetch(`${BASE}/admin/sessions/${encodeURIComponent(id)}/retry-push`, {
+    method: "POST", headers: headersNoBody(),
+  })
+  if (!r.ok) {
+    let msg = `HTTP ${r.status}`
+    try { const j = await r.json() as { error?: string }; if (j?.error) msg = j.error } catch { /* yok say */ }
+    throw new Error(msg)
+  }
+}
+
 export async function deleteSession(id: string): Promise<void> {
   const r = await fetch(`${BASE}/admin/sessions/${encodeURIComponent(id)}`, {
     method: "DELETE", headers: headersNoBody(),

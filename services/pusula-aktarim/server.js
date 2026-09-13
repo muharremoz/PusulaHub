@@ -225,6 +225,33 @@ fastify.post("/admin/sessions/:id/cancel", async (req, reply) => {
   return { ok: true }
 })
 
+/**
+ * Yarıda kalan push'u yeniden başlatır. Staging duruyorsa dosyalar tekrar
+ * yüklenmeden hedefe gönderilir; rsync kopyalanmış dosyaları atlar.
+ * Yalnız push_failed durumundaki oturumlar için.
+ */
+fastify.post("/admin/sessions/:id/retry-push", async (req, reply) => {
+  if (!checkAdmin(req, reply)) return
+  const sess = stmts.byId.get(req.params.id)
+  if (!sess) return reply.code(404).send({ error: "not_found" })
+  if (sess.status !== "push_failed") {
+    return reply.code(409).send({ error: `Yalnız başarısız aktarımlar tekrar denenebilir (durum: ${sess.status})` })
+  }
+
+  const stagingDir = join(STAGING_ROOT, sess.token)
+  try { await stat(stagingDir) }
+  catch { return reply.code(409).send({ error: "Staging klasörü yok — dosyalar silinmiş, müşterinin yeniden yüklemesi gerekiyor" }) }
+
+  stmts.updatePush.run({ token: sess.token, progress: 0, stage: "starting", error: null, status: "pushing" })
+  startPushJob(sess.token).catch((err) => {
+    fastify.log.error({ err, token: sess.token }, "retry push job crashed")
+    stmts.updatePush.run({
+      token: sess.token, progress: 0, stage: null, error: String(err?.message ?? err), status: "push_failed",
+    })
+  })
+  return reply.send({ ok: true })
+})
+
 fastify.delete("/admin/sessions/:id", async (req, reply) => {
   if (!checkAdmin(req, reply)) return
   const sess = stmts.byId.get(req.params.id)
@@ -1324,10 +1351,41 @@ function execCmd(cmd, args, opts = {}) {
 }
 
 /** Bir klasördeki tüm dosyaları cifs mount edilmiş hedefe kopyalar.
- *  Recursive cp; klasör ağacı korunur. */
+ *  Recursive; klasör ağacı korunur.
+ *
+ *  rsync varsa rsync kullanılır: kopyalanmış dosyaları atlar, yani tekrar
+ *  denemede yalnız eksikler gider. Yoksa cp'ye düşer.
+ *
+ *  Neden tekrar deneme: Windows tarafındaki geçici dosya kilitleri (ör.
+ *  Defender'ın yeni yazılan resimleri taraması) binlerce dosyalık kopyada
+ *  "Permission denied" verip işi yarıda bırakabiliyor — 2026-09-13'te
+ *  firma 3143'ün 13.412 resminin 2.900'ü böyle düştü. Aynı komut birkaç
+ *  saniye sonra sorunsuz çalışıyor. */
 async function copyTreeRecursive(srcDir, dstDir) {
   await mkdir(dstDir, { recursive: true })
-  await execCmd("cp", ["-r", srcDir + "/.", dstDir])
+  let hasRsync = true
+  try { await execCmd("sh", ["-c", "command -v rsync"]) } catch { hasRsync = false }
+
+  const dene = async () => {
+    if (hasRsync) {
+      // --no-perms/-owner/-group: cifs mount'ta sahiplik değiştirilemez
+      await execCmd("rsync", ["-rt", "--no-perms", "--no-owner", "--no-group", srcDir + "/", dstDir + "/"])
+    } else {
+      await execCmd("cp", ["-r", srcDir + "/.", dstDir])
+    }
+  }
+
+  const MAX = 3
+  for (let i = 1; i <= MAX; i++) {
+    try {
+      await dene()
+      return
+    } catch (err) {
+      if (i === MAX) throw err
+      fastify.log.warn({ err: String(err?.message ?? err), deneme: i }, "kopyalama hatasi - tekrar denenecek")
+      await new Promise((r) => setTimeout(r, 5000 * i))
+    }
+  }
 }
 
 async function withCifsMount(ip, share, username, password, fn) {
