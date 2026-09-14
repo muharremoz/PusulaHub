@@ -286,6 +286,79 @@ export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   RDP sunucularında anlık bağlı kişi
+══════════════════════════════════════════════════════════ */
+
+/**
+ * RDP kartının ihtiyaç duyduğu asgari sunucu şekli.
+ * `activeSessions` /api/servers'ta hesaplanıyor: yalnız "Active" oturumlar,
+ * aynı kullanıcı bir kez — yani oturum değil KİŞİ sayısı. undefined = agent
+ * oturum bildirmiyor.
+ */
+export interface RdpCardServer {
+  id:     string
+  name:   string
+  status?: string
+  roles?: string[]
+  activeSessions?: number
+}
+
+/**
+ * Terminal başına planlanan kullanıcı sayısı — çubuk buna göre dolar.
+ * Oturum açma gecikmesi oturum sayısıyla doğrusal büyüdüğü için (T1'de
+ * ~0,25 sn/oturum) bu sınıra yaklaşmak da "dikkat" demek: %80'de kehribar,
+ * %90'da kırmızı.
+ */
+const RDP_KAPASITE = 80
+
+export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
+  const rdp = servers
+    .filter((s) => (s.roles ?? []).some((r) => r.toUpperCase() === "RDP"))
+    .sort((a, b) => a.name.localeCompare(b.name, "tr", { numeric: true }))
+
+  const bilinen = rdp.filter((s) => s.status !== "offline" && typeof s.activeSessions === "number")
+  const toplam  = bilinen.reduce((t, s) => t + (s.activeSessions ?? 0), 0)
+  const cevrimdisi = rdp.some((s) => s.status === "offline")
+
+  return (
+    <Card>
+      <div className="flex items-baseline justify-between gap-2">
+        <Title accent={cevrimdisi ? RED : undefined}>Bağlı Kullanıcı</Title>
+        <span className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: TXT }}>
+          {bilinen.length > 0 ? toplam : "—"}
+        </span>
+      </div>
+
+      <div className="mt-2">
+        {rdp.length === 0 ? (
+          <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+            rdp sunucusu yok
+          </div>
+        ) : (
+          rdp.map((s) => {
+            if (s.status === "offline") {
+              return <Row key={s.id} name={s.name} value="çevrimdışı" color={RED} />
+            }
+            if (typeof s.activeSessions !== "number") {
+              return <Row key={s.id} name={s.name} value="—" color={TXT_DIM} />
+            }
+            const n = s.activeSessions
+            return (
+              <Meter
+                key={s.id}
+                name={s.name}
+                value={`${n} kişi`}
+                percent={Math.round((n / RDP_KAPASITE) * 100)}
+              />
+            )
+          })
+        )}
+      </div>
+    </Card>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
    İmaj yedekleri
 ══════════════════════════════════════════════════════════ */
 

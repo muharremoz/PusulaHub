@@ -42,6 +42,10 @@ interface ServerRow {
   uptime: string
   activeSessions?: number
   disks?: { drive: string; totalGB: number; usedGB: number; percent: number }[]
+  /** "online" | "offline" … — agent yoksa DB'deki son durum */
+  status?: string
+  /** Sunucu rolleri (RDP, SQL, IIS…) */
+  roles?: string[]
 }
 
 /**
