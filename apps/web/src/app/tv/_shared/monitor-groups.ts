@@ -87,6 +87,11 @@ const MAP: Record<string, TreeKey> = {
   "Pusulanet.net":     "dns",
   "Pusulayazilim.net": "dns",
   "kur.pusulanet.net": "dns",
+  /* databag.net iki sağlayıcıda (AWS Route 53 + Cloudflare) — her biri kendi
+     yetkili sunucusuna doğrudan soruluyor; biri düşerse ya da kayıtlar
+     ayrışırsa hangi taraf olduğu ayrı görünür. */
+  "DNS Yedek - AWS":        "dns",
+  "DNS Yedek - Cloudflare": "dns",
 
   /* ── Dış dünya ── */
   // Döviz kaynakları aşağıdaki önek kuralıyla yakalanıyor
