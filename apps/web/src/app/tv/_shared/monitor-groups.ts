@@ -83,6 +83,7 @@ const MAP: Record<string, TreeKey> = {
   "IIS":               "dns",      // iis.databag.net
   "PS1":               "dns",      // ps1.databag.net
   "PS2":               "dns",      // ps2.databag.net
+  "PS3":               "dns",      // ps3.databag.net — Terminal 3
   "Pusula VPN":        "dns",      // vpn.pusulanet.net
   "Pusulanet.net":     "dns",
   "Pusulayazilim.net": "dns",
