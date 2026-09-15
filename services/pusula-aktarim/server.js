@@ -719,7 +719,7 @@ function renderHtml(token) {
   .drop-icon { display:block; margin:0 auto 8px; color:var(--muted) }
   .drop-icon svg { width:24px; height:24px }
   .drop strong { display:block; color:var(--text); font-weight:500; margin-bottom:3px; font-size:13px }
-  .drop .hint { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:3px 8px; border-radius:5px; background:var(--warn-bg); color:var(--warn); font-size:11px; font-weight:500 }
+  .drop .hint { display:flex; width:fit-content; align-items:center; gap:6px; margin:10px auto 0; padding:3px 8px; border-radius:5px; background:var(--warn-bg); color:var(--warn); font-size:11px; font-weight:500 }
 
   /* ── Özet / ağaç ─────────────────────── */
   .summary { margin-top:12px; border:1px solid var(--border); border-radius:5px; overflow:hidden }

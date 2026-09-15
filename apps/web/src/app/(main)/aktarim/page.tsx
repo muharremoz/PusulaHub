@@ -45,7 +45,7 @@ interface TransferSession {
   notes:               string | null
 }
 
-interface FirmaItem { firkod: string; firma: string }
+interface FirmaItem { firkod: string; firma: string; windowsServerId?: string | null }
 interface ServerOption { id: string; name: string; ip: string }
 
 function formatBytes(b: number): string {
@@ -424,9 +424,11 @@ function NewTransferDialog({
   const [firmas, setFirmas]               = useState<FirmaItem[]>([])
   const [sqlServers, setSqlServers]       = useState<ServerOption[]>([])
   const [depoServers, setDepoServers]     = useState<ServerOption[]>([])
+  const [rdpServers, setRdpServers]       = useState<ServerOption[]>([])
   const [firma, setFirma]                 = useState<FirmaItem | null>(null)
   const [sqlServerId, setSqlServerId]     = useState<string>("")
   const [depoServerId, setDepoServerId]   = useState<string>("")
+  const [rdpServerId, setRdpServerId]     = useState<string>("")
   const [expiresInDays, setExpiresInDays] = useState<number>(7)
   const [notes, setNotes]                 = useState<string>("")
   const [submitting, setSubmitting]       = useState(false)
@@ -435,17 +437,19 @@ function NewTransferDialog({
 
   useEffect(() => {
     if (!open) return
-    setFirma(null); setSqlServerId(""); setDepoServerId("")
+    setFirma(null); setSqlServerId(""); setDepoServerId(""); setRdpServerId("")
     setExpiresInDays(7); setNotes(""); setFirmaSearch("")
     Promise.all([
       // all=true → kurulumu olmayan firmalar da gelsin
       fetch("/api/firma/companies?all=true").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/sql-servers").then(r => r.ok ? r.json() : []).catch(() => []),
       fetch("/api/setup/depo-servers").then(r => r.ok ? r.json() : []).catch(() => []),
-    ]).then(([cs, sql, depo]) => {
+      fetch("/api/setup/rdp-servers").then(r => r.ok ? r.json() : []).catch(() => []),
+    ]).then(([cs, sql, depo, rdp]) => {
       setFirmas(Array.isArray(cs) ? cs : [])
       setSqlServers(Array.isArray(sql) ? sql : [])
       setDepoServers(Array.isArray(depo) ? depo : [])
+      setRdpServers(Array.isArray(rdp) ? rdp : [])
     })
   }, [open])
 
@@ -474,6 +478,7 @@ function NewTransferDialog({
           firmaName:     firma.firma,
           sqlServerId:   sqlServerId || null,
           depoServerId:  depoServerId || null,
+          rdpServerId:   rdpServerId || null,
           expiresInDays,
           notes:         notes.trim() || null,
         }),
@@ -514,7 +519,12 @@ function NewTransferDialog({
               getKey={(f) => f.firkod}
               getLabel={(f) => f.firma}
               value={firma?.firkod}
-              onChange={(kod) => setFirma(firmas.find((f) => f.firkod === kod) ?? null)}
+              onChange={(kod) => {
+                const f = firmas.find((x) => x.firkod === kod) ?? null
+                setFirma(f)
+                // Firmanın atanmış terminal sunucusu varsa önceden seç
+                setRdpServerId(f?.windowsServerId ?? "")
+              }}
               search={firmaSearch}
               onSearchChange={setFirmaSearch}
               placeholder="Firma seç..."
@@ -566,6 +576,26 @@ function NewTransferDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-foreground/80 text-[12px] font-medium">Terminal Sunucusu</Label>
+            <Select value={rdpServerId} onValueChange={setRdpServerId}>
+              <SelectTrigger className="h-8 text-[11px] w-full">
+                <SelectValue placeholder="Seçilmedi — program dosyası alanı gizlenir" />
+              </SelectTrigger>
+              <SelectContent>
+                {rdpServers.map((s) => (
+                  <SelectItem key={s.id} value={s.id} className="text-[13px]">
+                    {s.name} ({s.ip})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">
+              Program dosyaları bu sunucuda C:\MUSTERI\&lt;firma&gt;\Aktarim altına kopyalanır.
+              {firma && firma.windowsServerId && rdpServerId === firma.windowsServerId && " Firmanın atanmış sunucusu seçildi."}
+            </p>
           </div>
 
           <div className="space-y-1">

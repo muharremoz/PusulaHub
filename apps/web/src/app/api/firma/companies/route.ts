@@ -5,11 +5,13 @@ import { syncFirmalarNow } from "@/lib/firma-sync"
 export interface FirmaCompany {
   id: string; firkod: string; firma: string; email: string; phone: string
   userCount: number; licenseCount: number; lisansBitis: string
+  /** Firmanın atanmış terminal (RDP) sunucusu — kurulmamışsa null */
+  windowsServerId: string | null
 }
 
 interface CompanyRow {
   company_id: string; name: string; contact_email: string | null; contact_phone: string | null
-  user_count: number; ad_server_id: string | null; contract_end: string | null
+  user_count: number; ad_server_id: string | null; windows_server_id: string | null; contract_end: string | null
 }
 
 export async function GET(req: NextRequest) {
@@ -20,7 +22,7 @@ export async function GET(req: NextRequest) {
     if (sync) { try { await syncFirmalarNow() } catch (e) { console.error("[firma/companies] sync hata:", e) } }
 
     const sb = await getSupabaseServer()
-    const COLS = "company_id, name, contact_email, contact_phone, user_count, ad_server_id, contract_end"
+    const COLS = "company_id, name, contact_email, contact_phone, user_count, ad_server_id, windows_server_id, contract_end"
 
     /*
      * ⚠ PostgREST'in `max-rows` ayarı (varsayılan 1000) sunucu tarafında
@@ -75,6 +77,7 @@ export async function GET(req: NextRequest) {
       userCount: c.ad_server_id ? (ouCnt.get(c.company_id) ?? 0) : (c.user_count ?? 0),
       licenseCount: c.user_count ?? 0,
       lisansBitis: c.contract_end ? c.contract_end.slice(0, 10) : "",
+      windowsServerId: c.windows_server_id ?? null,
     }))
 
     const resp = NextResponse.json(companies)

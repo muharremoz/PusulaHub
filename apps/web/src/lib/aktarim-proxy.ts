@@ -66,6 +66,8 @@ export interface CreateInput {
   /** Hub Servers tablosundan ID — backend bunları credential'a açar */
   sqlServerId?:    string | null
   depoServerId?:   string | null
+  /** Terminal (RDP) sunucusu — boşsa firmanın atanmış sunucusu kullanılır */
+  rdpServerId?:    string | null
   /** Ubuntu'ya geçen alanlar (Hub backend doldurur) */
   sqlServerName?:  string | null
   sqlServerIp?:    string | null

@@ -64,7 +64,10 @@ export async function POST(req: NextRequest) {
     const sb = await getSupabaseServer()
     const { data: comp } = await sb.schema("hub").from("companies")
       .select("windows_server_id").eq("company_id", body.companyId).maybeSingle()
-    const rdpServerId = (comp as { windows_server_id: string | null } | null)?.windows_server_id ?? null
+    // Pencereden seçilen sunucu öncelikli; seçilmediyse firmanın atanmış sunucusu
+    const rdpServerId = body.rdpServerId
+      ?? (comp as { windows_server_id: string | null } | null)?.windows_server_id
+      ?? null
 
     // Müşterinin seçeceği programlar (Perakende, Toptan…) — hizmet kataloğundaki pusula-program'lar
     const { data: svcRows } = await sb.schema("hub").from("wizard_services")
