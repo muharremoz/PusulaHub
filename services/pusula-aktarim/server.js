@@ -17,6 +17,8 @@
  *     GET    /api/info/:token              — public bilgi
  *     POST   /api/upload/:token/data       — .bak yükle
  *     POST   /api/upload/:token/image      — resim yükle (relPath ile)
+ *     POST   /api/upload/:token/program    — program dosyası (.exe/.txt) yükle
+ *     POST   /api/upload/:token/program-progress — program sayacı
  *     POST   /api/upload/:token/images-done — toplu sayaç
  *     POST   /api/upload/:token/complete   — tamamlandı
  */
@@ -26,7 +28,7 @@ import multipart from "@fastify/multipart"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
 import { dirname, join, normalize } from "path"
-import { mkdir, stat, readdir, rm, readFile } from "fs/promises"
+import { mkdir, stat, readdir, rm, readFile, writeFile } from "fs/promises"
 import { createWriteStream } from "fs"
 import { pipeline } from "stream/promises"
 import { randomBytes } from "crypto"
@@ -90,6 +92,27 @@ ensureColumn("depoPassword",  "TEXT")
 ensureColumn("pushProgress",  "INTEGER NOT NULL DEFAULT 0")   // 0-100 toplam
 ensureColumn("pushStage",     "TEXT")                          // 'data' | 'images' | null
 ensureColumn("pushError",     "TEXT")
+// Program dosyaları (.exe) → firmanın terminal sunucusu C$\MUSTERI\{firmaId}\Aktarim
+ensureColumn("rdpServerName",        "TEXT")
+ensureColumn("rdpServerIp",          "TEXT")
+ensureColumn("rdpUsername",          "TEXT")
+ensureColumn("rdpPassword",          "TEXT")
+ensureColumn("programFilesTotal",    "INTEGER NOT NULL DEFAULT 0")
+ensureColumn("programFilesReceived", "INTEGER NOT NULL DEFAULT 0")
+ensureColumn("programBytesTotal",    "INTEGER NOT NULL DEFAULT 0")
+ensureColumn("programBytesReceived", "INTEGER NOT NULL DEFAULT 0")
+// Hub kataloğundaki pusula-program hizmetleri: [{ name, exeName, paramFileName }]
+ensureColumn("programOptions",       "TEXT")
+
+function programOptionsOf(sess) {
+  try {
+    const arr = JSON.parse(sess.programOptions || "[]")
+    return Array.isArray(arr) ? arr.filter((o) => o && typeof o.name === "string" && o.name.trim()) : []
+  } catch { return [] }
+}
+function programEnabledOf(sess) {
+  return !!(sess.rdpServerIp && sess.rdpUsername && sess.rdpPassword) && programOptionsOf(sess).length > 0
+}
 
 function newId()    { return randomBytes(8).toString("hex") }
 function newToken() { return randomBytes(18).toString("base64url") }
@@ -99,10 +122,12 @@ const stmts = {
     INSERT INTO sessions (id, token, companyId, firmaName, sqlServerName, depoServerName,
                           sqlServerIp, sqlUsername, sqlPassword,
                           depoServerIp, depoUsername, depoPassword,
+                          rdpServerName, rdpServerIp, rdpUsername, rdpPassword, programOptions,
                           status, createdBy, expiresAt, notes)
     VALUES (@id, @token, @companyId, @firmaName, @sqlServerName, @depoServerName,
             @sqlServerIp, @sqlUsername, @sqlPassword,
             @depoServerIp, @depoUsername, @depoPassword,
+            @rdpServerName, @rdpServerIp, @rdpUsername, @rdpPassword, @programOptions,
             'pending', @createdBy, @expiresAt, @notes)
   `),
   updatePush: db.prepare(`
@@ -137,6 +162,10 @@ const stmts = {
         imageFilesReceived = COALESCE(@imageFilesReceived, imageFilesReceived),
         imageBytesTotal    = COALESCE(@imageBytesTotal,    imageBytesTotal),
         imageBytesReceived = COALESCE(@imageBytesReceived, imageBytesReceived),
+        programFilesTotal    = COALESCE(@programFilesTotal,    programFilesTotal),
+        programFilesReceived = COALESCE(@programFilesReceived, programFilesReceived),
+        programBytesTotal    = COALESCE(@programBytesTotal,    programBytesTotal),
+        programBytesReceived = COALESCE(@programBytesReceived, programBytesReceived),
         status             = COALESCE(@status, status)
     WHERE token = @token
   `),
@@ -212,6 +241,11 @@ fastify.post("/admin/sessions", async (req, reply) => {
     depoServerIp:   body.depoServerIp  ?? null,
     depoUsername:   body.depoUsername   ?? null,
     depoPassword:   body.depoPassword   ?? null,
+    rdpServerName:  body.rdpServerName  ?? null,
+    rdpServerIp:    body.rdpServerIp    ?? null,
+    rdpUsername:    body.rdpUsername    ?? null,
+    rdpPassword:    body.rdpPassword    ?? null,
+    programOptions: Array.isArray(body.programOptions) ? JSON.stringify(body.programOptions) : null,
     createdBy:      body.createdBy ?? null,
     expiresAt,
     notes:          body.notes ?? null,
@@ -301,6 +335,13 @@ fastify.get("/api/info/:token", async (req, reply) => {
     imageFilesReceived:  s.imageFilesReceived,
     imageBytesTotal:     s.imageBytesTotal,
     imageBytesReceived:  s.imageBytesReceived,
+    programFilesTotal:    s.programFilesTotal,
+    programFilesReceived: s.programFilesReceived,
+    programBytesTotal:    s.programBytesTotal,
+    programBytesReceived: s.programBytesReceived,
+    // Program alanı yalnız firmanın terminal sunucusu biliniyorsa açılır
+    programEnabled:       programEnabledOf(s),
+    programOptions:       programOptionsOf(s).map((o) => ({ name: o.name, exeName: o.exeName ?? null, paramFileName: o.paramFileName ?? null })),
     pushProgress:        s.pushProgress ?? 0,
     pushStage:           s.pushStage,
     pushError:           s.pushError,
@@ -310,6 +351,8 @@ fastify.get("/api/info/:token", async (req, reply) => {
 
 const ALLOWED_DATA_EXT  = /\.(bak|rar|zip|ldf|mdf)$/i
 const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i
+const PROGRAM_KIND_EXT = { exe: /\.exe$/i, param: /\.txt$/i, extra: /^.+$/ }   // extra: ek dosyalar, tüm türler
+const PROGRAM_NULL = { programFilesTotal: null, programFilesReceived: null, programBytesTotal: null, programBytesReceived: null }
 
 fastify.post("/api/upload/:token/data", async (req, reply) => {
   const v = getActiveSession(req.params.token)
@@ -360,6 +403,70 @@ fastify.post("/api/upload/:token/image", async (req, reply) => {
   return reply.send({ ok: true, path: safeRel, size: s.size })
 })
 
+fastify.post("/api/upload/:token/program", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  if (!programEnabledOf(v.session)) {
+    return reply.code(409).send({ error: "Bu aktarım için program dosyası yükleme kapalı" })
+  }
+
+  const data = await req.file()
+  if (!data) return reply.code(400).send({ error: "Dosya yok" })
+  const drain = () => data.toBuffer().catch(() => {})
+
+  // Hangi programa ait (Perakende, Toptan…) — yalnız Hub kataloğundaki adlar
+  const program = String(data.fields.program?.value ?? "")
+  const kind    = String(data.fields.kind?.value ?? "")
+  if (!programOptionsOf(v.session).some((o) => o.name === program)) {
+    await drain()
+    return reply.code(400).send({ error: "Geçersiz program" })
+  }
+  if (!PROGRAM_KIND_EXT[kind]) {
+    await drain()
+    return reply.code(400).send({ error: "Geçersiz dosya türü" })
+  }
+  if (!PROGRAM_KIND_EXT[kind].test(data.filename || "")) {
+    await drain()
+    return reply.code(400).send({ error: kind === "exe" ? "Program dosyası .exe olmalı" : "Parametre dosyası .txt olmalı" })
+  }
+
+  const filename = sanitizeFilename(data.filename || (kind === "exe" ? "program.exe" : kind === "param" ? "parametre.txt" : "dosya"))
+  // Klasör adı katalogdan geldiği için güvenli (Hub kontrolünde, / ve .. içermez)
+  const targetDir = join(STAGING_ROOT, req.params.token, "program", program.replace(/[\\/]/g, "_"))
+  await mkdir(targetDir, { recursive: true })
+  const targetPath = join(targetDir, filename)
+  await pipeline(data.file, createWriteStream(targetPath))
+  const st = await stat(targetPath)
+  if (kind === "param") {
+    // Push'ta DATA KODU / OPEN OFFICE yazılacak dosyayı işaretle
+    const kayit = join(STAGING_ROOT, req.params.token, "program-param.json")
+    let m = {}
+    try { m = JSON.parse(await readFile(kayit, "utf8")) } catch { m = {} }
+    m[program] = filename
+    await writeFile(kayit, JSON.stringify(m))
+  }
+  stmts.setStatus.run("active", "active", req.params.token)
+  return reply.send({ ok: true, program, kind, filename, size: st.size })
+})
+
+fastify.post("/api/upload/:token/program-progress", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  const b = req.body ?? {}
+  stmts.updateProgress.run({
+    token: req.params.token,
+    status: "active",
+    dataBytesTotal: null, dataBytesReceived: null,
+    imageFilesTotal: null, imageFilesReceived: null,
+    imageBytesTotal: null, imageBytesReceived: null,
+    programFilesTotal:    b.totalFiles    ?? null,
+    programFilesReceived: b.uploadedFiles ?? null,
+    programBytesTotal:    b.totalBytes    ?? null,
+    programBytesReceived: b.uploadedBytes ?? null,
+  })
+  return reply.send({ ok: true })
+})
+
 fastify.post("/api/upload/:token/data-progress", async (req, reply) => {
   const v = getActiveSession(req.params.token)
   if (v.error) return reply.code(410).send({ error: v.error })
@@ -371,6 +478,7 @@ fastify.post("/api/upload/:token/data-progress", async (req, reply) => {
     dataBytesReceived: b.uploadedBytes ?? null,
     imageFilesTotal: null, imageFilesReceived: null,
     imageBytesTotal: null, imageBytesReceived: null,
+    ...PROGRAM_NULL,
   })
   return reply.send({ ok: true })
 })
@@ -387,6 +495,7 @@ fastify.post("/api/upload/:token/images-done", async (req, reply) => {
     imageFilesReceived: b.uploadedFiles ?? null,
     imageBytesTotal:    b.totalBytes    ?? null,
     imageBytesReceived: b.uploadedBytes ?? null,
+    ...PROGRAM_NULL,
   })
   return reply.send({ ok: true })
 })
@@ -461,6 +570,8 @@ const ICON_UPLOAD   = `<svg width="28" height="28" viewBox="0 0 24 24" fill="non
 const ICON_CHECK    = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
 const ICON_CHECK_BIG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
 const ICON_X        = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+const ICON_MESSAGE  = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`
+const ICON_APP      = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M7 6.5h.01"/><path d="M10 6.5h.01"/></svg>`
 const ICON_WARN     = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
 
 function renderHtml(token) {
@@ -471,263 +582,288 @@ function renderHtml(token) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pusula Aktarım</title>
 <style>
+  /* Hub / PusulaCRM tasarım dili — token'lar globals.css ile aynı */
   *, *::before, *::after { box-sizing: border-box }
   :root {
-    --pusula: #1d64ff;
-    --pusula-soft: #eff5ff;
-    --bg: #f4f2f0;
-    --card: #fff;
-    --border: #e4e4e7;
-    --text: #18181b;
-    --muted: #71717a;
-    --shadow: 0 2px 4px rgba(0,0,0,0.06);
+    --page-bg: #F7F7F8;
+    --section-bg: #F0F0F0;
+    --card: #FFFFFF;
+    --card-shadow: 0 1px 2px rgba(0,0,0,.05), 0 1px 3px rgba(0,0,0,.04);
+    --border: #E4E4E7;
+    --text: #171717;
+    --muted: #71717A;
+    --primary: #171717;
+    --primary-fg: #FFFFFF;
+    --primary-10: rgba(23,23,23,.08);
+    --primary-20: rgba(23,23,23,.16);
+    --ok: #047857;   --ok-bg: rgba(16,185,129,.15);
+    --warn: #B45309; --warn-bg: rgba(245,158,11,.15);
+    --err: #B91C1C;  --err-bg: rgba(239,68,68,.15);
+    --info: #1D4ED8; --info-bg: rgba(59,130,246,.15);
+    --mono: ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, monospace;
   }
+  :root { color-scheme: light }
   body {
     margin: 0; min-height: 100vh;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-    background: var(--bg); color: var(--text);
+    font-size: 14px; background: var(--page-bg); color: var(--text);
+    -webkit-font-smoothing: antialiased;
   }
-
-  /* ── Header ───────────────────────────── */
-  header.topbar {
-    background:#fff; border-bottom:1px solid var(--border);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
-    position:sticky; top:0; z-index:10;
-  }
-  .topbar-inner {
-    max-width:1080px; margin:0 auto; padding:14px 24px;
-    display:flex; align-items:center; justify-content:space-between; gap:16px;
-  }
-  .topbar-brand { display:flex; align-items:center; gap:10px }
-  .topbar-brand img { height:28px; width:auto }
-  .topbar-brand .sep { width:1px; height:20px; background:var(--border) }
-  .topbar-brand .label { font-size:12px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase; font-weight:500 }
-  .topbar-firma { text-align:right }
-  .topbar-firma .l { font-size:10px; color:var(--muted); letter-spacing:.5px; text-transform:uppercase }
-  .topbar-firma .v { font-size:14px; font-weight:600; color:var(--text); max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-
-  .page { max-width: 1080px; margin: 0 auto; padding: 28px 24px 48px }
-
-  /* ── Cards ────────────────────────────── */
-  .card {
-    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: var(--shadow); padding: 24px;
-  }
-  .intro { margin-bottom:18px }
-  .intro p { margin:0; color:var(--muted); font-size:13px; line-height:1.5 }
-  .intro .note { margin-top:12px; padding:10px 12px; background:#fffbeb; border:1px solid #fde68a; border-radius:5px; color:#78350f; font-size:12px }
-
-  /* ── 2 sütun grid ─────────────────────── */
-  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px }
-  @media (max-width:880px) { .grid { grid-template-columns:1fr } }
-
-  .card-hdr { display:flex; align-items:center; gap:12px; margin-bottom: 16px }
-  .card-hdr .icon {
-    flex: 0 0 40px; width:40px; height:40px; border-radius:8px;
-    background: var(--pusula-soft); color: var(--pusula);
-    display:flex; align-items:center; justify-content:center;
-  }
-  .card-hdr h2 { margin:0; font-size:15px; font-weight:600; color:var(--text) }
-  .card-hdr .meta { font-size:11px; color:var(--muted); margin-top:2px }
-
-  /* ── Drop zone ────────────────────────── */
-  .drop {
-    display:block; width:100%;
-    border: 2px dashed #d4d4d8; border-radius: 6px;
-    padding: 28px 16px; text-align: center; background: #fafafa;
-    cursor: pointer; transition: all .15s; color: var(--muted);
-    font-size: 12px;
-  }
-  .drop:hover, .drop.over { border-color: var(--pusula); background: var(--pusula-soft); color: var(--pusula) }
-  .drop input { display: none }
-  .drop-icon { display:block; margin:0 auto 8px auto; opacity:.55 }
-  .drop strong { display:block; color:var(--text); font-weight:600; margin-bottom:4px; font-size:13px }
-  .drop:hover strong, .drop.over strong { color: var(--pusula) }
-
-  /* ── Özet ─────────────────────────────── */
-  .summary { margin-top:14px; border:1px solid var(--border); border-radius:6px; overflow:hidden }
-  .summary-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:8px 12px; align-items:center; font-size:12px }
-  .summary-row + .summary-row { border-top:1px solid var(--border) }
-  .summary-row .l { color:var(--muted) }
-  .summary-row .v { font-weight:600; font-family:ui-monospace,SFMono-Regular,monospace; tabular-nums:true }
-  .summary-row.danger { background:#fef2f2 }
-  .summary-row.danger .l { color:#991b1b }
-  .summary-row.danger .v { color:#991b1b }
-
-  .clear-btn {
-    margin-top:10px; width:100%; padding:6px; font-size:11px; color:var(--muted);
-    background:transparent; border:1px solid var(--border); border-radius:5px; cursor:pointer;
-  }
-  .clear-btn:hover { background:#f4f4f5; color:var(--text) }
-
-  /* ── Klasör ağacı ─────────────────────── */
-  .tree {
-    margin-top:12px; border:1px solid var(--border); border-radius:6px;
-    background:#fafafa; max-height:240px; overflow-y:auto;
-  }
-  .tree-hdr {
-    padding:8px 12px; font-size:10px; font-weight:600;
-    color:var(--muted); letter-spacing:.5px; text-transform:uppercase;
-    border-bottom:1px solid var(--border); background:#fff;
-    position:sticky; top:0;
-  }
-  .tree-row {
-    display:grid; grid-template-columns:1fr auto; gap:8px;
-    padding:6px 12px; font-size:11px; align-items:center;
-  }
-  .tree-row + .tree-row { border-top:1px solid #e4e4e7 }
-  .tree-path { font-family:ui-monospace,SFMono-Regular,monospace; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
-  .tree-meta { color:var(--muted); font-family:ui-monospace,SFMono-Regular,monospace; tabular-nums:true; white-space:nowrap }
-  .tree-more { justify-content:center; color:var(--muted); font-style:italic; grid-template-columns:1fr }
-
-  /* ── Sıkıştırma uyarısı ───────────────── */
-  .compress-tip {
-    margin-top:12px; padding:10px 12px; border-radius:5px;
-    background:#fff7ed; border:1px solid #fed7aa; color:#9a3412;
-    font-size:11px; display:flex; gap:8px; align-items:flex-start;
-  }
-  .compress-tip strong { display:block; color:#7c2d12; margin-bottom:2px; font-size:12px }
-  .compress-tip a { color:#7c2d12; text-decoration:underline }
-
-  /* ── Progress (yükleme sırasında) ─────── */
-  .progress { margin-top:14px }
-  .bar { height:6px; background:#e4e4e7; border-radius:3px; overflow:hidden }
-  .bar > div { height:100%; background: var(--pusula); transition:width .25s; border-radius:3px }
-  .stat { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); margin-top:6px }
-  .stat .pct { font-weight:600; color:var(--text) }
-
-  /* ── Status durum rozeti ──────────────── */
-  .status-badge {
-    display:inline-flex; align-items:center; gap:4px;
-    font-size:10px; font-weight:500; padding:3px 8px; border-radius:99px;
-    background:#f4f4f5; color:var(--muted);
-  }
-  .status-badge.uploading { background:var(--pusula-soft); color:var(--pusula) }
-  .status-badge.done      { background:#ecfdf5; color:#059669 }
-  .status-badge.err       { background:#fef2f2; color:#b91c1c }
-
-  /* ── Footer / Aksiyon ─────────────────── */
-  .actions { margin-top:24px; display:flex; justify-content:flex-end; gap:10px }
-  .btn { padding:10px 24px; border-radius:5px; border:0; background: var(--pusula); color:#fff; font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s; display:inline-flex; align-items:center; gap:6px }
-  .btn:hover { opacity:.9 }
-  .btn:disabled { opacity:.4; cursor:not-allowed }
-  .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border) }
-  .btn-ghost:hover { background:#f4f4f5; opacity:1 }
-
-  .alert { padding: 16px; border-radius:8px; border:1px solid; font-size:13px }
-  .alert-err { background:#fef2f2; border-color:#fecaca; color:#991b1b }
-
-  .done-banner {
-    margin-top:18px; padding:18px 20px; border-radius:8px;
-    background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46;
-    display:flex; align-items:center; gap:12px;
-  }
-  .done-banner .icon { width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#fff; color:#059669; display:flex; align-items:center; justify-content:center }
-  .done-banner h2 { margin:0 0 2px 0; font-size:14px; font-weight:600 }
-  .done-banner p { margin:0; font-size:12px; opacity:.85 }
-
-  .push-banner {
-    margin-top:18px; padding:18px 20px; border-radius:8px;
-    background:#eff6ff; border:1px solid #bfdbfe;
-  }
-  .spinner {
-    width:24px; height:24px; flex:0 0 24px;
-    border:3px solid #bfdbfe; border-top-color:#1d4ed8;
-    border-radius:50%; animation:spin .8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg) } }
-
-  .push-fail-banner {
-    margin-top:18px; padding:18px 20px; border-radius:8px;
-    background:#fef2f2; border:1px solid #fecaca; color:#991b1b;
-    display:flex; align-items:center; gap:12px;
-  }
-  .push-fail-banner .icon { width:36px; height:36px; flex:0 0 36px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center }
-  .push-fail-banner h2 { margin:0 0 2px 0; font-size:14px; font-weight:600 }
-  .push-fail-banner p { margin:0; font-size:12px; opacity:.85 }
-
-  .footer-code { text-align:center; padding:18px 0 0 0; color:var(--muted); font-size:10px; font-family:ui-monospace,SFMono-Regular,monospace }
-
   .hidden { display:none !important }
 
-  /* ── Tamamlandı tam ekran ─────────────── */
-  .success-overlay {
-    position:fixed; inset:0; z-index:200;
-    background:linear-gradient(135deg, #ecfdf5 0%, #d1fae5 50%, #a7f3d0 100%);
+  /* ── Üst çubuk ───────────────────────── */
+  header.topbar { background:var(--card); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:10 }
+  .topbar-inner { max-width:1360px; margin:0 auto; padding:0 24px; height:56px; display:flex; align-items:center; justify-content:space-between; gap:16px }
+  .topbar-brand { display:flex; align-items:center; gap:12px }
+  .topbar-brand img { height:52px; width:auto; display:block }
+  .topbar-brand .sep { width:1px; height:18px; background:var(--border) }
+  .topbar-brand .label { font-size:14px; font-weight:600; color:var(--text); letter-spacing:-.005em }
+  .topbar-firma { display:flex; align-items:center; gap:10px; min-width:0 }
+  .topbar-firma .kod { font-family:var(--mono); font-size:12px; font-weight:500; color:var(--muted); background:var(--section-bg); padding:2px 7px; border-radius:5px; white-space:nowrap }
+  .topbar-firma .v { font-size:14px; font-weight:600; max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .topbar-firma .dot { width:1px; height:18px; background:var(--border) }
+  .hdr-status { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:500; padding:2px 8px; border-radius:5px; background:var(--primary-10); color:var(--muted); white-space:nowrap }
+  .hdr-status::before { content:""; width:6px; height:6px; border-radius:50%; background:currentColor }
+  .hdr-status.pending   { background:var(--warn-bg); color:var(--warn) }
+  .hdr-status.active    { background:var(--info-bg); color:var(--info) }
+  .hdr-status.pushing   { background:var(--info-bg); color:var(--info) }
+  .hdr-status.push_failed { background:var(--err-bg); color:var(--err) }
+  .hdr-status.completed { background:var(--ok-bg); color:var(--ok) }
+  @media (max-width:640px) { .topbar-brand .sep, .topbar-brand .label, .topbar-firma .dot { display:none } .topbar-firma .v { max-width:160px } }
+
+  .page { max-width:1360px; margin:0 auto; padding:28px 24px 48px }
+
+  /* ── Sayfa başlığı ───────────────────── */
+  .page-head { margin-bottom:16px }
+  .page-head h1 { margin:0; font-size:20px; font-weight:600; letter-spacing:-.01em }
+  .page-head p { margin:6px 0 0; font-size:13px; line-height:1.55; color:var(--muted); max-width:720px }
+  /* ── Müşteriye mesaj ───────────────── */
+  .message { margin-bottom:12px; background:var(--section-bg); border-radius:8px; padding:8px }
+  .message-card { background:var(--card); border-radius:5px; box-shadow:var(--card-shadow); padding:16px 18px; display:flex; gap:14px; align-items:flex-start }
+  .message-icon { flex:0 0 36px; width:36px; height:36px; border-radius:5px; background:var(--primary-10); color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary-20); display:flex; align-items:center; justify-content:center }
+  .message-icon svg { width:18px; height:18px }
+  .message-label { font-size:10px; font-weight:500; color:var(--muted); letter-spacing:.06em; text-transform:uppercase }
+  .message-text { margin-top:4px; font-size:15px; line-height:1.55; color:var(--text); white-space:pre-wrap; word-break:break-word }
+
+  /* ── Bölüm paneli + kartlar ──────────── */
+  .section { background:var(--section-bg); border-radius:8px; padding:8px }
+  .card { background:var(--card); border-radius:5px; box-shadow:var(--card-shadow); padding:18px }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+  .grid.three { grid-template-columns:repeat(3, 1fr) }
+
+  /* ── Program satırları ──────────────── */
+  .prog-rows { display:flex; flex-direction:column; gap:8px }
+  .prog-row { border:1px solid var(--border); border-radius:5px; padding:10px; background:var(--page-bg) }
+  .prog-row-hdr { display:flex; gap:6px; align-items:center; margin-bottom:8px }
+  .dd { position:relative; flex:1; min-width:0 }
+  .dd-trigger { width:100%; height:32px; padding:0 8px 0 10px; border:1px solid var(--border); border-radius:5px; background:var(--card); color:var(--text); font-size:13px; font-family:inherit; display:flex; align-items:center; gap:8px; cursor:pointer; text-align:left }
+  .dd-trigger:hover { border-color:var(--muted) }
+  .dd.open .dd-trigger { border-color:var(--primary); box-shadow:0 0 0 3px var(--primary-10) }
+  .dd-trigger:disabled { cursor:not-allowed; opacity:.55 }
+  .dd-val { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .dd-val.ph { color:var(--muted) }
+  .dd-chev { color:var(--muted); flex:0 0 auto; transition:transform .15s }
+  .dd.open .dd-chev { transform:rotate(180deg) }
+  .dd-menu { position:absolute; left:0; width:100%; top:calc(100% + 4px); z-index:50; background:var(--card); border:1px solid var(--border); border-radius:5px; box-shadow:0 8px 24px rgba(0,0,0,.12); padding:4px; max-height:240px; overflow-y:auto }
+  .dd-item { width:100%; display:flex; align-items:center; gap:8px; padding:6px 8px; border:0; border-radius:4px; background:transparent; color:var(--text); font-size:13px; font-family:inherit; cursor:pointer; text-align:left }
+  .dd-item:hover { background:var(--primary-10) }
+  .dd-item .t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .dd-item .h { color:var(--muted); font-size:11px; font-family:var(--mono); white-space:nowrap }
+  .dd-item .c { width:14px; flex:0 0 14px; color:var(--primary); display:flex }
+  .dd-item:disabled { opacity:.4; cursor:not-allowed; background:transparent }
+  .prog-del { width:32px; height:32px; flex:0 0 32px; border:1px solid var(--border); border-radius:5px; background:var(--card); color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center }
+  .prog-del:hover { color:var(--err); border-color:var(--err) }
+  .prog-file { display:flex; align-items:center; gap:10px; padding:7px 10px; border:1px dashed var(--border); border-radius:5px; background:var(--card); cursor:pointer; font-size:12px; min-width:0 }
+  .prog-file + .prog-file { margin-top:6px }
+  .prog-file:hover { border-color:var(--primary) }
+  .prog-file.set { border-style:solid }
+  .prog-file input { display:none }
+  .prog-file .k { flex:0 0 84px; white-space:nowrap; font-size:10px; font-weight:500; color:var(--muted); letter-spacing:.06em; text-transform:uppercase }
+  .prog-file .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted) }
+  .prog-file.set .n { color:var(--text); font-family:var(--mono) }
+  .prog-file .sz { color:var(--muted); font-family:var(--mono); white-space:nowrap }
+  .prog-file.disabled { pointer-events:none; opacity:.55 }
+  .prog-warn { margin-top:6px; font-size:11px; color:var(--warn) }
+  .prog-extras { margin-top:4px; border:1px solid var(--border); border-radius:5px; background:var(--card); max-height:150px; overflow-y:auto }
+  .prog-extra { display:flex; align-items:center; gap:8px; padding:4px 6px 4px 10px; font-size:12px }
+  .prog-extra + .prog-extra { border-top:1px solid var(--border) }
+  .prog-extra .n { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:var(--mono) }
+  .prog-extra .sz { color:var(--muted); font-family:var(--mono); white-space:nowrap }
+  .prog-extra-del { width:22px; height:22px; flex:0 0 22px; border:0; border-radius:4px; background:transparent; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center }
+  .prog-extra-del:hover { color:var(--err); background:var(--err-bg) }
+  .prog-extra-del svg { width:12px; height:12px }
+  .prog-add { margin-top:8px; width:100%; height:32px; font-size:12px; font-weight:500; color:var(--text); background:transparent; border:1px dashed var(--border); border-radius:5px; cursor:pointer }
+  .prog-add:hover { border-color:var(--primary); background:var(--primary-10) }
+  .prog-add:disabled { opacity:.4; cursor:not-allowed }
+  @media (max-width:1000px) { .grid.three { grid-template-columns:1fr 1fr } }
+  @media (max-width:880px) { .grid, .grid.three { grid-template-columns:1fr } }
+
+  .card-hdr { display:flex; align-items:center; gap:12px; margin-bottom:14px }
+  .card-hdr .icon {
+    flex:0 0 36px; width:36px; height:36px; border-radius:5px;
+    background:var(--primary-10); color:var(--primary); box-shadow:inset 0 0 0 1px var(--primary-20);
     display:flex; align-items:center; justify-content:center;
-    animation:fadeIn .4s ease-out;
   }
+  .card-hdr .icon svg { width:18px; height:18px }
+  .card-hdr h2 { margin:0; font-size:15px; font-weight:600 }
+  .card-hdr .meta { font-size:12px; color:var(--muted); margin-top:1px }
+
+  /* ── Bırakma alanı ───────────────────── */
+  .drop {
+    display:block; width:100%; border:1.5px dashed var(--border); border-radius:5px;
+    padding:26px 16px; text-align:center; background:var(--page-bg);
+    cursor:pointer; transition:border-color .15s, background .15s; color:var(--muted); font-size:12px;
+  }
+  .drop:hover, .drop.over { border-color:var(--primary); background:var(--primary-10) }
+  .drop input { display:none }
+  .drop-icon { display:block; margin:0 auto 8px; color:var(--muted) }
+  .drop-icon svg { width:24px; height:24px }
+  .drop strong { display:block; color:var(--text); font-weight:500; margin-bottom:3px; font-size:13px }
+  .drop .hint { display:inline-flex; align-items:center; gap:6px; margin-top:10px; padding:3px 8px; border-radius:5px; background:var(--warn-bg); color:var(--warn); font-size:11px; font-weight:500 }
+
+  /* ── Özet / ağaç ─────────────────────── */
+  .summary { margin-top:12px; border:1px solid var(--border); border-radius:5px; overflow:hidden }
+  .summary-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:7px 12px; align-items:center; font-size:12px }
+  .summary-row + .summary-row { border-top:1px solid var(--border) }
+  .summary-row .l { color:var(--muted) }
+  .summary-row .v { font-weight:600; font-family:var(--mono); font-variant-numeric:tabular-nums }
+  .summary-row.danger { background:var(--err-bg) }
+  .summary-row.danger .l, .summary-row.danger .v { color:var(--err) }
+
+  .clear-btn {
+    margin-top:8px; width:100%; height:30px; font-size:12px; font-weight:500; color:var(--muted);
+    background:transparent; border:1px solid var(--border); border-radius:5px; cursor:pointer;
+  }
+  .clear-btn:hover { background:var(--primary-10); color:var(--text) }
+
+  .tree { margin-top:10px; border:1px solid var(--border); border-radius:5px; max-height:240px; overflow-y:auto; background:var(--card) }
+  .tree-hdr {
+    padding:7px 12px; font-size:10px; font-weight:500; color:var(--muted); letter-spacing:.06em; text-transform:uppercase;
+    border-bottom:1px solid var(--border); background:var(--section-bg); position:sticky; top:0;
+  }
+  .tree-row { display:grid; grid-template-columns:1fr auto; gap:8px; padding:6px 12px; font-size:12px; align-items:center }
+  .tree-row + .tree-row { border-top:1px solid var(--border) }
+  .tree-path { font-family:var(--mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .tree-meta { color:var(--muted); font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap }
+  .tree-more { justify-content:center; color:var(--muted); font-style:italic; grid-template-columns:1fr }
+
+  .compress-tip { margin-top:10px; padding:10px 12px; border-radius:5px; background:var(--warn-bg); color:var(--warn); font-size:12px; display:flex; gap:8px; align-items:flex-start; line-height:1.45 }
+  .compress-tip strong { display:block; margin-bottom:2px; font-size:12px }
+  .compress-tip a { color:inherit; text-decoration:underline }
+
+  /* ── İlerleme ────────────────────────── */
+  .progress { margin:0 0 12px; padding:10px 12px; border-radius:5px; background:var(--section-bg) }
+  .progress .bar { background:var(--primary-20) }
+  .total { flex:1; min-width:0; max-width:520px; margin:0 12px }
+  .total-top { display:flex; align-items:baseline; gap:8px; margin-bottom:6px; font-variant-numeric:tabular-nums }
+  .total-l { font-size:10px; font-weight:500; color:var(--muted); letter-spacing:.06em; text-transform:uppercase }
+  .total-s { flex:1; min-width:0; font-size:12px; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .total-p { font-size:15px; font-weight:700 }
+  .total .bar { height:8px }
+  @media (max-width:700px) { .actions { flex-wrap:wrap } .total { order:3; flex-basis:100%; max-width:none; margin:4px 0 0 } }
+  .bar { height:6px; background:var(--primary-10); border-radius:99px; overflow:hidden }
+  .bar > div { height:100%; background:var(--primary); transition:width .25s; border-radius:99px }
+  .stat { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-top:6px; font-variant-numeric:tabular-nums }
+  .stat .pct { font-weight:600; color:var(--text) }
+
+  /* ── Rozet ───────────────────────────── */
+  .status-badge { display:inline-flex; align-items:center; gap:4px; font-size:11px; font-weight:500; padding:2px 8px; border-radius:5px; background:var(--primary-10); color:var(--muted); white-space:nowrap }
+  .status-badge.uploading { background:var(--info-bg); color:var(--info) }
+  .status-badge.done      { background:var(--ok-bg); color:var(--ok) }
+  .status-badge.err       { background:var(--err-bg); color:var(--err) }
+
+  /* ── Aksiyon çubuğu ──────────────────── */
+  .actions { margin-top:8px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 10px 10px 14px }
+  .footer-code { color:var(--muted); font-size:11px; font-family:var(--mono) }
+  .footer-code b { font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-weight:500; font-size:10px; letter-spacing:.06em; text-transform:uppercase; margin-right:6px }
+  .btn { height:36px; padding:0 16px; border-radius:5px; border:0; background:var(--primary); color:var(--primary-fg); font-size:13px; font-weight:500; cursor:pointer; transition:opacity .15s; display:inline-flex; align-items:center; gap:8px }
+  .btn svg { width:16px; height:16px }
+  .btn:hover { opacity:.88 }
+  .btn:disabled { opacity:.35; cursor:not-allowed }
+  .btn-ghost { background:transparent; color:var(--text); border:1px solid var(--border) }
+  .btn-ghost:hover { background:var(--primary-10); opacity:1 }
+
+  .alert { padding:14px 16px; border-radius:5px; font-size:13px }
+  .alert-err { background:var(--err-bg); color:var(--err) }
+  .loading-card { color:var(--muted); font-size:13px }
+  .skel { height:12px; border-radius:5px; background:var(--primary-10); animation:pulse 1.4s ease-in-out infinite }
+  @keyframes pulse { 50% { opacity:.45 } }
+
+  /* ── Durum bantları ──────────────────── */
+  .banner { margin-top:8px; padding:14px 16px; border-radius:5px; display:flex; align-items:center; gap:12px }
+  .banner h2 { margin:0 0 2px; font-size:14px; font-weight:600 }
+  .banner p { margin:0; font-size:12px; color:var(--muted); line-height:1.45 }
+  .banner .icon { width:34px; height:34px; flex:0 0 34px; border-radius:5px; display:flex; align-items:center; justify-content:center }
+  .push-banner { margin-top:8px; padding:14px 16px; border-radius:5px; background:var(--card); box-shadow:var(--card-shadow) }
+  .push-banner h2 { margin:0 0 2px; font-size:14px; font-weight:600 }
+  .push-banner p { margin:0; font-size:12px; color:var(--muted) }
+  .push-pct { font-size:18px; font-weight:600; font-variant-numeric:tabular-nums }
+  .done-banner { background:var(--ok-bg) }
+  .done-banner h2 { color:var(--ok) }
+  .done-banner .icon { background:var(--card); color:var(--ok) }
+  .push-fail-banner { background:var(--err-bg) }
+  .push-fail-banner h2, .push-fail-banner p { color:var(--err) }
+  .push-fail-banner .icon { background:var(--card); color:var(--err) }
+  .spinner { width:22px; height:22px; flex:0 0 22px; border:2.5px solid var(--primary-20); border-top-color:var(--primary); border-radius:50%; animation:spin .8s linear infinite }
+  @keyframes spin { to { transform:rotate(360deg) } }
+
+  /* ── Tamamlandı ──────────────────────── */
+  .success-overlay { position:fixed; inset:0; z-index:200; background:rgba(15,17,19,.45); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:16px; animation:fadeIn .25s ease-out }
   @keyframes fadeIn { from { opacity:0 } to { opacity:1 } }
-  .success-card {
-    background:#fff; border-radius:12px; box-shadow:0 20px 60px rgba(0,0,0,0.15);
-    padding:48px 40px; max-width:520px; width:90%; text-align:center;
-    animation:popIn .5s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-  @keyframes popIn { from { opacity:0; transform:scale(.9) translateY(20px) } to { opacity:1; transform:scale(1) translateY(0) } }
-  .success-icon-wrap {
-    width:88px; height:88px; border-radius:50%; background:#ecfdf5;
-    margin:0 auto 20px auto; display:flex; align-items:center; justify-content:center;
-    color:#059669; animation:popCheck .6s .2s cubic-bezier(0.16, 1, 0.3, 1) both;
-  }
-  @keyframes popCheck { from { transform:scale(0); opacity:0 } to { transform:scale(1); opacity:1 } }
-  .success-icon-wrap svg { width:48px; height:48px }
-  .success-card h1 { margin:0 0 8px 0; font-size:24px; font-weight:600; color:#064e3b }
-  .success-card .sub { font-size:14px; color:#065f46; margin-bottom:24px; line-height:1.5 }
-  .success-stats { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:24px }
-  .success-stat {
-    background:#f9fafb; border:1px solid #e5e7eb; border-radius:8px; padding:14px 12px;
-    text-align:center;
-  }
-  .success-stat .v { font-size:20px; font-weight:600; color:#111827; tabular-nums:true }
-  .success-stat .l { font-size:11px; color:#6b7280; margin-top:2px; letter-spacing:.3px; text-transform:uppercase }
-  .success-foot { margin-top:20px; padding-top:20px; border-top:1px solid #e5e7eb; font-size:12px; color:#6b7280 }
+  .success-card { background:var(--card); border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.25); max-width:460px; width:100%; overflow:hidden; animation:popIn .35s cubic-bezier(.16,1,.3,1) }
+  @keyframes popIn { from { opacity:0; transform:scale(.96) translateY(8px) } to { opacity:1; transform:none } }
+  .success-head { background:var(--section-bg); border-bottom:1px solid var(--border); padding:18px 20px; display:flex; align-items:center; gap:12px }
+  .success-icon-wrap { width:36px; height:36px; flex:0 0 36px; border-radius:5px; background:var(--ok-bg); color:var(--ok); display:flex; align-items:center; justify-content:center; animation:popCheck .45s .15s cubic-bezier(.16,1,.3,1) both }
+  @keyframes popCheck { from { transform:scale(0) } to { transform:scale(1) } }
+  .success-icon-wrap svg { width:20px; height:20px }
+  .success-head h1 { margin:0; font-size:15px; font-weight:600 }
+  .success-head .sub { margin:1px 0 0; font-size:12px; color:var(--muted) }
+  .success-body { padding:16px 20px 20px }
+  .success-stats { display:grid; grid-template-columns:1fr 1fr; gap:8px }
+  .success-stats.three { grid-template-columns:1fr 1fr 1fr }
+  .success-stat { background:var(--section-bg); border-radius:5px; padding:12px }
+  .success-stat .l { font-size:10px; font-weight:500; color:var(--muted); letter-spacing:.06em; text-transform:uppercase }
+  .success-stat .v { font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px }
+  .success-foot { margin-top:14px; font-size:12px; color:var(--muted); line-height:1.5 }
 
-  @media (max-width:480px) {
-    .success-card { padding:32px 24px }
-    .success-card h1 { font-size:20px }
-    .success-icon-wrap { width:72px; height:72px }
-    .success-icon-wrap svg { width:40px; height:40px }
-  }
-
-  /* ── Toast ────────────────────────────── */
-  .toast-wrap {
-    position:fixed; top:80px; left:50%; transform:translateX(-50%);
-    display:flex; flex-direction:column; gap:8px; z-index:100;
-    pointer-events:none;
-  }
-  .toast {
-    pointer-events:auto;
-    padding:10px 16px; border-radius:6px; font-size:12px; font-weight:500;
-    background:#1f2937; color:#fff; box-shadow:0 4px 12px rgba(0,0,0,0.15);
-    animation: toastIn .2s ease-out;
-  }
-  .toast.err { background:#b91c1c }
-  .toast.info { background:#1e40af }
-  @keyframes toastIn { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:translateY(0) } }
+  /* ── Bildirim (sonner benzeri) ───────── */
+  .toast-wrap { position:fixed; top:16px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; gap:8px; z-index:300; pointer-events:none; width:min(420px, calc(100% - 32px)) }
+  .toast { pointer-events:auto; padding:11px 14px; border-radius:8px; font-size:13px; font-weight:500; background:var(--card); color:var(--text); border:1px solid var(--border); box-shadow:0 8px 24px rgba(0,0,0,.12); animation:toastIn .2s ease-out }
+  .toast.err { color:var(--err) }
+  .toast.info { color:var(--info) }
+  @keyframes toastIn { from { opacity:0; transform:translateY(-6px) } to { opacity:1; transform:none } }
 </style>
 </head>
 <body>
 
 <div id="toastWrap" class="toast-wrap"></div>
 
-<!-- Tamamlandı tam ekran overlay -->
+<!-- Tamamlandı -->
 <div id="successOverlay" class="success-overlay hidden">
   <div class="success-card">
-    <div class="success-icon-wrap">${ICON_CHECK_BIG}</div>
-    <h1>Aktarım Tamamlandı</h1>
-    <p class="sub" id="successFirma">—</p>
-    <div class="success-stats">
-      <div class="success-stat">
-        <div class="v" id="successDataSize">—</div>
-        <div class="l">Veri</div>
-      </div>
-      <div class="success-stat">
-        <div class="v" id="successImgCount">—</div>
-        <div class="l">Resim</div>
+    <div class="success-head">
+      <div class="success-icon-wrap">${ICON_CHECK_BIG}</div>
+      <div>
+        <h1>Aktarım Tamamlandı</h1>
+        <p class="sub" id="successFirma">—</p>
       </div>
     </div>
-    <div class="success-foot">
-      Tüm dosyalarınız güvenli şekilde sunucularımıza aktarıldı. Bu pencereyi kapatabilirsiniz.
+    <div class="success-body">
+      <div class="success-stats" id="successStats">
+        <div class="success-stat">
+          <div class="l">Veri</div>
+          <div class="v" id="successDataSize">—</div>
+        </div>
+        <div class="success-stat">
+          <div class="l">Resim</div>
+          <div class="v" id="successImgCount">—</div>
+        </div>
+        <div class="success-stat hidden" id="successProgBox">
+          <div class="l">Program</div>
+          <div class="v" id="successProgCount">—</div>
+        </div>
+      </div>
+      <div class="success-foot">Tüm dosyalarınız güvenli şekilde sunucularımıza aktarıldı. Bu pencereyi kapatabilirsiniz.</div>
     </div>
   </div>
 </div>
@@ -737,128 +873,167 @@ function renderHtml(token) {
     <div class="topbar-brand">
       <img src="https://pusulanet.net/img/logo.png" alt="Pusula" onerror="this.style.display='none'">
       <span class="sep"></span>
-      <span class="label">Aktarım</span>
+      <span class="label">Veri Aktarımı</span>
     </div>
     <div class="topbar-firma">
-      <div class="l">Firma</div>
-      <div class="v" id="firmaName">—</div>
+      <span class="kod hidden" id="firmaKod"></span>
+      <span class="v" id="firmaName">—</span>
+      <span class="dot"></span>
+      <span class="hdr-status hidden" id="hdrStatus"></span>
     </div>
   </div>
 </header>
 
 <div class="page">
-  <div id="loading" class="card"><div style="color:var(--muted);font-size:12px">Yükleniyor…</div></div>
+  <div id="loading" class="section">
+    <div class="card loading-card">
+      <div class="skel" style="width:40%"></div>
+      <div class="skel" style="width:70%; margin-top:10px"></div>
+    </div>
+  </div>
   <div id="error" class="alert alert-err hidden"></div>
 
   <div id="main" class="hidden">
 
-    <div class="intro card">
-      <p>Veritabanı (.bak) ve resim klasörlerinizi aşağıdaki alanlardan seçin. Seçim sonrası özet görüntülenir; <strong>"Aktarımı Başlat"</strong> butonuna basana kadar yükleme başlamaz.</p>
-      <div id="notes" class="note hidden"></div>
+    <div id="notesWrap" class="message hidden">
+      <div class="message-card">
+        <span class="message-icon">${ICON_MESSAGE}</span>
+        <div style="min-width:0">
+          <div class="message-label">Not</div>
+          <div id="notes" class="message-text"></div>
+        </div>
+      </div>
     </div>
 
-    <div class="grid">
+    <div class="section">
+      <div class="grid" id="uploadGrid">
 
-      <!-- Veri Dosyası -->
-      <div class="card">
-        <div class="card-hdr">
-          <span class="icon">${ICON_DATABASE}</span>
-          <div>
-            <h2>Veri Dosyası</h2>
-            <div class="meta">.bak / .rar / .zip / .mdf / .ldf</div>
+        <!-- Veri Dosyası -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="icon">${ICON_DATABASE}</span>
+            <div>
+              <h2>Veri Dosyası</h2>
+              <div class="meta">.bak · .rar · .zip · .mdf · .ldf</div>
+            </div>
+            <span id="dataBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
-          <span id="dataBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
-        </div>
 
-        <label class="drop" id="dataDrop">
-          <input type="file" id="dataInput" accept=".bak,.rar,.zip,.ldf,.mdf" multiple>
-          <span class="drop-icon">${ICON_UPLOAD}</span>
-          <strong>Dosyaları buraya bırakın</strong>
-          <span>veya tıklayıp seçin · birden fazla dosya seçebilirsiniz</span>
-        </label>
-
-        <div id="dataSummary" class="summary hidden"></div>
-        <div id="dataTree" class="tree hidden"></div>
-        <button id="dataClear" class="clear-btn hidden" type="button">Dosyaları kaldır</button>
-
-        <div id="dataProgress" class="progress hidden">
-          <div class="bar"><div id="dataBar" style="width:0%"></div></div>
-          <div class="stat"><span id="dataStat">—</span><span id="dataPct" class="pct">0%</span></div>
-        </div>
-      </div>
-
-
-      <!-- Resim Klasörü -->
-      <div class="card">
-        <div class="card-hdr">
-          <span class="icon">${ICON_FOLDER}</span>
-          <div>
-            <h2>Resim Klasörü</h2>
-            <div class="meta">Alt klasörler dahil yüklenir</div>
+          <div id="dataProgress" class="progress hidden">
+            <div class="bar"><div id="dataBar" style="width:0%"></div></div>
+            <div class="stat"><span id="dataStat">—</span><span id="dataPct" class="pct">0%</span></div>
           </div>
-          <span id="imgBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+
+          <label class="drop" id="dataDrop">
+            <input type="file" id="dataInput" accept=".bak,.rar,.zip,.ldf,.mdf" multiple>
+            <span class="drop-icon">${ICON_UPLOAD}</span>
+            <strong>Dosyaları buraya bırakın</strong>
+            <span>veya tıklayıp seçin · birden fazla dosya seçebilirsiniz</span>
+          </label>
+
+          <div id="dataSummary" class="summary hidden"></div>
+          <div id="dataTree" class="tree hidden"></div>
+          <button id="dataClear" class="clear-btn hidden" type="button">Dosyaları kaldır</button>
+
         </div>
 
-        <label class="drop" id="imgDrop">
-          <input type="file" id="imgInput" webkitdirectory multiple accept="image/*">
-          <span class="drop-icon">${ICON_UPLOAD}</span>
-          <strong>Klasörü buraya sürükleyin</strong>
-          <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
-          <span style="display:block; margin-top:6px; font-size:10px; color:#a16207">⚠ Tarayıcı izin sorduğunda "Yükle" seçeneğine basınız</span>
-        </label>
-
-        <div id="imgSummary" class="summary hidden"></div>
-        <div id="imgTree" class="tree hidden"></div>
-        <div id="imgCompressTip" class="compress-tip hidden">
-          <span style="color:#9a3412">${ICON_WARN}</span>
-          <div>
-            <strong>Sıkıştırma önerisi</strong>
-            <span id="compressMsg"></span>
+        <!-- Resim Klasörü -->
+        <div class="card">
+          <div class="card-hdr">
+            <span class="icon">${ICON_FOLDER}</span>
+            <div>
+              <h2>Resim Klasörü</h2>
+              <div class="meta">Alt klasörler dahil yüklenir</div>
+            </div>
+            <span id="imgBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
+
+          <div id="imgProgress" class="progress hidden">
+            <div class="bar"><div id="imgBar" style="width:0%"></div></div>
+            <div class="stat"><span id="imgStat">—</span><span id="imgPct" class="pct">0%</span></div>
+          </div>
+
+          <label class="drop" id="imgDrop">
+            <input type="file" id="imgInput" webkitdirectory multiple accept="image/*">
+            <span class="drop-icon">${ICON_UPLOAD}</span>
+            <strong>Klasörü buraya sürükleyin</strong>
+            <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
+            <span class="hint">${ICON_WARN} Tarayıcı izin sorduğunda "Yükle"yi seçin</span>
+          </label>
+
+          <div id="imgSummary" class="summary hidden"></div>
+          <div id="imgTree" class="tree hidden"></div>
+          <div id="imgCompressTip" class="compress-tip hidden">
+            <span>${ICON_WARN}</span>
+            <div>
+              <strong>Sıkıştırma önerisi</strong>
+              <span id="compressMsg"></span>
+            </div>
+          </div>
+          <button id="imgClear" class="clear-btn hidden" type="button">Klasörü kaldır</button>
+
         </div>
-        <button id="imgClear" class="clear-btn hidden" type="button">Klasörü kaldır</button>
 
-        <div id="imgProgress" class="progress hidden">
-          <div class="bar"><div id="imgBar" style="width:0%"></div></div>
-          <div class="stat"><span id="imgStat">—</span><span id="imgPct" class="pct">0%</span></div>
+        <!-- Program Dosyaları (yalnız firmanın terminal sunucusu biliniyorsa) -->
+        <div class="card hidden" id="progCard">
+          <div class="card-hdr">
+            <span class="icon">${ICON_APP}</span>
+            <div>
+              <h2>Program Dosyaları</h2>
+              <div class="meta">Her program için .exe, parametre (.txt) ve ek dosyalar</div>
+            </div>
+            <span id="progBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+          </div>
+
+          <div id="progProgress" class="progress hidden">
+            <div class="bar"><div id="progBar" style="width:0%"></div></div>
+            <div class="stat"><span id="progStat">—</span><span id="progPct" class="pct">0%</span></div>
+          </div>
+
+          <div id="progRows" class="prog-rows"></div>
+          <button id="progAdd" class="prog-add" type="button">+ Program ekle</button>
+
+        </div>
+
+      </div>
+
+      <div id="pushBanner" class="push-banner hidden">
+        <div style="display:flex; align-items:center; gap:12px">
+          <div class="spinner"></div>
+          <div style="flex:1; min-width:0">
+            <h2>Sunucuya aktarılıyor</h2>
+            <p id="pushSubtext">Dosyalarınız hedef sunuculara taşınıyor — bu işlem birkaç dakika sürebilir, sayfayı kapatabilirsiniz.</p>
+          </div>
+          <div id="pushPctNum" class="push-pct">0%</div>
+        </div>
+        <div class="bar" style="margin-top:12px"><div id="pushBar" style="width:0%"></div></div>
+      </div>
+
+      <div id="doneBanner" class="banner done-banner hidden">
+        <span class="icon">${ICON_CHECK}</span>
+        <div>
+          <h2>Aktarım tamamlandı</h2>
+          <p>Dosyalarınız sunuculara aktarıldı. Bu pencereyi kapatabilirsiniz.</p>
         </div>
       </div>
 
-    </div>
-
-    <div id="pushBanner" class="push-banner hidden">
-      <div style="display:flex; align-items:center; gap:12px">
-        <div class="spinner"></div>
-        <div style="flex:1">
-          <h2 style="margin:0 0 4px 0; font-size:14px; font-weight:600; color:#1e40af">Sunucuya aktarılıyor</h2>
-          <p id="pushSubtext" style="margin:0; font-size:12px; color:#1e3a8a">Dosyalarınız hedef sunuculara taşınıyor — bu işlem birkaç dakika sürebilir, sayfayı kapatabilirsiniz.</p>
+      <div id="pushFailBanner" class="banner push-fail-banner hidden">
+        <span class="icon">${ICON_WARN}</span>
+        <div>
+          <h2>Sunucuya aktarım hatası</h2>
+          <p id="pushFailMsg">Yükleme başarılı oldu ancak sunucuya aktarımda bir sorun oluştu. Ekibimiz inceliyor.</p>
         </div>
-        <div id="pushPctNum" style="font-size:18px; font-weight:600; color:#1e40af; tabular-nums:true">0%</div>
       </div>
-      <div class="bar" style="margin-top:12px"><div id="pushBar" style="width:0%"></div></div>
-    </div>
 
-    <div id="doneBanner" class="done-banner hidden">
-      <span class="icon">${ICON_CHECK}</span>
-      <div>
-        <h2>Aktarım tamamlandı</h2>
-        <p>Dosyalarınız sunuculara aktarıldı. Bu pencereyi kapatabilirsiniz.</p>
-      </div>
-    </div>
-
-    <div id="pushFailBanner" class="push-fail-banner hidden">
-      <span class="icon" style="color:#b91c1c">${ICON_WARN}</span>
-      <div>
-        <h2>Sunucuya aktarım hatası</h2>
-        <p id="pushFailMsg">Yükleme başarılı oldu ancak sunucuya aktarımda bir sorun oluştu. Ekibimiz inceliyor.</p>
+      <div class="card actions">
+        <div class="footer-code"><b>Aktarım kodu</b>${token}</div>
+        <div id="totalProgress" class="total hidden">
+          <div class="total-top"><span class="total-l">Toplam</span><span id="totalStat" class="total-s">—</span><span id="totalPct" class="total-p">0%</span></div>
+          <div class="bar"><div id="totalBar" style="width:0%"></div></div>
+        </div>
+        <button id="startBtn" class="btn" disabled>${ICON_UPLOAD}<span>Aktarımı Başlat</span></button>
       </div>
     </div>
-
-    <div class="actions">
-      <button id="startBtn" class="btn" disabled>${ICON_UPLOAD}<span>Aktarımı Başlat</span></button>
-    </div>
-
-    <div class="footer-code">Aktarım kodu: ${token}</div>
   </div>
 </div>
 
@@ -867,6 +1042,10 @@ const TOKEN = ${JSON.stringify(token)};
 const LARGE_THRESHOLD = 500 * 1024;   // 500 KB
 const DATA_EXT  = /\\.(bak|rar|zip|ldf|mdf)$/i;
 const IMAGE_EXT = /\\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i;
+const ICON_X_JS = ${JSON.stringify(ICON_X)};
+const ICON_CHECK_JS = ${JSON.stringify(ICON_CHECK.replace('width="18" height="18"', 'width="14" height="14"'))};
+const ICON_CHEVRON_JS = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+let PROGRAM_OPTIONS = [];   // [{ name, exeName, paramFileName }] — Hub kataloğu
 const $ = (id) => document.getElementById(id);
 
 function fmtBytes(b) {
@@ -899,7 +1078,14 @@ async function loadInfo() {
     }
     lastInfo = d;
     $("firmaName").textContent = d.firmaName;
-    if (d.notes) { $("notes").textContent = d.notes; $("notes").classList.remove("hidden"); }
+    if (d.firmaId) { $("firmaKod").textContent = d.firmaId; $("firmaKod").classList.remove("hidden"); }
+    if (d.notes) { $("notes").textContent = d.notes; $("notesWrap").classList.remove("hidden"); }
+    if (d.programEnabled) {
+      PROGRAM_OPTIONS = Array.isArray(d.programOptions) ? d.programOptions : [];
+      if (progRows.length === 0) addProgRow();
+      $("progCard").classList.remove("hidden");
+      $("uploadGrid").classList.add("three");
+    }
     $("loading").classList.add("hidden");
     $("main").classList.remove("hidden");
     applyStatus(d);
@@ -910,7 +1096,23 @@ async function loadInfo() {
   }
 }
 
+const HDR_STATUS = {
+  pending:     "Bekliyor",
+  active:      "Yükleniyor",
+  pushing:     "Sunucuya aktarılıyor",
+  push_failed: "Aktarım hatası",
+  completed:   "Tamamlandı",
+};
+function setHdrStatus(status) {
+  const el = $("hdrStatus");
+  if (!HDR_STATUS[status]) { el.classList.add("hidden"); return; }
+  el.textContent = HDR_STATUS[status];
+  el.className = "hdr-status " + status;
+}
+
 function applyStatus(d) {
+  // Yükleme henüz başlamadıysa (pending/active ama tarayıcıda yükleme yok) Bekliyor göster
+  setHdrStatus(d.status === "active" && !uploading ? "pending" : d.status);
   if (d.status === "pushing") {
     showPushBanner(d);
     if (!pushPollInterval) pushPollInterval = setInterval(pollPush, 3000);
@@ -930,6 +1132,9 @@ function applyStatus(d) {
     if ((d.imageFilesReceived ?? 0) > 0) {
       $("imgBadge").textContent = "Yüklendi"; $("imgBadge").className = "status-badge done";
     }
+    if ((d.programFilesReceived ?? 0) > 0) {
+      $("progBadge").textContent = "Yüklendi"; $("progBadge").className = "status-badge done";
+    }
     stopPushPoll();
   }
 }
@@ -937,14 +1142,16 @@ function applyStatus(d) {
 function showPushBanner(d) {
   $("pushBanner").classList.remove("hidden");
   // Drop alanlarını kalıcı kilitle
-  $("dataDrop").style.pointerEvents = "none"; $("dataDrop").style.opacity = ".5";
-  $("imgDrop").style.pointerEvents  = "none"; $("imgDrop").style.opacity = ".5";
+  $("dataDrop").classList.add("hidden");
+  $("imgDrop").classList.add("hidden");
+  renderProgRows();
   $("startBtn").disabled = true;
   const pct = Math.max(0, Math.min(100, d.pushProgress ?? 0));
   $("pushPctNum").textContent = pct + "%";
   $("pushBar").style.width = pct + "%";
   if (d.pushStage === "data")   $("pushSubtext").textContent = "Veri dosyaları SQL sunucusuna aktarılıyor…";
   else if (d.pushStage === "images") $("pushSubtext").textContent = "Resimler depo sunucusuna aktarılıyor…";
+  else if (d.pushStage === "program") $("pushSubtext").textContent = "Program dosyaları terminal sunucusuna aktarılıyor…";
 }
 
 function stopPushPoll() {
@@ -975,6 +1182,12 @@ function showSuccessOverlay(d) {
   $("successImgCount").textContent = (d.imageFilesReceived ?? 0) > 0
     ? (d.imageFilesReceived.toLocaleString("tr") + " dosya")
     : "—";
+  if ((d.programFilesReceived ?? 0) > 0) {
+    $("successProgCount").textContent = d.programFilesReceived.toLocaleString("tr") + " dosya";
+    $("successProgBox").classList.remove("hidden");
+    $("successStats").classList.add("three");
+  }
+  setHdrStatus("completed");
   $("successOverlay").classList.remove("hidden");
 }
 
@@ -985,7 +1198,20 @@ let selectedImages    = [];   // File[]
 let imgTotalBytes     = 0;
 let imgLargeCount     = 0;
 let imgLargeBytes     = 0;
+let progRows          = [];   // [{ id, program, exe: File|null, param: File|null }]
+let progRowSeq        = 0;
+let progOpenId        = null;   // açık program menüsü (satır id)
 let uploading         = false;
+let totalBytesAll     = 0;
+const totalDone       = { data: 0, img: 0, prog: 0 };
+function totalUpdate(kind, bytes) {
+  totalDone[kind] = bytes;
+  const done = totalDone.data + totalDone.img + totalDone.prog;
+  const p = totalBytesAll > 0 ? Math.min(100, Math.round((done / totalBytesAll) * 100)) : 0;
+  $("totalBar").style.width = p + "%";
+  $("totalPct").textContent = p + "%";
+  $("totalStat").textContent = fmtBytes(done) + " / " + fmtBytes(totalBytesAll);
+}
 
 function setupDrop(zone, input) {
   ["dragenter","dragover"].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over") }));
@@ -1113,7 +1339,7 @@ function renderImgSummary() {
     '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>' +
     '<div class="summary-row"><span class="l">Klasör sayısı</span><span class="v">' + dirs.length.toLocaleString("tr") + '</span></div>';
   if (imgSkippedCount > 0) {
-    html += '<div class="summary-row"><span class="l" style="color:#a16207">Atlanan (resim değil)</span><span class="v" style="color:#a16207">' + imgSkippedCount.toLocaleString("tr") + ' dosya</span></div>';
+    html += '<div class="summary-row"><span class="l" style="color:var(--warn)">Atlanan (resim değil)</span><span class="v" style="color:var(--warn)">' + imgSkippedCount.toLocaleString("tr") + ' dosya</span></div>';
   }
   if (imgLargeCount > 0) {
     html += '<div class="summary-row danger"><span class="l">500 KB üzeri</span><span class="v">' + imgLargeCount.toLocaleString("tr") + ' dosya · ' + fmtBytes(imgLargeBytes) + '</span></div>';
@@ -1161,8 +1387,160 @@ $("imgClear").addEventListener("click", () => {
   refreshStart();
 });
 
+// ── Program dosyaları (program başına exe + parametre) ──
+function progOption(name) { return PROGRAM_OPTIONS.find((o) => o.name === name) || null; }
+function progFiles() {
+  const out = [];
+  for (const row of progRows) {
+    if (!row.program) continue;
+    if (row.exe) out.push({ row, kind: "exe", file: row.exe });
+    if (row.param) out.push({ row, kind: "param", file: row.param });
+    for (const x of row.extras) out.push({ row, kind: "extra", file: x });
+  }
+  return out;
+}
+function progReady() {
+  // Dosya seçilmiş ama programı seçilmemiş satır varsa başlatma
+  return progRows.every((row) => row.program || (!row.exe && !row.param && row.extras.length === 0));
+}
+function addProgRow() {
+  if (uploading) return;
+  progRows.push({ id: ++progRowSeq, program: "", exe: null, param: null, extras: [] });
+  renderProgRows();
+}
+$("progAdd").addEventListener("click", addProgRow);
+
+function renderProgRows() {
+  const box = $("progRows");
+  const used = progRows.map((row) => row.program).filter(Boolean);
+  let html = "";
+  for (const row of progRows) {
+    const opt = progOption(row.program);
+    const open = progOpenId === row.id && !uploading;
+    let sel = '<div class="dd' + (open ? " open" : "") + '">' +
+      '<button type="button" class="dd-trigger" data-id="' + row.id + '"' + (uploading ? " disabled" : "") + '>' +
+        '<span class="dd-val' + (row.program ? "" : " ph") + '">' + escapeHtml(row.program || "Program seçin…") + '</span>' +
+        '<span class="dd-chev">' + ICON_CHEVRON_JS + '</span>' +
+      '</button>';
+    if (open) {
+      sel += '<div class="dd-menu">';
+      for (const o of PROGRAM_OPTIONS) {
+        const taken = used.includes(o.name) && o.name !== row.program;
+        sel += '<button type="button" class="dd-item" data-id="' + row.id + '" data-value="' + escapeHtml(o.name) + '"' + (taken ? " disabled" : "") + '>' +
+          '<span class="t">' + escapeHtml(o.name) + '</span>' +
+          (o.exeName ? '<span class="h">' + escapeHtml(o.exeName) + '</span>' : "") +
+          '<span class="c">' + (o.name === row.program ? ICON_CHECK_JS : "") + '</span>' +
+        '</button>';
+      }
+      sel += '</div>';
+    }
+    sel += '</div>';
+    const dis = uploading || !row.program ? " disabled" : "";
+    const exeHint = opt && opt.exeName ? "Beklenen: " + opt.exeName : ".exe seçin";
+    const parHint = opt && opt.paramFileName ? "Beklenen: " + opt.paramFileName : ".txt seçin";
+    let warn = "";
+    if (opt && row.exe && opt.exeName && row.exe.name.toLowerCase() !== opt.exeName.toLowerCase()) warn += "Exe adı beklenenden farklı (" + opt.exeName + "). ";
+    if (opt && row.param && opt.paramFileName && row.param.name.toLowerCase() !== opt.paramFileName.toLowerCase()) warn += "Parametre adı beklenenden farklı (" + opt.paramFileName + ").";
+    html += '<div class="prog-row">' +
+      '<div class="prog-row-hdr">' + sel +
+        (uploading ? "" : '<button type="button" class="prog-del" data-id="' + row.id + '" title="Kaldır">' + ICON_X_JS + '</button>') +
+      '</div>' +
+      '<label class="prog-file' + (row.exe ? " set" : "") + dis + '">' +
+        '<input type="file" accept=".exe" data-id="' + row.id + '" data-kind="exe">' +
+        '<span class="k">Program</span>' +
+        '<span class="n">' + escapeHtml(row.exe ? row.exe.name : exeHint) + '</span>' +
+        (row.exe ? '<span class="sz">' + fmtBytes(row.exe.size) + '</span>' : "") +
+      '</label>' +
+      '<label class="prog-file' + (row.param ? " set" : "") + dis + '">' +
+        '<input type="file" accept=".txt" data-id="' + row.id + '" data-kind="param">' +
+        '<span class="k">Parametre</span>' +
+        '<span class="n">' + escapeHtml(row.param ? row.param.name : parHint) + '</span>' +
+        (row.param ? '<span class="sz">' + fmtBytes(row.param.size) + '</span>' : "") +
+      '</label>' +
+      '<label class="prog-file' + (row.extras.length ? " set" : "") + dis + '">' +
+        '<input type="file" multiple data-id="' + row.id + '" data-kind="extra">' +
+        '<span class="k">Ek dosyalar</span>' +
+        '<span class="n">' + (row.extras.length ? row.extras.length + " dosya eklendi · eklemek için tıklayın" : "Tüm dosya türleri · birden fazla seçilebilir") + '</span>' +
+        (row.extras.length ? '<span class="sz">' + fmtBytes(row.extras.reduce((t, x) => t + x.size, 0)) + '</span>' : "") +
+      '</label>' +
+      (row.extras.length ? '<div class="prog-extras">' + row.extras.map((x, i) =>
+        '<div class="prog-extra"><span class="n">' + escapeHtml(x.name) + '</span><span class="sz">' + fmtBytes(x.size) + '</span>' +
+        (uploading ? "" : '<button type="button" class="prog-extra-del" data-id="' + row.id + '" data-idx="' + i + '" title="Kaldır">' + ICON_X_JS + '</button>') +
+        '</div>').join("") + '</div>' : "") +
+      (warn ? '<div class="prog-warn">' + escapeHtml(warn) + '</div>' : "") +
+    '</div>';
+  }
+  box.innerHTML = html;
+  $("progAdd").disabled = uploading || progRows.length >= PROGRAM_OPTIONS.length;
+  $("progAdd").classList.toggle("hidden", uploading);
+
+  const count = progFiles().length;
+  if (count > 0 && !uploading) {
+    $("progBadge").hidden = false; $("progBadge").textContent = "Hazır"; $("progBadge").className = "status-badge";
+  } else if (!uploading) {
+    $("progBadge").hidden = true;
+  }
+  refreshStart();
+}
+
+document.addEventListener("click", (e) => {
+  if (progOpenId !== null && !e.target.closest(".dd")) { progOpenId = null; renderProgRows(); }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && progOpenId !== null) { progOpenId = null; renderProgRows(); }
+});
+
+$("progRows").addEventListener("change", (e) => {
+  if (uploading) return;
+  const t = e.target;
+  const row = progRows.find((x) => String(x.id) === t.dataset.id);
+  if (!row) return;
+  if (t.type === "file" && t.dataset.kind === "extra" && t.files && t.files.length) {
+    for (const file of Array.from(t.files)) {
+      const i = row.extras.findIndex((x) => x.name.toLowerCase() === file.name.toLowerCase());
+      if (i >= 0) row.extras[i] = file; else row.extras.push(file);
+    }
+  } else if (t.type === "file" && t.files && t.files[0]) {
+    const file = t.files[0];
+    const ok = t.dataset.kind === "exe" ? /\\.exe$/i.test(file.name) : /\\.txt$/i.test(file.name);
+    if (!ok) { showToast(t.dataset.kind === "exe" ? "Program dosyası .exe olmalı." : "Parametre dosyası .txt olmalı."); return; }
+    row[t.dataset.kind] = file;
+  }
+  renderProgRows();
+});
+$("progRows").addEventListener("click", (e) => {
+  if (uploading) return;
+  const trig = e.target.closest(".dd-trigger");
+  if (trig) {
+    progOpenId = progOpenId === Number(trig.dataset.id) ? null : Number(trig.dataset.id);
+    renderProgRows();
+    return;
+  }
+  const item = e.target.closest(".dd-item");
+  if (item) {
+    if (item.disabled) return;
+    const row = progRows.find((x) => String(x.id) === item.dataset.id);
+    if (row) row.program = item.dataset.value;
+    progOpenId = null;
+    renderProgRows();
+    return;
+  }
+  const xd = e.target.closest(".prog-extra-del");
+  if (xd) {
+    const row = progRows.find((x) => String(x.id) === xd.dataset.id);
+    if (row) row.extras.splice(Number(xd.dataset.idx), 1);
+    renderProgRows();
+    return;
+  }
+  const b = e.target.closest(".prog-del");
+  if (!b) return;
+  progRows = progRows.filter((x) => String(x.id) !== b.dataset.id);
+  if (progRows.length === 0) addProgRow(); else renderProgRows();
+});
+
 function refreshStart() {
-  $("startBtn").disabled = uploading || (selectedDataFiles.length === 0 && selectedImages.length === 0);
+  const hasProg = progFiles().length > 0;
+  $("startBtn").disabled = uploading || !progReady() || (selectedDataFiles.length === 0 && selectedImages.length === 0 && !hasProg);
 }
 
 // ── Aktarımı başlat ───────────────────
@@ -1171,26 +1549,36 @@ $("startBtn").addEventListener("click", startUpload);
 async function startUpload() {
   if (uploading) return;
   uploading = true;
+  setHdrStatus("active");
   $("startBtn").disabled = true;
   $("dataClear").classList.add("hidden");
   $("imgClear").classList.add("hidden");
 
   // Drop alanlarını kapat
-  $("dataDrop").style.pointerEvents = "none";
-  $("imgDrop").style.pointerEvents = "none";
-  $("dataDrop").style.opacity = ".5";
-  $("imgDrop").style.opacity = ".5";
+  $("dataDrop").classList.add("hidden");
+  $("imgDrop").classList.add("hidden");
+  totalBytesAll = dataTotalBytes + imgTotalBytes + progFiles().reduce((t, it) => t + it.file.size, 0);
+  totalDone.data = 0; totalDone.img = 0; totalDone.prog = 0;
+  $("totalProgress").classList.remove("hidden");
+  totalUpdate("data", 0);
+  renderProgRows();
 
   try {
     if (selectedDataFiles.length > 0) await uploadData();
     if (selectedImages.length > 0) await uploadImages();
+    if (progFiles().length > 0) await uploadProgram();
     await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
     // Push job arkaplanda başladı — polling pollPush ile yönetilir
+    setHdrStatus("pushing");
     showPushBanner({ pushProgress: 0, pushStage: "starting" });
     pushPollInterval = setInterval(pollPush, 3000);
   } catch (err) {
     showToast("Yükleme sırasında hata: " + err.message);
     uploading = false;
+    setHdrStatus("pending");
+    $("dataDrop").classList.remove("hidden");
+    $("imgDrop").classList.remove("hidden");
+    $("totalProgress").classList.add("hidden");
     refreshStart();
   }
 }
@@ -1217,6 +1605,7 @@ async function uploadData() {
         const cur = completedBytes + (loaded || 0);
         const totalPct = total > 0 ? Math.round((cur / total) * 100) : 0;
         $("dataBar").style.width = totalPct + "%";
+        totalUpdate("data", cur);
         $("dataPct").textContent = totalPct + "%";
         $("dataStat").textContent = (uploadedCount + 1) + " / " + files.length + " · " + f.name + " · " + fmtBytes(cur) + " / " + fmtBytes(total);
         // Hub'ın canlı progress için her ~2 sn'de bir raporla
@@ -1236,6 +1625,7 @@ async function uploadData() {
   }
 
   $("dataBar").style.width = "100%";
+  totalUpdate("data", completedBytes);
   $("dataPct").textContent = "100%";
   $("dataStat").textContent = uploadedCount + " / " + files.length + " dosya · " + fmtBytes(completedBytes) + " / " + fmtBytes(total);
 
@@ -1269,10 +1659,14 @@ async function uploadImages() {
   for (const f of files) {
     const rel = f.webkitRelativePath || f.name;
     const fd = new FormData(); fd.append("relPath", rel); fd.append("file", f);
-    try { await xhrUpload("/api/upload/" + TOKEN + "/image", fd, () => {}); uploaded++; uploadedBytes += f.size }
+    try {
+      await xhrUpload("/api/upload/" + TOKEN + "/image", fd, (p, loaded) => { totalUpdate("img", uploadedBytes + (loaded || 0)); });
+      uploaded++; uploadedBytes += f.size;
+    }
     catch (err) { console.error("img upload failed", rel, err) }
     const pct = total > 0 ? Math.round((uploadedBytes / total) * 100) : 0;
     $("imgBar").style.width = pct + "%";
+    totalUpdate("img", uploadedBytes);
     $("imgPct").textContent = pct + "%";
     $("imgStat").textContent = uploaded + " / " + files.length + " dosya · " + fmtBytes(uploadedBytes) + " / " + fmtBytes(total);
     const now = Date.now();
@@ -1287,6 +1681,53 @@ async function uploadImages() {
 async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
   try {
     await fetch("/api/upload/" + TOKEN + "/images-done", {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ totalFiles, totalBytes, uploadedFiles, uploadedBytes }),
+    });
+  } catch {}
+}
+
+async function uploadProgram() {
+  const items = progFiles();
+  const total = items.reduce((t, it) => t + it.file.size, 0);
+  const badge = $("progBadge");
+  badge.hidden = false; badge.textContent = "Yükleniyor"; badge.className = "status-badge uploading";
+  $("progProgress").classList.remove("hidden");
+  await reportProgram(items.length, total, 0, 0);
+
+  let uploaded = 0, done = 0, failed = 0;
+  for (const it of items) {
+    const fd = new FormData();
+    fd.append("program", it.row.program);   // alanlar dosyadan ÖNCE eklenmeli (multipart sırası)
+    fd.append("kind", it.kind);
+    fd.append("file", it.file);
+    try {
+      await xhrUpload("/api/upload/" + TOKEN + "/program", fd, (pct, loaded) => {
+        const cur = done + (loaded || 0);
+        const p = total > 0 ? Math.round((cur / total) * 100) : 0;
+        $("progBar").style.width = p + "%";
+        totalUpdate("prog", cur);
+        $("progPct").textContent = p + "%";
+        $("progStat").textContent = (uploaded + 1) + " / " + items.length + " · " + it.row.program + " · " + it.file.name;
+      });
+      uploaded++; done += it.file.size;
+    } catch (err) { failed++; console.error("program upload failed", it.row.program, it.file.name, err); }
+  }
+  $("progBar").style.width = "100%";
+  totalUpdate("prog", done);
+  $("progPct").textContent = "100%";
+  $("progStat").textContent = uploaded + " / " + items.length + " dosya · " + fmtBytes(done);
+  await reportProgram(items.length, total, uploaded, done);
+  if (failed > 0) {
+    badge.textContent = "Hata"; badge.className = "status-badge err";
+    throw new Error(failed + " program dosyası yüklenemedi");
+  }
+  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
+}
+
+async function reportProgram(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
+  try {
+    await fetch("/api/upload/" + TOKEN + "/program-progress", {
       method:"POST", headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({ totalFiles, totalBytes, uploadedFiles, uploadedBytes }),
     });
@@ -1324,6 +1765,39 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// ── Yerel tasarım önizlemesi: localhost + ?demo ─────────────
+// Yerelde yükleme anında bittiği için ilerleme ekranı görülemiyor. Bu modda
+// dosyalar gönderilmez, ilerleme yavaşça canlandırılır ve sunucuya aktarım
+// başlatılmaz. Canlı alan adında (aktarim.pusulanet.net) hiçbir etkisi yok.
+if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && new URLSearchParams(location.search).has("demo")) {
+  xhrUpload = function (url, fd, onProgress) {
+    return new Promise(function (resolve) {
+      const file = fd.get("file");
+      const size = file ? file.size : 1000;
+      let loaded = 0;
+      const step = Math.max(1, Math.round(size / 30));
+      const t = setInterval(function () {
+        loaded = Math.min(size, loaded + step);
+        onProgress(Math.round(loaded / size * 100), loaded);
+        if (loaded >= size) { clearInterval(t); resolve("{}"); }
+      }, 100);
+    });
+  };
+  const gercekFetch = window.fetch.bind(window);
+  window.fetch = function (u, o) {
+    const adres = String(u);
+    if (adres.indexOf("/api/upload/") >= 0) {
+      if (adres.indexOf("/complete") >= 0) {
+        setTimeout(function () { showToast("Demo modu: sunucuya aktarım başlatılmadı.", "info"); }, 300);
+        return new Promise(function () {});
+      }
+      return Promise.resolve(new Response("{}", { status: 200 }));
+    }
+    return gercekFetch(u, o);
+  };
+  showToast("Demo modu: dosyalar gönderilmez, yükleme canlandırılır.", "info");
 }
 
 loadInfo();
@@ -1447,17 +1921,81 @@ async function startPushJob(token) {
       // Müşterinin webkitRelativePath ile yüklediği klasör ağacı korunur
       await execCmd("cp", ["-r", stagingImages + "/.", dst])
     })
-    stmts.updatePush.run({ token, progress: 95, stage: "images", error: null, status: "pushing" })
+    stmts.updatePush.run({ token, progress: 90, stage: "images", error: null, status: "pushing" })
   }
 
-  // ── 3) Bitir ──
+  // ── 3) Program dosyaları → firmanın terminal sunucusu C$\MUSTERI\{firmaId}\Aktarim\{Program} ──
+  const stagingProgram = join(STAGING_ROOT, token, "program")
+  const hasProgram = await safeReadDir(stagingProgram)
+  if (hasProgram.length > 0) {
+    if (!sess.rdpServerIp || !sess.rdpUsername || !sess.rdpPassword) {
+      throw new Error("Terminal sunucusu credential'ları eksik")
+    }
+    stmts.updatePush.run({ token, progress: 92, stage: "program", error: null, status: "pushing" })
+    await parametreleriGuncelle(token, sess)
+    await withCifsMount(sess.rdpServerIp, "C$", sess.rdpUsername, sess.rdpPassword, async (mnt) => {
+      await copyTreeRecursive(stagingProgram, join(mnt, "MUSTERI", sess.companyId, "Aktarim"))
+    })
+    stmts.updatePush.run({ token, progress: 98, stage: "program", error: null, status: "pushing" })
+  }
+
+  // ── 4) Bitir ──
   stmts.updatePush.run({ token, progress: 100, stage: null, error: null, status: "completed" })
 
-  // ── 4) Staging temizliği — başarılı push sonrası dosyalar artık hedef sunucuda ──
+  // ── 5) Staging temizliği — başarılı push sonrası dosyalar artık hedef sunucuda ──
   try {
     await rm(join(STAGING_ROOT, token), { recursive: true, force: true })
   } catch (err) {
     fastify.log.warn({ err, token }, "staging temizleme hatası (push yine de başarılı)")
+  }
+}
+
+/* Parametre dosyalarına kurulum sihirbazıyla aynı kuralı uygular:
+ *   Perakende (programCode 909): yalnız <DATAKODU> firmaId </DATAKODU> bloğu (Open Office yazılmaz)
+ *   Diğerleri: [DATA KODU] firmaId ve [OPEN OFFICE] 1 satırları
+ * Var olan değer güncellenir, yoksa sona eklenir. Dosya latin1 okunup yazılır:
+ * baytlar aynen korunur (Windows-1254 Türkçe karakterler bozulmaz), yalnız ASCII
+ * etiketler değişir. Satır sonu dosyadakiyle aynı tutulur. */
+function parametreMetni(metin, firmaId, perakende) {
+  const nl = metin.includes("\r\n") ? "\r\n" : "\n"
+  if (perakende) {
+    // Perakende: yalnız DATAKODU — Open Office ayarı Perakende parametresine yazılmaz
+    for (const [etiket, deger] of [["DATAKODU", firmaId]]) {
+      const blok = "<" + etiket + ">" + nl + deger + nl + "</" + etiket + ">"
+      const re = new RegExp("<" + etiket + ">[\\s\\S]*?</" + etiket + ">", "i")
+      if (re.test(metin)) metin = metin.replace(re, blok)
+      else metin = metin.replace(/\s+$/, "") + nl + blok + nl
+    }
+    return metin
+  }
+  const sonNl = metin.endsWith(nl)
+  let satirlar = metin.split(nl)
+  if (sonNl) satirlar.pop()
+  let dk = false, oo = false
+  satirlar = satirlar.map((l) => {
+    if (/^\[DATA KODU\]/.test(l)) { dk = true; return "[DATA KODU] " + firmaId }
+    if (/^\s*\[OPEN ?OFFICE\]/i.test(l)) { oo = true; return "[OPEN OFFICE] 1" }
+    return l
+  })
+  if (!dk) satirlar.push("[DATA KODU] " + firmaId)
+  if (!oo) satirlar.push("[OPEN OFFICE] 1")
+  return satirlar.join(nl) + nl
+}
+
+async function parametreleriGuncelle(token, sess) {
+  let kayit = {}
+  try { kayit = JSON.parse(await readFile(join(STAGING_ROOT, token, "program-param.json"), "utf8")) } catch { return }
+  const secenekler = programOptionsOf(sess)
+  for (const [program, dosya] of Object.entries(kayit)) {
+    const yol = join(STAGING_ROOT, token, "program", program.replace(/[\\/]/g, "_"), dosya)
+    try {
+      const opt = secenekler.find((o) => o.name === program)
+      const perakende = String(opt?.programCode ?? "").trim() === "909" || program.toLocaleLowerCase("tr") === "perakende"
+      const eski = await readFile(yol, "latin1")
+      await writeFile(yol, parametreMetni(eski, sess.companyId, perakende), "latin1")
+    } catch (err) {
+      fastify.log.warn({ err: String(err?.message ?? err), program, dosya }, "parametre guncellenemedi (aktarim devam ediyor)")
+    }
   }
 }
 

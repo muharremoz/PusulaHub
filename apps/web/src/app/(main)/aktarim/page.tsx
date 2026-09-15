@@ -37,6 +37,11 @@ interface TransferSession {
   imageFilesReceived:  number
   imageBytesTotal:     number
   imageBytesReceived:  number
+  programFilesTotal?:    number
+  programFilesReceived?: number
+  programBytesTotal?:    number
+  programBytesReceived?: number
+  rdpServerName?:        string | null
   notes:               string | null
 }
 
@@ -295,9 +300,11 @@ function SessionRow({
 
   const dataPct  = s.dataBytesTotal  > 0 ? Math.round((s.dataBytesReceived  / s.dataBytesTotal) * 100)  : 0
   const imgPct   = s.imageBytesTotal > 0 ? Math.round((s.imageBytesReceived / s.imageBytesTotal) * 100) : 0
+  const progTotal    = s.programBytesTotal ?? 0
+  const progReceived = s.programBytesReceived ?? 0
   const overallPct =
-    s.dataBytesTotal + s.imageBytesTotal > 0
-      ? Math.round(((s.dataBytesReceived + s.imageBytesReceived) / (s.dataBytesTotal + s.imageBytesTotal)) * 100)
+    s.dataBytesTotal + s.imageBytesTotal + progTotal > 0
+      ? Math.round(((s.dataBytesReceived + s.imageBytesReceived + progReceived) / (s.dataBytesTotal + s.imageBytesTotal + progTotal)) * 100)
       : 0
 
   async function handleCopyLink() {
@@ -348,6 +355,11 @@ function SessionRow({
           <span className="ml-auto tabular-nums font-medium text-foreground">{imgPct}%</span>
         </div>
         <ProgressBar pct={imgPct} />
+        {(s.programFilesTotal ?? 0) > 0 && (
+          <div className="text-[10px] text-muted-foreground tabular-nums truncate">
+            Program: {(s.programFilesReceived ?? 0).toLocaleString("tr")} / {(s.programFilesTotal ?? 0).toLocaleString("tr")} dosya
+          </div>
+        )}
       </div>
 
       {/* Toplam */}

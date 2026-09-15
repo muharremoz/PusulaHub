@@ -11,6 +11,16 @@
       ],
       "port": 4242,
       "autoPort": false
+    },
+    {
+      "name": "aktarim-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "--env-file=services/pusula-aktarim/.env.dev",
+        "services/pusula-aktarim/server.js"
+      ],
+      "port": 5055,
+      "autoPort": false
     }
   ],
   "autoVerify": false

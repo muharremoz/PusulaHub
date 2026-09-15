@@ -75,6 +75,13 @@ export interface CreateInput {
   depoServerIp?:   string | null
   depoUsername?:   string | null
   depoPassword?:   string | null
+  /** Firmanın terminal sunucusu — program (.exe) dosyaları C$\MUSTERI\{firmaId}\Aktarim'e gider */
+  rdpServerName?:  string | null
+  rdpServerIp?:    string | null
+  rdpUsername?:    string | null
+  rdpPassword?:    string | null
+  /** Müşterinin dosya yükleyebileceği programlar — hizmet kataloğundan */
+  programOptions?: { name: string; exeName: string | null; paramFileName: string | null; programCode: string | null }[]
   expiresInDays?:  number
   createdBy?:      string | null
   notes?:          string | null

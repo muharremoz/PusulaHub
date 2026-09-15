@@ -59,10 +59,33 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // SQL ve Depo sunucusu credential'larını çek
-    const [sqlSrv, depoSrv] = await Promise.all([
+    // Firmanın terminal (RDP) sunucusu — program dosyaları buraya gider.
+    // Firma kurulmamışsa yok; o durumda müşteri sayfasında program alanı görünmez.
+    const sb = await getSupabaseServer()
+    const { data: comp } = await sb.schema("hub").from("companies")
+      .select("windows_server_id").eq("company_id", body.companyId).maybeSingle()
+    const rdpServerId = (comp as { windows_server_id: string | null } | null)?.windows_server_id ?? null
+
+    // Müşterinin seçeceği programlar (Perakende, Toptan…) — hizmet kataloğundaki pusula-program'lar
+    const { data: svcRows } = await sb.schema("hub").from("wizard_services")
+      .select("name, config").eq("type", "pusula-program").eq("is_active", true).order("display_order")
+    const programOptions = ((svcRows ?? []) as { name: string; config: string | null }[]).map((r) => {
+      let cfg: { exeName?: string | null; paramFileName?: string | null; programCode?: string | null } = {}
+      try { cfg = r.config ? JSON.parse(r.config) : {} } catch { /* bozuk config */ }
+      return {
+        name: r.name,
+        exeName: cfg.exeName ?? null,
+        paramFileName: cfg.paramFileName ?? null,
+        // 909 = Perakende: parametrede <DATAKODU>/<OPENOFFICE> blok biçimi kullanılır
+        programCode: cfg.programCode ?? null,
+      }
+    })
+
+    // SQL, Depo ve terminal sunucusu credential'larını çek
+    const [sqlSrv, depoSrv, rdpSrv] = await Promise.all([
       loadServerCreds(body.sqlServerId),
       loadServerCreds(body.depoServerId),
+      loadServerCreds(rdpServerId),
     ])
 
     const payload: CreateInput = {
@@ -76,6 +99,11 @@ export async function POST(req: NextRequest) {
       depoServerIp:   depoSrv?.IP       ?? null,
       depoUsername:   depoSrv?.Username ?? null,
       depoPassword:   depoSrv?.Password ?? null,
+      rdpServerName:  rdpSrv?.Name      ?? null,
+      rdpServerIp:    rdpSrv?.IP        ?? null,
+      rdpUsername:    rdpSrv?.Username  ?? null,
+      rdpPassword:    rdpSrv?.Password  ?? null,
+      programOptions,
     }
     const sess = await createSession(payload)
     return NextResponse.json(sess)

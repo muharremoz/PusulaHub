@@ -139,12 +139,13 @@ export function buildWriteDesktopIni(folderPath: string, infoTip: string): strin
   ].join("; ")
 }
 
-/* ── Parametre TXT dosyasında [DATA KODU] satırını güncelle ─────────── */
+/* ── Parametre TXT dosyasında [DATA KODU] ve [OPEN OFFICE] satırları ──── */
 /**
- * Eski uygulama ile aynı davranış:
+ * Eski uygulama ile aynı davranış, [OPEN OFFICE] eklemesiyle:
  *   - Dosya yoksa: SKIPPED (hata değil, devam et)
- *   - Dosyada `[DATA KODU]` ile başlayan satır varsa: satırı `[DATA KODU] {firmaId}` ile değiştir
- *   - Satır yoksa: dosyanın sonuna `[DATA KODU] {firmaId}` ekle
+ *   - `[DATA KODU]` ile başlayan satır → `[DATA KODU] {firmaId}`; yoksa sona eklenir
+ *   - `[OPEN OFFICE]` ile başlayan satır → `[OPEN OFFICE] 1`; yoksa sona eklenir
+ *     (programlar Excel yerine OpenOffice ile çalışsın — sunucularda Office yok)
  *   - UTF-8 ile yazılır
  */
 export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): string {
@@ -153,11 +154,15 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
   return [
     `$f='${f}'`,
     `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIPPED'} else {` +
-      `$target = '[DATA KODU] ${id}'; ` +
+      `$dk = '[DATA KODU] ${id}'; $oo = '[OPEN OFFICE] 1'; ` +
       `$lines = Get-Content -LiteralPath $f -Encoding UTF8; ` +
-      `$updated = $false; ` +
-      `$out = foreach($line in $lines){if($line -match '^\\[DATA KODU\\]'){$updated = $true; $target} else {$line}}; ` +
-      `if(-not $updated){$out = @($out) + @($target)}; ` +
+      `$dkVar = $false; $ooVar = $false; ` +
+      `$out = foreach($line in $lines){` +
+        `if($line -match '^\\[DATA KODU\\]'){$dkVar = $true; $dk} ` +
+        `elseif($line -match '^\\s*\\[OPEN ?OFFICE\\]'){$ooVar = $true; $oo} ` +
+        `else {$line}}; ` +
+      `if(-not $dkVar){$out = @($out) + @($dk)}; ` +
+      `if(-not $ooVar){$out = @($out) + @($oo)}; ` +
       `Set-Content -LiteralPath $f -Value $out -Encoding UTF8; ` +
       `Write-Output 'UPDATED'` +
     `}`,
@@ -176,6 +181,8 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
  *
  * Değer yine firmaId'dir (diğer programlarla aynı kaynak). Yalnızca BİÇİM
  * farklıdır. Dosyada var olan blok güncellenir; yoksa dosya sonuna eklenir.
+ * Open Office ayarı Perakende'ye YAZILMAZ (yalnız diğer programlarda
+ * `[OPEN OFFICE] 1` eklenir — bkz. buildUpdateParamTxt).
  * Çift tırnak yasak → satır sonu için [char]13/[char]10 kullanılır.
  */
 export function buildUpdateDataKoduXml(paramFilePath: string, firmaId: string): string {
