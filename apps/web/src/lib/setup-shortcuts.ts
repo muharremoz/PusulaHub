@@ -22,10 +22,16 @@ function psQuote(s: string): string {
 export function buildCreateShortcut(shortcutPath: string, targetPath: string): string {
   const sc = psQuote(shortcutPath)
   const tg = psQuote(targetPath)
+  // Exe kısayollarında "Başlangıç" klasörü exe'nin klasörü olmalı. Boş kalırsa
+  // program masaüstünde çalışmaya başlar; göreli yol kullanan yardımcılar
+  // (ör. Resim.exe'nin çektiği a.jpg) kullanıcının masaüstüne yazılır.
+  const isExe = /\.exe$/i.test(targetPath ?? "")
+  const wd = isExe ? psQuote(targetPath.replace(/\\[^\\]*$/, "")) : ""
   return [
     `$ws = New-Object -comObject WScript.Shell`,
     `$lnk = $ws.CreateShortcut('${sc}')`,
     `$lnk.TargetPath = '${tg}'`,
+    ...(isExe ? [`$lnk.WorkingDirectory = '${wd}'`] : []),
     `$lnk.Save()`,
     `Write-Output 'OK'`,
   ].join("; ")
