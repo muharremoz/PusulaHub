@@ -103,6 +103,8 @@ ensureColumn("programBytesTotal",    "INTEGER NOT NULL DEFAULT 0")
 ensureColumn("programBytesReceived", "INTEGER NOT NULL DEFAULT 0")
 // Hub kataloğundaki pusula-program hizmetleri: [{ name, exeName, paramFileName }]
 ensureColumn("programOptions",       "TEXT")
+// Müşteri tarayıcısında yüklenemeyen dosyalar (son bildirim, JSON) — destek için
+ensureColumn("clientError",          "TEXT")
 
 function programOptionsOf(sess) {
   try {
@@ -467,6 +469,51 @@ fastify.post("/api/upload/:token/program-progress", async (req, reply) => {
   return reply.send({ ok: true })
 })
 
+/** Sunucuda duran (yüklenmiş) dosyalar — tarayıcı aynı ad + boyuttakileri atlar,
+ *  yarıda kalan aktarımda yalnız eksikler gönderilir. */
+async function listeleDosyalar(kok, alt = "") {
+  const out = []
+  let girdiler = []
+  try { girdiler = await readdir(join(kok, alt), { withFileTypes: true }) } catch { return out }
+  for (const g of girdiler) {
+    const rel = alt ? alt + "/" + g.name : g.name
+    if (g.isDirectory()) out.push(...await listeleDosyalar(kok, rel))
+    else if (g.isFile()) {
+      try { out.push({ path: rel, size: (await stat(join(kok, rel))).size }) } catch { /* yarışta silinmiş */ }
+    }
+  }
+  return out
+}
+
+fastify.get("/api/upload/:token/staged", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  const kok = join(STAGING_ROOT, req.params.token)
+  return {
+    data:    await listeleDosyalar(join(kok, "data")),
+    images:  await listeleDosyalar(join(kok, "images")),
+    program: await listeleDosyalar(join(kok, "program")),
+  }
+})
+
+/** Tarayıcıda yüklenemeyen dosyaları kaydeder (müşteri yalnız "Hata" görse de
+ *  hangi dosyanın neden kaldığı sunucu logunda ve clientError kolonunda durur). */
+fastify.post("/api/upload/:token/client-error", async (req, reply) => {
+  const sess = stmts.byToken.get(req.params.token)
+  if (!sess) return reply.code(404).send({ error: "not_found" })
+  const b = req.body ?? {}
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({
+    area: String(x?.area ?? "").slice(0, 20),
+    name: String(x?.name ?? "").slice(0, 300),
+    size: Number(x?.size) || 0,
+    reason: String(x?.reason ?? "").slice(0, 300),
+  })) : []
+  const kayit = { at: new Date().toISOString(), userAgent: String(req.headers["user-agent"] ?? "").slice(0, 200), items }
+  db.prepare("UPDATE sessions SET clientError = ? WHERE token = ?").run(JSON.stringify(kayit), req.params.token)
+  fastify.log.warn({ token: req.params.token, firma: sess.companyId, items }, "musteri tarayicisinda yuklenemeyen dosyalar")
+  return reply.send({ ok: true })
+})
+
 fastify.post("/api/upload/:token/data-progress", async (req, reply) => {
   const v = getActiveSession(req.params.token)
   if (v.error) return reply.code(410).send({ error: v.error })
@@ -747,6 +794,14 @@ function renderHtml(token) {
   .tree-meta { color:var(--muted); font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap }
   .tree-more { justify-content:center; color:var(--muted); font-style:italic; grid-template-columns:1fr }
 
+  .upload-err { margin:0 0 12px; border-radius:5px; background:var(--err-bg); color:var(--err); padding:10px 12px; font-size:12px; line-height:1.45 }
+  .upload-err strong { display:block; font-size:13px; margin-bottom:4px }
+  .upload-err ul { margin:6px 0 0; padding:0; list-style:none; max-height:160px; overflow-y:auto }
+  .upload-err li { display:flex; gap:8px; padding:4px 0; border-top:1px solid rgba(185,28,28,.15) }
+  .upload-err li:first-child { border-top:0 }
+  .upload-err .n { font-family:var(--mono); font-weight:600; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:0 1 auto; max-width:45% }
+  .upload-err .w { flex:1; min-width:0; color:var(--text) }
+  .upload-err .tip { margin-top:8px; padding-top:8px; border-top:1px solid rgba(185,28,28,.2); color:var(--text) }
   .compress-tip { margin-top:10px; padding:10px 12px; border-radius:5px; background:var(--warn-bg); color:var(--warn); font-size:12px; display:flex; gap:8px; align-items:flex-start; line-height:1.45 }
   .compress-tip strong { display:block; margin-bottom:2px; font-size:12px }
   .compress-tip a { color:inherit; text-decoration:underline }
@@ -919,6 +974,7 @@ function renderHtml(token) {
             <span id="dataBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
 
+          <div id="dataErr" class="upload-err hidden"></div>
           <div id="dataProgress" class="progress hidden">
             <div class="bar"><div id="dataBar" style="width:0%"></div></div>
             <div class="stat"><span id="dataStat">—</span><span id="dataPct" class="pct">0%</span></div>
@@ -948,6 +1004,7 @@ function renderHtml(token) {
             <span id="imgBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
 
+          <div id="imgErr" class="upload-err hidden"></div>
           <div id="imgProgress" class="progress hidden">
             <div class="bar"><div id="imgBar" style="width:0%"></div></div>
             <div class="stat"><span id="imgStat">—</span><span id="imgPct" class="pct">0%</span></div>
@@ -985,6 +1042,7 @@ function renderHtml(token) {
             <span id="progBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
 
+          <div id="progErr" class="upload-err hidden"></div>
           <div id="progProgress" class="progress hidden">
             <div class="bar"><div id="progBar" style="width:0%"></div></div>
             <div class="stat"><span id="progStat">—</span><span id="progPct" class="pct">0%</span></div>
@@ -1546,6 +1604,72 @@ function refreshStart() {
 // ── Aktarımı başlat ───────────────────
 $("startBtn").addEventListener("click", startUpload);
 
+// Tarayıcıdaki sanitizeFilename ile aynı (sunucuda dosya adı böyle saklanır)
+function sunucuAdi(ad) { return String(ad).replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 200); }
+function sunucuYolu(rel) { return String(rel).replace(/\\\\/g, "/").replace(/^\\/+/, ""); }
+
+/** Dosya okunabiliyor mu? Kilitli dosyada (ör. SQL Server'a bağlı .mdf/.ldf)
+ *  tarayıcı NotReadableError verir — yüklemeye hiç başlamadan yakala. */
+async function okunabilirMi(file) {
+  try { await file.slice(0, Math.min(file.size, 64)).arrayBuffer(); return null; }
+  catch (e) { return hataNedeni(e, file); }
+}
+
+function hataNedeni(err, file) {
+  const ad = err && err.name ? err.name : "";
+  const kilitli = /\\.(mdf|ldf|ndf)$/i.test(file ? file.name : "");
+  if (ad === "NotReadableError" || ad === "NotFoundError" || ad === "SecurityError") {
+    return kilitli
+      ? "Dosya kullanımda: SQL Server bu veritabanını hâlâ açık tutuyor."
+      : "Dosya okunamadı: başka bir program kullanıyor ya da silinmiş/taşınmış.";
+  }
+  const m = err && err.message ? err.message : String(err);
+  if (/Bağlantı hatası/.test(m)) {
+    return kilitli
+      ? "Yüklenemedi: dosya okunurken kesildi (SQL Server'da açık olabilir) ya da bağlantı koptu."
+      : "Bağlantı koptu: internet bağlantınızı kontrol edip tekrar deneyin.";
+  }
+  const hm = m.match(/^HTTP (\\d+): (.*)$/);
+  if (hm) {
+    let detay = hm[2];
+    try { const j = JSON.parse(hm[2]); detay = j.error || detay; } catch {}
+    if (hm[1] === "413") return "Dosya çok büyük (sunucu sınırı aşıldı).";
+    return "Sunucu reddetti (" + hm[1] + "): " + detay;
+  }
+  return m;
+}
+
+function hataKutusu(pfx, hatalar) {
+  const box = $(pfx + "Err");
+  if (!hatalar.length) { box.classList.add("hidden"); box.innerHTML = ""; return; }
+  const kilitli = hatalar.some((h) => /SQL Server/.test(h.reason));
+  box.innerHTML =
+    "<strong>" + hatalar.length + " dosya yüklenemedi</strong>" +
+    "<ul>" + hatalar.map((h) => '<li><span class="n">' + escapeHtml(h.name) + '</span><span class="w">' + escapeHtml(h.reason) + "</span></li>").join("") + "</ul>" +
+    '<div class="tip">' + (kilitli
+      ? "Ne yapmalı: SQL Server Management Studio'da bu veritabanlarını ayırın (Detach) ya da SQL Server servisini durdurun, ardından <b>Eksikleri Yükle</b>'ye basın. Yüklenmiş dosyalar tekrar gönderilmez."
+      : "Sorunu giderip <b>Eksikleri Yükle</b>'ye basın. Yüklenmiş dosyalar tekrar gönderilmez.") + "</div>";
+  box.classList.remove("hidden");
+}
+
+async function sunucudakiler() {
+  try {
+    const r = await fetch("/api/upload/" + TOKEN + "/staged", { cache: "no-store" });
+    const d = r.ok ? await r.json() : {};
+    const harita = (arr) => { const m = new Map(); (Array.isArray(arr) ? arr : []).forEach((x) => m.set(x.path, x.size)); return m; };
+    return { data: harita(d.data), images: harita(d.images), program: harita(d.program) };
+  } catch { return { data: new Map(), images: new Map(), program: new Map() }; }
+}
+
+async function hatalariBildir(hatalar) {
+  try {
+    await fetch("/api/upload/" + TOKEN + "/client-error", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: hatalar }),
+    });
+  } catch {}
+}
+
 async function startUpload() {
   if (uploading) return;
   uploading = true;
@@ -1553,6 +1677,7 @@ async function startUpload() {
   $("startBtn").disabled = true;
   $("dataClear").classList.add("hidden");
   $("imgClear").classList.add("hidden");
+  hataKutusu("data", []); hataKutusu("img", []); hataKutusu("prog", []);
 
   // Drop alanlarını kapat
   $("dataDrop").classList.add("hidden");
@@ -1563,27 +1688,54 @@ async function startUpload() {
   totalUpdate("data", 0);
   renderProgRows();
 
+  const onceki = await sunucudakiler();
+  const hatalar = [];
   try {
-    if (selectedDataFiles.length > 0) await uploadData();
-    if (selectedImages.length > 0) await uploadImages();
-    if (progFiles().length > 0) await uploadProgram();
+    if (selectedDataFiles.length > 0) hatalar.push(...await uploadData(onceki.data));
+    if (selectedImages.length > 0) hatalar.push(...await uploadImages(onceki.images));
+    if (progFiles().length > 0) hatalar.push(...await uploadProgram(onceki.program));
+  } catch (err) {
+    hatalar.push({ area: "genel", name: "—", size: 0, reason: hataNedeni(err) });
+  }
+
+  if (hatalar.length > 0) {
+    hatalariBildir(hatalar);
+    hataKutusu("data", hatalar.filter((h) => h.area === "data" || h.area === "genel"));
+    hataKutusu("img", hatalar.filter((h) => h.area === "img"));
+    hataKutusu("prog", hatalar.filter((h) => h.area === "prog"));
+    showToast(hatalar.length + " dosya yüklenemedi — ayrıntı ilgili kartta.");
+    uploading = false;
+    setHdrStatus("pending");
+    $("totalProgress").classList.add("hidden");
+    // Müşteri seçimi değiştirebilsin (ör. ayrılmış veritabanı dosyalarını yeniden seçmek)
+    $("dataDrop").classList.remove("hidden");
+    $("imgDrop").classList.remove("hidden");
+    if (selectedDataFiles.length) $("dataClear").classList.remove("hidden");
+    if (selectedImages.length) $("imgClear").classList.remove("hidden");
+    $("startBtn").querySelector("span").textContent = "Eksikleri Yükle";
+    renderProgRows();
+    refreshStart();
+    const ilk = hatalar[0];
+    const kutu = $((ilk.area === "img" ? "img" : ilk.area === "prog" ? "prog" : "data") + "Err");
+    if (kutu && kutu.scrollIntoView) kutu.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+
+  try {
     await fetch("/api/upload/" + TOKEN + "/complete", { method:"POST" });
     // Push job arkaplanda başladı — polling pollPush ile yönetilir
     setHdrStatus("pushing");
     showPushBanner({ pushProgress: 0, pushStage: "starting" });
     pushPollInterval = setInterval(pollPush, 3000);
   } catch (err) {
-    showToast("Yükleme sırasında hata: " + err.message);
+    showToast("Aktarım başlatılamadı: " + hataNedeni(err));
     uploading = false;
     setHdrStatus("pending");
-    $("dataDrop").classList.remove("hidden");
-    $("imgDrop").classList.remove("hidden");
-    $("totalProgress").classList.add("hidden");
     refreshStart();
   }
 }
 
-async function uploadData() {
+async function uploadData(onceki) {
   const files = selectedDataFiles;
   const total = dataTotalBytes;
   const badge = $("dataBadge");
@@ -1594,11 +1746,19 @@ async function uploadData() {
 
   let completedBytes = 0;
   let uploadedCount = 0;
-  let failed = 0;
   let lastReport = 0;   // throttled live-progress report
+  const hatalar = [];
 
   for (let i = 0; i < files.length; i++) {
     const f = files[i];
+    // Sunucuda aynı ad ve boyutta duruyorsa (önceki denemede yüklenmiş) atla
+    if (onceki && onceki.get(sunucuAdi(f.name)) === f.size) {
+      completedBytes += f.size; uploadedCount++;
+      totalUpdate("data", completedBytes);
+      continue;
+    }
+    const neden = await okunabilirMi(f);
+    if (neden) { hatalar.push({ area: "data", name: f.name, size: f.size, reason: neden }); continue; }
     const fd = new FormData(); fd.append("file", f);
     try {
       await xhrUpload("/api/upload/" + TOKEN + "/data", fd, (pct, loaded) => {
@@ -1608,32 +1768,28 @@ async function uploadData() {
         totalUpdate("data", cur);
         $("dataPct").textContent = totalPct + "%";
         $("dataStat").textContent = (uploadedCount + 1) + " / " + files.length + " · " + f.name + " · " + fmtBytes(cur) + " / " + fmtBytes(total);
-        // Hub'ın canlı progress için her ~2 sn'de bir raporla
         const now = Date.now();
-        if (now - lastReport > 2000) {
-          lastReport = now;
-          reportData(total, cur);
-        }
+        if (now - lastReport > 2000) { lastReport = now; reportData(total, cur); }
       });
       completedBytes += f.size;
       uploadedCount++;
       reportData(total, completedBytes);
     } catch (err) {
-      failed++;
+      hatalar.push({ area: "data", name: f.name, size: f.size, reason: hataNedeni(err, f) });
       console.error("data upload failed", f.name, err);
     }
   }
 
-  $("dataBar").style.width = "100%";
+  const pct = total > 0 ? Math.round((completedBytes / total) * 100) : 100;
+  $("dataBar").style.width = pct + "%";
   totalUpdate("data", completedBytes);
-  $("dataPct").textContent = "100%";
+  $("dataPct").textContent = pct + "%";
   $("dataStat").textContent = uploadedCount + " / " + files.length + " dosya · " + fmtBytes(completedBytes) + " / " + fmtBytes(total);
+  reportData(total, completedBytes);
 
-  if (failed > 0) {
-    badge.textContent = "Hata"; badge.className = "status-badge err";
-    throw new Error(failed + " dosya yüklenemedi");
-  }
-  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
+  if (hatalar.length > 0) { badge.textContent = "Eksik"; badge.className = "status-badge err"; }
+  else { badge.textContent = "Yüklendi"; badge.className = "status-badge done"; }
+  return hatalar;
 }
 
 async function reportData(totalBytes, uploadedBytes) {
@@ -1645,7 +1801,7 @@ async function reportData(totalBytes, uploadedBytes) {
   } catch {}
 }
 
-async function uploadImages() {
+async function uploadImages(onceki) {
   const files = selectedImages;
   const total = imgTotalBytes;
   const badge = $("imgBadge");
@@ -1656,26 +1812,37 @@ async function uploadImages() {
 
   let uploaded = 0, uploadedBytes = 0;
   let lastReport = Date.now();
+  const hatalar = [];
   for (const f of files) {
     const rel = f.webkitRelativePath || f.name;
-    const fd = new FormData(); fd.append("relPath", rel); fd.append("file", f);
-    try {
-      await xhrUpload("/api/upload/" + TOKEN + "/image", fd, (p, loaded) => { totalUpdate("img", uploadedBytes + (loaded || 0)); });
+    if (onceki && onceki.get(sunucuYolu(rel)) === f.size) {
       uploaded++; uploadedBytes += f.size;
+    } else {
+      const neden = await okunabilirMi(f);
+      if (neden) hatalar.push({ area: "img", name: rel, size: f.size, reason: neden });
+      else {
+        const fd = new FormData(); fd.append("relPath", rel); fd.append("file", f);
+        try {
+          await xhrUpload("/api/upload/" + TOKEN + "/image", fd, (p, loaded) => { totalUpdate("img", uploadedBytes + (loaded || 0)); });
+          uploaded++; uploadedBytes += f.size;
+        } catch (err) {
+          hatalar.push({ area: "img", name: rel, size: f.size, reason: hataNedeni(err, f) });
+          console.error("img upload failed", rel, err);
+        }
+      }
     }
-    catch (err) { console.error("img upload failed", rel, err) }
     const pct = total > 0 ? Math.round((uploadedBytes / total) * 100) : 0;
     $("imgBar").style.width = pct + "%";
     totalUpdate("img", uploadedBytes);
     $("imgPct").textContent = pct + "%";
     $("imgStat").textContent = uploaded + " / " + files.length + " dosya · " + fmtBytes(uploadedBytes) + " / " + fmtBytes(total);
     const now = Date.now();
-    if (now - lastReport > 2000 || uploaded === files.length) {
-      lastReport = now;
-      reportImgs(files.length, total, uploaded, uploadedBytes);
-    }
+    if (now - lastReport > 2000) { lastReport = now; reportImgs(files.length, total, uploaded, uploadedBytes); }
   }
-  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
+  await reportImgs(files.length, total, uploaded, uploadedBytes);
+  if (hatalar.length > 0) { badge.textContent = "Eksik"; badge.className = "status-badge err"; }
+  else { badge.textContent = "Yüklendi"; badge.className = "status-badge done"; }
+  return hatalar;
 }
 
 async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
@@ -1687,7 +1854,7 @@ async function reportImgs(totalFiles, totalBytes, uploadedFiles, uploadedBytes) 
   } catch {}
 }
 
-async function uploadProgram() {
+async function uploadProgram(onceki) {
   const items = progFiles();
   const total = items.reduce((t, it) => t + it.file.size, 0);
   const badge = $("progBadge");
@@ -1695,8 +1862,18 @@ async function uploadProgram() {
   $("progProgress").classList.remove("hidden");
   await reportProgram(items.length, total, 0, 0);
 
-  let uploaded = 0, done = 0, failed = 0;
+  let uploaded = 0, done = 0;
+  const hatalar = [];
   for (const it of items) {
+    const ad = it.row.program + " · " + it.file.name;
+    const anahtar = it.row.program.replace(/[\\\\/]/g, "_") + "/" + sunucuAdi(it.file.name);
+    // Parametre dosyası sunucuda güncellenebildiği için boyut karşılaştırması yapılmaz — her seferinde gönderilir
+    if (it.kind !== "param" && onceki && onceki.get(anahtar) === it.file.size) {
+      uploaded++; done += it.file.size; totalUpdate("prog", done);
+      continue;
+    }
+    const neden = await okunabilirMi(it.file);
+    if (neden) { hatalar.push({ area: "prog", name: ad, size: it.file.size, reason: neden }); continue; }
     const fd = new FormData();
     fd.append("program", it.row.program);   // alanlar dosyadan ÖNCE eklenmeli (multipart sırası)
     fd.append("kind", it.kind);
@@ -1708,21 +1885,23 @@ async function uploadProgram() {
         $("progBar").style.width = p + "%";
         totalUpdate("prog", cur);
         $("progPct").textContent = p + "%";
-        $("progStat").textContent = (uploaded + 1) + " / " + items.length + " · " + it.row.program + " · " + it.file.name;
+        $("progStat").textContent = (uploaded + 1) + " / " + items.length + " · " + ad;
       });
       uploaded++; done += it.file.size;
-    } catch (err) { failed++; console.error("program upload failed", it.row.program, it.file.name, err); }
+    } catch (err) {
+      hatalar.push({ area: "prog", name: ad, size: it.file.size, reason: hataNedeni(err, it.file) });
+      console.error("program upload failed", ad, err);
+    }
   }
-  $("progBar").style.width = "100%";
+  const p = total > 0 ? Math.round((done / total) * 100) : 100;
+  $("progBar").style.width = p + "%";
   totalUpdate("prog", done);
-  $("progPct").textContent = "100%";
+  $("progPct").textContent = p + "%";
   $("progStat").textContent = uploaded + " / " + items.length + " dosya · " + fmtBytes(done);
   await reportProgram(items.length, total, uploaded, done);
-  if (failed > 0) {
-    badge.textContent = "Hata"; badge.className = "status-badge err";
-    throw new Error(failed + " program dosyası yüklenemedi");
-  }
-  badge.textContent = "Yüklendi"; badge.className = "status-badge done";
+  if (hatalar.length > 0) { badge.textContent = "Eksik"; badge.className = "status-badge err"; }
+  else { badge.textContent = "Yüklendi"; badge.className = "status-badge done"; }
+  return hatalar;
 }
 
 async function reportProgram(totalFiles, totalBytes, uploadedFiles, uploadedBytes) {
@@ -1789,6 +1968,7 @@ if ((location.hostname === "localhost" || location.hostname === "127.0.0.1") && 
   window.fetch = function (u, o) {
     const adres = String(u);
     if (adres.indexOf("/api/upload/") >= 0) {
+      if (adres.indexOf("/staged") >= 0) return Promise.resolve(new Response(JSON.stringify({ data: [], images: [], program: [] }), { status: 200 }));
       if (adres.indexOf("/complete") >= 0) {
         setTimeout(function () { showToast("Demo modu: sunucuya aktarım başlatılmadı.", "info"); }, 300);
         return new Promise(function () {});
