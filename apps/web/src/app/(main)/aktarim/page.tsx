@@ -455,13 +455,18 @@ function NewTransferDialog({
 
   const firmaFiltered = useMemo(() => {
     const q = firmaSearch.trim().toLowerCase()
-    if (!q) return firmas.slice(0, 50)
-    return firmas
-      .filter((f) =>
-        f.firma.toLowerCase().includes(q) || (f.firkod || "").toLowerCase().includes(q),
-      )
-      .slice(0, 50)
-  }, [firmas, firmaSearch])
+    const list = !q
+      ? firmas.slice(0, 50)
+      : firmas
+          .filter((f) =>
+            f.firma.toLowerCase().includes(q) || (f.firkod || "").toLowerCase().includes(q),
+          )
+          .slice(0, 50)
+    // Combobox seçili değeri yalnız `items` içinden bulur. Seçilen firma ilk 50'de
+    // değilse (arama temizlenince) tetikleyicide "Firma seç..." görünüyordu.
+    if (firma && !list.some((f) => f.firkod === firma.firkod)) return [firma, ...list]
+    return list
+  }, [firmas, firmaSearch, firma])
 
   async function handleCreate() {
     if (!firma) {
