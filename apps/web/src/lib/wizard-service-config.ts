@@ -49,6 +49,12 @@ export interface ParsConfig {
   serverId:     string
   /** Sunucudaki tam yol, örn C:\Pusula\Pusula Gorev\Ayar.mdb */
   dbPath:       string
+  /**
+   * Pars mobil uygulamasının bağlandığı port (örn 8888). Hizmete ait — tek
+   * mobil sunucu, tek Ayar.mdb; firmaya değil. Eskiden hiç tutulmuyordu, CRM
+   * Erişim sekmesi bağlantı adresini eksik gösteriyordu (16.09.2026).
+   */
+  port?:        number | null
   /** DB'de: encrypt() ile şifreli. DTO'da hiç dönmez — yerine hasPassword. */
   dbPassword?:  string
   /** Yalnız DTO'da: şifre kayıtlı mı */
@@ -88,7 +94,7 @@ export function parseConfig(raw: string | null): ServiceConfig | null {
 export function maskConfig(type: string, cfg: ServiceConfig | null): ServiceConfig | null {
   if (!cfg || type !== "pars") return cfg
   const p = cfg as ParsConfig
-  return { serverId: p.serverId, dbPath: p.dbPath, hasPassword: !!p.dbPassword }
+  return { serverId: p.serverId, dbPath: p.dbPath, port: p.port ?? null, hasPassword: !!p.dbPassword }
 }
 
 export function wizardServiceRowToDto(r: WizardServiceRow): WizardServiceDto {
@@ -168,7 +174,16 @@ export function validateConfig(type: ServiceType, raw: unknown, mevcut?: Service
     const eskiSifre = (mevcut as ParsConfig | null | undefined)?.dbPassword ?? ""
     const dbPassword = yeniSifre ? (encrypt(yeniSifre) ?? "") : eskiSifre
     if (!dbPassword) return { ok: false, error: "config.dbPassword zorunlu (Ayar.mdb şifresi)" }
-    return { ok: true, config: { serverId, dbPath, dbPassword } }
+    // Port isteğe bağlı. Payload'da hiç yoksa mevcut değer korunur (PATCH'in
+    // config'siz yolu mevcut config'i yeniden doğruluyor — port düşmesin).
+    const portHam = "port" in c ? c.port : (mevcut as ParsConfig | null | undefined)?.port
+    let port: number | null = null
+    if (portHam !== null && portHam !== undefined && portHam !== "") {
+      const n = Number(portHam)
+      if (!Number.isInteger(n) || n < 1 || n > 65535) return { ok: false, error: "config.port 1-65535 arasında tam sayı olmalı" }
+      port = n
+    }
+    return { ok: true, config: { serverId, dbPath, dbPassword, port } }
   }
 
   return { ok: false, error: "Bilinmeyen type" }

@@ -316,6 +316,7 @@ export default function ServicesPage() {
                           </>
                         ) : svc.type === "pars" ? (
                           <span className="truncate">
+                            {svc.config && "port" in svc.config && svc.config.port ? `Port ${svc.config.port} · ` : "Port YOK · "}
                             {svc.config && "hasPassword" in svc.config && svc.config.hasPassword ? "Ayar.mdb · şifre kayıtlı" : "Ayar.mdb · şifre YOK"}
                           </span>
                         ) : (

@@ -29,6 +29,8 @@ const TYPE_OPTIONS: { value: ServiceType; label: string; icon: React.ReactNode; 
 ]
 
 const PARS_VARSAYILAN_YOL = "C:\\Pusula\\Pusula Gorev\\Ayar.mdb"
+/** Mobil sunucuda Pars'ın dinlediği port (16.09.2026 doğrulandı: iis.databag.net:8888). */
+const PARS_VARSAYILAN_PORT = "8888"
 
 const IIS_CATEGORIES = ["API Hizmeti", "Entegrasyonlar"]
 
@@ -91,6 +93,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
   /* ── pars config ── */
   const [zServerId,         setZServerId]         = useState("")
   const [zDbPath,           setZDbPath]           = useState(PARS_VARSAYILAN_YOL)
+  const [zPort,             setZPort]             = useState(PARS_VARSAYILAN_PORT)
   const [zDbPassword,       setZDbPassword]       = useState("")
   const [zHasPassword,      setZHasPassword]      = useState(false)
   const [servers,           setServers]           = useState<HubServer[]>([])
@@ -128,6 +131,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       } else if (editing.type === "pars" && editing.config && "dbPath" in editing.config) {
         setZServerId(editing.config.serverId ?? "")
         setZDbPath(editing.config.dbPath || PARS_VARSAYILAN_YOL)
+        setZPort("port" in editing.config && editing.config.port ? String(editing.config.port) : "")
         setZDbPassword("")
         setZHasPassword(!!editing.config.hasPassword)
       }
@@ -148,6 +152,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       setRSubFolder("")
       setZServerId("")
       setZDbPath(PARS_VARSAYILAN_YOL)
+      setZPort(PARS_VARSAYILAN_PORT)
       setZDbPassword("")
       setZHasPassword(false)
     }
@@ -204,7 +209,9 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
     }
     if (type === "pars") {
       // Düzenlemede şifre boş bırakılabilir (kayıtlı olan korunur)
-      return !!zServerId && /\.mdb$/i.test(zDbPath.trim()) && (!!zDbPassword || zHasPassword)
+      const p = zPort.trim()
+      const portGecerli = !p || (/^\d+$/.test(p) && Number(p) >= 1 && Number(p) <= 65535)
+      return !!zServerId && /\.mdb$/i.test(zDbPath.trim()) && (!!zDbPassword || zHasPassword) && portGecerli
     }
     return false
   })()
@@ -227,6 +234,8 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
         : type === "pars" ? {
           serverId:         zServerId,
           dbPath:           zDbPath.trim(),
+          // Boş → portsuz kaydedilir (CRM adresi portsuz gösterir)
+          port:             zPort.trim() ? Number(zPort.trim()) : null,
           // Boş → sunucu kayıtlı şifreyi korur
           dbPassword:       zDbPassword,
         }
@@ -569,6 +578,19 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                         ))}
                       </SelectContent>
                     </Select>
+                  </Field>
+
+                  <Field label="Bağlantı Portu" hint="Pars mobil uygulamasının bağlandığı port. CRM Erişim sekmesinde adresle birlikte gösterilir.">
+                    <div className="relative">
+                      <Waypoints className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        inputMode="numeric"
+                        placeholder={PARS_VARSAYILAN_PORT}
+                        value={zPort}
+                        onChange={(e) => setZPort(e.target.value.replace(/\D/g, "").slice(0, 5))}
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
+                      />
+                    </div>
                   </Field>
 
                   <Field label="Ayar.mdb Yolu" hint="Sunucudaki tam yol.">
