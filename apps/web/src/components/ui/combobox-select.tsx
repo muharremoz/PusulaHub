@@ -151,6 +151,25 @@ export function SelectContent({
     if (!open) setQuery("");
   }, [open]);
 
+  /*  Popover kapaliyken icerik hic mount olmuyor, dolayisiyla SelectItem'lar
+   *  etiketlerini kaydedemiyor ve onceden secili bir deger tetikleyicide
+   *  placeholder ("Baglanmaz", "Secin…") olarak gorunuyordu — kullanici
+   *  listeyi bir kez acana kadar. Kapaliyken ogeleri gizli bir Command
+   *  icinde render edip yalniz kayit icin kullaniyoruz.                  */
+  if (!open) {
+    return (
+      <div hidden aria-hidden>
+        <Command shouldFilter={false}>
+          <CommandList>
+            <CommandGroup>
+              <QueryCtx.Provider value="">{children}</QueryCtx.Provider>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </div>
+    );
+  }
+
   return (
     <PopoverContent
       align="start"
