@@ -9,7 +9,8 @@ import {
   DatabaseBackup, WifiOff,
 } from "lucide-react"
 import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
-import { Building2, HardDrive } from "lucide-react"
+import { Building2, HardDrive, Handshake } from "lucide-react"
+import type { BilkarOzet } from "@/app/api/dashboard/bilkar/route"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 
@@ -368,7 +369,218 @@ export default function DashboardPage() {
       </div>
       </div>
 
+      {/* ─── Bilkar (iş ortağı) portföyü ─── */}
+      <BilkarBolumu />
+
     </PageContainer>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/**
+ * Bilkar bölümü — iş ortağının portföyü ve bizim sunucularımızdaki yükü.
+ *
+ * "Portföy" CRM'de temsilcisi BILKAR olan tüm firmalar (büyük çoğunluğu
+ * bizde kurulu değil); asıl önemli olan "kurulu" sayısı ve oradaki
+ * kullanıcı/oturum yüküdür. Ayrı uçtan beslenir: CRM yavaşsa ya da
+ * kapalıysa panelin geri kalanı etkilenmesin.
+ */
+function BilkarBolumu() {
+  const [veri, setVeri] = useState<BilkarOzet | null>(null)
+  const [yukleniyor, setYukleniyor] = useState(true)
+
+  useEffect(() => {
+    let mounted = true
+    const yukle = async () => {
+      try {
+        const r = await fetch("/api/dashboard/bilkar", { cache: "no-store" })
+        const j = await r.json()
+        if (mounted) setVeri(j?.ok ? (j as BilkarOzet) : null)
+      } catch {
+        if (mounted) setVeri(null)
+      } finally {
+        if (mounted) setYukleniyor(false)
+      }
+    }
+    yukle()
+    const iv = setInterval(yukle, 60_000)
+    return () => { mounted = false; clearInterval(iv) }
+  }, [])
+
+  if (!yukleniyor && !veri) return null
+
+  return (
+    <div className="rounded-[8px] p-2 mb-3" style={{ backgroundColor: "var(--section-bg)" }}>
+      <div className="mb-2">
+        <PanelCard
+          title="Bilkar"
+          icon={<StaticIcon I={Handshake} />}
+          footer={veri ? `${veri.portfoy} firmalık portföyün ${veri.kurulu} tanesi sunucularımızda kurulu` : undefined}
+        >
+          <div className="flex items-stretch divide-x divide-border/60">
+            <OzetMetrik
+              title="KURULU FİRMA"
+              icon={<StaticIcon I={Building2} />}
+              loading={yukleniyor}
+              value={veri?.kurulu ?? 0}
+              extra={veri ? (
+                <span className="text-muted-foreground">{veri.portfoy} firmalık portföy</span>
+              ) : null}
+            />
+            <OzetMetrik
+              title="KULLANICI"
+              icon={<CardIcon name="users" />}
+              loading={yukleniyor}
+              value={veri?.kullanici ?? 0}
+              extra={veri ? (
+                <span className="text-muted-foreground">{veri.lisans} lisans hakkı</span>
+              ) : null}
+            />
+            <OzetMetrik
+              title="AKTİF OTURUM"
+              icon={<StaticIcon I={Activity} />}
+              loading={yukleniyor}
+              value={veri?.aktifOturum ?? 0}
+              extra={veri ? (
+                <span className="text-muted-foreground">şu an bağlı</span>
+              ) : null}
+            />
+            <OzetMetrik
+              title="SUNUCU"
+              icon={<StaticIcon I={HardDrive} />}
+              loading={yukleniyor}
+              value={veri?.sunucular.length ?? 0}
+              extra={veri ? (
+                <div className="flex flex-col gap-0.5">
+                  {veri.sunucular.slice(0, 3).map((s) => (
+                    <span key={s.id} className="inline-flex items-center gap-1">
+                      <span className={`size-1.5 rounded-full shrink-0 ${s.online ? "bg-emerald-500" : "bg-red-500"}`} />
+                      <span className="truncate">{kisaRdpAdi(s.ad)}</span>
+                      <span className="tabular-nums text-muted-foreground">{s.firma}</span>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            />
+          </div>
+        </PanelCard>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {/* Firma listesi — kullanıcı sayısına göre */}
+        <div className="col-span-2">
+          <PanelCard
+            title="Bilkar Firmaları"
+            icon={<StaticIcon I={Building2} />}
+            footer={veri ? `${veri.firmalar.length} kurulu firma · kullanıcı sayısına göre` : undefined}
+          >
+            {yukleniyor ? (
+              <SkeletonList rows={6} />
+            ) : !veri || veri.firmalar.length === 0 ? (
+              <EmptyState text="Kurulu Bilkar firması yok." />
+            ) : (
+              <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                <div className="grid grid-cols-[1fr_1fr_60px_60px_70px] gap-2 px-2 py-1.5 bg-muted/20 border-b border-border text-[9px] font-medium text-muted-foreground tracking-wide uppercase">
+                  <span>Firma</span><span>Sunucu</span>
+                  <span className="text-right">Kullanıcı</span>
+                  <span className="text-right">Lisans</span>
+                  <span className="text-right">Aktif</span>
+                </div>
+                <div className="divide-y divide-border/40 max-h-[320px] overflow-y-auto">
+                  {veri.firmalar.map((f) => (
+                    <Link
+                      key={f.firkod}
+                      href={`/companies?firma=${encodeURIComponent(f.firkod)}`}
+                      className="grid grid-cols-[1fr_1fr_60px_60px_70px] gap-2 px-2 py-1.5 text-[11px] hover:bg-muted/70 transition-colors"
+                    >
+                      <span className="truncate">
+                        <span className="text-muted-foreground font-mono mr-1.5">{f.firkod}</span>
+                        {f.firma}
+                      </span>
+                      <span className="truncate text-muted-foreground">{f.sunucu ? kisaRdpAdi(f.sunucu) : "—"}</span>
+                      <span className="text-right tabular-nums">{f.kullanici}</span>
+                      <span className="text-right tabular-nums text-muted-foreground">{f.lisans || "—"}</span>
+                      <span className="text-right tabular-nums">
+                        {f.aktif > 0
+                          ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">{f.aktif}</span>
+                          : <span className="text-muted-foreground">—</span>}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </PanelCard>
+        </div>
+
+        {/* Sunucu dağılımı + lisans uyarıları */}
+        <div className="flex flex-col gap-2">
+          <PanelCard
+            title="Sunucu Dağılımı"
+            icon={<StaticIcon I={HardDrive} />}
+            footer={veri ? "firma · kullanıcı · aktif oturum" : undefined}
+          >
+            {yukleniyor ? (
+              <SkeletonList rows={3} />
+            ) : !veri || veri.sunucular.length === 0 ? (
+              <EmptyState text="Sunucu ataması yok." />
+            ) : (
+              <div className="divide-y divide-border/40">
+                {veri.sunucular.map((s) => (
+                  <Link key={s.id} href={`/servers/${s.id}`} className="block py-2 hover:bg-muted/20 -mx-1 px-1 rounded">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="inline-flex min-w-0 items-center gap-1.5">
+                        <span className={`size-1.5 rounded-full shrink-0 ${s.online ? "bg-emerald-500" : "bg-red-500"}`} />
+                        <span className="truncate font-medium">{s.ad}</span>
+                      </span>
+                      <span className="tabular-nums text-muted-foreground text-[10px] shrink-0">
+                        {s.firma} firma · {s.kullanici} kul.
+                        {s.aktif > 0 && <span className="text-emerald-600 dark:text-emerald-400 font-medium"> · {s.aktif} aktif</span>}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground tabular-nums">
+                      <span>CPU %{s.cpu}</span>
+                      <span>RAM %{s.ram}</span>
+                      <span>Disk %{s.disk}</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </PanelCard>
+
+          <PanelCard
+            title="Lisans Uyarıları"
+            icon={<StaticIcon I={AlertTriangle} />}
+            footer="30 gün içinde dolan / dolmuş"
+          >
+            {yukleniyor ? (
+              <SkeletonList rows={2} />
+            ) : !veri || veri.lisansUyari.length === 0 ? (
+              <EmptyState text="Yaklaşan lisans bitişi yok." />
+            ) : (
+              <div className="divide-y divide-border/40">
+                {veri.lisansUyari.map((f) => (
+                  <Link
+                    key={f.firkod}
+                    href={`/companies?firma=${encodeURIComponent(f.firkod)}`}
+                    className="flex items-center justify-between py-1.5 text-[11px] hover:bg-muted/20 -mx-1 px-1 rounded"
+                  >
+                    <span className="truncate">
+                      <span className="text-muted-foreground font-mono mr-1.5">{f.firkod}</span>
+                      {f.firma}
+                    </span>
+                    <span className={`tabular-nums text-[10px] shrink-0 ${f.gun < 0 ? "text-destructive font-medium" : "text-amber-600 dark:text-amber-400"}`}>
+                      {f.gun < 0 ? `${Math.abs(f.gun)} gün geçti` : `${f.gun} gün`}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </PanelCard>
+        </div>
+      </div>
+    </div>
   )
 }
 
