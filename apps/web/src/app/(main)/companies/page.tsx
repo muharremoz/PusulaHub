@@ -130,6 +130,9 @@ function tagColor(tag: string): string {
 }
 import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
+import { StepServicesPars } from "@/components/company-setup/step-services-pars";
+import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
+import type { PusulaProgramConfig } from "@/app/api/services/route";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
@@ -757,6 +760,17 @@ export default function CompaniesPage() {
   const [newSvcStarted, setNewSvcStarted]             = useState(false);
   const [newSvcDone, setNewSvcDone]                   = useState(false);
   const [newSvcError, setNewSvcError]                 = useState<string | null>(null);
+  // Pars (mobil) — dialogda Pars hizmeti seçilince: kullanıcılar + raporlar + bağlanacak DB'ler
+  const [newSvcParsUsers, setNewSvcParsUsers]         = useState<ParsWizardUser[]>([]);
+  const [newSvcParsReportIds, setNewSvcParsReportIds] = useState<number[]>([]);
+  const [newSvcParsKatalog, setNewSvcParsKatalog]     = useState<ParsKatalog | null>(null);
+  const [newSvcParsKatalogFor, setNewSvcParsKatalogFor] = useState<number | null>(null);
+  const [newSvcParsLoading, setNewSvcParsLoading]     = useState(false);
+  const [newSvcParsError, setNewSvcParsError]         = useState<string | null>(null);
+  /** DB adı → Pars tip ID (string); "" = bağlanmaz */
+  const [newSvcParsDbTips, setNewSvcParsDbTips]       = useState<Record<string, string>>({});
+  let _parsRowId = 1
+  const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false })
 
   // Şifre üretici — connection string / XML uyumlu karakter seti.
   const generatePassword = () => generateSafePassword(10)
@@ -810,12 +824,19 @@ export default function CompaniesPage() {
     } catch {}
   }
 
-  async function openNewSvcDialog() {
+  /** @param onlyPars true → var olan Pars hizmetine kullanıcı ekleme: Pars seçili ve sekme Mobil açılır */
+  async function openNewSvcDialog(onlyPars = false) {
     if (!selectedFirma) return
     setNewSvcOpen(true)
     setNewSvcStarted(false); setNewSvcDone(false); setNewSvcError(null)
     setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId("")
     setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
+    setNewSvcParsUsers([mkParsRow()]); setNewSvcParsReportIds([]); setNewSvcParsError(null)
+    setNewSvcParsKatalog(null); setNewSvcParsKatalogFor(null)
+    // Firmanın mevcut DB'leri program koduna göre tipiyle hazır gelsin
+    const dbTips: Record<string, string> = {}
+    for (const d of tabSQL) { const t = parsTipFromProgramCode(d.ProgramCode); dbTips[d.Name] = t === null ? "" : String(t) }
+    setNewSvcParsDbTips(dbTips)
     setNewSvcLoading(true)
     try {
       const [svcR, iisR, depoR, optR] = await Promise.all([
@@ -827,7 +848,13 @@ export default function CompaniesPage() {
       const catalog: WizardServiceDto[] = Array.isArray(svcR) ? svcR : []
       setNewSvcCatalog(catalog)
       const cats = [...new Set(catalog.map((s) => s.category))]
-      setNewSvcActiveCat(cats[0] ?? "")
+      const parsSvc = catalog.find((s) => s.type === "pars")
+      if (onlyPars && parsSvc) {
+        setNewSvcSelectedIds([parsSvc.id])
+        setNewSvcActiveCat(parsSvc.category)
+      } else {
+        setNewSvcActiveCat(cats[0] ?? "")
+      }
       setNewSvcIisServers(Array.isArray(iisR) ? iisR : [])
       setNewSvcDepoServers(Array.isArray(depoR) ? depoR : [])
       const rdpServers = optR.rdpServers ?? []
@@ -850,12 +877,48 @@ export default function CompaniesPage() {
   const newSvcHasIis           = newSvcSelected.some((s) => s.type === "iis-site")
   // Resim: IIS'te site kurar (IIS sunucusu) + Depo'daki paylaşımı yayınlar (Depo sunucusu)
   const newSvcHasResim         = newSvcSelected.some((s) => s.type === "iis-resim")
+  const newSvcParsService      = newSvcSelected.find((s) => s.type === "pars") ?? null
+  // Rapor gruplaması için firmanın program tipleri: mevcut DB'lerin program kodları + seçilen Pusula programları
+  const newSvcParsTipleri = [...new Set([
+    ...tabSQL.map((d) => parsTipFromProgramCode(d.ProgramCode)),
+    ...newSvcSelected.filter((s) => s.type === "pusula-program").map((s) => parsTipFromProgramCode((s.config as PusulaProgramConfig | null)?.programCode)),
+  ].filter((t): t is number => t !== null))]
+  const newSvcParsDatalar = Object.entries(newSvcParsDbTips)
+    .filter(([, t]) => t !== "")
+    .map(([data, t]) => ({ data, tipId: Number(t) }))
+  const newSvcParsUsersValid = newSvcParsUsers.length > 0
+    && newSvcParsUsers.every((u) => parsKullaniciAdiGecerliMi(u.username) && parsSifreGecerliMi(u.password))
+    && new Set(newSvcParsUsers.map((u) => u.username.trim().toLocaleLowerCase("tr-TR"))).size === newSvcParsUsers.length
+    && !newSvcParsUsers.some((u) => (newSvcParsKatalog?.users ?? []).some((k) => k.adi.trim().toLocaleLowerCase("tr-TR") === u.username.trim().toLocaleLowerCase("tr-TR")))
+  const newSvcParsValid = !newSvcParsService
+    || (newSvcParsUsersValid && !!newSvcParsKatalog && !newSvcParsError && newSvcParsReportIds.length > 0 && newSvcParsDatalar.length > 0)
+
   const newSvcValid =
     newSvcSelectedIds.length > 0 &&
     !!newSvcAdServerId &&
     (!newSvcHasPusula || (!!newSvcWindowsServerId && !!newSvcDepoServerId)) &&
     (!(newSvcHasIis || newSvcHasResim) || !!newSvcIisServerId) &&
-    (!newSvcHasResim || !!newSvcDepoServerId)
+    (!newSvcHasResim || !!newSvcDepoServerId) &&
+    newSvcParsValid
+
+  const loadNewSvcParsKatalog = (serviceId: number, taze = false) => {
+    setNewSvcParsLoading(true); setNewSvcParsError(null)
+    fetch(`/api/setup/pars/catalog?serviceId=${serviceId}${taze ? "&refresh=true" : ""}`, { cache: "no-store" })
+      .then(async (r) => {
+        const d = await r.json()
+        if (!r.ok || d?.error) throw new Error(d?.error ?? "Pars kataloğu alınamadı")
+        setNewSvcParsKatalog(d as ParsKatalog); setNewSvcParsKatalogFor(serviceId)
+      })
+      .catch((e) => setNewSvcParsError(e instanceof Error ? e.message : "Pars kataloğu alınamadı"))
+      .finally(() => setNewSvcParsLoading(false))
+  }
+  // Dialogda Pars seçilince kataloğu bir kez çek
+  useEffect(() => {
+    if (!newSvcOpen || !newSvcParsService) return
+    if (newSvcParsKatalogFor === newSvcParsService.id || newSvcParsLoading) return
+    loadNewSvcParsKatalog(newSvcParsService.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newSvcOpen, newSvcParsService?.id, newSvcParsKatalogFor, newSvcParsLoading])
 
   const newUserValid =
     !!newUserAdServerId &&
@@ -2307,7 +2370,7 @@ tr:nth-child(even) td{background:#fafafa}
                 <div className="flex items-center justify-end">
                   <Button
                     size="sm"
-                    onClick={openNewSvcDialog}
+                    onClick={() => openNewSvcDialog()}
                     className="rounded-[5px] h-7 text-[11px] gap-1.5"
                   >
                     <Plus className="h-3.5 w-3.5" /> Yeni Hizmet Ekle
@@ -2371,10 +2434,15 @@ tr:nth-child(even) td{background:#fafafa}
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 text-[11px]">
+                              {svc.type === "pars" && (
+                                <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openNewSvcDialog(true)}>
+                                  <UserPlus className="h-3.5 w-3.5" /> Pars Kullanıcısı Ekle
+                                </DropdownMenuItem>
+                              )}
                               {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
                               <DropdownMenuItem
                                 className="text-[11px] gap-2 text-destructive focus:text-destructive"
-                                disabled={!svc.assigned}
+                                disabled={!svc.assigned || svc.type === "pars"}
                               >
                                 <Trash2 className="h-3.5 w-3.5" /> Hizmeti Kaldır
                               </DropdownMenuItem>
@@ -3629,13 +3697,64 @@ tr:nth-child(even) td{background:#fafafa}
                                     {svc.type === "iis-site" || svc.type === "iis-resim" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
                                     <span className={`text-[11px] font-medium flex-1 ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>{svc.name}</span>
                                     <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
-                                      {svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : "—"}
+                                      {svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : svc.config && "dbPath" in svc.config ? svc.config.dbPath : "—"}
                                     </span>
                                   </button>
                                 )
                               })}
                             </div>
                           </div>
+
+                          {/* Pars: kullanıcılar + raporlar + bağlanacak DB'ler */}
+                          {newSvcParsService && (
+                            <>
+                              <div className="rounded-[5px] border border-border/50 overflow-hidden">
+                                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                                  <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
+                                    Pars'a bağlanacak veritabanları — {newSvcParsDatalar.length} / {tabSQL.length}
+                                  </span>
+                                </div>
+                                {tabSQL.length === 0 ? (
+                                  <p className="px-3 py-3 text-[11px] text-amber-600 dark:text-amber-400">
+                                    Firmanın SQL veritabanı listesi boş — Pars kullanıcısı rapor göremez. Önce SQL sekmesinden veritabanını kur.
+                                  </p>
+                                ) : (
+                                  <div className="divide-y divide-border/40">
+                                    {tabSQL.map((db) => (
+                                      <div key={db.Name} className="grid grid-cols-[1fr_170px] items-center gap-3 px-3 py-1.5">
+                                        <span className="text-[11px] font-mono truncate">{db.Name}</span>
+                                        <Select value={newSvcParsDbTips[db.Name] ?? ""} onValueChange={(v) => setNewSvcParsDbTips((p) => ({ ...p, [db.Name]: v === "yok" ? "" : v }))}>
+                                          <SelectTrigger className="h-7 text-[11px] rounded-[5px]">
+                                            <SelectValue placeholder="Bağlanmaz" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="yok" className="text-[11px]">Bağlanmaz</SelectItem>
+                                            {Object.entries(PARS_TIPLER).map(([tid, ad]) => (
+                                              <SelectItem key={tid} value={tid} className="text-[11px]">{ad}</SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                              <StepServicesPars
+                                katalog={newSvcParsKatalog}
+                                loading={newSvcParsLoading}
+                                error={newSvcParsError}
+                                onRefresh={() => loadNewSvcParsKatalog(newSvcParsService.id, true)}
+                                users={newSvcParsUsers}
+                                onAddUser={() => setNewSvcParsUsers((p) => [...p, mkParsRow()])}
+                                onRemoveUser={(id) => setNewSvcParsUsers((p) => p.filter((u) => u.id !== id))}
+                                onUpdateUser={(id, patch) => setNewSvcParsUsers((p) => p.map((u) => u.id === id ? { ...u, ...patch } : u))}
+                                onRegenerate={(id) => setNewSvcParsUsers((p) => p.map((u) => u.id === id ? { ...u, password: parsSifreUret() } : u))}
+                                programTipleri={newSvcParsTipleri}
+                                selectedReportIds={newSvcParsReportIds}
+                                onSetReportIds={setNewSvcParsReportIds}
+                              />
+                            </>
+                          )}
 
                           {/* Pusula: Windows + Depo sunucusu */}
                           {newSvcHasPusula && (
@@ -3739,6 +3858,12 @@ tr:nth-child(even) td{background:#fafafa}
                             config: s.config,
                           })),
                           skipDepo:         !newSvcHasPusula,
+                          pars: newSvcParsService ? {
+                            serviceId:        newSvcParsService.id,
+                            users:            newSvcParsUsers.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin })),
+                            allowedReportIds: newSvcParsReportIds,
+                            datalar:          newSvcParsDatalar,
+                          } : undefined,
                         }}
                         onComplete={() => {
                           toast.success("Hizmet kuruldu", { description: `${newSvcSelected.length} hizmet firmaya eklendi` })

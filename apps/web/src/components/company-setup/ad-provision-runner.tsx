@@ -72,6 +72,8 @@ export interface AdProvisionPayload {
     users:            { username: string; password: string; admin: boolean }[]
     /** İzinli rapor ID'leri; sunucu geri kalan her şeyi yasaklı yazar */
     allowedReportIds: number[]
+    /** SQL adımı çalışmadığında (firma detayından ekleme) bağlanacak mevcut DB'ler */
+    datalar?:         { data: string; tipId: number }[]
   }
 }
 

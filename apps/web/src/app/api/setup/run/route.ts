@@ -48,7 +48,7 @@ import type {
   IisSiteConfig,
   IisResimConfig,
 } from "@/app/api/services/route"
-import { parsHedefYukle, parsKatalogOku, parsKatalogOnbellekTemizle } from "@/lib/pars-service"
+import { parsHedefYukle, parsKatalogOku, parsKatalogOnbellekTemizle, parsKullanicilariKaydet } from "@/lib/pars-service"
 import { buildParsKullaniciYaz, parsJsonAyikla } from "@/lib/setup-parsops"
 import { parsTipFromProgramCode } from "@/lib/pars-katalog"
 
@@ -238,6 +238,9 @@ interface RunPayload {
     serviceId:        number
     users:            { username: string; password: string; admin: boolean }[]
     allowedReportIds: number[]
+    /** SQL adımı çalışmadığında (firma detayından ekleme) bağlanacak mevcut DB'ler.
+     *  Restore edilenlerle birleştirilir. */
+    datalar?:         { data: string; tipId: number }[]
   }
 }
 
@@ -1485,6 +1488,14 @@ export async function POST(req: NextRequest) {
                 if (tip === null) { tipsizler.push(d.data); continue }
                 datalar.push({ data: d.data, tipId: tip })
               }
+              // Firma detayından ekleme: mevcut DB'ler istemciden tipiyle gelir
+              for (const d of (p.datalar ?? [])) {
+                const data = String(d.data ?? "").trim()
+                const tip = Number(d.tipId)
+                if (!data || !Number.isFinite(tip) || tip === 0) continue
+                if (datalar.some((x) => x.data.toLowerCase() === data.toLowerCase())) continue
+                datalar.push({ data, tipId: tip })
+              }
 
               send("step", {
                 stepId: "pars_oku", label: okuLabel, status: "done",
@@ -1528,6 +1539,17 @@ export async function POST(req: NextRequest) {
                 } else {
                   parsUsersCreated = sonuc.users?.length ?? 0
                   const yeniData = (sonuc.datalar ?? []).filter((d) => d.yeni).map((d) => d.data)
+                  // Hub'a iz: firma Hizmetler sekmesi bu kayıtları listeler. Hata kurulumu bozmaz.
+                  try {
+                    const idByName = new Map((sonuc.users ?? []).map((u) => [u.adi.toLowerCase(), u.id]))
+                    await parsKullanicilariKaydet(
+                      payload.firmaId, hedef.serviceId,
+                      p.users.map((u) => ({ username: u.username.trim(), tipi: u.admin ? 1 : 0, parsUserId: idByName.get(u.username.trim().toLowerCase()) ?? null })),
+                      datalar.map((d) => d.data),
+                    )
+                  } catch (err) {
+                    send("step", { stepId: "pars_kayit", label: "Pars: Hub kaydı yazılamadı (Ayar.mdb tamam)", status: "error", error: err instanceof Error ? err.message : String(err) })
+                  }
                   send("step", {
                     stepId: "pars_yaz", label: yazLabel, status: "done",
                     output: [

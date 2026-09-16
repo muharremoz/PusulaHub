@@ -70,3 +70,23 @@ export async function parsKatalogOku(hedef: ParsHedef, taze = false): Promise<{ 
 export function parsKatalogOnbellekTemizle(serviceId: number) {
   katalogCache.delete(serviceId)
 }
+
+/** Ayar.mdb'ye yazılan kullanıcıları Hub'a kaydeder (firma Hizmetler sekmesi). Şifre saklanmaz. */
+export async function parsKullanicilariKaydet(
+  companyId: string,
+  serviceId: number,
+  users: { username: string; tipi: 0 | 1; parsUserId: number | null }[],
+  dataNames: string[],
+): Promise<void> {
+  if (!users.length) return
+  const sb = await getSupabaseServer()
+  const { error } = await sb.schema("hub").from("company_pars_users").insert(users.map((u) => ({
+    company_id:   companyId,
+    service_id:   serviceId,
+    username:     u.username,
+    tipi:         u.tipi,
+    pars_user_id: u.parsUserId,
+    data_names:   dataNames.length ? dataNames.join(",") : null,
+  })))
+  if (error) throw new Error(error.message)
+}

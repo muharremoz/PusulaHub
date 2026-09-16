@@ -7,7 +7,8 @@ import { requirePermission } from "@/lib/require-permission"
  * Firma detay sayfası "Hizmetler" tabı için:
  * Firmaya sihirbaz tarafından atanan hizmetleri (WizardPortAssignments) +
  * katalog bilgisini (WizardServices) + kurulu olduğu sunucuyu (IISSites)
- * birleştirerek döndürür.
+ * birleştirerek döndürür. Pars hizmeti port almaz; company_pars_users'tan
+ * kullanıcı listesiyle tek satır olarak eklenir.
  */
 
 export interface CompanyServiceDto {
@@ -21,6 +22,8 @@ export interface CompanyServiceDto {
   status:     string
   appPool:    string
   assignedAt: string
+  /** Pars: Ayar.mdb'ye yazılmış kullanıcı adları */
+  users?:     string[]
 }
 
 export async function GET(
@@ -36,10 +39,11 @@ export async function GET(
   const { firkod } = await params
   try {
     const sb = await getSupabaseServer()
-    const [{ data: wpa }, { data: ws }, { data: iis }] = await Promise.all([
+    const [{ data: wpa }, { data: ws }, { data: iis }, { data: parsRows }] = await Promise.all([
       sb.schema("hub").from("wizard_port_assignments").select("id, service_id, port, site_name, assigned_at").eq("company_id", firkod),
       sb.schema("hub").from("wizard_services").select("id, name, category, type"),
       sb.schema("hub").from("iis_sites").select("name, server, status, app_pool").eq("firma", firkod),
+      sb.schema("hub").from("company_pars_users").select("id, service_id, username, tipi, created_at").eq("company_id", firkod).order("created_at"),
     ])
     const wsById = new Map(((ws ?? []) as { id: number; name: string; category: string | null; type: string }[]).map((s) => [s.id, s]))
     const iisByName = new Map(((iis ?? []) as { name: string; server: string; status: string; app_pool: string }[]).map((i) => [i.name, i]))
@@ -56,8 +60,26 @@ export async function GET(
         }
       })
       .filter((x) => x.name)
-      .sort((a, b) => a.name.localeCompare(b.name))
 
+    // Pars: hizmet başına tek satır, kullanıcılar alt bilgi
+    const parsByService = new Map<number, { users: string[]; ilk: string }>()
+    for (const r of ((parsRows ?? []) as { service_id: number; username: string; tipi: number; created_at: string }[])) {
+      const g = parsByService.get(r.service_id) ?? { users: [], ilk: r.created_at }
+      g.users.push(r.tipi === 1 ? `${r.username} (admin)` : r.username)
+      parsByService.set(r.service_id, g)
+    }
+    for (const [serviceId, g] of parsByService) {
+      const s = wsById.get(serviceId)
+      if (!s) continue
+      services.push({
+        id: 1_000_000 + serviceId, name: s.name, category: s.category ?? "", type: s.type,
+        port: null, siteName: g.users.join(", "), server: "Ayar.mdb", status: "", appPool: "",
+        assignedAt: g.ilk ? g.ilk.slice(0, 19).replace("T", " ") : "",
+        users: g.users,
+      })
+    }
+
+    services.sort((a, b) => a.name.localeCompare(b.name))
     const resp = NextResponse.json(services)
     resp.headers.set("Cache-Control", "private, max-age=15, stale-while-revalidate=30")
     return resp
