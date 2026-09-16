@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
 import type { DepoServerItem } from "@/app/api/setup/depo-servers/route"
-import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive } from "lucide-react"
+import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive, Smartphone } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
@@ -15,6 +15,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
+import { StepServicesPars } from "./step-services-pars"
+import type { ComponentProps } from "react"
 
 interface Props {
   services: WizardServiceDto[]
@@ -37,6 +39,9 @@ interface Props {
   depoServersError?:   string | null
   selectedDepoServerId: string | null
   onSelectDepoServer:   (id: string) => void
+
+  /** Pars paneli — yalnız Pars hizmeti seçiliyken dolu */
+  pars?: ComponentProps<typeof StepServicesPars> | null
 }
 
 function getSourcePath(svc: WizardServiceDto): string {
@@ -44,6 +49,7 @@ function getSourcePath(svc: WizardServiceDto): string {
   if (svc.config && "subFolder" in svc.config) {
     return `Depo\\Resimler\\{firmaKod}${svc.config.subFolder ? `\\${svc.config.subFolder}` : ""}`
   }
+  if (svc.config && "dbPath" in svc.config) return svc.config.dbPath
   return "—"
 }
 
@@ -56,6 +62,7 @@ export function StepServices({
   selectedIisServerId, onSelectIisServer,
   depoServers, depoServersLoading, depoServersError,
   selectedDepoServerId, onSelectDepoServer,
+  pars,
 }: Props) {
   const categories = [...new Set(services.map((s) => s.category))]
   const [activeTab, setActiveTab] = useState<string | undefined>(categories[0])
@@ -220,11 +227,13 @@ export function StepServices({
                     "shrink-0",
                     isSelected ? "text-foreground" : "text-muted-foreground/70"
                   )}
-                  title={service.type === "iis-site" ? "IIS Sitesi" : service.type === "iis-resim" ? "Resim Paylaşımı" : "Pusula Programı"}
+                  title={service.type === "iis-site" ? "IIS Sitesi" : service.type === "iis-resim" ? "Resim Paylaşımı" : service.type === "pars" ? "Pars (Mobil)" : "Pusula Programı"}
                 >
                   {isIisType(service.type)
                     ? <Globe className="size-3" />
-                    : <Server className="size-3" />}
+                    : service.type === "pars"
+                      ? <Smartphone className="size-3" />
+                      : <Server className="size-3" />}
                 </span>
 
                 {/* İsim */}
@@ -244,6 +253,9 @@ export function StepServices({
           })}
         </div>
       </div>
+
+      {/* Pars — kullanıcılar + rapor seçimi (Pars hizmeti seçildiyse) */}
+      {pars && <StepServicesPars {...pars} />}
 
       {/* IIS Sunucusu seçimi — hizmet listesinin altında (aktif tab IIS kategorisindeyse veya iis-site seçildiyse) */}
       {showIisPicker && (

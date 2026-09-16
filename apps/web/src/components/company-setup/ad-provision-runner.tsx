@@ -65,6 +65,14 @@ export interface AdProvisionPayload {
   addToSirketDb?:     boolean
   /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır */
   skipDepo?:          boolean
+
+  /* ── Pars (mobil raporlama) — Hizmetler adımında Pars hizmeti seçildiyse ── */
+  pars?: {
+    serviceId:        number
+    users:            { username: string; password: string; admin: boolean }[]
+    /** İzinli rapor ID'leri; sunucu geri kalan her şeyi yasaklı yazar */
+    allowedReportIds: number[]
+  }
 }
 
 interface Props {
@@ -116,13 +124,16 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   // Masaüstü adımları: MUSTERILER subdir (1) + exe kısayolları (pusulaCount) + Resimler kısayolu (1)
   // Sadece pusula servisi varsa oluşturulur
   const desktopStepCount = pusulaCount > 0 ? pusulaCount + 2 : 0
+  // Pars: Ayar.mdb oku + tek yazma adımı
+  const parsStepCount = payload.pars ? 2 : 0
   const totalEstimated =
     3 +
     payload.users.length * 2 +
     depoStepCount +
     (serviceCount > 0 ? 1 + Math.round(pusulaCount * 3.5) + iisCount * 5 + resimCount * 2 + 1 : 0) +
     desktopStepCount +
-    sqlStepCount
+    sqlStepCount +
+    parsStepCount
   const doneCount = steps.filter((s) => s.status === "done").length
   const errorStep = steps.find((s) => s.status === "error")
   const progress  = Math.min(100, Math.round((doneCount / totalEstimated) * 100))

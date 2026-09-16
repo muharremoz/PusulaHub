@@ -2339,7 +2339,7 @@ tr:nth-child(even) td{background:#fafafa}
                       </div>
                     ) : collectServices().map((svc) => {
                       const running = svc.status === "Started"
-                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula Program" : (svc.type || "—")
+                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula Program" : svc.type === "pars" ? "Pars" : (svc.type || "—")
                       return (
                         <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
                           <div className="flex items-center gap-2 min-w-0">

@@ -8,6 +8,7 @@ import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
 import { AlertTriangle, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { ParsWizardUser } from "@/lib/pars-katalog"
 
 interface Props {
   adServer: AdServerItem | null
@@ -25,6 +26,8 @@ interface Props {
   selectedDemoDbIds: number[]
   demoDatabases: DemoDatabaseDto[]
   addFirmaPrefix: boolean
+  /** Pars hizmeti seçiliyse — kullanıcılar ve seçilen rapor sayısı */
+  pars?: { serviceName: string; users: ParsWizardUser[]; reportCount: number; totalReports: number } | null
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -50,7 +53,7 @@ function Row({ label, value, mono }: { label: string; value: string; mono?: bool
 export function StepSummary({
   adServer, windowsServer, company, users, services,
   selectedServiceIds, sqlServer, selectedSqlServerId, sqlMode, backupFiles,
-  selectedDemoDbIds, demoDatabases, addFirmaPrefix,
+  selectedDemoDbIds, demoDatabases, addFirmaPrefix, pars,
 }: Props) {
   const firmaId = company?.firkod ?? ""
   const selectedServices = services.filter((s) => selectedServiceIds.includes(s.id))
@@ -100,6 +103,12 @@ export function StepSummary({
         ]
       : []),
     ...(sqlSecimiEksik ? ["SQL adımı ATLANACAK — veritabanı oluşturulmayacak"] : []),
+    ...(pars ? [
+      `Pars: Ayar.mdb'ye ${pars.users.length} kullanıcı yazılacak (${pars.reportCount} rapor açık, diğerleri yasaklı)`,
+      sqlDbCount > 0
+        ? `Pars: ${sqlDbCount} veritabanı Datalar tablosuna bağlanacak`
+        : "Pars: veritabanı seçilmediği için Datalar bağlantısı yapılmayacak — kullanıcı rapor göremez",
+    ] : []),
   ]
 
   return (
@@ -184,6 +193,18 @@ export function StepSummary({
               <span className="text-[11px] text-muted-foreground font-mono">
                 → {firmaId ? `${firmaId}_` : ""}{d.dataName}
               </span>
+            </div>
+          ))}
+        </Section>
+      )}
+
+      {/* Pars */}
+      {pars && (
+        <Section title={`Pars — ${pars.users.length} kullanıcı · ${pars.reportCount}/${pars.totalReports} rapor`}>
+          {pars.users.map((u) => (
+            <div key={u.id} className="flex items-center justify-between px-3 py-2">
+              <span className="text-[11px] font-mono">{u.username || "—"}</span>
+              <span className="text-[10px] text-muted-foreground">{u.admin ? "Admin" : "Kullanıcı"}</span>
             </div>
           ))}
         </Section>

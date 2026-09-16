@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
 import { copyToClipboard } from "@/lib/clipboard"
+import type { ParsWizardUser } from "@/lib/pars-katalog"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 
@@ -104,6 +105,8 @@ interface Props {
   demoDatabases?:      DemoDatabaseDto[]
   addFirmaPrefix?:     boolean
   addToSirketDb?:      boolean
+  /** Pars hizmeti seçildiyse — kullanıcılar Ayar.mdb'ye yazılır, mesajda gösterilir */
+  pars?:               { serviceId: number; users: ParsWizardUser[]; allowedReportIds: number[] } | null
   onComplete:      () => void
   onReset:         () => void
   onConfetti:      () => void
@@ -112,6 +115,7 @@ interface Props {
 export function StepRun({
   serverId, windowsServerId, iisServerId, iisServerDns, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
   sqlServerId, sqlServer, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, demoDatabases, addFirmaPrefix, addToSirketDb,
+  pars,
   onComplete, onReset, onConfetti,
 }: Props) {
   const [completed, setCompleted]   = useState(false)
@@ -129,6 +133,10 @@ export function StepRun({
   /*  SQL Backup Master eklemesi kritik olmayan bir adim: basarisiz olsa
    *  da kurulum devam ediyor. Sonucu modalda gostermek icin izleniyor.  */
   const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "hata">("yok")
+  /*  Pars yazma adımı da kritik degil; sonucu mesajda ve modalda dogru
+   *  gostermek icin izleniyor — basarisizsa kullanici bilgileri mesaja
+   *  girmez, "eklenemedi" uyarisi gosterilir.                          */
+  const [parsDurum, setParsDurum] = useState<"yok" | "tamam" | "hata">("yok")
   const [copied, setCopied]         = useState(false)
 
   // Şifre yeniden deneme
@@ -283,6 +291,16 @@ export function StepRun({
       lines.push("")
     }
 
+    // Pars mobil uygulama — yalnız yazma adımı başarılıysa
+    if (pars && pars.users.length > 0 && parsDurum === "tamam") {
+      lines.push("Pars Mobil Uygulama Bilgileri:")
+      pars.users.forEach((u) => {
+        lines.push(`Kullanıcı Adı: ${u.username}`)
+        lines.push(`Şifre: ${u.password}`)
+      })
+      lines.push("")
+    }
+
     lines.push("İyi çalışmalar.")
 
     return lines.join("\n")
@@ -339,6 +357,11 @@ export function StepRun({
           selectedDemoDbIds,
           addFirmaPrefix,
           addToSirketDb,
+          pars: pars && pars.users.length > 0 ? {
+            serviceId:        pars.serviceId,
+            users:            pars.users.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin })),
+            allowedReportIds: pars.allowedReportIds,
+          } : undefined,
         }}
         onComplete={() => {
           setCompleted(true)
@@ -349,9 +372,14 @@ export function StepRun({
         onError={() => setHasError(true)}
         onStepError={handleStepError}
         onStep={(st) => {
-          if (st.stepId !== "sbm_add") return
-          if (st.status === "done")  setSbmDurum("tamam")
-          if (st.status === "error") setSbmDurum("hata")
+          if (st.stepId === "sbm_add") {
+            if (st.status === "done")  setSbmDurum("tamam")
+            if (st.status === "error") setSbmDurum("hata")
+          }
+          if (st.stepId === "pars_yaz") {
+            if (st.status === "done")  setParsDurum("tamam")
+            if (st.status === "error") setParsDurum("hata")
+          }
         }}
       />
 
@@ -450,6 +478,26 @@ export function StepRun({
                 <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">{serverDns}</p>
               )}
             </div>
+
+            {/* Pars yazilamadiysa: kullanici mesaja girmez, elle eklenmeli */}
+            {pars && parsDurum === "hata" && (
+              <div className="rounded-[5px] border border-red-500/25 bg-red-500/10 px-3 py-2.5">
+                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
+                  <AlertTriangle className="size-3.5" />
+                  Pars kullanıcıları eklenemedi
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Ayar.mdb&apos;ye yazma adımı hata verdi (adım listesinde ayrıntı var). Kullanıcılar Pusula Görev üzerinden elle eklenmeli:
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {pars.users.map((u) => (
+                    <li key={u.id} className="rounded-[5px] bg-background/60 px-2 py-1 font-mono text-[10px] text-foreground">
+                      {u.username} · {u.admin ? "admin" : "kullanıcı"}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* 2) Yedek gorevleri — SQL kurulmadiysa hic gosterilmiyor */}
             {restoredDbNames.length > 0 && (
@@ -657,6 +705,24 @@ export function StepRun({
                 </div>
               </div>
             ))}
+
+            {pars && pars.users.length > 0 && parsDurum === "tamam" && (
+              <div className="rounded-[5px] border border-border/60 overflow-hidden">
+                <div className="px-3 py-2 bg-muted/20 border-b border-border">
+                  <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
+                    Pars Mobil Uygulama
+                  </p>
+                </div>
+                <div className="p-3 space-y-2">
+                  {pars.users.map((u) => (
+                    <div key={u.id} className="space-y-1">
+                      <CopyField label="Kullanıcı Adı" value={u.username} mono />
+                      <CopyField label="Şifre"         value={u.password} mono />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleCopy}

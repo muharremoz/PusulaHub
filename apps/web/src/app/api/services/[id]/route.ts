@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
-import type { WizardServiceDto, ServiceType, ServiceConfig } from "../route"
+import {
+  SERVICE_TYPES, WIZARD_SERVICE_COLS, parseConfig, validateConfig, wizardServiceRowToDto,
+  type ServiceType, type WizardServiceRow,
+} from "@/lib/wizard-service-config"
 
 /**
  * /api/services/[id]
@@ -9,86 +12,6 @@ import type { WizardServiceDto, ServiceType, ServiceConfig } from "../route"
  *
  * Type değişimi destekleniyor — yeni type için config tam set verilmek zorunda.
  */
-
-interface Row {
-  id: number; name: string; category: string; type: string
-  config: string | null; display_order: number; is_active: boolean
-}
-const SVC_COLS = "id, name, category, type, config, display_order, is_active"
-
-function rowToDto(r: Row): WizardServiceDto {
-  let parsed: ServiceConfig | null = null
-  if (r.config) {
-    try { parsed = JSON.parse(r.config) as ServiceConfig } catch { parsed = null }
-  }
-  return {
-    id: r.id, name: r.name, category: r.category,
-    type: (r.type as ServiceType) ?? "pusula-program",
-    config: parsed, displayOrder: r.display_order, isActive: !!r.is_active,
-  }
-}
-
-function validateConfig(type: ServiceType, raw: unknown):
-  { ok: true; config: ServiceConfig } | { ok: false; error: string }
-{
-  if (!raw || typeof raw !== "object") return { ok: false, error: "config zorunlu" }
-  const c = raw as Record<string, unknown>
-
-  if (type === "pusula-program") {
-    const sourceFolderPath = typeof c.sourceFolderPath === "string" ? c.sourceFolderPath.trim() : ""
-    if (!sourceFolderPath) return { ok: false, error: "config.sourceFolderPath zorunlu" }
-    return {
-      ok: true,
-      config: {
-        sourceFolderPath,
-        paramFileName: typeof c.paramFileName === "string" && c.paramFileName.trim() ? c.paramFileName.trim() : null,
-        programCode:   typeof c.programCode   === "string" && c.programCode.trim()   ? c.programCode.trim()   : null,
-        exeName:       typeof c.exeName       === "string" && c.exeName.trim()       ? c.exeName.trim()       : null,
-      },
-    }
-  }
-
-  if (type === "iis-site") {
-    const sourceFolderPath = typeof c.sourceFolderPath === "string" ? c.sourceFolderPath.trim() : ""
-    const siteNamePattern  = typeof c.siteNamePattern  === "string" ? c.siteNamePattern.trim()  : ""
-    const portRangeId      = Number(c.portRangeId)
-    if (!sourceFolderPath) return { ok: false, error: "config.sourceFolderPath zorunlu" }
-    if (!Number.isFinite(portRangeId) || portRangeId <= 0) {
-      return { ok: false, error: "config.portRangeId zorunlu" }
-    }
-    return {
-      ok: true,
-      config: {
-        sourceFolderPath,
-        configFileName: typeof c.configFileName === "string" && c.configFileName.trim() ? c.configFileName.trim() : null,
-        siteNamePattern: siteNamePattern || null,
-        portRangeId,
-      },
-    }
-  }
-
-  if (type === "iis-resim") {
-    const portRangeId = Number(c.portRangeId)
-    if (!Number.isFinite(portRangeId) || portRangeId <= 0) {
-      return { ok: false, error: "config.portRangeId zorunlu" }
-    }
-    const subFolder = cleanSubFolder(c.subFolder)
-    if (subFolder === false) return { ok: false, error: "config.subFolder geçersiz (.., : ve özel karakter kullanılamaz)" }
-    return { ok: true, config: { portRangeId, subFolder } }
-  }
-
-  return { ok: false, error: "Bilinmeyen type" }
-}
-
-/** Alt klasör yolunu normalize eder: baş/son ayraçlar atılır, / → \. Geçersizse false. */
-function cleanSubFolder(raw: unknown): string | null | false {
-  if (typeof raw !== "string") return null
-  const s = raw.trim().replace(/\//g, "\\").replace(/^\\+|\\+$/g, "")
-  if (!s) return null
-  if (/[:*?"<>|']/.test(s)) return false
-  if (s.split("\\").some((p) => !p.trim() || p === "." || p === "..")) return false
-  return s
-}
 
 interface PatchPayload {
   name?:         string
@@ -113,9 +36,9 @@ export async function PATCH(
     const body = (await req.json()) as PatchPayload
     const sb = await getSupabaseServer()
 
-    const { data: current } = await sb.schema("hub").from("wizard_services").select(SVC_COLS).eq("id", numericId).maybeSingle()
+    const { data: current } = await sb.schema("hub").from("wizard_services").select(WIZARD_SERVICE_COLS).eq("id", numericId).maybeSingle()
     if (!current) return NextResponse.json({ error: "Hizmet bulunamadı" }, { status: 404 })
-    const cur = current as unknown as Row
+    const cur = current as unknown as WizardServiceRow
 
     const nextName     = body.name     !== undefined ? body.name.trim()     : cur.name
     const nextCategory = body.category !== undefined ? body.category.trim() : cur.category
@@ -125,15 +48,18 @@ export async function PATCH(
 
     if (!nextName)     return NextResponse.json({ error: "name boş olamaz" },     { status: 400 })
     if (!nextCategory) return NextResponse.json({ error: "category boş olamaz" }, { status: 400 })
-    if (nextType !== "pusula-program" && nextType !== "iis-site" && nextType !== "iis-resim") {
+    if (!SERVICE_TYPES.includes(nextType)) {
       return NextResponse.json({ error: "type geçersiz" }, { status: 400 })
     }
+
+    // Mevcut (ham) config — aynı tipte kalınıyorsa gizli alanlar (Pars şifresi) buradan korunur.
+    const curConfig = nextType === cur.type ? parseConfig(cur.config) : null
 
     // Config: yeni payload geldiyse tam validate; gelmediyse mevcut config'i al.
     // Type değiştiyse config payload zorunlu (eski config yeni type'a uymaz).
     let nextConfigJson: string
     if (body.config !== undefined) {
-      const v = validateConfig(nextType, body.config)
+      const v = validateConfig(nextType, body.config, curConfig)
       if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 })
       nextConfigJson = JSON.stringify(v.config)
     } else {
@@ -144,9 +70,7 @@ export async function PATCH(
         )
       }
       // Mevcut config'i parse + re-validate (eski şema kalıntısı için).
-      let curConfig: unknown = null
-      if (cur.config) { try { curConfig = JSON.parse(cur.config) } catch { /* yok say */ } }
-      const v = validateConfig(nextType, curConfig)
+      const v = validateConfig(nextType, curConfig, curConfig)
       if (!v.ok) {
         return NextResponse.json(
           { error: `Mevcut config geçersiz: ${v.error}. Lütfen config alanlarını da gönderin.` },
@@ -159,9 +83,9 @@ export async function PATCH(
     const { data: updated, error } = await sb.schema("hub").from("wizard_services").update({
       name: nextName, category: nextCategory, type: nextType, config: nextConfigJson,
       display_order: nextDisplayOrder, is_active: nextIsActive, updated_at: new Date().toISOString(),
-    }).eq("id", numericId).select(SVC_COLS).single()
+    }).eq("id", numericId).select(WIZARD_SERVICE_COLS).single()
     if (error) throw error
-    return NextResponse.json(rowToDto(updated as unknown as Row))
+    return NextResponse.json(wizardServiceRowToDto(updated as unknown as WizardServiceRow))
   } catch (err) {
     console.error("[PATCH /api/services/[id]]", err)
     return NextResponse.json({ error: "Hizmet güncellenemedi" }, { status: 500 })

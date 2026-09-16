@@ -14,17 +14,21 @@ import {
   SelectValue,
 } from "@/components/ui/combobox-select"
 import { cn } from "@/lib/utils"
-import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot, Images } from "lucide-react"
+import { FolderOpen, FileText, Loader2, Server, Globe, Waypoints, MonitorDot, Images, Smartphone, KeyRound } from "lucide-react"
 import { toast } from "sonner"
 import type { WizardServiceDto, ServiceType } from "@/app/api/services/route"
 import type { PortRangeDto } from "@/app/api/port-ranges/route"
+import type { Server as HubServer } from "@/types"
 
 /* ── Sabitler ── */
 const TYPE_OPTIONS: { value: ServiceType; label: string; icon: React.ReactNode; defaultCategory: string }[] = [
   { value: "pusula-program", label: "Pusula Programı",      icon: <Server className="size-3.5" />, defaultCategory: "Pusula Programları" },
   { value: "iis-site",       label: "IIS Sitesi",            icon: <Globe  className="size-3.5" />, defaultCategory: "API Hizmeti" },
   { value: "iis-resim",      label: "Resim Paylaşımı",       icon: <Images className="size-3.5" />, defaultCategory: "API Hizmeti" },
+  { value: "pars",           label: "Pars (Mobil)",          icon: <Smartphone className="size-3.5" />, defaultCategory: "Mobil" },
 ]
+
+const PARS_VARSAYILAN_YOL = "C:\\Pusula\\Pusula Gorev\\Ayar.mdb"
 
 const IIS_CATEGORIES = ["API Hizmeti", "Entegrasyonlar"]
 
@@ -84,6 +88,14 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
   /* ── iis-resim config (port aralığı iPortRangeId ile ortak) ── */
   const [rSubFolder,        setRSubFolder]        = useState("")
 
+  /* ── pars config ── */
+  const [zServerId,         setZServerId]         = useState("")
+  const [zDbPath,           setZDbPath]           = useState(PARS_VARSAYILAN_YOL)
+  const [zDbPassword,       setZDbPassword]       = useState("")
+  const [zHasPassword,      setZHasPassword]      = useState(false)
+  const [servers,           setServers]           = useState<HubServer[]>([])
+  const [serversLoading,    setServersLoading]    = useState(false)
+
   const [portRanges,        setPortRanges]        = useState<PortRangeDto[]>([])
   const [portRangesLoading, setPortRangesLoading] = useState(false)
 
@@ -113,6 +125,11 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       } else if (editing.type === "iis-resim" && editing.config && "subFolder" in editing.config) {
         setIPortRangeId(String(editing.config.portRangeId ?? ""))
         setRSubFolder(editing.config.subFolder ?? "")
+      } else if (editing.type === "pars" && editing.config && "dbPath" in editing.config) {
+        setZServerId(editing.config.serverId ?? "")
+        setZDbPath(editing.config.dbPath || PARS_VARSAYILAN_YOL)
+        setZDbPassword("")
+        setZHasPassword(!!editing.config.hasPassword)
       }
     } else {
       setType("pusula-program")
@@ -129,8 +146,23 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
       setISiteNamePattern("")
       setIPortRangeId("")
       setRSubFolder("")
+      setZServerId("")
+      setZDbPath(PARS_VARSAYILAN_YOL)
+      setZDbPassword("")
+      setZHasPassword(false)
     }
   }, [open, editing])
+
+  /* ── Sunucu listesi (pars seçilince — Ayar.mdb'nin olduğu mobil sunucu) ── */
+  useEffect(() => {
+    if (!open || type !== "pars" || servers.length > 0) return
+    setServersLoading(true)
+    fetch("/api/servers")
+      .then((r) => r.json())
+      .then((data) => setServers(Array.isArray(data) ? (data as HubServer[]) : []))
+      .catch(() => setServers([]))
+      .finally(() => setServersLoading(false))
+  }, [open, type, servers.length])
 
   /* ── Port aralıklarını çek (iis-site / iis-resim seçilince) ── */
   useEffect(() => {
@@ -170,6 +202,10 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
     if (type === "iis-resim") {
       return !!iPortRangeId
     }
+    if (type === "pars") {
+      // Düzenlemede şifre boş bırakılabilir (kayıtlı olan korunur)
+      return !!zServerId && /\.mdb$/i.test(zDbPath.trim()) && (!!zDbPassword || zHasPassword)
+    }
     return false
   })()
 
@@ -187,6 +223,12 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
         : type === "iis-resim" ? {
           portRangeId:      Number(iPortRangeId),
           subFolder:        rSubFolder.trim() || null,
+        }
+        : type === "pars" ? {
+          serverId:         zServerId,
+          dbPath:           zDbPath.trim(),
+          // Boş → sunucu kayıtlı şifreyi korur
+          dbPassword:       zDbPassword,
         }
         : {
           sourceFolderPath: iSourceFolderPath.trim(),
@@ -271,7 +313,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
 
             {/* ── Tip Seçimi ── */}
             <Section title="Hizmet Tipi">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 {TYPE_OPTIONS.map((t) => {
                   const active = type === t.value
                   return (
@@ -305,6 +347,11 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
               {type === "iis-resim" && (
                 <p className="text-[10px] text-muted-foreground">
                   Klasör kopyalanmaz. IIS sunucusunda firmanın Depo&apos;daki resim klasörünü port havuzundan bir portla dışarıya açan site kurulur.
+                </p>
+              )}
+              {type === "pars" && (
+                <p className="text-[10px] text-muted-foreground">
+                  Mobil sunucudaki PUSULA GOREV uygulamasının Ayar.mdb dosyasına Pars kullanıcısı, rapor yetkileri ve firma veritabanı bağlantısı yazılır. Tek kayıt yeterlidir.
                 </p>
               )}
             </Section>
@@ -496,6 +543,61 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                 <Section title="Port Havuzu">
                   <Field label="Port Aralığı" hint="Sıradaki boş port atanır. Firmanın sitesi IIS'te zaten varsa portu korunur.">
                     {portRangeSelect}
+                  </Field>
+                </Section>
+              </>
+            )}
+
+            {/* ── Type-specific: pars ── */}
+            {type === "pars" && (
+              <>
+                <Section title="Ayar Veritabanı">
+                  <Field label="Mobil Sunucu" hint="PUSULA GOREV'in çalıştığı, agent kurulu sunucu. Ayar.mdb buradan okunur/yazılır.">
+                    <Select value={zServerId} onValueChange={setZServerId}>
+                      <SelectTrigger className="rounded-[5px] text-[13px] h-8 w-full">
+                        <SelectValue placeholder={serversLoading ? "Yükleniyor…" : "Sunucu seçin…"} />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-[5px]">
+                        {servers.map((s) => (
+                          <SelectItem key={s.id} value={s.id} className="text-[13px]">
+                            <div className="flex items-center gap-2 w-full">
+                              <Server className="size-3 text-muted-foreground shrink-0" />
+                              <span className="font-medium">{s.name}</span>
+                              <span className="text-muted-foreground font-mono ml-2">{s.ip}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </Field>
+
+                  <Field label="Ayar.mdb Yolu" hint="Sunucudaki tam yol.">
+                    <div className="relative">
+                      <FileText className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        placeholder={PARS_VARSAYILAN_YOL}
+                        value={zDbPath}
+                        onChange={(e) => setZDbPath(e.target.value)}
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
+                      />
+                    </div>
+                  </Field>
+
+                  <Field
+                    label={zHasPassword ? "Veritabanı Şifresi (kayıtlı — değiştirmek için yaz)" : "Veritabanı Şifresi"}
+                    hint="Şifreli saklanır; listede ve sihirbazda gösterilmez."
+                  >
+                    <div className="relative">
+                      <KeyRound className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+                      <Input
+                        type="password"
+                        autoComplete="new-password"
+                        placeholder={zHasPassword ? "••••••••  (boş bırak → kayıtlı şifre kalır)" : "Ayar.mdb şifresi"}
+                        value={zDbPassword}
+                        onChange={(e) => setZDbPassword(e.target.value)}
+                        className="rounded-[5px] text-[13px] h-8 pl-7 font-mono"
+                      />
+                    </div>
                   </Field>
                 </Section>
               </>

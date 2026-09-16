@@ -48,6 +48,9 @@ import type {
   IisSiteConfig,
   IisResimConfig,
 } from "@/app/api/services/route"
+import { parsHedefYukle, parsKatalogOku, parsKatalogOnbellekTemizle } from "@/lib/pars-service"
+import { buildParsKullaniciYaz, parsJsonAyikla } from "@/lib/setup-parsops"
+import { parsTipFromProgramCode } from "@/lib/pars-katalog"
 
 /**
  * POST /api/setup/run
@@ -224,6 +227,18 @@ interface RunPayload {
   /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır.
    *  Tekil kullanıcı ekleme gibi depo ile ilgisiz akışlar için. */
   skipDepo?:         boolean
+
+  /* ── Pars (mobil raporlama) ────────────────────────────────────
+   * Hizmetler adımında Pars hizmeti seçildiyse gelir. Hizmet config'i
+   * (mobil sunucu, Ayar.mdb yolu, şifre) istemciye güvenilmeden DB'den
+   * yüklenir; istemci yalnız kullanıcıları ve izinli rapor listesini verir.
+   * Bağlanacak veritabanları SQL adımında restore edilenlerdir.
+   */
+  pars?: {
+    serviceId:        number
+    users:            { username: string; password: string; admin: boolean }[]
+    allowedReportIds: number[]
+  }
 }
 
 interface AgentTarget {
@@ -1019,6 +1034,9 @@ export async function POST(req: NextRequest) {
         // ── 7) SQL — veritabanı restore + guvenlik insert ───────────
         let sqlRestored  = 0
         let sqlGuvenlik  = 0
+        /* Pars'a bağlanacak DB'ler: başarıyla restore/attach edilenler,
+         * program koduyla birlikte (Datalar.TipID buradan türer). */
+        const parsDatalar: { data: string; programCode: string | null }[] = []
         if (sqlTarget) {
           // Mod 0 veya 1'e göre restore edilecek (bakPath, targetDbName, programCode) listesi
           interface RestoreTask {
@@ -1196,7 +1214,7 @@ export async function POST(req: NextRequest) {
                           return `${t.srcMdf}${t.srcLdf ? " + .ldf" : ""} → [${t.dbName}] (ATTACH)`
                         },
                       )
-                      if (ok) restoredDbNames.push(t.dbName)
+                      if (ok) { restoredDbNames.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
                     } else {
                       const restoreStepId = `sql_restore_${t.dbName}`
                       const restoreLabel  = `Veritabanı restore ediliyor: ${t.dbName}`
@@ -1217,7 +1235,7 @@ export async function POST(req: NextRequest) {
                           return `${t.bakPath} → [${t.dbName}]`
                         },
                       )
-                      if (ok) restoredDbNames.push(t.dbName)
+                      if (ok) { restoredDbNames.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
                     }
                   }
 
@@ -1432,6 +1450,98 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // ── 8) Pars — Ayar.mdb'ye kullanıcı + yetki (non-critical) ──────
+        // Kritik değil: mobil sunucuya ulaşılamazsa kurulum durmaz, adım
+        // kırmızı kalır ve "Elle Yapılacak Adımlar" kullanıcıları listeler.
+        let parsUsersCreated = 0
+        if (payload.pars && payload.pars.users.length > 0) {
+          const p = payload.pars
+          const okuLabel = "Pars: Ayar.mdb okunuyor"
+          send("step", { stepId: "pars_oku", label: okuLabel, status: "running" })
+
+          const hedefSonuc = await parsHedefYukle(Number(p.serviceId))
+          if (!hedefSonuc.ok) {
+            send("step", { stepId: "pars_oku", label: okuLabel, status: "error", error: hedefSonuc.error })
+          } else {
+            const hedef = hedefSonuc.hedef
+            const katalogSonuc = await parsKatalogOku(hedef, true)
+            if (!katalogSonuc.ok) {
+              send("step", { stepId: "pars_oku", label: okuLabel, status: "error", error: katalogSonuc.error })
+            } else {
+              const katalog = katalogSonuc.katalog
+              const mevcut = new Set(katalog.users.map((u) => u.adi.trim().toLocaleLowerCase("tr-TR")))
+              const cakisan = p.users.filter((u) => mevcut.has(u.username.trim().toLocaleLowerCase("tr-TR"))).map((u) => u.username)
+              const gecerliRapor = new Set(katalog.scripts.map((s) => s.id))
+              const izinli = p.allowedReportIds.map(Number).filter((id) => gecerliRapor.has(id))
+
+              // Datalar.TipID: DB'nin program kodundan; yoksa seçili ilk Pusula programından
+              const yedekTip = pusulaServices
+                .map((s) => parsTipFromProgramCode((s.config as PusulaProgramConfig | null)?.programCode))
+                .find((t) => t !== null) ?? null
+              const datalar: { data: string; tipId: number }[] = []
+              const tipsizler: string[] = []
+              for (const d of parsDatalar) {
+                const tip = parsTipFromProgramCode(d.programCode) ?? yedekTip
+                if (tip === null) { tipsizler.push(d.data); continue }
+                datalar.push({ data: d.data, tipId: tip })
+              }
+
+              send("step", {
+                stepId: "pars_oku", label: okuLabel, status: "done",
+                output: `${katalog.scripts.length} rapor, ${katalog.datalar.length} data, ${katalog.users.length} kullanıcı · izinli ${izinli.length} rapor · bağlanacak ${datalar.length} DB`,
+              })
+
+              if (cakisan.length > 0) {
+                send("step", {
+                  stepId: "pars_yaz", label: "Pars: kullanıcılar yazılıyor", status: "error",
+                  error: `Pars'ta zaten kayıtlı: ${cakisan.join(", ")}. Hizmetler adımında farklı ad verin.`,
+                })
+              } else {
+                if (tipsizler.length > 0) {
+                  send("step", {
+                    stepId: "pars_tipsiz", label: `Pars: ${tipsizler.length} DB bağlanamadı — program tipi belirsiz`, status: "error",
+                    error: `Program kodu Pars tipine eşlenemedi (909/011/016/111 bekleniyor): ${tipsizler.join(", ")}`,
+                  })
+                }
+                if (datalar.length === 0) {
+                  send("step", {
+                    stepId: "pars_datasiz", label: "Pars: bağlanacak veritabanı yok — kullanıcı rapor göremeyecek", status: "done",
+                    output: "SQL adımında DB restore edilmedi; Datalar kaydı yazılmadı. Sonradan Pusula Görev'den bağlanabilir.",
+                  })
+                }
+
+                const yazLabel = `Pars: ${p.users.length} kullanıcı yazılıyor`
+                send("step", { stepId: "pars_yaz", label: yazLabel, status: "running" })
+                const cmd = buildParsKullaniciYaz(hedef.dbPath, hedef.password, {
+                  datalar,
+                  users: p.users.map((u) => ({ adi: u.username.trim(), tipi: u.admin ? 1 : 0, sifre: u.password })),
+                  izinliRaporlar: izinli,
+                })
+                const r = await execOnAgent(hedef.agent.ip, hedef.agent.port, hedef.agent.apiKey, cmd, 90)
+                const sonuc = parsJsonAyikla<{ ok: boolean; error?: string; users?: { adi: string; id: number }[]; datalar?: { data: string; did: number; yeni: boolean }[]; yasakliData?: number; yasakliRapor?: number }>(r.stdout ?? "")
+                parsKatalogOnbellekTemizle(hedef.serviceId)
+                if (!sonuc || !sonuc.ok) {
+                  send("step", {
+                    stepId: "pars_yaz", label: yazLabel, status: "error",
+                    error: sonuc?.error ?? (r.stderr || r.stdout || `exit ${r.exitCode}`).trim().slice(0, 400),
+                  })
+                } else {
+                  parsUsersCreated = sonuc.users?.length ?? 0
+                  const yeniData = (sonuc.datalar ?? []).filter((d) => d.yeni).map((d) => d.data)
+                  send("step", {
+                    stepId: "pars_yaz", label: yazLabel, status: "done",
+                    output: [
+                      `${parsUsersCreated} kullanıcı: ${(sonuc.users ?? []).map((u) => `${u.adi} (ID ${u.id})`).join(", ")}`,
+                      yeniData.length ? `Datalar'a eklendi: ${yeniData.join(", ")}` : (datalar.length ? "Datalar zaten kayıtlıydı" : "Data bağlanmadı"),
+                      `kullanıcı başına ${sonuc.yasakliData ?? "?"} data ve ${sonuc.yasakliRapor ?? "?"} rapor yasaklandı`,
+                    ].join(" · "),
+                  })
+                }
+              }
+            }
+          }
+        }
+
         // Sunucu atamasını hub.companies tablosuna kaydet
         try {
           const sb = await getSupabaseServer()
@@ -1488,6 +1598,7 @@ export async function POST(req: NextRequest) {
             servicesInstalled,
             sqlRestored,
             sqlGuvenlik,
+            parsUsersCreated,
           },
         })
       } catch (err) {

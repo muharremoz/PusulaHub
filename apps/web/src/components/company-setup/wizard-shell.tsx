@@ -27,6 +27,11 @@ const Confetti     = dynamic(() => import("@/components/magicui/confetti").then(
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
+import {
+  parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsVarsayilanSecim,
+  type ParsKatalog, type ParsWizardUser,
+} from "@/lib/pars-katalog"
+import type { PusulaProgramConfig } from "@/app/api/services/route"
 
 const STEPS = [
   { label: "Sunucu",       hint: "Active Directory sunucusunu seçin",                          icon: Server },
@@ -42,6 +47,10 @@ let _uid = 2
 const generatePassword = () => generateSafePassword(12)
 function mkUser(): WizardUser {
   return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }
+}
+let _parsUid = 1
+function mkParsUser(): ParsWizardUser {
+  return { id: _parsUid++, username: "", password: parsSifreUret(), admin: false }
 }
 
 export function WizardShell() {
@@ -293,6 +302,64 @@ export function WizardShell() {
   const [setupDone, setSetupDone] = useState(false)
   const [showConfetti, setShowConfetti] = useState(false)
 
+  // Pars (step 3 — Pars hizmeti seçildiğinde)
+  const [parsUsers, setParsUsers]           = useState<ParsWizardUser[]>([])
+  const [parsReportIds, setParsReportIds]   = useState<number[]>([])
+  /** Kullanıcı rapor listesine elle dokundu mu — dokunmadıysa program seçimi değişince varsayılan yenilenir */
+  const [parsReportsTouched, setParsReportsTouched] = useState(false)
+  const [parsKatalog, setParsKatalog]       = useState<ParsKatalog | null>(null)
+  const [parsKatalogFor, setParsKatalogFor] = useState<number | null>(null)
+  const [parsKatalogLoading, setParsKatalogLoading] = useState(false)
+  const [parsKatalogError, setParsKatalogError]     = useState<string | null>(null)
+
+  const parsService = apiServices.find((s) => s.type === "pars" && selectedServiceIds.includes(s.id)) ?? null
+  // Seçili Pusula programlarının Pars tipleri — programCode'dan (909 → Perakende …)
+  const parsProgramTipleri = [...new Set(
+    apiServices
+      .filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))
+      .map((s) => parsTipFromProgramCode((s.config as PusulaProgramConfig | null)?.programCode))
+      .filter((t): t is number => t !== null),
+  )]
+
+  const loadParsKatalog = useCallback((serviceId: number, taze = false) => {
+    setParsKatalogLoading(true)
+    setParsKatalogError(null)
+    fetch(`/api/setup/pars/catalog?serviceId=${serviceId}${taze ? "&refresh=true" : ""}`, { cache: "no-store" })
+      .then(async (r) => {
+        const data = await r.json()
+        if (!r.ok || data?.error) throw new Error(data?.error ?? "Pars kataloğu alınamadı")
+        setParsKatalog(data as ParsKatalog)
+        setParsKatalogFor(serviceId)
+      })
+      .catch((e) => setParsKatalogError(e instanceof Error ? e.message : "Pars kataloğu alınamadı"))
+      .finally(() => setParsKatalogLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (step !== 3 || !parsService) return
+    if (parsKatalogFor === parsService.id || parsKatalogLoading) return
+    loadParsKatalog(parsService.id)
+  }, [step, parsService, parsKatalogFor, parsKatalogLoading, loadParsKatalog])
+
+  // Varsayılan rapor seçimi — katalog geldiğinde ve (elle dokunulmadıysa) program seçimi değiştiğinde
+  const parsTipKey = parsProgramTipleri.join(",")
+  useEffect(() => {
+    if (!parsKatalog || parsReportsTouched) return
+    setParsReportIds(parsVarsayilanSecim(parsKatalog.scripts, parsProgramTipleri))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parsKatalog, parsTipKey, parsReportsTouched])
+
+  // Pars seçilince en az bir kullanıcı satırı hazır gelsin
+  useEffect(() => {
+    if (parsService && parsUsers.length === 0) setParsUsers([mkParsUser()])
+  }, [parsService, parsUsers.length])
+
+  const parsUsersValid = parsUsers.length > 0 && parsUsers.every((u) =>
+    parsKullaniciAdiGecerliMi(u.username) && parsSifreGecerliMi(u.password),
+  ) && new Set(parsUsers.map((u) => u.username.trim().toLocaleLowerCase("tr-TR"))).size === parsUsers.length
+    && !parsUsers.some((u) => (parsKatalog?.users ?? []).some((k) => k.adi.trim().toLocaleLowerCase("tr-TR") === u.username.trim().toLocaleLowerCase("tr-TR")))
+  const parsReady = !parsService || (parsUsersValid && !!parsKatalog && !parsKatalogError)
+
   // Step 4: Demo veritabanları kataloğunu fetch et (aktif olanlar)
   useEffect(() => {
     if (step !== 4) return
@@ -360,7 +427,7 @@ export function WizardShell() {
                 && apiExistingUsers.length < (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0)
                 && selectedWindowsServerId !== null :
     step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
-    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) :
+    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) && parsReady :
     true
 
   const go = (to: number) => {
@@ -379,6 +446,14 @@ export function WizardShell() {
     const ids = apiServices.filter((s) => s.category === cat).map((s) => s.id)
     setSelectedServiceIds((p) => sel ? [...new Set([...p, ...ids])] : p.filter((id) => !ids.includes(id)))
   }, [apiServices])
+
+  const addParsUser    = useCallback(() => setParsUsers((p) => [...p, mkParsUser()]), [])
+  const removeParsUser = useCallback((id: number) => setParsUsers((p) => p.filter((u) => u.id !== id)), [])
+  const updateParsUser = useCallback((id: number, patch: Partial<ParsWizardUser>) =>
+    setParsUsers((p) => p.map((u) => u.id === id ? { ...u, ...patch } : u)), [])
+  const regenParsUser  = useCallback((id: number) =>
+    setParsUsers((p) => p.map((u) => u.id === id ? { ...u, password: parsSifreUret() } : u)), [])
+  const setParsReports = useCallback((ids: number[]) => { setParsReportsTouched(true); setParsReportIds(ids) }, [])
 
   const toggleBackup = (id: number) =>
     setBackupFiles((p) => p.map((f) => {
@@ -468,6 +543,8 @@ export function WizardShell() {
     // demoDatabases tekrar fetch edilsin diye boşalt — step 4'e girince useEffect yeniden doldurur
     setDemoDatabases([])
     setApiExistingUsers([]); setExistingUsersKey(null)
+    setParsUsers([]); setParsReportIds([]); setParsReportsTouched(false)
+    setParsKatalog(null); setParsKatalogFor(null); setParsKatalogError(null)
   }
 
   return (
@@ -606,6 +683,20 @@ export function WizardShell() {
                   depoServersError={depoServersError}
                   selectedDepoServerId={selectedDepoServerId}
                   onSelectDepoServer={setSelectedDepoServerId}
+                  pars={parsService ? {
+                    katalog: parsKatalog,
+                    loading: parsKatalogLoading,
+                    error: parsKatalogError,
+                    onRefresh: () => loadParsKatalog(parsService.id, true),
+                    users: parsUsers,
+                    onAddUser: addParsUser,
+                    onRemoveUser: removeParsUser,
+                    onUpdateUser: updateParsUser,
+                    onRegenerate: regenParsUser,
+                    programTipleri: parsProgramTipleri,
+                    selectedReportIds: parsReportIds,
+                    onSetReportIds: setParsReports,
+                  } : null}
                 />
               )}
               {step === 4 && (
@@ -639,6 +730,7 @@ export function WizardShell() {
                   sqlServer={sqlServer} selectedSqlServerId={selectedSqlServerId} sqlMode={sqlMode} backupFiles={backupFiles}
                   selectedDemoDbIds={selectedDemoDbIds} demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
+                  pars={parsService ? { serviceName: parsService.name, users: parsUsers, reportCount: parsReportIds.length, totalReports: parsKatalog?.scripts.length ?? 0 } : null}
                 />
               )}
               {step === 6 && (
@@ -665,6 +757,7 @@ export function WizardShell() {
                   demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                   addToSirketDb={addToSirketDb}
+                  pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: parsReportIds } : null}
                   onComplete={() => setSetupDone(true)}
                   onReset={reset}
                   onConfetti={() => { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 4000) }}

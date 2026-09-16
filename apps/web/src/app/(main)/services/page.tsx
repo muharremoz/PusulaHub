@@ -48,6 +48,7 @@ const TYPE_LABELS: Record<ServiceType, { label: string; icon: React.ReactNode; b
   "pusula-program": { label: "Pusula", icon: <Server className="size-3" />, badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/25" },
   "iis-site":       { label: "IIS",    icon: <Globe  className="size-3" />, badge: "bg-purple-500/15 text-purple-700 dark:text-purple-400 border-purple-500/25" },
   "iis-resim":      { label: "Resim",  icon: <Globe  className="size-3" />, badge: "bg-teal-500/15 text-teal-700 dark:text-teal-400 border-teal-500/25" },
+  "pars":           { label: "Pars",   icon: <Server className="size-3" />, badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/25" },
 };
 
 /* ── SortHeader ── */
@@ -260,6 +261,7 @@ export default function ServicesPage() {
                   svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath
                   : svc.config && "subFolder" in svc.config
                     ? `Depo\\Resimler\\{firmaKod}${svc.config.subFolder ? `\\${svc.config.subFolder}` : ""}`
+                  : svc.config && "dbPath" in svc.config ? svc.config.dbPath
                     : "—";
                 const programCode =
                   svc.type === "pusula-program" && svc.config && "programCode" in svc.config
@@ -312,6 +314,10 @@ export default function ServicesPage() {
                             <Waypoints className="size-3 shrink-0" />
                             <span className="truncate font-mono">{"{firmaKod}_RESIM"}</span>
                           </>
+                        ) : svc.type === "pars" ? (
+                          <span className="truncate">
+                            {svc.config && "hasPassword" in svc.config && svc.config.hasPassword ? "Ayar.mdb · şifre kayıtlı" : "Ayar.mdb · şifre YOK"}
+                          </span>
                         ) : (
                           <span className="text-muted-foreground/40">—</span>
                         )}
