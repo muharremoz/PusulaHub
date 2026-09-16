@@ -101,6 +101,8 @@ interface TabCompanyService {
   status:     string
   appPool:    string
   assignedAt: string
+  /** Pars satırı: yönetim panelinin açılacağı hizmet id'si (satır id'si sentetik) */
+  parsServiceId?: number
 }
 
 function firmaIsActive(f: FirmaCompany): boolean {
@@ -131,6 +133,7 @@ function tagColor(tag: string): string {
 import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
+const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
@@ -771,6 +774,8 @@ export default function CompaniesPage() {
   const [newSvcParsDbTips, setNewSvcParsDbTips]       = useState<Record<string, string>>({});
   /** Ayar.mdb yazma adımının sonucu — mesaj yalnız başarılıysa gösterilir */
   const [newSvcParsDurum, setNewSvcParsDurum]         = useState<"yok" | "tamam" | "hata">("yok");
+  /** Pars yönetim paneli (kullanıcı/şifre, raporlar, veritabanı) */
+  const [parsYonetim, setParsYonetim] = useState<{ serviceId: number | null; sekme: string } | null>(null);
   const [newSvcMsgCopied, setNewSvcMsgCopied]         = useState(false);
   let _parsRowId = 1
   const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false })
@@ -2383,7 +2388,8 @@ tr:nth-child(even) td{background:#fafafa}
                   </Button>
                 </div>
                 <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 bg-muted/20 border-b border-border">
+                  {/* gap-3: satırlarla AYNI olmalı, yoksa başlıklar kayar */}
+                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Hizmet</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tip</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
@@ -2441,9 +2447,20 @@ tr:nth-child(even) td{background:#fafafa}
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56 text-[11px]">
                               {svc.type === "pars" && (
-                                <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openNewSvcDialog(true)}>
-                                  <UserPlus className="h-3.5 w-3.5" /> Pars Kullanıcısı Ekle
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
+                                    <KeyRound className="h-3.5 w-3.5" /> Kullanıcı Adı / Şifre
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "raporlar" })}>
+                                    <FileText className="h-3.5 w-3.5" /> Rapor / Görev Yetkileri
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "datalar" })}>
+                                    <Database className="h-3.5 w-3.5" /> Veritabanı Ekle
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openNewSvcDialog(true)}>
+                                    <UserPlus className="h-3.5 w-3.5" /> Pars Kullanıcısı Ekle
+                                  </DropdownMenuItem>
+                                </>
                               )}
                               {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
                               <DropdownMenuItem
@@ -3640,6 +3657,20 @@ tr:nth-child(even) td{background:#fafafa}
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Pars Yönetimi (kullanıcı adı/şifre · raporlar · veritabanı) */}
+          {selectedFirma && (
+            <ParsYonetimSheet
+              open={!!parsYonetim}
+              onOpenChange={(o) => !o && setParsYonetim(null)}
+              firkod={selectedFirma.firkod}
+              firmaAdi={selectedFirma.firma}
+              serviceId={parsYonetim?.serviceId ?? null}
+              baslangicSekmesi={parsYonetim?.sekme}
+              dbSecenekleri={tabSQL.map((d) => ({ name: d.Name, programCode: d.ProgramCode }))}
+              onChanged={refreshTabServices}
+            />
+          )}
 
           {/* Yeni Hizmet Ekle Dialog */}
           <Dialog open={newSvcOpen} onOpenChange={(o) => { if (!newSvcStarted) setNewSvcOpen(o) }}>

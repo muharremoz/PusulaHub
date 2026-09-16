@@ -278,6 +278,164 @@ $c.Close()
   return buildPars32BitCommand(script)
 }
 
+/**
+ * Verilen kullanıcıların İZİNLİ rapor id'leri — yasak listesinde OLMAYANLAR.
+ * Çıktı: PARSJSON:{izinler:[{UID,ScriptID}]}
+ */
+export function buildParsIzinliRaporOku(dbPath: string, dbPassword: string, ids: number[]): string {
+  const temiz = [...new Set(ids.filter((n) => Number.isInteger(n) && n > 0))]
+  const liste = temiz.length ? temiz.join(",") : "-1"
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+$cmd = $c.CreateCommand()
+$cmd.CommandText = 'SELECT u.ID AS UID, s.ScriptID AS ScriptID FROM Users u, Scripts s WHERE u.ID IN (${liste}) AND NOT EXISTS (SELECT 1 FROM YasakliRapor r WHERE r.UID = u.ID AND r.RAPOR = s.ScriptID)'
+$r = $cmd.ExecuteReader()
+$l = New-Object System.Collections.ArrayList
+while ($r.Read()) { [void]$l.Add(@{ UID = $r.GetValue(0); ScriptID = $r.GetValue(1) }) }
+$r.Close()
+$c.Close()
+'PARSJSON:' + (ConvertTo-Json -InputObject @{ izinler = $l.ToArray() } -Compress -Depth 3)
+`
+  return buildPars32BitCommand(script)
+}
+
+/**
+ * Kullanıcı adı / şifre / yetki güncelleme. Ad değişiyorsa çakışma kontrolü var.
+ * Çıktı: PARSJSON:{ok,eski,yeni} | {ok:false,error}
+ */
+export function buildParsKullaniciGuncelle(
+  dbPath: string, dbPassword: string,
+  girdi: { parsUserId: number; yeniAd?: string | null; yeniSifre?: string | null; tipi?: 0 | 1 | null },
+): string {
+  const json = JSON.stringify(girdi)
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$g = ConvertFrom-Json '${psQuote(json)}'
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+$tx = $c.BeginTransaction()
+function K($sql,$p){ $cmd=$c.CreateCommand(); $cmd.Transaction=$tx; $cmd.CommandText=$sql; foreach($v in @($p)){ [void]$cmd.Parameters.AddWithValue('?',$v) }; return $cmd }
+function Sk($sql,$p){ return (K $sql $p).ExecuteScalar() }
+function Ca($sql,$p){ return [int](K $sql $p).ExecuteNonQuery() }
+try {
+  $uid = [int]$g.parsUserId
+  $eski = Sk 'SELECT Adi FROM Users WHERE ID = ?' @($uid)
+  if ($eski -eq $null -or $eski -is [DBNull]) { throw ('Pars kullanicisi bulunamadi: ' + $uid) }
+  $yeniAd = [string]$g.yeniAd
+  if ($yeniAd -and $yeniAd -ne [string]$eski) {
+    $n = [int](Sk 'SELECT COUNT(*) FROM Users WHERE Adi = ? AND ID <> ?' @($yeniAd, $uid))
+    if ($n -gt 0) { throw ('Bu kullanici adi zaten var: ' + $yeniAd) }
+    [void](Ca 'UPDATE Users SET Adi = ? WHERE ID = ?' @($yeniAd, $uid))
+  }
+  if ([string]$g.yeniSifre) { [void](Ca 'UPDATE Users SET sifre = ? WHERE ID = ?' @([string]$g.yeniSifre, $uid)) }
+  if ($g.tipi -ne $null) { [void](Ca 'UPDATE Users SET Tipi = ? WHERE ID = ?' @([int]$g.tipi, $uid)) }
+  $son = Sk 'SELECT Adi FROM Users WHERE ID = ?' @($uid)
+  $tx.Commit()
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; eski = [string]$eski; yeni = [string]$son } -Compress)
+} catch { try { $tx.Rollback() } catch {}; 'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress) }
+$c.Close()
+`
+  return buildPars32BitCommand(script)
+}
+
+/**
+ * Kullanıcının rapor yetkisini yeniden yazar: YasakliRapor satırları silinip
+ * izinli OLMAYAN her Scripts kaydı yeniden yazılır (ters yetki).
+ * Çıktı: PARSJSON:{ok,izinli,yasakli}
+ */
+export function buildParsRaporYaz(dbPath: string, dbPassword: string, parsUserId: number, izinliRaporlar: number[]): string {
+  const json = JSON.stringify({ parsUserId, izinli: [...new Set(izinliRaporlar.map(Number).filter((n) => Number.isInteger(n)))] })
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$g = ConvertFrom-Json '${psQuote(json)}'
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+$tx = $c.BeginTransaction()
+function K($sql,$p){ $cmd=$c.CreateCommand(); $cmd.Transaction=$tx; $cmd.CommandText=$sql; foreach($v in @($p)){ [void]$cmd.Parameters.AddWithValue('?',$v) }; return $cmd }
+function Sk($sql,$p){ return (K $sql $p).ExecuteScalar() }
+function Ca($sql,$p){ return [int](K $sql $p).ExecuteNonQuery() }
+function Liste($sql){ $cmd=$c.CreateCommand(); $cmd.Transaction=$tx; $cmd.CommandText=$sql; $r=$cmd.ExecuteReader(); $l=New-Object System.Collections.ArrayList; while($r.Read()){ [void]$l.Add($r.GetValue(0)) }; $r.Close(); return ,$l.ToArray() }
+try {
+  $uid = [int]$g.parsUserId
+  $n = [int](Sk 'SELECT COUNT(*) FROM Users WHERE ID = ?' @($uid))
+  if ($n -eq 0) { throw ('Pars kullanicisi bulunamadi: ' + $uid) }
+  $izinli = @(foreach ($x in @($g.izinli)) { [int]$x })
+  $ham = Liste 'SELECT ScriptID FROM Scripts'
+  $tum = @(foreach ($x in $ham) { [int]$x })
+  [void](Ca 'DELETE FROM YasakliRapor WHERE UID = ?' @($uid))
+  $yasak = 0
+  foreach ($sid in $tum) { if ($izinli -notcontains $sid) { [void](Ca 'INSERT INTO YasakliRapor (UID, RAPOR) VALUES (?, ?)' @($uid, $sid)); $yasak++ } }
+  $tx.Commit()
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; izinli = $izinli.Count; yasakli = $yasak } -Compress)
+} catch { try { $tx.Rollback() } catch {}; 'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress) }
+$c.Close()
+`
+  return buildPars32BitCommand(script)
+}
+
+/**
+ * Firmaya veritabanı bağlar: Datalar'a ekler (yoksa), firma DIŞINDAKİ tüm
+ * kullanıcılara yasaklar, firmanın kullanıcılarına açar + varsayılan atar.
+ * Çıktı: PARSJSON:{ok,did,yeni,disariYasak,firmayaAcildi}
+ */
+export function buildParsDataEkle(
+  dbPath: string, dbPassword: string,
+  girdi: { data: string; tipId: number; firmaKullanicilari: number[] },
+): string {
+  const json = JSON.stringify(girdi)
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$g = ConvertFrom-Json '${psQuote(json)}'
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+$tx = $c.BeginTransaction()
+function K($sql,$p){ $cmd=$c.CreateCommand(); $cmd.Transaction=$tx; $cmd.CommandText=$sql; foreach($v in @($p)){ [void]$cmd.Parameters.AddWithValue('?',$v) }; return $cmd }
+function Sk($sql,$p){ return (K $sql $p).ExecuteScalar() }
+function Ca($sql,$p){ return [int](K $sql $p).ExecuteNonQuery() }
+function Liste($sql){ $cmd=$c.CreateCommand(); $cmd.Transaction=$tx; $cmd.CommandText=$sql; $r=$cmd.ExecuteReader(); $l=New-Object System.Collections.ArrayList; while($r.Read()){ [void]$l.Add($r.GetValue(0)) }; $r.Close(); return ,$l.ToArray() }
+try {
+  $data = [string]$g.data
+  $tip  = [int]$g.tipId
+  $firma = @(foreach ($x in @($g.firmaKullanicilari)) { [int]$x })
+  if (-not $data) { throw 'Veritabani adi bos' }
+  $did = Sk 'SELECT DID FROM Datalar WHERE Data = ?' @($data)
+  $yeni = $false
+  if ($did -eq $null -or $did -is [DBNull]) {
+    [void](Ca 'INSERT INTO Datalar (Data, TipID) VALUES (?, ?)' @($data, $tip))
+    $did = Sk 'SELECT @@IDENTITY' @()
+    $yeni = $true
+  }
+  $ham = Liste 'SELECT ID FROM Users'
+  $tumKullanicilar = @(foreach ($x in $ham) { [int]$x })
+  # Firma disindaki herkese yasak (ters yetki: satiri olmayan gorur)
+  $disariYasak = 0
+  foreach ($uid in $tumKullanicilar) {
+    if ($firma -contains $uid) { continue }
+    $var = [int](Sk 'SELECT COUNT(*) FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, $data))
+    if ($var -eq 0) { [void](Ca 'INSERT INTO YasakliDatalar (UID, DATAAD) VALUES (?, ?)' @($uid, $data)); $disariYasak++ }
+  }
+  # Firmanin kullanicilarina ac + varsayilan
+  $acildi = 0
+  foreach ($uid in $firma) {
+    $s = [int](Sk 'SELECT COUNT(*) FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, $data))
+    if ($s -gt 0) { [void](Ca 'DELETE FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, $data)); $acildi++ }
+    $v = [int](Sk 'SELECT COUNT(*) FROM UserDefaultData WHERE UUID = ? AND UTID = ?' @($uid, $tip))
+    if ($v -eq 0) { [void](Ca 'INSERT INTO UserDefaultData (UUID, UTID, UDID) VALUES (?, ?, ?)' @($uid, $tip, [int]$did)) }
+  }
+  $tx.Commit()
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; did = [int]$did; yeni = $yeni; disariYasak = $disariYasak; firmayaAcildi = $acildi } -Compress)
+} catch { try { $tx.Rollback() } catch {}; 'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress) }
+$c.Close()
+`
+  return buildPars32BitCommand(script)
+}
+
 /** Betik çıktısındaki `PARSJSON:{...}` satırını çözer; yoksa null. */
 export function parsJsonAyikla<T = unknown>(stdout: string): T | null {
   const m = (stdout ?? "").match(/PARSJSON:(\{[\s\S]*\})/)
