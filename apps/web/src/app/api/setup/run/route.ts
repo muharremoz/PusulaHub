@@ -1537,13 +1537,25 @@ export async function POST(req: NextRequest) {
 
                 const yazLabel = `Pars: ${p.users.length} kullanıcı yazılıyor`
                 send("step", { stepId: "pars_yaz", label: yazLabel, status: "running" })
+                /*  Firmanın Ayar.mdb'de zaten olan Pars kullanıcıları: yeni
+                 *  data onlara yasaklanmasın, aksine açılsın.             */
+                let mevcutFirmaKullanicilari: number[] = []
+                try {
+                  const sb = await getSupabaseServer()
+                  const { data: eski } = await sb.schema("hub").from("company_pars_users")
+                    .select("pars_user_id").eq("company_id", payload.firmaId).eq("service_id", hedef.serviceId)
+                  mevcutFirmaKullanicilari = ((eski ?? []) as { pars_user_id: number | null }[])
+                    .map((x) => Number(x.pars_user_id)).filter((n) => Number.isInteger(n) && n > 0)
+                } catch { /* kayıt okunamazsa en kötü yeni data eskiye kapalı kalır */ }
+
                 const cmd = buildParsKullaniciYaz(hedef.dbPath, hedef.password, {
                   datalar,
                   users: p.users.map((u) => ({ adi: u.username.trim(), tipi: u.admin ? 1 : 0, sifre: u.password })),
                   izinliRaporlar: izinli,
+                  mevcutFirmaKullanicilari,
                 })
                 const r = await execOnAgent(hedef.agent.ip, hedef.agent.port, hedef.agent.apiKey, cmd, 90)
-                const sonuc = parsJsonAyikla<{ ok: boolean; error?: string; users?: { adi: string; id: number }[]; datalar?: { data: string; did: number; yeni: boolean }[]; yasakliData?: number; yasakliRapor?: number; eskiyeYasak?: number }>(r.stdout ?? "")
+                const sonuc = parsJsonAyikla<{ ok: boolean; error?: string; users?: { adi: string; id: number }[]; datalar?: { data: string; did: number; yeni: boolean }[]; yasakliData?: number; yasakliRapor?: number; eskiyeYasak?: number; eskidenAcilan?: number }>(r.stdout ?? "")
                 parsKatalogOnbellekTemizle(hedef.serviceId)
                 if (!sonuc || !sonuc.ok) {
                   send("step", {
@@ -1570,7 +1582,8 @@ export async function POST(req: NextRequest) {
                       `${parsUsersCreated} kullanıcı: ${(sonuc.users ?? []).map((u) => `${u.adi} (ID ${u.id})`).join(", ")}`,
                       yeniData.length ? `Datalar'a eklendi: ${yeniData.join(", ")}` : (datalar.length ? "Datalar zaten kayıtlıydı" : "Data bağlanmadı"),
                       `kullanıcı başına ${sonuc.yasakliData ?? "?"} data ve ${sonuc.yasakliRapor ?? "?"} rapor yasaklandı`,
-                      ...(sonuc.eskiyeYasak ? [`yeni data mevcut ${sonuc.eskiyeYasak} kullanıcıya yasaklandı`] : []),
+                      ...(sonuc.eskiyeYasak ? [`yeni data firma dışı ${sonuc.eskiyeYasak} kullanıcıya yasaklandı`] : []),
+                      ...(sonuc.eskidenAcilan ? [`firmanın eski kullanıcılarına ${sonuc.eskidenAcilan} data açıldı`] : []),
                     ].join(" · "),
                   })
                 }

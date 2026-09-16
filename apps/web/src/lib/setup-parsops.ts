@@ -75,13 +75,21 @@ export interface ParsYazmaGirdisi {
   users:   { adi: string; tipi: 0 | 1; sifre: string }[]
   /** İzinli rapor ID'leri — bunların DIŞINDAKİ her Scripts kaydı yasaklanır. */
   izinliRaporlar: number[]
+  /**
+   * Firmanın Ayar.mdb'de ZATEN olan Pars kullanıcı ID'leri (Users.ID).
+   * Yeni data hepsine yasaklanırken bunlar dışarıda kalır — yoksa firmanın
+   * eski kullanıcısı, sonradan eklenen kendi datasını göremezdi.
+   */
+  mevcutFirmaKullanicilari?: number[]
 }
 
 /**
  * Kullanıcı + yetki yazma. Tek transaction: hata olursa hiçbir şey kalmaz.
  *  1) Kullanıcı adı çakışması → hata
  *  2) Datalar: yoksa ekle, DID'yi al
- *  3) Her kullanıcı: Users → YasakliDatalar (firma dışı tüm datalar)
+ *  3) Yeni data → firma dışındaki TÜM mevcut kullanıcılara yasak (ters yetki:
+ *     satırı olmayan görür); firmanın eski kullanıcılarına ise açılır
+ *  4) Her yeni kullanıcı: Users → YasakliDatalar (firma dışı tüm datalar)
  *     → YasakliRapor (izinli olmayan tüm scriptler) → UserDefaultData (tip başına ilk data)
  * Çıktı: PARSJSON:{ok:true,users:[{adi,id}],datalar:[{data,did,yeni}]} | {ok:false,error}
  */
@@ -141,12 +149,28 @@ try {
       gorur (16.09.2026'da yasandi: 6399'un iki datasini 22 kullanici
       goruyordu). Bu yuzden her YENI data, o an var olan tum kullanicilara
       yasaklanir. Zaten kayitli datalarda yasaklar yerinde kabul edilir.  #>
+  # Firmanin kendi eski kullanicilari haric: onlar yeni datayi GORMELI.
+  $firmaninEskileri = @(foreach ($x in @($g.mevcutFirmaKullanicilari)) { [int]$x })
   $eskiyeYasak = 0
   foreach ($fd in $firmaDatalar) {
     if (-not $fd.yeni) { continue }
     foreach ($uid in $eskiKullanicilar) {
+      if ($firmaninEskileri -contains $uid) { continue }
       $var = [int](Skalar 'SELECT COUNT(*) FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, [string]$fd.data))
       if ($var -eq 0) { Calistir 'INSERT INTO YasakliDatalar (UID, DATAAD) VALUES (?, ?)' @($uid, [string]$fd.data); $eskiyeYasak++ }
+    }
+  }
+
+  <#  Firmanin eski kullanicilari yeni datayi gorsun: eskiden yazilmis bir
+      yasak satiri varsa (baska bir kurulumda firma disi sayilmis olabilir)
+      kaldirilir ve tipine gore varsayilan data atanir.                    #>
+  $eskidenAcilan = 0
+  foreach ($uid in $firmaninEskileri) {
+    foreach ($fd in $firmaDatalar) {
+      $s = [int](Skalar 'SELECT COUNT(*) FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, [string]$fd.data))
+      if ($s -gt 0) { Calistir 'DELETE FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, [string]$fd.data); $eskidenAcilan++ }
+      $v = [int](Skalar 'SELECT COUNT(*) FROM UserDefaultData WHERE UUID = ? AND UTID = ?' @($uid, [int]$fd.tipId))
+      if ($v -eq 0) { Calistir 'INSERT INTO UserDefaultData (UUID, UTID, UDID) VALUES (?, ?, ?)' @($uid, [int]$fd.tipId, [int]$fd.did) }
     }
   }
 
@@ -177,7 +201,7 @@ try {
   }
 
   $tx.Commit()
-  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = ($tumScriptler.Count - $izinli.Count); eskiyeYasak = $eskiyeYasak } -Compress -Depth 4)
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = ($tumScriptler.Count - $izinli.Count); eskiyeYasak = $eskiyeYasak; eskidenAcilan = $eskidenAcilan } -Compress -Depth 4)
 } catch {
   try { $tx.Rollback() } catch { }
   'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress)
