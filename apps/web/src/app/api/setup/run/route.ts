@@ -1543,7 +1543,7 @@ export async function POST(req: NextRequest) {
                   izinliRaporlar: izinli,
                 })
                 const r = await execOnAgent(hedef.agent.ip, hedef.agent.port, hedef.agent.apiKey, cmd, 90)
-                const sonuc = parsJsonAyikla<{ ok: boolean; error?: string; users?: { adi: string; id: number }[]; datalar?: { data: string; did: number; yeni: boolean }[]; yasakliData?: number; yasakliRapor?: number }>(r.stdout ?? "")
+                const sonuc = parsJsonAyikla<{ ok: boolean; error?: string; users?: { adi: string; id: number }[]; datalar?: { data: string; did: number; yeni: boolean }[]; yasakliData?: number; yasakliRapor?: number; eskiyeYasak?: number }>(r.stdout ?? "")
                 parsKatalogOnbellekTemizle(hedef.serviceId)
                 if (!sonuc || !sonuc.ok) {
                   send("step", {
@@ -1570,6 +1570,7 @@ export async function POST(req: NextRequest) {
                       `${parsUsersCreated} kullanıcı: ${(sonuc.users ?? []).map((u) => `${u.adi} (ID ${u.id})`).join(", ")}`,
                       yeniData.length ? `Datalar'a eklendi: ${yeniData.join(", ")}` : (datalar.length ? "Datalar zaten kayıtlıydı" : "Data bağlanmadı"),
                       `kullanıcı başına ${sonuc.yasakliData ?? "?"} data ve ${sonuc.yasakliRapor ?? "?"} rapor yasaklandı`,
+                      ...(sonuc.eskiyeYasak ? [`yeni data mevcut ${sonuc.eskiyeYasak} kullanıcıya yasaklandı`] : []),
                     ].join(" · "),
                   })
                 }

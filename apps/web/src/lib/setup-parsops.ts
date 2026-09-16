@@ -118,6 +118,10 @@ try {
     if ($n -gt 0) { throw ('Pars kullanicisi zaten var: ' + $u.adi) }
   }
 
+  # Yeni data eklemeden ONCE var olan kullanicilar: yasak satirlari bunlara yazilacak.
+  $eskiHam = Liste 'SELECT ID FROM Users'
+  $eskiKullanicilar = @(foreach ($x in $eskiHam) { [int]$x })
+
   $firmaDatalar = @()
   foreach ($d in $datalar) {
     $did = Skalar 'SELECT DID FROM Datalar WHERE Data = ?' @([string]$d.data)
@@ -130,6 +134,21 @@ try {
     $firmaDatalar += @{ data = [string]$d.data; did = [int]$did; tipId = [int]$d.tipId; yeni = $yeni }
   }
   $izinliDatalar = @($firmaDatalar | ForEach-Object { $_.data })
+
+  <#  Yetki TERS calisiyor: YasakliDatalar'da satiri OLMAYAN her kullanici o
+      datayi gorur. Yeni eklenen data icin mevcut kullanicilara yasak
+      yazilmazsa BASKA FIRMALARIN kullanicilari yeni firmanin datasini
+      gorur (16.09.2026'da yasandi: 6399'un iki datasini 22 kullanici
+      goruyordu). Bu yuzden her YENI data, o an var olan tum kullanicilara
+      yasaklanir. Zaten kayitli datalarda yasaklar yerinde kabul edilir.  #>
+  $eskiyeYasak = 0
+  foreach ($fd in $firmaDatalar) {
+    if (-not $fd.yeni) { continue }
+    foreach ($uid in $eskiKullanicilar) {
+      $var = [int](Skalar 'SELECT COUNT(*) FROM YasakliDatalar WHERE UID = ? AND DATAAD = ?' @($uid, [string]$fd.data))
+      if ($var -eq 0) { Calistir 'INSERT INTO YasakliDatalar (UID, DATAAD) VALUES (?, ?)' @($uid, [string]$fd.data); $eskiyeYasak++ }
+    }
+  }
 
   # Liste ',$dizi' dondurur: pipeline'a tek nesne olarak gider; @() ile sarmak
   # tek elemanli dizi yapar (yasandi: 15 data tek satira birlesti) — foreach ile acilir
@@ -158,7 +177,7 @@ try {
   }
 
   $tx.Commit()
-  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = ($tumScriptler.Count - $izinli.Count) } -Compress -Depth 4)
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = ($tumScriptler.Count - $izinli.Count); eskiyeYasak = $eskiyeYasak } -Compress -Depth 4)
 } catch {
   try { $tx.Rollback() } catch { }
   'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress)
