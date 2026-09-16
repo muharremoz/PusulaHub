@@ -44,6 +44,8 @@ interface FirmaCompany {
   phone: string
   userCount: number
   lisansBitis: string
+  /** CRM'deki müşteri temsilcisi — CRM'e ulaşılamazsa null */
+  temsilci?: { id: string; ad: string; parsKodu: number | null; aktif: boolean } | null
 }
 
 interface TabUser {
@@ -480,13 +482,14 @@ export default function CompaniesPage() {
   const [firmaFiltre,  setFirmaFiltre]  = useState("");
   const [kodFiltre,    setKodFiltre]    = useState("");
   const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
+  const [temsilciFiltre, setTemsilciFiltre] = useState<string[]>([]);
   const [lisansFiltre, setLisansFiltre] = useState<TarihFiltreDeger>({ mode: "tum" });
   const [kullaniciFiltre, setKullaniciFiltre] = useState<SayiAralikDeger>({});
 
   /* Sayfalama — sayfa başına 25 kayıt. */
   const FIRMA_SAYFA_BOYU = 25;
   const [firmaSayfa, setFirmaSayfa] = useState(1);
-  const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status">("firma");
+  const [listSortKey, setListSortKey] = useState<"firma" | "firkod" | "userCount" | "lisansBitis" | "status" | "temsilci">("firma");
   const [listSortDir, setListSortDir] = useState<"asc" | "desc">("asc");
 
   const [tabUsers, setTabUsers] = useState<TabUser[]>([]);
@@ -1094,10 +1097,11 @@ export default function CompaniesPage() {
     if (!listeFiltreli.length) return
     const XLSX = await import("xlsx")
 
-    const header = ["Firma Kodu", "Firma", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
+    const header = ["Firma Kodu", "Firma", "Temsilci", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
     const rows = listeFiltreli.map((c) => [
       c.firkod,
       c.firma,
+      c.temsilci ? (c.temsilci.aktif ? c.temsilci.ad : `${c.temsilci.ad} (pasif)`) : "",
       c.email || "",
       c.phone || "",
       c.userCount,
@@ -1948,6 +1952,8 @@ tr:nth-child(even) td{background:#fafafa}
       case "firkod":      cmp = (a.firkod || "").localeCompare(b.firkod || "", "tr"); break;
       case "userCount":   cmp = a.userCount - b.userCount; break;
       case "lisansBitis": cmp = parseLisansDate(a.lisansBitis) - parseLisansDate(b.lisansBitis); break;
+      /* Temsilcisiz firmalar sona — boş satırlar listenin başını kaplamasın. */
+      case "temsilci":    cmp = (a.temsilci?.ad ?? "ZZZ").localeCompare(b.temsilci?.ad ?? "ZZZ", "tr"); break;
       case "status": {
         const av = firmaIsActive(a) ? 1 : 0;
         const bv = firmaIsActive(b) ? 1 : 0;
@@ -1961,7 +1967,17 @@ tr:nth-child(even) td{background:#fafafa}
   /* Filtre değişince kullanıcı 3. sayfada boş liste görmesin. */
   useEffect(() => {
     setFirmaSayfa(1);
-  }, [firmaFiltre, kodFiltre, durumFiltre, lisansFiltre, kullaniciFiltre]);
+  }, [firmaFiltre, kodFiltre, durumFiltre, temsilciFiltre, lisansFiltre, kullaniciFiltre]);
+
+  /* Temsilci filtresi seçenekleri — listedeki temsilciler + "Temsilcisiz". */
+  const TEMSILCISIZ = "— Temsilcisiz —";
+  const temsilciSecenekleri = useMemo(() => {
+    const ad = new Set<string>();
+    let bosVar = false;
+    for (const c of apiCompanies) { if (c.temsilci?.ad) ad.add(c.temsilci.ad); else bosVar = true; }
+    const liste = [...ad].sort((a, b) => a.localeCompare(b, "tr"));
+    return bosVar ? [...liste, TEMSILCISIZ] : liste;
+  }, [apiCompanies]);
 
   /* Sütun başlığı filtreleri — üstteki serbest arama ile VE (AND) birleşir. */
   const listeFiltreli = listSorted.filter((c) => {
@@ -1970,6 +1986,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (f && !c.firma.toLocaleLowerCase("tr-TR").includes(f)) return false;
     if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
     if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
+    if (temsilciFiltre.length && !temsilciFiltre.includes(c.temsilci?.ad ?? TEMSILCISIZ)) return false;
     if (!tarihUygun(lisansIso(c.lisansBitis), lisansFiltre)) return false;
     if (kullaniciFiltre.min != null && c.userCount < kullaniciFiltre.min) return false;
     if (kullaniciFiltre.max != null && c.userCount > kullaniciFiltre.max) return false;
@@ -4089,6 +4106,17 @@ tr:nth-child(even) td{background:#fafafa}
                 <th className="px-4 py-1.5 text-left font-medium">
                   <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
                 </th>
+                <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
+                  <SecimFiltre
+                    label="Temsilci"
+                    options={temsilciSecenekleri}
+                    getLabel={(o) => o}
+                    selected={temsilciFiltre}
+                    onChange={(v) => setTemsilciFiltre(v as string[])}
+                    aranabilir
+                    ilkGosterim={8}
+                  />
+                </th>
                 <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
                   <SayiAralikFiltre label="Kullanıcı" value={kullaniciFiltre} onChange={setKullaniciFiltre} />
                 </th>
@@ -4115,14 +4143,14 @@ tr:nth-child(even) td{background:#fafafa}
                 {apiLoading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 5 }).map((_, j) => (
+                      {Array.from({ length: 6 }).map((_, j) => (
                         <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
                       ))}
                     </tr>
                   ))
                 ) : listeFiltreli.length === 0 ? (
                   <ListeBosSatir
-                    sutunSayisi={5}
+                    sutunSayisi={6}
                     toplam={apiCompanies.length}
                     bosMesaj="Kayıtlı firma yok."
                     filtreliMesaj="Arama sonucu bulunamadı."
@@ -4143,6 +4171,17 @@ tr:nth-child(even) td{background:#fafafa}
                           <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
                           <span className="truncate">{comp.firma}</span>
                         </span>
+                      </td>
+                      <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap text-[12px]">
+                        {comp.temsilci ? (
+                          <span className="inline-flex items-center gap-1.5" title={comp.temsilci.aktif ? undefined : "Temsilci pasif — firma devredilmemiş olabilir"}>
+                            <User className="h-3 w-3 shrink-0" />
+                            <span className={comp.temsilci.aktif ? "" : "opacity-60"}>{comp.temsilci.ad}</span>
+                            {!comp.temsilci.aktif && (
+                              <span className="inline-flex rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
+                            )}
+                          </span>
+                        ) : "—"}
                       </td>
                       <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
                         <span className="inline-flex items-center gap-1">

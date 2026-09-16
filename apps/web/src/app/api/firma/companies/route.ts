@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { syncFirmalarNow } from "@/lib/firma-sync"
+import { firmaTemsilcileri, type CrmTemsilci } from "@/lib/crm-temsilciler"
 
 export interface FirmaCompany {
   id: string; firkod: string; firma: string; email: string; phone: string
   userCount: number; licenseCount: number; lisansBitis: string
   /** Firmanın atanmış terminal (RDP) sunucusu — kurulmamışsa null */
   windowsServerId: string | null
+  /** CRM'deki müşteri temsilcisi — CRM'e ulaşılamazsa null */
+  temsilci: CrmTemsilci | null
 }
 
 interface CompanyRow {
@@ -61,11 +64,13 @@ export async function GET(req: NextRequest) {
       return out
     }
 
-    const [comps, { data: adu }] = await Promise.all([
+    const [comps, { data: adu }, temsilciler] = await Promise.all([
       fetchAllCompanies(),
       // ad_users şu an ~58 satır; max-rows sınırının çok altında. Tablo
       // binleri geçerse buraya da sayfalama gerekir.
       sb.schema("hub").from("ad_users").select("ou"),
+      // CRM'den temsilciler — 15 dk önbellekli, hata olursa boş harita
+      firmaTemsilcileri(),
     ])
     // Kurulu firmada userCount = ad_users OU sayımı; değilse lisans (company.user_count)
     const ouCnt = new Map<string, number>()
@@ -78,6 +83,7 @@ export async function GET(req: NextRequest) {
       licenseCount: c.user_count ?? 0,
       lisansBitis: c.contract_end ? c.contract_end.slice(0, 10) : "",
       windowsServerId: c.windows_server_id ?? null,
+      temsilci: temsilciler.get(c.company_id) ?? null,
     }))
 
     const resp = NextResponse.json(companies)
