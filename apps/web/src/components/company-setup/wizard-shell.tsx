@@ -754,7 +754,7 @@ export function WizardShell() {
                   demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                   addToSirketDb={addToSirketDb}
-                  pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: parsReportIds } : null}
+                  pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: parsReportIds, baglanti: parsKatalog?.baglanti ?? null } : null}
                   onComplete={() => setSetupDone(true)}
                   onReset={reset}
                   onConfetti={() => { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 4000) }}

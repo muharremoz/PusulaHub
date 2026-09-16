@@ -55,11 +55,48 @@ export interface ParsUserRow {
   tipi: number
 }
 
+/** Mobil uygulamanın bağlanacağı adres — müşteri mesajında gösterilir. */
+export interface ParsBaglanti {
+  /** Sunucu DNS'i, yoksa IP */
+  host: string
+  /** Hizmet ayarındaki port; tanımlı değilse null */
+  port: number | null
+  /** "iis.databag.net:8888" — port yoksa yalnız host */
+  adres: string
+}
+
+export function parsBaglantiKur(dns: string | null | undefined, ip: string, port: number | null): ParsBaglanti {
+  const host = (dns ?? "").trim() || ip
+  return { host, port, adres: port ? `${host}:${port}` : host }
+}
+
 export interface ParsKatalog {
   dtipler: { tid: number; ad: string }[]
   datalar: ParsData[]
   scripts: ParsScript[]
   users:   ParsUserRow[]
+  /** Katalog ucundan gelir; Ayar.mdb'den değil hizmet ayarından türer. */
+  baglanti?: ParsBaglanti
+}
+
+/**
+ * Müşteriye gidecek Pars bloğu — sihirbaz ve firma detayı AYNI metni üretsin
+ * diye tek yerde. Boş kullanıcı listesinde boş dizi döner.
+ */
+export function parsMesajSatirlari(
+  users: { username: string; password: string }[],
+  baglanti?: ParsBaglanti | null,
+): string[] {
+  const dolu = users.filter((u) => u.username.trim())
+  if (dolu.length === 0) return []
+  const lines = ["Pars Mobil Uygulama Bilgileri:"]
+  if (baglanti?.adres) lines.push(`Sunucu: ${baglanti.adres}`)
+  dolu.forEach((u, i) => {
+    lines.push(`Kullanıcı Adı: ${u.username.trim()}`)
+    lines.push(`Şifre: ${u.password}`)
+    if (i < dolu.length - 1) lines.push("")
+  })
+  return lines
 }
 
 /**

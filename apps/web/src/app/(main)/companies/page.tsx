@@ -131,7 +131,7 @@ function tagColor(tag: string): string {
 import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
-import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
+import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
@@ -769,6 +769,9 @@ export default function CompaniesPage() {
   const [newSvcParsError, setNewSvcParsError]         = useState<string | null>(null);
   /** DB adı → Pars tip ID (string); "" = bağlanmaz */
   const [newSvcParsDbTips, setNewSvcParsDbTips]       = useState<Record<string, string>>({});
+  /** Ayar.mdb yazma adımının sonucu — mesaj yalnız başarılıysa gösterilir */
+  const [newSvcParsDurum, setNewSvcParsDurum]         = useState<"yok" | "tamam" | "hata">("yok");
+  const [newSvcMsgCopied, setNewSvcMsgCopied]         = useState(false);
   let _parsRowId = 1
   const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false })
 
@@ -833,6 +836,7 @@ export default function CompaniesPage() {
     setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
     setNewSvcParsUsers([mkParsRow()]); setNewSvcParsReportIds([]); setNewSvcParsError(null)
     setNewSvcParsKatalog(null); setNewSvcParsKatalogFor(null)
+    setNewSvcParsDurum("yok"); setNewSvcMsgCopied(false)
     // Firmanın mevcut DB'leri program koduna göre tipiyle hazır gelsin
     const dbTips: Record<string, string> = {}
     for (const d of tabSQL) { const t = parsTipFromProgramCode(d.ProgramCode); dbTips[d.Name] = t === null ? "" : String(t) }
@@ -3873,9 +3877,45 @@ tr:nth-child(even) td{background:#fafafa}
                           refreshTabServices()
                         }}
                         onError={(msg) => setNewSvcError(msg)}
+                        onStep={(st) => {
+                          if (st.stepId !== "pars_yaz") return
+                          if (st.status === "done")  setNewSvcParsDurum("tamam")
+                          if (st.status === "error") setNewSvcParsDurum("hata")
+                        }}
                       />
                     )
                   )}
+
+                  {/*  Pars kullanicisi yazildiysa musteriye gidecek metin —
+                      sihirbazdaki (step-run.tsx) blokla AYNI bicim.        */}
+                  {newSvcParsDurum === "tamam" && newSvcParsService && (() => {
+                    const msg = [
+                      "Merhaba,",
+                      "",
+                      "Pars mobil uygulama erişim bilgileriniz aşağıdadır.",
+                      "",
+                      ...parsMesajSatirlari(
+                        newSvcParsUsers.map((u) => ({ username: u.username, password: u.password })),
+                        newSvcParsKatalog?.baglanti,
+                      ),
+                      "",
+                      "İyi çalışmalar.",
+                    ].join("\n")
+                    return (
+                      <div className="space-y-2 mt-2">
+                        <Label className="text-foreground/80 text-[12px] font-medium">Müşteri Bilgilendirme Mesajı</Label>
+                        <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => { if (await copyToClipboard(msg)) { setNewSvcMsgCopied(true); setTimeout(() => setNewSvcMsgCopied(false), 2000) } }}
+                          className="w-full rounded-[5px] h-8 text-[13px] gap-1.5"
+                        >
+                          {newSvcMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
+                        </Button>
+                      </div>
+                    )
+                  })()}
                 </div>
               </ScrollArea>
               <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">

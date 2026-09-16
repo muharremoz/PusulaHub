@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
 import { copyToClipboard } from "@/lib/clipboard"
-import type { ParsWizardUser } from "@/lib/pars-katalog"
+import { parsMesajSatirlari, type ParsBaglanti, type ParsWizardUser } from "@/lib/pars-katalog"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
 
@@ -106,7 +106,7 @@ interface Props {
   addFirmaPrefix?:     boolean
   addToSirketDb?:      boolean
   /** Pars hizmeti seçildiyse — kullanıcılar Ayar.mdb'ye yazılır, mesajda gösterilir */
-  pars?:               { serviceId: number; users: ParsWizardUser[]; allowedReportIds: number[] } | null
+  pars?:               { serviceId: number; users: ParsWizardUser[]; allowedReportIds: number[]; baglanti?: ParsBaglanti | null } | null
   onComplete:      () => void
   onReset:         () => void
   onConfetti:      () => void
@@ -292,13 +292,9 @@ export function StepRun({
     }
 
     // Pars mobil uygulama — yalnız yazma adımı başarılıysa
-    if (pars && pars.users.length > 0 && parsDurum === "tamam") {
-      lines.push("Pars Mobil Uygulama Bilgileri:")
-      pars.users.forEach((u) => {
-        lines.push(`Kullanıcı Adı: ${u.username}`)
-        lines.push(`Şifre: ${u.password}`)
-      })
-      lines.push("")
+    if (pars && parsDurum === "tamam") {
+      const parsLines = parsMesajSatirlari(pars.users, pars.baglanti)
+      if (parsLines.length > 0) lines.push(...parsLines, "")
     }
 
     lines.push("İyi çalışmalar.")
@@ -714,6 +710,7 @@ export function StepRun({
                   </p>
                 </div>
                 <div className="p-3 space-y-2">
+                  {pars.baglanti?.adres && <CopyField label="Sunucu" value={pars.baglanti.adres} mono />}
                   {pars.users.map((u) => (
                     <div key={u.id} className="space-y-1">
                       <CopyField label="Kullanıcı Adı" value={u.username} mono />

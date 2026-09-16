@@ -39,10 +39,10 @@ export type HubSorguIstemcisi = { schema: (s: "hub") => any }
  * uçlar admin istemcisini geçmeli — oturum istemcisi `hub` şemasında RLS
  * yüzünden boş döner ve sunucu "yok" gibi görünür.
  */
-export async function serverAgentById(id: string, istemci?: HubSorguIstemcisi): Promise<{ ip: string; agent_port: number | null; api_key: string | null } | null> {
+export async function serverAgentById(id: string, istemci?: HubSorguIstemcisi): Promise<{ ip: string; dns: string | null; agent_port: number | null; api_key: string | null } | null> {
   const sb = istemci ?? await getSupabaseServer()
-  const { data } = await sb.schema("hub").from("servers").select("ip, agent_port, api_key").eq("id", id).maybeSingle()
-  return (data as unknown as { ip: string; agent_port: number | null; api_key: string | null }) ?? null
+  const { data } = await sb.schema("hub").from("servers").select("ip, dns, agent_port, api_key").eq("id", id).maybeSingle()
+  return (data as unknown as { ip: string; dns: string | null; agent_port: number | null; api_key: string | null }) ?? null
 }
 
 /** Belirli role sahip sunucular (eski `JOIN ServerRoles WHERE Role=X` deseni). */

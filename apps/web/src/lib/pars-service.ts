@@ -5,7 +5,7 @@ import { decrypt } from "@/lib/crypto"
 import { execOnAgent } from "@/lib/agent-poller"
 import { parseConfig, type ParsConfig } from "@/lib/wizard-service-config"
 import { buildParsKatalogOku, buildParsSifreOku, parsJsonAyikla, parsKatalogNormalize } from "@/lib/setup-parsops"
-import type { ParsKatalog } from "@/lib/pars-katalog"
+import { parsBaglantiKur, type ParsBaglanti, type ParsKatalog } from "@/lib/pars-katalog"
 
 /**
  * Pars hizmeti — sunucu tarafı ortak işler.
@@ -20,6 +20,8 @@ export interface ParsHedef {
   dbPath:    string
   password:  string
   agent:     { ip: string; port: number; apiKey: string }
+  /** Mobil uygulamanın bağlandığı adres — sunucu DNS'i (yoksa IP) + hizmet portu. */
+  baglanti:  ParsBaglanti
 }
 
 /**
@@ -47,6 +49,7 @@ export async function parsHedefYukle(serviceId: number, istemci?: HubSorguIstemc
       dbPath:    cfg.dbPath,
       password,
       agent:     { ip: srv.ip, port: srv.agent_port, apiKey: srv.api_key },
+      baglanti:  parsBaglantiKur(srv.dns, srv.ip, cfg.port ?? null),
     },
   }
 }

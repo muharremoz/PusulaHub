@@ -24,7 +24,8 @@ export async function GET(req: NextRequest) {
     if (!h.ok) return NextResponse.json({ error: h.error }, { status: 400 })
     const k = await parsKatalogOku(h.hedef, taze)
     if (!k.ok) return NextResponse.json({ error: k.error }, { status: 502 })
-    return NextResponse.json(k.katalog)
+    // Bağlantı adresi katalogla birlikte döner: müşteri mesajında gösterilecek.
+    return NextResponse.json({ ...k.katalog, baglanti: h.hedef.baglanti })
   } catch (err) {
     console.error("[GET /api/setup/pars/catalog]", err)
     return NextResponse.json({ error: "Pars kataloğu alınamadı" }, { status: 500 })
