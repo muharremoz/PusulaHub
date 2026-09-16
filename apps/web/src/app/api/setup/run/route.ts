@@ -280,26 +280,39 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  if (!payload.serverId || !payload.firmaId || !Array.isArray(payload.users)) {
-    return new Response(JSON.stringify({ error: "serverId, firmaId, users zorunlu" }), {
+  if (!payload.firmaId || !Array.isArray(payload.users)) {
+    return new Response(JSON.stringify({ error: "firmaId, users zorunlu" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
   }
 
-  // AD sunucusu (1-4. adımlar)
-  const adSrv = await serverAgentById(payload.serverId)
-  if (!adSrv || !adSrv.api_key || !adSrv.agent_port) {
-    return new Response(JSON.stringify({ error: "AD sunucu bilgisi eksik (ApiKey/AgentPort)" }), {
+  /* Yalnız Pars: kullanıcı yok, Pars dışında hizmet yok, SQL işi yok.
+   * AD'ye (OU / grup / senkron) hiç dokunulmaz; AD sunucusu istenmez. */
+  const parsOnly =
+    payload.users.length === 0 &&
+    (payload.services ?? []).length > 0 &&
+    (payload.services ?? []).every((s) => s.type === "pars") &&
+    !payload.sqlServerId
+
+  if (!payload.serverId && !parsOnly) {
+    return new Response(JSON.stringify({ error: "serverId zorunlu" }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
   }
 
-  const adAgent: AgentTarget = {
-    ip:     adSrv.ip,
-    port:   adSrv.agent_port,
-    apiKey: adSrv.api_key,
+  // AD sunucusu (1-4. adımlar) — yalnız Pars akışında yok
+  let adAgent: AgentTarget | null = null
+  if (payload.serverId) {
+    const adSrv = await serverAgentById(payload.serverId)
+    if (!adSrv || !adSrv.api_key || !adSrv.agent_port) {
+      return new Response(JSON.stringify({ error: "AD sunucu bilgisi eksik (ApiKey/AgentPort)" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+    adAgent = { ip: adSrv.ip, port: adSrv.agent_port, apiKey: adSrv.api_key }
   }
 
   // Hizmetleri tipine göre ayır
@@ -579,8 +592,9 @@ export async function POST(req: NextRequest) {
       }
 
       try {
-        // ── 1-4) AD adımları → AD agent ─────────────────────────────
-
+        // ── 1-4) AD adımları → AD agent (yalnız Pars akışında atlanır) ──
+        let createdCount = 0
+        if (adAgent && !parsOnly) {
         // 1) Firmalar root OU
         if (!(await runStep(
           adAgent,
@@ -606,7 +620,6 @@ export async function POST(req: NextRequest) {
         ))) { controller.close(); return }
 
         // 4) Kullanıcılar (her biri için: oluştur + gruba ekle)
-        let createdCount = 0
         for (const u of payload.users) {
           const fullUsername = `${payload.firmaId}.${u.username.trim()}`
 
@@ -649,6 +662,7 @@ export async function POST(req: NextRequest) {
 
           createdCount++
         }
+        } // adAgent && !parsOnly
 
         // ── 4b) Depo sunucusu — resim klasörü (opsiyonel, non-critical) ──
         if (depoAgent) {
@@ -1580,7 +1594,7 @@ export async function POST(req: NextRequest) {
         // 5 dk ritimle yazar; sihirbaz bitince kullanici/DB en kotu 10 dk
         // sonra gorunuyordu. Burada ilgili sunucular force ile yoklanir,
         // ardindan firma sayaclari yeniden hesaplanir. Hata kurulumu bozmaz.
-        const senkronHedefleri: { id: string | null | undefined; etiket: string }[] = [
+        const senkronHedefleri: { id: string | null | undefined; etiket: string }[] = parsOnly ? [] : [
           { id: payload.serverId,        etiket: "Active Directory" },
           { id: payload.sqlServerId,     etiket: "SQL" },
           { id: payload.windowsServerId, etiket: "IIS / Terminal" },

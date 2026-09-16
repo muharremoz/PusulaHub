@@ -135,8 +135,10 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   const desktopStepCount = pusulaCount > 0 ? pusulaCount + 2 : 0
   // Pars: Ayar.mdb oku + tek yazma adımı
   const parsStepCount = payload.pars ? 2 : 0
+  // Yalnız Pars: AD adımları (OU/grup) ve senkron yok
+  const parsOnly = payload.users.length === 0 && serviceCount > 0 && services.every((s) => s.type === "pars") && !payload.sqlServerId
   const totalEstimated =
-    3 +
+    (parsOnly ? 0 : 3) +
     payload.users.length * 2 +
     depoStepCount +
     (serviceCount > 0 ? 1 + Math.round(pusulaCount * 3.5) + iisCount * 5 + resimCount * 2 + 1 : 0) +

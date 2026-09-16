@@ -893,9 +893,11 @@ export default function CompaniesPage() {
   const newSvcParsValid = !newSvcParsService
     || (newSvcParsUsersValid && !!newSvcParsKatalog && !newSvcParsError && newSvcParsReportIds.length > 0 && newSvcParsDatalar.length > 0)
 
+  // Yalnız Pars: AD'ye dokunulmaz, AD sunucusu istenmez
+  const newSvcParsOnly = newSvcSelected.length > 0 && newSvcSelected.every((s) => s.type === "pars")
   const newSvcValid =
     newSvcSelectedIds.length > 0 &&
-    !!newSvcAdServerId &&
+    (!!newSvcAdServerId || newSvcParsOnly) &&
     (!newSvcHasPusula || (!!newSvcWindowsServerId && !!newSvcDepoServerId)) &&
     (!(newSvcHasIis || newSvcHasResim) || !!newSvcIisServerId) &&
     (!newSvcHasResim || !!newSvcDepoServerId) &&
@@ -3833,7 +3835,7 @@ tr:nth-child(even) td{background:#fafafa}
                             </div>
                           )}
 
-                          {!newSvcAdServerId && (
+                          {!newSvcAdServerId && !newSvcParsOnly && (
                             <p className="text-[10px] text-amber-600 dark:text-amber-400">Uyarı: Bu firma için AD sunucusu tanımlı değil — hizmet kurulumu OU/grup adımları için AD ister.</p>
                           )}
                           {newSvcError && <p className="text-[11px] text-red-500">{newSvcError}</p>}
@@ -3844,7 +3846,7 @@ tr:nth-child(even) td{background:#fafafa}
                     selectedFirma && (
                       <AdProvisionRunner
                         payload={{
-                          serverId:         newSvcAdServerId,
+                          serverId:         newSvcParsOnly ? "" : newSvcAdServerId,
                           windowsServerId:  newSvcHasPusula ? newSvcWindowsServerId : undefined,
                           iisServerId:      (newSvcHasIis || newSvcHasResim) ? newSvcIisServerId : undefined,
                           depoServerId:     (newSvcHasPusula || newSvcHasResim) ? newSvcDepoServerId : undefined,
