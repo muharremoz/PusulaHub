@@ -1578,15 +1578,24 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Sunucu atamasını hub.companies tablosuna kaydet
+        /*  Sunucu atamasını hub.companies'e yaz — YALNIZ bu çalıştırmada
+         *  gerçekten kullanılan sunucular.
+         *
+         *  Eskiden dört alan da `?? null` ile yazılıyordu: firma detayından
+         *  tek hizmet/kullanıcı eklemek (payload'da windowsServerId yok)
+         *  firmanın kayıtlı RDP sunucusunu SİLİYORDU. 6399'da yaşandı —
+         *  firma Terminal 3'te kurulu ama kayıt boşaldı. Gönderilmeyen alana
+         *  dokunulmaz.                                                     */
         try {
-          const sb = await getSupabaseServer()
-          await sb.schema("hub").from("companies").update({
-            windows_server_id: payload.windowsServerId ?? null,
-            ad_server_id:      payload.serverId ?? null,
-            sql_server_id:     payload.sqlServerId ?? null,
-            file_server_id:    payload.depoServerId ?? null,
-          }).eq("company_id", payload.firmaId)
+          const atama: Record<string, string> = {}
+          if (payload.windowsServerId) atama.windows_server_id = payload.windowsServerId
+          if (payload.serverId)        atama.ad_server_id      = payload.serverId
+          if (payload.sqlServerId)     atama.sql_server_id     = payload.sqlServerId
+          if (payload.depoServerId)    atama.file_server_id    = payload.depoServerId
+          if (Object.keys(atama).length > 0) {
+            const sb = await getSupabaseServer()
+            await sb.schema("hub").from("companies").update(atama).eq("company_id", payload.firmaId)
+          }
         } catch { /* hub.companies'te kayıt yoksa sessizce geç */ }
 
         // ── Senkron: agent onbellegini zorla yenile + hub'a hemen yaz ──
