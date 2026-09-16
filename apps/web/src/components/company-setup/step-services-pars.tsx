@@ -72,7 +72,7 @@ export function StepServicesPars({
       out.push({
         key: `tip_${tip}`, birincil: true,
         baslik: `${tipAdlari.get(tip) ?? tip} raporları`,
-        aciklama: "Seçilen programın raporları — mobilde görünenler ve firmaya özel olmayanlar varsayılan seçili",
+        aciklama: "Seçilen programın raporları — hangileri açılacaksa işaretle; firmaya özel olanlar rozetle gösterilir",
         items: katalog.scripts.filter((s) => s.tipId === tip),
       })
     }
@@ -248,8 +248,9 @@ export function StepServicesPars({
             <p className="text-[11px] font-semibold shrink-0">
               Raporlar / Görevler
               {katalog && (
-                <span className="ml-2 text-[10px] font-normal text-muted-foreground">
-                  <span className="font-semibold text-foreground">{selectedReportIds.length}</span> / {katalog.scripts.length} seçili
+                <span className={cn("ml-2 text-[10px] font-normal", selectedReportIds.length === 0 ? "text-red-500" : "text-muted-foreground")}>
+                  <span className={cn("font-semibold", selectedReportIds.length === 0 ? "" : "text-foreground")}>{selectedReportIds.length}</span> / {katalog.scripts.length} seçili
+                  {selectedReportIds.length === 0 && " — en az bir rapor seç"}
                 </span>
               )}
             </p>

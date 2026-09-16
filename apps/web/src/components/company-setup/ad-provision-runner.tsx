@@ -100,6 +100,13 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   const [fatalError, setFatalError] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs]   = useState(0)
   const started = useRef(false)
+  const listeRef = useRef<HTMLDivElement>(null)
+
+  /* Yeni adim geldikce listeyi en alta kaydir */
+  useEffect(() => {
+    const el = listeRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [steps])
 
   const services     = payload.services ?? []
   const serviceCount = services.length
@@ -319,7 +326,9 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
             {completed && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
             {isRunning && <Loader2 className="size-3.5 text-foreground animate-spin" />}
           </div>
-          <div className="divide-y divide-border/40">
+          {/*  Uzun kurulumlarda liste sayfayi asiyordu: sabit yukseklik +
+               kaydirma; son adim gorunur kalsin diye asagiya kayar.       */}
+          <div ref={listeRef} className="divide-y divide-border/40 max-h-[380px] overflow-y-auto">
             {steps.map((step) => (
               <div key={step.stepId} className={cn(
                 "flex items-start gap-2.5 px-3 py-2 transition-colors",
@@ -334,7 +343,8 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
                 <div className="min-w-0 flex-1">
                   <p className={cn(
                     "text-[11px] font-mono",
-                    step.status === "done"    && "text-muted-foreground line-through",
+                    /* Tamamlanan: ustu cizili degil, yesil fosforlu kalemle isaretlenmis gibi */
+                    step.status === "done"    && "text-emerald-800 dark:text-emerald-300 bg-emerald-400/20 rounded-[3px] px-1 -mx-1 inline-block",
                     step.status === "running" && "text-foreground font-semibold",
                     step.status === "pending" && "text-muted-foreground/50",
                     step.status === "error"   && "text-red-500",

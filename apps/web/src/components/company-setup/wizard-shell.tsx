@@ -28,7 +28,7 @@ import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, L
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
 import {
-  parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsVarsayilanSecim,
+  parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode,
   type ParsKatalog, type ParsWizardUser,
 } from "@/lib/pars-katalog"
 import type { PusulaProgramConfig } from "@/app/api/services/route"
@@ -306,7 +306,6 @@ export function WizardShell() {
   const [parsUsers, setParsUsers]           = useState<ParsWizardUser[]>([])
   const [parsReportIds, setParsReportIds]   = useState<number[]>([])
   /** Kullanıcı rapor listesine elle dokundu mu — dokunmadıysa program seçimi değişince varsayılan yenilenir */
-  const [parsReportsTouched, setParsReportsTouched] = useState(false)
   const [parsKatalog, setParsKatalog]       = useState<ParsKatalog | null>(null)
   const [parsKatalogFor, setParsKatalogFor] = useState<number | null>(null)
   const [parsKatalogLoading, setParsKatalogLoading] = useState(false)
@@ -341,13 +340,8 @@ export function WizardShell() {
     loadParsKatalog(parsService.id)
   }, [step, parsService, parsKatalogFor, parsKatalogLoading, loadParsKatalog])
 
-  // Varsayılan rapor seçimi — katalog geldiğinde ve (elle dokunulmadıysa) program seçimi değiştiğinde
-  const parsTipKey = parsProgramTipleri.join(",")
-  useEffect(() => {
-    if (!parsKatalog || parsReportsTouched) return
-    setParsReportIds(parsVarsayilanSecim(parsKatalog.scripts, parsProgramTipleri))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [parsKatalog, parsTipKey, parsReportsTouched])
+  // Rapor seçimi varsayılan BOŞ gelir ve en az bir rapor seçmek zorunlu —
+  // hangi raporların açılacağı bilinçli bir karar olsun (2026-09-16 istek).
 
   // Pars seçilince en az bir kullanıcı satırı hazır gelsin
   useEffect(() => {
@@ -358,7 +352,7 @@ export function WizardShell() {
     parsKullaniciAdiGecerliMi(u.username) && parsSifreGecerliMi(u.password),
   ) && new Set(parsUsers.map((u) => u.username.trim().toLocaleLowerCase("tr-TR"))).size === parsUsers.length
     && !parsUsers.some((u) => (parsKatalog?.users ?? []).some((k) => k.adi.trim().toLocaleLowerCase("tr-TR") === u.username.trim().toLocaleLowerCase("tr-TR")))
-  const parsReady = !parsService || (parsUsersValid && !!parsKatalog && !parsKatalogError)
+  const parsReady = !parsService || (parsUsersValid && !!parsKatalog && !parsKatalogError && parsReportIds.length > 0)
 
   // Step 4: Demo veritabanları kataloğunu fetch et (aktif olanlar)
   useEffect(() => {
@@ -428,6 +422,9 @@ export function WizardShell() {
                 && selectedWindowsServerId !== null :
     step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
     step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) && parsReady :
+    // SQL sunucusu seçildiyse veri seçimi zorunlu — eskiden sessizce atlanıyordu
+    step === 4 ? selectedSqlServerId === null
+                || (sqlMode === 0 ? backupFiles.some((f) => f.selected && f.databaseName.trim()) : selectedDemoDbIds.length > 0) :
     true
 
   const go = (to: number) => {
@@ -453,7 +450,7 @@ export function WizardShell() {
     setParsUsers((p) => p.map((u) => u.id === id ? { ...u, ...patch } : u)), [])
   const regenParsUser  = useCallback((id: number) =>
     setParsUsers((p) => p.map((u) => u.id === id ? { ...u, password: parsSifreUret() } : u)), [])
-  const setParsReports = useCallback((ids: number[]) => { setParsReportsTouched(true); setParsReportIds(ids) }, [])
+  const setParsReports = useCallback((ids: number[]) => setParsReportIds(ids), [])
 
   const toggleBackup = (id: number) =>
     setBackupFiles((p) => p.map((f) => {
@@ -543,7 +540,7 @@ export function WizardShell() {
     // demoDatabases tekrar fetch edilsin diye boşalt — step 4'e girince useEffect yeniden doldurur
     setDemoDatabases([])
     setApiExistingUsers([]); setExistingUsersKey(null)
-    setParsUsers([]); setParsReportIds([]); setParsReportsTouched(false)
+    setParsUsers([]); setParsReportIds([])
     setParsKatalog(null); setParsKatalogFor(null); setParsKatalogError(null)
   }
 
