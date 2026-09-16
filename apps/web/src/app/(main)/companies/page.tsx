@@ -2133,6 +2133,22 @@ tr:nth-child(even) td{background:#fafafa}
                           {lisansGoster(selectedFirma.lisansBitis)}
                         </span>
                       )}
+                      {/* Müşteri temsilcisi — CRM'den; pasifse firma devredilmemiş olabilir */}
+                      {selectedFirma.temsilci && (
+                        <>
+                          <span className="bg-border h-3 w-px shrink-0" />
+                          <span
+                            className="inline-flex shrink-0 items-center gap-1"
+                            title={selectedFirma.temsilci.aktif ? "Müşteri temsilcisi" : "Müşteri temsilcisi pasif — firma devredilmemiş olabilir"}
+                          >
+                            <User className="size-3 shrink-0" />
+                            <span className={selectedFirma.temsilci.aktif ? "" : "opacity-60"}>{selectedFirma.temsilci.ad}</span>
+                            {!selectedFirma.temsilci.aktif && (
+                              <span className="inline-flex rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
+                            )}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
 
