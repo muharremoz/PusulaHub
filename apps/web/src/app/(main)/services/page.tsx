@@ -36,6 +36,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { ServiceSheet } from "@/components/services/service-sheet";
+import { ParsImportSheet } from "@/components/services/pars-import-sheet";
 import { toast } from "sonner";
 import type { WizardServiceDto, ServiceType } from "@/app/api/services/route";
 
@@ -96,6 +97,8 @@ export default function ServicesPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing]     = useState<WizardServiceDto | null>(null);
   const [deleting, setDeleting]   = useState<WizardServiceDto | null>(null);
+  /** Pars: Ayar.mdb'deki mevcut kullanıcıları Hub'a aktarma paneli */
+  const [parsImport, setParsImport] = useState<WizardServiceDto | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -340,10 +343,15 @@ export default function ServicesPage() {
                             <MoreVertical className="size-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" sideOffset={4} className="w-40 text-[12px]">
+                        <DropdownMenuContent align="end" sideOffset={4} className="w-52 text-[12px]">
                           <DropdownMenuItem onClick={() => openEdit(svc)}>
                             Düzenle
                           </DropdownMenuItem>
+                          {svc.type === "pars" && (
+                            <DropdownMenuItem onClick={() => setParsImport(svc)}>
+                              Kullanıcıları Hub&apos;a Aktar
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => handleToggleActive(svc)}>
                             {svc.isActive ? "Pasife Al" : "Aktif Et"}
                           </DropdownMenuItem>
@@ -366,6 +374,12 @@ export default function ServicesPage() {
         onOpenChange={setSheetOpen}
         editing={editing}
         onSaved={refresh}
+      />
+
+      <ParsImportSheet
+        open={!!parsImport}
+        onOpenChange={(o) => !o && setParsImport(null)}
+        service={parsImport}
       />
 
       <AlertDialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>

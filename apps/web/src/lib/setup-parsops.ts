@@ -242,6 +242,42 @@ $c.Close()
   return buildPars32BitCommand(script)
 }
 
+/**
+ * Ayar.mdb'deki TÜM Pars kullanıcıları + her birinin gördüğü datalar.
+ *
+ * Ters yetki: YasakliDatalar'da satırı olmayan data görünür. Hub'a aktarım
+ * ekranı kullanıcıyı firmaya bu datalardan (ad öneki) eşler.
+ * Çıktı: PARSJSON:{users:[{ID,Adi,Tipi}], izinler:[{UID,Data}]}
+ */
+export function buildParsKullaniciDataOku(dbPath: string, dbPassword: string): string {
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+function Oku($sql) {
+  $cmd = $c.CreateCommand(); $cmd.CommandText = $sql
+  $r = $cmd.ExecuteReader()
+  $l = New-Object System.Collections.ArrayList
+  while ($r.Read()) {
+    $o = @{}
+    for ($i = 0; $i -lt $r.FieldCount; $i++) { $v = $r.GetValue($i); if ($v -is [DBNull]) { $v = $null }; $o[$r.GetName($i)] = $v }
+    [void]$l.Add($o)
+  }
+  $r.Close()
+  return ,$l.ToArray()
+}
+$out = @{
+  users   = Oku 'SELECT ID, Adi, Tipi FROM Users ORDER BY Adi'
+  izinler = Oku 'SELECT u.ID AS UID, d.Data AS Data FROM Users u, Datalar d WHERE NOT EXISTS (SELECT 1 FROM YasakliDatalar y WHERE y.UID = u.ID AND y.DATAAD = d.Data)'
+  datalar = Oku 'SELECT Data FROM Datalar'
+}
+$c.Close()
+'PARSJSON:' + (ConvertTo-Json -InputObject $out -Compress -Depth 4)
+`
+  return buildPars32BitCommand(script)
+}
+
 /** Betik çıktısındaki `PARSJSON:{...}` satırını çözer; yoksa null. */
 export function parsJsonAyikla<T = unknown>(stdout: string): T | null {
   const m = (stdout ?? "").match(/PARSJSON:(\{[\s\S]*\})/)

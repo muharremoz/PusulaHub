@@ -157,6 +157,68 @@ export function parsKullaniciAdiGecerliMi(adi: string): boolean {
   return s.length >= 2 && s.length <= 40 && !/[\s'"]/.test(s)
 }
 
+/**
+ * Data adından firma kodu — Pars datası `<firmaKodu>_<ad>` deseninde
+ * (3745_SEYIDOGLU26, 877_Siparis). Öneki olmayanlarda (ALTAN2026) null.
+ */
+export function parsDataFirmaKodu(data: string): string | null {
+  const m = (data ?? "").trim().match(/^(\d{3,5})[_.-]/)
+  return m ? m[1] : null
+}
+
+/**
+ * Kullanıcı adından firma kodu — `5973.canta1` gibi noktalı adlarda önek.
+ * Datası olmayan/öneksiz data kullanan kullanıcılar için ikinci ipucu.
+ */
+export function parsKullaniciAdiFirmaKodu(username: string): string | null {
+  const m = (username ?? "").trim().match(/^(\d{3,5})[._-]/)
+  return m ? m[1] : null
+}
+
+/** Karşılaştırma için sadeleştirir: harfler büyük, TR karakterler düz, rakam/ayraç yok. */
+function sadelestir(s: string): string {
+  return (s ?? "")
+    .toLocaleUpperCase("tr-TR")
+    .replace(/İ/g, "I").replace(/Ş/g, "S").replace(/Ğ/g, "G").replace(/Ü/g, "U").replace(/Ö/g, "O").replace(/Ç/g, "C")
+    .replace(/[^A-Z]/g, "")
+}
+
+/**
+ * Datası okunamayan kullanıcı için firma TAHMİNİ: kullanıcı adı, data adının
+ * içinde geçiyor mu (cihan → 5055_CIHAN24, merve1 → 5339_MERVE).
+ * Kesin değildir — arayüzde "tahmin" diye gösterilir, otomatik seçilmez.
+ */
+export function parsFirmaTahmini(username: string, tumDatalar: string[]): { kod: string; data: string } | null {
+  const ad = sadelestir(username)
+  if (ad.length < 4) return null
+  for (const uzunluk of [ad.length, 5]) {
+    const parca = ad.slice(0, uzunluk)
+    if (parca.length < 4) continue
+    for (const d of tumDatalar) {
+      const kod = parsDataFirmaKodu(d)
+      if (!kod) continue
+      if (sadelestir(d).includes(parca)) return { kod, data: d }
+    }
+  }
+  return null
+}
+
+/** Ayar.mdb'de var olan bir Pars kullanıcısı — Hub'a aktarım ekranı için. */
+export interface ParsMevcutKullanici {
+  parsUserId: number
+  username:   string
+  /** 1 admin, 0 kullanıcı */
+  tipi:       number
+  /** Kullanıcının görebildiği datalar */
+  datalar:    string[]
+  /** Datalardan (ya da kullanıcı adı önekinden) tespit edilen firma kodları */
+  firmaKodlari: string[]
+  /** Kesin eşleşme yoksa ad benzerliğinden tahmin — otomatik seçilmez */
+  firmaTahmini: { kod: string; data: string } | null
+  /** Hub'da company_pars_users'ta zaten kayıtlı mı (hangi firmaya) */
+  hubFirmaId: string | null
+}
+
 /** Sihirbaz durumundaki Pars kullanıcı satırı. */
 export interface ParsWizardUser {
   id:       number

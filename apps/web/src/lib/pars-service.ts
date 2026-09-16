@@ -4,8 +4,11 @@ import { serverAgentById, type HubSorguIstemcisi } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { execOnAgent } from "@/lib/agent-poller"
 import { parseConfig, type ParsConfig } from "@/lib/wizard-service-config"
-import { buildParsKatalogOku, buildParsSifreOku, parsJsonAyikla, parsKatalogNormalize } from "@/lib/setup-parsops"
-import { parsBaglantiKur, type ParsBaglanti, type ParsKatalog } from "@/lib/pars-katalog"
+import { buildParsKatalogOku, buildParsKullaniciDataOku, buildParsSifreOku, parsJsonAyikla, parsKatalogNormalize } from "@/lib/setup-parsops"
+import {
+  parsBaglantiKur, parsDataFirmaKodu, parsFirmaTahmini, parsKullaniciAdiFirmaKodu,
+  type ParsBaglanti, type ParsKatalog, type ParsMevcutKullanici,
+} from "@/lib/pars-katalog"
 
 /**
  * Pars hizmeti — sunucu tarafı ortak işler.
@@ -95,6 +98,63 @@ export async function parsKullanicilariKaydet(
     data_names:   dataNames.length ? dataNames.join(",") : null,
   })))
   if (error) throw new Error(error.message)
+}
+
+/**
+ * Ayar.mdb'deki tüm Pars kullanıcıları + gördükleri datalar + Hub eşleşmesi.
+ * Hub'a aktarım ekranı (hangi firmalar Pars'ta kayıtlı?) bunu kullanır.
+ */
+export async function parsMevcutKullanicilar(hedef: ParsHedef): Promise<{ ok: true; users: ParsMevcutKullanici[] } | { ok: false; error: string }> {
+  const r = await execOnAgent(hedef.agent.ip, hedef.agent.port, hedef.agent.apiKey, buildParsKullaniciDataOku(hedef.dbPath, hedef.password), 60)
+  const raw = parsJsonAyikla<{ users?: unknown; izinler?: unknown; datalar?: unknown }>(r.stdout ?? "")
+  if (!raw) {
+    const neden = (r.stderr || r.stdout || `exit ${r.exitCode}`).trim().slice(0, 300)
+    return { ok: false, error: `Ayar.mdb okunamadı: ${neden}` }
+  }
+  // ConvertTo-Json tek elemanlı diziyi nesneye çevirebiliyor → ikisini de kabul et.
+  const dizi = (v: unknown) => (Array.isArray(v) ? v : v ? [v] : []) as Record<string, unknown>[]
+
+  const dataByUid = new Map<number, string[]>()
+  for (const i of dizi(raw.izinler)) {
+    const uid = Number(i.UID)
+    const data = String(i.Data ?? "").trim()
+    if (!Number.isInteger(uid) || !data) continue
+    const l = dataByUid.get(uid) ?? []
+    l.push(data)
+    dataByUid.set(uid, l)
+  }
+
+  const sb = await getSupabaseServer()
+  const { data: hubRows } = await sb.schema("hub").from("company_pars_users")
+    .select("company_id, pars_user_id").eq("service_id", hedef.serviceId)
+  const hubByParsId = new Map<number, string>()
+  for (const h of ((hubRows ?? []) as { company_id: string; pars_user_id: number | null }[])) {
+    if (h.pars_user_id != null) hubByParsId.set(Number(h.pars_user_id), h.company_id)
+  }
+
+  const tumDatalar = dizi(raw.datalar).map((d) => String(d.Data ?? "").trim()).filter(Boolean)
+
+  const users = dizi(raw.users).map((u): ParsMevcutKullanici => {
+    const parsUserId = Number(u.ID)
+    const username = String(u.Adi ?? "")
+    const datalar = (dataByUid.get(parsUserId) ?? []).sort((a, b) => a.localeCompare(b, "tr"))
+    // 1) gördüğü dataların öneki  2) kullanıcı adının öneki (5973.canta1)
+    const kodlar = [...new Set([
+      ...datalar.map(parsDataFirmaKodu),
+      parsKullaniciAdiFirmaKodu(username),
+    ].filter((k): k is string => !!k))]
+    return {
+      parsUserId,
+      username,
+      tipi:         Number(u.Tipi) === 1 ? 1 : 0,
+      datalar,
+      firmaKodlari: kodlar,
+      firmaTahmini: kodlar.length === 0 ? parsFirmaTahmini(username, tumDatalar) : null,
+      hubFirmaId:   hubByParsId.get(parsUserId) ?? null,
+    }
+  }).filter((u) => Number.isInteger(u.parsUserId) && u.username)
+
+  return { ok: true, users }
 }
 
 export interface ParsFirmaSifreleri {
