@@ -169,6 +169,36 @@ try {
   return buildPars32BitCommand(script)
 }
 
+/**
+ * Yalnız VERİLEN kullanıcıların şifrelerini okur (Users.sifre — düz metin).
+ * Katalog okuması bilerek şifresiz; bu betik firma Erişim ekranı için var ve
+ * yalnız o firmanın kullanıcı ID'lerini alır — tüm Pars kullanıcılarının
+ * şifrelerini dökmez. ID'ler tam sayı olarak doğrulanıp sorguya gömülür.
+ * Çıktı: PARSJSON:{users:[{ID,Adi,sifre}]}
+ */
+export function buildParsSifreOku(dbPath: string, dbPassword: string, ids: number[]): string {
+  const temiz = [...new Set(ids.filter((n) => Number.isInteger(n) && n > 0))]
+  const liste = temiz.length ? temiz.join(",") : "-1"
+  const script = `
+${ORTAK_BASLIK}
+${jetBaglanti(dbPath, dbPassword)}
+$c = New-Object System.Data.OleDb.OleDbConnection $cs
+$c.Open()
+$cmd = $c.CreateCommand(); $cmd.CommandText = 'SELECT ID, Adi, sifre FROM Users WHERE ID IN (${liste})'
+$r = $cmd.ExecuteReader()
+$l = New-Object System.Collections.ArrayList
+while ($r.Read()) {
+  $o = @{}
+  for ($i = 0; $i -lt $r.FieldCount; $i++) { $v = $r.GetValue($i); if ($v -is [DBNull]) { $v = $null }; $o[$r.GetName($i)] = $v }
+  [void]$l.Add($o)
+}
+$r.Close()
+$c.Close()
+'PARSJSON:' + (ConvertTo-Json -InputObject @{ users = $l.ToArray() } -Compress -Depth 3)
+`
+  return buildPars32BitCommand(script)
+}
+
 /** Betik çıktısındaki `PARSJSON:{...}` satırını çözer; yoksa null. */
 export function parsJsonAyikla<T = unknown>(stdout: string): T | null {
   const m = (stdout ?? "").match(/PARSJSON:(\{[\s\S]*\})/)
