@@ -606,9 +606,14 @@ function sanitizeFilename(s) {
 }
 function sanitizeRelPath(s) {
   const cleaned = s.replace(/\\/g, "/").replace(/^\/+/, "")
-  if (cleaned.includes("..")) return null
   if (cleaned.length > 500) return null
-  return normalize(cleaned)
+  // Yol atlamasi yalniz TAM bir ".." parcasidir. Dosya adinin icinde gecen
+  // art arda noktalar mesru: "M-BLK-109...jpg" gibi adlar gercek veride var.
+  if (cleaned.split("/").some((p) => p === "." || p === "..")) return null
+  const n = normalize(cleaned)
+  // normalize sonrasi da disari cikmamali (mutlak yol / surucu harfi / ".." ile baslama)
+  if (n.startsWith("/") || n.startsWith("..") || /^[a-zA-Z]:/.test(n)) return null
+  return n
 }
 
 const ICON_DATABASE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>`
