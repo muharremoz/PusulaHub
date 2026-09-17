@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { getAllAgents } from "@/lib/agent-store"
 import { requirePermission } from "@/lib/require-permission"
-import { firmaTemsilcileri } from "@/lib/crm-temsilciler"
+import { firmaEkTemsilcileri, firmaTemsilcileri } from "@/lib/crm-temsilciler"
 
 /**
  * GET /api/dashboard/bilkar
@@ -10,7 +10,8 @@ import { firmaTemsilcileri } from "@/lib/crm-temsilciler"
  * Bilkar (iş ortağı) portföyünün tek bakışta özeti — kontrol panelindeki
  * Bilkar bölümü için.
  *
- * Bilkar firması = CRM'de müşteri temsilcisi BILKAR olan firma. Portföy
+ * Bilkar firması = CRM'de müşteri temsilcisi YA DA ek temsilcisi BILKAR olan
+ * firma (ek temsilci: PARS'ta başka temsilcisi olan, ör. 2642 EMRE + BILKAR). Portföy
  * büyük (764) ama çoğu Hub'da kurulu değil; ekranda ikisi de gösterilir:
  * "kurulu" olanlar bizim sunucularımızda yer kaplayan gerçek yüktür.
  *
@@ -60,9 +61,9 @@ export async function GET() {
   if (gate) return gate
   try {
     const sb = await getSupabaseServer()
-    const temsilciler = await firmaTemsilcileri()
+    const [temsilciler, ekTemsilciler] = await Promise.all([firmaTemsilcileri(), firmaEkTemsilcileri()])
     const bilkarKodlari = new Set(
-      [...temsilciler.entries()]
+      [...temsilciler.entries(), ...ekTemsilciler.entries()]
         .filter(([, t]) => /bilkar/i.test(t.ad ?? ""))
         .map(([firkod]) => firkod),
     )

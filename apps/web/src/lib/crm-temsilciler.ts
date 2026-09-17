@@ -23,14 +23,20 @@ export interface CrmTemsilci {
 interface CrmYanit {
   ok?:       boolean
   toplam?:   number
-  firmalar?: { firkod: string; temsilci: CrmTemsilci | null }[]
+  firmalar?: { firkod: string; temsilci: CrmTemsilci | null; ekTemsilci?: CrmTemsilci | null }[]
+}
+
+interface Haritalar {
+  temsilci: Map<string, CrmTemsilci>
+  /** CRM'deki ek temsilci (customers.secondary_manager_id) — ör. EMRE + BILKAR */
+  ek:       Map<string, CrmTemsilci>
 }
 
 const TTL_MS = 15 * 60_000
-let onbellek: { t: number; harita: Map<string, CrmTemsilci> } | null = null
-let akan: Promise<Map<string, CrmTemsilci>> | null = null
+let onbellek: { t: number; harita: Haritalar } | null = null
+let akan: Promise<Haritalar> | null = null
 
-async function cek(): Promise<Map<string, CrmTemsilci>> {
+async function cek(): Promise<Haritalar> {
   const kok = (process.env.CRM_URL ?? "https://crm.pusulanet.net").replace(/\/+$/, "")
   const anahtar = process.env.INTERNAL_APP_KEY
   if (!anahtar) throw new Error("INTERNAL_APP_KEY tanımlı değil")
@@ -42,10 +48,11 @@ async function cek(): Promise<Map<string, CrmTemsilci>> {
   })
   if (!r.ok) throw new Error(`CRM ${r.status}`)
   const j = (await r.json()) as CrmYanit
-  const harita = new Map<string, CrmTemsilci>()
+  const harita: Haritalar = { temsilci: new Map(), ek: new Map() }
   for (const f of j.firmalar ?? []) {
-    if (!f.firkod || !f.temsilci?.id) continue
-    harita.set(String(f.firkod), f.temsilci)
+    if (!f.firkod) continue
+    if (f.temsilci?.id) harita.temsilci.set(String(f.firkod), f.temsilci)
+    if (f.ekTemsilci?.id) harita.ek.set(String(f.firkod), f.ekTemsilci)
   }
   return harita
 }
@@ -55,6 +62,15 @@ async function cek(): Promise<Map<string, CrmTemsilci>> {
  * veri varsa o döner, yoksa BOŞ harita (çağıran akış bozulmasın).
  */
 export async function firmaTemsilcileri(): Promise<Map<string, CrmTemsilci>> {
+  return (await haritalar()).temsilci
+}
+
+/** firkod → ek temsilci. Aynı istek/önbellekten; olmayan firma haritada yok. */
+export async function firmaEkTemsilcileri(): Promise<Map<string, CrmTemsilci>> {
+  return (await haritalar()).ek
+}
+
+async function haritalar(): Promise<Haritalar> {
   if (onbellek && Date.now() - onbellek.t < TTL_MS) return onbellek.harita
   // Aynı anda gelen isteklerde tek çağrı yapılsın (1,1 MB yanıt).
   if (!akan) {
@@ -62,7 +78,7 @@ export async function firmaTemsilcileri(): Promise<Map<string, CrmTemsilci>> {
       .then((harita) => { onbellek = { t: Date.now(), harita }; return harita })
       .catch((err) => {
         console.error("[crm-temsilciler]", err instanceof Error ? err.message : err)
-        return onbellek?.harita ?? new Map<string, CrmTemsilci>()
+        return onbellek?.harita ?? { temsilci: new Map<string, CrmTemsilci>(), ek: new Map<string, CrmTemsilci>() }
       })
       .finally(() => { akan = null })
   }
