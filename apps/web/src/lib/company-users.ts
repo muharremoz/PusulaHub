@@ -23,6 +23,8 @@ export interface CompanyUserDto {
   lastLogin:   string
   server:      string
   groups:      string[]
+  /** Bu satırın okunduğu agent raporunun zamanı (ISO) — "sunucudan en son ne zaman okundu". */
+  reportedAt?: string | null
   /** Kullanıcının kaynak kullanımı (en güncel gün). null = ölçüm yok. */
   usageCpu?:   number | null
   usageRamMB?: number | null
@@ -61,6 +63,7 @@ export async function listCompanyUsers(
          *  bırakılıyordu. Office yetkisi (`Office_Kullanicilari`) bu
          *  listeden okunuyor, o yüzden artık aktarılıyor.               */
         groups:      u.groups ?? [],
+        reportedAt:  agent.lastReport?.timestamp ?? null,
       })
     }
   }
