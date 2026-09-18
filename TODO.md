@@ -4,6 +4,30 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ---
 
+## Terminal Sunucuları — Oturum Açma Gecikmesi
+
+- [ ] 🔴 **Terminal 1 yeni oturumda ~12–15 sn bekliyor, oturum sayısıyla doğrusal büyüyor** —
+  kök sebep LogonUI'nin tüm oturumları ~64 tur tarayan RPC fırtınası (oturum başına ~0,25 sn;
+  80 kullanıcıda ~20 sn öngörülüyor, T2 dolunca orada da çıkar). 3 ilke denendi, etkisiz,
+  geri alındı. Sonraki adım: giriş sırasında WPR yığın kaydı. Tüm kayıt:
+  [docs/terminal1-oturum-gecikmesi.md](docs/terminal1-oturum-gecikmesi.md). (2026-09-11, askıda)
+- [ ] ⚪ **Terminal 3 giriş kilitlenmesi (zombi RDP oturumu)** — 14 ve 17 Eylül'de yaşandı, ESXi reset
+  ile geçti, KB5129237 elle kuruldu; çözüldü mü belli değil. **Askıda, tekrar olmadıkça açılmaz.**
+  Kayıt: [docs/terminal3-kilitlenme.md](docs/terminal3-kilitlenme.md). (2026-09-18)
+
+---
+
+## SQL Yedek Kontrolü
+
+- [ ] 🟡 **2026-09-18 sabahı yedek kontrolünü tekrarla** — `node apps/web/__yedek.mjs scripts/sql/yedek-kontrol.sql`.
+  17 Eylül 20:04'te 198 DB'nin 185'inde taban sağlamdı; o gün oluşturulan 13 DB'nin
+  (11× `2642_MERS_*`, `651_PIR2025`, `URNTRANSFER`) SpareBackup tam yedeği yoktu, 08:00 turunda
+  düzelmeleri bekleniyor. `URNTRANSFER` 18:00 COPY_ONLY turunda da yoktu → Backup Master kapsamına bak.
+  Yan iş: `C:\ProgramData\SpareBackup`'ta Nisan–Haziran'dan 730 yetim zip (710 MB); yeni tarihli
+  kapsam dışı DB'ler (`651_REGOLD25`, `651_RG_ATL_*25`, `5055_CIHAN23`, `5702_INCI25`) bilinçli mi?
+
+---
+
 ## Firma Kurulum Sihirbazı — Sağlamlaştırma (kod incelemesi bulguları)
 
 > Kaynak: 2026-06 firma sihirbazı + aktarım modülü kod incelemesi. Temel akış
@@ -31,7 +55,7 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 ### Yapılacak
 
 - [ ] 🔴 **`complete` status guard yok** — `server.js:367` `complete` endpoint'i status doğrulamıyor; müşteri çift tıklar/sekme yenilerse iki paralel `startPushJob` → aynı hedefe iki SMB mount + cp → bozuk kopya. Çözüm: atomik `UPDATE ... SET status='pushing' WHERE token=? AND status IN ('active','pending')`, etkilenen satır 0 ise başlatma. (En kolay + yüksek etkili.)
-- [ ] 🔴 **Push retry mekanizması yok** — Veri SQL'e kopyalandı ama resim aşaması SMB hatası verirse `push_failed` kalır; hiçbir endpoint retry tetikleyemiyor → müşteri **tüm dosyaları baştan yükler** (oysa staging duruyor). Çözüm: `POST /admin/sessions/:id/retry-push` ekle; aşama bazlı "yapıldı mı" işareti tutup kaldığı yerden devam et.
+- ✅ **Push retry mekanizması** — 2026-09-13'te eklendi. Servis: `POST /admin/sessions/:id/retry-push` (yalnız `push_failed` + staging duruyorsa). Hub: `POST /api/aktarim/[id]/retry` + aktarım listesinde "Yeniden dene" düğmesi. Kopyalama rsync'e geçti (kopyalanmışı atlar) ve hata halinde 3 kez deneniyor. Tetikleyen olay: firma 3143'ün 13.412 resminden 2.900'ü `Permission denied` ile düştü; sebep Depo'da Defender'ın gerçek zamanlı taraması, `D:\Resimler` hariç tutmalara eklendi.
 - [ ] 🟡 **Credential plaintext + müşteriye sızma** — `sqlPassword`/`depoPassword` `aktarim.db`'de şifresiz (`server.js:84`). Ayrıca mount hata mesajı `pushError` kolonuna yazılıp `/api/info/:token` ile **müşteriye plaintext dönebiliyor** (`:279,:379`). Çözüm: (a) push hatasını müşteriye generic mesaja indir, ham hatayı sadece admin'e; (b) mount'u `credentials=` dosyasıyla (0600) yap, argv'den çıkar; (c) `completed`/`push_failed` olunca credential kolonlarını NULL'a çek.
 - [ ] 🟡 **Staging cleanup eksik** — `cancel`/`expired` yollarında `staging/{token}` silinmiyor (`server.js:120,175`), sadece `DELETE` ve `completed` temizliyor. 365 gün default expiry ile GB'larca .bak birikir. Çözüm: cancel + expire'da `rm staging/{token}`; periyodik temizlik job'ı.
 - [ ] 🟡 **`complete` upload tamamlık doğrulaması yok** — Müşteri tek resim yüklemeden `complete` çağırabilir; server "beklenen dosya = staging'deki dosya" kontrolü yapmıyor, yarım yükleme `completed` olur. `dataBytesReceived` client raporuna güveniyor. Çözüm: `complete`'te staging'i tarayıp gerçek byte/dosya sayısını DB'ye yaz, uyumsuzsa reddet.
