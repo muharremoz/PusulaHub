@@ -373,9 +373,14 @@ interface Props {
   domains:      DomainExpiry[] | null
   /** Spare Backup deposunun disk dolulugu - ayni kartta gosteriliyor */
   backupStorage: BackupStorage | null
+  /**
+   * Üç kartın ALTINA eklenen kartlar (imaj yedekleri). Sol altyapı sütunu
+   * dört kartla 1080 piksele sığmıyordu; sağ şeridin altı boştu.
+   */
+  children?: React.ReactNode
 }
 
-export function RightRail({ bandwidth, offlineFirms, domains, backupStorage }: Props) {
+export function RightRail({ bandwidth, offlineFirms, domains, backupStorage, children }: Props) {
   return (
     <>
       {/* Sağdan sola sönen karartı — kartların okunabilirlik zemini */}
@@ -387,10 +392,14 @@ export function RightRail({ bandwidth, offlineFirms, domains, backupStorage }: P
         }}
       />
 
-      <div className="pointer-events-none absolute right-6 top-6 flex w-[262px] select-none flex-col gap-4">
+      {/*  z-20: imaj yedekleri kartındaki gün seçicisi tıklanabilir olsun
+           (Nexus'un SVG katmanı z-10). Sütun pointer-events-none kalıyor,
+           yalnız seçici kendi için geri açıyor.                          */}
+      <div className="pointer-events-none absolute right-6 top-6 z-20 flex w-[262px] select-none flex-col gap-4">
         <TrafficCard data={bandwidth} />
         <BackupsCard data={offlineFirms} storage={backupStorage} />
         <DomainsCard data={domains} />
+        {children}
       </div>
     </>
   )

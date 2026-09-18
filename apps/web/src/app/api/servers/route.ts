@@ -30,11 +30,29 @@ export async function GET() {
   if (gate) return gate
   try {
     const sb = await getSupabaseServer()
-    const [{ data: srvData, error }, { data: roleData }] = await Promise.all([
+    const [{ data: srvData, error }, { data: roleData }, { data: compData }, { data: adData }] = await Promise.all([
       sb.schema("hub").from("servers").select("id, name, ip, dns, os, status, cpu, ram, disk, uptime, last_checked").order("name"),
       sb.schema("hub").from("server_roles").select("server_id, role"),
+      /*  Terminal başına kayıtlı kullanıcı: firma → sunucu ataması ve
+       *  firmanın AD OU'sundaki kullanıcılar. İki küçük tablo; /tv
+       *  "Bağlı Kullanıcı" kartı "38 / 120" için kullanıyor.           */
+      sb.schema("hub").from("companies").select("company_id, windows_server_id").not("windows_server_id", "is", null).limit(10_000),
+      sb.schema("hub").from("ad_users").select("ou").limit(10_000),
     ])
     if (error) throw error
+
+    const ouCount = new Map<string, number>()
+    for (const a of (adData ?? []) as { ou: string | null }[]) {
+      const k = (a.ou ?? "").trim()
+      if (k) ouCount.set(k, (ouCount.get(k) ?? 0) + 1)
+    }
+    const assignedUsers = new Map<string, number>()
+    for (const c of (compData ?? []) as { company_id: string; windows_server_id: string }[]) {
+      assignedUsers.set(
+        c.windows_server_id,
+        (assignedUsers.get(c.windows_server_id) ?? 0) + (ouCount.get(String(c.company_id).trim()) ?? 0),
+      )
+    }
 
     const roleMap = new Map<string, string[]>()
     for (const r of (roleData ?? []) as { server_id: string; role: string }[]) {
@@ -71,6 +89,7 @@ export async function GET() {
         lastChecked: agent ? agent.lastSeen : (r.last_checked ?? "—"),
         roles: (roleMap.get(r.id) ?? []) as Server["roles"],
         activeSessions,
+        assignedUsers: assignedUsers.get(r.id),
         /*  Tüm diskler: `disk` alanı yalnız ilki. Agent yoksa undefined —
          *  DB'de disk dizisi tutulmuyor, tek yüzde var.                   */
         disks: m?.disks?.map((d) => ({

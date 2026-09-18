@@ -186,24 +186,9 @@ export default function TvAgacPage() {
         offlineFirms={mockFirms ?? offlineFirms}
         domains={domains}
         backupStorage={backupDisk}
-      />
-
-      {/* Altyapi sutunu — izleme kartlarinin SOLUNDA, ayri bir sutun.
-          Alti kart tek sutunda 1124px tutuyordu ve 1080px ekrana
-          sigmiyordu; uretimde disk karti sunucu satirlariyla daha da
-          buyuyecek. Ikinci sutun kartlari sikistirmadan cozuyor.
-          Kure ekranin solunda kaliyor, cakisma yok.
-          Ucu de sessizce bozulan seyleri gosteriyor (guc kaynagi, dolan
-          disk, yedeksiz sanal makine) — hicbiri alarm uretmedigi icin
-          surekli goz onunde duruyorlar. */}
-      {/*  z-20: Nexus'un SVG katmani z-10 ile ustte duruyordu ve imaj
-            yedekleri kartindaki gun secicisine tiklama SVG'ye gidiyordu.
-            Sutun pointer-events-none kaliyor; yalniz secici kendi icin
-            geri aciyor, kalan alan tiklamayi kureye gecirmeye devam eder. */}
-      <div className="pointer-events-none absolute right-[306px] top-6 z-20 flex w-[262px] select-none flex-col gap-4">
-        {esxi && <PhysicalHostCard host={esxi.host} />}
-        {serverList.length > 0 && <RdpUsersCard servers={serverList} />}
-        {serverList.length > 0 && <DiskCard servers={serverList} />}
+      >
+        {/*  İmaj yedekleri sağ şeritte: sol sütun dört kartla TV'ye
+             sığmıyordu (alt kısmı kesiliyordu), sağ şeridin altı boştu. */}
         {esxi?.backups && esxi.backups.length > 0 && (
           <BackupImageCard
             backups={esxi.backups}
@@ -212,6 +197,21 @@ export default function TvAgacPage() {
             vmsInJob={esxi.vmsInJob}
           />
         )}
+      </RightRail>
+
+      {/* Altyapi sutunu — izleme kartlarinin SOLUNDA, ayri bir sutun.
+          Alti kart tek sutunda 1124px tutuyordu ve 1080px ekrana
+          sigmiyordu; uretimde disk karti sunucu satirlariyla daha da
+          buyuyecek. Ikinci sutun kartlari sikistirmadan cozuyor.
+          Kure ekranin solunda kaliyor, cakisma yok.
+          Hepsi sessizce bozulan seyleri gosteriyor (guc kaynagi, dolan
+          disk) — hicbiri alarm uretmedigi icin surekli goz onunde.
+          Imaj yedekleri karti sag seride tasindi (RightRail children):
+          bu sutun dort kartla TV'de alttan kesiliyordu. */}
+      <div className="pointer-events-none absolute right-[306px] top-6 flex w-[262px] select-none flex-col gap-4">
+        {esxi && <PhysicalHostCard host={esxi.host} />}
+        {serverList.length > 0 && <RdpUsersCard servers={serverList} />}
+        {serverList.length > 0 && <DiskCard servers={serverList} />}
       </div>
     </div>
   )

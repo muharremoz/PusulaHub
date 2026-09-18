@@ -24,6 +24,13 @@ export interface Server {
    */
   activeSessions?: number;
   /**
+   * Bu sunucuya ATANMIŞ firmaların AD kullanıcı sayısı (companies.
+   * windows_server_id → ad_users.ou). "38 kişi bağlı" tek başına az
+   * söylüyor; "38 / 120" sunucunun ne kadarının o an çalıştığını
+   * gösteriyor. Firma atanmamış sunucuda undefined.
+   */
+  assignedUsers?: number;
+  /**
    * Sunucudaki BÜTÜN diskler. `disk` alanı yalnız ilk diskin yüzdesini
    * verdiği için ikinci bir veri diski olan sunucularda eksik kalıyordu;
    * /tv disk panelinde hepsi gösteriliyor. Agent bildirmiyorsa undefined.

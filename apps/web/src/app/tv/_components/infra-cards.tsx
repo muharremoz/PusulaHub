@@ -301,6 +301,7 @@ export interface RdpCardServer {
   status?: string
   roles?: string[]
   activeSessions?: number
+  assignedUsers?:  number
 }
 
 /**
@@ -319,6 +320,10 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
   const bilinen = rdp.filter((s) => s.status !== "offline" && typeof s.activeSessions === "number")
   const toplam  = bilinen.reduce((t, s) => t + (s.activeSessions ?? 0), 0)
   const cevrimdisi = rdp.some((s) => s.status === "offline")
+  /*  Kayıtlı kullanıcı: sunucuya atanmış firmaların AD kullanıcıları.
+   *  "83 / 350" — o an çalışan / toplam. Hiçbir sunucuda bilinmiyorsa
+   *  yalnız bağlı sayı gösterilir.                                      */
+  const kayitli = rdp.reduce((t, s) => t + (s.assignedUsers ?? 0), 0)
 
   return (
     <Card>
@@ -326,6 +331,9 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
         <Title accent={cevrimdisi ? RED : undefined}>Bağlı Kullanıcı</Title>
         <span className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: TXT }}>
           {bilinen.length > 0 ? toplam : "—"}
+          {kayitli > 0 && (
+            <span className="text-[11px] font-medium" style={{ color: TXT_DIM }}> / {kayitli}</span>
+          )}
         </span>
       </div>
 
@@ -347,7 +355,7 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
               <Meter
                 key={s.id}
                 name={s.name}
-                value={`${n} kişi`}
+                value={typeof s.assignedUsers === "number" ? `${n} / ${s.assignedUsers}` : `${n} kişi`}
                 percent={Math.round((n / RDP_KAPASITE) * 100)}
               />
             )
