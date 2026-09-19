@@ -41,6 +41,11 @@ interface TransferSession {
   programFilesReceived?: number
   programBytesTotal?:    number
   programBytesReceived?: number
+  /** Eski yıl dataları → Depo D:\Eski Datalar\{firmaId} (SQL'e bağlanmaz) */
+  oldFilesTotal?:        number
+  oldFilesReceived?:     number
+  oldBytesTotal?:        number
+  oldBytesReceived?:     number
   rdpServerName?:        string | null
   notes:               string | null
 }
@@ -302,9 +307,11 @@ function SessionRow({
   const imgPct   = s.imageBytesTotal > 0 ? Math.round((s.imageBytesReceived / s.imageBytesTotal) * 100) : 0
   const progTotal    = s.programBytesTotal ?? 0
   const progReceived = s.programBytesReceived ?? 0
+  const oldTotal     = s.oldBytesTotal ?? 0
+  const oldReceived  = s.oldBytesReceived ?? 0
   const overallPct =
-    s.dataBytesTotal + s.imageBytesTotal + progTotal > 0
-      ? Math.round(((s.dataBytesReceived + s.imageBytesReceived + progReceived) / (s.dataBytesTotal + s.imageBytesTotal + progTotal)) * 100)
+    s.dataBytesTotal + s.imageBytesTotal + progTotal + oldTotal > 0
+      ? Math.round(((s.dataBytesReceived + s.imageBytesReceived + progReceived + oldReceived) / (s.dataBytesTotal + s.imageBytesTotal + progTotal + oldTotal)) * 100)
       : 0
 
   async function handleCopyLink() {
@@ -358,6 +365,11 @@ function SessionRow({
         {(s.programFilesTotal ?? 0) > 0 && (
           <div className="text-[10px] text-muted-foreground tabular-nums truncate">
             Program: {(s.programFilesReceived ?? 0).toLocaleString("tr")} / {(s.programFilesTotal ?? 0).toLocaleString("tr")} dosya
+          </div>
+        )}
+        {(s.oldFilesTotal ?? 0) > 0 && (
+          <div className="text-[10px] text-muted-foreground tabular-nums truncate">
+            Eski data: {(s.oldFilesReceived ?? 0).toLocaleString("tr")} / {(s.oldFilesTotal ?? 0).toLocaleString("tr")} dosya · {formatBytes(oldReceived)}
           </div>
         )}
       </div>
