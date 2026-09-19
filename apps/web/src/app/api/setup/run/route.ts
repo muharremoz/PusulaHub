@@ -779,6 +779,16 @@ export async function POST(req: NextRequest) {
             buildSetNtfsPermissions(firmaRoot, `${payload.firmaId}_users`),
           ))) { controller.close(); return }
 
+          // 5c-2) desktop.ini — C:\MUSTERI altında klasörler firma ID'siyle
+          // duruyor; üzerine gelince firma adı görünsün (Depo'daki Resimler ve
+          // Eski Datalar klasörleriyle aynı). Kritik değil, hata devam ettirir.
+          await runStep(
+            winAgent,
+            "firma_root_tooltip",
+            `Firma klasörü açıklaması (desktop.ini): ${payload.firmaName}`,
+            buildWriteDesktopIni(firmaRoot, payload.firmaName),
+          )
+
           // 5d) Masaüstü MUSTERILER klasörü + kısayollar (non-critical, hata devam ettirir)
           // Sadece Administrator masaüstüne — Public\Desktop tüm kullanıcılara yansırdı.
           const safeFirmaName    = sanitizeWindowsName(payload.firmaName) || payload.firmaId
