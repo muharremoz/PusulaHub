@@ -2289,6 +2289,10 @@ async function startPushJob(token) {
       await cakisanlariYenidenAdlandir(stagingOld, dst)
       await copyTreeRecursive(stagingOld, dst)
     })
+    // Klasörün üzerine gelince firma adı görünsün — kurulum sihirbazının
+    // D:\Resimler\{firmaId} için yaptığının aynısı. Hata aktarımı bozmaz.
+    await desktopIniYaz(sess.depoServerIp, sess.depoUsername, sess.depoPassword,
+      "Eski Datalar", sess.companyId, sess.firmaName)
     stmts.updatePush.run({ token, progress: 91, stage: "old", error: null, status: "pushing" })
   }
 
@@ -2395,6 +2399,60 @@ async function cakisanlariYenidenAdlandir(srcDir, dstDir) {
         break
       }
     }
+  }
+}
+
+/**
+ * Firma klasörüne desktop.ini yazar: [.ShellClassInfo] InfoTip=<firma adı>.
+ * Kurulum sihirbazındaki buildWriteDesktopIni ile aynı sonuç (setup-fileops.ts):
+ * UTF-16 LE + BOM, dosyaya gizli+sistem, klasöre sistem özniteliği — Explorer
+ * desktop.ini'yi ancak klasör "sistem" işaretliyse okur.
+ *
+ * Neden smbclient: cifs mount üzerinden dosya yazılabiliyor ama Windows'un
+ * gizli/sistem öznitelikleri verilemiyor. smbclient'in `setmode` komutu bunu
+ * SMB üzerinden yapıyor. Parola argv'de değil PASSWD ortam değişkeninde.
+ *
+ * Aktarımı ASLA düşürmez: smbclient yoksa ya da bir adım hata verirse
+ * günlüğe uyarı yazılır, dosyalar zaten kopyalanmış durumda.
+ */
+async function desktopIniYaz(ip, username, password, ustKlasor, klasorAdi, infoTip) {
+  try { await execCmd("sh", ["-c", "command -v smbclient"]) }
+  catch {
+    fastify.log.warn({ klasor: `${ustKlasor}/${klasorAdi}` }, "desktop.ini atlandi: smbclient kurulu degil (apt install smbclient)")
+    return
+  }
+
+  const temiz = (x) => String(x).replace(/["\\/;]/g, "_")
+  const tmp = join(STAGING_ROOT, `desktop-${randomBytes(6).toString("hex")}.ini`)
+  const metin = "[.ShellClassInfo]\r\nInfoTip=" + String(infoTip ?? "").replace(/[\r\n]/g, " ") + "\r\n"
+  await writeFile(tmp, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(metin, "utf16le")]))
+
+  const klasor = `"${temiz(ustKlasor)}/${temiz(klasorAdi)}"`
+  const smb = (komutlar) => execCmd(
+    "smbclient", [`//${ip}/D$`, "-U", username, "-c", komutlar.join("; ")],
+    { env: { ...process.env, PASSWD: password } },
+  ).catch((err) => ({ stdout: "", stderr: String(err?.message ?? err) }))
+
+  try {
+    // 1) Önceki desktop.ini gizli+sistemse üzerine yazılamaz: öznitelikleri kaldır.
+    //    AYRI çağrı: dosya yokken hata verir, asıl komutların önünü kesmesin.
+    await smb([`cd ${klasor}`, "setmode desktop.ini -rsh"])
+    // 2) Yaz, gizle, klasörü sistem işaretle
+    const { stdout, stderr } = await smb([
+      `cd ${klasor}`,
+      `put "${tmp}" desktop.ini`,
+      "setmode desktop.ini +sh",
+      "cd ..",
+      `setmode "${temiz(klasorAdi)}" +s`,
+    ])
+    const cikti = `${stdout}\n${stderr}`
+    if (/NT_STATUS_(ACCESS_DENIED|LOGON_FAILURE|BAD_NETWORK_NAME|OBJECT_PATH_NOT_FOUND)/.test(cikti)) {
+      fastify.log.warn({ klasor: `${ustKlasor}/${klasorAdi}`, cikti: cikti.slice(0, 400) }, "desktop.ini yazilamadi")
+    } else {
+      fastify.log.info({ klasor: `${ustKlasor}/${klasorAdi}`, infoTip }, "desktop.ini yazildi")
+    }
+  } finally {
+    try { await rm(tmp, { force: true }) } catch { /* ignore */ }
   }
 }
 
