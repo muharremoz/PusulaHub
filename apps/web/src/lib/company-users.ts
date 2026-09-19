@@ -1,6 +1,7 @@
 import "server-only"
 
 import { getAllAgents } from "@/lib/agent-store"
+import { adEzmeUygula } from "@/lib/ad-ad-ezme"
 import type { getSupabaseServer } from "@/lib/supabase/server"
 
 /**
@@ -53,7 +54,8 @@ export async function listCompanyUsers(
       if (seen.has(key)) continue
       seen.set(key, {
         username:    u.username,
-        displayName: u.displayName ?? "",
+        // Yeni değiştirilen ad, agent önbelleği tazelenene kadar korunur.
+        displayName: adEzmeUygula(firkod, u.username, u.displayName ?? ""),
         email:       "",
         ou:          firkod,
         enabled:     !!u.enabled,

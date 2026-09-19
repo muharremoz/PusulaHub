@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { execOnAgent, pollSingleAgent } from "@/lib/agent-poller"
+import { adEzmeKaydet } from "@/lib/ad-ad-ezme"
 
 /**
  * POST /api/hub/firma-kullanici-ad
@@ -8,8 +9,8 @@ import { execOnAgent, pollSingleAgent } from "@/lib/agent-poller"
  *
  * Firmanın AD kullanıcısının ad-soyadını (DisplayName + GivenName/Surname)
  * değiştirir — alt uygulamalar (CRM Erişim sekmesi) için. AD agent'a
- * PowerShell komutu gider; ardından rapor zorla yenilenir ki liste yeni adı
- * hemen göstersin (AD listesi agent'ta önbellekli, force'suz eski kalıyor).
+ * PowerShell komutu gider. Yanıt komut biter bitmez döner; liste yeni adı
+ * `ad-ad-ezme` ile hemen gösterir, agent önbelleği arka planda tazelenir.
  *
  * Auth: x-internal-key (middleware `/api/hub/*` yolunu muaf tutar).
  * Kullanıcı yetkilendirmesini ÇAĞIRAN uygulama yapar.
@@ -90,8 +91,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Liste yeni adı göstersin — force ZORUNLU (bkz. companies/[firkod]/users refresh).
-  try { await pollSingleAgent(adId, true) } catch { /* rapor sonraki turda yenilenir */ }
+  // Liste yeni adı HEMEN göstersin: agent önbelleği tazelenene kadar ad
+  // burada tutulur (bkz. ad-ad-ezme). Force poll BEKLENMEZ — AD sunucusunda
+  // 20-60 sn sürüyor, CRM'de kaydet düğmesi o kadar dönüyordu. Arka planda
+  // çalışır ve agent'ın AD önbelleğini sıfırlar.
+  adEzmeKaydet(firkod, username, displayName)
+  void pollSingleAgent(adId, true).catch(() => { /* ezme kaydı zaten koruyor */ })
 
   return NextResponse.json({ ok: true, displayName })
 }
