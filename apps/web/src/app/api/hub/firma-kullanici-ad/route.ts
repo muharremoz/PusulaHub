@@ -79,18 +79,20 @@ export async function POST(req: NextRequest) {
 
   // SOYAD:
   //   dolu  → -Surname '<soyad>'
-  //   boş   → alanı yalnız DOLUYSA temizle. Zaten boşken '-Clear Surname'
-  //           AD tarafından reddediliyor ("attribute or value does not exist")
-  //           ve Set-ADUser tek parça olduğu için HİÇBİR alan yazılmıyordu:
-  //           tek kelimelik adlar (ARN, TEST…) sessizce kaydedilmiyordu
-  //           (21.09.2026). Ayrıca komut try/catch içinde: hata olursa
-  //           'HATA: …' yazılır, eskiden hata çıksa da 'OK' basılıyordu.
+  //   boş   → alan temizlenir. İKİ tuzak (21.09.2026):
+  //           1. '-Clear' LDAP alan adı ister: 'Surname' DEĞİL 'sn'. Yanlış ad
+  //              "attribute or value does not exist" hatası veriyor.
+  //           2. Set-ADUser tek parça: o hata komutun tamamını düşürüyordu,
+  //              tek kelimelik adlar (ARN, TEST…) hiç kaydedilmiyordu.
+  //           Zaten boş alanı temizlemeye de gerek yok → koşullu.
+  //           Ayrıca komut try/catch içinde: hata olursa 'HATA: …' yazılır,
+  //           eskiden hata çıksa da 'OK' basılıyordu.
   const setSoyad = surname
     ? `-Surname '${psQuote(surname)}' `
     : ``
   const soyadTemizle = surname
     ? ``
-    : `if ($k.Surname) { Set-ADUser -Identity '${u}' -Clear Surname -ErrorAction Stop }; `
+    : `if ($k.Surname) { Set-ADUser -Identity '${u}' -Clear sn -ErrorAction Stop }; `
 
   const cmd =
     `Import-Module ActiveDirectory -ErrorAction Stop; ` +
