@@ -74,19 +74,44 @@ export async function POST(req: NextRequest) {
   const given = parts[0]
   const surname = parts.slice(1).join(" ")
   const u = psQuote(username)
-  // Boş Surname parametre olarak geçilemiyor — tek kelimede alan temizlenir.
-  const soyad = surname ? `-Surname '${psQuote(surname)}'` : `-Clear Surname`
-  const cmd =
-    `Import-Module ActiveDirectory; ` +
-    `Set-ADUser -Identity '${u}' -DisplayName '${psQuote(displayName)}' ` +
-    `-GivenName '${psQuote(given)}' ${soyad} -ErrorAction Stop; ` +
-    `Write-Output 'OK'`
+  const dn = psQuote(displayName)
+  const gn = psQuote(given)
 
-  const res = await execOnAgent(s.ip, s.agent_port, s.api_key, cmd, 20)
+  // SOYAD:
+  //   dolu  → -Surname '<soyad>'
+  //   boş   → alanı yalnız DOLUYSA temizle. Zaten boşken '-Clear Surname'
+  //           AD tarafından reddediliyor ("attribute or value does not exist")
+  //           ve Set-ADUser tek parça olduğu için HİÇBİR alan yazılmıyordu:
+  //           tek kelimelik adlar (ARN, TEST…) sessizce kaydedilmiyordu
+  //           (21.09.2026). Ayrıca komut try/catch içinde: hata olursa
+  //           'HATA: …' yazılır, eskiden hata çıksa da 'OK' basılıyordu.
+  const setSoyad = surname
+    ? `-Surname '${psQuote(surname)}' `
+    : ``
+  const soyadTemizle = surname
+    ? ``
+    : `if ($k.Surname) { Set-ADUser -Identity '${u}' -Clear Surname -ErrorAction Stop }; `
+
+  const cmd =
+    `Import-Module ActiveDirectory -ErrorAction Stop; ` +
+    `try { ` +
+      `$k = Get-ADUser -Identity '${u}' -Properties Surname -ErrorAction Stop; ` +
+      `Set-ADUser -Identity '${u}' -DisplayName '${dn}' -GivenName '${gn}' ${setSoyad}-ErrorAction Stop; ` +
+      soyadTemizle +
+      // Yazdıktan sonra GERİ OKU: "ok" dediğimiz şey sunucuda gerçekten olmuş olsun.
+      `$y = (Get-ADUser -Identity '${u}' -Properties DisplayName -ErrorAction Stop).DisplayName; ` +
+      `if ($y -eq '${dn}') { Write-Output 'OK' } else { Write-Output ('HATA: ad yazilamadi (sunucuda: ' + $y + ')') } ` +
+    `} catch { Write-Output ('HATA: ' + $_.Exception.Message) }`
+
+  const res = await execOnAgent(s.ip, s.agent_port, s.api_key, cmd, 25)
   const out = (res.stdout ?? "").trim()
-  if (res.exitCode !== 0 || !out.includes("OK")) {
+  // 'OK' SATIRI aranır: eskiden stdout içinde OK geçmesi yetiyordu, hata
+  // mesajıyla birlikte OK basıldığında başarı sanılıyordu.
+  const basarili = out.split(/\r?\n/).some((r) => r.trim() === "OK")
+  if (res.exitCode !== 0 || !basarili) {
+    const hata = out.split(/\r?\n/).find((r) => r.startsWith("HATA:"))
     return NextResponse.json(
-      { error: res.stderr || res.stdout || "Agent komutu başarısız" },
+      { error: hata || res.stderr || res.stdout || "Agent komutu başarısız" },
       { status: 500 },
     )
   }
