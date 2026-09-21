@@ -121,3 +121,32 @@ export function buildAddGroupMember(firmaId: string, username: string): string {
     `catch{if($_.Exception.Message -match 'already a member'){Write-Output 'EXISTS'} else {throw}}`,
   ].join("; ")
 }
+
+/**
+ * Office çalıştırma yetkisini taşıyan AD grubu.
+ *
+ * İki ayrı yer bu grubu okuyor:
+ *   - Terminal sunuculardaki **AppLocker** kuralı — üye olmayan Office'i açamaz.
+ *   - NETLOGON'daki **Office-FTA.ps1** oturum açılış betiği — üyeye .xlsx/.xls
+ *     için Excel, üye olmayana OpenOffice Calc ilişkilendirmesi verir.
+ *
+ * Grup adı burada, AppLocker kuralında ve o betikte AYNI olmalı; biri
+ * değişirse üçü birden değişmeli.
+ */
+export const OFFICE_GRUBU = "Office_Kullanicilari"
+
+/**
+ * Kullanıcıyı Office grubuna ekler.
+ *
+ * Sihirbaz yeni kullanıcıları **varsayılan olarak** bu gruba alıyor
+ * (2026-09-21); yetki sonradan firma detayındaki kullanıcı menüsünden
+ * kaldırılabilir.
+ */
+export function buildAddOfficeMember(username: string): string {
+  const u = psQuote(username)
+  return [
+    `Import-Module ActiveDirectory -ErrorAction Stop`,
+    `try{Add-ADGroupMember -Identity '${OFFICE_GRUBU}' -Members '${u}' -ErrorAction Stop; Write-Output 'ADDED'}` +
+    `catch{if($_.Exception.Message -match 'already a member'){Write-Output 'EXISTS'} else {throw}}`,
+  ].join("; ")
+}

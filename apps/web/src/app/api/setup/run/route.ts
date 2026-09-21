@@ -18,6 +18,8 @@ import {
   buildEnsureGroup,
   buildCreateUser,
   buildAddGroupMember,
+  buildAddOfficeMember,
+  OFFICE_GRUBU,
 } from "@/lib/ad-powershell"
 import {
   buildCreateDir,
@@ -645,6 +647,17 @@ export async function POST(req: NextRequest) {
             buildAddGroupMember(payload.firmaId, fullUsername),
           )
           if (!memberOk) { controller.close(); return }
+
+          /*  Office yetkisi — yeni kullanıcılara VARSAYILAN olarak veriliyor.
+           *  Kritik değil: başarısız olursa kurulum durmaz, yetki firma
+           *  detayındaki kullanıcı menüsünden sonradan verilebilir. Bu yüzden
+           *  dönüş değeri kontrol edilmiyor — hata adım olarak raporlanır.   */
+          await runStep(
+            adAgent,
+            `office_${u.username}`,
+            `Office yetkisi veriliyor: ${fullUsername} → ${OFFICE_GRUBU}`,
+            buildAddOfficeMember(fullUsername),
+          )
 
           // Şifreyi encrypted olarak sakla — firma detayındaki "Erişim
           // Bilgileri" modal'ında okunabilsin. Hata kurulumu bozmasın.

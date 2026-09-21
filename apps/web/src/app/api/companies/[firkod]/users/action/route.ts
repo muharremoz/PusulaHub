@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { execOnAgent } from "@/lib/agent-poller"
 import { saveCompanyUserPassword } from "@/lib/firma-credentials"
+import { OFFICE_GRUBU } from "@/lib/ad-powershell"
 
 /**
  * POST /api/companies/[firkod]/users/action
@@ -13,14 +14,8 @@ import { saveCompanyUserPassword } from "@/lib/firma-credentials"
  * ⚠ Agent regex-parse yapıyor — çift tırnak YASAK. Tek tırnak + '' escape.
  */
 
-/**
- * Office çalıştırma yetkisini taşıyan AD grubu.
- *
- * Terminal sunucularda AppLocker bu grubu arıyor: üye olmayan kullanıcı
- * Office'i açamıyor. Grup adı burada ve AppLocker kuralında AYNI olmalı;
- * değiştirilecekse iki yer birden değişmeli.
- */
-const OFFICE_GRUBU = "Office_Kullanicilari"
+/*  Office grubunun adı tek kaynaktan geliyor → `@/lib/ad-powershell`.
+ *  Sihirbaz da yeni kullanıcıları aynı gruba ekliyor.                  */
 
 interface Body {
   username: string
