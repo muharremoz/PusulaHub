@@ -11,6 +11,7 @@ import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
+import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import {
   buildEnsureFirmalarOu,
@@ -1492,6 +1493,31 @@ export async function POST(req: NextRequest) {
                     status: "error",
                     error:  msg,
                   })
+                }
+
+                /*  Backup Master listesini guvenlik ile eşitle — yeni firmanın
+                 *  YedekAl=1 veritabanları ikinci arşive (Drive + FTP) de girsin.
+                 *  Liste elle tutulduğu için ayrışıyordu; artık kurulum sonunda
+                 *  otomatik. Kritik değil: hata kurulumu durdurmaz.             */
+                if (sqlGuvenlik > 0 && sqlTarget.agent) {
+                  send("step", { stepId: "bm_esitle", label: "Backup Master listesi eşitleniyor", status: "running" })
+                  try {
+                    const bm = await esitleBackupMaster({
+                      ip:        sqlTarget.ip,
+                      username:  sqlTarget.username,
+                      password:  sqlTarget.password,
+                      agentPort: sqlTarget.agent.port,
+                      apiKey:    sqlTarget.agent.apiKey,
+                    })
+                    send("step", { stepId: "bm_esitle", label: bmOzet(bm), status: "done" })
+                  } catch (err) {
+                    send("step", {
+                      stepId: "bm_esitle",
+                      label:  "Backup Master listesi eşitlenemedi — elle kontrol edin",
+                      status: "error",
+                      error:  err instanceof Error ? err.message : String(err),
+                    })
+                  }
                 }
               }
             }
