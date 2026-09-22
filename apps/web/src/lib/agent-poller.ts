@@ -62,67 +62,68 @@ function sqlCollectDue(serverName: string): boolean {
 async function collectSqlFromServer(serverIp: string, user: string, password: string): Promise<SqlDbRow[] | null> {
   try {
     return await withSqlConnection(
-      { server: serverIp, user, password, database: "master", requestTimeout: 15000 },
+      { server: serverIp, user, password, database: "master", requestTimeout: 60000 },
       async (pool) => {
         const res = await pool.request().query<SqlDbRow>(`
           -- READ UNCOMMITTED: msdb.backupset'i kilitlemeden oku (yoksa BACKUP/RESTORE
           -- bloke olur, restore %100'de takılır). Birkaç sn eski tarih monitoring için önemsiz.
           SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
 
-          -- TEK GECISLI yazim. Onceki surum her veritabani icin ayri ayri
-          -- korelasyonlu alt sorgu calistiriyordu: 79 DB x 7 alt sorgu =
-          -- ~316 tekrar tarama, sorgu basina 94M mantiksal okuma ve 60-78 sn.
-          -- msdb.backupset uzerindeki indeks yalniz (database_name) — type
-          -- ve backup_finish_date indekste olmadigi icin her alt sorgu
-          -- satirlari tek tek okumak zorundaydi. Asagidaki bicimde her kaynak
-          -- BIR kez taranip gruplaniyor.
-          WITH sizes AS (
-            SELECT database_id, SUM(CAST(size AS BIGINT) * 8 / 1024) AS sizeMB
-            FROM sys.master_files WHERE type = 0 GROUP BY database_id
-          ),
-          paths AS (
-            SELECT database_id,
-                   MAX(CASE WHEN type = 0 THEN physical_name END) AS dataFilePath,
-                   MAX(CASE WHEN type = 1 THEN physical_name END) AS logFilePath
-            FROM (
-              SELECT database_id, type, physical_name,
-                     ROW_NUMBER() OVER (PARTITION BY database_id, type ORDER BY file_id) AS rn
-              FROM sys.master_files
-            ) f WHERE rn = 1 GROUP BY database_id
-          ),
-          -- Yalniz Full ('D') ve Differential ('I'); log yedekleri ('L')
-          -- satirlarin buyuk kismi ve burada kullanilmiyor.
-          bk AS (
-            SELECT database_name, type, backup_finish_date, backup_start_date,
-                   ROW_NUMBER() OVER (PARTITION BY database_name, type
-                                      ORDER BY backup_finish_date DESC) AS rn
-            FROM msdb.dbo.backupset WHERE type IN ('D','I')
-          ),
-          bks AS (
-            SELECT database_name,
-                   MAX(CASE WHEN type='D' THEN backup_finish_date END) AS lastBackup,
-                   MAX(CASE WHEN type='I' THEN backup_finish_date END) AS lastDiffBackup,
-                   MAX(CASE WHEN type='D' THEN backup_start_date  END) AS lastBackupStart,
-                   MAX(CASE WHEN type='I' THEN backup_start_date  END) AS lastDiffBackupStart
-            FROM bk WHERE rn = 1 GROUP BY database_name
-          )
+          -- HER PARÇA AYRI, SONRA GEÇİCİ TABLODAN BİRLEŞTİR.
+          --
+          -- Önceki sürüm aynı işi tek SELECT içinde CTE'lerle yapıyordu ve
+          -- 265 veritabanlı sunucuda 443 SANİYE sürüyordu; poller'ın 15 sn'lik
+          -- sınırına takılıp sürekli "Timeout" veriyordu → o sunucunun
+          -- veritabanı boyutları ve son yedek tarihleri GÜNLERCE donuyordu
+          -- (22.09.2026, 10.15.2.2: veri 20.09'da kalmıştı).
+          --
+          -- Parçaların her biri tek başına 0,5 sn'den hızlı; yavaşlatan şey
+          -- msdb.backupset ile sys.databases'in ad üzerinden birleştirilmesiydi
+          -- (indeks type/finish_date taşımıyor, plan her satır için yeniden
+          -- tarıyordu). Geçici tabloya alınca aynı iş 0,6 sn.
+          SELECT database_name,
+                 MAX(CASE WHEN type='D' THEN backup_finish_date END) AS lastBackup,
+                 MAX(CASE WHEN type='I' THEN backup_finish_date END) AS lastDiffBackup,
+                 MAX(CASE WHEN type='D' THEN backup_start_date  END) AS lastBackupStart,
+                 MAX(CASE WHEN type='I' THEN backup_start_date  END) AS lastDiffBackupStart
+          INTO #bks
+          FROM msdb.dbo.backupset WHERE type IN ('D','I')
+          GROUP BY database_name;
+
+          SELECT database_id, SUM(CAST(size AS BIGINT) * 8 / 1024) AS sizeMB
+          INTO #sz
+          FROM sys.master_files WHERE type = 0 GROUP BY database_id;
+
+          SELECT database_id,
+                 MAX(CASE WHEN type = 0 THEN physical_name END) AS dataFilePath,
+                 MAX(CASE WHEN type = 1 THEN physical_name END) AS logFilePath
+          INTO #pt
+          FROM (
+            SELECT database_id, type, physical_name,
+                   ROW_NUMBER() OVER (PARTITION BY database_id, type ORDER BY file_id) AS rn
+            FROM sys.master_files
+          ) f WHERE rn = 1 GROUP BY database_id;
+
           SELECT
             d.name AS name,
             CAST(ISNULL(sz.sizeMB, 0) AS INT) AS sizeMB,
             d.state_desc AS status,
-            bks.lastBackup          AS lastBackup,
-            bks.lastDiffBackup      AS lastDiffBackup,
-            bks.lastBackupStart     AS lastBackupStart,
-            bks.lastDiffBackupStart AS lastDiffBackupStart,
+            b.lastBackup          AS lastBackup,
+            b.lastDiffBackup      AS lastDiffBackup,
+            b.lastBackupStart     AS lastBackupStart,
+            b.lastDiffBackupStart AS lastDiffBackupStart,
             d.recovery_model_desc AS recoveryModel,
             ISNULL(SUSER_SNAME(d.owner_sid), '') AS owner,
             ISNULL(pt.dataFilePath, '') AS dataFilePath,
             ISNULL(pt.logFilePath,  '') AS logFilePath
           FROM sys.databases d
-          LEFT JOIN sizes sz ON sz.database_id   = d.database_id
-          LEFT JOIN paths pt ON pt.database_id   = d.database_id
-          LEFT JOIN bks      ON bks.database_name = d.name
-          WHERE d.name NOT IN ('master','tempdb','model','msdb')
+          LEFT JOIN #sz sz ON sz.database_id = d.database_id
+          LEFT JOIN #pt pt ON pt.database_id = d.database_id
+          -- COLLATE: msdb ile kullanıcı veritabanı sıralaması farklı olabilir.
+          LEFT JOIN #bks b ON b.database_name = d.name COLLATE DATABASE_DEFAULT
+          WHERE d.name NOT IN ('master','tempdb','model','msdb');
+
+          DROP TABLE #bks; DROP TABLE #sz; DROP TABLE #pt;
         `)
         return res.recordset as SqlDbRow[]
       },
