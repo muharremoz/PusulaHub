@@ -3,6 +3,7 @@ import { sqlServerById } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 import { buildListBackupFiles, parseBackupListOutput, type RawBackupItem } from "@/lib/sql-backup-powershell"
 import type { BackupFile } from "@/lib/setup-mock-data"
+import { yedekAlVarsayilan } from "@/lib/yedek-varsayilan"
 
 /**
  * POST /api/setup/sql-servers/:id/scan-backups
@@ -104,6 +105,7 @@ export async function POST(
         selected:         false,
         programServiceId: null,
         kind:             "bak",
+        yedekAl:          yedekAlVarsayilan(parseDatabaseName(item.Name)),
       })
     }
 
@@ -120,6 +122,7 @@ export async function POST(
         selected:         false,
         programServiceId: null,
         kind:             "attach",
+        yedekAl:          yedekAlVarsayilan(base.replace(/_\d{8}$/, "").trim() || base),
         mdfFileName:      mdf.Name,
         ldfFileName:      ldf?.Name,
       })

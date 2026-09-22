@@ -349,6 +349,7 @@ export function StepRun({
               kind:             f.kind ?? "bak",
               mdfFileName:      f.mdfFileName,
               ldfFileName:      f.ldfFileName,
+              yedekAl:          f.yedekAl !== false,
             })),
           selectedDemoDbIds,
           addFirmaPrefix,

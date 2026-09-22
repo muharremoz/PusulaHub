@@ -192,6 +192,8 @@ interface RunBackupFile {
   mdfFileName?: string
   /** kind="attach" için ham .ldf dosya adı — yoksa ATTACH_REBUILD_LOG. */
   ldfFileName?: string
+  /** Otomatik yedeklemeye dahil mi (`guvenlik.YedekAl`). Eski client'larda yok → true. */
+  yedekAl?:     boolean
 }
 
 interface RunPayload {
@@ -1092,6 +1094,8 @@ export async function POST(req: NextRequest) {
             srkAdi:       string
             /** Bu DB için guvenlik kaydında kullanılacak program kodu (null → insert atlanır) */
             programCode:  string | null
+            /** guvenlik.YedekAl — sihirbazda kullanıcı kapatabilir (eski yıl datası). */
+            yedekAl:      boolean
           }
           const tasks: RestoreTask[] = []
 
@@ -1132,6 +1136,7 @@ export async function POST(req: NextRequest) {
                   dbName:      `${prefix}${dbName}`,
                   srkAdi:      dbName,
                   programCode,
+                  yedekAl:     bf.yedekAl !== false,
                 })
               } else {
                 const fileName = (bf.fileName ?? "").trim()
@@ -1144,6 +1149,7 @@ export async function POST(req: NextRequest) {
                   dbName:      `${prefix}${dbName}`,
                   srkAdi:      dbName,
                   programCode,
+                  yedekAl:     bf.yedekAl !== false,
                 })
               }
             }
@@ -1204,6 +1210,7 @@ export async function POST(req: NextRequest) {
                   dbName:      `${prefix}${rawName}`,
                   srkAdi:      rawName,
                   programCode,
+                  yedekAl:     true,   // demo DB güncel data, yedeğe girer
                 })
               }
             }
@@ -1469,6 +1476,7 @@ export async function POST(req: NextRequest) {
                               srkAdi:      t.srkAdi,
                               firmaId:     payload.firmaId,
                               programCode: t.programCode!,
+                              yedekAl:     t.yedekAl,
                             })
                             sqlGuvenlik++
                           },

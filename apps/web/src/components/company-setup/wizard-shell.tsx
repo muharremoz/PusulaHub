@@ -27,6 +27,7 @@ const Confetti     = dynamic(() => import("@/components/magicui/confetti").then(
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
+import { yedekAlVarsayilan } from "@/lib/yedek-varsayilan"
 import {
   parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode,
   type ParsKatalog, type ParsWizardUser,
@@ -465,7 +466,12 @@ export function WizardShell() {
       return { ...f, selected: nextSelected, programServiceId: nextProgramServiceId }
     }))
   const updateBackupDatabaseName = (id: number, name: string) =>
-    setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, databaseName: name } : f))
+    setBackupFiles((p) => p.map((f) => f.id === id
+      // Kullanıcı kutuyu elle değiştirmediyse yedek varsayılanı yeni ada göre tazelenir
+      ? { ...f, databaseName: name, yedekAl: f.yedekAlElle ? f.yedekAl : yedekAlVarsayilan(name) }
+      : f))
+  const toggleBackupYedek = (id: number) =>
+    setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, yedekAl: !f.yedekAl, yedekAlElle: true } : f))
   const updateBackupProgramServiceId = (id: number, serviceId: number | null) =>
     setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, programServiceId: serviceId } : f))
   const toggleDemoDb = (id: number) =>
@@ -713,6 +719,7 @@ export function WizardShell() {
                   onScanBackups={() => scanBackups()}
                   onUpdateBackupDatabaseName={updateBackupDatabaseName}
                   onUpdateBackupProgramServiceId={updateBackupProgramServiceId}
+                  onToggleBackupYedek={toggleBackupYedek}
                   selectedPusulaServices={apiServices.filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))}
                   onToggleDemoDb={toggleDemoDb}
                   onUpdateDemoDbDataName={updateDemoDbDataName}

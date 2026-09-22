@@ -82,6 +82,13 @@ export interface BackupFile {
   mdfFileName?: string
   /** kind="attach" için ham .ldf dosya adı — yoksa ATTACH_REBUILD_LOG kullanılır. */
   ldfFileName?: string
+  /** Otomatik yedeklemeye girsin mi (`sirket.dbo.guvenlik.YedekAl`).
+   *  Varsayılan `yedekAlVarsayilan()` ile addan hesaplanır: yılsız ve güncel yıl
+   *  işaretli, eski yıl datası işaretsiz. */
+  yedekAl: boolean
+  /** Kullanıcı kutuyu elle değiştirdi mi — DB adı düzenlenince varsayılan
+   *  yeniden hesaplanır, elle seçim korunur. Yalnız istemci tarafı. */
+  yedekAlElle?: boolean
 }
 
 export interface DemoDatabase {
@@ -241,10 +248,10 @@ export const sqlServers: SqlServer[] = [
 ]
 
 export const mockBackupFiles: BackupFile[] = [
-  { id: 1, fileName: 'ERP_PROD_20260402.bak', databaseName: 'ERP_PROD', fileSizeMB: 4096, date: '2026-04-02', selected: false, programServiceId: null },
-  { id: 2, fileName: 'HR_System_20260401.bak', databaseName: 'HR_System', fileSizeMB: 512, date: '2026-04-01', selected: false, programServiceId: null },
-  { id: 3, fileName: 'CRM_Data_20260402.bak', databaseName: 'CRM_Data', fileSizeMB: 1280, date: '2026-04-02', selected: false, programServiceId: null },
-  { id: 4, fileName: 'WebApp_20260330.bak', databaseName: 'WebApp', fileSizeMB: 256, date: '2026-03-30', selected: false, programServiceId: null },
+  { id: 1, fileName: 'ERP_PROD_20260402.bak', databaseName: 'ERP_PROD', fileSizeMB: 4096, date: '2026-04-02', selected: false, programServiceId: null, yedekAl: true },
+  { id: 2, fileName: 'HR_System_20260401.bak', databaseName: 'HR_System', fileSizeMB: 512, date: '2026-04-01', selected: false, programServiceId: null, yedekAl: true },
+  { id: 3, fileName: 'CRM_Data_20260402.bak', databaseName: 'CRM_Data', fileSizeMB: 1280, date: '2026-04-02', selected: false, programServiceId: null, yedekAl: true },
+  { id: 4, fileName: 'WebApp_20260330.bak', databaseName: 'WebApp', fileSizeMB: 256, date: '2026-03-30', selected: false, programServiceId: null, yedekAl: true },
 ]
 
 export const demoDatabases: DemoDatabase[] = [

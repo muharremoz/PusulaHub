@@ -39,6 +39,8 @@ interface Props {
   onUpdateBackupDatabaseName: (id: number, name: string) => void
   /** Hangi pusula programına bağlı olduğunu seçmek için. */
   onUpdateBackupProgramServiceId: (id: number, serviceId: number | null) => void
+  /** Otomatik yedekleme kutusu (guvenlik.YedekAl) — eski yıl datasında varsayılan kapalı. */
+  onToggleBackupYedek: (id: number) => void
   /** Sihirbazda 3. adımda seçili pusula-program servisleri (1 ise auto-assign, 2+ ise dropdown çıkar). */
   selectedPusulaServices: WizardServiceDto[]
   onToggleDemoDb: (id: number) => void
@@ -67,6 +69,7 @@ export function StepSql({
   selectedSqlServerId,
   sqlMode,
   backupFiles, backupFolderPath, demoDatabases, demoDatabasesLoading, demoDatabasesError,
+  onToggleBackupYedek,
   selectedDemoDbIds, addFirmaPrefix, addToSirketDb, firmaId, isScanning,
   onSelectSqlServer, onSetSqlMode, onToggleBackup,
   onSetBackupFolder, onScanBackups, onUpdateBackupDatabaseName,
@@ -472,8 +475,8 @@ export function StepSql({
                           className={cn(
                             "w-full grid gap-3 items-center px-3 py-2.5 text-left transition-colors cursor-pointer",
                             showProgramColumn
-                              ? "grid-cols-[20px_1fr_200px_160px_70px_70px]"
-                              : "grid-cols-[20px_1fr_240px_70px_70px]",
+                              ? "grid-cols-[20px_1fr_200px_160px_86px_70px_70px]"
+                              : "grid-cols-[20px_1fr_240px_86px_70px_70px]",
                             f.selected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"
                           )}
                         >
@@ -543,6 +546,21 @@ export function StepSql({
                               </Select>
                             </div>
                           )}
+                          {/*  Otomatik yedekleme — guvenlik.YedekAl. Eski yıl datası
+                               varsayılan kapalı gelir (yedek boyutunu şişirmesin),
+                               yılsız ve güncel yıl açık. */}
+                          <label
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none justify-self-start"
+                            title="Otomatik yedeklemeye dahil et (sirket.dbo.guvenlik · YedekAl)"
+                          >
+                            <Checkbox
+                              checked={f.yedekAl !== false}
+                              disabled={!addToSirketDb}
+                              onCheckedChange={() => onToggleBackupYedek(f.id)}
+                            />
+                            Yedek
+                          </label>
                           <span className="text-[11px] text-muted-foreground tabular-nums text-right">
                             {formatSize(f.fileSizeMB)}
                           </span>
