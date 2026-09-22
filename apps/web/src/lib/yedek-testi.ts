@@ -90,9 +90,21 @@ const BULUT_SAAT   = 26
 /* ── Biçimlendirme ──────────────────────────────────────────────────── */
 const sayi = (n: number) => n.toLocaleString("tr-TR")
 
+/**
+ * SQL'den gelen zamanı saat:dakika olarak yazar.
+ *
+ * TUZAK: tedious `useUTC` varsayılanıyla çalışıyor — SQL'in duvar saatini
+ * (GETDATE(), backup_finish_date) UTC sanıp öyle bir Date üretiyor. Yerel
+ * saatle yazdırırsak Türkiye'de üç saat ileri görünüyor (18:18 alınan
+ * yedek ekranda 21:18 çıkıyordu). Bu yüzden biçimlendirme de UTC'de
+ * yapılıyor: ortaya SQL sunucusunun gerçek saati çıkıyor.
+ *
+ * İki zaman arasındaki FARK (bkz. `gecen`) bu kaymadan etkilenmiyor:
+ * karşılaştırılan iki değer de aynı kaynaktan, aynı şekilde geliyor.
+ */
 function saat(d: Date | null | undefined): string {
   if (!d) return "—"
-  return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+  return d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })
 }
 
 function gecen(d: Date | null | undefined, simdi: Date): string {
@@ -190,11 +202,16 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
                GETDATE() AS simdi,
                (SELECT sqlserver_start_time FROM sys.dm_os_sys_info) AS acilis`)
       simdi = new Date(r.simdi)
-      const gun = Math.floor((simdi.getTime() - new Date(r.acilis).getTime()) / 86_400_000)
+      /*  Sunucu her gece yeniden başlatılıyor; "0 gündür açık" ekranda
+       *  bozuk duruyordu. Bir günü doldurmadıysa saat yazıyoruz.        */
+      const saatSayisi = Math.floor((simdi.getTime() - new Date(r.acilis).getTime()) / 3_600_000)
+      const suredir = saatSayisi >= 24
+        ? `${Math.floor(saatSayisi / 24)} gündür`
+        : `${saatSayisi} saattir`
       return {
         durum: "ok",
         deger: `${hedef.ad} · ${hedef.ip}`,
-        detay: [`SQL Server ${r.surum}`, `Hizmet ${gun} gündür kesintisiz açık`],
+        detay: [`SQL Server ${r.surum}`, `Hizmet ${suredir} kesintisiz açık`],
       }
     },
   )
