@@ -23,6 +23,9 @@ export interface FirmaErisimBilgisi {
     name: string
     ip: string
     domain: string | null
+    /** Hub'ın son yoklamasındaki durum (online/offline) + zamanı. */
+    durum: string | null
+    sonKontrol: string | null
   } | null
 
   /** Windows/RDP sunucusu — RDP hedefi için */
@@ -31,6 +34,8 @@ export interface FirmaErisimBilgisi {
     ip: string
     dns: string | null
     rdpPort: number | null
+    durum: string | null
+    sonKontrol: string | null
   } | null
 
   /** IIS sunucusu — WAN'dan erişilebilen DNS için */
@@ -38,6 +43,8 @@ export interface FirmaErisimBilgisi {
     name: string
     ip: string
     dns: string | null
+    durum?: string | null
+    sonKontrol?: string | null
   } | null
 
   /**
@@ -80,8 +87,12 @@ interface ServerRow {
   dns: string | null
   domain: string | null
   rdp_port: number | null
+  status: string | null
+  last_checked: string | null
 }
-const SRV_COLS = "id, name, ip, dns, domain, rdp_port"
+// status + last_checked: CRM Erişim sekmesi sunucuları kart olarak gösterip
+// çevrimiçi durumunu yazıyor (22.09.2026).
+const SRV_COLS = "id, name, ip, dns, domain, rdp_port, status, last_checked"
 const SQL_COLS = "id, name, ip, sql_username, sql_password"
 
 /** Firma bulunamazsa `null` döner. */
@@ -166,11 +177,34 @@ export async function getFirmaErisim(
 
   return {
     firmaId: comp.company_id,
-    ad: adRow ? { name: adRow.name, ip: adRow.ip, domain: adRow.domain ?? null } : null,
-    windows: winRow
-      ? { name: winRow.name, ip: winRow.ip, dns: winRow.dns ?? null, rdpPort: winRow.rdp_port ?? null }
+    ad: adRow
+      ? {
+          name: adRow.name,
+          ip: adRow.ip,
+          domain: adRow.domain ?? null,
+          durum: adRow.status ?? null,
+          sonKontrol: adRow.last_checked ?? null,
+        }
       : null,
-    iis: iisRow ? { name: iisRow.name, ip: iisRow.ip, dns: iisRow.dns ?? null } : null,
+    windows: winRow
+      ? {
+          name: winRow.name,
+          ip: winRow.ip,
+          dns: winRow.dns ?? null,
+          rdpPort: winRow.rdp_port ?? null,
+          durum: winRow.status ?? null,
+          sonKontrol: winRow.last_checked ?? null,
+        }
+      : null,
+    iis: iisRow
+      ? {
+          name: iisRow.name,
+          ip: iisRow.ip,
+          dns: iisRow.dns ?? null,
+          durum: iisRow.status ?? null,
+          sonKontrol: iisRow.last_checked ?? null,
+        }
+      : null,
     sql,
     credentials,
     sqlCredentials,
