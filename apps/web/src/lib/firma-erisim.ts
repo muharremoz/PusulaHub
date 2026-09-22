@@ -3,6 +3,7 @@ import "server-only"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { getCompanyCredentials, getCompanySqlCredentials, getCompanySqlLogins, type SupabaseLike } from "@/lib/firma-credentials"
 import { decrypt } from "@/lib/crypto"
+import { getAllAgents } from "@/lib/agent-store"
 
 /**
  * Firma erişim bilgileri — sunucular + kullanıcı şifreleri.
@@ -60,6 +61,8 @@ export interface FirmaErisimBilgisi {
     port: number
     username: string | null
     password: string | null
+    durum: string | null
+    sonKontrol: string | null
   } | null
 
   /** Tam kullanıcı adı ("2507.vefa1") → düz şifre. */
@@ -93,7 +96,31 @@ interface ServerRow {
 // status + last_checked: CRM Erişim sekmesi sunucuları kart olarak gösterip
 // çevrimiçi durumunu yazıyor (22.09.2026).
 const SRV_COLS = "id, name, ip, dns, domain, rdp_port, status, last_checked"
-const SQL_COLS = "id, name, ip, sql_username, sql_password"
+const SQL_COLS = "id, name, ip, sql_username, sql_password, status, last_checked"
+
+/**
+ * Sunucunun ŞU ANKİ durumu.
+ *
+ * `servers.status` / `last_checked` kolonlarına güvenilmez: ajan mimarisi
+ * pull modeline geçtiğinden beri bu kolonlar yazılmıyor — 22.09.2026'da tüm
+ * satırlarda kalıcı olarak "offline" ve last_checked NULL duruyordu, CRM
+ * Erişim sekmesindeki sunucu kartları bu yüzden hep "bilinmiyor" gösteriyordu.
+ * Gerçek durum /api/servers ile aynı kaynakta: ajan deposu (in-memory).
+ * Ajan eşleşmezse DB kolonuna düşüyoruz ki eski davranış kaybolmasın.
+ */
+function canliDurum(row: {
+  id: string
+  name: string
+  ip: string
+  status?: string | null
+  last_checked?: string | null
+}): { durum: string | null; sonKontrol: string | null } {
+  const ajan = getAllAgents().find(
+    (a) => a.agentId === row.id || a.hostname === row.name || a.ip === row.ip,
+  )
+  if (ajan) return { durum: ajan.status, sonKontrol: ajan.lastSeen }
+  return { durum: row.status ?? null, sonKontrol: row.last_checked ?? null }
+}
 
 /** Firma bulunamazsa `null` döner. */
 export async function getFirmaErisim(
@@ -150,7 +177,15 @@ export async function getFirmaErisim(
       .eq("id", comp.sql_server_id)
       .maybeSingle()
     const s = data as
-      | { name: string; ip: string; sql_username: string | null; sql_password: string | null }
+      | {
+          id: string
+          name: string
+          ip: string
+          sql_username: string | null
+          sql_password: string | null
+          status: string | null
+          last_checked: string | null
+        }
       | null
     if (!s) return null
     let sifre: string | null = null
@@ -162,7 +197,14 @@ export async function getFirmaErisim(
         sifre = null
       }
     }
-    return { name: s.name, ip: s.ip, port: 1433, username: s.sql_username ?? null, password: sifre }
+    return {
+      name: s.name,
+      ip: s.ip,
+      port: 1433,
+      username: s.sql_username ?? null,
+      password: sifre,
+      ...canliDurum(s),
+    }
   }
 
   const [adRow, winRow, iisRow, sql, credentials, sqlCredentials, sqlLogins] = await Promise.all([
@@ -182,8 +224,7 @@ export async function getFirmaErisim(
           name: adRow.name,
           ip: adRow.ip,
           domain: adRow.domain ?? null,
-          durum: adRow.status ?? null,
-          sonKontrol: adRow.last_checked ?? null,
+          ...canliDurum(adRow),
         }
       : null,
     windows: winRow
@@ -192,8 +233,7 @@ export async function getFirmaErisim(
           ip: winRow.ip,
           dns: winRow.dns ?? null,
           rdpPort: winRow.rdp_port ?? null,
-          durum: winRow.status ?? null,
-          sonKontrol: winRow.last_checked ?? null,
+          ...canliDurum(winRow),
         }
       : null,
     iis: iisRow
@@ -201,8 +241,7 @@ export async function getFirmaErisim(
           name: iisRow.name,
           ip: iisRow.ip,
           dns: iisRow.dns ?? null,
-          durum: iisRow.status ?? null,
-          sonKontrol: iisRow.last_checked ?? null,
+          ...canliDurum(iisRow),
         }
       : null,
     sql,
