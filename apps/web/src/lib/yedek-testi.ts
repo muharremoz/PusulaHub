@@ -67,7 +67,7 @@ export const TEST_PLANI: PlanAdimi[] = [
   { id: "kapsam",   baslik: "Yedek Kapsamı",             aciklama: "Yedeklenmesi gereken veritabanları firma kayıtlarından okunuyor" },
   { id: "tam",      baslik: "Günlük Tam Yedek",          aciklama: "Her veritabanının son tam yedeği 26 saatten yeni mi" },
   { id: "diff",     baslik: "15 Dakikalık Fark Yedeği",  aciklama: "Gün içinde 15 dakikada bir alınan değişiklik yedekleri güncel mi" },
-  { id: "zincir",   baslik: "Geri Yükleme Zinciri",      aciklama: "Fark yedekleri gerçekten son tam yedeğin üstüne oturuyor mu" },
+  { id: "zincir",   baslik: "Geri Yükleme Zinciri",      aciklama: "Her fark yedeği kendi tam yedeğinin üstüne oturuyor mu" },
   { id: "bulut",    baslik: "Bulut Teslimi",             aciklama: "Alınan her yedek dosyası bulut sunucusunda gerçekten duruyor mu" },
   { id: "arsiv",    baslik: "İkinci Arşiv",              aciklama: "Google Drive ve FTP'ye giden ikinci kopya aynı listeyi kapsıyor mu" },
 ]
@@ -83,7 +83,8 @@ export interface YedekTestiHedef {
 
 /* ── Eşikler — scripts/sql/yedek-kontrol.sql ile aynı ───────────────── */
 const TAM_SAAT     = 26   // günlük tam yedek bu kadar saatten eskiyse sorun
-const DIFF_DK      = 45   // 15 dk'da bir alınıyor; 45 dk tolerans
+const DIFF_DK      = 45   // 15 dk'da bir alınıyor; tur bu kadar süredir gelmediyse durmuş
+const TUR_GERI_DK  = 35   // bir DB son turdan bu kadar gerideyse (≈ iki tur kaçırmış) sorun
 const YUKLEME_PAYI = 30   // yeni biten yedek hâlâ yükleniyor olabilir
 const BULUT_SAAT   = 26
 
@@ -127,7 +128,9 @@ function bulutGunu(baslangic: string): string {
 const SON_YEDEKLER = `
   WITH b AS (
     SELECT bs.database_name COLLATE DATABASE_DEFAULT AS db, bs.type, bs.is_copy_only,
-           bs.backup_finish_date, bs.backup_set_uuid, bs.differential_base_guid,
+           bs.backup_start_date, bs.backup_finish_date, bs.backup_set_uuid, bs.differential_base_guid,
+           (SELECT TOP 1 mf.physical_device_name FROM msdb.dbo.backupmediafamily mf
+            WHERE mf.media_set_id = bs.media_set_id) AS dev,
            ROW_NUMBER() OVER (PARTITION BY bs.database_name, bs.type, bs.is_copy_only
                               ORDER BY bs.backup_finish_date DESC) AS rn
     FROM msdb.dbo.backupset bs
@@ -149,7 +152,7 @@ const KAPSAM_SQL = `
 
 interface KapsamSatir { db: string; sunucuda: string | null; durum: string | null }
 interface SonSatir    { db: string; son: Date | null }
-interface ZincirSatir { db: string; uyumlu: number }
+interface ZincirSatir { db: string; uyumlu: number; yabanci: number }
 
 /* ══════════════════════════════════════════════════════════════════════
    Test
@@ -247,34 +250,91 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
   )
 
   /* 4 ── 15 dakikalık fark yedeği --------------------------------------- */
+  /*
+   * ── Takvim ────────────────────────────────────────────────────────────
+   * SpareBackup fark yedeklerini gün boyu 15 dakikada bir alıyor ama
+   * GECE ALMIYOR: 23:00'te duruyor, 08:00'deki tam yedek turu bitince
+   * (~09:20) yeniden başlıyor. İlk sürüm "her DB'nin son farkı 45 dk'dan
+   * yeni mi" diye soruyordu → her gece ve her sabah 188 veritabanını
+   * kırmızı gösterdi (2026-09-23 09:33, vitrin ekranında).
+   *
+   * Şimdi iki ayrı soru soruluyor:
+   *   1. Her veritabanı SON TURA katılmış mı? (DB bazlı arıza — tur
+   *      çalışıyor ama biri atlanıyor; ör. adında tire olan DB)
+   *   2. Turların kendisi olması gerektiği gibi dönüyor mu? Son tur
+   *      45 dk'dan eskiyse bu ancak şu iki durumda normal:
+   *        - tam yedek turu sürüyor ya da az önce bitti
+   *        - dün aynı saatte de fark yedeği alınmıyordu (planlı gece arası)
+   *      Takvim koda yazılmadı: "dün bu saatte" karşılaştırması SpareBackup
+   *      ayarı değişirse bir gün içinde kendiliğinden uyuyor.
+   */
   yield* adim("diff", async () => {
       const r = await sorgu<SonSatir>(`${SON_YEDEKLER}
         SELECT k.db, i.backup_finish_date AS son
         FROM k LEFT JOIN b i ON i.db = k.db AND i.type = 'I' AND i.rn = 1`)
-      return ozetle(r, DIFF_DK, "fark yedeği", simdi)
+      const [t] = await sorgu<{ sonTam: Date | null; dunAyniSaat: number }>(`${SON_YEDEKLER}
+        SELECT (SELECT MAX(f.backup_finish_date) FROM k JOIN b f ON f.db = k.db
+                 AND f.type = 'D' AND f.is_copy_only = 0) AS sonTam,
+               (SELECT COUNT(*) FROM k JOIN b i ON i.db = k.db AND i.type = 'I'
+                 AND i.backup_finish_date BETWEEN DATEADD(minute, -(24 * 60 + ${DIFF_DK}), GETDATE())
+                                              AND DATEADD(hour, -24, GETDATE())) AS dunAyniSaat`)
+
+      return farkTurKarari({
+        satirlar:    r.map((x) => ({ db: x.db, son: x.son ? new Date(x.son) : null })),
+        sonTam:      t?.sonTam ? new Date(t.sonTam) : null,
+        dunAyniSaat: t?.dunAyniSaat ?? 0,
+        simdi,
+      })
     },
   )
 
   /* 5 ── Zincir bütünlüğü ----------------------------------------------- */
+  /*
+   * Doğru soru "son fark yedeği, ONDAN ÖNCEKİ son tam yedeğin üstüne mi
+   * oturuyor". İlk sürüm en son tam yedeğe bakıyordu: sabah yeni tam yedek
+   * alınıp ilk fark turu gelmeden önce her zincir "kopuk" görünüyordu
+   * (dünkü fark doğal olarak dünkü tama dayanıyor) — yanlış alarm.
+   *
+   * Ayrıca tabanın SpareBackup'ın kendi tam yedeği olması şart. COPY_ONLY
+   * olmadan alınan her tam yedek tabanı kendine çeker; o dosya bulutta
+   * olmadığı için zincir gerçekte kopar. 2026-09-22 10:51'de
+   * `2642_MERS_MERKEZ` için `C:\pslYedek`'e böyle bir yedek alındı,
+   * SpareBackup 11:00'de kendi tam yedeğini yeniden alıp düzeltti. O
+   * pencerede zincir burada kopuk görünür — doğrusu da bu.
+   *
+   * Fark yedeği hiç yoksa kopuk sayılmaz: önceki adım onu gecikme olarak
+   * zaten bildiriyor.
+   */
   yield* adim("zincir", async () => {
       const r = await sorgu<ZincirSatir>(`${SON_YEDEKLER}
-        /* Fark yedeği hiç yoksa zincir "kopuk" sayılmaz — onu bir önceki
-           adım zaten gecikme olarak bildiriyor; burada iki kez sorun
-           göstermek yanıltıcı olurdu (yedek-kontrol.sql ile aynı kural). */
         SELECT k.db,
                CASE WHEN i.backup_finish_date IS NULL THEN 1
-                    WHEN f.backup_set_uuid IS NOT NULL AND i.differential_base_guid = f.backup_set_uuid THEN 1
-                    ELSE 0 END AS uyumlu
+                    WHEN f.backup_set_uuid IS NOT NULL
+                     AND i.differential_base_guid = f.backup_set_uuid
+                     AND f.dev LIKE 'C:\\ProgramData\\SpareBackup\\%' THEN 1
+                    ELSE 0 END AS uyumlu,
+               CASE WHEN f.dev IS NOT NULL AND f.dev NOT LIKE 'C:\\ProgramData\\SpareBackup\\%' THEN 1 ELSE 0 END AS yabanci
         FROM k
-        LEFT JOIN b f ON f.db = k.db AND f.type = 'D' AND f.is_copy_only = 0 AND f.rn = 1
-        LEFT JOIN b i ON i.db = k.db AND i.type = 'I' AND i.rn = 1`)
-      const bozuk = r.filter((x) => !x.uyumlu)
+        LEFT JOIN b i ON i.db = k.db AND i.type = 'I' AND i.rn = 1
+        OUTER APPLY (
+          SELECT TOP 1 x.backup_set_uuid, x.dev FROM b x
+          WHERE x.db = k.db AND x.type = 'D' AND x.is_copy_only = 0
+            AND x.backup_finish_date <= i.backup_start_date
+          ORDER BY x.backup_finish_date DESC
+        ) f`)
+      const bozuk   = r.filter((x) => !x.uyumlu)
+      const yabanci = bozuk.filter((x) => x.yabanci)
       return {
         durum: bozuk.length > 0 ? "hata" : "ok",
         deger: bozuk.length > 0 ? `${sayi(bozuk.length)} zincir kopuk` : `${sayi(r.length)} zincir sağlam`,
         detay: bozuk.length > 0
-          ? ["Kopuk zincirde fark yedeği geri yüklenemez", bozuk.map((x) => x.db).slice(0, 3).join(", ")]
-          : ["Tam yedek ve fark yedeği birlikte açılabiliyor", "En fazla 15 dakikalık veri geriye dönülüyor"],
+          ? [
+              yabanci.length > 0
+                ? "Tabanı başka bir programın aldığı tam yedek — bulutta yok"
+                : "Kopuk zincirde fark yedeği geri yüklenemez",
+              bozuk.map((x) => x.db).slice(0, 3).join(", "),
+            ]
+          : ["Her fark yedeği kendi tam yedeğinin üstüne oturuyor", "Son fark yedeğine kadar geri dönülebiliyor"],
       }
     },
   )
@@ -366,6 +426,79 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
   : `${sayi(kapsam)} veritabanının yedeği eksiksiz ve geri yüklenebilir durumda`
 
   yield { tip: "bitti", sonuc: { durum, ozet, sureMs: Date.now() - basladi, bitisAt: new Date().toISOString() } }
+}
+
+/* ── Fark yedeği kararı ──────────────────────────────────────────────── */
+
+export interface FarkTurGirdisi {
+  /** Kapsamdaki her veritabanının son fark yedeği */
+  satirlar:    { db: string; son: Date | null }[]
+  /** Kapsamdaki en son tam (COPY_ONLY olmayan) yedek */
+  sonTam:      Date | null
+  /** Dün bu saatin 45 dk öncesinden bu saate kadar alınan fark yedeği sayısı */
+  dunAyniSaat: number
+  /** SQL sunucusunun saati (tarihlerle aynı kaynaktan — bkz. `saat`) */
+  simdi:       Date
+}
+
+/**
+ * Fark yedeği adımının kararı. Saf fonksiyon: sorgudan ayrı tutuldu ki gece
+ * arası / tam yedek turu / gerçek duruş senaryoları sunucuya bağlanmadan
+ * sınanabilsin. Kurallar 4. adımın üstündeki açıklamada.
+ */
+export function farkTurKarari(g: FarkTurGirdisi): { durum: AdimDurum; deger: string; detay: string[] } {
+  const { satirlar, sonTam, dunAyniSaat, simdi } = g
+  const dolu   = satirlar.map((x) => x.son).filter((d): d is Date => d !== null)
+  const sonTur = dolu.length ? new Date(Math.max(...dolu.map((d) => d.getTime()))) : null
+  const dk     = (d: Date | null) => (d ? (simdi.getTime() - d.getTime()) / 60_000 : Infinity)
+
+  /* 1 — son tura katılmayanlar */
+  const sinir  = sonTur ? sonTur.getTime() - TUR_GERI_DK * 60_000 : 0
+  const geride = satirlar.filter((x) => !x.son || x.son.getTime() < sinir)
+  if (geride.length > 0) {
+    return {
+      durum: "hata",
+      deger: `${sayi(geride.length)} veritabanı geride`,
+      detay: [
+        `Son tura katılmayan: ${geride.map((x) => x.db).slice(0, 3).join(", ")}`,
+        `Son tur ${saat(sonTur)} (${gecen(sonTur, simdi)})`,
+      ],
+    }
+  }
+
+  /* 2 — turlar dönüyor mu */
+  if (dk(sonTur) <= DIFF_DK) {
+    return {
+      durum: "ok",
+      deger: `${sayi(satirlar.length)} / ${sayi(satirlar.length)} güncel`,
+      detay: [`Son tur ${saat(sonTur)} (${gecen(sonTur, simdi)})`, "Tüm veritabanları son tura katıldı"],
+    }
+  }
+  if (sonTam && sonTur && sonTam > sonTur && dk(sonTam) <= DIFF_DK) {
+    return {
+      durum: "ok",
+      deger: "Tam yedek turu",
+      detay: [
+        `Son tam yedek ${saat(sonTam)} (${gecen(sonTam, simdi)})`,
+        "Fark yedekleri tur bitince yeniden başlar",
+      ],
+    }
+  }
+  if (dunAyniSaat === 0) {
+    return {
+      durum: "ok",
+      deger: "Planlı gece arası",
+      detay: [
+        `Son tur ${saat(sonTur)} — tüm veritabanları katıldı`,
+        "Fark yedekleri gece durur, sabah tam yedekten sonra başlar",
+      ],
+    }
+  }
+  return {
+    durum: "hata",
+    deger: "Fark yedeği turu durmuş",
+    detay: [`Son tur ${saat(sonTur)} (${gecen(sonTur, simdi)})`, "Dün bu saatte fark yedeği alınıyordu"],
+  }
 }
 
 /* ── Yardımcılar ─────────────────────────────────────────────────────── */
