@@ -64,7 +64,7 @@ export function YedekTestiDugmesi({ onClick }: { onClick: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="absolute bottom-[86px] left-9 z-30 flex items-center gap-2.5 rounded-[10px] border px-4 py-2.5 transition-colors duration-200 hover:bg-white/[0.07]"
+      className="absolute left-9 top-[116px] z-30 flex items-center gap-2.5 rounded-[10px] border px-4 py-2.5 transition-colors duration-200 hover:bg-white/[0.07]"
       style={{ background: "rgba(255,255,255,0.03)", borderColor: BORDER }}
     >
       <ShieldCheck className="size-4" style={{ color: GREEN }} />
