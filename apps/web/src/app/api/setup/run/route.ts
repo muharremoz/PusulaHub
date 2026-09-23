@@ -7,7 +7,7 @@ import { withSqlConnection } from "@/lib/sql-external"
 import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
-import { sqlLoginAdi } from "@/lib/firma-adlandirma"
+import { apiKullaniciAdi, sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
@@ -974,7 +974,11 @@ export async function POST(req: NextRequest) {
                 buildPatchWebConfig({
                   configPath:  webCfgPath,
                   sqlIp:       hasSqlForCfg ? sqlTarget!.ip : undefined,
-                  sqlUserId:   hasSqlForCfg ? `${payload.firmaId}_${firstUser!.username}` : undefined,
+                  // User Id = SQL girisi (asagida sqlLoginAdi ile olusturulan,
+                  // NOKTALI "4950.ertap1"). Users.xml'deki alt cizgili ad
+                  // (apiKullaniciAdi) uygulama kullanicisidir, SQL'de yoktur —
+                  // onu yazmak hizmeti 18456 ile dusurur.
+                  sqlUserId:   hasSqlForCfg ? sqlLoginAdi(payload.firmaId, firstUser!.username) : undefined,
                   sqlPassword: hasSqlForCfg ? firstUser!.password : undefined,
                 }),
               ))) { controller.close(); return }
@@ -1371,7 +1375,9 @@ export async function POST(req: NextRequest) {
                     const xmlUsers = payload.users
                       .filter((u) => u.username && u.password)
                       .map((u) => ({
-                        username: `${payload.firmaId}_${u.username}`,
+                        // Uygulama-ici kimlik, SQL girisi DEGIL — alt cizgi
+                        // bilerek (Users.xml bicimi). Bkz. apiKullaniciAdi.
+                        username: apiKullaniciAdi(payload.firmaId, u.username),
                         password: u.password,
                       }))
 

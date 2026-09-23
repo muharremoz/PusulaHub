@@ -8,6 +8,7 @@ import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
 import { AlertTriangle, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import type { ParsWizardUser } from "@/lib/pars-katalog"
 
 interface Props {
@@ -97,9 +98,9 @@ export function StepSummary({
       : []),
     ...(hasSqlSelection && sqlDbCount > 0 && firstUser?.username
       ? [
-          `SQL login oluşturulacak: ${firmaId}_${firstUser.username}`,
+          `SQL login oluşturulacak: ${sqlLoginAdi(firmaId, firstUser.username)}`,
           `DENY VIEW ANY DATABASE verilecek (kullanıcı sadece kendi DB'lerini görür)`,
-          `${sqlDbCount} veritabanının owner'ı ${firmaId}_${firstUser.username} olarak ayarlanacak`,
+          `${sqlDbCount} veritabanının owner'ı ${sqlLoginAdi(firmaId, firstUser.username)} olarak ayarlanacak`,
         ]
       : []),
     ...(sqlSecimiEksik ? ["SQL adımı ATLANACAK — veritabanı oluşturulmayacak"] : []),
@@ -177,7 +178,7 @@ export function StepSummary({
           <Row label="SQL Sunucusu" value={sqlServer?.name ?? "(yükleniyor…)"} mono />
           <Row label="Mod" value={sqlMode === 0 ? "Yedekten Yükle" : "Demo Veritabanı"} />
           {firstUser?.username && sqlDbCount > 0 && (
-            <Row label="SQL Login" value={`${firmaId}_${firstUser.username}`} mono />
+            <Row label="SQL Login" value={`${sqlLoginAdi(firmaId, firstUser.username)}`} mono />
           )}
           {sqlMode === 0 && selectedBackups.map((f) => (
             <div key={f.id} className="flex items-center justify-between px-3 py-2">

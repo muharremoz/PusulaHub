@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
 import { copyToClipboard } from "@/lib/clipboard"
+import { apiKullaniciAdi, sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { parsMesajSatirlari, type ParsBaglanti, type ParsWizardUser } from "@/lib/pars-katalog"
 
 interface FwItem { title: string; description: string; optional?: boolean; checked: boolean }
@@ -254,7 +255,7 @@ export function StepRun({
       // API/Web uygulama kimlik bilgileri — Users.xml ile uyumlu
       // Username: {firmaId}_{username} (alt çizgili)
       if (iisAssignments.length > 0) {
-        const apiUser = `${firmaId}_${localUsers[i]?.username ?? ""}`
+        const apiUser = apiKullaniciAdi(firmaId, localUsers[i]?.username ?? "")
         lines.push("API / Web Uygulama Bilgileri:")
         lines.push(`Kullanıcı Adı: ${apiUser}`)
         lines.push(`Şifre: ${c.password}`)
@@ -284,7 +285,8 @@ export function StepRun({
     if (sqlServerId && firstUser?.username && firstUser.password && restoredDbNames.length > 0) {
       lines.push("SQL Veritabanı Bilgileri:")
       if (sqlServer?.ip) lines.push(`Sunucu: ${sqlServer.ip}`)
-      lines.push(`Kullanıcı Adı: ${firmaId}_${firstUser.username}`)
+      // SQL girisi NOKTALI — route'taki sqlLoginAdi ile ayni ad.
+      lines.push(`Kullanıcı Adı: ${sqlLoginAdi(firmaId, firstUser.username)}`)
       lines.push(`Şifre: ${firstUser.password}`)
       lines.push("Veritabanları:")
       restoredDbNames.forEach((db) => lines.push(`  • ${db}`))
