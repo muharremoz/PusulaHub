@@ -23,7 +23,7 @@
 
 import { isExchange, type KumaMonitor } from "./types"
 
-export type TreeKey = "servers" | "ports" | "apps" | "dns" | "external" | "unclassified"
+export type TreeKey = "servers" | "ports" | "apps" | "services" | "dns" | "external" | "unclassified"
 
 export interface TreeDef {
   key:   TreeKey
@@ -37,6 +37,7 @@ export const TREES: TreeDef[] = [
   { key: "servers",      label: "Datacenter",         hint: "Fiziksel makineler" },
   { key: "ports",        label: "Portlar",            hint: "TCP port dinleniyor mu" },
   { key: "apps",         label: "Uygulamalar",        hint: "Servisler ve web uçları" },
+  { key: "services",     label: "Servisler",          hint: "Sunuculardaki kritik Windows servisleri — bekçi görevi her dakika bildiriyor" },
   { key: "dns",          label: "DNS",                hint: "Alan adı çözümleme kontrolleri" },
   { key: "external",     label: "Döviz Kaynakları",   hint: "Dış sağlayıcılar — bizim kontrolümüz dışında" },
   { key: "unclassified", label: "Sınıflandırılmamış", hint: "Eşleme tablosuna eklenmesi gerekiyor" },
@@ -173,12 +174,18 @@ export function subGroupOf(m: Pick<KumaMonitor, "name" | "type">): string | null
  * gövdede tutmak gerekirse MAPe yazmak yeterli.
  * Önek kuralı sayesinde Kuma'ya yeni bir "Döviz - X" eklendiğinde burayı
  * güncellemeye gerek kalmıyor.
+ *
+ * Push monitörleri "Servisler"e gider: Kuma dışarıdan yoklayamadığı Windows
+ * servislerini sunucudaki bekçi görevinin push'uyla izliyor (ilk üçü
+ * "T1/T2/T3 Thinstuff (RDP oturum servisi)" — PusulaThinstuffBekci). Yeni bir
+ * servis bekçisi eklendiğinde burayı güncellemeye gerek yok.
  */
 export function treeOf(m: Pick<KumaMonitor, "name" | "type">): TreeKey {
   const name = m.name.trim()
   const direct = MAP[name]
   if (direct) return direct
   if (m.type === "port") return "ports"
+  if (m.type === "push") return "services"
   if (isExchange(name)) return "external"
   return "unclassified"
 }
