@@ -1197,13 +1197,40 @@ namespace PusulaConnect
              *  her cagrida gunluge satir yaziyordu; tek indirmede gunluk
              *  760 KB'a cikti, asil teshis satirlari o yiginin icinde
              *  kayboldu. Ekran her olayda guncelleniyor, gunluge yalniz
-             *  %10'luk adimlarda yaziliyor.                              */
+             *  %10'luk adimlarda yaziliyor.
+             *
+             *  HIZ (2026-09-25): sahada "Chrome'dan hizli iniyor, programdan
+             *  yavas" denildi. Hiz ekranda ve gunlukte gorunsun ki musteri
+             *  arayinca tahmin degil olcum konusalim. Anlik hiz her olayda
+             *  degil SANIYEDE BIR hesaplaniyor (olay basina fark cok gurultulu)
+             *  ve oncekiyle yumusatiliyor; kalan sure bu hizdan cikiyor.     */
             int sonKayit = -1;
+            DateTime t0 = DateTime.Now;
+            DateTime hizAn = t0;
+            long hizBayt = 0;
+            double hiz = 0;   // bayt/sn, yumusatilmis
             wc.DownloadProgressChanged += delegate(object s, DownloadProgressChangedEventArgs e)
             {
+                DateTime simdi = DateTime.Now;
+                double dt = (simdi - hizAn).TotalSeconds;
+                if (dt >= 1.0)
+                {
+                    double anlik = (e.BytesReceived - hizBayt) / dt;
+                    hiz = hiz <= 0 ? anlik : hiz * 0.5 + anlik * 0.5;
+                    hizAn = simdi; hizBayt = e.BytesReceived;
+                }
+
                 cubuk.Deger = e.ProgressPercentage * 0.25;
                 string metin = "FortiClient VPN indiriliyor — %" + e.ProgressPercentage
-                    + "  (" + (e.BytesReceived / 1048576) + " / " + (e.TotalBytesToReceive / 1048576) + " MB)";
+                    + "  (" + (e.BytesReceived / 1048576) + " / " + (e.TotalBytesToReceive / 1048576) + " MB";
+                if (hiz > 0)
+                {
+                    metin += " · " + HizMetni(hiz);
+                    // Bitince "~1 sn kaldı" yazmasin: kalan bayt yoksa sure gosterilmez
+                    if (e.TotalBytesToReceive > e.BytesReceived)
+                        metin += " · " + KalanMetni((e.TotalBytesToReceive - e.BytesReceived) / hiz);
+                }
+                metin += ")";
                 int dilim = e.ProgressPercentage / 10;
                 if (dilim != sonKayit) { sonKayit = dilim; Isaretle(0, 0, metin); }
                 else EkranaYaz(0, metin);
@@ -1214,7 +1241,7 @@ namespace PusulaConnect
             };
             Gunluk.Yaz("  indirme basliyor: " + url);
             Gunluk.Yaz("  hedef: " + hedef);
-            DateTime t0 = DateTime.Now;
+            t0 = DateTime.Now; hizAn = t0;
             wc.DownloadFileAsync(new Uri(url), hedef);
 
             while (!indirmeBitti) { Nefes(); System.Threading.Thread.Sleep(60); }
@@ -1222,9 +1249,28 @@ namespace PusulaConnect
             if (indirmeHatasi != null) throw indirmeHatasi;
 
             double sn = (DateTime.Now - t0).TotalSeconds;
-            Gunluk.Yaz("  indirme bitti: " + sn.ToString("F1") + " sn");
+            long boyut = 0;
+            try { boyut = new FileInfo(hedef).Length; } catch { }
+            Gunluk.Yaz("  indirme bitti: " + sn.ToString("F1") + " sn, "
+                     + (boyut / 1048576) + " MB, ortalama " + HizMetni(boyut / Math.Max(0.1, sn)));
             MsiDogrula(hedef, "indirilen dosya");
             return hedef;
+        }
+
+        /// 6,2 MB/sn · 850 KB/sn — Turkce ondalik virgulu, kisa.
+        static string HizMetni(double baytSn)
+        {
+            System.Globalization.CultureInfo tr = new System.Globalization.CultureInfo("tr-TR");
+            if (baytSn >= 1048576) return (baytSn / 1048576).ToString("F1", tr) + " MB/sn";
+            return Math.Max(1, (int)(baytSn / 1024)).ToString() + " KB/sn";
+        }
+
+        /// ~12 sn kaldı · ~3 dk kaldı
+        static string KalanMetni(double sn)
+        {
+            if (sn < 0 || double.IsInfinity(sn) || double.IsNaN(sn)) return "";
+            if (sn < 60) return "~" + Math.Max(1, (int)Math.Ceiling(sn)) + " sn kaldı";
+            return "~" + (int)Math.Ceiling(sn / 60) + " dk kaldı";
         }
 
         static string KisaHata(Exception ex)
