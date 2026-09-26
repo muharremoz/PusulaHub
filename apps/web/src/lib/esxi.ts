@@ -611,13 +611,19 @@ const HOUR_MS      = 3_600_000
 const DAY_MS       = 86_400_000
 
 /**
- * Programın bir turu ne kadar sarkabilir.
+ * Bir turun BAŞLANGICI program saatinden ne kadar sapabilir.
  *
- * İş makineleri sırayla dolaşıyor: 12:00 turunda ilk makine 11:58'de,
- * sonuncusu 12:17'de yedekleniyor. 45 dakika bu yayılmayı rahat alıyor
- * ama bir sonraki tura (3 saat sonra) taşmıyor.
+ * Turlar ~11:53, 14:54, 17:54, 21:54'te başlıyor. Turun kendisi bundan
+ * uzun sürebilir (makineler sırayla dolaşılıyor) — o yayılma
+ * `TUR_ARASI_MS` ile ayrıca ele alınıyor.
  */
 const SLOT_GRACE_MS = 45 * 60_000
+
+/**
+ * İki yedek arasında bundan uzun boşluk varsa ayrı turlardır. Tur içinde
+ * makineler arası en fazla ~30 dk görülüyor; turlar arası >= ~2,5 saat.
+ */
+const TUR_ARASI_MS = 60 * 60_000
 
 /**
  * Bir program turunun sonucu.
@@ -653,7 +659,8 @@ export interface BackupCycle {
  * İş şu an günde dört kez dönüyor (TR ~12:00 · 15:00 · 18:00 · 22:00) ama
  * bu Makdos tarafında değişebilir. Sabit saat yazmak, program
  * değiştiğinde panelin sessizce yanlış göstermesi demek olurdu. Saatler
- * geçmiş yedeklerden çıkarılıyor: en yakın tam saate yuvarlanıp, EN AZ
+ * geçmiş yedeklerden çıkarılıyor: yedekler turlara gruplanıyor, her turun
+ * BAŞLANGICI en yakın tam saate yuvarlanıp, EN AZ
  * İKİ AYRI GÜNDE tekrar eden saatler "program" sayılıyor. Tek seferlik
  * elle alınmış bir yedek böylece programa karışmıyor.
  *
@@ -688,12 +695,33 @@ export function computeBackupCycle(
   }
   if (!points.length) return bos
 
-  /*  Program saatleri: her yedeği en yakın tam saate yuvarla, o saatin
-   *  kaç AYRI günde göründüğüne bak. TR ofseti tam saat olduğu için
+  /*  Turlar: yedekleri zamana göre sırala, aralarında TUR_ARASI'ndan uzun
+   *  boşluk olan yerlerden böl. Bir tur 45 dakikayı rahatça aşabiliyor
+   *  (2026-09-26 12:00 turu 11:53'te başlayıp 13:18'de bitti).
+   *
+   *  Eskiden her yedek AYRI AYRI en yakın saate yuvarlanıyordu: 22:38'de
+   *  yedeklenen son makine 23:00'e düşüyor, bu iki günde tekrar edince
+   *  "23:00" sahte bir tur oluyordu ve panel her gün 13:00/23:00 için
+   *  "kısmi" uyarısı gösteriyordu. Artık yalnız TURUN BAŞLANGICI
+   *  yuvarlanıyor.                                                        */
+  points.sort((x, y) => x.t - y.t)
+  const turlar: { bas: number; son: number; vms: Set<string> }[] = []
+  for (const pt of points) {
+    const son = turlar[turlar.length - 1]
+    if (son && pt.t - son.son <= TUR_ARASI_MS) {
+      son.son = pt.t
+      son.vms.add(pt.vm)
+    } else {
+      turlar.push({ bas: pt.t, son: pt.t, vms: new Set([pt.vm]) })
+    }
+  }
+
+  /*  Program saatleri: tur başlangıcını en yakın tam saate yuvarla, o
+   *  saatin kaç AYRI günde göründüğüne bak. TR ofseti tam saat olduğu için
    *  yuvarlama UTC üzerinde yapılabiliyor, sonuç aynı.                  */
   const daysByHour = new Map<number, Set<string>>()
-  for (const pt of points) {
-    const slot = Math.round(pt.t / HOUR_MS) * HOUR_MS
+  for (const tur of turlar) {
+    const slot = Math.round(tur.bas / HOUR_MS) * HOUR_MS
     const tr   = new Date(slot + TR_OFFSET_MS)
     const h    = tr.getUTCHours()
     const gun  = tr.toISOString().slice(0, 10)
@@ -723,9 +751,11 @@ export function computeBackupCycle(
   /*  Dün 00:00 ile yarın 00:00 arası — iki günlük pencere.             */
   const pencere = anlar.filter((t) => t >= bugunTR - DAY_MS && t < bugunTR + DAY_MS)
 
+  const sonTur = turlar[turlar.length - 1]
   const slots: BackupSlot[] = pencere.map((t) => {
-    const vmSet = new Set<string>()
-    for (const pt of points) if (Math.abs(pt.t - t) <= SLOT_GRACE_MS) vmSet.add(pt.vm)
+    /*  Bu program anına ait tur: başlangıcı anın ±SLOT_GRACE'i içinde.   */
+    const tur     = turlar.find((x) => Math.abs(x.bas - t) <= SLOT_GRACE_MS)
+    const vmSet   = tur?.vms ?? new Set<string>()
     const vmCount = vmSet.size
 
     /*  Beklenen makine sayisi TUR BAZLI.
@@ -734,12 +764,16 @@ export function computeBackupCycle(
      *  bugun eklenince DUNUN butun turlari geriye donuk "eksik" oldu —
      *  oysa o gun makine iste yoktu. Bir makine ancak ILK yedeginden
      *  sonraki turlarda bekleniyor.                                     */
+    const turSonu  = Math.max(t + SLOT_GRACE_MS, tur?.son ?? 0)
     const beklenen = inJob.filter((v) => {
       const ilk = new Date(v.times[0]).getTime()
-      return isFinite(ilk) && ilk <= t + SLOT_GRACE_MS
+      return isFinite(ilk) && ilk <= turSonu
     }).length
-    /*  Tur daha yeni başlamışsa sonucu belli değil — "kaçırıldı" deme.  */
-    const bitti = nowMs > t + SLOT_GRACE_MS
+    /*  Tur daha yeni başlamışsa ya da makineler hâlâ dolaşılıyorsa sonucu
+     *  belli değil — "kaçırıldı"/"kısmi" deme. Son yedekten sonra
+     *  TUR_ARASI kadar sessizlik olmadan eksik tur bitmiş sayılmıyor.    */
+    const suruyor = tur !== undefined && tur === sonTur && nowMs - tur.son <= TUR_ARASI_MS
+    const bitti   = nowMs > t + SLOT_GRACE_MS && !(suruyor && vmCount < beklenen)
     const status: BackupSlot["status"] =
       !bitti                    ? "pending"
       : vmCount === 0         ? "missed"
