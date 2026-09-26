@@ -2251,7 +2251,7 @@ async function startPushJob(token) {
     await withCifsMount(sess.sqlServerIp, "D$", sess.sqlUsername, sess.sqlPassword, async (mnt) => {
       const dst = join(mnt, "SQLData", sess.companyId, "aktarim")
       await mkdir(dst, { recursive: true })
-      await execCmd("cp", ["-r", stagingData + "/.", dst])
+      await copyTreeRecursive(stagingData, dst)
     })
     stmts.updatePush.run({ token, progress: 50, stage: "data", error: null, status: "pushing" })
   }
@@ -2267,7 +2267,7 @@ async function startPushJob(token) {
       const dst = join(mnt, sess.companyId)
       await mkdir(dst, { recursive: true })
       // Müşterinin webkitRelativePath ile yüklediği klasör ağacı korunur
-      await execCmd("cp", ["-r", stagingImages + "/.", dst])
+      await copyTreeRecursive(stagingImages, dst)
     })
     stmts.updatePush.run({ token, progress: 90, stage: "images", error: null, status: "pushing" })
   }
