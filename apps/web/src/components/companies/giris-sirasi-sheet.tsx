@@ -118,10 +118,22 @@ export function GirisSirasiSheet({
     }))
   }
 
-  const degisen = useMemo(
-    () => liste.filter((s, i) => orijinal[i]?.srkkod !== s.srkkod).length,
-    [liste, orijinal],
-  )
+  /*  degisen: numarası değişecek satır (DB'ye yazılan) — tek sürükleme
+   *  bile iki satırın yerini değiştirir.
+   *  tasinan: kullanıcının gözüyle kaç satır taşındı = satır sayısı −
+   *  eski sırasını koruyan en uzun alt dizi (yerinde kalanlar).         */
+  const { degisen, tasinan } = useMemo(() => {
+    const degisen = liste.filter((s, i) => orijinal[i]?.srkkod !== s.srkkod).length
+    const eskiIdx = new Map(orijinal.map((s, i) => [s.srkkod, i]))
+    const seq = liste.map((s) => eskiIdx.get(s.srkkod) ?? -1)
+    const lis: number[] = []
+    for (const v of seq) {
+      let lo = 0, hi = lis.length
+      while (lo < hi) { const m = (lo + hi) >> 1; if (lis[m] < v) lo = m + 1; else hi = m }
+      lis[lo] = v
+    }
+    return { degisen, tasinan: degisen ? liste.length - lis.length : 0 }
+  }, [liste, orijinal])
 
   const kaydet = async (geriAl: boolean) => {
     setSaving(true)
@@ -182,7 +194,7 @@ export function GirisSirasiSheet({
                 &quot;Yeni Veritabanı Ekle&quot; ile data ekleyin.
               </div>
             ) : (
-              <div className="overflow-hidden rounded-[5px] border border-border/50">
+              <div className="shrink-0 overflow-hidden rounded-[5px] border border-border/50">
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                   <SortableContext items={liste.map((s) => s.srkkod)} strategy={verticalListSortingStrategy}>
                     {liste.map((s, i) => <Satir key={s.srkkod} s={s} sira={i + 1} />)}
@@ -202,7 +214,7 @@ export function GirisSirasiSheet({
           <SheetFooter className="flex-row">
             <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Kapat</Button>
             <Button className="flex-1" disabled={!degisen || saving || loading} onClick={() => setOnay("kaydet")}>
-              {degisen ? `Kaydet (${degisen} değişiklik)` : "Kaydet"}
+              {tasinan ? `Kaydet (${tasinan} data taşındı)` : "Kaydet"}
             </Button>
           </SheetFooter>
         </SheetContent>
@@ -215,7 +227,7 @@ export function GirisSirasiSheet({
             <AlertDialogDescription>
               {onay === "geriAl"
                 ? "Datalar son değişiklikten önceki numaralarına döner."
-                : `${degisen} datanın şirket tablosundaki numarası (srkkod) yer değiştirecek. Eski numaralar kaydedilir, istenirse geri alınabilir.`}
+                : `${tasinan} data taşındı; bunun için ${degisen} datanın şirket tablosundaki numarası (srkkod) yer değiştirecek. Eski numaralar kaydedilir, istenirse geri alınabilir.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

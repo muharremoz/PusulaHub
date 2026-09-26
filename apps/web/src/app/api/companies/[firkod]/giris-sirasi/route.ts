@@ -9,7 +9,7 @@ import { girisSatirlari, siraUygula, type SiraEslesme } from "@/lib/giris-sirasi
 /**
  * Pusula giriş ekranı data sırası — bkz. lib/giris-sirasi.ts
  *
- * GET  → firmanın dataları (srkkod büyükten küçüğe = programdaki sıra) + son değişiklik
+ * GET  → firmanın dataları (srkkod büyükten küçüğe = programdaki sıra) + geri alınabilir son değişiklik
  * POST { sira: number[] }  → srkkod'lar istenen sırada (üstten alta)
  * POST { geriAl: number }  → geçmişteki bir değişikliği geri al
  */
@@ -44,7 +44,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       withSqlConnection(b.cfg, (pool) => girisSatirlari(pool, firmaId)),
       b.sb.schema("hub").from("giris_sirasi_gecmis")
         .select("id, kullanici, geri_alindi, created_at")
-        .eq("company_id", firkod).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        .eq("company_id", firkod).eq("geri_alindi", false).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ])
     return NextResponse.json({ satirlar, sonDegisiklik: son ?? null })
   } catch (err) {
@@ -125,7 +125,10 @@ export async function POST(req: NextRequest, { params }: Ctx) {
     if (!eslesme) return NextResponse.json({ ok: true, degisen: 0 })
 
     const gecmis = b.sb.schema("hub").from("giris_sirasi_gecmis")
-    const { error: logErr } = await gecmis.insert({ company_id: firkod, kullanici, eslesme })
+    /*  Geri alma kaydı kendisi geri alınamaz (geri_alindi=true doğar) —
+     *  aksi halde "geri al"a ikinci basış geri almayı geri alırdı. Böylece
+     *  art arda basmak değişiklikleri sondan başa doğru teker teker açar. */
+    const { error: logErr } = await gecmis.insert({ company_id: firkod, kullanici, eslesme, geri_alindi: geriAlId !== null })
     if (logErr) console.error("[giris-sirasi] geçmiş yazılamadı:", logErr.message, JSON.stringify(eslesme))
     if (geriAlId !== null) await gecmis.update({ geri_alindi: true }).eq("id", geriAlId)
 
