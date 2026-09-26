@@ -34,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
+const GirisSirasiSheet = dynamic(() => import("@/components/companies/giris-sirasi-sheet").then((m) => m.GirisSirasiSheet), { ssr: false });
 const OldDataRestoreSheet = dynamic(() => import("@/components/companies/old-data-restore-sheet").then((m) => m.OldDataRestoreSheet), { ssr: false });
 
 interface FirmaCompany {
@@ -132,7 +133,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
@@ -564,6 +565,7 @@ export default function CompaniesPage() {
 
   // Yeni Kullanıcı dialog
   const [oldDataOpen, setOldDataOpen]             = useState(false);
+  const [girisSirasiOpen, setGirisSirasiOpen]     = useState(false);
   const [newUserOpen, setNewUserOpen]             = useState(false);
   const [newUserAdServers, setNewUserAdServers]   = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
   const [newUserRdpServers, setNewUserRdpServers] = useState<{ id: string; name: string; ip: string; dns?: string | null; domain?: string | null; rdpPort?: number | null }[]>([]);
@@ -2521,6 +2523,14 @@ tr:nth-child(even) td{background:#fafafa}
                 <div className="flex justify-end gap-2 mb-2">
                   <Button
                     size="sm"
+                    variant="outline"
+                    onClick={() => setGirisSirasiOpen(true)}
+                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
+                  >
+                    <ListOrdered className="h-3.5 w-3.5" /> Giriş Sırası
+                  </Button>
+                  <Button
+                    size="sm"
                     onClick={() => setOldDataOpen(true)}
                     className="rounded-[5px] h-7 text-[11px] gap-1.5"
                   >
@@ -3007,6 +3017,16 @@ tr:nth-child(even) td{background:#fafafa}
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          {/* Pusula giriş ekranı data sırası */}
+          {selectedFirma && (
+            <GirisSirasiSheet
+              open={girisSirasiOpen}
+              onOpenChange={setGirisSirasiOpen}
+              firkod={selectedFirma.firkod}
+              firma={selectedFirma.firma}
+            />
+          )}
 
           {/* Yeni Veritabanı Ekle — Eski Datalar restore sheet */}
           {selectedFirma && (
