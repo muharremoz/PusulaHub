@@ -465,7 +465,7 @@ fastify.post("/api/upload/:token/program", async (req, reply) => {
   await pipeline(data.file, createWriteStream(targetPath))
   const st = await stat(targetPath)
   if (kind === "param") {
-    // Push'ta DATA KODU / OPEN OFFICE yazılacak dosyayı işaretle
+    // Push'ta DATA KODU yazılacak dosyayı işaretle
     const kayit = join(STAGING_ROOT, req.params.token, "program-param.json")
     let m = {}
     try { m = JSON.parse(await readFile(kayit, "utf8")) } catch { m = {} }
@@ -2323,15 +2323,17 @@ async function startPushJob(token) {
 }
 
 /* Parametre dosyalarına kurulum sihirbazıyla aynı kuralı uygular:
- *   Perakende (programCode 909): yalnız <DATAKODU> firmaId </DATAKODU> bloğu (Open Office yazılmaz)
- *   Diğerleri: [DATA KODU] firmaId ve [OPEN OFFICE] 1 satırları
+ *   Perakende (programCode 909): yalnız <DATAKODU> firmaId </DATAKODU> bloğu
+ *   Diğerleri: yalnız [DATA KODU] firmaId satırı
+ * [OPEN OFFICE] 1 ARTIK YAZILMIYOR (2026-09-29): terminallerde Office kuruldu;
+ * dosyada zaten olan [OPEN OFFICE] satırına dokunulmaz.
  * Var olan değer güncellenir, yoksa sona eklenir. Dosya latin1 okunup yazılır:
  * baytlar aynen korunur (Windows-1254 Türkçe karakterler bozulmaz), yalnız ASCII
  * etiketler değişir. Satır sonu dosyadakiyle aynı tutulur. */
 function parametreMetni(metin, firmaId, perakende) {
   const nl = metin.includes("\r\n") ? "\r\n" : "\n"
   if (perakende) {
-    // Perakende: yalnız DATAKODU — Open Office ayarı Perakende parametresine yazılmaz
+    // Perakende: yalnız DATAKODU bloğu
     for (const [etiket, deger] of [["DATAKODU", firmaId]]) {
       const blok = "<" + etiket + ">" + nl + deger + nl + "</" + etiket + ">"
       const re = new RegExp("<" + etiket + ">[\\s\\S]*?</" + etiket + ">", "i")
@@ -2343,14 +2345,12 @@ function parametreMetni(metin, firmaId, perakende) {
   const sonNl = metin.endsWith(nl)
   let satirlar = metin.split(nl)
   if (sonNl) satirlar.pop()
-  let dk = false, oo = false
+  let dk = false
   satirlar = satirlar.map((l) => {
     if (/^\[DATA KODU\]/.test(l)) { dk = true; return "[DATA KODU] " + firmaId }
-    if (/^\s*\[OPEN ?OFFICE\]/i.test(l)) { oo = true; return "[OPEN OFFICE] 1" }
     return l
   })
   if (!dk) satirlar.push("[DATA KODU] " + firmaId)
-  if (!oo) satirlar.push("[OPEN OFFICE] 1")
   return satirlar.join(nl) + nl
 }
 
