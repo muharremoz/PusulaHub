@@ -477,11 +477,11 @@ async function collectFileStorage(): Promise<void> {
 }
 
 /* ── Firma kullanım istatistikleri (5 dk'da bir): pre → fileStorage → post ── */
-async function updateCompanyUsage(): Promise<void> {
+async function updateCompanyUsage(dosyaBoyutu = true): Promise<void> {
   if (isReadOnly()) return
   try {
     await hub().rpc("update_company_usage_pre")
-    await collectFileStorage()
+    if (dosyaBoyutu) await collectFileStorage()
     await hub().rpc("update_company_usage_post")
     console.log("[Poller] Firma istatistikleri güncellendi")
   } catch (err) {
@@ -514,9 +514,13 @@ async function pollAll(): Promise<void> {
   }
 }
 
-/* ── Firma istatistiklerini simdi yeniden hesapla (sihirbaz sonu) ── */
-export async function refreshCompanyStats(): Promise<void> {
-  await updateCompanyUsage()
+/* ── Firma istatistiklerini simdi yeniden hesapla (sihirbaz sonu) ──
+ *  dosyaBoyutu=false: Depo'daki D:Resimler<firma> taramasini atla. Bu tarama
+ *  dosya sunucusu atanmis TUM firmalarin resim klasorlerini tek tek dolasiyor;
+ *  sihirbazda yeni firmanin klasoru bos oldugu icin gereksiz bekleme. Duzenli
+ *  poller (USAGE_EVERY) dosya boyutunu zaten olcuyor.                        */
+export async function refreshCompanyStats(opts: { dosyaBoyutu?: boolean } = {}): Promise<void> {
+  await updateCompanyUsage(opts.dosyaBoyutu ?? true)
 }
 
 /* ── On-demand tek sunucu poll (UI "Yenile") ── */

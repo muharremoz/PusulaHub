@@ -1702,12 +1702,18 @@ export async function POST(req: NextRequest) {
           { id: payload.sqlServerId,     etiket: "SQL" },
           { id: payload.windowsServerId, etiket: "IIS / Terminal" },
         ]
+        /*  Sunucular PARALEL yoklanir: force'ta agent her seyi bastan topluyor
+         *  (olculen 2026-09-29: AD 30 sn, Terminal 21 sn, SQL 8 sn). Sirayla
+         *  ~1 dk suruyordu; paralelde en yavasi kadar (~30 sn).             */
         const senkronlanan = new Set<string>()
-        for (const h of senkronHedefleri) {
-          if (!h.id || senkronlanan.has(h.id)) continue
+        const hedefler = senkronHedefleri.filter((h): h is { id: string; etiket: string } => {
+          if (!h.id || senkronlanan.has(h.id)) return false
           senkronlanan.add(h.id)
+          return true
+        })
+        for (const h of hedefler) send("step", { stepId: `sync_${h.id}`, label: `Hub senkronu: ${h.etiket}`, status: "running" })
+        await Promise.all(hedefler.map(async (h) => {
           const stepId = `sync_${h.id}`
-          send("step", { stepId, label: `Hub senkronu: ${h.etiket}`, status: "running" })
           try {
             const ok = await pollSingleAgent(h.id, true)
             send("step", {
@@ -1718,11 +1724,11 @@ export async function POST(req: NextRequest) {
           } catch (err) {
             send("step", { stepId, label: `Hub senkronu: ${h.etiket}`, status: "error", error: err instanceof Error ? err.message : String(err) })
           }
-        }
+        }))
         if (senkronlanan.size) {
           send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "running" })
           try {
-            await refreshCompanyStats()
+            await refreshCompanyStats({ dosyaBoyutu: false })
             send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "done", output: "Kullanıcı sayısı ve kullanım güncellendi" })
           } catch (err) {
             send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "error", error: err instanceof Error ? err.message : String(err) })
