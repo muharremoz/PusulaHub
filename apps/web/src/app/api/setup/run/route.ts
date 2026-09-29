@@ -784,7 +784,7 @@ export async function POST(req: NextRequest) {
                 `svc_param_${s.id}`,
                 isPerakende
                   ? `Parametre güncelleniyor (Perakende · DATAKODU): ${cfg.paramFileName}`
-                  : `Parametre güncelleniyor (DATA KODU · OPEN OFFICE): ${cfg.paramFileName}`,
+                  : `Parametre güncelleniyor (DATA KODU): ${cfg.paramFileName}`,
                 isPerakende
                   ? buildUpdateDataKoduXml(paramFile, payload.firmaId)
                   : buildUpdateParamTxt(paramFile, payload.firmaId),
