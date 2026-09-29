@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
+import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
 import dynamic from "next/dynamic"
 import {
   WizardUser, BackupFile, Company, ExistingAdUser,
@@ -421,7 +422,7 @@ export function WizardShell() {
                 && !existingUsersLoading
                 && apiExistingUsers.length < (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0)
                 && selectedWindowsServerId !== null :
-    step === 2 ? users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password)) :
+    step === 2 ? users.every((u) => u.username.trim() && !adKullaniciAdiHatasi(`${firmaId}.${u.username.trim()}`) && u.password.trim() && meetsAdComplexity(u.password)) :
     step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) && parsReady :
     // SQL sunucusu seçildiyse veri seçimi zorunlu — eskiden sessizce atlanıyordu
     step === 4 ? selectedSqlServerId === null

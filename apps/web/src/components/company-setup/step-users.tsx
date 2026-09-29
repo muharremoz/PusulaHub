@@ -6,6 +6,7 @@ import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskC
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner } from "./ad-provision-runner"
+import { adKullaniciAdiHatasi, onekSonrasiMax } from "@/lib/ad-kullanici-adi"
 
 interface Props {
   users: WizardUser[]
@@ -68,8 +69,10 @@ export function StepUsers({
   const activeExisting = existingUsers.filter((u) => !u.isDisabled).length
   const limitReached = userLimit > 0 && activeExisting + users.length >= userLimit
 
+  const adHatasi = (username: string) =>
+    username.trim() ? adKullaniciAdiHatasi(`${firmaId}.${username.trim()}`) : null
   const allUsersValid = users.length > 0 &&
-    users.every((u) => u.username.trim() && u.password.trim() && meetsAdComplexity(u.password))
+    users.every((u) => u.username.trim() && !adHatasi(u.username) && u.password.trim() && meetsAdComplexity(u.password))
   const canTest = allUsersValid && !!serverId && !!firmaId
 
   const startTest = () => {
@@ -183,7 +186,10 @@ export function StepUsers({
                 {/* Kullanıcı adı */}
                 <div>
                   <p className="text-[11px] font-medium text-foreground mb-1.5">Kullanıcı Adı</p>
-                  <div className="flex items-center rounded-[5px] border-2 border-border bg-background overflow-hidden focus-within:border-foreground/60 transition-colors">
+                  <div className={cn(
+                    "flex items-center rounded-[5px] border-2 bg-background overflow-hidden transition-colors",
+                    adHatasi(user.username) ? "border-red-500/60" : "border-border focus-within:border-foreground/60",
+                  )}>
                     {firmaId && (
                       <span className="text-[11px] text-muted-foreground bg-muted px-2.5 py-2 border-r-2 border-border shrink-0 font-mono">
                         {firmaId}.
@@ -196,7 +202,18 @@ export function StepUsers({
                       placeholder="kullanici"
                       className="flex-1 px-2.5 py-2 text-xs bg-transparent outline-none min-w-0"
                     />
+                    {firmaId && user.username && (
+                      <span className={cn(
+                        "px-2 text-[10px] tabular-nums shrink-0",
+                        user.username.trim().length > onekSonrasiMax(firmaId) ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
+                      )}>
+                        {user.username.trim().length}/{onekSonrasiMax(firmaId)}
+                      </span>
+                    )}
                   </div>
+                  {adHatasi(user.username) && (
+                    <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{adHatasi(user.username)}</p>
+                  )}
                 </div>
 
                 {/* Ad Soyad */}

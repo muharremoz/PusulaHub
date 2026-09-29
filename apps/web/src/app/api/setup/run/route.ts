@@ -13,6 +13,7 @@ import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
+import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
 import {
   buildEnsureFirmalarOu,
   buildEnsureFirmaOu,
@@ -287,6 +288,22 @@ export async function POST(req: NextRequest) {
 
   if (!payload.firmaId || !Array.isArray(payload.users)) {
     return new Response(JSON.stringify({ error: "firmaId, users zorunlu" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  /* Kullanıcı adları AD kuralına uymuyorsa (20 karakter, yasak karakter)
+   * hiçbir adıma başlama — OU/grup açılıp kullanıcıda yarıda kalmasın.  */
+  const adHatalari = payload.users
+    .map((u) => {
+      const tam = `${payload.firmaId}.${(u.username ?? "").trim()}`
+      const h = adKullaniciAdiHatasi(tam)
+      return h ? `${tam}: ${h}` : null
+    })
+    .filter(Boolean)
+  if (adHatalari.length) {
+    return new Response(JSON.stringify({ error: `Geçersiz kullanıcı adı — ${adHatalari.join("; ")}` }), {
       status: 400,
       headers: { "Content-Type": "application/json" },
     })
