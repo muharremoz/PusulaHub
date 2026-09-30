@@ -1,0 +1,11 @@
+# Nixpacks sağlayıcı kilidi — Coolify derlemesi bu depoyu Node (Next.js) olarak kursun.
+#
+# NEDEN (30.09.2026, deploy patladı): Aktarım 2 istemcisinin .csproj dosyası
+# (apps/aktarim-istemci/src/PusulaAktarim) depoya girince Nixpacks .NET
+# sağlayıcısını seçti, kökte `dotnet restore` çalıştırdı → MSB1003 → deploy
+# başarısız. PusulaCRM'de sql-konsol ile aynısı yaşanmıştı (04.09.2026),
+# çözüm de aynı. Nixpacks depo KÖKÜNDE çalışıyor (base_directory'e rağmen).
+#
+# Ayar depoda, Coolify ortam değişkeninde değil: sürüm kontrolünde durur.
+# Kurulum/derleme adımları Coolify'daki build/start komutlarından gelir.
+providers = ["node"]
