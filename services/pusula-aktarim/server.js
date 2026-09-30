@@ -539,6 +539,35 @@ fastify.post("/api/upload/:token/old-progress", async (req, reply) => {
   return reply.send({ ok: true })
 })
 
+/** Ek dosyalar: program kartından ayrıldı (2026-09-30). Klasör seçilebilir, alt
+ *  klasör yapısı korunur, her dosya türü kabul edilir. Push'ta firmanın terminal
+ *  sunucusuna C$\MUSTERI\{firmaId}\Aktarim\Ek Dosyalar altına kopyalanır —
+ *  program dosyalarıyla aynı hedef ve credential, bu yüzden aynı kapıya bağlı. */
+fastify.post("/api/upload/:token/ek", async (req, reply) => {
+  const v = getActiveSession(req.params.token)
+  if (v.error) return reply.code(410).send({ error: v.error })
+  if (!programEnabledOf(v.session)) {
+    return reply.code(409).send({ error: "Bu aktarım için ek dosya yükleme kapalı" })
+  }
+
+  const data = await req.file()
+  if (!data) return reply.code(400).send({ error: "Dosya yok" })
+
+  const relPath = data.fields.relPath?.value ?? data.filename
+  const safeRel = sanitizeRelPath(String(relPath))
+  if (!safeRel) {
+    await data.toBuffer().catch(() => {})
+    return reply.code(400).send({ error: "Geçersiz dosya yolu" })
+  }
+
+  const targetPath = join(STAGING_ROOT, req.params.token, "ek", safeRel)
+  await mkdir(dirname(targetPath), { recursive: true })
+  await pipeline(data.file, createWriteStream(targetPath))
+  const st = await stat(targetPath)
+  stmts.setStatus.run("active", "active", req.params.token)
+  return reply.send({ ok: true, path: safeRel, size: st.size })
+})
+
 /** Sunucuda duran (yüklenmiş) dosyalar — tarayıcı aynı ad + boyuttakileri atlar,
  *  yarıda kalan aktarımda yalnız eksikler gönderilir. */
 async function listeleDosyalar(kok, alt = "") {
@@ -564,6 +593,7 @@ fastify.get("/api/upload/:token/staged", async (req, reply) => {
     images:  await listeleDosyalar(join(kok, "images")),
     program: await listeleDosyalar(join(kok, "program")),
     old:     await listeleDosyalar(join(kok, "old")),
+    ek:      await listeleDosyalar(join(kok, "ek")),
   }
 })
 
@@ -1150,7 +1180,7 @@ function renderHtml(token) {
             <span class="icon">${ICON_APP}</span>
             <div>
               <h2>Program Dosyaları</h2>
-              <div class="meta">Her program için .exe, parametre (.txt) ve ek dosyalar</div>
+              <div class="meta">Her program için .exe ve parametre (.txt)</div>
             </div>
             <span id="progBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
           </div>
@@ -1163,6 +1193,37 @@ function renderHtml(token) {
 
           <div id="progRows" class="prog-rows"></div>
           <button id="progAdd" class="prog-add" type="button">+ Program ekle</button>
+
+        </div>
+
+        <!-- Ek Dosyalar (program kartıyla aynı koşul: firmanın terminal sunucusu biliniyorsa) -->
+        <div class="card hidden" id="ekCard">
+          <div class="card-hdr">
+            <span class="icon">${ICON_FOLDER}</span>
+            <div>
+              <h2>Ek Dosyalar</h2>
+              <div class="meta">Tüm dosya türleri · alt klasörler dahil</div>
+            </div>
+            <span id="ekBadge" class="status-badge" style="margin-left:auto" hidden>Bekliyor</span>
+          </div>
+
+          <div id="ekErr" class="upload-err hidden"></div>
+          <div id="ekProgress" class="progress hidden">
+            <div class="bar"><div id="ekBar" style="width:0%"></div></div>
+            <div class="stat"><span id="ekStat">—</span><span id="ekPct" class="pct">0%</span></div>
+          </div>
+
+          <label class="drop" id="ekDrop">
+            <input type="file" id="ekInput" webkitdirectory multiple>
+            <span class="drop-icon">${ICON_UPLOAD}</span>
+            <strong>Klasörü buraya sürükleyin</strong>
+            <span>veya tıklayıp klasör seçin · raporlar, şablonlar, diğer dosyalar</span>
+            <span class="hint">${ICON_WARN} Tarayıcı izin sorduğunda "Yükle"yi seçin</span>
+          </label>
+
+          <div id="ekSummary" class="summary hidden"></div>
+          <div id="ekTree" class="tree hidden"></div>
+          <button id="ekClear" class="clear-btn hidden" type="button">Klasörü kaldır</button>
 
         </div>
 
@@ -1256,11 +1317,12 @@ async function loadInfo() {
       PROGRAM_OPTIONS = Array.isArray(d.programOptions) ? d.programOptions : [];
       if (progRows.length === 0) addProgRow();
       $("progCard").classList.remove("hidden");
+      $("ekCard").classList.remove("hidden");
     }
     if (d.oldEnabled) $("oldCard").classList.remove("hidden");
-    // Görünen kart sayısına göre ızgara: 2 → yan yana, 3 → üçlü, 4 → 2x2
-    const kartSayisi = 2 + (d.programEnabled ? 1 : 0) + (d.oldEnabled ? 1 : 0);
-    $("uploadGrid").classList.toggle("three", kartSayisi === 3);
+    // Görünen kart sayısına göre ızgara: 2 → yan yana, 3 ve 5 → üçlü, 4 → 2x2
+    const kartSayisi = 2 + (d.programEnabled ? 2 : 0) + (d.oldEnabled ? 1 : 0);
+    $("uploadGrid").classList.toggle("three", kartSayisi === 3 || kartSayisi === 5);
     $("uploadGrid").classList.toggle("four", kartSayisi === 4);
     $("loading").classList.add("hidden");
     $("main").classList.remove("hidden");
@@ -1324,6 +1386,7 @@ function showPushBanner(d) {
   $("dataDrop").classList.add("hidden");
   $("imgDrop").classList.add("hidden");
   $("oldDrop").classList.add("hidden");
+  $("ekDrop").classList.add("hidden");
   renderProgRows();
   $("startBtn").disabled = true;
   const pct = Math.max(0, Math.min(100, d.pushProgress ?? 0));
@@ -1333,6 +1396,7 @@ function showPushBanner(d) {
   else if (d.pushStage === "images") $("pushSubtext").textContent = "Resimler depo sunucusuna aktarılıyor…";
   else if (d.pushStage === "old")    $("pushSubtext").textContent = "Eski yıl dataları depo sunucusuna aktarılıyor…";
   else if (d.pushStage === "program") $("pushSubtext").textContent = "Program dosyaları terminal sunucusuna aktarılıyor…";
+  else if (d.pushStage === "ek")      $("pushSubtext").textContent = "Ek dosyalar terminal sunucusuna aktarılıyor…";
 }
 
 function stopPushPoll() {
@@ -1389,15 +1453,17 @@ let selectedImages    = [];   // File[]
 let imgTotalBytes     = 0;
 let imgLargeCount     = 0;
 let imgLargeBytes     = 0;
+let selectedEk        = [];   // [{ file: File, rel: "Klasor/alt/dosya.ext" }]
+let ekTotalBytes      = 0;
 let progRows          = [];   // [{ id, program, exe: File|null, param: File|null }]
 let progRowSeq        = 0;
 let progOpenId        = null;   // açık program menüsü (satır id)
 let uploading         = false;
 let totalBytesAll     = 0;
-const totalDone       = { data: 0, img: 0, prog: 0, old: 0 };
+const totalDone       = { data: 0, img: 0, prog: 0, old: 0, ek: 0 };
 function totalUpdate(kind, bytes) {
   totalDone[kind] = bytes;
-  const done = totalDone.data + totalDone.img + totalDone.prog + totalDone.old;
+  const done = totalDone.data + totalDone.img + totalDone.prog + totalDone.old + totalDone.ek;
   const p = totalBytesAll > 0 ? Math.min(100, Math.round((done / totalBytesAll) * 100)) : 0;
   $("totalBar").style.width = p + "%";
   $("totalPct").textContent = p + "%";
@@ -1589,6 +1655,115 @@ $("imgClear").addEventListener("click", () => {
   refreshStart();
 });
 
+// ── Ek dosyalar (klasör, tüm türler, alt klasörler korunur) ──
+// Öğeler { file, rel }: klasör sürükle-bırakta webkitRelativePath boş gelir,
+// yolu dizin girdisinden biz kurarız.
+function ekEkle(items) {
+  for (const it of items) {
+    const i = selectedEk.findIndex((x) => x.rel === it.rel);
+    if (i >= 0) selectedEk[i] = it; else selectedEk.push(it);
+  }
+  ekTotalBytes = selectedEk.reduce((t, x) => t + x.file.size, 0);
+  renderEkSummary();
+  refreshStart();
+}
+function girdiOku(entry, yol) {
+  return new Promise((resolve) => {
+    if (entry.isFile) {
+      entry.file((f) => resolve([{ file: f, rel: yol + f.name }]), () => resolve([]));
+    } else if (entry.isDirectory) {
+      const okuyucu = entry.createReader();
+      const hepsi = [];
+      const oku = () => okuyucu.readEntries(async (parca) => {
+        if (!parca.length) {
+          const alt = [];
+          for (const g of hepsi) alt.push(...await girdiOku(g, yol + entry.name + "/"));
+          resolve(alt);
+          return;
+        }
+        hepsi.push(...parca);
+        oku();   // readEntries en fazla ~100 girdi döndürür, bitene kadar tekrar
+      }, () => resolve([]));
+      oku();
+    } else resolve([]);
+  });
+}
+(function () {
+  const zone = $("ekDrop"), input = $("ekInput");
+  ["dragenter","dragover"].forEach(ev => zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add("over") }));
+  ["dragleave","drop"].forEach(ev => zone.addEventListener(ev, () => zone.classList.remove("over")));
+  zone.addEventListener("drop", async (e) => {
+    e.preventDefault();
+    if (uploading) return;
+    const girdiler = Array.from(e.dataTransfer.items || [])
+      .map((it) => it.webkitGetAsEntry ? it.webkitGetAsEntry() : null).filter(Boolean);
+    const items = [];
+    if (girdiler.length) { for (const g of girdiler) items.push(...await girdiOku(g, "")); }
+    else { for (const f of Array.from(e.dataTransfer.files)) items.push({ file: f, rel: f.name }); }
+    if (!items.length) { showToast("Bırakılan klasörde dosya bulunamadı."); return; }
+    ekEkle(items);
+  });
+  input.addEventListener("change", (e) => {
+    if (uploading) return;
+    const items = Array.from(e.target.files).map((f) => ({ file: f, rel: f.webkitRelativePath || f.name }));
+    input.value = "";
+    if (!items.length) { showToast("Seçilen klasörde dosya bulunamadı."); return; }
+    ekEkle(items);
+  });
+  $("ekClear").addEventListener("click", () => {
+    if (uploading) return;
+    selectedEk = []; ekTotalBytes = 0;
+    renderEkSummary();
+    refreshStart();
+  });
+})();
+
+function renderEkSummary() {
+  const s = $("ekSummary");
+  const tree = $("ekTree");
+  if (selectedEk.length === 0) {
+    s.classList.add("hidden"); tree.classList.add("hidden");
+    $("ekClear").classList.add("hidden");
+    $("ekBadge").hidden = true;
+    return;
+  }
+  const dirMap = new Map();
+  for (const x of selectedEk) {
+    const parts = x.rel.split("/");
+    const dir = parts.slice(0, -1).join("/") || "(kök)";
+    let e = dirMap.get(dir);
+    if (!e) { e = { count: 0, bytes: 0 }; dirMap.set(dir, e); }
+    e.count++; e.bytes += x.file.size;
+  }
+  const dirs = Array.from(dirMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr"));
+  s.innerHTML =
+    '<div class="summary-row"><span class="l">Dosya sayısı</span><span class="v">' + selectedEk.length.toLocaleString("tr") + '</span></div>' +
+    '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(ekTotalBytes) + '</span></div>' +
+    '<div class="summary-row"><span class="l">Klasör sayısı</span><span class="v">' + dirs.length.toLocaleString("tr") + '</span></div>';
+  s.classList.remove("hidden");
+
+  // Az dosyada dosya listesi, çok dosyada klasör dağılımı
+  let treeHtml = "";
+  if (selectedEk.length <= 30) {
+    treeHtml = '<div class="tree-hdr">DOSYALAR</div>';
+    for (const x of selectedEk.slice().sort((a, b) => a.rel.localeCompare(b.rel, "tr"))) {
+      treeHtml += '<div class="tree-row"><span class="tree-path">' + escapeHtml(x.rel) + '</span><span class="tree-meta">' + fmtBytes(x.file.size) + '</span></div>';
+    }
+  } else {
+    treeHtml = '<div class="tree-hdr">KLASÖR DAĞILIMI</div>';
+    for (const [dir, e] of dirs.slice(0, 50)) {
+      treeHtml += '<div class="tree-row"><span class="tree-path">' + escapeHtml(dir) + '</span><span class="tree-meta">' + e.count.toLocaleString("tr") + ' dosya · ' + fmtBytes(e.bytes) + '</span></div>';
+    }
+    if (dirs.length > 50) treeHtml += '<div class="tree-row tree-more">… ve ' + (dirs.length - 50).toLocaleString("tr") + ' klasör daha</div>';
+  }
+  tree.innerHTML = treeHtml;
+  tree.classList.remove("hidden");
+  $("ekClear").classList.remove("hidden");
+  $("ekBadge").hidden = false;
+  $("ekBadge").textContent = "Hazır";
+  $("ekBadge").className = "status-badge";
+}
+
 // ── Program dosyaları (program başına exe + parametre) ──
 function progOption(name) { return PROGRAM_OPTIONS.find((o) => o.name === name) || null; }
 function progFiles() {
@@ -1659,16 +1834,6 @@ function renderProgRows() {
         '<span class="n">' + escapeHtml(row.param ? row.param.name : parHint) + '</span>' +
         (row.param ? '<span class="sz">' + fmtBytes(row.param.size) + '</span>' : "") +
       '</label>' +
-      '<label class="prog-file' + (row.extras.length ? " set" : "") + dis + '">' +
-        '<input type="file" multiple data-id="' + row.id + '" data-kind="extra">' +
-        '<span class="k">Ek dosyalar</span>' +
-        '<span class="n">' + (row.extras.length ? row.extras.length + " dosya eklendi · eklemek için tıklayın" : "Tüm dosya türleri · birden fazla seçilebilir") + '</span>' +
-        (row.extras.length ? '<span class="sz">' + fmtBytes(row.extras.reduce((t, x) => t + x.size, 0)) + '</span>' : "") +
-      '</label>' +
-      (row.extras.length ? '<div class="prog-extras">' + row.extras.map((x, i) =>
-        '<div class="prog-extra"><span class="n">' + escapeHtml(x.name) + '</span><span class="sz">' + fmtBytes(x.size) + '</span>' +
-        (uploading ? "" : '<button type="button" class="prog-extra-del" data-id="' + row.id + '" data-idx="' + i + '" title="Kaldır">' + ICON_X_JS + '</button>') +
-        '</div>').join("") + '</div>' : "") +
       (warn ? '<div class="prog-warn">' + escapeHtml(warn) + '</div>' : "") +
     '</div>';
   }
@@ -1697,12 +1862,7 @@ $("progRows").addEventListener("change", (e) => {
   const t = e.target;
   const row = progRows.find((x) => String(x.id) === t.dataset.id);
   if (!row) return;
-  if (t.type === "file" && t.dataset.kind === "extra" && t.files && t.files.length) {
-    for (const file of Array.from(t.files)) {
-      const i = row.extras.findIndex((x) => x.name.toLowerCase() === file.name.toLowerCase());
-      if (i >= 0) row.extras[i] = file; else row.extras.push(file);
-    }
-  } else if (t.type === "file" && t.files && t.files[0]) {
+  if (t.type === "file" && t.files && t.files[0]) {
     const file = t.files[0];
     const ok = t.dataset.kind === "exe" ? /\\.exe$/i.test(file.name) : /\\.txt$/i.test(file.name);
     if (!ok) { showToast(t.dataset.kind === "exe" ? "Program dosyası .exe olmalı." : "Parametre dosyası .txt olmalı."); return; }
@@ -1727,13 +1887,6 @@ $("progRows").addEventListener("click", (e) => {
     renderProgRows();
     return;
   }
-  const xd = e.target.closest(".prog-extra-del");
-  if (xd) {
-    const row = progRows.find((x) => String(x.id) === xd.dataset.id);
-    if (row) row.extras.splice(Number(xd.dataset.idx), 1);
-    renderProgRows();
-    return;
-  }
   const b = e.target.closest(".prog-del");
   if (!b) return;
   progRows = progRows.filter((x) => String(x.id) !== b.dataset.id);
@@ -1742,7 +1895,7 @@ $("progRows").addEventListener("click", (e) => {
 
 function refreshStart() {
   const hasProg = progFiles().length > 0;
-  $("startBtn").disabled = uploading || !progReady() || (selectedDataFiles.length === 0 && selectedImages.length === 0 && selectedOldFiles.length === 0 && !hasProg);
+  $("startBtn").disabled = uploading || !progReady() || (selectedDataFiles.length === 0 && selectedImages.length === 0 && selectedOldFiles.length === 0 && selectedEk.length === 0 && !hasProg);
 }
 
 // ── Aktarımı başlat ───────────────────
@@ -1801,8 +1954,8 @@ async function sunucudakiler() {
     const r = await fetch("/api/upload/" + TOKEN + "/staged", { cache: "no-store" });
     const d = r.ok ? await r.json() : {};
     const harita = (arr) => { const m = new Map(); (Array.isArray(arr) ? arr : []).forEach((x) => m.set(x.path, x.size)); return m; };
-    return { data: harita(d.data), images: harita(d.images), program: harita(d.program), old: harita(d.old) };
-  } catch { return { data: new Map(), images: new Map(), program: new Map(), old: new Map() }; }
+    return { data: harita(d.data), images: harita(d.images), program: harita(d.program), old: harita(d.old), ek: harita(d.ek) };
+  } catch { return { data: new Map(), images: new Map(), program: new Map(), old: new Map(), ek: new Map() }; }
 }
 
 async function hatalariBildir(hatalar) {
@@ -1822,14 +1975,16 @@ async function startUpload() {
   $("dataClear").classList.add("hidden");
   $("imgClear").classList.add("hidden");
   $("oldClear").classList.add("hidden");
-  hataKutusu("data", []); hataKutusu("img", []); hataKutusu("prog", []); hataKutusu("old", []);
+  $("ekClear").classList.add("hidden");
+  hataKutusu("data", []); hataKutusu("img", []); hataKutusu("prog", []); hataKutusu("old", []); hataKutusu("ek", []);
 
   // Drop alanlarını kapat
   $("dataDrop").classList.add("hidden");
   $("imgDrop").classList.add("hidden");
   $("oldDrop").classList.add("hidden");
-  totalBytesAll = dataTotalBytes + imgTotalBytes + oldTotalBytes + progFiles().reduce((t, it) => t + it.file.size, 0);
-  totalDone.data = 0; totalDone.img = 0; totalDone.prog = 0; totalDone.old = 0;
+  $("ekDrop").classList.add("hidden");
+  totalBytesAll = dataTotalBytes + imgTotalBytes + oldTotalBytes + ekTotalBytes + progFiles().reduce((t, it) => t + it.file.size, 0);
+  totalDone.data = 0; totalDone.img = 0; totalDone.prog = 0; totalDone.old = 0; totalDone.ek = 0;
   $("totalProgress").classList.remove("hidden");
   totalUpdate("data", 0);
   renderProgRows();
@@ -1841,6 +1996,7 @@ async function startUpload() {
     if (selectedImages.length > 0) hatalar.push(...await uploadImages(onceki.images));
     if (selectedOldFiles.length > 0) hatalar.push(...await uploadOld(onceki.old));
     if (progFiles().length > 0) hatalar.push(...await uploadProgram(onceki.program));
+    if (selectedEk.length > 0) hatalar.push(...await uploadEk(onceki.ek));
   } catch (err) {
     hatalar.push({ area: "genel", name: "—", size: 0, reason: hataNedeni(err) });
   }
@@ -1851,6 +2007,7 @@ async function startUpload() {
     hataKutusu("img", hatalar.filter((h) => h.area === "img"));
     hataKutusu("prog", hatalar.filter((h) => h.area === "prog"));
     hataKutusu("old", hatalar.filter((h) => h.area === "old"));
+    hataKutusu("ek", hatalar.filter((h) => h.area === "ek"));
     showToast(hatalar.length + " dosya yüklenemedi — ayrıntı ilgili kartta.");
     uploading = false;
     setHdrStatus("pending");
@@ -1859,14 +2016,16 @@ async function startUpload() {
     $("dataDrop").classList.remove("hidden");
     $("imgDrop").classList.remove("hidden");
     $("oldDrop").classList.remove("hidden");
+    $("ekDrop").classList.remove("hidden");
     if (selectedDataFiles.length) $("dataClear").classList.remove("hidden");
     if (selectedImages.length) $("imgClear").classList.remove("hidden");
     if (selectedOldFiles.length) $("oldClear").classList.remove("hidden");
+    if (selectedEk.length) $("ekClear").classList.remove("hidden");
     $("startBtn").querySelector("span").textContent = "Eksikleri Yükle";
     renderProgRows();
     refreshStart();
     const ilk = hatalar[0];
-    const kutu = $((ilk.area === "img" ? "img" : ilk.area === "prog" ? "prog" : ilk.area === "old" ? "old" : "data") + "Err");
+    const kutu = $((ilk.area === "img" ? "img" : ilk.area === "prog" ? "prog" : ilk.area === "old" ? "old" : ilk.area === "ek" ? "ek" : "data") + "Err");
     if (kutu && kutu.scrollIntoView) kutu.scrollIntoView({ behavior: "smooth", block: "center" });
     return;
   }
@@ -2067,6 +2226,50 @@ async function uploadProgram(onceki) {
   $("progPct").textContent = p + "%";
   $("progStat").textContent = uploaded + " / " + items.length + " dosya · " + fmtBytes(done);
   await reportProgram(items.length, total, uploaded, done);
+  if (hatalar.length > 0) { badge.textContent = "Eksik"; badge.className = "status-badge err"; }
+  else { badge.textContent = "Yüklendi"; badge.className = "status-badge done"; }
+  return hatalar;
+}
+
+async function uploadEk(onceki) {
+  const items = selectedEk;
+  const total = ekTotalBytes;
+  const badge = $("ekBadge");
+  badge.hidden = false; badge.textContent = "Yükleniyor"; badge.className = "status-badge uploading";
+  $("ekProgress").classList.remove("hidden");
+
+  let uploaded = 0, done = 0;
+  const hatalar = [];
+  for (const x of items) {
+    // Sunucuda aynı yol ve boyutta duruyorsa (önceki denemede yüklenmiş) atla
+    if (onceki && onceki.get(sunucuYolu(x.rel)) === x.file.size) {
+      uploaded++; done += x.file.size; totalUpdate("ek", done);
+    } else {
+      const neden = await okunabilirMi(x.file);
+      if (neden) hatalar.push({ area: "ek", name: x.rel, size: x.file.size, reason: neden });
+      else {
+        const fd = new FormData(); fd.append("relPath", x.rel); fd.append("file", x.file);
+        try {
+          await xhrUpload("/api/upload/" + TOKEN + "/ek", fd, (p, loaded) => {
+            const cur = done + (loaded || 0);
+            const pc = total > 0 ? Math.round((cur / total) * 100) : 0;
+            $("ekBar").style.width = pc + "%";
+            $("ekPct").textContent = pc + "%";
+            totalUpdate("ek", cur);
+          });
+          uploaded++; done += x.file.size;
+        } catch (err) {
+          hatalar.push({ area: "ek", name: x.rel, size: x.file.size, reason: hataNedeni(err, x.file) });
+          console.error("ek upload failed", x.rel, err);
+        }
+      }
+    }
+    const pc = total > 0 ? Math.round((done / total) * 100) : 100;
+    $("ekBar").style.width = pc + "%";
+    $("ekPct").textContent = pc + "%";
+    totalUpdate("ek", done);
+    $("ekStat").textContent = uploaded + " / " + items.length + " dosya · " + fmtBytes(done) + " / " + fmtBytes(total);
+  }
   if (hatalar.length > 0) { badge.textContent = "Eksik"; badge.className = "status-badge err"; }
   else { badge.textContent = "Yüklendi"; badge.className = "status-badge done"; }
   return hatalar;
@@ -2308,7 +2511,21 @@ async function startPushJob(token) {
     await withCifsMount(sess.rdpServerIp, "C$", sess.rdpUsername, sess.rdpPassword, async (mnt) => {
       await copyTreeRecursive(stagingProgram, join(mnt, "MUSTERI", sess.companyId, "Aktarim"))
     })
-    stmts.updatePush.run({ token, progress: 98, stage: "program", error: null, status: "pushing" })
+    stmts.updatePush.run({ token, progress: 96, stage: "program", error: null, status: "pushing" })
+  }
+
+  // ── 4b) Ek dosyalar → aynı terminal C$\MUSTERI\{firmaId}\Aktarim\Ek Dosyalar (klasör yapısıyla) ──
+  const stagingEk = join(STAGING_ROOT, token, "ek")
+  const hasEk = await safeReadDir(stagingEk)
+  if (hasEk.length > 0) {
+    if (!sess.rdpServerIp || !sess.rdpUsername || !sess.rdpPassword) {
+      throw new Error("Terminal sunucusu credential'ları eksik")
+    }
+    stmts.updatePush.run({ token, progress: 97, stage: "ek", error: null, status: "pushing" })
+    await withCifsMount(sess.rdpServerIp, "C$", sess.rdpUsername, sess.rdpPassword, async (mnt) => {
+      await copyTreeRecursive(stagingEk, join(mnt, "MUSTERI", sess.companyId, "Aktarim", "Ek Dosyalar"))
+    })
+    stmts.updatePush.run({ token, progress: 98, stage: "ek", error: null, status: "pushing" })
   }
 
   // ── 5) Bitir ──
