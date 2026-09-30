@@ -5,11 +5,12 @@
  * docs/aktarim2/PLAN.md. Durum servisin SQLite'ında; Hub yalnız admin arayüzü.
  *
  * Env:
- *   AKTARIM2_SERVICE_URL  — varsayılan http://10.15.2.6:5100
+ *   AKTARIM2_SERVICE_URL  — varsayılan https://aktarim.pusulanet.net/v2 (nginx → 127.0.0.1:5100;
+ *                           Hub eski servise de böyle ulaşıyor, 10.15.2.6'da 5000/5100 dışa kapalı)
  *   TRANSFER_SERVICE_KEY  — eski servisle aynı ortak anahtar
  */
 
-const BASE = process.env.AKTARIM2_SERVICE_URL ?? "http://10.15.2.6:5100"
+const BASE = process.env.AKTARIM2_SERVICE_URL ?? "https://aktarim.pusulanet.net/v2"
 const KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
 
 export type Aktarim2Durum =

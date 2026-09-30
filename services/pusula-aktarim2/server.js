@@ -19,13 +19,22 @@
  *     POST   /api/giris                       { kod, surum, makine } → { token, oturum }
  *     GET    /api/oturum                      (Bearer)
  *     POST   /api/kesif                       (Bearer) keşif raporu
+ *     GET    /api/dosyalar                    (Bearer) yüklenen/yarım dosyalar
+ *     POST   /api/dosya                       (Bearer) { tur, yol, boyut, sha256, meta } → { id, parcaBoyutu, alinan[] }
+ *     PUT    /api/dosya/:id/parca/:no         (Bearer) octet-stream, X-Parca-Sha256
+ *     POST   /api/dosya/:id/bitir             (Bearer) tüm parçalar geldi mi + dosya SHA256
+ *
+ * Parça parça yükleme: istemci kopunca /api/dosya'yı yeniden çağırır, alınan
+ * parçaları öğrenir, yalnız eksikleri gönderir. Parçalar dosyaya doğrudan kendi
+ * konumuna yazılır (birleştirme adımı yok).
  */
 
 import Fastify from "fastify"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
-import { dirname, join } from "path"
-import { mkdir } from "fs/promises"
+import { dirname, join, normalize } from "path"
+import { mkdir, open, rm } from "fs/promises"
+import { createReadStream } from "fs"
 import { randomBytes, createHash, timingSafeEqual } from "crypto"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -73,6 +82,26 @@ db.exec(`
     olusturma  TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_tokenlar_oturum ON tokenlar(oturumId);
+  CREATE TABLE IF NOT EXISTS dosyalar (
+    id           TEXT PRIMARY KEY,
+    oturumId     TEXT NOT NULL REFERENCES oturumlar(id) ON DELETE CASCADE,
+    tur          TEXT NOT NULL,          -- veritabani | resim | eski | program | ek
+    yol          TEXT NOT NULL,          -- tur klasörüne göre göreli yol (ör. 4022_KOLN.bak)
+    boyut        INTEGER NOT NULL,
+    sha256       TEXT NOT NULL,
+    parcaBoyutu  INTEGER NOT NULL,
+    parcaSayisi  INTEGER NOT NULL,
+    durum        TEXT NOT NULL DEFAULT 'yukleniyor',  -- yukleniyor | tamam | hata
+    meta         TEXT,                   -- JSON (veritabanı adı, sıkıştırma…)
+    olusturma    TEXT NOT NULL DEFAULT (datetime('now')),
+    bitis        TEXT,
+    UNIQUE (oturumId, tur, yol)
+  );
+  CREATE TABLE IF NOT EXISTS parcalar (
+    dosyaId TEXT NOT NULL REFERENCES dosyalar(id) ON DELETE CASCADE,
+    no      INTEGER NOT NULL,
+    PRIMARY KEY (dosyaId, no)
+  );
 `)
 db.pragma("foreign_keys = ON")
 
@@ -90,6 +119,38 @@ const sql = {
   durum: db.prepare(`UPDATE oturumlar SET durum = ? WHERE id = ?`),
   kesifYaz: db.prepare(`UPDATE oturumlar SET kesif = ?, kesifZamani = datetime('now') WHERE id = ?`),
   sil: db.prepare(`DELETE FROM oturumlar WHERE id = ?`),
+  dosyaBul: db.prepare(`SELECT * FROM dosyalar WHERE oturumId = ? AND tur = ? AND yol = ?`),
+  dosyaById: db.prepare(`SELECT * FROM dosyalar WHERE id = ? AND oturumId = ?`),
+  dosyaEkle: db.prepare(`INSERT INTO dosyalar (id, oturumId, tur, yol, boyut, sha256, parcaBoyutu, parcaSayisi, meta)
+                         VALUES (@id, @oturumId, @tur, @yol, @boyut, @sha256, @parcaBoyutu, @parcaSayisi, @meta)`),
+  dosyaSil: db.prepare(`DELETE FROM dosyalar WHERE id = ?`),
+  dosyaDurum: db.prepare(`UPDATE dosyalar SET durum = ?, bitis = CASE WHEN ? = 'tamam' THEN datetime('now') ELSE bitis END WHERE id = ?`),
+  dosyalar: db.prepare(`SELECT d.id, d.tur, d.yol, d.boyut, d.durum, d.parcaSayisi, d.meta,
+                               (SELECT COUNT(*) FROM parcalar p WHERE p.dosyaId = d.id) AS alinanSayi
+                        FROM dosyalar d WHERE d.oturumId = ? ORDER BY d.olusturma`),
+  parcaEkle: db.prepare(`INSERT OR IGNORE INTO parcalar (dosyaId, no) VALUES (?, ?)`),
+  parcalar: db.prepare(`SELECT no FROM parcalar WHERE dosyaId = ? ORDER BY no`),
+  parcaSay: db.prepare(`SELECT COUNT(*) AS n FROM parcalar WHERE dosyaId = ?`),
+}
+
+const TURLER = new Set(["veritabani", "resim", "eski", "program", "ek"])
+/** 8 MB — tarayıcı yerine .NET HttpClient; kopunca en fazla 8 MB tekrar gider. */
+const PARCA_BOYUTU = 8 * 1024 * 1024
+
+/** Oturumun staging klasöründe güvenli yol (dışarı çıkamaz). */
+function stagingYolu(oturumId, tur, yol) {
+  const temiz = String(yol ?? "").replace(/\\/g, "/").replace(/^\/+/, "")
+  if (!temiz || temiz.length > 500 || temiz.split("/").some((p) => p === "" || p === "." || p === "..")) return null
+  const n = normalize(temiz)
+  if (n.startsWith("..") || n.startsWith("/") || /^[a-zA-Z]:/.test(n)) return null
+  return join(STAGING_ROOT, oturumId, tur, n)
+}
+
+function dosyaSha256(yol) {
+  return new Promise((resolve, reject) => {
+    const h = createHash("sha256")
+    createReadStream(yol).on("data", (d) => h.update(d)).on("end", () => resolve(h.digest("hex"))).on("error", reject)
+  })
 }
 
 // ── Yardımcılar ──
@@ -208,6 +269,8 @@ fastify.post("/admin/oturumlar/:id/iptal", async (req, reply) => {
 fastify.delete("/admin/oturumlar/:id", async (req, reply) => {
   if (!yonetici(req, reply)) return
   sql.sil.run(req.params.id)
+  // Yüklenmiş dosyalar da gitsin (disk dolmasın — eski serviste yaşandı).
+  if (/^[0-9a-f]{16}$/.test(req.params.id)) await rm(join(STAGING_ROOT, req.params.id), { recursive: true, force: true })
   return { tamam: true }
 })
 
@@ -262,6 +325,109 @@ fastify.post("/api/kesif", async (req, reply) => {
   const rapor = req.body
   if (!rapor || typeof rapor !== "object") return reply.code(400).send({ hata: "Rapor boş" })
   sql.kesifYaz.run(JSON.stringify(rapor), o.id)
+  return { tamam: true }
+})
+
+// ── Parça parça yükleme ──
+// Parça gövdesi ham bayt; genel 10 MB sınırı yerine parça boyutu + pay.
+fastify.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bodyLimit: PARCA_BOYUTU + 1024 },
+  (req, govde, bitti) => bitti(null, govde))
+
+/** Yükleme kabul edilir mi — aktarım başlamışsa dosya değişmesin. */
+function yuklemeAcik(o, reply) {
+  if (["aktariliyor", "tamamlandi"].includes(o.durum)) {
+    reply.code(409).send({ hata: "Aktarım başladı; yeni dosya yüklenemez." })
+    return false
+  }
+  return true
+}
+
+fastify.get("/api/dosyalar", async (req, reply) => {
+  const o = istemciOturumu(req, reply)
+  if (!o) return
+  return sql.dosyalar.all(o.id).map((d) => ({ ...d, meta: d.meta ? JSON.parse(d.meta) : null }))
+})
+
+fastify.post("/api/dosya", async (req, reply) => {
+  const o = istemciOturumu(req, reply)
+  if (!o || !yuklemeAcik(o, reply)) return
+  const b = req.body ?? {}
+  const tur = String(b.tur ?? "")
+  const boyut = Number(b.boyut)
+  const sha = String(b.sha256 ?? "").toLowerCase()
+  if (!TURLER.has(tur)) return reply.code(400).send({ hata: "Geçersiz dosya türü" })
+  if (!Number.isSafeInteger(boyut) || boyut < 0) return reply.code(400).send({ hata: "Geçersiz boyut" })
+  if (!/^[0-9a-f]{64}$/.test(sha)) return reply.code(400).send({ hata: "Geçersiz SHA256" })
+  const hedef = stagingYolu(o.id, tur, b.yol)
+  if (!hedef) return reply.code(400).send({ hata: "Geçersiz dosya yolu" })
+  const yol = String(b.yol).replace(/\\/g, "/")
+
+  let d = sql.dosyaBul.get(o.id, tur, yol)
+  // Aynı yolda farklı içerik (yedek yeniden alındı) → eskisini at, baştan.
+  if (d && (d.boyut !== boyut || d.sha256 !== sha)) {
+    sql.dosyaSil.run(d.id)
+    d = null
+  }
+  if (!d) {
+    const id = randomBytes(8).toString("hex")
+    sql.dosyaEkle.run({
+      id, oturumId: o.id, tur, yol, boyut, sha256: sha,
+      parcaBoyutu: PARCA_BOYUTU, parcaSayisi: Math.max(1, Math.ceil(boyut / PARCA_BOYUTU)),
+      meta: b.meta ? JSON.stringify(b.meta) : null,
+    })
+    await mkdir(dirname(hedef), { recursive: true })
+    // Tam boyutta boş dosya — parçalar kendi konumlarına yazılır.
+    const f = await open(hedef, "w")
+    try { await f.truncate(boyut) } finally { await f.close() }
+    d = sql.dosyaById.get(id, o.id)
+    if (o.durum === "bagli" || o.durum === "bekliyor") sql.durum.run("yukleniyor", o.id)
+  }
+  return {
+    id: d.id, durum: d.durum, parcaBoyutu: d.parcaBoyutu, parcaSayisi: d.parcaSayisi,
+    alinan: d.durum === "tamam" ? [] : sql.parcalar.all(d.id).map((p) => p.no),
+  }
+})
+
+fastify.put("/api/dosya/:id/parca/:no", async (req, reply) => {
+  const o = istemciOturumu(req, reply)
+  if (!o || !yuklemeAcik(o, reply)) return
+  const d = sql.dosyaById.get(req.params.id, o.id)
+  if (!d) return reply.code(404).send({ hata: "Dosya bulunamadı; yüklemeyi yeniden başlatın." })
+  if (d.durum === "tamam") return { tamam: true }
+  const no = Number(req.params.no)
+  if (!Number.isInteger(no) || no < 0 || no >= d.parcaSayisi) return reply.code(400).send({ hata: "Geçersiz parça" })
+  const govde = req.body
+  if (!Buffer.isBuffer(govde)) return reply.code(400).send({ hata: "Parça boş (application/octet-stream bekleniyor)" })
+  const beklenen = no === d.parcaSayisi - 1 ? d.boyut - no * d.parcaBoyutu : d.parcaBoyutu
+  if (govde.length !== beklenen) return reply.code(400).send({ hata: `Parça boyutu yanlış (${govde.length} / ${beklenen})` })
+  const sha = createHash("sha256").update(govde).digest("hex")
+  if (sha !== String(req.headers["x-parca-sha256"] ?? "").toLowerCase()) {
+    return reply.code(422).send({ hata: "Parça bozuk geldi (SHA256 tutmadı), yeniden gönderin." })
+  }
+  const hedef = stagingYolu(o.id, d.tur, d.yol)
+  const f = await open(hedef, "r+")
+  try { await f.write(govde, 0, govde.length, no * d.parcaBoyutu) } finally { await f.close() }
+  sql.parcaEkle.run(d.id, no)
+  return { tamam: true }
+})
+
+fastify.post("/api/dosya/:id/bitir", async (req, reply) => {
+  const o = istemciOturumu(req, reply)
+  if (!o) return
+  const d = sql.dosyaById.get(req.params.id, o.id)
+  if (!d) return reply.code(404).send({ hata: "Dosya bulunamadı" })
+  if (d.durum === "tamam") return { tamam: true }
+  const gelen = sql.parcaSay.get(d.id).n
+  if (gelen !== d.parcaSayisi) return reply.code(409).send({ hata: `Eksik parça var (${gelen} / ${d.parcaSayisi})` })
+  const sha = await dosyaSha256(stagingYolu(o.id, d.tur, d.yol))
+  if (sha !== d.sha256) {
+    // Parçalar tek tek doğruydu ama bütün tutmuyor → baştan (çok düşük olasılık).
+    db.prepare("DELETE FROM parcalar WHERE dosyaId = ?").run(d.id)
+    sql.dosyaDurum.run("hata", "hata", d.id)
+    return reply.code(422).send({ hata: "Dosyanın bütünü doğrulanamadı; yeniden yüklenecek." })
+  }
+  sql.dosyaDurum.run("tamam", "tamam", d.id)
+  req.log.info({ oturum: o.id, firma: o.firmaId, dosya: d.yol, boyut: d.boyut }, "dosya tamam")
   return { tamam: true }
 })
 
