@@ -64,7 +64,7 @@ db.exec(`
     firmaAdi     TEXT NOT NULL,
     hedefler     TEXT,                   -- JSON: { sql:{ip,kullanici,sifre}, depo:{…}, rdp:{…} } — istemciye GİTMEZ
     programlar   TEXT,                   -- JSON: [{ name, exeName, paramFileName }]
-    durum        TEXT NOT NULL DEFAULT 'bekliyor',   -- bekliyor | bagli | yukleniyor | aktariliyor | tamamlandi | hata | iptal | suresi_doldu
+    durum        TEXT NOT NULL DEFAULT 'bekliyor',   -- bekliyor | bagli | yukleniyor | yuklendi | aktariliyor | tamamlandi | hata | iptal | suresi_doldu
     notlar       TEXT,
     olusturan    TEXT,
     olusturma    TEXT NOT NULL DEFAULT (datetime('now')),
@@ -428,6 +428,19 @@ fastify.post("/api/dosya/:id/bitir", async (req, reply) => {
   }
   sql.dosyaDurum.run("tamam", "tamam", d.id)
   req.log.info({ oturum: o.id, firma: o.firmaId, dosya: d.yol, boyut: d.boyut }, "dosya tamam")
+  return { tamam: true }
+})
+
+/** İstemci tüm dosyaları yükledi. 3. aşamada burada geri yükleme (RESTORE) başlar. */
+fastify.post("/api/tamamla", async (req, reply) => {
+  const o = istemciOturumu(req, reply)
+  if (!o) return
+  const dosyalar = sql.dosyalar.all(o.id)
+  if (dosyalar.length === 0) return reply.code(409).send({ hata: "Yüklenmiş dosya yok." })
+  const eksik = dosyalar.filter((d) => d.durum !== "tamam").map((d) => d.yol)
+  if (eksik.length) return reply.code(409).send({ hata: "Tamamlanmamış dosya var: " + eksik.join(", ") })
+  if (!["aktariliyor", "tamamlandi"].includes(o.durum)) sql.durum.run("yuklendi", o.id)
+  req.log.info({ oturum: o.id, firma: o.firmaId, dosya: dosyalar.length }, "yukleme tamamlandi")
   return { tamam: true }
 })
 

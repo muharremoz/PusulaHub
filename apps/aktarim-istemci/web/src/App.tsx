@@ -7,6 +7,7 @@ import { GirisEkrani } from "@/ekranlar/giris";
 import { SqlGirisEkrani } from "@/ekranlar/baglanti";
 import { RaporEkrani } from "@/ekranlar/rapor";
 import { KapatmaOnayi } from "@/ekranlar/kapatma-onayi";
+import { AktarimEkrani } from "@/ekranlar/aktarim";
 
 export function App() {
   const [durum, setDurum] = useState<Durum | null>(null);
@@ -28,7 +29,8 @@ export function App() {
   }, [tazele]);
 
   // Arka planda süren adımlarda (SQL arama, tarama) sık yokla; diğerlerinde seyrek.
-  const suruyor = durum?.asama === "sqlAraniyor" || durum?.asama === "kesif";
+  const suruyor =
+    durum?.asama === "acilis" || durum?.asama === "sqlAraniyor" || durum?.asama === "kesif" || !!durum?.aktarim?.suruyor;
   useEffect(() => {
     if (!anahtarVar()) return;
     const id = window.setInterval(() => void tazele(), suruyor ? 700 : 4000);
@@ -49,6 +51,10 @@ function Icerik({ durum, setDurum, hata }: { durum: Durum | null; setDurum: (d: 
   if (!durum) return <Bekleme baslik="Açılıyor…" alt={hata} />;
   const p = { durum, setDurum };
   switch (durum.asama) {
+    case "acilis":
+      return <Bekleme baslik="Önceki aktarım sürdürülüyor" alt="Pusula'ya bağlanılıyor…" />;
+    case "aktarim":
+      return durum.aktarim ? <AktarimEkrani {...p} /> : <Bekleme baslik="Hazırlanıyor…" />;
     case "giris":
       return <GirisEkrani {...p} />;
     case "sqlAraniyor":

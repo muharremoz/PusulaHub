@@ -39,6 +39,8 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
+    <!-- ProtectedData (DPAPI) — oturum tokenı yalnız bu Windows kullanıcısına açık saklanır -->
+    <Reference Include="System.Security" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
     <PackageReference Include="Fody" Version="6.8.1" PrivateAssets="all" />

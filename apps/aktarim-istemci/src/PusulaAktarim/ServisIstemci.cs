@@ -28,6 +28,8 @@ namespace PusulaAktarim
             Assembly.GetExecutingAssembly().GetName().Version is Version v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
 
         private readonly HttpClient _http;
+        /// <summary>Parçalar için ayrı istemci: zaman aşımını istek başına biz veriyoruz.</summary>
+        private readonly HttpClient _parcaHttp;
         private string _token;
 
         public string Adres { get; }
@@ -40,6 +42,8 @@ namespace PusulaAktarim
             Adres = adres.EndsWith("/") ? adres : adres + "/";
             _http = new HttpClient { BaseAddress = new Uri(Adres), Timeout = TimeSpan.FromSeconds(60) };
             _http.DefaultRequestHeaders.UserAgent.ParseAdd("PusulaAktarim/" + Surum);
+            _parcaHttp = new HttpClient { BaseAddress = new Uri(Adres), Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+            _parcaHttp.DefaultRequestHeaders.UserAgent.ParseAdd("PusulaAktarim/" + Surum);
         }
 
         public async Task<JObject> Giris(string kod, string makine)
@@ -51,6 +55,52 @@ namespace PusulaAktarim
 
         public Task<JObject> Oturum() => Gonder(HttpMethod.Get, "api/oturum", null);
         public Task<JObject> KesifGonder(object rapor) => Gonder(HttpMethod.Post, "api/kesif", rapor);
+
+        /// <summary>Kayıtlı token (DPAPI) ile oturumu sürdür; geçersizse null.</summary>
+        public string Token { get => _token; set => _token = value; }
+
+        /// <summary>Dosya yüklemesini başlatır/sürdürür → { id, parcaBoyutu, parcaSayisi, alinan[] }.</summary>
+        public Task<JObject> DosyaBaslat(string tur, string yol, long boyut, string sha256, object meta) =>
+            Gonder(HttpMethod.Post, "api/dosya", new { tur, yol, boyut, sha256, meta });
+
+        public Task<JObject> Tamamla() => Gonder(HttpMethod.Post, "api/tamamla", new { });
+
+        public Task<JObject> DosyaBitir(string id) => Gonder(HttpMethod.Post, "api/dosya/" + id + "/bitir", new { });
+
+        /// <summary>Tek parça — ham bayt, SHA256 başlıkta. Parça başına uzun zaman aşımı (yavaş hat).</summary>
+        public async Task ParcaGonder(string id, int no, byte[] veri, int uzunluk, System.Threading.CancellationToken iptal)
+        {
+            string sha;
+            using (var h = System.Security.Cryptography.SHA256.Create())
+                sha = BitConverter.ToString(h.ComputeHash(veri, 0, uzunluk)).Replace("-", "").ToLowerInvariant();
+            using (var istek = new HttpRequestMessage(HttpMethod.Put, "api/dosya/" + id + "/parca/" + no))
+            using (var zaman = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(iptal))
+            {
+                zaman.CancelAfter(TimeSpan.FromMinutes(10));
+                istek.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+                istek.Headers.Add("X-Parca-Sha256", sha);
+                istek.Content = new ByteArrayContent(veri, 0, uzunluk);
+                istek.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                HttpResponseMessage yanit;
+                try { yanit = await _parcaHttp.SendAsync(istek, zaman.Token).ConfigureAwait(false); }
+                catch (OperationCanceledException) when (!iptal.IsCancellationRequested)
+                {
+                    throw new ServisHatasi("Parça gönderimi zaman aşımına uğradı.", 0);
+                }
+                catch (Exception e) when (!(e is OperationCanceledException))
+                {
+                    throw new ServisHatasi("Bağlantı koptu (" + e.GetBaseException().Message + ")", 0);
+                }
+                using (yanit)
+                {
+                    if (yanit.IsSuccessStatusCode) return;
+                    var metin = await yanit.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    string mesaj = null;
+                    try { mesaj = JObject.Parse(metin).Value<string>("hata"); } catch { }
+                    throw new ServisHatasi(mesaj ?? $"Sunucu hatası ({(int)yanit.StatusCode})", (int)yanit.StatusCode);
+                }
+            }
+        }
 
         private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde)
         {

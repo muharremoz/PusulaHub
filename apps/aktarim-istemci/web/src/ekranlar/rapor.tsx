@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Database, FolderOpen, Image, Loader2, RefreshCw, Server, XCircle } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Database, FolderOpen, Image, Loader2, RefreshCw, Server, XCircle } from "lucide-react";
 import { api, type Durum, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { mb } from "./ortak";
 
@@ -16,10 +17,37 @@ const TUR_ETIKET: Record<Veritabani["tur"], string> = {
   sirket: "Şirket tanımları",
 };
 
-/** Keşif sonucu. 2. aşamada buraya seçim + "Aktarımı başlat" gelecek. */
+/** Keşif sonucu + aktarılacak veritabanlarının seçimi. Varsayılan: firma ve transfer dataları. */
 export function RaporEkrani({ durum, setDurum }: P) {
   const r = durum.kesif;
   const [bekle, setBekle] = useState(false);
+  const [secili, setSecili] = useState<Set<string>>(
+    () => new Set((r?.veritabanlari ?? []).filter((v) => (v.tur === "firma" || v.tur === "transfer") && v.durum === "ONLINE").map((v) => v.ad)),
+  );
+  const [basliyor, setBasliyor] = useState(false);
+  const [hata, setHata] = useState<string | null>(null);
+  const toplamMb = useMemo(
+    () => (r?.veritabanlari ?? []).filter((v) => secili.has(v.ad)).reduce((t, v) => t + v.veriMb, 0),
+    [r, secili],
+  );
+  const degistir = (ad: string, acik: boolean) =>
+    setSecili((s) => {
+      const y = new Set(s);
+      if (acik) y.add(ad);
+      else y.delete(ad);
+      return y;
+    });
+  const baslat = async () => {
+    setBasliyor(true);
+    setHata(null);
+    try {
+      setDurum(await api<Durum>("/aktarim/baslat", { veritabanlari: [...secili] }));
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      setBasliyor(false);
+    }
+  };
 
   const yenile = async () => {
     setBekle(true);
@@ -33,7 +61,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const gruplar: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
 
   return (
-    <div className="min-h-svh bg-muted/40">
+    <div className="min-h-svh bg-muted/40 pb-20">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
         <div className="min-w-0 flex-1">
           <div className="text-xs text-muted-foreground">Aktarım · {durum.oturum?.firmaId}</div>
@@ -78,6 +106,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
               <Table>
                 <TableHeader>
                   <TableRow className="text-[10px] uppercase tracking-wider">
+                    <TableHead className="w-10 pl-4" />
                     <TableHead className="px-4">Veritabanı</TableHead>
                     <TableHead className="px-4">Şirket</TableHead>
                     <TableHead className="px-4">Program</TableHead>
@@ -92,12 +121,20 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     if (!satirlar.length) return [];
                     return [
                       <TableRow key={g} className="bg-muted/40 hover:bg-muted/40">
-                        <TableCell colSpan={6} className="px-4 py-1 text-xs font-medium text-muted-foreground">
+                        <TableCell colSpan={7} className="px-4 py-1 text-xs font-medium text-muted-foreground">
                           {TUR_ETIKET[g]} · {satirlar.length}
                         </TableCell>
                       </TableRow>,
                       ...satirlar.map((v) => (
-                        <TableRow key={v.ad}>
+                        <TableRow key={v.ad} data-state={secili.has(v.ad) ? "selected" : undefined}>
+                          <TableCell className="pl-4">
+                            <Checkbox
+                              checked={secili.has(v.ad)}
+                              disabled={v.durum !== "ONLINE"}
+                              onCheckedChange={(c) => degistir(v.ad, c === true)}
+                              aria-label={v.ad + " aktarılsın"}
+                            />
+                          </TableCell>
                           <TableCell className="px-4 font-mono">
                             {v.ad}
                             {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-2">{v.durum}</Badge>}
@@ -143,6 +180,26 @@ export function RaporEkrani({ durum, setDurum }: P) {
           </>
         )}
       </main>
+
+      {r && (
+        <footer className="fixed inset-x-0 bottom-0 border-t bg-card/95 backdrop-blur">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
+            <div className="min-w-0 flex-1 text-sm">
+              {hata ? (
+                <span className="text-destructive">{hata}</span>
+              ) : (
+                <>
+                  <span className="font-medium">{secili.size} veritabanı</span>
+                  <span className="text-muted-foreground"> · {mb(toplamMb)} veri{r.sql.sikistirmaVar ? " · sıkıştırılarak yedeklenir" : ""}</span>
+                </>
+              )}
+            </div>
+            <Button disabled={basliyor || secili.size === 0} onClick={() => void baslat()}>
+              {basliyor ? <Loader2 className="animate-spin" /> : null} Aktarımı başlat <ArrowRight />
+            </Button>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }

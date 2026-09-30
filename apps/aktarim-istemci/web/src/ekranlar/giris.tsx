@@ -39,6 +39,7 @@ export function GirisEkrani({ durum, setDurum }: P) {
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Pusula Aktarım</h1>
           <p className="text-sm text-muted-foreground">Pusula'nın size verdiği aktarım kodunu girin.</p>
+          {durum.mesaj && <p className="text-sm text-amber-700 dark:text-amber-400">{durum.mesaj}</p>}
         </div>
 
         <div className="flex flex-col items-center gap-4">

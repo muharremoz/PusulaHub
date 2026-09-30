@@ -36,6 +36,7 @@ const DURUM: Record<Aktarim2Durum, { etiket: string; sinif: string }> = {
   bekliyor:     { etiket: "Kod bekliyor",   sinif: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
   bagli:        { etiket: "Bağlandı",       sinif: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
   yukleniyor:   { etiket: "Yükleniyor",     sinif: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
+  yuklendi:     { etiket: "Yüklendi",       sinif: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
   aktariliyor:  { etiket: "Aktarılıyor",    sinif: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
   tamamlandi:   { etiket: "Tamamlandı",     sinif: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
   hata:         { etiket: "Hata",           sinif: "bg-red-500/15 text-red-700 dark:text-red-400" },

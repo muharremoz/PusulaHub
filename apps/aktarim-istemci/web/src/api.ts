@@ -69,7 +69,29 @@ export function nabziBaslat(): () => void {
 
 // ---------------------------------------------------------------- tipler
 
-export type Asama = "giris" | "sqlAraniyor" | "sqlGiris" | "kesif" | "hazir";
+export type Asama = "acilis" | "giris" | "sqlAraniyor" | "sqlGiris" | "kesif" | "hazir" | "aktarim";
+
+export type IsOgesi = {
+  tur: string;
+  ad: string;
+  yol: string;
+  durum: "bekliyor" | "yedekleniyor" | "hazirlaniyor" | "yukleniyor" | "tamam" | "hata";
+  yuzde: number;
+  boyut: number;
+  gonderilen: number;
+  hata: string | null;
+  veriMb: number;
+};
+
+export type Aktarim = {
+  ogeler: IsOgesi[];
+  sikistir: boolean;
+  suruyor: boolean;
+  bitti: boolean;
+  bilgi: string | null;
+  bildirildi: boolean;
+  yedekKlasoru: string;
+};
 
 export type Oturum = {
   id: string;
@@ -128,4 +150,5 @@ export type Durum = {
   kesifHatasi: string | null;
   kesifGonderildi: boolean;
   mesaj: string | null;
+  aktarim: Aktarim | null;
 };

@@ -14,7 +14,7 @@ const BASE = process.env.AKTARIM2_SERVICE_URL ?? "https://aktarim.pusulanet.net/
 const KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
 
 export type Aktarim2Durum =
-  | "bekliyor" | "bagli" | "yukleniyor" | "aktariliyor" | "tamamlandi" | "hata" | "iptal" | "suresi_doldu"
+  | "bekliyor" | "bagli" | "yukleniyor" | "yuklendi" | "aktariliyor" | "tamamlandi" | "hata" | "iptal" | "suresi_doldu"
 
 export interface Aktarim2Oturum {
   id: string

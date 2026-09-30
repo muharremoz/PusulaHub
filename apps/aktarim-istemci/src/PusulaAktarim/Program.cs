@@ -108,6 +108,10 @@ namespace PusulaAktarim
                 case "POST /giris": return _uygulama.Giris(i.Metin("kod"));
                 case "POST /sql/elle": return _uygulama.ElleBaglan(i.Metin("sunucu"), i.Metin("kullanici"), i.Metin("sifre"));
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
+                case "POST /aktarim/baslat":
+                    return _uygulama.AktarimBaslat(i.Govde?["veritabanlari"]?.ToObject<string[]>());
+                case "POST /aktarim/duraklat": return _uygulama.Duraklat();
+                case "POST /aktarim/devam": return _uygulama.Devam();
                 case "POST /cikis":
                     _ = Task.Run(async () => { await Task.Delay(300); Kapat(); });
                     return Task.FromResult<object>(new { tamam = true });
@@ -128,6 +132,7 @@ namespace PusulaAktarim
         private static void Kapat()
         {
             if (Interlocked.Exchange(ref _kapaniyor, 1) == 1) return;
+            try { _uygulama?.Kapat(); } catch { }
             try { _sunucu?.Durdur(); } catch { }
             if (_pencere != null && !_pencere.IsDisposed)
             {
