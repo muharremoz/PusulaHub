@@ -1,0 +1,4 @@
+node_modules/
+aktarim2.db*
+staging/
+.env.dev
