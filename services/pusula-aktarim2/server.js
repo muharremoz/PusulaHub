@@ -33,9 +33,10 @@ import Fastify from "fastify"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
 import { dirname, join, normalize } from "path"
-import { mkdir, open, rm } from "fs/promises"
+import { mkdir, open, rm, stat, readdir, writeFile, rename } from "fs/promises"
 import { createReadStream } from "fs"
 import { randomBytes, createHash, timingSafeEqual } from "crypto"
+import { spawn } from "child_process"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -104,12 +105,19 @@ db.exec(`
   );
 `)
 db.pragma("foreign_keys = ON")
+// Sonradan eklenen sütunlar (tablo zaten varsa)
+for (const [ad, tip] of [["asama", "TEXT"], ["ilerleme", "INTEGER NOT NULL DEFAULT 0"], ["tamamlanma", "TEXT"]]) {
+  if (!db.prepare("PRAGMA table_info(oturumlar)").all().some((c) => c.name === ad)) db.exec(`ALTER TABLE oturumlar ADD COLUMN ${ad} ${tip}`)
+}
 
 const sql = {
   ekle: db.prepare(`INSERT INTO oturumlar (id, kodOzet, firmaId, firmaAdi, hedefler, programlar, notlar, olusturan, bitis)
                     VALUES (@id, @kodOzet, @firmaId, @firmaAdi, @hedefler, @programlar, @notlar, @olusturan, @bitis)`),
-  liste: db.prepare(`SELECT id, firmaId, firmaAdi, durum, notlar, olusturan, olusturma, bitis, sonGiris, makine,
-                            istemciSurum, kesifZamani, hata FROM oturumlar ORDER BY olusturma DESC LIMIT 500`),
+  liste: db.prepare(`SELECT o.id, o.firmaId, o.firmaAdi, o.durum, o.notlar, o.olusturan, o.olusturma, o.bitis, o.sonGiris, o.makine,
+                            o.istemciSurum, o.kesifZamani, o.hata, o.asama, o.ilerleme, o.tamamlanma,
+                            (SELECT COUNT(*) FROM dosyalar d WHERE d.oturumId = o.id AND d.durum = 'tamam') AS dosyaSayisi,
+                            (SELECT COALESCE(SUM(boyut), 0) FROM dosyalar d WHERE d.oturumId = o.id AND d.durum = 'tamam') AS dosyaBoyutu
+                     FROM oturumlar o ORDER BY o.olusturma DESC LIMIT 500`),
   byId: db.prepare(`SELECT * FROM oturumlar WHERE id = ?`),
   byKod: db.prepare(`SELECT * FROM oturumlar WHERE kodOzet = ?`),
   byToken: db.prepare(`SELECT o.* FROM tokenlar t JOIN oturumlar o ON o.id = t.oturumId WHERE t.ozet = ?`),
@@ -119,6 +127,9 @@ const sql = {
   durum: db.prepare(`UPDATE oturumlar SET durum = ? WHERE id = ?`),
   kesifYaz: db.prepare(`UPDATE oturumlar SET kesif = ?, kesifZamani = datetime('now') WHERE id = ?`),
   sil: db.prepare(`DELETE FROM oturumlar WHERE id = ?`),
+  aktarimDurumu: db.prepare(`UPDATE oturumlar SET durum = @durum, asama = @asama, ilerleme = @ilerleme, hata = @hata,
+                               tamamlanma = CASE WHEN @durum = 'tamamlandi' THEN datetime('now') ELSE tamamlanma END
+                             WHERE id = @id`),
   dosyaBul: db.prepare(`SELECT * FROM dosyalar WHERE oturumId = ? AND tur = ? AND yol = ?`),
   dosyaById: db.prepare(`SELECT * FROM dosyalar WHERE id = ? AND oturumId = ?`),
   dosyaEkle: db.prepare(`INSERT INTO dosyalar (id, oturumId, tur, yol, boyut, sha256, parcaBoyutu, parcaSayisi, meta)
@@ -185,13 +196,25 @@ function istemciGorunumu(o) {
   return {
     id: o.id, firmaId: o.firmaId, firmaAdi: o.firmaAdi, durum: o.durum,
     notlar: o.notlar, bitis: o.bitis, programlar,
+    // Sunucuya taşıma (yuklendi → aktariliyor → tamamlandi | hata) — istemci ekranda gösterir
+    asama: o.asama, ilerleme: o.ilerleme, hata: o.hata,
+    // Hangi alanlar açık: hedef sunucu tanımlı değilse o tür dosya yüklenemez
+    hedefler: hedefDurumu(o),
   }
+}
+
+function hedefleriOku(o) {
+  try { return JSON.parse(o.hedefler || "{}") ?? {} } catch { return {} }
+}
+const hedefTamam = (h) => !!(h && h.ip && h.kullanici && h.sifre)
+function hedefDurumu(o) {
+  const h = hedefleriOku(o)
+  return { sql: hedefTamam(h.sql), depo: hedefTamam(h.depo), rdp: hedefTamam(h.rdp) }
 }
 
 function kullanilabilir(o) {
   if (!o) return "Kod geçersiz."
   if (o.durum === "iptal") return "Bu aktarım iptal edilmiş."
-  if (o.durum === "tamamlandi") return "Bu aktarım tamamlanmış."
   if (new Date(o.bitis.replace(" ", "T") + "Z") < new Date()) {
     if (o.durum !== "suresi_doldu") sql.durum.run("suresi_doldu", o.id)
     return "Bu aktarımın süresi dolmuş."
@@ -335,7 +358,7 @@ fastify.addContentTypeParser("application/octet-stream", { parseAs: "buffer", bo
 
 /** Yükleme kabul edilir mi — aktarım başlamışsa dosya değişmesin. */
 function yuklemeAcik(o, reply) {
-  if (["aktariliyor", "tamamlandi"].includes(o.durum)) {
+  if (["yuklendi", "aktariliyor", "tamamlandi"].includes(o.durum)) {
     reply.code(409).send({ hata: "Aktarım başladı; yeni dosya yüklenemez." })
     return false
   }
@@ -439,12 +462,180 @@ fastify.post("/api/tamamla", async (req, reply) => {
   if (dosyalar.length === 0) return reply.code(409).send({ hata: "Yüklenmiş dosya yok." })
   const eksik = dosyalar.filter((d) => d.durum !== "tamam").map((d) => d.yol)
   if (eksik.length) return reply.code(409).send({ hata: "Tamamlanmamış dosya var: " + eksik.join(", ") })
-  if (!["aktariliyor", "tamamlandi"].includes(o.durum)) sql.durum.run("yuklendi", o.id)
+  if (!["aktariliyor", "tamamlandi"].includes(o.durum)) {
+    sql.durum.run("yuklendi", o.id)
+    aktarimiBaslat(o.id)
+  }
   req.log.info({ oturum: o.id, firma: o.firmaId, dosya: dosyalar.length }, "yukleme tamamlandi")
   return { tamam: true }
 })
 
+/** Hub: taşıma hata verdiyse yeniden dene (yüklenen dosyalar staging'de duruyor). */
+fastify.post("/admin/oturumlar/:id/yeniden", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const o = sql.byId.get(req.params.id)
+  if (!o) return reply.code(404).send({ hata: "bulunamadi" })
+  if (!["hata", "yuklendi"].includes(o.durum)) return reply.code(409).send({ hata: "Yalnız hata veren ya da bekleyen aktarım yeniden denenir." })
+  aktarimiBaslat(o.id)
+  return { tamam: true }
+})
+
+// ─────────────────────────────────────────────────
+// SUNUCUYA TAŞIMA — geri yükleme YOK (sihirbazın işi). Dosyalar eski web
+// aktarımıyla AYNI yerlere bırakılır ki sihirbaz aynı yerden bulsun:
+//   veritabani → SQL   D$\SQLData\{firma}\aktarim
+//   eski       → Depo  D$\Eski Datalar\{firma}   (aynı ad farklı boyut → "ad (2)")
+//   resim      → Depo  Resimler\{firma}          (klasör ağacı korunur)
+//   program    → RDP   C$\MUSTERI\{firma}\Aktarim\{Program}
+//   ek         → RDP   C$\MUSTERI\{firma}\Aktarim\Ek Dosyalar
+// ─────────────────────────────────────────────────
+
+const suruyor = new Set()
+
+function aktarimiBaslat(id) {
+  if (suruyor.has(id)) return
+  suruyor.add(id)
+  aktar(id)
+    .catch((err) => {
+      fastify.log.error({ err: String(err?.message ?? err), oturum: id }, "tasima hatasi")
+      sql.aktarimDurumu.run({ id, durum: "hata", asama: null, ilerleme: 0, hata: String(err?.message ?? err).slice(0, 500) })
+    })
+    .finally(() => suruyor.delete(id))
+}
+
+async function aktar(id) {
+  const o = sql.byId.get(id)
+  if (!o) return
+  const h = hedefleriOku(o)
+  const kok = join(STAGING_ROOT, id)
+  const var_ = async (tur) => (await safeReadDir(join(kok, tur))).length > 0
+  const adimlar = [
+    { tur: "veritabani", hedef: h.sql,  pay: "D$",       yol: (m) => join(m, "SQLData", o.firmaId, "aktarim"), ad: "SQL sunucusu" },
+    { tur: "eski",       hedef: h.depo, pay: "D$",       yol: (m) => join(m, "Eski Datalar", o.firmaId),        ad: "Depo sunucusu", eski: true },
+    { tur: "resim",      hedef: h.depo, pay: "Resimler", yol: (m) => join(m, o.firmaId),                        ad: "Depo sunucusu" },
+    { tur: "program",    hedef: h.rdp,  pay: "C$",       yol: (m) => join(m, "MUSTERI", o.firmaId, "Aktarim"),  ad: "terminal sunucusu" },
+    { tur: "ek",         hedef: h.rdp,  pay: "C$",       yol: (m) => join(m, "MUSTERI", o.firmaId, "Aktarim", "Ek Dosyalar"), ad: "terminal sunucusu" },
+  ]
+  const yapilacak = []
+  for (const a of adimlar) if (await var_(a.tur)) yapilacak.push(a)
+  // Hedefi tanımsız tür varsa hiç başlamadan söyle — yarım taşıma olmasın.
+  const eksik = yapilacak.filter((a) => !hedefTamam(a.hedef)).map((a) => a.ad)
+  if (eksik.length) throw new Error("Hedef sunucu bilgisi eksik: " + [...new Set(eksik)].join(", ") + ". Hub'da oturumu yeniden oluşturun.")
+
+  for (let i = 0; i < yapilacak.length; i++) {
+    const a = yapilacak[i]
+    sql.aktarimDurumu.run({ id, durum: "aktariliyor", asama: a.tur, ilerleme: Math.round((i / yapilacak.length) * 100), hata: null })
+    const kaynak = join(kok, a.tur)
+    await withCifsMount(a.hedef.ip, a.pay, a.hedef.kullanici, a.hedef.sifre, async (mnt) => {
+      const dst = a.yol(mnt)
+      await mkdir(dst, { recursive: true })
+      if (a.eski) await cakisanlariYenidenAdlandir(kaynak, dst)
+      await copyTreeRecursive(kaynak, dst)
+    })
+    if (a.eski) await desktopIniYaz(a.hedef.ip, a.hedef.kullanici, a.hedef.sifre, "Eski Datalar", o.firmaId, o.firmaAdi)
+    fastify.log.info({ oturum: id, firma: o.firmaId, tur: a.tur }, "tasindi")
+  }
+
+  sql.aktarimDurumu.run({ id, durum: "tamamlandi", asama: null, ilerleme: 100, hata: null })
+  // Dosyalar hedefte — staging boşalsın (disk dolmasın). Kayıtlar Hub'da görünmeye devam eder.
+  try { await rm(kok, { recursive: true, force: true }) } catch (err) { fastify.log.warn({ err: String(err), oturum: id }, "staging silinemedi") }
+}
+
+function execCmd(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"], ...opts })
+    let stdout = "", stderr = ""
+    p.stdout.on("data", (d) => (stdout += d.toString()))
+    p.stderr.on("data", (d) => (stderr += d.toString()))
+    p.on("error", reject)
+    p.on("close", (code) => (code === 0 ? resolve({ stdout, stderr }) : reject(new Error(`Exit ${code}: ${stderr || stdout || cmd}`))))
+  })
+}
+
+async function safeReadDir(p) {
+  try { return await readdir(p) } catch { return [] }
+}
+
+/** Eski servisteki copyTreeRecursive ile aynı: rsync (yalnız eksikler) + Windows'un geçici
+ *  kilitlerine karşı 3 deneme (Defender taraması "Permission denied", 13.09.2026). */
+async function copyTreeRecursive(srcDir, dstDir) {
+  await mkdir(dstDir, { recursive: true })
+  let rsyncVar = true
+  try { await execCmd("sh", ["-c", "command -v rsync"]) } catch { rsyncVar = false }
+  const dene = () => rsyncVar
+    ? execCmd("rsync", ["-rt", "--no-perms", "--no-owner", "--no-group", srcDir + "/", dstDir + "/"])
+    : execCmd("cp", ["-r", srcDir + "/.", dstDir])
+  for (let i = 1; i <= 3; i++) {
+    try { await dene(); return } catch (err) {
+      if (i === 3) throw err
+      fastify.log.warn({ err: String(err?.message ?? err), deneme: i }, "kopyalama hatasi - tekrar denenecek")
+      await new Promise((r) => setTimeout(r, 5000 * i))
+    }
+  }
+}
+
+/** SMB bağlama. Parola komut satırına değil PASSWD ortam değişkenine (mount.cifs okur) —
+ *  eski serviste -o password=… ile ps çıktısında kısa süre görünüyordu. */
+async function withCifsMount(ip, share, username, password, fn) {
+  const nokta = `/tmp/pusula-aktarim2-mnt-${randomBytes(6).toString("hex")}`
+  await mkdir(nokta, { recursive: true })
+  const env = { ...process.env, PASSWD: password }
+  const secenek = (v) => `username=${username},vers=${v},uid=0,gid=0,file_mode=0664,dir_mode=0775`
+  try {
+    await execCmd("mount", ["-t", "cifs", `//${ip}/${share}`, nokta, "-o", secenek("3.0")], { env })
+  } catch {
+    try { await execCmd("mount", ["-t", "cifs", `//${ip}/${share}`, nokta, "-o", secenek("2.1")], { env }) }
+    catch (err2) { await rm(nokta, { recursive: true, force: true }).catch(() => {}); throw new Error(`SMB bağlanamadı (//${ip}/${share}): ${err2.message}`) }
+  }
+  try { return await fn(nokta) } finally {
+    try { await execCmd("umount", [nokta]) } catch { /* ignore */ }
+    try { await rm(nokta, { recursive: true, force: true }) } catch { /* ignore */ }
+  }
+}
+
+/** Eski yıl klasöründe aynı ad farklı boyut → gelen dosya "ad (2).uzantı" (eski servisle aynı kural). */
+async function cakisanlariYenidenAdlandir(srcDir, dstDir) {
+  for (const ad of await safeReadDir(srcDir)) {
+    const kaynak = join(srcDir, ad)
+    const boyut = (await stat(kaynak)).size
+    let hedefBoyut = null
+    try { hedefBoyut = (await stat(join(dstDir, ad))).size } catch { continue }
+    if (hedefBoyut === boyut) continue
+    const nokta = ad.lastIndexOf(".")
+    const kokAd = nokta > 0 ? ad.slice(0, nokta) : ad
+    const uzanti = nokta > 0 ? ad.slice(nokta) : ""
+    for (let i = 2; i < 1000; i++) {
+      const yeni = `${kokAd} (${i})${uzanti}`
+      let v = null
+      try { v = (await stat(join(dstDir, yeni))).size } catch { /* yok */ }
+      if (v === null || v === boyut) { await rename(kaynak, join(srcDir, yeni)); break }
+    }
+  }
+}
+
+/** Klasörün üzerine gelince firma adı görünsün (eski servis + sihirbazla aynı). Hata taşımayı düşürmez. */
+async function desktopIniYaz(ip, username, password, ustKlasor, klasorAdi, infoTip) {
+  try { await execCmd("sh", ["-c", "command -v smbclient"]) } catch { return }
+  const temiz = (x) => String(x).replace(/["\\/;]/g, "_")
+  const tmp = join(STAGING_ROOT, `desktop-${randomBytes(6).toString("hex")}.ini`)
+  const metin = "[.ShellClassInfo]\r\nInfoTip=" + String(infoTip ?? "").replace(/[\r\n]/g, " ") + "\r\n"
+  await writeFile(tmp, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(metin, "utf16le")]))
+  const klasor = `"${temiz(ustKlasor)}/${temiz(klasorAdi)}"`
+  const smb = (komutlar) => execCmd("smbclient", [`//${ip}/D$`, "-U", username, "-c", komutlar.join("; ")],
+    { env: { ...process.env, PASSWD: password } }).catch(() => null)
+  try {
+    await smb([`cd ${klasor}`, "setmode desktop.ini -rsh"])
+    await smb([`cd ${klasor}`, `put "${tmp}" desktop.ini`, "setmode desktop.ini +sh", "cd ..", `setmode "${temiz(klasorAdi)}" +s`])
+  } finally {
+    await rm(tmp, { force: true }).catch(() => {})
+  }
+}
+
 fastify.get("/saglik", async () => ({ tamam: true, surum: "aktarim2", minIstemci: MIN_SURUM }))
+
+// Servis taşıma sürerken yeniden başladıysa o iş yarıda kaldı → Hub'dan "Yeniden dene".
+db.prepare(`UPDATE oturumlar SET durum = 'hata', hata = 'Servis yeniden başladı, taşıma yarıda kaldı. Yeniden deneyin.'
+            WHERE durum = 'aktariliyor'`).run()
 
 await fastify.listen({ port: PORT, host: HOST })
 fastify.log.info({ port: PORT, db: DB_PATH, staging: STAGING_ROOT }, "Pusula Aktarım 2 ayakta")

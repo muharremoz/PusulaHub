@@ -102,6 +102,13 @@ namespace PusulaAktarim
                         bilgi = _aktarici?.Bilgi,
                         bildirildi = _yuklemeBildirildi,
                         yedekKlasoru = Yedekleyici.Klasor,
+                        sunucu = _sunucu == null ? null : new
+                        {
+                            durum = _sunucu.Value<string>("durum"),
+                            asama = _sunucu.Value<string>("asama"),
+                            ilerleme = _sunucu.Value<int?>("ilerleme") ?? 0,
+                            hata = _sunucu.Value<string>("hata"),
+                        },
                     },
                 };
             }
@@ -270,7 +277,39 @@ namespace PusulaAktarim
             catch (Exception e)
             {
                 lock (_kilit) _mesaj = "Yükleme bitti ama Pusula'ya bildirilemedi: " + e.Message;
+                return;
             }
+            _ = Task.Run(SunucuyuIzle);
+        }
+
+        private JObject _sunucu;
+        private int _izleniyor;
+
+        /// <summary>Pusula tarafında dosyaların sunuculara taşınmasını izler (tamamlanana kadar).</summary>
+        private async Task SunucuyuIzle()
+        {
+            if (Interlocked.Exchange(ref _izleniyor, 1) == 1) return;
+            try
+            {
+                for (var i = 0; i < 2000; i++)
+                {
+                    try
+                    {
+                        var o = await _servis.Oturum();
+                        lock (_kilit) _sunucu = o;
+                        if (o.Value<string>("durum") == "tamamlandi")
+                        {
+                            // Bitti: yarım iş kaydı ve oturum tokenı artık gereksiz.
+                            _is?.Sil();
+                            IsKaydi.TokenSil();
+                            return;
+                        }
+                    }
+                    catch { /* bağlantı geçici — bir sonraki turda */ }
+                    await Task.Delay(TimeSpan.FromSeconds(5));
+                }
+            }
+            finally { Interlocked.Exchange(ref _izleniyor, 0); }
         }
 
         // ------------------------------------------------------------ keşif

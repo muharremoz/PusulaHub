@@ -91,6 +91,8 @@ export type Aktarim = {
   bilgi: string | null;
   bildirildi: boolean;
   yedekKlasoru: string;
+  /** Pusula tarafında sunuculara taşıma: yuklendi → aktariliyor → tamamlandi | hata */
+  sunucu: { durum: string; asama: string | null; ilerleme: number; hata: string | null } | null;
 };
 
 export type Oturum = {

@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   AlertTriangle, Ban, Copy, Database, Eye, FolderOpen, Image as ImageIcon, KeyRound, MonitorDown,
-  MoreVertical, Plus, Server, Trash2,
+  MoreVertical, Plus, RotateCw, Server, Trash2,
 } from "lucide-react"
 import type { Aktarim2Detay, Aktarim2Durum, Aktarim2Kesif, Aktarim2Oturum } from "@/lib/aktarim2-proxy"
 
@@ -42,6 +42,15 @@ const DURUM: Record<Aktarim2Durum, { etiket: string; sinif: string }> = {
   hata:         { etiket: "Hata",           sinif: "bg-red-500/15 text-red-700 dark:text-red-400" },
   iptal:        { etiket: "İptal",          sinif: "bg-muted text-muted-foreground" },
   suresi_doldu: { etiket: "Süresi doldu",   sinif: "bg-muted text-muted-foreground" },
+}
+
+/** Sunuculara taşımada o anki adım */
+const ASAMA: Record<string, string> = {
+  veritabani: "Veritabanları → SQL sunucusu",
+  eski: "Eski yıllar → Depo",
+  resim: "Resimler → Depo",
+  program: "Program dosyaları → terminal",
+  ek: "Ek dosyalar → terminal",
 }
 
 /** Servis SQLite zamanı UTC ("YYYY-MM-DD HH:MM:SS"). */
@@ -79,14 +88,14 @@ export default function Aktarim2Page() {
     return () => clearInterval(id)
   }, [yukle])
 
-  async function islem(o: Aktarim2Oturum, tur: "iptal" | "sil") {
+  async function islem(o: Aktarim2Oturum, tur: "iptal" | "yeniden" | "sil") {
     try {
-      const r = await fetch(`/api/aktarim2/${o.id}`, tur === "iptal"
-        ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ islem: "iptal" }) }
-        : { method: "DELETE" })
+      const r = await fetch(`/api/aktarim2/${o.id}`, tur === "sil"
+        ? { method: "DELETE" }
+        : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ islem: tur }) })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error((d as { error?: string }).error ?? "İşlem başarısız")
-      toast.success(tur === "iptal" ? "Aktarım iptal edildi" : "Aktarım silindi")
+      toast.success(tur === "iptal" ? "Aktarım iptal edildi" : tur === "yeniden" ? "Taşıma yeniden başlatıldı" : "Aktarım silindi")
       void yukle()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Hata")
@@ -107,6 +116,7 @@ export default function Aktarim2Page() {
               <th className="px-4 py-1.5 text-left font-medium">Firma</th>
               <th className="px-4 py-1.5 text-left font-medium">Durum</th>
               <th className="px-4 py-1.5 text-left font-medium">Bilgisayar</th>
+              <th className="px-4 py-1.5 text-right font-medium">Yüklenen</th>
               <th className="px-4 py-1.5 text-left font-medium">Keşif</th>
               <th className="px-4 py-1.5 text-left font-medium">Oluşturma</th>
               <th className="px-4 py-1.5 text-left font-medium">Bitiş</th>
@@ -116,15 +126,15 @@ export default function Aktarim2Page() {
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 7 }).map((__, j) => (
+                    {Array.from({ length: 8 }).map((__, j) => (
                       <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
                     ))}
                   </tr>
                 ))
               ) : error ? (
-                <tr><td colSpan={7} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td></tr>
               ) : items.length === 0 ? (
-                <ListeBosSatir sutunSayisi={7} toplam={0} bosMesaj="Henüz Aktarım 2 oturumu yok. “Yeni Aktarım” ile müşteriye kod üretin." />
+                <ListeBosSatir sutunSayisi={8} toplam={0} bosMesaj="Henüz Aktarım 2 oturumu yok. “Yeni Aktarım” ile müşteriye kod üretin." />
               ) : (
                 items.map((o) => (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
@@ -135,10 +145,16 @@ export default function Aktarim2Page() {
                     <td className="px-4 py-1.5 whitespace-nowrap">
                       <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", DURUM[o.durum]?.sinif)}>
                         {DURUM[o.durum]?.etiket ?? o.durum}
+                        {o.durum === "aktariliyor" && ` · %${o.ilerleme}`}
                       </span>
+                      {o.durum === "aktariliyor" && o.asama && <div className="text-muted-foreground text-[12px]">{ASAMA[o.asama] ?? o.asama}</div>}
+                      {o.durum === "hata" && o.hata && <div className="text-[12px] text-red-600 dark:text-red-400 max-w-72 truncate" title={o.hata}>{o.hata}</div>}
                     </td>
                     <td className="px-4 py-1.5 whitespace-nowrap text-[12px]">
                       {o.makine ? <><span className="font-mono">{o.makine}</span><span className="text-muted-foreground"> · v{o.istemciSurum}</span></> : "—"}
+                    </td>
+                    <td className="px-4 py-1.5 whitespace-nowrap text-right text-[12px] tabular-nums">
+                      {o.dosyaSayisi > 0 ? <>{o.dosyaSayisi} dosya<span className="text-muted-foreground"> · {mb(o.dosyaBoyutu / 1048576)}</span></> : "—"}
                     </td>
                     <td className="px-4 py-1.5 whitespace-nowrap text-muted-foreground text-[12px]">{zamanMetni(o.kesifZamani)}</td>
                     <td className="px-4 py-1.5 whitespace-nowrap text-muted-foreground text-[12px] tabular-nums">{zamanMetni(o.olusturma)}</td>
@@ -154,7 +170,12 @@ export default function Aktarim2Page() {
                           <DropdownMenuItem className="gap-2" onClick={() => setDetayId(o.id)}>
                             <Eye className="size-3.5" />Keşif raporu
                           </DropdownMenuItem>
-                          {!["iptal", "tamamlandi", "suresi_doldu"].includes(o.durum) && (
+                          {o.durum === "hata" && (
+                            <DropdownMenuItem className="gap-2" onClick={() => void islem(o, "yeniden")}>
+                              <RotateCw className="size-3.5" />Taşımayı yeniden dene
+                            </DropdownMenuItem>
+                          )}
+                          {!["iptal", "tamamlandi", "suresi_doldu", "aktariliyor"].includes(o.durum) && (
                             <DropdownMenuItem className="gap-2" onClick={() => void islem(o, "iptal")}>
                               <Ban className="size-3.5" />İptal et
                             </DropdownMenuItem>

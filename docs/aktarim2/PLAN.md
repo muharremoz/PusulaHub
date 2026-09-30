@@ -39,7 +39,7 @@ konuşur (Hub'la değil). Hedef sunucu bilgileri (SQL/Depo/terminal) yalnız ser
 |---|---|
 | 1 | İskelet; kodla giriş; SQL bağlantısı (Windows oturumu → `C:\Pusula\ps.dat` → elle); keşif: `sirket.guvenlik` + tüm DB'ler (boyut, durum, PrgTur, KOD, URN*/transfer işareti, guvenlik'te olmayan DB'ler), resim yolları, program klasörleri; keşif raporu servise |
 | 2 | `BACKUP DATABASE … WITH COPY_ONLY, COMPRESSION, CHECKSUM` (Express'te sıkıştırma yok → düz), parça parça (8 MB, SHA256) devam edebilen yükleme, yarım iş diskte (exe kapansa da sürer) |
-| 3 | Serviste birleştirme → SQL sunucusuna kopya → `RESTORE … WITH MOVE` (`{firma}_` önek, URN* öneksiz), sahip, `guvenlik` satırları (URN* KOD 99999), Backup Master |
+| 3 | Sunuculara taşıma — **geri yükleme YOK** (kullanıcı kararı 30.09: geri yükleme sihirbazın işi). Eski web aktarımıyla aynı yerler: `.bak` → SQL `D:\SQLData\{firma}\aktarim`, eski yıl → Depo `D:\Eski Datalar\{firma}`, resim → Depo `Resimler\{firma}`, program/ek → terminal `C:\MUSTERI\{firma}\Aktarim`. Yükleme bitince otomatik başlar; hata → Hub'da "Yeniden dene" |
 | 4 | Resim (Depo `D:\Resimler\{firma}`), eski yıl (`D:\Eski Datalar\{firma}`), program + ek dosyalar (terminal `C:\MUSTERI\{firma}\Aktarim`) |
 | 5 | (sonra) Ön rapor → Hub'da şube kodu / subeler / Banko eşleme önerisi |
 

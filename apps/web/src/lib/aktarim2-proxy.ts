@@ -30,6 +30,12 @@ export interface Aktarim2Oturum {
   istemciSurum: string | null
   kesifZamani: string | null
   hata: string | null
+  /** Sunuculara taşımada o anki tür (veritabani, resim…) */
+  asama: string | null
+  ilerleme: number
+  tamamlanma: string | null
+  dosyaSayisi: number
+  dosyaBoyutu: number
 }
 
 /** İstemcinin gönderdiği keşif raporu (apps/aktarim-istemci Kesif.cs ile aynı biçim). */
@@ -93,5 +99,7 @@ export const olustur = (g: Aktarim2Olustur) =>
   cagir<{ id: string; kod: string }>("/admin/oturumlar", { method: "POST", body: JSON.stringify(g) })
 export const iptal = (id: string) =>
   cagir<{ tamam: true }>(`/admin/oturumlar/${encodeURIComponent(id)}/iptal`, { method: "POST" })
+export const yenidenDene = (id: string) =>
+  cagir<{ tamam: true }>(`/admin/oturumlar/${encodeURIComponent(id)}/yeniden`, { method: "POST" })
 export const sil = (id: string) =>
   cagir<{ tamam: true }>(`/admin/oturumlar/${encodeURIComponent(id)}`, { method: "DELETE" })

@@ -1,12 +1,12 @@
 /**
  * GET    /api/aktarim2/:id  → oturum ayrıntısı + keşif raporu
- * POST   /api/aktarim2/:id  → { islem: "iptal" }
+ * POST   /api/aktarim2/:id  → { islem: "iptal" | "yeniden" }  (yeniden: hata veren taşımayı tekrar dene)
  * DELETE /api/aktarim2/:id  → kaydı sil
  */
 
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
-import { iptal, oturum, sil } from "@/lib/aktarim2-proxy"
+import { iptal, oturum, sil, yenidenDene } from "@/lib/aktarim2-proxy"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -26,8 +26,11 @@ export async function POST(req: NextRequest, { params }: Ctx) {
   if (gate) return gate
   const { id } = await params
   const b = (await req.json().catch(() => ({}))) as { islem?: string }
-  if (b.islem !== "iptal") return NextResponse.json({ error: "Bilinmeyen işlem" }, { status: 400 })
-  try { return NextResponse.json(await iptal(id)) } catch (err) { return hata(err) }
+  try {
+    if (b.islem === "iptal") return NextResponse.json(await iptal(id))
+    if (b.islem === "yeniden") return NextResponse.json(await yenidenDene(id))
+  } catch (err) { return hata(err) }
+  return NextResponse.json({ error: "Bilinmeyen işlem" }, { status: 400 })
 }
 
 export async function DELETE(_req: NextRequest, { params }: Ctx) {

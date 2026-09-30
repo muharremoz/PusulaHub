@@ -99,16 +99,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             <AlertDescription>{durum.mesaj}</AlertDescription>
           </Alert>
         )}
-        {a.bitti && (
-          <Alert>
-            <CheckCircle2 />
-            <AlertDescription>
-              {a.bildirildi
-                ? "Yükleme tamamlandı ve Pusula'ya bildirildi. Veritabanlarınız sunucumuza aktarılacak; bu pencereyi kapatabilirsiniz."
-                : "Yükleme tamamlandı, Pusula'ya bildiriliyor…"}
-            </AlertDescription>
-          </Alert>
-        )}
+        {a.bitti && <SunucuDurumu a={a} />}
 
         <section className="overflow-hidden rounded-lg border bg-card">
           {a.ogeler.map((o) => (
@@ -134,6 +125,46 @@ export function AktarimEkrani({ durum, setDurum }: P) {
         </section>
       </main>
     </div>
+  );
+}
+
+/** Yükleme bitti: Pusula tarafında dosyalar sunuculara taşınıyor. Müşterinin yapacağı bir şey yok. */
+function SunucuDurumu({ a }: { a: NonNullable<Durum["aktarim"]> }) {
+  const s = a.sunucu;
+  if (!a.bildirildi || !s) {
+    return (
+      <Alert>
+        <Loader2 className="animate-spin" />
+        <AlertDescription>Yükleme tamamlandı, Pusula'ya bildiriliyor…</AlertDescription>
+      </Alert>
+    );
+  }
+  if (s.durum === "tamamlandi") {
+    return (
+      <Alert>
+        <CheckCircle2 />
+        <AlertDescription>Aktarım tamamlandı. Verileriniz Pusula sunucularında; bu pencereyi kapatabilirsiniz.</AlertDescription>
+      </Alert>
+    );
+  }
+  if (s.durum === "hata") {
+    return (
+      <Alert>
+        <AlertTriangle />
+        <AlertDescription>
+          Dosyalarınız bize ulaştı; sunucuya yerleştirirken bir sorun çıktı ve ekibimiz ilgileniyor. Tekrar yüklemeniz gerekmiyor, bu pencereyi
+          kapatabilirsiniz.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+  return (
+    <Alert>
+      <Loader2 className="animate-spin" />
+      <AlertDescription>
+        Dosyalarınız bize ulaştı, Pusula sunucularına yerleştiriliyor ({s.ilerleme}%). Bu pencereyi kapatabilirsiniz; işlem bizim tarafta sürer.
+      </AlertDescription>
+    </Alert>
   );
 }
 
