@@ -56,14 +56,28 @@ namespace PusulaAktarim
 
         private async Task Oge(IsOgesi o, CancellationToken iptal)
         {
-            // 1) Yedek — dosya yoksa ya da yedek yarıda kaldıysa baştan.
-            var yedekVar = o.Sha256 != null && File.Exists(o.YerelYol) && new FileInfo(o.YerelYol).Length == o.Boyut;
-            if (!yedekVar)
+            // 1) Yüklenecek dosyayı hazırla — hazırsa (uygulama yeniden açıldı) atla.
+            var hazir = o.Sha256 != null && File.Exists(o.YerelYol) && new FileInfo(o.YerelYol).Length == o.Boyut;
+            if (!hazir)
             {
-                Yedekleyici.KlasoruHazirla();
-                o.Durum = "yedekleniyor"; o.Yuzde = 0; o.Gonderilen = 0; o.Sha256 = null;
-                Kaydet();
-                await Yedekleyici.Al(_sql, o.Ad, o.YerelYol, _is.Sikistir, y => { o.Yuzde = y; _degisti(); }, iptal).ConfigureAwait(false);
+                o.Gonderilen = 0; o.Sha256 = null; o.Yuzde = 0;
+                if (o.Tip == "vt")
+                {
+                    Yedekleyici.KlasoruHazirla();
+                    o.Durum = "yedekleniyor";
+                    Kaydet();
+                    await Yedekleyici.Al(_sql, o.Veritabani ?? o.Ad, o.YerelYol, _is.Sikistir, y => { o.Yuzde = y; _degisti(); }, iptal).ConfigureAwait(false);
+                }
+                else if (o.Tip == "paket")
+                {
+                    o.Durum = "paketleniyor";
+                    Kaydet();
+                    await Task.Run(() => Paketleyici.Yaz(o.KaynakKok, o.Dosyalar, o.YerelYol, y => { o.Yuzde = y; _degisti(); }, iptal), iptal).ConfigureAwait(false);
+                }
+                else if (!File.Exists(o.YerelYol))
+                {
+                    throw new FileNotFoundException("Dosya bulunamadı: " + o.YerelYol);
+                }
 
                 // 2) SHA256 — sunucu bütünü bununla doğrular.
                 o.Durum = "hazirlaniyor"; o.Yuzde = 0;
@@ -78,7 +92,9 @@ namespace PusulaAktarim
             Kaydet();
             for (var tur = 0; ; tur++)
             {
-                var d = await Tekrarla(() => _servis.DosyaBaslat(o.Tur, o.Yol, o.Boyut, o.Sha256, new { veritabani = o.Ad, sikistirma = _is.Sikistir }), iptal).ConfigureAwait(false);
+                var meta = o.Meta ?? new System.Collections.Generic.Dictionary<string, object>();
+                if (o.Tip == "vt") { meta["veritabani"] = o.Veritabani ?? o.Ad; meta["sikistirma"] = _is.Sikistir; }
+                var d = await Tekrarla(() => _servis.DosyaBaslat(o.Tur, o.Yol, o.Boyut, o.Sha256, meta), iptal).ConfigureAwait(false);
                 var id = d.Value<string>("id");
                 if (d.Value<string>("durum") == "tamam") break;
                 var parcaBoyutu = d.Value<int>("parcaBoyutu");
@@ -125,8 +141,8 @@ namespace PusulaAktarim
                 }
             }
 
-            // 4) Bitti — yerel yedek silinir (disk dolmasın).
-            try { File.Delete(o.YerelYol); } catch { }
+            // 4) Bitti — bizim ürettiğimiz dosya (yedek/paket) silinir; müşterinin kendi dosyasına dokunulmaz.
+            if (o.Tip == "vt" || o.Tip == "paket") { try { File.Delete(o.YerelYol); } catch { } }
             o.Durum = "tamam"; o.Yuzde = 100; o.Gonderilen = o.Boyut;
             Kaydet();
         }

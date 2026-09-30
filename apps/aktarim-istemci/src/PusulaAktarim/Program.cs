@@ -109,13 +109,59 @@ namespace PusulaAktarim
                 case "POST /sql/elle": return _uygulama.ElleBaglan(i.Metin("sunucu"), i.Metin("kullanici"), i.Metin("sifre"));
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
                 case "POST /aktarim/baslat":
-                    return _uygulama.AktarimBaslat(i.Govde?["veritabanlari"]?.ToObject<string[]>());
+                    return _uygulama.AktarimBaslat(i.Govde);
+                case "POST /sec/dosyalar": return Sec(p => DosyaSec(p));
+                case "POST /sec/klasor": return Sec(p => KlasorSec(p, i.Metin("aciklama")));
                 case "POST /aktarim/duraklat": return _uygulama.Duraklat();
                 case "POST /aktarim/devam": return _uygulama.Devam();
                 case "POST /cikis":
                     _ = Task.Run(async () => { await Task.Delay(300); Kapat(); });
                     return Task.FromResult<object>(new { tamam = true });
                 default: throw new KullaniciHatasi("Bilinmeyen istek: " + i.Yontem + " " + i.Yol, 404);
+            }
+        }
+
+        // ------------------------------------------------------------ Windows dosya/klasör seçimi
+        // Web arayüzündeki <input type=file> dosyanın YOLUNU vermez; uygulama yolu bilmeli
+        // (paketleme, devam). Bu yüzden seçim pencereleri exe'de, Windows'un kendi penceresi.
+
+        private static Task<object> Sec(Func<IWin32Window, object> goster)
+        {
+            var sonuc = new TaskCompletionSource<object>();
+            void Calistir(IWin32Window sahip)
+            {
+                try { sonuc.SetResult(goster(sahip)); } catch (Exception e) { sonuc.SetException(e); }
+            }
+            var p = _pencere;
+            if (p != null && !p.IsDisposed && p.Visible) p.BeginInvoke((Action)(() => Calistir(p)));
+            else
+            {
+                // Pencere yok (tarayıcı modu) → ayrı STA iş parçacığı
+                var t = new Thread(() => Calistir(null)) { IsBackground = true };
+                t.SetApartmentState(ApartmentState.STA);
+                t.Start();
+            }
+            return sonuc.Task;
+        }
+
+        private static object DosyaSec(IWin32Window sahip)
+        {
+            using (var d = new OpenFileDialog
+            {
+                Title = "Eski yıl dataları seçin",
+                Multiselect = true,
+                Filter = "Veritabanı ve arşiv dosyaları|*.mdf;*.ldf;*.ndf;*.bak;*.zip;*.rar;*.7z|Tüm dosyalar|*.*",
+            })
+            {
+                return new { yollar = d.ShowDialog(sahip) == DialogResult.OK ? d.FileNames : new string[0] };
+            }
+        }
+
+        private static object KlasorSec(IWin32Window sahip, string aciklama)
+        {
+            using (var d = new FolderBrowserDialog { Description = aciklama ?? "Klasör seçin", ShowNewFolderButton = false })
+            {
+                return new { yol = d.ShowDialog(sahip) == DialogResult.OK ? d.SelectedPath : null };
             }
         }
 

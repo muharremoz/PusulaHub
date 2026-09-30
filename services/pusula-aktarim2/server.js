@@ -33,7 +33,7 @@ import Fastify from "fastify"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
 import { dirname, join, normalize } from "path"
-import { mkdir, open, rm, stat, readdir, writeFile, rename } from "fs/promises"
+import { mkdir, open, rm, stat, readdir, readFile, writeFile, rename } from "fs/promises"
 import { createReadStream } from "fs"
 import { randomBytes, createHash, timingSafeEqual } from "crypto"
 import { spawn } from "child_process"
@@ -144,7 +144,9 @@ const sql = {
   parcaSay: db.prepare(`SELECT COUNT(*) AS n FROM parcalar WHERE dosyaId = ?`),
 }
 
-const TURLER = new Set(["veritabani", "resim", "eski", "program", "ek"])
+/** paket: çok sayıda küçük dosya (resim, ek klasör) tek dosyada — bitince açılır, bkz. paketiAc */
+const TURLER = new Set(["veritabani", "resim", "eski", "program", "ek", "paket"])
+const PAKET_HEDEFLERI = new Set(["resim", "ek"])
 /** 8 MB — tarayıcı yerine .NET HttpClient; kopunca en fazla 8 MB tekrar gider. */
 const PARCA_BOYUTU = 8 * 1024 * 1024
 
@@ -449,10 +451,68 @@ fastify.post("/api/dosya/:id/bitir", async (req, reply) => {
     sql.dosyaDurum.run("hata", "hata", d.id)
     return reply.code(422).send({ hata: "Dosyanın bütünü doğrulanamadı; yeniden yüklenecek." })
   }
+  if (d.tur === "paket") {
+    try {
+      const meta = d.meta ? JSON.parse(d.meta) : {}
+      const sayi = await paketiAc(stagingYolu(o.id, d.tur, d.yol), o.id, meta)
+      req.log.info({ oturum: o.id, paket: d.yol, dosya: sayi }, "paket acildi")
+    } catch (err) {
+      db.prepare("DELETE FROM parcalar WHERE dosyaId = ?").run(d.id)
+      sql.dosyaDurum.run("hata", "hata", d.id)
+      return reply.code(422).send({ hata: "Paket açılamadı, yeniden yüklenecek: " + (err?.message ?? err) })
+    }
+  }
   sql.dosyaDurum.run("tamam", "tamam", d.id)
   req.log.info({ oturum: o.id, firma: o.firmaId, dosya: d.yol, boyut: d.boyut }, "dosya tamam")
   return { tamam: true }
 })
+
+/**
+ * Paket biçimi (istemci Paketleyici.cs): "PKT1" + uint32 LE başlık uzunluğu +
+ * başlık JSON [{ y: göreli yol, b: bayt }] + dosyaların baytları art arda.
+ * İçerik staging/{oturum}/{hedefTur}/{altKlasor}/{y} altına açılır, paket silinir.
+ * Arşiv aracı (unzip) gerekmez; yol kaçışı her dosyada ayrıca denetlenir.
+ */
+async function paketiAc(paketYolu, oturumId, meta) {
+  const hedefTur = String(meta?.hedefTur ?? "")
+  if (!PAKET_HEDEFLERI.has(hedefTur)) throw new Error("Geçersiz paket hedefi")
+  const alt = String(meta?.altKlasor ?? "").replace(/\\/g, "/").replace(/^\/+|\/+$/g, "")
+  const f = await open(paketYolu, "r")
+  try {
+    const bas = Buffer.alloc(8)
+    await f.read(bas, 0, 8, 0)
+    if (bas.toString("latin1", 0, 4) !== "PKT1") throw new Error("Paket imzası yok")
+    const basUzunluk = bas.readUInt32LE(4)
+    if (basUzunluk > 64 * 1024 * 1024) throw new Error("Paket başlığı çok büyük")
+    const basJson = Buffer.alloc(basUzunluk)
+    await f.read(basJson, 0, basUzunluk, 8)
+    const liste = JSON.parse(basJson.toString("utf8"))
+    let konum = 8 + basUzunluk
+    const tampon = Buffer.alloc(1 << 20)
+    for (const g of liste) {
+      const rel = alt ? alt + "/" + g.y : g.y
+      const hedef = stagingYolu(oturumId, hedefTur, rel)
+      if (!hedef) throw new Error("Geçersiz yol: " + g.y)
+      await mkdir(dirname(hedef), { recursive: true })
+      const c = await open(hedef, "w")
+      try {
+        let kalan = Number(g.b)
+        while (kalan > 0) {
+          const n = Math.min(kalan, tampon.length)
+          const { bytesRead } = await f.read(tampon, 0, n, konum)
+          if (bytesRead !== n) throw new Error("Paket eksik")
+          await c.write(tampon, 0, n)
+          konum += n
+          kalan -= n
+        }
+      } finally { await c.close() }
+    }
+    return liste.length
+  } finally {
+    await f.close()
+    await rm(paketYolu, { force: true })
+  }
+}
 
 /** İstemci tüm dosyaları yükledi. 3. aşamada burada geri yükleme (RESTORE) başlar. */
 fastify.post("/api/tamamla", async (req, reply) => {
@@ -526,6 +586,7 @@ async function aktar(id) {
     const a = yapilacak[i]
     sql.aktarimDurumu.run({ id, durum: "aktariliyor", asama: a.tur, ilerleme: Math.round((i / yapilacak.length) * 100), hata: null })
     const kaynak = join(kok, a.tur)
+    if (a.tur === "program") await parametreleriGuncelle(o)
     await withCifsMount(a.hedef.ip, a.pay, a.hedef.kullanici, a.hedef.sifre, async (mnt) => {
       const dst = a.yol(mnt)
       await mkdir(dst, { recursive: true })
@@ -539,6 +600,47 @@ async function aktar(id) {
   sql.aktarimDurumu.run({ id, durum: "tamamlandi", asama: null, ilerleme: 100, hata: null })
   // Dosyalar hedefte — staging boşalsın (disk dolmasın). Kayıtlar Hub'da görünmeye devam eder.
   try { await rm(kok, { recursive: true, force: true }) } catch (err) { fastify.log.warn({ err: String(err), oturum: id }, "staging silinemedi") }
+}
+
+/* Parametre dosyalarına DATA KODU = firma kodu (eski servis + sihirbazla aynı kural):
+ *   Perakende (programCode 909): <DATAKODU> firmaId </DATAKODU> bloğu
+ *   Diğerleri: [DATA KODU] firmaId satırı
+ * [OPEN OFFICE] yazılmaz (2026-09-29). latin1 okuma/yazma: 1254 Türkçe baytlar
+ * ve satır sonları korunur. İstemci param dosyalarını meta.param = true ile işaretler. */
+function parametreMetni(metin, firmaId, perakende) {
+  const nl = metin.includes("\r\n") ? "\r\n" : "\n"
+  if (perakende) {
+    const blok = "<DATAKODU>" + nl + firmaId + nl + "</DATAKODU>"
+    const re = /<DATAKODU>[\s\S]*?<\/DATAKODU>/i
+    return re.test(metin) ? metin.replace(re, blok) : metin.replace(/\s+$/, "") + nl + blok + nl
+  }
+  const sonNl = metin.endsWith(nl)
+  let satirlar = metin.split(nl)
+  if (sonNl) satirlar.pop()
+  let var_ = false
+  satirlar = satirlar.map((l) => (/^\[DATA KODU\]/.test(l) ? ((var_ = true), "[DATA KODU] " + firmaId) : l))
+  if (!var_) satirlar.push("[DATA KODU] " + firmaId)
+  return satirlar.join(nl) + nl
+}
+
+async function parametreleriGuncelle(o) {
+  let programlar = []
+  try { programlar = JSON.parse(o.programlar || "[]") } catch { /* yok */ }
+  for (const d of sql.dosyalar.all(o.id).filter((x) => x.tur === "program")) {
+    let meta = {}
+    try { meta = d.meta ? JSON.parse(d.meta) : {} } catch { /* yok */ }
+    if (!meta.param) continue
+    const program = String(meta.program ?? d.yol.split("/")[0])
+    const secenek = programlar.find((p) => p.name === program)
+    const perakende = String(secenek?.programCode ?? "").trim() === "909" || program.toLocaleLowerCase("tr") === "perakende"
+    const yol = stagingYolu(o.id, "program", d.yol)
+    try {
+      const eski = await readFile(yol, "latin1")
+      await writeFile(yol, parametreMetni(eski, o.firmaId, perakende), "latin1")
+    } catch (err) {
+      fastify.log.warn({ err: String(err?.message ?? err), dosya: d.yol }, "parametre guncellenemedi (tasima surer)")
+    }
+  }
 }
 
 function execCmd(cmd, args, opts = {}) {

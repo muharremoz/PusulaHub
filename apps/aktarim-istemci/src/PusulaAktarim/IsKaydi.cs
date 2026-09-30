@@ -8,13 +8,24 @@ using Newtonsoft.Json;
 
 namespace PusulaAktarim
 {
-    /// <summary>Aktarılacak tek öğe (şimdilik veritabanı; 4. aşamada klasörler).</summary>
+    /// <summary>
+    /// Aktarılacak tek öğe. Tip:
+    ///   vt     → SQL veritabanı: COPY_ONLY yedek alınır, yüklenince yerel yedek silinir
+    ///   dosya  → diskte duran dosya (eski yıl .mdf/.bak, program exe/parametre): olduğu gibi, SİLİNMEZ
+    ///   paket  → çok sayıda küçük dosya (resim, ek klasör): paket dosyasında toplanır, yüklenince paket silinir
+    /// </summary>
     internal sealed class IsOgesi
     {
+        public string Tip = "vt";
+        /// <summary>Sunucudaki tür: veritabani | eski | program | paket</summary>
         public string Tur = "veritabani";
-        public string Ad;              // veritabanı adı
-        public string Yol;             // sunucudaki göreli yol (ör. KOLN.bak)
-        public string YerelYol;        // bu bilgisayardaki yedek dosyası
+        public string Ad;              // ekranda görünen ad
+        public string Yol;             // sunucudaki göreli yol (ör. KOLN.bak, Perakende/Parametre.txt)
+        public string YerelYol;        // yüklenecek yerel dosya (vt/paket için üretilen)
+        public string Veritabani;      // Tip=vt: yedeği alınacak veritabanı
+        public string KaynakKok;       // Tip=paket: dosyaların kök klasörü
+        public List<string> Dosyalar;  // Tip=paket: kök klasöre göre yollar
+        public Dictionary<string, object> Meta;
         /// <summary>bekliyor | yedekleniyor | hazirlaniyor | yukleniyor | tamam | hata</summary>
         public string Durum = "bekliyor";
         public int Yuzde;              // o anki adımın yüzdesi

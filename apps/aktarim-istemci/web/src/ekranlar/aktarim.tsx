@@ -11,6 +11,7 @@ type P = { durum: Durum; setDurum: (d: Durum) => void };
 const ADIM: Record<IsOgesi["durum"], string> = {
   bekliyor: "Sırada",
   yedekleniyor: "Yedekleniyor",
+  paketleniyor: "Paketleniyor",
   hazirlaniyor: "Doğrulanıyor",
   yukleniyor: "Yükleniyor",
   tamam: "Tamamlandı",
@@ -115,7 +116,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                     {o.durum === "tamam" && o.boyut > 0 && ` · ${bayt(o.boyut)}`}
                   </span>
                 </div>
-                {(o.durum === "yedekleniyor" || o.durum === "hazirlaniyor" || o.durum === "yukleniyor") && (
+                {(o.durum === "yedekleniyor" || o.durum === "paketleniyor" || o.durum === "hazirlaniyor" || o.durum === "yukleniyor") && (
                   <Progress value={o.yuzde} className="mt-1.5 h-1.5" />
                 )}
                 {o.hata && <div className="mt-1 text-xs text-destructive">{o.hata}</div>}

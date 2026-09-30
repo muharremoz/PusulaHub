@@ -72,10 +72,10 @@ export function nabziBaslat(): () => void {
 export type Asama = "acilis" | "giris" | "sqlAraniyor" | "sqlGiris" | "kesif" | "hazir" | "aktarim";
 
 export type IsOgesi = {
+  tip: "vt" | "dosya" | "paket";
   tur: string;
   ad: string;
-  yol: string;
-  durum: "bekliyor" | "yedekleniyor" | "hazirlaniyor" | "yukleniyor" | "tamam" | "hata";
+  durum: "bekliyor" | "yedekleniyor" | "paketleniyor" | "hazirlaniyor" | "yukleniyor" | "tamam" | "hata";
   yuzde: number;
   boyut: number;
   gonderilen: number;
@@ -102,6 +102,9 @@ export type Oturum = {
   durum: string;
   notlar: string | null;
   bitis: string;
+  programlar: { name: string; exeName: string | null; paramFileName: string | null; programCode: string | null }[];
+  /** Hedef sunucu tanımlı mı — tanımsızsa o alan gösterilmez */
+  hedefler: { sql: boolean; depo: boolean; rdp: boolean };
 };
 
 export type SqlDenemesi = { sunucu: string; kaynak: string; hata: string | null };
