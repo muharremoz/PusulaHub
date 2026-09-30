@@ -367,7 +367,14 @@ function YeniAktarimSheet({
 
 // ------------------------------------------------------------ kod penceresi
 
+/** Müşteri uygulaması — aktarım servisinden indirilir (müşteri Hub kullanıcısı değil). */
+const INDIRME_ADRESI = "https://aktarim.pusulanet.net/v2/indir"
+
 function KodPenceresi({ kod, onClose }: { kod: { kod: string; firma: string } | null; onClose: () => void }) {
+  const mesaj = kod
+    ? `Verilerinizi Pusula sunucularına taşımak için:\n1) Uygulamayı indirin: ${INDIRME_ADRESI}\n` +
+      `2) SQL Server'ın kurulu olduğu bilgisayarda çalıştırın.\n3) Aktarım kodunu girin: ${kod.kod}`
+    : ""
   return (
     <AlertDialog open={!!kod} onOpenChange={(o) => !o && onClose()}>
       <AlertDialogContent>
@@ -389,7 +396,17 @@ function KodPenceresi({ kod, onClose }: { kod: { kod: string; firma: string } | 
             <Copy className="size-4" />
           </Button>
         </div>
+        <div className="rounded-[5px] border bg-[var(--section-bg)] px-3 py-2 text-[12px]">
+          <div className="text-muted-foreground mb-1">Uygulama indirme adresi</div>
+          <a href={INDIRME_ADRESI} className="font-mono underline underline-offset-2" target="_blank" rel="noreferrer">{INDIRME_ADRESI}</a>
+        </div>
         <AlertDialogFooter>
+          <Button
+            variant="outline"
+            onClick={async () => { if (await copyToClipboard(mesaj)) toast.success("Müşteri mesajı kopyalandı", { description: "İndirme adresi + kod" }) }}
+          >
+            <Copy className="size-4" />Müşteri mesajını kopyala
+          </Button>
           <AlertDialogAction onClick={onClose}>Tamam</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

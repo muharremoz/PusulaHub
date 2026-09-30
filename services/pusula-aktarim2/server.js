@@ -321,7 +321,7 @@ fastify.post("/api/giris", async (req, reply) => {
   const b = req.body ?? {}
   const surum = String(b.surum ?? "0.0.0")
   if (surumKarsilastir(surum, MIN_SURUM) < 0) {
-    return reply.code(426).send({ hata: "Uygulamanın yeni sürümü gerekli (en az " + MIN_SURUM + "). Güncel uygulamayı indirip tekrar açın.", minSurum: MIN_SURUM })
+    return reply.code(426).send({ hata: "Uygulamanın yeni sürümü gerekli (en az " + MIN_SURUM + "). Güncel uygulamayı https://aktarim.pusulanet.net/v2/indir adresinden indirip tekrar açın.", minSurum: MIN_SURUM })
   }
   const o = sql.byKod.get(ozet(kodNormal(b.kod)))
   const neden = kullanilabilir(o)
@@ -732,6 +732,19 @@ async function desktopIniYaz(ip, username, password, ustKlasor, klasorAdi, infoT
     await rm(tmp, { force: true }).catch(() => {})
   }
 }
+
+/** Müşteri uygulamasının indirilmesi — müşteri Hub kullanıcısı değil, bu adrese erişiyor.
+ *  Yayınlamak: exe'yi ISTEMCI_EXE yoluna kopyala (varsayılan /opt/pusula-aktarim2/istemci/PusulaAktarim.exe). */
+const ISTEMCI_EXE = process.env.ISTEMCI_EXE ?? join(__dirname, "istemci", "PusulaAktarim.exe")
+fastify.get("/indir", async (req, reply) => {
+  let st
+  try { st = await stat(ISTEMCI_EXE) } catch { return reply.code(404).type("text/plain; charset=utf-8").send("Uygulama henüz yayınlanmadı.") }
+  reply.header("Content-Type", "application/vnd.microsoft.portable-executable")
+  reply.header("Content-Length", st.size)
+  reply.header("Content-Disposition", "attachment; filename=\"PusulaAktarim.exe\"; filename*=UTF-8''" + encodeURIComponent("Pusula Aktarım.exe"))
+  reply.header("Cache-Control", "no-store")
+  return reply.send(createReadStream(ISTEMCI_EXE))
+})
 
 fastify.get("/saglik", async () => ({ tamam: true, surum: "aktarim2", minIstemci: MIN_SURUM }))
 

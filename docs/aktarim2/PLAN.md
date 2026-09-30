@@ -43,6 +43,18 @@ konuşur (Hub'la değil). Hedef sunucu bilgileri (SQL/Depo/terminal) yalnız ser
 | 4 | Resim (Depo `D:\Resimler\{firma}`), eski yıl (`D:\Eski Datalar\{firma}`), program + ek dosyalar (terminal `C:\MUSTERI\{firma}\Aktarim`) |
 | 5 | (sonra) Ön rapor → Hub'da şube kodu / subeler / Banko eşleme önerisi |
 
+### Yayınlama (istemci exe)
+
+Müşteri Hub kullanıcısı değil → exe aktarım servisinden iner: `https://aktarim.pusulanet.net/v2/indir`
+(servis `/opt/pusula-aktarim2/istemci/PusulaAktarim.exe` dosyasını verir). Yeni sürüm:
+1. `PusulaAktarim.csproj` içinde `<Version>` artır.
+2. `apps/aktarim-istemci/web`: `npm run build`; `src/PusulaAktarim`: `dotnet build -c Release`.
+3. `bin/Release/net48/PusulaAktarim.exe` → sunucuya `istemci/PusulaAktarim.exe` (önce `.yeni` adıyla, sonra `mv`).
+4. Eski sürümü kapatmak için `/opt/pusula-aktarim2/.env` → `MIN_ISTEMCI_SURUM`, `pm2 restart aktarim2`.
+
+Exe imzalı değil: indirirken Windows SmartScreen "tanınmayan uygulama" uyarısı verebilir
+("Ek bilgi → Yine de çalıştır").
+
 ### Güvenlik
 - İstemci ↔ servis HTTPS (nginx), Bearer token (kod tek kullanımlık, token oturum ömrü).
 - SQL şifresi (ps.dat / elle) yalnız istemci belleğinde, servise gitmez.
