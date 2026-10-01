@@ -28,7 +28,6 @@ export function AnaEkran({ durum, setDurum }: P) {
   const [hata, setHata] = useState<string | null>(null);
   const [vpnUyari, setVpnUyari] = useState(false);
   const [sifre, setSifre] = useState("");
-  const [sifreFormu, setSifreFormu] = useState(false);
   // Yardım talebi orta panelde açılır (iframe); exe CSP'si yalnız bu adrese frame-src izni verir.
   const [talepAcik, setTalepAcik] = useState(false);
   // İki adımlı doğrulama: açma penceresi + kod sorma (bağlan / kapat / şifre kaydet)
@@ -67,12 +66,11 @@ export function AnaEkran({ durum, setDurum }: P) {
     }
     if (await cagir("/rdp/sifre", { sifre }, "sifre")) {
       setSifre("");
-      setSifreFormu(false);
     }
   };
 
   const vk = durum.vpnKurulum;
-  const sifreGoster = !k.rdpSifre.kayitli || sifreFormu;
+  const sifreGoster = !k.rdpSifre.kayitli;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
@@ -121,11 +119,6 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Button variant="ghost" size="sm" className="justify-start" disabled={!!bekle} onClick={() => void cagir("/kontrol", {}, "kontrol")}>
             {bekle === "kontrol" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden kontrol et
           </Button>
-          {k.rdpSifre.kayitli && !sifreFormu && (
-            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setSifreFormu(true)}>
-              <KeyRound /> Şifreyi değiştir
-            </Button>
-          )}
           <Button variant="ghost" size="sm" className="justify-start" onClick={() => void api("/gunluk/ac", {})}>
             <FileText /> Günlük
           </Button>
@@ -252,7 +245,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         )}
 
         {sifreGoster && (
-          <Bolum baslik={k.rdpSifre.kayitli ? "Oturum şifresini değiştir" : "Oturum şifresini kaydedin"} ikon={<KeyRound />}>
+          <Bolum baslik="Oturum şifresini kaydedin" ikon={<KeyRound />}>
             <p className="mb-3 text-sm text-muted-foreground">
               <span className="font-medium">{kayit.kullanici}</span> kullanıcısının Pusula oturum şifresi. Yalnız bu bilgisayarın Windows
               kimlik kasasında saklanır; her bağlantıda tekrar sorulmaz.
@@ -268,9 +261,6 @@ export function AnaEkran({ durum, setDurum }: P) {
               <Button disabled={!sifre || !!bekle} onClick={() => void sifreKaydet()}>
                 {bekle === "sifre" ? <Loader2 className="animate-spin" /> : null} Kaydet
               </Button>
-              {k.rdpSifre.kayitli && (
-                <Button variant="ghost" onClick={() => setSifreFormu(false)}>Vazgeç</Button>
-              )}
             </div>
           </Bolum>
         )}
@@ -335,7 +325,6 @@ export function AnaEkran({ durum, setDurum }: P) {
           else if (kodIstek === "sifre") {
             setDurum(await api<Durum>("/rdp/sifre", { sifre, kod }));
             setSifre("");
-            setSifreFormu(false);
           }
         }}
       />
