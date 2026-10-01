@@ -74,14 +74,19 @@ namespace PusulaAktarim
                 var tamAdres = _sunucu.Adres + "#anahtar=" + _sunucu.Anahtar;
                 AdresDosyasiYaz(tamAdres);
                 TepsiKur(tamAdres);
-                if (AktarimPenceresi.CalismaZamaniVar())
+                _adres = tamAdres;
+                // WebView2 yoksa (Windows Server'da sık) kur — arayüz tarayıcıda değil uygulamanın penceresinde açılsın
+                var pencereVar = AktarimPenceresi.CalismaZamaniVar() || WebViewKurulum.Kur(AktarimPenceresi.CalismaZamaniVar);
+                if (pencereVar)
                 {
-                    _pencere = new AktarimPenceresi(tamAdres, Kapat);
-                    _pencere.Show();
+                    PencereAc();
                     GosterOlayiniDinle();
                 }
                 else
                 {
+                    // Son çare: bileşen kurulamadı (internet/izin) — arayüz tarayıcıda
+                    MessageBox.Show("Uygulama penceresi için gereken Microsoft WebView2 bileşeni kurulamadı.\n\nArayüz tarayıcıda açılacak; aktarım normal çalışır.",
+                        Baslik, MessageBoxButtons.OK, MessageBoxIcon.Information);
                     TarayicidaAc(tamAdres);
                 }
 
@@ -165,7 +170,6 @@ namespace PusulaAktarim
         {
             var menu = new ContextMenuStrip();
             menu.Items.Add("Göster", null, (s, e) => Goster(adres));
-            menu.Items.Add("Tarayıcıda aç", null, (s, e) => TarayicidaAc(adres));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Kapat", null, (s, e) => Kapat());
             _tepsi = new NotifyIcon
@@ -178,9 +182,19 @@ namespace PusulaAktarim
             _tepsi.DoubleClick += (s, e) => Goster(adres);
         }
 
+        private static string _adres;
+
+        private static void PencereAc()
+        {
+            _pencere = new AktarimPenceresi(_adres, Kapat);
+            _pencere.Show();
+        }
+
+        /// <summary>Tepsiden: pencere varsa öne getir, kapanmışsa yeniden aç (tarayıcıya yalnız WebView2 yoksa).</summary>
         private static void Goster(string adres)
         {
             if (_pencere != null && !_pencere.IsDisposed && !_pencere.SormadanKapat) _pencere.OneGetir();
+            else if (Interlocked.CompareExchange(ref _kapaniyor, 0, 0) == 0 && AktarimPenceresi.CalismaZamaniVar()) PencereAc();
             else TarayicidaAc(adres);
         }
 
