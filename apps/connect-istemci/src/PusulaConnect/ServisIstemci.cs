@@ -53,6 +53,15 @@ namespace PusulaConnect
         public Task<JObject> IkiKapat(string kod) => Gonder(HttpMethod.Post, "api/2fa/kapat", new { kod });
         public string IndirmeAdresi => Adres + "indir";
 
+        // Hub izleme merkezi: canlı durum (~60 sn) ve olay kaydı. Hata yutulur — izleme asıl işi bozmasın.
+        public Task<JObject> Nabiz(object durum) => Gonder(HttpMethod.Post, "api/nabiz", durum);
+        public async Task Olay(string tur, object ayrinti = null)
+        {
+            if (Token == null) return;
+            try { await Gonder(HttpMethod.Post, "api/olay", new { tur, ayrinti }).ConfigureAwait(false); }
+            catch (Exception e) { Gunluk.Yaz("Olay gönderilemedi (" + tur + "): " + e.Message); }
+        }
+
         private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde)
         {
             using (var istek = new HttpRequestMessage(yontem, yol))

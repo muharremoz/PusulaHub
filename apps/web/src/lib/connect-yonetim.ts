@@ -1,0 +1,108 @@
+/**
+ * Pusula Connect izleme merkezi (Hub /connect) — Connect servisinin admin uçları.
+ * Servis: services/pusula-connect (X-Service-Key). Yalnız sunucu tarafında kullanılır.
+ */
+
+const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
+const KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
+
+export interface ConnectAyarlar {
+  tamEkran?: boolean; yazici?: boolean; pano?: boolean; ses?: boolean; windowsIleBaslat?: boolean
+  akilliKart?: boolean; portlar?: boolean; konum?: boolean; kamera?: boolean; aygitlar?: boolean; suruculer?: boolean
+}
+
+export interface ConnectCihazDurum {
+  os: string | null
+  forti: string | null
+  vpnProfil: { dogru: boolean; kullaniciAdi: boolean } | null
+  sifreKayitli: boolean | null
+  ayarlar: ConnectAyarlar | null
+}
+
+export interface ConnectCihazSatir {
+  id: string
+  kodId: string
+  makine: string | null
+  surum: string | null
+  ilkGiris: string
+  sonGorulme: string | null
+  iptal: boolean
+  totpAktif: boolean
+  totpHata: number
+  totpKilit: string | null
+  sonNabiz: string | null
+  oturumAcik: boolean
+  oturumBaslangic: string | null
+  terminalErisim: boolean | null
+  terminalMs: number | null
+  ip: string | null
+  firmaId: string
+  firmaAdi: string
+  kullanici: string
+  kodDurum: string
+  olusturan: string | null
+  rdp: string | null
+  tunel: string | null
+  durum: ConnectCihazDurum | null
+}
+
+export interface ConnectOlay {
+  id: number
+  zaman: string
+  cihazId: string | null
+  firmaId: string | null
+  kullanici: string | null
+  makine: string | null
+  tur: string
+  ayrinti: string | null
+  kaynak: "servis" | "istemci" | "yonetici"
+  ip: string | null
+}
+
+export interface ConnectKod {
+  id: string; firmaId: string; firmaAdi: string; kullanici: string
+  durum: "bekliyor" | "kullanildi" | "iptal"; olusturan: string | null; olusturma: string; bitis: string
+  cihazlar: { id: string }[]
+}
+
+export type ConnectCihazIslemi = "2fa-sifirla" | "kilit-kaldir" | "iptal" | "etkinlestir"
+
+async function istek<T>(yol: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(`${BASE}${yol}`, { ...init, headers: { "X-Service-Key": KEY, "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" })
+  const metin = await r.text()
+  let j: unknown = null
+  try { j = JSON.parse(metin) } catch { /* JSON değil */ }
+  if (!r.ok) throw new Error((j as { hata?: string } | null)?.hata ?? `Connect servisi: HTTP ${r.status}`)
+  return j as T
+}
+
+export const connectTumCihazlar = (firma?: string) =>
+  istek<ConnectCihazSatir[]>(`/admin/cihazlar${firma ? `?firma=${encodeURIComponent(firma)}` : ""}`)
+
+export function connectOlaylar(q: { firma?: string; cihaz?: string; limit?: number; once?: number }) {
+  const p = new URLSearchParams()
+  if (q.firma) p.set("firma", q.firma)
+  if (q.cihaz) p.set("cihaz", q.cihaz)
+  if (q.limit) p.set("limit", String(q.limit))
+  if (q.once) p.set("once", String(q.once))
+  return istek<ConnectOlay[]>(`/admin/olaylar?${p}`)
+}
+
+export const connectKodlar = (firma?: string) =>
+  istek<ConnectKod[]>(`/admin/kodlar${firma ? `?firma=${encodeURIComponent(firma)}` : ""}`)
+
+export const connectCihazIslemi = (id: string, islem: ConnectCihazIslemi, yapan: string | null) =>
+  istek<{ tamam: boolean }>(`/admin/cihazlar/${encodeURIComponent(id)}/${islem}`, { method: "POST", body: JSON.stringify({ yapan }) })
+
+export const connectKodIptal = (id: string, yapan: string | null) =>
+  istek<{ tamam: boolean }>(`/admin/kodlar/${encodeURIComponent(id)}/iptal`, { method: "POST", body: JSON.stringify({ yapan }) })
+
+/** Yayındaki istemci sürümü (eski sürüm uyarısı için). Servis yoksa null. */
+export async function connectSurum(): Promise<{ son: string | null; min: string | null }> {
+  try {
+    const j = await istek<{ son?: string | null; min?: string | null }>("/api/surum")
+    return { son: j.son ?? null, min: j.min ?? null }
+  } catch {
+    return { son: null, min: null }
+  }
+}

@@ -147,7 +147,7 @@ namespace PusulaConnect
         /// Uzak masaüstünü pencerenin tamamında açar (arayüz gizlenir). Bitince arayüz geri gelir ve
         /// <paramref name="bitti"/> (mesaj, şifreHatalı) çağrılır. UI iş parçacığında çalışır.
         /// </summary>
-        public void OturumAc(RdpAyar a, Action<string, bool> bitti)
+        public void OturumAc(RdpAyar a, Action<string, bool, int> bitti)
         {
             if (InvokeRequired) { Invoke((Action)(() => OturumAc(a, bitti))); return; }
             if (_oturum != null) { OneGetir(); return; }
@@ -160,7 +160,7 @@ namespace PusulaConnect
                 _web.Visible = true;
                 p.Dispose();
                 BaslikCubugu(true);
-                bitti(mesaj, sifreHatali);
+                bitti(mesaj, sifreHatali, p.SonNeden);
             };
             _oturum = p;
             BaslikCubugu(false);

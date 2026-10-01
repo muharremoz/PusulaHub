@@ -30,6 +30,8 @@ namespace PusulaConnect
     {
         /// <summary>Mesaj: kullanıcıya gösterilecek hata (null = normal bitiş); şifreHatali: kayıtlı şifre yanlış.</summary>
         public event Action<string, bool> Bitti;
+        /// <summary>Bitiş nedeni (mstscax discReason; -1 = bilinmiyor/kullanıcı kesti, bağlanmadan).</summary>
+        public int SonNeden { get; private set; } = -1;
 
         private readonly RdpAyar _a;
         private readonly AxMsRdpClient9NotSafeForScripting _rdp;
@@ -302,6 +304,7 @@ namespace PusulaConnect
                 }
             }
             Gunluk.Yaz("RDP oturumu bitti: neden " + neden + (_kesiliyor ? " (kullanıcı kesti)" : ""));
+            SonNeden = neden;
             Bitir(mesaj, sifreHatali);
         }
 

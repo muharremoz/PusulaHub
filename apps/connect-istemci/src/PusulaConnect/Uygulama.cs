@@ -25,7 +25,7 @@ namespace PusulaConnect
         /// Gömülü oturum (Program bağlar → ConnectPenceresi.OturumAc). Null ise (WebView2 yok, tarayıcıda
         /// çalışıyor) yedek yol: mstsc. Geri çağrı (mesaj, şifreHatalı) oturum bitince gelir.
         /// </summary>
-        public Action<RdpAyar, Action<string, bool>> OturumAc;
+        public Action<RdpAyar, Action<string, bool, int>> OturumAc;
         public Func<bool> OturumAcikMi;
         private string _oturumMesaji;
 
@@ -66,6 +66,9 @@ namespace PusulaConnect
                 // Pusula 2FA'yı sıfırladıysa eski kasa dosyası artık çözülemez — temizle (kullanıcı şifreyi yeniden girer)
                 if (k["ikiAdim"]?.Value<bool?>("aktif") != true && Rdp.KasaliSifreVar) Rdp.KasaliSil();
                 lock (_kilit) { _kayit = k; _asama = "hazir"; _servisErisim = true; }
+                var onceki = Yerlesim.OncekiSurumAl();
+                if (onceki != null) _ = _servis.Olay("guncellendi", onceki + " → " + ServisIstemci.Surum);
+                else _ = _servis.Olay("uygulama_acildi", ServisIstemci.Surum);
             }
             catch (ServisHatasi e) when (e.DurumKodu == 401 || e.DurumKodu == 410)
             {
@@ -107,6 +110,8 @@ namespace PusulaConnect
                     if (_vpnDurum?.Value<bool>("bitti") == true)
                     {
                         _vpnKuruluyor = false;
+                        var vh = _vpnDurum.Value<string>("hata");
+                        _ = _servis.Olay(vh == null ? "vpn_kuruldu" : "vpn_kurulum_hatasi", vh);
                         _ = Task.Run(Kontrol);
                     }
                 }
@@ -166,6 +171,7 @@ namespace PusulaConnect
             Rdp.YerelSil();
             Rdp.KasaliSil();
             Gunluk.Yaz("Cihaz kaydı kaldırıldı (kullanıcı)");
+            try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
             lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; }
             return Durum();
@@ -194,6 +200,7 @@ namespace PusulaConnect
                 }
             }
             finally { Interlocked.Exchange(ref _kontrolSuruyor, 0); }
+            await NabizGonder(false);
         }
 
         public async Task<object> KontrolEt()
@@ -236,6 +243,7 @@ namespace PusulaConnect
                 Rdp.YerelSil();
                 lock (_kilit) _oturumMesaji = null;
                 Gunluk.Yaz("RDP şifresi kaydedildi (2FA kasası)");
+                _ = _servis.Olay("sifre_kaydedildi", "2FA kasası");
                 await Kontrol();
                 return Durum();
             }
@@ -243,6 +251,7 @@ namespace PusulaConnect
             Rdp.SifreSil(rdp);
             lock (_kilit) _oturumMesaji = null;
             Gunluk.Yaz("RDP şifresi kaydedildi (" + rdp + ")");
+            _ = _servis.Olay("sifre_kaydedildi");
             await Kontrol();
             return Durum();
         }
@@ -253,6 +262,7 @@ namespace PusulaConnect
             if (rdp != null) Rdp.SifreSil(rdp);
             Rdp.KasaliSil();
             Rdp.YerelSil();
+            _ = _servis.Olay("sifre_silindi");
             await Kontrol();
             return Durum();
         }
@@ -294,6 +304,9 @@ namespace PusulaConnect
                     AkilliKart = ay.AkilliKart, Portlar = ay.Portlar, Konum = ay.Konum, Kamera = ay.Kamera,
                     Aygitlar = ay.Aygitlar, Suruculer = ay.Suruculer,
                 }, OturumBitti);
+                _oturumBaslangic = DateTime.Now;
+                _ = _servis.Olay("oturum_acildi", new { sunucu = rdp, ms = t.ms, ikiAdim = iki });
+                _ = Task.Run(() => NabizGonder(true));
                 Gunluk.Yaz("Oturum açılıyor (uygulama içinde" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
             else
@@ -308,6 +321,8 @@ namespace PusulaConnect
         {
             try { Ayarlar.Degistir(d); }
             catch (Exception e) { throw new KullaniciHatasi("Ayar kaydedilemedi: " + e.Message); }
+            _ = _servis.Olay("ayar_degisti", d);
+            _ = Task.Run(() => NabizGonder(true));
             return Durum();
         }
 
@@ -318,15 +333,80 @@ namespace PusulaConnect
         }
 
         /// <summary>Gömülü oturum bitti. Kayıtlı şifre yanlışsa silinir → arayüzde şifre formu yeniden çıkar.</summary>
-        private void OturumBitti(string mesaj, bool sifreHatali)
+        private void OturumBitti(string mesaj, bool sifreHatali, int neden)
         {
             if (sifreHatali)
             {
                 if (IkiAktif) Rdp.KasaliSil(); else Rdp.YerelSil();
                 Gunluk.Yaz("Kayıtlı RDP şifresi geçersiz, silindi");
+                _ = _servis.Olay("sifre_gecersiz");
             }
+            var sure = _oturumBaslangic == default ? (TimeSpan?)null : DateTime.Now - _oturumBaslangic;
+            _oturumBaslangic = default;
+            _ = _servis.Olay(mesaj == null ? "oturum_bitti" : "oturum_hatasi", new
+            {
+                neden,
+                mesaj,
+                sureDk = sure.HasValue ? Math.Round(sure.Value.TotalMinutes, 1) : (double?)null,
+            });
             lock (_kilit) _oturumMesaji = mesaj;
-            _ = Task.Run(Kontrol);
+            _ = Task.Run(async () => { await Kontrol(); await NabizGonder(true); });
+        }
+
+        // ------------------------------------------------------------ izleme (Hub)
+
+        private DateTime _sonNabizGonderim, _oturumBaslangic;
+        private int _nabizSuruyor;
+
+        /// <summary>
+        /// "Windows 11 Pro 24H2 (26100)" — Environment.OSVersion uygulama bildirimi olmadan 6.2 döner;
+        /// gerçek değer kayıt defterinde. Windows 11 de ProductName'de "Windows 10" yazar → yapı no ile düzeltilir.
+        /// </summary>
+        private static string WindowsSurumu()
+        {
+            try
+            {
+                using (var k = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64)
+                    .OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion"))
+                {
+                    var ad = k?.GetValue("ProductName") as string ?? "Windows";
+                    var yapi = k?.GetValue("CurrentBuild") as string ?? "";
+                    if (int.TryParse(yapi, out var y) && y >= 22000) ad = ad.Replace("Windows 10", "Windows 11");
+                    var surum = k?.GetValue("DisplayVersion") as string ?? k?.GetValue("ReleaseId") as string;
+                    return ad + (surum != null ? " " + surum : "") + (yapi != "" ? " (" + yapi + ")" : "") + (Environment.Is64BitOperatingSystem ? "" : " 32 bit");
+                }
+            }
+            catch { return Environment.OSVersion.VersionString; }
+        }
+
+        /// <summary>Canlı durum servise: ~60 sn'de bir (Kontrol'den), oturum açılıp kapanınca hemen.</summary>
+        private async Task NabizGonder(bool zorla)
+        {
+            if (_servis.Token == null) return;
+            if (!zorla && DateTime.Now - _sonNabizGonderim < TimeSpan.FromSeconds(55)) return;
+            if (Interlocked.Exchange(ref _nabizSuruyor, 1) == 1) return;
+            try
+            {
+                object durum;
+                lock (_kilit)
+                {
+                    if (_asama != "hazir") return;
+                    durum = new
+                    {
+                        oturum = OturumAcikMi?.Invoke() == true,
+                        terminal = new { erisim = _terminal.erisim, ms = _terminal.ms },
+                        os = WindowsSurumu(),
+                        forti = _fortiSurum,
+                        vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi },
+                        sifreKayitli = _rdpKullanici != null,
+                        ayarlar = Ayarlar.Simdiki.Gorunum(),
+                    };
+                }
+                await _servis.Nabiz(durum);
+                _sonNabizGonderim = DateTime.Now;
+            }
+            catch { /* servis yoksa sonra tekrar */ }
+            finally { Interlocked.Exchange(ref _nabizSuruyor, 0); }
         }
 
         // ------------------------------------------------------------ iki adımlı doğrulama

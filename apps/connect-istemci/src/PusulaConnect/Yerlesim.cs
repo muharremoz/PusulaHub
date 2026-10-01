@@ -87,6 +87,21 @@ namespace PusulaConnect
             return 0;
         }
 
+        private static string OncekiSurumDosyasi => Path.Combine(Kimlik.Klasor, "guncelleme-onceki.txt");
+
+        /// <summary>Güncellemeden sonraki ilk açılışta önceki sürüm (bir kez döner, dosya silinir); yoksa null.</summary>
+        public static string OncekiSurumAl()
+        {
+            try
+            {
+                if (!File.Exists(OncekiSurumDosyasi)) return null;
+                var s = File.ReadAllText(OncekiSurumDosyasi).Trim();
+                File.Delete(OncekiSurumDosyasi);
+                return s == ServisIstemci.Surum ? null : s;
+            }
+            catch { return null; }
+        }
+
         /// <summary>
         /// Yeni sürümü indirir, SHA-256'sını servisin bildirdiğiyle karşılaştırır, kurulu kopyanın yerine koyar
         /// ve yeniden başlatır. Bir önceki sürüm "PusulaConnect.exe.onceki" olarak kalır (elle geri dönüş için).
@@ -139,6 +154,8 @@ namespace PusulaConnect
                 catch { EskiyiKenaraAl(KuruluExe); }   // çalışan exe yeniden adlandırılabilir
             }
             var yeniSurum = SurumOku(yeni);
+            // Yeni sürüm açılınca "x → y güncellendi" olayını bildirebilsin
+            try { File.WriteAllText(OncekiSurumDosyasi, ServisIstemci.Surum); } catch { }
             File.Move(yeni, KuruluExe);
             Gunluk.Yaz("Güncellendi → " + yeniSurum + ", yeniden başlatılıyor");
             Process.Start(new ProcessStartInfo(KuruluExe, "--guncellendi") { UseShellExecute = true, WorkingDirectory = KuruluKlasor });

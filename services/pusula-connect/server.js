@@ -23,6 +23,13 @@
  *     POST   /api/2fa/dogrula { kod }   her bağlanmada → { kasaAnahtari } (RDP şifresi bununla çözülür)
  *     POST   /api/2fa/kapat   { kod }   → { kasaAnahtari } (istemci şifreyi kasaya geri yazar), kapanır
  *     POST   /admin/cihazlar/:id/2fa-sifirla   Pusula sıfırlar (telefon kayboldu)
+ *     POST   /admin/cihazlar/:id/kilit-kaldir  çok hatalı kod kilidini kaldır
+ *     POST   /admin/cihazlar/:id/etkinlestir   iptal edilen cihazı geri aç
+ *     GET    /admin/cihazlar?firma=     tüm cihazlar + canlı durum (nabız) — Hub izleme merkezi
+ *     GET    /admin/olaylar?firma=&cihaz=&limit=&once=   olay kaydı (yeniden eskiye)
+ *   İstemci (Bearer token):
+ *     POST   /api/nabiz                 { oturum, terminal, ayarlar, ... } — ~60 sn'de bir canlı durum
+ *     POST   /api/olay                  { tur, ayrinti } — oturum açıldı/bitti, güncellendi…
  *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
  *     GET    /api/surum                 { son, min, sha256, boyut, notlar } — kendini güncelleme
  *     GET    /indir                     uygulama exe
@@ -90,9 +97,40 @@ for (const [ad, tip] of [
   ["totpHata", "INTEGER NOT NULL DEFAULT 0"],
   ["totpKilit", "TEXT"],          // bu ana kadar kod denenemez
   ["kasaAnahtari", "TEXT"],       // şifreli; RDP şifresini çözen anahtar
+  // canlı durum (istemcinin nabzı)
+  ["sonNabiz", "TEXT"],
+  ["oturumAcik", "INTEGER NOT NULL DEFAULT 0"],
+  ["oturumBaslangic", "TEXT"],
+  ["terminalErisim", "INTEGER"],
+  ["terminalMs", "INTEGER"],
+  ["ip", "TEXT"],
+  ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar } — yalnız gösterim
 ]) {
   try { db.exec(`ALTER TABLE cihazlar ADD COLUMN ${ad} ${tip}`) } catch { /* zaten var */ }
 }
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS olaylar (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    zaman     TEXT NOT NULL DEFAULT (datetime('now')),
+    cihazId   TEXT,
+    firmaId   TEXT,
+    kullanici TEXT,
+    makine    TEXT,
+    tur       TEXT NOT NULL,
+    ayrinti   TEXT,
+    kaynak    TEXT NOT NULL DEFAULT 'servis',   -- servis | istemci | yonetici
+    ip        TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_olaylar_zaman ON olaylar(zaman);
+  CREATE INDEX IF NOT EXISTS idx_olaylar_firma ON olaylar(firmaId, zaman);
+  CREATE INDEX IF NOT EXISTS idx_olaylar_cihaz ON olaylar(cihazId, zaman);
+`)
+/** Olay kaydı 180 gün tutulur. */
+const OLAY_GUN = 180
+const olayTemizle = () => db.prepare(`DELETE FROM olaylar WHERE zaman < datetime('now', ?)`).run(`-${OLAY_GUN} days`)
+olayTemizle()
+setInterval(olayTemizle, 24 * 3600 * 1000).unref()
 
 const sql = {
   kodEkle: db.prepare(`INSERT INTO kodlar (id, kodOzet, firmaId, firmaAdi, kullanici, profil, olusturan, bitis)
@@ -103,7 +141,7 @@ const sql = {
                       WHERE (@firma IS NULL OR firmaId = @firma) ORDER BY olusturma DESC LIMIT 500`),
   cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
   cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum) VALUES (?, ?, ?, ?, ?)`),
-  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari, k.*
+  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari, k.*
                             FROM cihazlar c JOIN kodlar k ON k.id = c.kodId WHERE c.tokenOzet = ?`),
   totpBaslat: db.prepare(`UPDATE cihazlar SET totpGizli = ?, totpAktif = 0, totpSonAdim = NULL, totpHata = 0, totpKilit = NULL, kasaAnahtari = NULL WHERE id = ?`),
   totpEtkin: db.prepare(`UPDATE cihazlar SET totpAktif = 1, kasaAnahtari = ?, totpSonAdim = ?, totpHata = 0, totpKilit = NULL WHERE id = ?`),
@@ -113,7 +151,46 @@ const sql = {
   cihazGorundu: db.prepare(`UPDATE cihazlar SET sonGorulme = datetime('now'), surum = ? WHERE id = ?`),
   cihazIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE id = ?`),
   kodCihazlariIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE kodId = ?`),
+  cihazEtkin: db.prepare(`UPDATE cihazlar SET iptal = 0 WHERE id = ?`),
+  kilitKaldir: db.prepare(`UPDATE cihazlar SET totpHata = 0, totpKilit = NULL WHERE id = ?`),
+  nabiz: db.prepare(`UPDATE cihazlar SET sonNabiz = datetime('now'), sonGorulme = datetime('now'), surum = @surum,
+                      oturumAcik = @oturumAcik,
+                      oturumBaslangic = CASE WHEN @oturumAcik = 1 THEN COALESCE(oturumBaslangic, datetime('now')) ELSE NULL END,
+                      terminalErisim = @terminalErisim, terminalMs = @terminalMs, ip = @ip, durumJson = @durumJson
+                    WHERE id = @id`),
+  tumCihazlar: db.prepare(`SELECT c.id, c.kodId, c.makine, c.surum, c.ilkGiris, c.sonGorulme, c.iptal, c.totpAktif, c.totpHata, c.totpKilit,
+                             c.sonNabiz, c.oturumAcik, c.oturumBaslangic, c.terminalErisim, c.terminalMs, c.ip, c.durumJson,
+                             k.firmaId, k.firmaAdi, k.kullanici, k.durum AS kodDurum, k.olusturan, k.profil
+                           FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
+                           WHERE (@firma IS NULL OR k.firmaId = @firma)
+                           ORDER BY COALESCE(c.sonGorulme, c.ilkGiris) DESC LIMIT 2000`),
+  cihazBilgi: db.prepare(`SELECT c.id, c.makine, k.firmaId, k.kullanici FROM cihazlar c JOIN kodlar k ON k.id = c.kodId WHERE c.id = ?`),
+  kodBilgi: db.prepare(`SELECT id, firmaId, kullanici FROM kodlar WHERE id = ?`),
+  olayEkle: db.prepare(`INSERT INTO olaylar (cihazId, firmaId, kullanici, makine, tur, ayrinti, kaynak, ip)
+                        VALUES (@cihazId, @firmaId, @kullanici, @makine, @tur, @ayrinti, @kaynak, @ip)`),
+  olaylar: db.prepare(`SELECT id, zaman, cihazId, firmaId, kullanici, makine, tur, ayrinti, kaynak, ip FROM olaylar
+                       WHERE (@firma IS NULL OR firmaId = @firma) AND (@cihaz IS NULL OR cihazId = @cihaz)
+                         AND (@once IS NULL OR id < @once)
+                       ORDER BY id DESC LIMIT @limit`),
 }
+
+/** Olay kaydı — hata yutulur (kayıt yazılamadı diye asıl iş bozulmasın). */
+function olay(tur, { cihaz = null, firmaId = null, kullanici = null, makine = null, ayrinti = null, kaynak = "servis", ip = null } = {}) {
+  try {
+    sql.olayEkle.run({
+      cihazId: cihaz?.cihazId ?? cihaz?.id ?? null,
+      firmaId: cihaz?.firmaId ?? firmaId,
+      kullanici: cihaz?.kullanici ?? kullanici,
+      makine: cihaz?.makine ?? makine,
+      tur,
+      ayrinti: ayrinti == null ? null : (typeof ayrinti === "string" ? ayrinti : JSON.stringify(ayrinti)).slice(0, 1000),
+      kaynak,
+      ip,
+    })
+  } catch (e) { fastify?.log?.warn?.({ err: e.message, tur }, "olay yazilamadi") }
+}
+/** nginx arkasında gerçek istemci adresi */
+const istemciIp = (req) => String(req.headers["x-real-ip"] ?? req.headers["x-forwarded-for"] ?? req.ip ?? "").split(",")[0].trim().slice(0, 64) || null
 
 // ── yardımcılar (Aktarım 2 servisiyle aynı kurallar) ──
 const ozet = (s) => createHash("sha256").update(String(s)).digest("hex")
@@ -203,7 +280,7 @@ function totpDogrula(gizliB32, kod, sonAdim) {
 const TOTP_HATA_SINIRI = 5
 const TOTP_KILIT_DK = 10
 
-const fastify = Fastify({ logger: { level: "info" }, bodyLimit: 1024 * 1024 })
+var fastify = Fastify({ logger: { level: "info" }, bodyLimit: 1024 * 1024 })
 
 function yonetici(req, reply) {
   if (!anahtarDogru(req.headers["x-service-key"])) { reply.code(401).send({ hata: "yetkisiz" }); return false }
@@ -227,6 +304,7 @@ fastify.post("/admin/kodlar", async (req, reply) => {
         kullanici: String(b.kullanici), profil: JSON.stringify(b.profil), olusturan: b.olusturan ?? null,
         bitis: new Date(Date.now() + gun * 86400000).toISOString().replace("T", " ").slice(0, 19),
       })
+      olay("kod_olusturuldu", { firmaId: String(b.firmaId), kullanici: String(b.kullanici), kaynak: "yonetici", ayrinti: (b.olusturan ? b.olusturan + " · " : "") + gun + " gün geçerli" })
       return { id, kod }
     } catch (e) {
       if (!/UNIQUE/.test(String(e?.message))) throw e
@@ -245,6 +323,8 @@ fastify.post("/admin/kodlar/:id/iptal", async (req, reply) => {
   if (!yonetici(req, reply)) return
   sql.kodDurum.run("iptal", req.params.id)
   sql.kodCihazlariIptal.run(req.params.id)
+  const k = sql.kodBilgi.get(req.params.id)
+  olay("kod_iptal", { firmaId: k?.firmaId, kullanici: k?.kullanici, kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
   return { tamam: true }
 })
 
@@ -254,13 +334,50 @@ fastify.post("/admin/cihazlar/:id/2fa-sifirla", async (req, reply) => {
   const r = sql.totpSifirla.run(req.params.id)
   if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
   req.log.info({ cihaz: req.params.id }, "2fa sifirlandi (yonetici)")
+  olay("2fa_sifirlandi", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
   return { tamam: true }
+})
+
+fastify.post("/admin/cihazlar/:id/kilit-kaldir", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const r = sql.kilitKaldir.run(req.params.id)
+  if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  olay("2fa_kilit_kaldirildi", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
+  return { tamam: true }
+})
+
+fastify.post("/admin/cihazlar/:id/etkinlestir", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const r = sql.cihazEtkin.run(req.params.id)
+  if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  olay("cihaz_etkinlestirildi", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
+  return { tamam: true }
+})
+
+fastify.get("/admin/cihazlar", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const firma = req.query?.firma ? String(req.query.firma) : null
+  return sql.tumCihazlar.all({ firma }).map(({ profil, durumJson, ...c }) => {
+    let p = {}, d = null
+    try { p = JSON.parse(profil) } catch { /* bozuk */ }
+    try { d = durumJson ? JSON.parse(durumJson) : null } catch { /* bozuk */ }
+    return { ...c, iptal: !!c.iptal, totpAktif: !!c.totpAktif, oturumAcik: !!c.oturumAcik, terminalErisim: c.terminalErisim == null ? null : !!c.terminalErisim,
+      rdp: p.rdp ?? null, tunel: p.tunel ?? null, durum: d }
+  })
+})
+
+fastify.get("/admin/olaylar", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const q = req.query ?? {}
+  const limit = Math.min(Math.max(parseInt(q.limit ?? "200", 10) || 200, 1), 1000)
+  return sql.olaylar.all({ firma: q.firma ? String(q.firma) : null, cihaz: q.cihaz ? String(q.cihaz) : null, once: q.once ? parseInt(q.once, 10) : null, limit })
 })
 
 fastify.post("/admin/cihazlar/:id/iptal", async (req, reply) => {
   if (!yonetici(req, reply)) return
   const r = sql.cihazIptal.run(req.params.id)
   if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  olay("cihaz_iptal", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
   return { tamam: true }
 })
 
@@ -300,6 +417,7 @@ fastify.post("/api/kayit", async (req, reply) => {
   })
   tx()
   req.log.info({ firma: k.firmaId, kullanici: k.kullanici, makine: b.makine, surum }, "connect kayit")
+  olay("kayit", { firmaId: k.firmaId, kullanici: k.kullanici, makine: String(b.makine ?? "").slice(0, 100), ayrinti: "sürüm " + surum, ip: istemciIp(req) })
   return { token, kayit: kayitGorunumu(k) }
 })
 
@@ -325,6 +443,7 @@ function koduDenetle(c, kod, gizliB32, reply) {
       ? new Date(Date.now() + TOTP_KILIT_DK * 60000).toISOString().replace("T", " ").slice(0, 19)
       : null
     sql.totpHata.run(kilit ? 0 : hata, kilit, c.cihazId)
+    olay(kilit ? "2fa_kilitlendi" : "2fa_hatali_kod", { cihaz: c, kaynak: "istemci", ayrinti: kilit ? `${TOTP_HATA_SINIRI} hatalı kod, ${TOTP_KILIT_DK} dk kilit` : `${hata}. hatalı deneme` })
     reply.code(400).send({ hata: kilit ? `Çok fazla hatalı kod. ${TOTP_KILIT_DK} dakika sonra tekrar deneyin.` : "Kod hatalı ya da süresi geçmiş." })
     return null
   }
@@ -350,6 +469,7 @@ fastify.post("/api/2fa/onayla", async (req, reply) => {
   const kasa = randomBytes(32).toString("base64")
   sql.totpEtkin.run(sifrele(kasa), adim, c.cihazId)
   req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa etkin")
+  olay("2fa_acildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
   return { kasaAnahtari: kasa }
 })
 
@@ -368,6 +488,7 @@ fastify.post("/api/2fa/kapat", async (req, reply) => {
   const kasa = c.kasaAnahtari ? coz(c.kasaAnahtari) : null
   sql.totpSifirla.run(c.cihazId)
   req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa kapatildi")
+  olay("2fa_kapatildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
   return { kasaAnahtari: kasa }
 })
 
@@ -375,6 +496,35 @@ fastify.get("/api/profil", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   sql.cihazGorundu.run(String(req.headers["x-surum"] ?? "").slice(0, 20) || null, c.cihazId)
   return kayitGorunumu(c)
+})
+
+/** Canlı durum: istemci ~60 sn'de bir (ve oturum açılıp kapanınca hemen) gönderir. */
+fastify.post("/api/nabiz", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  const b = req.body ?? {}
+  const t = b.terminal ?? {}
+  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null }
+  sql.nabiz.run({
+    id: c.cihazId,
+    surum: String(req.headers["x-surum"] ?? "").slice(0, 20) || null,
+    oturumAcik: b.oturum ? 1 : 0,
+    terminalErisim: typeof t.erisim === "boolean" ? (t.erisim ? 1 : 0) : null,
+    terminalMs: Number.isFinite(t.ms) ? Math.round(t.ms) : null,
+    ip: istemciIp(req),
+    durumJson: JSON.stringify(durum).slice(0, 4000),
+  })
+  return { tamam: true }
+})
+
+/** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
+const ISTEMCI_OLAYLARI = new Set(["oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
+  "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
+fastify.post("/api/olay", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  const tur = String(req.body?.tur ?? "")
+  if (!ISTEMCI_OLAYLARI.has(tur)) return reply.code(400).send({ hata: "bilinmeyen olay" })
+  olay(tur, { cihaz: c, kaynak: "istemci", ayrinti: req.body?.ayrinti ?? null, ip: istemciIp(req) })
+  return { tamam: true }
 })
 
 /**
