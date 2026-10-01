@@ -95,19 +95,20 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
           </dl>
 
-          <div className="rounded-lg border p-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck className={"size-4 shrink-0 " + (ikiAktif ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
+          {ikiAktif ? (
+            <div className="flex items-center gap-2 rounded-lg border p-3">
+              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <div className="min-w-0 flex-1">
                 <div className="text-xs text-muted-foreground">İki adımlı doğrulama</div>
-                <div className={"text-sm font-medium " + (ikiAktif ? "text-emerald-700 dark:text-emerald-400" : "")}>{ikiAktif ? "Açık" : "Kapalı"}</div>
+                <div className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Açık</div>
               </div>
-              <Button size="sm" variant={ikiAktif ? "ghost" : "outline"} onClick={() => (ikiAktif ? setKodIstek("kapat") : setIkiAc(true))}>
-                {ikiAktif ? "Kapat" : "Aç"}
-              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setKodIstek("kapat")}>Kapat</Button>
             </div>
-            {!ikiAktif && <p className="mt-2 text-xs text-muted-foreground">Bağlanırken telefonunuzdaki kod da sorulsun.</p>}
-          </div>
+          ) : (
+            <Button variant="outline" className="w-full" onClick={() => setIkiAc(true)}>
+              <ShieldCheck /> İki adımlı doğrulamayı aç
+            </Button>
+          )}
 
           {durum.guncelleme.mevcut && (
             <Button size="sm" variant="outline" className="self-start" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
