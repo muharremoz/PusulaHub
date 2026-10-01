@@ -25,7 +25,7 @@
     <AssemblyName>PusulaAktarim</AssemblyName>
     <RootNamespace>PusulaAktarim</RootNamespace>
     <!-- Servisteki MIN_ISTEMCI_SURUM ile karşılaştırılır (eskiyse 426). -->
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Company>Pusula Yazılım</Company>
     <Product>Pusula Aktarım</Product>
     <AssemblyTitle>Pusula Aktarım</AssemblyTitle>

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FolderOpen, FolderPlus, Image, Info, Loader2, Plus,
-  RefreshCw, Server, X, XCircle,
+  RefreshCw, Search, Server, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -9,6 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import {
+  Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
+} from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { mb } from "./ortak";
@@ -21,6 +24,10 @@ const TUR_ETIKET: Record<Veritabani["tur"], string> = {
   diger: "Tanımsız",
   sirket: "Şirket tanımları",
 };
+
+const VT_SAYFA = 25;
+const KLASOR_SAYFA = 10;
+const GRUPLAR: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
 
 type ResimSecimi = { yol: string; secili: boolean; altKlasor: string };
 type ProgramSecimi = { yol: string; secili: boolean; program: string };
@@ -62,6 +69,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [ekKlasorler, setEkKlasorler] = useState<string[]>([]);
   const [basliyor, setBasliyor] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
+  const [arama, setArama] = useState("");
+  const [turFiltre, setTurFiltre] = useState<"hepsi" | Veritabani["tur"]>("hepsi");
+  const [vtSayfa, setVtSayfa] = useState(1);
+  const [resimSayfa, setResimSayfa] = useState(1);
+  const [programSayfa, setProgramSayfa] = useState(1);
 
   const toplamMb = useMemo(
     () => (r?.veritabanlari ?? []).filter((v) => secili.has(v.ad)).reduce((t, v) => t + v.veriMb, 0),
@@ -116,7 +128,48 @@ export function RaporEkrani({ durum, setDurum }: P) {
     }
   };
 
-  const gruplar: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
+  // Filtre (ad / şirket + tür) → grup sırasına diz → sayfala. Grup başlığı, sayfada o grubun ilk satırından önce.
+  const filtreli = useMemo(() => {
+    const q = arama.trim().toLocaleLowerCase("tr");
+    const l = (r?.veritabanlari ?? []).filter((v) => {
+      if (turFiltre !== "hepsi" && v.tur !== turFiltre) return false;
+      if (q && !v.ad.toLocaleLowerCase("tr").includes(q) && !v.sirketAdlari.some((x) => x.toLocaleLowerCase("tr").includes(q))) return false;
+      return true;
+    });
+    return GRUPLAR.flatMap((g) => l.filter((v) => v.tur === g));
+  }, [r, arama, turFiltre]);
+  const grupSayisi = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const v of filtreli) m.set(v.tur, (m.get(v.tur) ?? 0) + 1);
+    return m;
+  }, [filtreli]);
+  const vtSayfaSayisi = Math.max(1, Math.ceil(filtreli.length / VT_SAYFA));
+  const vtSayfaGecerli = Math.min(vtSayfa, vtSayfaSayisi);
+  const sayfadakiler = filtreli.slice((vtSayfaGecerli - 1) * VT_SAYFA, vtSayfaGecerli * VT_SAYFA);
+  const secilebilir = filtreli.filter((v) => v.durum === "ONLINE");
+  const filtreliSeciliSayisi = secilebilir.filter((v) => secili.has(v.ad)).length;
+  const hepsiSecili = secilebilir.length > 0 && filtreliSeciliSayisi === secilebilir.length;
+  const tumunuSec = (acik: boolean) =>
+    setSecili((s) => {
+      const y = new Set(s);
+      for (const v of secilebilir) {
+        if (acik) y.add(v.ad);
+        else y.delete(v.ad);
+      }
+      return y;
+    });
+
+  const resimSayfaSayisi = Math.max(1, Math.ceil(resimler.length / KLASOR_SAYFA));
+  const resimSayfaGecerli = Math.min(resimSayfa, resimSayfaSayisi);
+  const resimBas = (resimSayfaGecerli - 1) * KLASOR_SAYFA;
+  const programSayfaSayisi = Math.max(1, Math.ceil(programlar.length / KLASOR_SAYFA));
+  const programSayfaGecerli = Math.min(programSayfa, programSayfaSayisi);
+  const programBas = (programSayfaGecerli - 1) * KLASOR_SAYFA;
+  const resimSecilebilir = (yol: string) => {
+    const k = r?.resimKlasorleri.find((x) => x.yol === yol);
+    return !!k && k.var && k.dosyaSayisi > 0;
+  };
+  const resimHepsiSecili = resimler.filter((x) => resimSecilebilir(x.yol)).every((x) => x.secili);
 
   return (
     <div className="min-h-svh bg-muted/40 pb-20">
@@ -173,10 +226,48 @@ export function RaporEkrani({ durum, setDurum }: P) {
               baslik="Veritabanları"
               sag={`${r.veritabanlari.length} veritabanı · ${mb(r.veritabanlari.reduce((t, v) => t + v.veriMb, 0))}`}
             >
+              <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+                <div className="relative min-w-48 flex-1">
+                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={arama}
+                    onChange={(e) => {
+                      setArama(e.target.value);
+                      setVtSayfa(1);
+                    }}
+                    placeholder="Veritabanı veya şirket ara…"
+                    className="h-8 pl-8 text-sm"
+                  />
+                </div>
+                <ToggleGroup
+                  type="single"
+                  size="sm"
+                  variant="outline"
+                  value={turFiltre}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    setTurFiltre(v as typeof turFiltre);
+                    setVtSayfa(1);
+                  }}
+                >
+                  <ToggleGroupItem value="hepsi" className="px-2 text-xs">Tümü</ToggleGroupItem>
+                  {GRUPLAR.filter((g) => r.veritabanlari.some((v) => v.tur === g)).map((g) => (
+                    <ToggleGroupItem key={g} value={g} className="px-2 text-xs">{TUR_ETIKET[g]}</ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow className="text-[10px] uppercase tracking-wider">
-                    <TableHead className="w-10 pl-4" />
+                    <TableHead className="w-10 pl-4">
+                      <Checkbox
+                        checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
+                        disabled={secilebilir.length === 0}
+                        onCheckedChange={(c) => tumunuSec(c === true)}
+                        aria-label="Listelenenlerin tümünü seç"
+                        title="Listelenenlerin (filtreye uyan) tümünü seç / kaldır"
+                      />
+                    </TableHead>
                     <TableHead className="px-4">Veritabanı</TableHead>
                     <TableHead className="px-4">Şirket</TableHead>
                     <TableHead className="px-4">Program</TableHead>
@@ -186,16 +277,26 @@ export function RaporEkrani({ durum, setDurum }: P) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {gruplar.flatMap((g) => {
-                    const satirlar = r.veritabanlari.filter((v) => v.tur === g);
-                    if (!satirlar.length) return [];
+                  {filtreli.length === 0 && (
+                    <TableRow className="hover:bg-transparent">
+                      <TableCell colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                        Aramaya uyan veritabanı yok.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {sayfadakiler.flatMap((v, i) => {
+                    const baslik = i === 0 || sayfadakiler[i - 1].tur !== v.tur;
                     return [
-                      <TableRow key={g} className="bg-muted/40 hover:bg-muted/40">
-                        <TableCell colSpan={7} className="px-4 py-1 text-xs font-medium text-muted-foreground">
-                          {TUR_ETIKET[g]} · {satirlar.length}
-                        </TableCell>
-                      </TableRow>,
-                      ...satirlar.map((v) => (
+                      ...(baslik
+                        ? [
+                            <TableRow key={"g-" + v.tur} className="bg-muted/40 hover:bg-muted/40">
+                              <TableCell colSpan={7} className="px-4 py-1 text-xs font-medium text-muted-foreground">
+                                {TUR_ETIKET[v.tur]} · {grupSayisi.get(v.tur)}
+                              </TableCell>
+                            </TableRow>,
+                          ]
+                        : []),
+                      (
                         <TableRow key={v.ad} data-state={secili.has(v.ad) ? "selected" : undefined}>
                           <TableCell className="pl-4">
                             <Checkbox
@@ -230,11 +331,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             </TableCell>
                           )}
                         </TableRow>
-                      )),
+                      ),
                     ];
                   })}
                 </TableBody>
               </Table>
+              <Sayfalama
+                sayfa={vtSayfaGecerli}
+                sayfaSayisi={vtSayfaSayisi}
+                onSayfa={setVtSayfa}
+                bilgi={`${(vtSayfaGecerli - 1) * VT_SAYFA + 1}–${Math.min(vtSayfaGecerli * VT_SAYFA, filtreli.length)} / ${filtreli.length} · ${secili.size} seçili`}
+              />
               {hedef.depo && (
                 <p className="border-t px-4 py-2 text-xs text-muted-foreground">
                   "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
@@ -244,9 +351,24 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
             {hedef.depo && (
               <div className="grid gap-4 md:grid-cols-2">
-                <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri">
+                <Bolum
+                  ikon={<Image className="size-4" />}
+                  baslik="Resim klasörleri"
+                  aksiyon={
+                    resimler.length > 1 ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setResimler((l) => l.map((x) => (resimSecilebilir(x.yol) ? { ...x, secili: !resimHepsiSecili } : x)))}
+                      >
+                        {resimHepsiSecili ? "Hiçbirini seçme" : "Tümünü seç"}
+                      </Button>
+                    ) : undefined
+                  }
+                >
                   {resimler.length === 0 && <Bos>Şirket tanımlarında resim klasörü yok.</Bos>}
-                  {resimler.map((s, i) => {
+                  {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
+                    const i = resimBas + si;
                     const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
                     return (
                       <div key={s.yol} className="flex items-start gap-3 border-b px-4 py-2.5 last:border-b-0">
@@ -276,6 +398,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       </div>
                     );
                   })}
+                  <Sayfalama sayfa={resimSayfaGecerli} sayfaSayisi={resimSayfaSayisi} onSayfa={setResimSayfa} bilgi={`${resimler.length} klasör · ${resimSayisi} seçili`} />
                 </Bolum>
 
                 <Bolum
@@ -295,7 +418,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
               <div className="grid gap-4 md:grid-cols-2">
                 <Bolum ikon={<FolderOpen className="size-4" />} baslik="Program klasörleri">
                   {programlar.length === 0 && <Bos>Pusula program klasörü bulunamadı.</Bos>}
-                  {programlar.map((s, i) => {
+                  {programlar.slice(programBas, programBas + KLASOR_SAYFA).map((s, si) => {
+                    const i = programBas + si;
                     const p = r.programKlasorleri.find((x) => x.yol === s.yol)!;
                     return (
                       <div key={s.yol} className="flex items-start gap-3 border-b px-4 py-2.5 last:border-b-0">
@@ -327,6 +451,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       </div>
                     );
                   })}
+                  <Sayfalama sayfa={programSayfaGecerli} sayfaSayisi={programSayfaSayisi} onSayfa={setProgramSayfa} bilgi={`${programlar.length} klasör · ${programSayisi} seçili`} />
                 </Bolum>
 
                 <Bolum
@@ -388,6 +513,38 @@ function Bolum({ ikon, baslik, sag, aksiyon, children }: { ikon: React.ReactNode
       </div>
       {children}
     </section>
+  );
+}
+
+/** Tek sayfaya sığıyorsa hiç görünmez. İlk, son ve aktifin komşuları; arada "…". */
+function Sayfalama({ sayfa, sayfaSayisi, onSayfa, bilgi }: { sayfa: number; sayfaSayisi: number; onSayfa: (s: number) => void; bilgi?: string }) {
+  if (sayfaSayisi <= 1) return null;
+  const goster = [...new Set([1, sayfa - 1, sayfa, sayfa + 1, sayfaSayisi])].filter((x) => x >= 1 && x <= sayfaSayisi).sort((a, b) => a - b);
+  const git = (s: number) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    onSayfa(Math.min(sayfaSayisi, Math.max(1, s)));
+  };
+  const pasif = "pointer-events-none opacity-50";
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2">
+      {bilgi && <span className="text-xs text-muted-foreground tabular-nums">{bilgi}</span>}
+      <Pagination className="mx-0 ml-auto w-auto">
+        <PaginationContent>
+          <PaginationItem>
+            <PaginationPrevious href="#" onClick={git(sayfa - 1)} aria-disabled={sayfa === 1} className={sayfa === 1 ? pasif : ""} />
+          </PaginationItem>
+          {goster.flatMap((s, i) => [
+            ...(i > 0 && s - goster[i - 1] > 1 ? [<PaginationItem key={"e" + s}><PaginationEllipsis /></PaginationItem>] : []),
+            <PaginationItem key={s}>
+              <PaginationLink href="#" isActive={s === sayfa} onClick={git(s)} className="tabular-nums">{s}</PaginationLink>
+            </PaginationItem>,
+          ])}
+          <PaginationItem>
+            <PaginationNext href="#" onClick={git(sayfa + 1)} aria-disabled={sayfa === sayfaSayisi} className={sayfa === sayfaSayisi ? pasif : ""} />
+          </PaginationItem>
+        </PaginationContent>
+      </Pagination>
+    </div>
   );
 }
 
