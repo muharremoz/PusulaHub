@@ -19,7 +19,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { useDosyaSecici } from "./dosya-secici";
+import { boyutMetni, useDosyaSecici, type Secilen } from "./dosya-secici";
 import { Ipucu, mb } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
@@ -74,7 +74,11 @@ function programVarsayilan(r: KesifRaporu, katalog: Katalog): ProgramSecimi[] {
 }
 
 const dosyaAdi = (yol: string) => yol.split(/[\\/]/).pop() ?? yol;
-const klasorAdi = (yol: string) => yol.split(/[\\/]/).slice(0, -1).join("\\");
+/** Bulunduğu klasör; kökteki dosyada "D:\\" (yalnız "D:" değil). */
+const klasorAdi = (yol: string) => {
+  const k = yol.split(/[\\/]/).slice(0, -1).join("\\");
+  return /^[A-Za-z]:$/.test(k) ? k + "\\" : k;
+};
 
 type Onay = { baslik: string; mesaj: React.ReactNode; uygula: () => void };
 
@@ -98,7 +102,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
   const [programDosyalari, setProgramDosyalari] = useState<ProgramDosyasi[]>([]);
-  const [eskiDosyalar, setEskiDosyalar] = useState<string[]>([]);
+  const [eskiDosyalar, setEskiDosyalar] = useState<Secilen[]>([]);
   const [ekKlasorler, setEkKlasorler] = useState<string[]>([]);
   const [veritabanlariAyir, setVeritabanlariAyir] = useState(false);
   const [basliyor, setBasliyor] = useState(false);
@@ -139,16 +143,16 @@ export function RaporEkrani({ durum, setDurum }: P) {
   };
 
   const dosyaEkle = async () => {
-    const yollar = await dosyaSor({
+    const yeni = await dosyaSor({
       baslik: "Eski yıl dosyaları",
       mod: "dosya",
       coklu: true,
       uzantilar: [".mdf", ".ldf", ".ndf", ".bak", ".zip", ".rar", ".7z"],
     });
-    setEskiDosyalar((s) => [...s, ...yollar.filter((y) => !s.includes(y))]);
+    setEskiDosyalar((s) => [...s, ...yeni.filter((y) => !s.some((x) => x.yol === y.yol))]);
   };
   const klasorEkle = async () => {
-    const [yol] = await dosyaSor({ baslik: "Ek klasör", aciklama: "Göndermek istediğiniz klasörü açın veya işaretleyin.", mod: "klasor" });
+    const [{ yol } = { yol: "" }] = await dosyaSor({ baslik: "Ek klasör", aciklama: "Göndermek istediğiniz klasörü açın veya işaretleyin.", mod: "klasor" });
     if (yol) setEkKlasorler((s) => (s.includes(yol) ? s : [...s, yol]));
   };
   const programDosyasiSec = async (id: number, tur: "exe" | "param") => {
@@ -158,7 +162,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
         : { baslik: "Parametre dosyası", mod: "dosya", uzantilar: [".txt"] },
     );
     if (!yollar[0]) return;
-    setProgramDosyalari((l) => l.map((x) => (x.id === id ? { ...x, [tur]: yollar[0] } : x)));
+    setProgramDosyalari((l) => l.map((x) => (x.id === id ? { ...x, [tur]: yollar[0].yol } : x)));
   };
   const programDosyasiEkle = () =>
     setProgramDosyalari((l) => [...l, { id: Date.now(), program: katalog.length === 1 ? katalog[0].name : "", exe: null, param: null }]);
@@ -171,7 +175,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
         await api<Durum>("/aktarim/baslat", {
           veritabanlari: [...secili].map((ad) => ({ ad, eski: eskiYil.has(ad) })),
           resimler: resimler.filter((x) => x.secili).map((x) => ({ yol: x.yol, altKlasor: x.altKlasor })),
-          eskiDosyalar,
+          eskiDosyalar: eskiDosyalar.map((x) => x.yol),
           programlar: programlar.filter((x) => x.secili).map((x) => ({ yol: x.yol, program: x.program })),
           programDosyalari: programDosyalari.filter((x) => x.exe || x.param).map((x) => ({ program: x.program, exe: x.exe, param: x.param })),
           ekKlasorler,
@@ -270,6 +274,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
     return !!k && k.var && k.dosyaSayisi > 0;
   };
   const resimHepsiSecili = resimler.filter((x) => resimSecilebilir(x.yol)).every((x) => x.secili);
+  // v1'deki gibi: seçili resim klasörlerinde 500 KB üzeri dosya → sıkıştırma önerisi.
+  const buyukResim = resimler
+    .filter((x) => x.secili)
+    .map((x) => r?.resimKlasorleri.find((k) => k.yol === x.yol))
+    .reduce((t, k) => ({ adet: t.adet + (k?.buyukDosya ?? 0), mb: t.mb + (k?.buyukMb ?? 0) }), { adet: 0, mb: 0 });
   const programHepsiSecili = programlar.length > 0 && programlar.every((x) => x.secili);
 
   const programSecici = (deger: string, onDeger: (v: string) => void) =>
@@ -491,6 +500,15 @@ export function RaporEkrani({ durum, setDurum }: P) {
               {hedef.depo && (
                 <TabsContent value="resim">
                   <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
+                    {buyukResim.adet > 0 && (
+                      <div className="flex items-start gap-2 border-b bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          <b>{buyukResim.adet.toLocaleString("tr")}</b> adet resim 500 KB'tan büyük (toplam {mb(buyukResim.mb)}). Yükleme öncesi
+                          sıkıştırmanızı öneririz — yükleme süresi azalır ve depolama tasarrufu sağlanır.
+                        </span>
+                      </div>
+                    )}
                     {resimler.length === 0 ? (
                       <Bos>Şirket tanımlarında resim klasörü yok.</Bos>
                     ) : (
@@ -508,6 +526,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             <TableHead className="px-4">Kullanan şirketler</TableHead>
                             <TableHead className="px-4 text-right">Dosya</TableHead>
                             <TableHead className="px-4 text-right">Boyut</TableHead>
+                            <TableHead className="px-4 text-right">500 KB üzeri</TableHead>
                             <TableHead className="px-4">{`Hedef: Resimler\\${oturum?.firmaId ?? ""}\\`}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -547,6 +566,18 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                   {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
                                 </TableCell>
                                 <TableCell className="px-4 text-right tabular-nums">{k.var ? mb(k.boyutMb) : "—"}</TableCell>
+                                <TableCell className="px-4 text-right tabular-nums">
+                                  {k.buyukDosya ? (
+                                    <Ipucu metin={`${k.buyukDosya.toLocaleString("tr")} dosya 500 KB'tan büyük, toplam ${mb(k.buyukMb ?? 0)}`}>
+                                      <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                        <AlertTriangle className="size-3.5" />
+                                        {k.buyukDosya.toLocaleString("tr")}
+                                      </span>
+                                    </Ipucu>
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
                                 <TableCell className="w-48 px-4 py-1">
                                   {s.secili ? (
                                     <Input
@@ -581,7 +612,13 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     {eskiDosyalar.length === 0 ? (
                       <Bos>SQL'e bağlı olmayan eski yıl dataları (.mdf, .bak, .zip…) varsa ekleyin.</Bos>
                     ) : (
-                      <YolTablosu basliklar={["Dosya", "Klasör"]} yollar={eskiDosyalar} ad={dosyaAdi} onSil={(y) => setEskiDosyalar((s) => s.filter((x) => x !== y))} />
+                      <YolTablosu
+                        basliklar={["Dosya", "Klasör"]}
+                        yollar={eskiDosyalar.map((x) => x.yol)}
+                        boyutlar={Object.fromEntries(eskiDosyalar.map((x) => [x.yol, x.boyut]))}
+                        ad={dosyaAdi}
+                        onSil={(y) => setEskiDosyalar((s) => s.filter((x) => x.yol !== y))}
+                      />
                     )}
                   </Bolum>
                 </TabsContent>
@@ -797,13 +834,17 @@ function Bolum({ ikon, baslik, sag, aksiyon, children }: { ikon: React.ReactNode
 }
 
 /** Eski yıl dosyaları / ek klasörler: ad + bulunduğu yer + kaldır. */
-function YolTablosu({ basliklar, yollar, ad, onSil }: { basliklar: [string, string]; yollar: string[]; ad: (y: string) => string; onSil: (y: string) => void }) {
+function YolTablosu({
+  basliklar, yollar, boyutlar, ad, onSil,
+}: { basliklar: [string, string]; yollar: string[]; boyutlar?: Record<string, number | null>; ad: (y: string) => string; onSil: (y: string) => void }) {
+  const toplam = boyutlar ? Object.values(boyutlar).reduce<number>((t, b) => t + (b ?? 0), 0) : 0;
   return (
     <Table>
       <TableHeader>
         <TableRow className="text-[10px] uppercase tracking-wider">
           <TableHead className="px-4">{basliklar[0]}</TableHead>
           <TableHead className="px-4">{basliklar[1]}</TableHead>
+          {boyutlar && <TableHead className="px-4 text-right">Boyut</TableHead>}
           <TableHead className="w-10 pr-4" />
         </TableRow>
       </TableHeader>
@@ -814,6 +855,9 @@ function YolTablosu({ basliklar, yollar, ad, onSil }: { basliklar: [string, stri
             <TableCell className="max-w-96 px-4 font-mono text-xs text-muted-foreground">
               <Ipucu metin={y}><div className="truncate">{klasorAdi(y) || "—"}</div></Ipucu>
             </TableCell>
+            {boyutlar && (
+              <TableCell className="px-4 text-right tabular-nums">{boyutlar[y] != null ? boyutMetni(boyutlar[y]!) : "—"}</TableCell>
+            )}
             <TableCell className="pr-4">
               <Button variant="ghost" size="icon" className="size-7" onClick={() => onSil(y)} aria-label="Kaldır">
                 <X />
@@ -821,6 +865,13 @@ function YolTablosu({ basliklar, yollar, ad, onSil }: { basliklar: [string, stri
             </TableCell>
           </TableRow>
         ))}
+        {boyutlar && yollar.length > 1 && (
+          <TableRow className="hover:bg-transparent">
+            <TableCell colSpan={2} className="px-4 text-xs text-muted-foreground">{yollar.length} dosya</TableCell>
+            <TableCell className="px-4 text-right text-xs font-medium tabular-nums">{boyutMetni(toplam)}</TableCell>
+            <TableCell />
+          </TableRow>
+        )}
       </TableBody>
     </Table>
   );

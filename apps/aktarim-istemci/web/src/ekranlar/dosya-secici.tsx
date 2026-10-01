@@ -15,7 +15,7 @@ import { mb } from "./ortak";
  * Veriyi exe'den alır (POST /dosya/listele); seçilen tam yolları döndürür.
  *
  *   const [sor, secici] = useDosyaSecici();
- *   const yollar = await sor({ baslik: "…", mod: "dosya", coklu: true, uzantilar: [".bak"] });
+ *   const secilen = await sor({ baslik: "…", mod: "dosya", coklu: true, uzantilar: [".bak"] });  // [{ yol, boyut }]
  *   …
  *   return <>{…}{secici}</>;
  */
@@ -32,26 +32,29 @@ export type SeciciAyar = {
 type Oge = { ad: string; yol: string; klasor: boolean; boyut?: number | null; tarih?: string | null; surucu?: boolean; bos?: number | null; toplam?: number | null };
 type Liste = { yol: string; ust: string | null; hata: string | null; ogeler: Oge[]; hizli?: { ad: string; yol: string }[] };
 
-type Bekleyen = SeciciAyar & { coz: (yollar: string[]) => void };
+/** Seçilen öğe — boyut yalnız dosyalarda (bayt), klasörde null. */
+export type Secilen = { yol: string; boyut: number | null };
+
+type Bekleyen = SeciciAyar & { coz: (s: Secilen[]) => void };
 
 const SON_KLASOR = "aktarim.sonKlasor";
 
-export function useDosyaSecici(): [(a: SeciciAyar) => Promise<string[]>, React.ReactNode] {
+export function useDosyaSecici(): [(a: SeciciAyar) => Promise<Secilen[]>, React.ReactNode] {
   const [bekleyen, setBekleyen] = useState<Bekleyen | null>(null);
-  const sor = useCallback((a: SeciciAyar) => new Promise<string[]>((coz) => setBekleyen({ ...a, coz })), []);
-  const kapat = (yollar: string[]) => {
-    bekleyen?.coz(yollar);
+  const sor = useCallback((a: SeciciAyar) => new Promise<Secilen[]>((coz) => setBekleyen({ ...a, coz })), []);
+  const kapat = (s: Secilen[]) => {
+    bekleyen?.coz(s);
     setBekleyen(null);
   };
   return [sor, bekleyen ? <DosyaSecici key={bekleyen.baslik} ayar={bekleyen} onKapat={kapat} /> : null];
 }
 
-function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: string[]) => void }) {
+function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (s: Secilen[]) => void }) {
   const [kok, setKok] = useState<Liste | null>(null);
   const [liste, setListe] = useState<Liste | null>(null);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [yolMetni, setYolMetni] = useState("");
-  const [secilen, setSecilen] = useState<string[]>([]);
+  const [secilen, setSecilen] = useState<Secilen[]>([]);
   const dosyaMod = ayar.mod === "dosya";
 
   const git = useCallback(
@@ -84,15 +87,17 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: st
 
   const tikla = (o: Oge) => {
     if (o.klasor && dosyaMod) return void git(o.yol);
-    if (ayar.coklu) setSecilen((s) => (s.includes(o.yol) ? s.filter((x) => x !== o.yol) : [...s, o.yol]));
-    else setSecilen((s) => (s[0] === o.yol ? [] : [o.yol]));
+    const yeni: Secilen = { yol: o.yol, boyut: o.klasor ? null : o.boyut ?? null };
+    if (ayar.coklu) setSecilen((s) => (s.some((x) => x.yol === o.yol) ? s.filter((x) => x.yol !== o.yol) : [...s, yeni]));
+    else setSecilen((s) => (s[0]?.yol === o.yol ? [] : [yeni]));
   };
 
   // Klasör modunda hiçbir alt klasör işaretli değilse "Seç" bulunulan klasörü seçer.
-  const sonuc = !dosyaMod && secilen.length === 0 && liste?.yol ? [liste.yol] : secilen;
+  const sonuc: Secilen[] = !dosyaMod && secilen.length === 0 && liste?.yol ? [{ yol: liste.yol, boyut: null }] : secilen;
+  const seciliMi = (yol: string) => secilen.some((x) => x.yol === yol);
   const parcalar = (liste?.yol ?? "").split("\\").filter(Boolean);
   const dosyalar = liste?.ogeler.filter((o) => !o.klasor) ?? [];
-  const hepsiSecili = ayar.coklu && dosyalar.length > 0 && dosyalar.every((o) => secilen.includes(o.yol));
+  const hepsiSecili = ayar.coklu && dosyalar.length > 0 && dosyalar.every((o) => seciliMi(o.yol));
 
   return (
     <Dialog open onOpenChange={(o) => !o && onKapat([])}>
@@ -175,9 +180,13 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: st
                       <TableHead className="w-10 pl-4">
                         {ayar.coklu && dosyalar.length > 0 && (
                           <Checkbox
-                            checked={hepsiSecili ? true : dosyalar.some((o) => secilen.includes(o.yol)) ? "indeterminate" : false}
+                            checked={hepsiSecili ? true : dosyalar.some((o) => seciliMi(o.yol)) ? "indeterminate" : false}
                             onCheckedChange={(c) =>
-                              setSecilen((s) => (c === true ? [...new Set([...s, ...dosyalar.map((o) => o.yol)])] : s.filter((x) => !dosyalar.some((o) => o.yol === x))))
+                              setSecilen((s) =>
+                                c === true
+                                  ? [...s, ...dosyalar.filter((o) => !s.some((x) => x.yol === o.yol)).map((o) => ({ yol: o.yol, boyut: o.boyut ?? null }))]
+                                  : s.filter((x) => !dosyalar.some((o) => o.yol === x.yol)),
+                              )
                             }
                             aria-label="Tüm dosyaları seç"
                           />
@@ -197,7 +206,7 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: st
                       </TableRow>
                     )}
                     {liste?.ogeler.map((o) => {
-                      const isaretli = secilen.includes(o.yol);
+                      const isaretli = seciliMi(o.yol);
                       const secilebilir = dosyaMod ? !o.klasor : true;
                       return (
                         <TableRow
@@ -207,7 +216,7 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: st
                           onClick={() => tikla(o)}
                           onDoubleClick={() => {
                             if (o.klasor) void git(o.yol);
-                            else if (!ayar.coklu) onKapat([o.yol]);
+                            else if (!ayar.coklu) onKapat([{ yol: o.yol, boyut: o.boyut ?? null }]);
                           }}
                         >
                           <TableCell className="pl-4">
@@ -243,13 +252,13 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (yollar: st
           </div>
         </div>
 
-        <DialogFooter className="flex-row items-center gap-3 border-t px-5 py-3 sm:justify-between">
+        <DialogFooter className="m-0 flex-row items-center gap-3 rounded-none border-t bg-muted/40 px-5 py-4 sm:justify-between">
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {sonuc.length === 0
               ? dosyaMod ? "Dosya seçilmedi — çift tıklayarak klasörlere girin." : "Bir klasör açın."
               : sonuc.length === 1
-                ? <span className="font-mono text-foreground">{sonuc[0]}</span>
-                : `${sonuc.length} dosya seçildi`}
+                ? <span className="font-mono text-foreground">{sonuc[0].yol}{sonuc[0].boyut != null && ` · ${boyutMetni(sonuc[0].boyut)}`}</span>
+                : `${sonuc.length} dosya seçildi · ${boyutMetni(sonuc.reduce((t, x) => t + (x.boyut ?? 0), 0))}`}
           </span>
           <Button variant="outline" onClick={() => onKapat([])}>İptal</Button>
           <Button disabled={sonuc.length === 0} onClick={() => onKapat(sonuc)}>
@@ -280,7 +289,7 @@ function YanOge({ ikon, ad, alt, aktif, onClick }: { ikon: React.ReactNode; ad: 
   );
 }
 
-function boyutMetni(b: number): string {
+export function boyutMetni(b: number): string {
   if (b < 1024) return `${b} B`;
   if (b < 1048576) return `${(b / 1024).toLocaleString("tr", { maximumFractionDigits: 0 })} KB`;
   return mb(b / 1048576);

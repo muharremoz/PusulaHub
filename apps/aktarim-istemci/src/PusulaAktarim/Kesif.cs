@@ -63,6 +63,8 @@ namespace PusulaAktarim
         public int DosyaSayisi;
         public double BoyutMb;
         public bool Eksik;             // süre/sayı sınırına takıldı, sayım eksik
+        public int BuyukDosya;         // 500 KB üzeri dosya sayısı (v1 gibi sıkıştırma uyarısı için)
+        public double BuyukMb;
         public List<string> Kullananlar = new List<string>();
     }
 
@@ -267,6 +269,8 @@ ORDER BY d.name";
         // ------------------------------------------------------------ resim klasörleri
 
         private const int ResimSayiSiniri = 500_000;
+        /// <summary>v1 ile aynı eşik: 500 KB üzeri resimler için sıkıştırma önerilir.</summary>
+        private const long BuyukResimSiniri = 500 * 1024;
         private static readonly TimeSpan ResimSureSiniri = TimeSpan.FromSeconds(45);
 
         private static List<KlasorBilgisi> ResimKlasorleri(List<Dictionary<string, object>> guvenlik, Action<string> ilerleme)
@@ -288,6 +292,8 @@ ORDER BY d.name";
                 if (!k.Var) continue;
                 var sure = Stopwatch.StartNew();
                 long bayt = 0;
+                long buyukBayt = 0;
+                var buyuk = 0;
                 var sayi = 0;
                 var yigin = new Stack<string>();
                 yigin.Push(k.Yol);
@@ -297,13 +303,20 @@ ORDER BY d.name";
                     var d = yigin.Pop();
                     try
                     {
-                        foreach (var f in new DirectoryInfo(d).EnumerateFiles()) { sayi++; bayt += f.Length; }
+                        foreach (var f in new DirectoryInfo(d).EnumerateFiles())
+                        {
+                            sayi++;
+                            bayt += f.Length;
+                            if (f.Length > BuyukResimSiniri) { buyuk++; buyukBayt += f.Length; }
+                        }
                         foreach (var alt in Directory.EnumerateDirectories(d)) yigin.Push(alt);
                     }
                     catch { /* erişim yok → atla */ }
                 }
                 k.DosyaSayisi = sayi;
                 k.BoyutMb = Math.Round(bayt / 1048576.0, 1);
+                k.BuyukDosya = buyuk;
+                k.BuyukMb = Math.Round(buyukBayt / 1048576.0, 1);
             }
             return yollar.Values.ToList();
         }

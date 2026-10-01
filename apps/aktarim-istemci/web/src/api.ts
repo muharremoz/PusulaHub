@@ -140,7 +140,7 @@ export type KesifRaporu = {
     yedekKlasoru: string | null;
   };
   veritabanlari: Veritabani[];
-  resimKlasorleri: { yol: string; var: boolean; dosyaSayisi: number; boyutMb: number; eksik: boolean; kullananlar: string[] }[];
+  resimKlasorleri: { yol: string; var: boolean; dosyaSayisi: number; boyutMb: number; eksik: boolean; kullananlar: string[]; buyukDosya?: number; buyukMb?: number }[];
   programKlasorleri: { yol: string; exeler: string[]; parametreler: { ad: string; dataKodu: string | null }[] }[];
   uyarilar: string[];
 };
