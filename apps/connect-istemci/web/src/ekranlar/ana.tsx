@@ -254,7 +254,6 @@ export function AnaEkran({ durum, setDurum }: P) {
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">Yardım mı gerekiyor?</div>
-            <div className="text-xs text-muted-foreground">Sorununuzu iletin, Pusula ekibi size dönsün.</div>
           </div>
           <Button variant="outline" asChild>
             <a href="https://talep.pusulanet.net" target="_blank" rel="noreferrer">
