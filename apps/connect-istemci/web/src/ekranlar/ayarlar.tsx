@@ -45,10 +45,26 @@ export function AyarlarIcerik({
     }
   };
 
-  const degistir = (ad: AyarAdi, deger: boolean) => void cagir("/ayarlar", { [ad]: deger }, ad);
+  // Anahtar tıklanınca hemen döner (kayıt arkada); kilitlenmez — "engel" imleci çıkmasın.
+  // Kayıt başarısız olursa sunucudaki değere geri döner.
+  const [yerel, setYerel] = useState<Partial<Record<AyarAdi, boolean>>>({});
+  const degistir = async (ad: AyarAdi, deger: boolean) => {
+    setYerel((y) => ({ ...y, [ad]: deger }));
+    setHata(null);
+    try {
+      setDurum(await api<Durum>("/ayarlar", { [ad]: deger }));
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      setYerel((y) => {
+        const { [ad]: _, ...kalan } = y;
+        return kalan;
+      });
+    }
+  };
 
   const anahtar = (ad: AyarAdi) => (
-    <Switch checked={!!ay?.[ad]} disabled={bekle === ad || !ay} onCheckedChange={(v) => degistir(ad, v)} />
+    <Switch checked={yerel[ad] ?? !!ay?.[ad]} disabled={!ay} onCheckedChange={(v) => void degistir(ad, v)} />
   );
 
   return (
