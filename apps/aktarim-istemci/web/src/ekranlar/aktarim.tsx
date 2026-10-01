@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, Loader2, Pause, Play, WifiOff, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Info, Loader2, Pause, Play, WifiOff, XCircle } from "lucide-react";
 import { api, type Durum, type IsOgesi } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -101,6 +101,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           </Alert>
         )}
         {a.bitti && <SunucuDurumu a={a} />}
+        {a.bitti && a.veritabanlariAyir && <AyirmaDurumu d={durum} />}
 
         <section className="overflow-hidden rounded-lg border bg-card">
           {a.ogeler.map((o) => (
@@ -163,7 +164,44 @@ function SunucuDurumu({ a }: { a: NonNullable<Durum["aktarim"]> }) {
     <Alert>
       <Loader2 className="animate-spin" />
       <AlertDescription>
-        Dosyalarınız bize ulaştı, Pusula sunucularına yerleştiriliyor ({s.ilerleme}%). Bu pencereyi kapatabilirsiniz; işlem bizim tarafta sürer.
+        Dosyalarınız bize ulaştı, Pusula sunucularına yerleştiriliyor ({s.ilerleme}%).{" "}
+        {a.veritabanlariAyir
+          ? "Pencereyi kapatmayın: işlem bitince veritabanları bu bilgisayardaki SQL Server'dan ayrılacak."
+          : "Bu pencereyi kapatabilirsiniz; işlem bizim tarafta sürer."}
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+/** Aktarım tamamlandıktan sonra veritabanlarının SQL Server'dan ayrılması (detach). */
+function AyirmaDurumu({ d }: { d: Durum }) {
+  const y = d.ayirma;
+  if (!y) {
+    return (
+      <Alert>
+        <Info />
+        <AlertDescription>Aktarım tamamlanınca aktarılan veritabanları bu SQL Server'dan ayrılacak (dosyalar silinmez).</AlertDescription>
+      </Alert>
+    );
+  }
+  if (y.durum === "suruyor") {
+    return (
+      <Alert>
+        <Loader2 className="animate-spin" />
+        <AlertDescription>Veritabanları SQL Server'dan ayrılıyor… ({y.ayrilanlar.length} ayrıldı)</AlertDescription>
+      </Alert>
+    );
+  }
+  return (
+    <Alert variant={y.hatalar.length ? "destructive" : "default"}>
+      {y.hatalar.length ? <AlertTriangle /> : <CheckCircle2 />}
+      <AlertDescription>
+        <span>{y.ayrilanlar.length} veritabanı SQL Server'dan ayrıldı. Veri dosyaları diskte duruyor.</span>
+        {y.hatalar.length > 0 && (
+          <ul className="mt-1 list-disc pl-4 text-xs">
+            {y.hatalar.map((h) => <li key={h}>{h}</li>)}
+          </ul>
+        )}
       </AlertDescription>
     </Alert>
   );

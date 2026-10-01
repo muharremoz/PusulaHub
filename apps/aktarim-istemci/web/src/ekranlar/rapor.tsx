@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FolderOpen, FolderPlus, Image, Info, Loader2, Plus,
+  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Plus,
   RefreshCw, Search, Server, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -13,6 +17,7 @@ import {
   Pagination, PaginationContent, PaginationEllipsis, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Ipucu, mb } from "./ortak";
 
@@ -40,9 +45,13 @@ function eskiYilMi(v: Veritabani): boolean {
   const simdi = new Date();
   return t.getFullYear() < simdi.getFullYear() && simdi.getTime() - t.getTime() > ESKI_GUN * 86400000;
 }
+const tarih = (s?: string | null) => (s ? new Date(s).toLocaleDateString("tr") : "—");
 
 type ResimSecimi = { yol: string; secili: boolean; altKlasor: string };
 type ProgramSecimi = { yol: string; secili: boolean; program: string };
+/** Eski aktarımdaki (v1) alan: program seç, exe ve parametre dosyasını tek tek seç. */
+type ProgramDosyasi = { id: number; program: string; exe: string | null; param: string | null };
+type Katalog = NonNullable<Durum["oturum"]>["programlar"];
 
 /** Varsayılan hedef alt klasör: en çok şirketin kullandığı kök ("" = Resimler\{firma}), diğerleri kendi adıyla. */
 function resimVarsayilan(r: KesifRaporu): ResimSecimi[] {
@@ -55,20 +64,25 @@ function resimVarsayilan(r: KesifRaporu): ResimSecimi[] {
   });
 }
 
-/** Program klasörünü katalogdaki programa exe adından eşle. */
-function programVarsayilan(r: KesifRaporu, katalog: Durum["oturum"] extends infer O ? (O extends { programlar: infer L } ? L : never) : never): ProgramSecimi[] {
+/** Program klasörünü katalogdaki programa exe adından eşle — varsayılan SEÇİLİ DEĞİL (kullanıcı bilerek seçer). */
+function programVarsayilan(r: KesifRaporu, katalog: Katalog): ProgramSecimi[] {
   return r.programKlasorleri.map((p) => {
     const eslesen = katalog.find((k) => k.exeName && p.exeler.some((e) => e.toLowerCase() === k.exeName!.toLowerCase()));
-    return { yol: p.yol, secili: !!eslesen, program: eslesen?.name ?? "" };
+    return { yol: p.yol, secili: false, program: eslesen?.name ?? "" };
   });
 }
 
-/** Keşif sonucu + aktarılacakların seçimi. */
+const dosyaAdi = (yol: string) => yol.split(/[\\/]/).pop() ?? yol;
+const klasorAdi = (yol: string) => yol.split(/[\\/]/).slice(0, -1).join("\\");
+
+type Onay = { baslik: string; mesaj: React.ReactNode; uygula: () => void };
+
+/** Keşif sonucu + aktarılacakların seçimi. Alanlar sekmelerde. */
 export function RaporEkrani({ durum, setDurum }: P) {
   const r = durum.kesif;
   const oturum = durum.oturum;
   const hedef = oturum?.hedefler ?? { sql: true, depo: true, rdp: true };
-  const katalog = oturum?.programlar ?? [];
+  const katalog: Katalog = oturum?.programlar ?? [];
 
   const [bekle, setBekle] = useState(false);
   const [secili, setSecili] = useState<Set<string>>(
@@ -82,8 +96,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
   }, [r]);
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
+  const [programDosyalari, setProgramDosyalari] = useState<ProgramDosyasi[]>([]);
   const [eskiDosyalar, setEskiDosyalar] = useState<string[]>([]);
   const [ekKlasorler, setEkKlasorler] = useState<string[]>([]);
+  const [veritabanlariAyir, setVeritabanlariAyir] = useState(false);
   const [basliyor, setBasliyor] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
   const [arama, setArama] = useState("");
@@ -91,6 +107,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [vtSayfa, setVtSayfa] = useState(1);
   const [resimSayfa, setResimSayfa] = useState(1);
   const [programSayfa, setProgramSayfa] = useState(1);
+  const [onay, setOnay] = useState<Onay | null>(null);
 
   const toplamMb = useMemo(
     () => (r?.veritabanlari ?? []).filter((v) => secili.has(v.ad)).reduce((t, v) => t + v.veriMb, 0),
@@ -98,7 +115,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
   );
   const resimSayisi = resimler.filter((x) => x.secili).length;
   const programSayisi = programlar.filter((x) => x.secili).length;
-  const bosSecim = secili.size + resimSayisi + programSayisi + eskiDosyalar.length + ekKlasorler.length === 0;
+  const programDosyaSayisi = programDosyalari.filter((x) => x.exe || x.param).length;
+  const bosSecim = secili.size + resimSayisi + programSayisi + programDosyaSayisi + eskiDosyalar.length + ekKlasorler.length === 0;
+  const programEksik =
+    programlar.some((x) => x.secili && !x.program) || programDosyalari.some((x) => (x.exe || x.param) && !x.program);
 
   const setDegistir = (s: Set<string>, ad: string, acik: boolean) => {
     const y = new Set(s);
@@ -124,6 +144,13 @@ export function RaporEkrani({ durum, setDurum }: P) {
     const { yol } = await api<{ yol: string | null }>("/sec/klasor", { aciklama: "Ek dosyaların bulunduğu klasörü seçin" });
     if (yol) setEkKlasorler((s) => (s.includes(yol) ? s : [...s, yol]));
   };
+  const programDosyasiSec = async (id: number, tur: "exe" | "param") => {
+    const { yollar } = await api<{ yollar: string[] }>("/sec/dosyalar", { tur });
+    if (!yollar[0]) return;
+    setProgramDosyalari((l) => l.map((x) => (x.id === id ? { ...x, [tur]: yollar[0] } : x)));
+  };
+  const programDosyasiEkle = () =>
+    setProgramDosyalari((l) => [...l, { id: Date.now(), program: katalog.length === 1 ? katalog[0].name : "", exe: null, param: null }]);
 
   const baslat = async () => {
     setBasliyor(true);
@@ -135,7 +162,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
           resimler: resimler.filter((x) => x.secili).map((x) => ({ yol: x.yol, altKlasor: x.altKlasor })),
           eskiDosyalar,
           programlar: programlar.filter((x) => x.secili).map((x) => ({ yol: x.yol, program: x.program })),
+          programDosyalari: programDosyalari.filter((x) => x.exe || x.param).map((x) => ({ program: x.program, exe: x.exe, param: x.param })),
           ekKlasorler,
+          veritabanlariAyir: veritabanlariAyir && secili.size > 0,
         }),
       );
     } catch (e) {
@@ -145,7 +174,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
     }
   };
 
-  // Filtre (ad / şirket + tür) → grup sırasına diz → sayfala. Grup başlığı, sayfada o grubun ilk satırından önce.
+  // Filtre (ad / şirket + tür) → tür sırasına diz → sayfala.
   const filtreli = useMemo(() => {
     const q = arama.trim().toLocaleLowerCase("tr");
     const l = (r?.veritabanlari ?? []).filter((v) => {
@@ -155,11 +184,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
     });
     return GRUPLAR.flatMap((g) => l.filter((v) => v.tur === g));
   }, [r, arama, turFiltre]);
-  const grupSayisi = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const v of filtreli) m.set(v.tur, (m.get(v.tur) ?? 0) + 1);
-    return m;
-  }, [filtreli]);
   const vtSayfaSayisi = Math.max(1, Math.ceil(filtreli.length / VT_SAYFA));
   const vtSayfaGecerli = Math.min(vtSayfa, vtSayfaSayisi);
   const sayfadakiler = filtreli.slice((vtSayfaGecerli - 1) * VT_SAYFA, vtSayfaGecerli * VT_SAYFA);
@@ -176,17 +200,52 @@ export function RaporEkrani({ durum, setDurum }: P) {
       return y;
     });
 
-  // Toplu: filtreye uyan ve seçili olanların hepsi güncel / eski yıl.
-  const topluEskiYil = (eski: boolean) =>
-    setEskiYil((s) => {
-      const y = new Set(s);
-      for (const v of secilebilir) {
-        if (!secili.has(v.ad)) continue;
-        if (eski) y.add(v.ad);
-        else y.delete(v.ad);
-      }
-      return y;
-    });
+  /** Tek satır Güncel / Eski yıl. Eski yıl datası (tarihe göre) "Güncel" yapılırsa önce sorulur. */
+  const satirAktarimi = (v: Veritabani, d: "guncel" | "eski") => {
+    const uygula = () => {
+      setSecili((s) => setDegistir(s, v.ad, true));
+      setEskiYil((s) => setDegistir(s, v.ad, d === "eski"));
+    };
+    if (d === "guncel" && eskiYilMi(v)) {
+      setOnay({
+        baslik: "Eski yıl datası güncel olarak aktarılsın mı?",
+        mesaj: (
+          <>
+            <span className="font-mono">{v.ad}</span> veritabanının son cari hareketi <b>{tarih(v.sonHareket)}</b>. Güncel olarak
+            işaretlerseniz Pusula'da kurulacak veriler arasına girer.
+          </>
+        ),
+        uygula,
+      });
+    } else uygula();
+  };
+
+  // Toplu: filtreye uyan ve seçili olanların hepsi güncel / eski yıl. Aralarında eski yıl datası varsa "Güncel" sorulur.
+  const topluEskiYil = (eski: boolean) => {
+    const hedefler = secilebilir.filter((v) => secili.has(v.ad));
+    const uygula = () =>
+      setEskiYil((s) => {
+        const y = new Set(s);
+        for (const v of hedefler) {
+          if (eski) y.add(v.ad);
+          else y.delete(v.ad);
+        }
+        return y;
+      });
+    const eskiler = hedefler.filter(eskiYilMi);
+    if (!eski && eskiler.length > 0) {
+      setOnay({
+        baslik: "Eski yıl dataları güncel olarak aktarılsın mı?",
+        mesaj: (
+          <>
+            Seçilenlerden <b>{eskiler.length}</b> veritabanının son cari hareketi eski yılda
+            ({eskiler.slice(0, 5).map((v) => v.ad).join(", ")}{eskiler.length > 5 ? "…" : ""}). Hepsi güncel olarak işaretlenecek.
+          </>
+        ),
+        uygula,
+      });
+    } else uygula();
+  };
   const eskiSayisi = [...eskiYil].filter((ad) => secili.has(ad)).length;
 
   const resimSayfaSayisi = Math.max(1, Math.ceil(resimler.length / KLASOR_SAYFA));
@@ -200,6 +259,21 @@ export function RaporEkrani({ durum, setDurum }: P) {
     return !!k && k.var && k.dosyaSayisi > 0;
   };
   const resimHepsiSecili = resimler.filter((x) => resimSecilebilir(x.yol)).every((x) => x.secili);
+  const programHepsiSecili = programlar.length > 0 && programlar.every((x) => x.secili);
+
+  const programSecici = (deger: string, onDeger: (v: string) => void) =>
+    katalog.length === 0 ? (
+      <span className="text-xs text-muted-foreground">Katalog boş</span>
+    ) : (
+      <ToggleGroup type="single" size="sm" variant="outline" className="flex-wrap justify-start" value={deger} onValueChange={(v) => v && onDeger(v)}>
+        {katalog.map((k) => (
+          <ToggleGroupItem key={k.name} value={k.name} className="px-2 text-xs">{k.name}</ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+    );
+
+  const sekmeSayi = (n: number) =>
+    n > 0 ? <Badge variant="secondary" className="ml-1 h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums">{n}</Badge> : null;
 
   return (
     <div className="min-h-svh bg-muted/40 pb-20">
@@ -251,84 +325,83 @@ export function RaporEkrani({ durum, setDurum }: P) {
               </div>
             </Bolum>
 
-            <Bolum
-              ikon={<Database className="size-4" />}
-              baslik="Veritabanları"
-              sag={`${r.veritabanlari.length} veritabanı · ${mb(r.veritabanlari.reduce((t, v) => t + v.veriMb, 0))}`}
-            >
-              <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-                <div className="relative min-w-48 flex-1">
-                  <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    value={arama}
-                    onChange={(e) => {
-                      setArama(e.target.value);
-                      setVtSayfa(1);
-                    }}
-                    placeholder="Veritabanı veya şirket ara…"
-                    className="h-8 pl-8 text-sm"
-                  />
-                </div>
-                <ToggleGroup
-                  type="single"
-                  size="sm"
-                  variant="outline"
-                  value={turFiltre}
-                  onValueChange={(v) => {
-                    if (!v) return;
-                    setTurFiltre(v as typeof turFiltre);
-                    setVtSayfa(1);
-                  }}
+            <Tabs defaultValue="vt" className="gap-3">
+              <TabsList className="h-9">
+                <TabsTrigger value="vt" className="px-3"><Database /> Veritabanları {sekmeSayi(secili.size)}</TabsTrigger>
+                {hedef.depo && <TabsTrigger value="resim" className="px-3"><Image /> Resimler {sekmeSayi(resimSayisi)}</TabsTrigger>}
+                {hedef.depo && <TabsTrigger value="eski" className="px-3"><FileArchive /> Eski yıl dosyaları {sekmeSayi(eskiDosyalar.length)}</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="program" className="px-3"><FolderOpen /> Programlar {sekmeSayi(programSayisi + programDosyaSayisi)}</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="ek" className="px-3"><FolderPlus /> Ek klasörler {sekmeSayi(ekKlasorler.length)}</TabsTrigger>}
+              </TabsList>
+
+              {/* ── Veritabanları ───────────────────────────────────── */}
+              <TabsContent value="vt">
+                <Bolum
+                  ikon={<Database className="size-4" />}
+                  baslik="Veritabanları"
+                  sag={`${r.veritabanlari.length} veritabanı · ${mb(r.veritabanlari.reduce((t, v) => t + v.veriMb, 0))}`}
                 >
-                  <ToggleGroupItem value="hepsi" className="px-2 text-xs">Tümü</ToggleGroupItem>
-                  {GRUPLAR.filter((g) => r.veritabanlari.some((v) => v.tur === g)).map((g) => (
-                    <ToggleGroupItem key={g} value={g} className="px-2 text-xs">{TUR_ETIKET[g]}</ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-              </div>
-              <Table>
-                <TableHeader>
-                  <TableRow className="text-[10px] uppercase tracking-wider">
-                    <TableHead className="w-10 pl-4">
-                      <Ipucu metin="Listelenenlerin (filtreye uyan) tümünü seç / kaldır">
-                        <Checkbox
-                          checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
-                          disabled={secilebilir.length === 0}
-                          onCheckedChange={(c) => tumunuSec(c === true)}
-                          aria-label="Listelenenlerin tümünü seç"
-                        />
-                      </Ipucu>
-                    </TableHead>
-                    <TableHead className="px-4">Veritabanı</TableHead>
-                    <TableHead className="px-4">Şirket</TableHead>
-                    <TableHead className="px-4">Program</TableHead>
-                    <TableHead className="px-4 text-right">Veri</TableHead>
-                    <TableHead className="px-4">Son hareket</TableHead>
-                    <TableHead className="px-4">Son yedek</TableHead>
-                    {hedef.depo && <TableHead className="px-4">Aktarım</TableHead>}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtreli.length === 0 && (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                        Aramaya uyan veritabanı yok.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {sayfadakiler.flatMap((v, i) => {
-                    const baslik = i === 0 || sayfadakiler[i - 1].tur !== v.tur;
-                    return [
-                      ...(baslik
-                        ? [
-                            <TableRow key={"g-" + v.tur} className="bg-muted/40 hover:bg-muted/40">
-                              <TableCell colSpan={8} className="px-4 py-1 text-xs font-medium text-muted-foreground">
-                                {TUR_ETIKET[v.tur]} · {grupSayisi.get(v.tur)}
-                              </TableCell>
-                            </TableRow>,
-                          ]
-                        : []),
-                      (
+                  <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
+                    <div className="relative min-w-48 flex-1">
+                      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        value={arama}
+                        onChange={(e) => {
+                          setArama(e.target.value);
+                          setVtSayfa(1);
+                        }}
+                        placeholder="Veritabanı veya şirket ara…"
+                        className="h-8 pl-8 text-sm"
+                      />
+                    </div>
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      variant="outline"
+                      value={turFiltre}
+                      onValueChange={(v) => {
+                        if (!v) return;
+                        setTurFiltre(v as typeof turFiltre);
+                        setVtSayfa(1);
+                      }}
+                    >
+                      <ToggleGroupItem value="hepsi" className="px-2 text-xs">Tümü</ToggleGroupItem>
+                      {GRUPLAR.filter((g) => r.veritabanlari.some((v) => v.tur === g)).map((g) => (
+                        <ToggleGroupItem key={g} value={g} className="px-2 text-xs">{TUR_ETIKET[g]}</ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                  </div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-[10px] uppercase tracking-wider">
+                        <TableHead className="w-10 pl-4">
+                          <Ipucu metin="Listelenenlerin (filtreye uyan) tümünü seç / kaldır">
+                            <Checkbox
+                              checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
+                              disabled={secilebilir.length === 0}
+                              onCheckedChange={(c) => tumunuSec(c === true)}
+                              aria-label="Listelenenlerin tümünü seç"
+                            />
+                          </Ipucu>
+                        </TableHead>
+                        <TableHead className="px-4">Veritabanı</TableHead>
+                        <TableHead className="px-4">Şirket</TableHead>
+                        <TableHead className="px-4">Program</TableHead>
+                        <TableHead className="px-4 text-right">Veri</TableHead>
+                        <TableHead className="px-4">Son hareket</TableHead>
+                        <TableHead className="px-4">Son yedek</TableHead>
+                        {hedef.depo && <TableHead className="px-4">Aktarım</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filtreli.length === 0 && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                            Aramaya uyan veritabanı yok.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {sayfadakiler.map((v) => (
                         <TableRow key={v.ad} data-state={secili.has(v.ad) ? "selected" : undefined}>
                           <TableCell className="pl-4">
                             <Checkbox
@@ -345,14 +418,12 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           <TableCell className="px-4">{v.sirketAdlari.join(", ") || "—"}</TableCell>
                           <TableCell className="px-4 text-muted-foreground">{v.prgTur === "909" ? "Perakende" : v.prgTur === "011" ? "Toptan" : v.prgTur ?? "—"}</TableCell>
                           <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
-                          <TableCell
-                            className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
-                          >
+                          <TableCell className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
                             <Ipucu metin={v.sonHareket ? "Son cari hareket (CarHrk)" + (eskiYilMi(v) ? " — eski yıl datası" : "") : "CarHrk tablosu yok veya okunamadı"}>
-                              <span>{v.sonHareket ? new Date(v.sonHareket).toLocaleDateString("tr") : "—"}</span>
+                              <span>{tarih(v.sonHareket)}</span>
                             </Ipucu>
                           </TableCell>
-                          <TableCell className="px-4 text-muted-foreground">{v.sonYedek ? new Date(v.sonYedek).toLocaleDateString("tr") : "—"}</TableCell>
+                          <TableCell className="px-4 text-muted-foreground">{tarih(v.sonYedek)}</TableCell>
                           {hedef.depo && (
                             <TableCell className="px-4">
                               {/* Her zaman görünür; seçili değilse soluk. Birine basmak satırı da seçer. */}
@@ -363,11 +434,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 disabled={v.durum !== "ONLINE"}
                                 className={secili.has(v.ad) ? "" : "opacity-50 hover:opacity-100"}
                                 value={secili.has(v.ad) ? (eskiYil.has(v.ad) ? "eski" : "guncel") : ""}
-                                onValueChange={(d) => {
-                                  if (!d) return;
-                                  setSecili((s) => setDegistir(s, v.ad, true));
-                                  setEskiYil((s) => setDegistir(s, v.ad, d === "eski"));
-                                }}
+                                onValueChange={(d) => d && satirAktarimi(v, d as "guncel" | "eski")}
                               >
                                 <ToggleGroupItem value="guncel" className="px-2 text-xs data-[state=on]:border-emerald-600 data-[state=on]:bg-emerald-600 data-[state=on]:text-white">Güncel</ToggleGroupItem>
                                 <ToggleGroupItem value="eski" className="px-2 text-xs data-[state=on]:border-amber-500 data-[state=on]:bg-amber-500 data-[state=on]:text-white">Eski yıl</ToggleGroupItem>
@@ -375,173 +442,281 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             </TableCell>
                           )}
                         </TableRow>
-                      ),
-                    ];
-                  })}
-                </TableBody>
-              </Table>
-              <Sayfalama
-                sayfa={vtSayfaGecerli}
-                sayfaSayisi={vtSayfaSayisi}
-                onSayfa={setVtSayfa}
-                bilgi={`${(vtSayfaGecerli - 1) * VT_SAYFA + 1}–${Math.min(vtSayfaGecerli * VT_SAYFA, filtreli.length)} / ${filtreli.length} · ${secili.size} seçili`}
-              />
-              {hedef.depo && (
-                <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-                  <span className="min-w-0 flex-1">
-                    "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
-                    {eskiSayisi > 0 && <span className="ml-1 font-medium text-foreground">{eskiSayisi} eski yıl seçili.</span>}
-                  </span>
-                  <span>Seçilenleri ({filtreliSeciliSayisi}):</span>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(false)}>
-                    Güncel yap
-                  </Button>
-                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(true)}>
-                    Eski yıl yap
-                  </Button>
-                </div>
-              )}
-            </Bolum>
-
-            {hedef.depo && (
-              <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
-                {resimler.length === 0 ? (
-                  <Bos>Şirket tanımlarında resim klasörü yok.</Bos>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="text-[10px] uppercase tracking-wider">
-                        <TableHead className="w-10 pl-4">
-                          <Checkbox
-                            checked={resimHepsiSecili ? true : resimSayisi > 0 ? "indeterminate" : false}
-                            onCheckedChange={(c) => setResimler((l) => l.map((x) => (resimSecilebilir(x.yol) ? { ...x, secili: c === true } : x)))}
-                            aria-label="Tüm resim klasörlerini seç"
-                          />
-                        </TableHead>
-                        <TableHead className="px-4">Klasör</TableHead>
-                        <TableHead className="px-4">Kullanan şirketler</TableHead>
-                        <TableHead className="px-4 text-right">Dosya</TableHead>
-                        <TableHead className="px-4 text-right">Boyut</TableHead>
-                        <TableHead className="px-4">{`Hedef: Resimler\\${oturum?.firmaId ?? ""}\\`}</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
-                        const i = resimBas + si;
-                        const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
-                        return (
-                          <TableRow key={s.yol} data-state={s.secili ? "selected" : undefined}>
-                            <TableCell className="pl-4">
-                              <Checkbox
-                                checked={s.secili}
-                                disabled={!k.var || k.dosyaSayisi === 0}
-                                onCheckedChange={(c) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
-                                aria-label={s.yol + " aktarılsın"}
-                              />
-                            </TableCell>
-                            <TableCell className="max-w-72 px-4 font-mono text-xs">
-                              <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
-                            </TableCell>
-                            <TableCell className="max-w-56 px-4 text-muted-foreground">
-                              <Ipucu metin={k.kullananlar.length > 2 ? k.kullananlar.join(", ") : undefined}>
-                                <div className="truncate">
-                                  {k.kullananlar.length === 0 ? "—" : k.kullananlar.length <= 2 ? k.kullananlar.join(", ") : `${k.kullananlar[0]} +${k.kullananlar.length - 1}`}
-                                </div>
-                              </Ipucu>
-                            </TableCell>
-                            <TableCell className="px-4 text-right tabular-nums">
-                              {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
-                            </TableCell>
-                            <TableCell className="px-4 text-right tabular-nums">{k.var ? mb(k.boyutMb) : "—"}</TableCell>
-                            <TableCell className="w-48 px-4 py-1">
-                              {s.secili ? (
-                                <Input
-                                  value={s.altKlasor}
-                                  placeholder="(ana klasör)"
-                                  onChange={(e) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, altKlasor: e.target.value } : x)))}
-                                  className="h-7 font-mono text-xs"
-                                />
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                      ))}
                     </TableBody>
                   </Table>
-                )}
-                <Sayfalama sayfa={resimSayfaGecerli} sayfaSayisi={resimSayfaSayisi} onSayfa={setResimSayfa} bilgi={`${resimBas + 1}–${Math.min(resimBas + KLASOR_SAYFA, resimler.length)} / ${resimler.length}`} />
-              </Bolum>
-            )}
-
-            {hedef.depo && (
-              <div className="grid gap-4">
-                <Bolum
-                  ikon={<FileArchive className="size-4" />}
-                  baslik="Eski yıl dosyaları"
-                  aksiyon={<Button variant="outline" size="sm" onClick={() => void dosyaEkle().catch((e) => setHata(e.message))}><Plus /> Dosya ekle</Button>}
-                >
-                  {eskiDosyalar.length === 0 && <Bos>SQL'e bağlı olmayan eski yıl dataları (.mdf, .bak, .zip…) varsa ekleyin.</Bos>}
-                  {eskiDosyalar.map((y) => (
-                    <SatirSil key={y} metin={y} onSil={() => setEskiDosyalar((s) => s.filter((x) => x !== y))} />
-                  ))}
+                  <Sayfalama
+                    sayfa={vtSayfaGecerli}
+                    sayfaSayisi={vtSayfaSayisi}
+                    onSayfa={setVtSayfa}
+                    bilgi={`${(vtSayfaGecerli - 1) * VT_SAYFA + 1}–${Math.min(vtSayfaGecerli * VT_SAYFA, filtreli.length)} / ${filtreli.length} · ${secili.size} seçili`}
+                  />
+                  {hedef.depo && (
+                    <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+                      <span className="min-w-0 flex-1">
+                        "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
+                        {eskiSayisi > 0 && <span className="ml-1 font-medium text-foreground">{eskiSayisi} eski yıl seçili.</span>}
+                      </span>
+                      <span>Seçilenleri ({filtreliSeciliSayisi}):</span>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(false)}>
+                        Güncel yap
+                      </Button>
+                      <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(true)}>
+                        Eski yıl yap
+                      </Button>
+                    </div>
+                  )}
+                  <label className="flex cursor-pointer items-start gap-3 border-t px-4 py-3 text-sm">
+                    <Checkbox className="mt-0.5" checked={veritabanlariAyir} onCheckedChange={(c) => setVeritabanlariAyir(c === true)} />
+                    <span>
+                      <span className="font-medium">Aktarım bitince veritabanlarını bu SQL Server'dan ayır (detach)</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Pusula aktarımı tamamladıktan sonra aktarılan veritabanları ayrılır; programınız artık bu verilere bağlanamaz.
+                        Veri dosyaları (.mdf/.ldf) silinmez, gerekirse yeniden bağlanabilir.
+                      </span>
+                    </span>
+                  </label>
                 </Bolum>
-              </div>
-            )}
+              </TabsContent>
 
-            {hedef.rdp && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <Bolum ikon={<FolderOpen className="size-4" />} baslik="Program klasörleri">
-                  {programlar.length === 0 && <Bos>Pusula program klasörü bulunamadı.</Bos>}
-                  {programlar.slice(programBas, programBas + KLASOR_SAYFA).map((s, si) => {
-                    const i = programBas + si;
-                    const p = r.programKlasorleri.find((x) => x.yol === s.yol)!;
-                    return (
-                      <div key={s.yol} className="flex items-start gap-3 border-b px-4 py-2.5 last:border-b-0">
-                        <Checkbox
-                          className="mt-0.5"
-                          checked={s.secili}
-                          onCheckedChange={(c) => setProgramlar((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <Ipucu metin={s.yol}><div className="truncate font-mono text-xs">{s.yol}</div></Ipucu>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {p.parametreler.map((x) => `${x.ad}${x.dataKodu ? ` (${x.dataKodu})` : ""}`).join(", ")}
-                          </div>
-                          {s.secili && katalog.length > 0 && (
-                            <ToggleGroup
-                              type="single"
-                              size="sm"
-                              variant="outline"
-                              className="mt-1.5 flex-wrap justify-start"
-                              value={s.program}
-                              onValueChange={(v) => v && setProgramlar((l) => l.map((x, j) => (j === i ? { ...x, program: v } : x)))}
-                            >
-                              {katalog.map((k) => (
-                                <ToggleGroupItem key={k.name} value={k.name} className="px-2 text-xs">{k.name}</ToggleGroupItem>
+              {/* ── Resimler ───────────────────────────────────────── */}
+              {hedef.depo && (
+                <TabsContent value="resim">
+                  <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
+                    {resimler.length === 0 ? (
+                      <Bos>Şirket tanımlarında resim klasörü yok.</Bos>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="text-[10px] uppercase tracking-wider">
+                            <TableHead className="w-10 pl-4">
+                              <Checkbox
+                                checked={resimHepsiSecili ? true : resimSayisi > 0 ? "indeterminate" : false}
+                                onCheckedChange={(c) => setResimler((l) => l.map((x) => (resimSecilebilir(x.yol) ? { ...x, secili: c === true } : x)))}
+                                aria-label="Tüm resim klasörlerini seç"
+                              />
+                            </TableHead>
+                            <TableHead className="px-4">Klasör</TableHead>
+                            <TableHead className="px-4">Kullanan şirketler</TableHead>
+                            <TableHead className="px-4 text-right">Dosya</TableHead>
+                            <TableHead className="px-4 text-right">Boyut</TableHead>
+                            <TableHead className="px-4">{`Hedef: Resimler\\${oturum?.firmaId ?? ""}\\`}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
+                            const i = resimBas + si;
+                            const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
+                            return (
+                              <TableRow key={s.yol} data-state={s.secili ? "selected" : undefined}>
+                                <TableCell className="pl-4">
+                                  <Checkbox
+                                    checked={s.secili}
+                                    disabled={!k.var || k.dosyaSayisi === 0}
+                                    onCheckedChange={(c) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
+                                    aria-label={s.yol + " aktarılsın"}
+                                  />
+                                </TableCell>
+                                <TableCell className="max-w-72 px-4 font-mono text-xs">
+                                  <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
+                                </TableCell>
+                                <TableCell className="max-w-56 px-4 text-muted-foreground">
+                                  <Ipucu
+                                    metin={
+                                      k.kullananlar.length > 1 ? (
+                                        <div className="flex flex-col gap-0.5 break-normal">
+                                          {k.kullananlar.map((ad) => <span key={ad}>{ad}</span>)}
+                                        </div>
+                                      ) : undefined
+                                    }
+                                  >
+                                    <div className="truncate">
+                                      {k.kullananlar.length === 0 ? "—" : k.kullananlar.length === 1 ? k.kullananlar[0] : `${k.kullananlar[0]} +${k.kullananlar.length - 1}`}
+                                    </div>
+                                  </Ipucu>
+                                </TableCell>
+                                <TableCell className="px-4 text-right tabular-nums">
+                                  {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
+                                </TableCell>
+                                <TableCell className="px-4 text-right tabular-nums">{k.var ? mb(k.boyutMb) : "—"}</TableCell>
+                                <TableCell className="w-48 px-4 py-1">
+                                  {s.secili ? (
+                                    <Input
+                                      value={s.altKlasor}
+                                      placeholder="(ana klasör)"
+                                      onChange={(e) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, altKlasor: e.target.value } : x)))}
+                                      className="h-7 font-mono text-xs"
+                                    />
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                    <Sayfalama sayfa={resimSayfaGecerli} sayfaSayisi={resimSayfaSayisi} onSayfa={setResimSayfa} bilgi={`${resimBas + 1}–${Math.min(resimBas + KLASOR_SAYFA, resimler.length)} / ${resimler.length}`} />
+                  </Bolum>
+                </TabsContent>
+              )}
+
+              {/* ── Eski yıl dosyaları ─────────────────────────────── */}
+              {hedef.depo && (
+                <TabsContent value="eski">
+                  <Bolum
+                    ikon={<FileArchive className="size-4" />}
+                    baslik="Eski yıl dosyaları"
+                    aksiyon={<Button variant="outline" size="sm" onClick={() => void dosyaEkle().catch((e) => setHata(e.message))}><Plus /> Dosya ekle</Button>}
+                  >
+                    {eskiDosyalar.length === 0 ? (
+                      <Bos>SQL'e bağlı olmayan eski yıl dataları (.mdf, .bak, .zip…) varsa ekleyin.</Bos>
+                    ) : (
+                      <YolTablosu basliklar={["Dosya", "Klasör"]} yollar={eskiDosyalar} ad={dosyaAdi} onSil={(y) => setEskiDosyalar((s) => s.filter((x) => x !== y))} />
+                    )}
+                  </Bolum>
+                </TabsContent>
+              )}
+
+              {/* ── Programlar ─────────────────────────────────────── */}
+              {hedef.rdp && (
+                <TabsContent value="program" className="flex flex-col gap-4">
+                  <Bolum ikon={<FolderOpen className="size-4" />} baslik="Program klasörleri" sag={`${programlar.length} klasör · ${programSayisi} seçili`}>
+                    {programlar.length === 0 ? (
+                      <Bos>Pusula program klasörü bulunamadı.</Bos>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="text-[10px] uppercase tracking-wider">
+                            <TableHead className="w-10 pl-4">
+                              <Checkbox
+                                checked={programHepsiSecili ? true : programSayisi > 0 ? "indeterminate" : false}
+                                onCheckedChange={(c) => setProgramlar((l) => l.map((x) => ({ ...x, secili: c === true })))}
+                                aria-label="Tüm program klasörlerini seç"
+                              />
+                            </TableHead>
+                            <TableHead className="px-4">Klasör</TableHead>
+                            <TableHead className="px-4">Program dosyası</TableHead>
+                            <TableHead className="px-4">Parametre (DATA KODU)</TableHead>
+                            <TableHead className="px-4">Program</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {programlar.slice(programBas, programBas + KLASOR_SAYFA).map((s, si) => {
+                            const i = programBas + si;
+                            const p = r.programKlasorleri.find((x) => x.yol === s.yol)!;
+                            return (
+                              <TableRow key={s.yol} data-state={s.secili ? "selected" : undefined}>
+                                <TableCell className="pl-4">
+                                  <Checkbox
+                                    checked={s.secili}
+                                    onCheckedChange={(c) => setProgramlar((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
+                                    aria-label={s.yol + " aktarılsın"}
+                                  />
+                                </TableCell>
+                                <TableCell className="max-w-64 px-4 font-mono text-xs">
+                                  <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
+                                </TableCell>
+                                <TableCell className="max-w-40 px-4 font-mono text-xs text-muted-foreground">
+                                  <div className="truncate">{p.exeler.join(", ") || "—"}</div>
+                                </TableCell>
+                                <TableCell className="max-w-48 px-4 text-xs text-muted-foreground">
+                                  <div className="truncate">{p.parametreler.map((x) => `${x.ad}${x.dataKodu ? ` (${x.dataKodu})` : ""}`).join(", ")}</div>
+                                </TableCell>
+                                <TableCell className="px-4 py-1">
+                                  {s.secili ? (
+                                    programSecici(s.program, (v) => setProgramlar((l) => l.map((x, j) => (j === i ? { ...x, program: v } : x))))
+                                  ) : (
+                                    <span className="text-muted-foreground">—</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    )}
+                    <Sayfalama sayfa={programSayfaGecerli} sayfaSayisi={programSayfaSayisi} onSayfa={setProgramSayfa} bilgi={`${programlar.length} klasör`} />
+                  </Bolum>
+
+                  <Bolum
+                    ikon={<FileCode2 className="size-4" />}
+                    baslik="Program dosyaları"
+                    aksiyon={<Button variant="outline" size="sm" onClick={programDosyasiEkle}><Plus /> Program ekle</Button>}
+                  >
+                    {programDosyalari.length === 0 ? (
+                      <Bos>Program klasörü bulunamadıysa ya da farklı bir exe / parametre göndermek istiyorsanız buradan tek tek seçin.</Bos>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="text-[10px] uppercase tracking-wider">
+                            <TableHead className="px-4">Program</TableHead>
+                            <TableHead className="px-4">Program dosyası (.exe)</TableHead>
+                            <TableHead className="px-4">Parametre (.txt)</TableHead>
+                            <TableHead className="w-10 pr-4" />
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {programDosyalari.map((d) => (
+                            <TableRow key={d.id}>
+                              <TableCell className="px-4 py-1.5">
+                                {programSecici(d.program, (v) => setProgramDosyalari((l) => l.map((x) => (x.id === d.id ? { ...x, program: v } : x))))}
+                              </TableCell>
+                              {(["exe", "param"] as const).map((tur) => (
+                                <TableCell key={tur} className="max-w-56 px-4 py-1.5">
+                                  {d[tur] ? (
+                                    <Ipucu metin={d[tur]!}>
+                                      <button
+                                        type="button"
+                                        className="block max-w-full truncate font-mono text-xs underline-offset-2 hover:underline"
+                                        onClick={() => void programDosyasiSec(d.id, tur).catch((e) => setHata(e.message))}
+                                      >
+                                        {dosyaAdi(d[tur]!)}
+                                      </button>
+                                    </Ipucu>
+                                  ) : (
+                                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => void programDosyasiSec(d.id, tur).catch((e) => setHata(e.message))}>
+                                      Seç…
+                                    </Button>
+                                  )}
+                                </TableCell>
                               ))}
-                            </ToggleGroup>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <Sayfalama sayfa={programSayfaGecerli} sayfaSayisi={programSayfaSayisi} onSayfa={setProgramSayfa} bilgi={`${programlar.length} klasör · ${programSayisi} seçili`} />
-                </Bolum>
+                              <TableCell className="pr-4">
+                                <Button variant="ghost" size="icon" className="size-7" aria-label="Kaldır" onClick={() => setProgramDosyalari((l) => l.filter((x) => x.id !== d.id))}>
+                                  <X />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                    <p className="border-t px-4 py-2 text-xs text-muted-foreground">
+                      Dosyalar terminal sunucusunda <span className="font-mono">{`MUSTERI\\${oturum?.firmaId ?? ""}\\Aktarim\\<program>`}</span> klasörüne gider;
+                      parametre dosyasındaki DATA KODU Pusula tarafında güncellenir.
+                    </p>
+                  </Bolum>
+                </TabsContent>
+              )}
 
-                <Bolum
-                  ikon={<FolderPlus className="size-4" />}
-                  baslik="Ek klasörler"
-                  aksiyon={<Button variant="outline" size="sm" onClick={() => void klasorEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
-                >
-                  {ekKlasorler.length === 0 && <Bos>Raporlar, şablonlar gibi göndermek istediğiniz klasörler varsa ekleyin.</Bos>}
-                  {ekKlasorler.map((y) => (
-                    <SatirSil key={y} metin={y} onSil={() => setEkKlasorler((s) => s.filter((x) => x !== y))} />
-                  ))}
-                </Bolum>
-              </div>
-            )}
+              {/* ── Ek klasörler ───────────────────────────────────── */}
+              {hedef.rdp && (
+                <TabsContent value="ek">
+                  <Bolum
+                    ikon={<FolderPlus className="size-4" />}
+                    baslik="Ek klasörler"
+                    aksiyon={<Button variant="outline" size="sm" onClick={() => void klasorEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
+                  >
+                    {ekKlasorler.length === 0 ? (
+                      <Bos>Raporlar, şablonlar gibi göndermek istediğiniz klasörler varsa ekleyin.</Bos>
+                    ) : (
+                      <YolTablosu basliklar={["Klasör", "Konum"]} yollar={ekKlasorler} ad={dosyaAdi} onSil={(y) => setEkKlasorler((s) => s.filter((x) => x !== y))} />
+                    )}
+                  </Bolum>
+                </TabsContent>
+              )}
+            </Tabs>
           </>
         )}
       </main>
@@ -560,21 +735,39 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     {eskiSayisi > 0 && ` (${eskiSayisi} eski yıl)`}
                     {resimSayisi > 0 && ` · ${resimSayisi} resim klasörü`}
                     {eskiDosyalar.length > 0 && ` · ${eskiDosyalar.length} eski yıl dosyası`}
-                    {programSayisi > 0 && ` · ${programSayisi} program`}
+                    {programSayisi + programDosyaSayisi > 0 && ` · ${programSayisi + programDosyaSayisi} program`}
                     {ekKlasorler.length > 0 && ` · ${ekKlasorler.length} ek klasör`}
+                    {veritabanlariAyir && secili.size > 0 && " · sonra ayrılacak"}
                   </span>
                 </>
               )}
             </div>
-            <Button
-              disabled={basliyor || bosSecim || programlar.some((x) => x.secili && !x.program)}
-              onClick={() => void baslat()}
-            >
+            <Button disabled={basliyor || bosSecim || programEksik} onClick={() => void baslat()}>
               {basliyor ? <Loader2 className="animate-spin" /> : null} Aktarımı başlat <ArrowRight />
             </Button>
           </div>
         </footer>
       )}
+
+      <AlertDialog open={!!onay} onOpenChange={(o) => !o && setOnay(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{onay?.baslik}</AlertDialogTitle>
+            <AlertDialogDescription>{onay?.mesaj}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                onay?.uygula();
+                setOnay(null);
+              }}
+            >
+              Evet, güncel olarak aktar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -590,6 +783,36 @@ function Bolum({ ikon, baslik, sag, aksiyon, children }: { ikon: React.ReactNode
       </div>
       {children}
     </section>
+  );
+}
+
+/** Eski yıl dosyaları / ek klasörler: ad + bulunduğu yer + kaldır. */
+function YolTablosu({ basliklar, yollar, ad, onSil }: { basliklar: [string, string]; yollar: string[]; ad: (y: string) => string; onSil: (y: string) => void }) {
+  return (
+    <Table>
+      <TableHeader>
+        <TableRow className="text-[10px] uppercase tracking-wider">
+          <TableHead className="px-4">{basliklar[0]}</TableHead>
+          <TableHead className="px-4">{basliklar[1]}</TableHead>
+          <TableHead className="w-10 pr-4" />
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {yollar.map((y) => (
+          <TableRow key={y}>
+            <TableCell className="px-4 font-mono text-xs font-medium">{ad(y)}</TableCell>
+            <TableCell className="max-w-96 px-4 font-mono text-xs text-muted-foreground">
+              <Ipucu metin={y}><div className="truncate">{klasorAdi(y) || "—"}</div></Ipucu>
+            </TableCell>
+            <TableCell className="pr-4">
+              <Button variant="ghost" size="icon" className="size-7" onClick={() => onSil(y)} aria-label="Kaldır">
+                <X />
+              </Button>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -630,17 +853,6 @@ function Bilgi({ l, v, mono }: { l: string; v: string; mono?: boolean }) {
     <div className="min-w-0">
       <div className="text-[11px] text-muted-foreground">{l}</div>
       <Ipucu metin={v}><div className={`truncate ${mono ? "font-mono" : ""}`}>{v || "—"}</div></Ipucu>
-    </div>
-  );
-}
-
-function SatirSil({ metin, onSil }: { metin: string; onSil: () => void }) {
-  return (
-    <div className="flex items-center gap-2 border-b px-4 py-2 last:border-b-0">
-      <Ipucu metin={metin}><span className="min-w-0 flex-1 truncate font-mono text-xs">{metin}</span></Ipucu>
-      <Button variant="ghost" size="icon" className="size-7" onClick={onSil} aria-label="Kaldır">
-        <X />
-      </Button>
     </div>
   );
 }

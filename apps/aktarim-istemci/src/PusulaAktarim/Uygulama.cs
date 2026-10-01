@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data.SqlClient;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -38,6 +39,10 @@ namespace PusulaAktarim
         private CancellationTokenSource _aktarimIptal;
         private bool _aktarimSuruyor;
         private bool _yuklemeBildirildi;
+        // Aktarım sonrası veritabanı ayırma (detach) sonucu — ekranda gösterilir.
+        private string _ayirmaDurumu;              // null | suruyor | bitti
+        private readonly List<string> _ayrilanlar = new List<string>();
+        private readonly List<string> _ayirmaHatalari = new List<string>();
 
         public Uygulama(ServisIstemci servis)
         {
@@ -94,6 +99,7 @@ namespace PusulaAktarim
                     kesifHatasi = _kesifHatasi,
                     kesifGonderildi = _kesifGonderildi,
                     mesaj = _mesaj,
+                    ayirma = _ayirmaDurumu == null ? null : new { durum = _ayirmaDurumu, ayrilanlar = _ayrilanlar.ToList(), hatalar = _ayirmaHatalari.ToList() },
                     aktarim = _is == null ? null : new
                     {
                         // Paketlerin dosya listesi (on binlerce yol) ekrana gitmez.
@@ -103,6 +109,7 @@ namespace PusulaAktarim
                         bitti = _is.Bitti,
                         bilgi = _aktarici?.Bilgi,
                         bildirildi = _yuklemeBildirildi,
+                        veritabanlariAyir = _is.VeritabanlariAyir,
                         yedekKlasoru = Yedekleyici.Klasor,
                         sunucu = _sunucu == null ? null : new
                         {
@@ -197,6 +204,8 @@ namespace PusulaAktarim
         ///   eskiDosyalar:  [yol]                  diskteki eski yıl .mdf/.bak/.zip → Eski Datalar
         ///   programlar:    [{ yol, program }]     exe + parametre → terminal Aktarim\{program}
         ///   ekKlasorler:   [yol]                  terminal Aktarim\Ek Dosyalar\{klasör adı}
+        ///   programDosyalari: [{ program, exe, param }]  elle seçilen exe / parametre (v1'deki alan) → Aktarim\{program}
+        ///   veritabanlariAyir: bool               Pusula tamamlayınca aktarılan veritabanlarını detach et
         /// </summary>
         public Task<object> AktarimBaslat(JObject secim)
         {
@@ -207,7 +216,7 @@ namespace PusulaAktarim
             secim = secim ?? new JObject();
             var hedefler = oturum?["hedefler"] as JObject;
             bool Acik(string h) => hedefler == null || hedefler.Value<bool?>(h) != false;
-            var kayit = new IsKaydi { OturumId = OturumId, Sikistir = k.Sql.SikistirmaVar };
+            var kayit = new IsKaydi { OturumId = OturumId, Sikistir = k.Sql.SikistirmaVar, VeritabanlariAyir = secim.Value<bool?>("veritabanlariAyir") == true };
             var adlar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // --- veritabanları
@@ -284,6 +293,27 @@ namespace PusulaAktarim
                         Tip = "dosya", Tur = "program", Ad = program + " · " + ad, Yol = program + "/" + ad, YerelYol = f.Item1,
                         VeriMb = new FileInfo(f.Item1).Length / 1048576.0,
                         Meta = new Dictionary<string, object> { ["program"] = program, ["param"] = f.Item2 },
+                    });
+                }
+            }
+
+            // --- elle seçilen program dosyaları (exe + parametre), program klasörüyle aynı hedef
+            foreach (var s in (secim["programDosyalari"] as JArray ?? new JArray()).OfType<JObject>())
+            {
+                if (!Acik("rdp")) throw new KullaniciHatasi("Bu aktarımda program alanı kapalı (terminal sunucusu tanımlı değil).");
+                var program = s.Value<string>("program");
+                if (string.IsNullOrWhiteSpace(program)) throw new KullaniciHatasi("Program dosyası için program seçin.");
+                foreach (var (yol, param) in new[] { (s.Value<string>("exe"), false), (s.Value<string>("param"), true) })
+                {
+                    if (string.IsNullOrWhiteSpace(yol)) continue;
+                    var fi = new FileInfo(yol);
+                    if (!fi.Exists) throw new KullaniciHatasi("Dosya bulunamadı: " + yol);
+                    if (!adlar.Add("program/" + program + "/" + fi.Name)) throw new KullaniciHatasi(program + " için aynı adlı iki dosya seçildi: " + fi.Name);
+                    kayit.Ogeler.Add(new IsOgesi
+                    {
+                        Tip = "dosya", Tur = "program", Ad = program + " · " + fi.Name, Yol = program + "/" + fi.Name, YerelYol = fi.FullName,
+                        VeriMb = fi.Length / 1048576.0,
+                        Meta = new Dictionary<string, object> { ["program"] = program, ["param"] = param },
                     });
                 }
             }
@@ -398,6 +428,7 @@ namespace PusulaAktarim
                         lock (_kilit) _sunucu = o;
                         if (o.Value<string>("durum") == "tamamlandi")
                         {
+                            if (_is != null && _is.VeritabanlariAyir) await VeritabanlariniAyir(_is);
                             // Bitti: yarım iş kaydı ve oturum tokenı artık gereksiz.
                             _is?.Sil();
                             IsKaydi.TokenSil();
@@ -409,6 +440,55 @@ namespace PusulaAktarim
                 }
             }
             finally { Interlocked.Exchange(ref _izleniyor, 0); }
+        }
+
+        /// <summary>
+        /// Aktarılan veritabanlarını müşterinin SQL Server'ından ayırır (sp_detach_db). Dosyalar diskte kalır,
+        /// gerekirse yeniden bağlanabilir. Yalnız Pusula tarafı "tamamlandı" dedikten sonra çağrılır.
+        /// </summary>
+        private async Task VeritabanlariniAyir(IsKaydi kayit)
+        {
+            var adlar = kayit.Ogeler.Where(x => x.Tip == "vt" && !string.IsNullOrEmpty(x.Veritabani)).Select(x => x.Veritabani).Distinct().ToList();
+            lock (_kilit) { _ayirmaDurumu = "suruyor"; _ayrilanlar.Clear(); _ayirmaHatalari.Clear(); }
+            try
+            {
+                using (var c = new SqlConnection(_sql.BaglantiMetni("master", 15)))
+                {
+                    await c.OpenAsync();
+                    foreach (var ad in adlar)
+                    {
+                        var q = "[" + ad.Replace("]", "]]") + "]";
+                        try
+                        {
+                            using (var k = new SqlCommand($"ALTER DATABASE {q} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; EXEC sp_detach_db @dbname = @ad, @skipchecks = 'true';", c) { CommandTimeout = 120 })
+                            {
+                                k.Parameters.AddWithValue("@ad", ad);
+                                await k.ExecuteNonQueryAsync();
+                            }
+                            lock (_kilit) _ayrilanlar.Add(ad);
+                        }
+                        catch (SqlException e)
+                        {
+                            lock (_kilit) _ayirmaHatalari.Add(ad + ": " + e.Message);
+                            // Ayrılamadıysa kullanıcıya açık bırak.
+                            try
+                            {
+                                using (var k = new SqlCommand($"IF DB_ID(@ad) IS NOT NULL ALTER DATABASE {q} SET MULTI_USER", c))
+                                {
+                                    k.Parameters.AddWithValue("@ad", ad);
+                                    await k.ExecuteNonQueryAsync();
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                lock (_kilit) _ayirmaHatalari.Add("SQL Server'a bağlanılamadı: " + e.Message);
+            }
+            lock (_kilit) _ayirmaDurumu = "bitti";
         }
 
         // ------------------------------------------------------------ keşif

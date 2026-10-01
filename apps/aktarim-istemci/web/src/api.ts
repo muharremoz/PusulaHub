@@ -90,6 +90,7 @@ export type Aktarim = {
   bitti: boolean;
   bilgi: string | null;
   bildirildi: boolean;
+  veritabanlariAyir?: boolean;
   yedekKlasoru: string;
   /** Pusula tarafında sunuculara taşıma: yuklendi → aktariliyor → tamamlandi | hata */
   sunucu: { durum: string; asama: string | null; ilerleme: number; hata: string | null } | null;
@@ -157,5 +158,7 @@ export type Durum = {
   kesifHatasi: string | null;
   kesifGonderildi: boolean;
   mesaj: string | null;
+  /** Aktarım sonrası veritabanı ayırma (detach) sonucu. */
+  ayirma?: { durum: "suruyor" | "bitti"; ayrilanlar: string[]; hatalar: string[] } | null;
   aktarim: Aktarim | null;
 };

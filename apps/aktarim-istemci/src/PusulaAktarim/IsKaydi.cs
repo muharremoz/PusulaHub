@@ -46,6 +46,8 @@ namespace PusulaAktarim
         public string OturumId;
         public string Olusturma = DateTime.Now.ToString("s");
         public bool Sikistir;
+        /// <summary>Pusula tarafı tamamlayınca aktarılan veritabanları müşterinin SQL Server'ından ayrılsın (detach; dosyalar kalır).</summary>
+        public bool VeritabanlariAyir;
         public List<IsOgesi> Ogeler = new List<IsOgesi>();
 
         [JsonIgnore] public bool Bitti => Ogeler.Count > 0 && Ogeler.All(o => o.Durum == "tamam");

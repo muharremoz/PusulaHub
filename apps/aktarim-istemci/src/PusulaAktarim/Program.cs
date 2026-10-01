@@ -110,7 +110,7 @@ namespace PusulaAktarim
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
                 case "POST /aktarim/baslat":
                     return _uygulama.AktarimBaslat(i.Govde);
-                case "POST /sec/dosyalar": return Sec(p => DosyaSec(p));
+                case "POST /sec/dosyalar": return Sec(p => DosyaSec(p, i.Metin("tur")));
                 case "POST /sec/klasor": return Sec(p => KlasorSec(p, i.Metin("aciklama")));
                 case "POST /aktarim/duraklat": return _uygulama.Duraklat();
                 case "POST /aktarim/devam": return _uygulama.Devam();
@@ -144,14 +144,14 @@ namespace PusulaAktarim
             return sonuc.Task;
         }
 
-        private static object DosyaSec(IWin32Window sahip)
+        /// <summary>tur: eski (varsayılan, çoklu) | exe | param — program dosyası seçimi tek dosya.</summary>
+        private static object DosyaSec(IWin32Window sahip, string tur)
         {
-            using (var d = new OpenFileDialog
-            {
-                Title = "Eski yıl dataları seçin",
-                Multiselect = true,
-                Filter = "Veritabanı ve arşiv dosyaları|*.mdf;*.ldf;*.ndf;*.bak;*.zip;*.rar;*.7z|Tüm dosyalar|*.*",
-            })
+            var (baslik, filtre, coklu) =
+                tur == "exe" ? ("Program dosyasını (.exe) seçin", "Program dosyası|*.exe", false) :
+                tur == "param" ? ("Parametre dosyasını (.txt) seçin", "Parametre dosyası|*.txt|Tüm dosyalar|*.*", false) :
+                ("Eski yıl dataları seçin", "Veritabanı ve arşiv dosyaları|*.mdf;*.ldf;*.ndf;*.bak;*.zip;*.rar;*.7z|Tüm dosyalar|*.*", true);
+            using (var d = new OpenFileDialog { Title = baslik, Multiselect = coklu, Filter = filtre })
             {
                 return new { yollar = d.ShowDialog(sahip) == DialogResult.OK ? d.FileNames : new string[0] };
             }
