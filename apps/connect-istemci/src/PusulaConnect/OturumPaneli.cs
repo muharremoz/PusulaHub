@@ -71,19 +71,11 @@ namespace PusulaConnect
             var kes = Dugme("Bağlantıyı kes", true, P);
             kes.Click += (s, e) => Kes();
             // Oturumda Windows başlık çubuğu gizli (ConnectPenceresi.OturumAc): küçültme şeritte
-            var kucult = new Button
-            {
-                Text = "", Font = new Font("Segoe MDL2 Assets", 9f), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
-                Size = new Size(P(40), P(30)), Margin = new Padding(P(10), 0, 0, 0), BackColor = Color.White,
-                ForeColor = Color.FromArgb(23, 23, 23), UseVisualStyleBackColor = false, TabStop = false,
-            };
-            kucult.FlatAppearance.BorderSize = 0;
-            kucult.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
+            var kucult = Dugme("Küçült", false, P);
             kucult.Click += (s, e) => { var f = FindForm(); if (f != null) f.WindowState = FormWindowState.Minimized; };
-            new ToolTip().SetToolTip(kucult, "Simge durumuna küçült");
+            sag.Controls.Add(kucult);
             sag.Controls.Add(_tamEkran);
             sag.Controls.Add(kes);
-            sag.Controls.Add(kucult);
 
             _serit.Controls.Add(_durum);
             _serit.Controls.Add(sag);
