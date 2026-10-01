@@ -188,23 +188,47 @@ namespace PusulaConnect
         /// </summary>
         private void BaslikCubugu(bool goster)
         {
-            var buyuk = WindowState == FormWindowState.Maximized;
-            if (goster)
+            // Normal/büyük arası gidip gelmeden (pencere bir an küçülüp geri büyüyordu): stil değişir,
+            // pencere büyükse yeni stile uygun büyük dikdörtgene doğrudan yerleştirilir.
+            FormBorderStyle = goster ? FormBorderStyle.Sizable : FormBorderStyle.None;
+            if (WindowState != FormWindowState.Maximized) return;
+            var r = BuyukDikdortgen(goster);
+            SetWindowPos(Handle, IntPtr.Zero, r.X, r.Y, r.Width, r.Height, 0x0004 | 0x0010 | 0x0020); // NOZORDER|NOACTIVATE|FRAMECHANGED
+        }
+
+        /// <summary>
+        /// Büyütülmüş pencerenin ekrandaki yeri: kenarlıksızken tam çalışma alanı (görev çubuğu hariç),
+        /// kenarlıklıyken Windows'un yaptığı gibi çerçeve kalınlığı kadar dışarı taşan alan.
+        /// </summary>
+        private Rectangle BuyukDikdortgen(bool kenarlikli)
+        {
+            var alan = Screen.FromHandle(Handle).WorkingArea;
+            if (!kenarlikli) return alan;
+            int k;
+            try { var dpi = (uint)DeviceDpi; k = GetSystemMetricsForDpi(32, dpi) + GetSystemMetricsForDpi(92, dpi); } // SM_CXFRAME + SM_CXPADDEDBORDER
+            catch { k = GetSystemMetrics(32) + GetSystemMetrics(92); }
+            alan.Inflate(k, k);
+            return alan;
+        }
+
+        [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr h, IntPtr sonra, int x, int y, int w, int hh, uint bayrak);
+        [DllImport("user32.dll")] private static extern int GetSystemMetrics(int i);
+        [DllImport("user32.dll")] private static extern int GetSystemMetricsForDpi(int i, uint dpi);
+
+        [StructLayout(LayoutKind.Sequential)] private struct NOKTA { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] private struct MINMAXINFO { public NOKTA Ayrilmis, MaxBoyut, MaxKonum, MinIz, MaxIz; }
+
+        protected override void WndProc(ref Message m)
+        {
+            base.WndProc(ref m);
+            // Kenarlıksızken büyütme = çalışma alanı (yoksa görev çubuğunun da üstünü örter)
+            if (m.Msg == 0x0024 && FormBorderStyle == FormBorderStyle.None) // WM_GETMINMAXINFO
             {
-                FormBorderStyle = FormBorderStyle.Sizable;
-                MaximizedBounds = Rectangle.Empty;
-            }
-            else
-            {
-                var ekran = Screen.FromControl(this).WorkingArea;
-                MaximizedBounds = new Rectangle(ekran.Location - (Size)Screen.FromControl(this).Bounds.Location, ekran.Size);
-                FormBorderStyle = FormBorderStyle.None;
-            }
-            if (buyuk)
-            {
-                // Yeni sınırın uygulanması için büyütmeyi tazele
-                WindowState = FormWindowState.Normal;
-                WindowState = FormWindowState.Maximized;
+                var ekran = Screen.FromHandle(Handle);
+                var mm = (MINMAXINFO)Marshal.PtrToStructure(m.LParam, typeof(MINMAXINFO));
+                mm.MaxKonum = new NOKTA { X = ekran.WorkingArea.X - ekran.Bounds.X, Y = ekran.WorkingArea.Y - ekran.Bounds.Y };
+                mm.MaxBoyut = new NOKTA { X = ekran.WorkingArea.Width, Y = ekran.WorkingArea.Height };
+                Marshal.StructureToPtr(mm, m.LParam, false);
             }
         }
 
