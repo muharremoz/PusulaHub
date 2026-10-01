@@ -120,6 +120,9 @@ namespace PusulaConnect
                 case "POST /iki/onayla": return _uygulama.IkiOnayla(i.Metin("kod"), i.Metin("sifre"));
                 case "POST /iki/kapat": return _uygulama.IkiKapat(i.Metin("kod"));
                 case "POST /guncelle": return Task.FromResult(_uygulama.Guncelle());
+                case "POST /guncelleme/denetle": return _uygulama.GuncellemeDenetle();
+                case "POST /ayarlar": return Task.FromResult(_uygulama.AyarKaydet(i.Govde));
+                case "POST /otomatik/bitti": return Task.FromResult(_uygulama.OtomatikBitti());
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
                     return Task.FromResult<object>(new { tamam = true });

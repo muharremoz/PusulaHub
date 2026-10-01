@@ -14,6 +14,8 @@ namespace PusulaConnect
     {
         public string Ad, Sunucu, Domain, Kullanici, Sifre;
         public int Port;
+        // Ayarlar sayfasından
+        public bool TamEkran, Yazici = true, Pano = true, Ses;
     }
 
     /// <summary>
@@ -129,6 +131,7 @@ namespace PusulaConnect
                 BagliYaz();
                 Olc();
                 _olcum.Start();
+                if (_a.TamEkran) { try { _rdp.FullScreen = true; } catch { } }
                 _rdp.Focus();
             };
             _rdp.OnAutoReconnecting2 += (s, e) => Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber);
@@ -155,13 +158,13 @@ namespace PusulaConnect
             // sertifika kullanıyor, bağlantı zaten VPN tüneli içinde ve sunucu adı profilden geliyor.
             ay.AuthenticationLevel = 0;
             ay.NegotiateSecurityLayer = true;
-            ay.RedirectPrinters = true;
-            ay.RedirectClipboard = true;
+            ay.RedirectPrinters = _a.Yazici;
+            ay.RedirectClipboard = _a.Pano;
             ay.RedirectSmartCards = true;
             ay.RedirectPorts = true;
             ay.RedirectDevices = true;
             ay.RedirectDrives = false;            // sürücüler BİLEREK kapalı (Rdp.Baglan ile aynı)
-            ay.AudioRedirectionMode = 2;          // ses çalınmaz (audiomode:i:2)
+            ay.AudioRedirectionMode = _a.Ses ? 0u : 2u; // 0 = bu bilgisayarda çal, 2 = çalma
             ay.EnableAutoReconnect = true;
             ay.MaxReconnectAttempts = 20;
             ay.BandwidthDetection = true;

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
-  Hash, Laptop, LifeBuoy, Network, Server, ShieldCheck, UserRound, WifiOff, XCircle,
+  AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, KeyRound, Loader2, Monitor, PlugZap,
+  Hash, Laptop, LifeBuoy, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
+import { AyarlarIcerik } from "./ayarlar";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
 import { ParlayanLogo } from "./ortak";
 
@@ -28,12 +29,19 @@ export function AnaEkran({ durum, setDurum }: P) {
   const [hata, setHata] = useState<string | null>(null);
   const [vpnUyari, setVpnUyari] = useState(false);
   const [sifre, setSifre] = useState("");
-  // Yardım talebi orta panelde açılır (iframe); exe CSP'si yalnız bu adrese frame-src izni verir.
-  const [talepAcik, setTalepAcik] = useState(false);
+  // Orta panel: bağlantı (ana), yardım talebi (iframe; exe CSP'si yalnız bu adrese frame-src izni verir), ayarlar
+  const [orta, setOrta] = useState<"ana" | "talep" | "ayarlar">("ana");
   // İki adımlı doğrulama: açma penceresi + kod sorma (bağlan / kapat / şifre kaydet)
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [ikiAc, setIkiAc] = useState(false);
   const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre">(null);
+
+  // Açılışta otomatik bağlanma 2FA açıkken: kod penceresi bir kez açılır
+  useEffect(() => {
+    if (!durum.otomatikKod) return;
+    setKodIstek("baglan");
+    void api("/otomatik/bitti", {});
+  }, [durum.otomatikKod]);
 
   const cagir = async (yol: string, govde: unknown = {}, ad = yol) => {
     setBekle(ad);
@@ -93,21 +101,6 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
           </dl>
 
-          {ikiAktif ? (
-            <div className="flex items-center gap-2 rounded-lg border p-3">
-              <ShieldCheck className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-              <div className="min-w-0 flex-1">
-                <div className="text-xs text-muted-foreground">İki adımlı doğrulama</div>
-                <div className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Açık</div>
-              </div>
-              <Button size="sm" variant="ghost" onClick={() => setKodIstek("kapat")}>Kapat</Button>
-            </div>
-          ) : (
-            <Button variant="outline" className="w-full" onClick={() => setIkiAc(true)}>
-              <ShieldCheck /> İki adımlı doğrulamayı aç
-            </Button>
-          )}
-
           {durum.guncelleme.mevcut && (
             <Button size="sm" variant="outline" className="self-start" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
               {durum.guncelleme.suruyor ? <Loader2 className="animate-spin" /> : <Download />} Güncelle ({durum.guncelleme.surum})
@@ -116,11 +109,13 @@ export function AnaEkran({ durum, setDurum }: P) {
         </div>
 
         <div className="flex flex-col gap-1 border-t px-3 py-3">
-          <Button variant="ghost" size="sm" className="justify-start" disabled={!!bekle} onClick={() => void cagir("/kontrol", {}, "kontrol")}>
-            {bekle === "kontrol" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden kontrol et
-          </Button>
-          <Button variant="ghost" size="sm" className="justify-start" onClick={() => void api("/gunluk/ac", {})}>
-            <FileText /> Günlük
+          <Button
+            variant={orta === "ayarlar" ? "secondary" : "ghost"}
+            size="sm"
+            className="justify-start"
+            onClick={() => setOrta(orta === "ayarlar" ? "ana" : "ayarlar")}
+          >
+            <Settings /> Ayarlar
           </Button>
         </div>
         <div className="flex items-center gap-2.5 border-t px-5 py-3">
@@ -135,11 +130,31 @@ export function AnaEkran({ durum, setDurum }: P) {
       </aside>
 
       {/* ── Orta: bağlantı durumu ──────────────────────────── */}
-      {talepAcik ? (
+      {orta === "ayarlar" ? (
         <main className="flex min-w-0 flex-1 flex-col">
           <OrtaBaslik
             sol={
-              <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setTalepAcik(false)} aria-label="Bağlantı ekranına dön">
+              <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setOrta("ana")} aria-label="Bağlantı ekranına dön">
+                <ArrowLeft />
+              </Button>
+            }
+            baslik="Ayarlar"
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <AyarlarIcerik
+              durum={durum}
+              setDurum={setDurum}
+              ikiAktif={ikiAktif}
+              onIkiAc={() => setIkiAc(true)}
+              onIkiKapat={() => setKodIstek("kapat")}
+            />
+          </div>
+        </main>
+      ) : orta === "talep" ? (
+        <main className="flex min-w-0 flex-1 flex-col">
+          <OrtaBaslik
+            sol={
+              <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setOrta("ana")} aria-label="Bağlantı ekranına dön">
                 <ArrowLeft />
               </Button>
             }
@@ -328,7 +343,7 @@ export function AnaEkran({ durum, setDurum }: P) {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">Yardım mı gerekiyor?</div>
           </div>
-          <Button variant="outline" onClick={() => setTalepAcik(true)}>
+          <Button variant="outline" onClick={() => setOrta("talep")}>
             <LifeBuoy /> Yardım talebi
           </Button>
         </div>

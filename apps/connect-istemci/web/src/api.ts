@@ -88,6 +88,10 @@ export type Durum = {
   ikiAdim?: { aktif: boolean };
   /** Uygulama içi uzak masaüstü: açık mı, son oturum hatayla bittiyse mesajı. */
   oturum?: { acik: boolean; mesaj: string | null };
+  /** Ayarlar sayfası (anında kaydedilir). */
+  ayarlar?: { tamEkran: boolean; yazici: boolean; pano: boolean; ses: boolean; windowsIleBaslat: boolean; otomatikBaglan: boolean };
+  /** Açılışta otomatik bağlanma 2FA kodu bekliyor — arayüz kod penceresini açar. */
+  otomatikKod?: boolean;
   vpnKurulum: {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;
