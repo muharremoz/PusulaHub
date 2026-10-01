@@ -29,12 +29,6 @@ namespace PusulaConnect
         public Func<bool> OturumAcikMi;
         private string _oturumMesaji;
 
-        // Açılışta otomatik bağlanma (Ayarlar.OtomatikBaglan): açılıştan sonraki 3 dk içinde, sunucuya ilk
-        // erişilince bir kez. 2FA açıksa bağlanmak yerine arayüze "kod sor" denir (otomatikKod).
-        private bool _otomatikBekliyor = Ayarlar.Simdiki.OtomatikBaglan;
-        private bool _otomatikKod;
-        private readonly DateTime _acilis = DateTime.Now;
-
         // kontroller
         private string _fortiSurum;
         private bool _profilDogru;
@@ -133,7 +127,6 @@ namespace PusulaConnect
                     ikiAdim = new { aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true },
                     oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
-                    otomatikKod = _otomatikKod,
                     guncelleme = new
                     {
                         mevcut = _sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0,
@@ -194,7 +187,6 @@ namespace PusulaConnect
                 }
             }
             finally { Interlocked.Exchange(ref _kontrolSuruyor, 0); }
-            OtomatikDene();
         }
 
         public async Task<object> KontrolEt()
@@ -302,34 +294,6 @@ namespace PusulaConnect
                 Rdp.Baglan(ad, rdp, RdpPort, P("domain"), kullanici, sifre);
                 Gunluk.Yaz("RDP başlatıldı (mstsc" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
-            return Durum();
-        }
-
-        private void OtomatikDene()
-        {
-            lock (_kilit)
-            {
-                if (!_otomatikBekliyor) return;
-                if (DateTime.Now - _acilis > TimeSpan.FromMinutes(3)) { _otomatikBekliyor = false; return; }
-                // Pencere hazır değilse (gömülü oturum bağlanamaz) bekle; mstsc'ye düşmesin
-                if (_asama != "hazir" || OturumAc == null || !_terminal.erisim || _rdpKullanici == null) return;
-                _otomatikBekliyor = false;
-                if (IkiAktifKilitsiz) { _otomatikKod = true; return; }
-            }
-            Gunluk.Yaz("Açılışta otomatik bağlanılıyor");
-            _ = Task.Run(async () =>
-            {
-                try { await Baglan(); }
-                catch (Exception e) { Gunluk.Yaz("Otomatik bağlanma olmadı: " + e.Message); lock (_kilit) _oturumMesaji = e.Message; }
-            });
-        }
-
-        private bool IkiAktifKilitsiz => _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true;
-
-        /// <summary>Arayüz otomatik kod penceresini açtı (bir kez sorulur).</summary>
-        public object OtomatikBitti()
-        {
-            lock (_kilit) _otomatikKod = false;
             return Durum();
         }
 

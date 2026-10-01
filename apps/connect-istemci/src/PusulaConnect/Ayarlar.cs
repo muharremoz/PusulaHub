@@ -31,8 +31,6 @@ namespace PusulaConnect
         public bool Aygitlar { get; set; } = true;
         /// <summary>Bu bilgisayarın diskleri oturumda görünür. Varsayılan KAPALI (güvenlik + yavaşlık).</summary>
         public bool Suruculer { get; set; }
-        /// <summary>Uygulama açılınca (sunucuya erişilebiliyorsa) kendiliğinden bağlan. 2FA açıksa kod yine sorulur.</summary>
-        public bool OtomatikBaglan { get; set; }
 
         [JsonIgnore]
         public bool WindowsIleBaslat => BaslangicKaydi() != null;
@@ -75,7 +73,6 @@ namespace PusulaConnect
                 a.Kamera = B("kamera") ?? a.Kamera;
                 a.Aygitlar = B("aygitlar") ?? a.Aygitlar;
                 a.Suruculer = B("suruculer") ?? a.Suruculer;
-                a.OtomatikBaglan = B("otomatikBaglan") ?? a.OtomatikBaglan;
                 var w = B("windowsIleBaslat");
                 if (w.HasValue) BaslangicAyarla(w.Value);
                 File.WriteAllText(Dosya, JsonConvert.SerializeObject(a, Formatting.Indented));
@@ -95,7 +92,6 @@ namespace PusulaConnect
             kamera = Kamera,
             aygitlar = Aygitlar,
             suruculer = Suruculer,
-            otomatikBaglan = OtomatikBaglan,
             windowsIleBaslat = WindowsIleBaslat,
         };
 

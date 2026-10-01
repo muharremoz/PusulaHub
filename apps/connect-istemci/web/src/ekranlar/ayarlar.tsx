@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Cable, CheckCircle2, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
-  RefreshCw, ShieldCheck, Usb, Video, Volume2, Zap,
+  RefreshCw, ShieldCheck, Usb, Video, Volume2,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import {
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
 type AyarAdi =
-  | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat" | "otomatikBaglan"
+  | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
   | "akilliKart" | "portlar" | "konum" | "kamera" | "aygitlar" | "suruculer";
 
 /**
@@ -101,12 +101,6 @@ export function AyarlarIcerik({
 
       <Bolum baslik="Başlangıç">
         <Satir ikon={<Power />} ad="Windows açılınca başlat" aciklama="Bilgisayar açılınca Pusula Connect de açılır." kontrol={anahtar("windowsIleBaslat")} />
-        <Satir
-          ikon={<Zap />}
-          ad="Açılınca otomatik bağlan"
-          aciklama={ikiAktif ? "Sunucuya erişilince doğrulama kodu sorulur, sonra bağlanılır." : "Sunucuya erişilince Pusula'ya kendiliğinden bağlanılır."}
-          kontrol={anahtar("otomatikBaglan")}
-        />
       </Bolum>
 
       <Bolum baslik="Güvenlik ve cihaz">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, KeyRound, Loader2, Monitor, PlugZap,
   Hash, Laptop, LifeBuoy, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
@@ -35,13 +35,6 @@ export function AnaEkran({ durum, setDurum }: P) {
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [ikiAc, setIkiAc] = useState(false);
   const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre">(null);
-
-  // Açılışta otomatik bağlanma 2FA açıkken: kod penceresi bir kez açılır
-  useEffect(() => {
-    if (!durum.otomatikKod) return;
-    setKodIstek("baglan");
-    void api("/otomatik/bitti", {});
-  }, [durum.otomatikKod]);
 
   const cagir = async (yol: string, govde: unknown = {}, ad = yol) => {
     setBekle(ad);
