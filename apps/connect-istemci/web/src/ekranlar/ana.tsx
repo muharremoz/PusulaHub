@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, CheckCircle2, CircleAlert, Download, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
-  Hash, Laptop, Server, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, LifeBuoy, Server, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -246,6 +246,22 @@ export function AnaEkran({ durum, setDurum }: P) {
           {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
         </Button>
         {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
+
+        {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
+        <div className="mt-2 flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+            <LifeBuoy className="size-[18px]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">Yardım mı gerekiyor?</div>
+            <div className="text-xs text-muted-foreground">Sorununuzu iletin, Pusula ekibi size dönsün.</div>
+          </div>
+          <Button variant="outline" asChild>
+            <a href="https://talep.pusulanet.net" target="_blank" rel="noreferrer">
+              <LifeBuoy /> Yardım talebi
+            </a>
+          </Button>
+        </div>
 
       </div>
       </main>
