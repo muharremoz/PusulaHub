@@ -8,8 +8,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
-import pusulaLogo from "@/assets/pusula-logo.png";
+import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
+import { ParlayanLogo } from "./ortak";
 
 /** Destek formu (PusulaWeb-v2 /destek-talebi). ?firmaid=<firkod> ile firma adı, yetkili ve telefon CRM'den dolar. */
 const TALEP_ADRESI = "https://talep.pusulanet.net";
@@ -29,6 +31,10 @@ export function AnaEkran({ durum, setDurum }: P) {
   const [sifreFormu, setSifreFormu] = useState(false);
   // Yardım talebi orta panelde açılır (iframe); exe CSP'si yalnız bu adrese frame-src izni verir.
   const [talepAcik, setTalepAcik] = useState(false);
+  // İki adımlı doğrulama: açma penceresi + kod sorma (bağlan / kapat / şifre kaydet)
+  const ikiAktif = !!durum.ikiAdim?.aktif;
+  const [ikiAc, setIkiAc] = useState(false);
+  const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre">(null);
 
   const cagir = async (yol: string, govde: unknown = {}, ad = yol) => {
     setBekle(ad);
@@ -46,11 +52,19 @@ export function AnaEkran({ durum, setDurum }: P) {
 
   const baglan = async () => {
     setVpnUyari(false);
+    if (ikiAktif) {
+      setKodIstek("baglan");
+      return;
+    }
     const tamam = await cagir("/baglan");
     if (!tamam && !k.terminal.erisim) setVpnUyari(true);
   };
 
   const sifreKaydet = async () => {
+    if (ikiAktif) {
+      setKodIstek("sifre");
+      return;
+    }
     if (await cagir("/rdp/sifre", { sifre }, "sifre")) {
       setSifre("");
       setSifreFormu(false);
@@ -80,6 +94,20 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-medium">{kayit.profil.rdp}</span>} />
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
           </dl>
+
+          <div className="rounded-lg border p-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className={"size-4 shrink-0 " + (ikiAktif ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")} />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-muted-foreground">İki adımlı doğrulama</div>
+                <div className={"text-sm font-medium " + (ikiAktif ? "text-emerald-700 dark:text-emerald-400" : "")}>{ikiAktif ? "Açık" : "Kapalı"}</div>
+              </div>
+              <Button size="sm" variant={ikiAktif ? "ghost" : "outline"} onClick={() => (ikiAktif ? setKodIstek("kapat") : setIkiAc(true))}>
+                {ikiAktif ? "Kapat" : "Aç"}
+              </Button>
+            </div>
+            {!ikiAktif && <p className="mt-2 text-xs text-muted-foreground">Bağlanırken telefonunuzdaki kod da sorulsun.</p>}
+          </div>
 
           {durum.guncelleme.mevcut && (
             <Button size="sm" variant="outline" className="self-start" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
@@ -270,9 +298,9 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        <Button size="lg" className="h-14 text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
+        <RainbowButton size="lg" className="h-14 w-full rounded-lg text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
           {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
-        </Button>
+        </RainbowButton>
         {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
 
         {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
@@ -292,6 +320,24 @@ export function AnaEkran({ durum, setDurum }: P) {
       </div>
       </main>
       )}
+
+      <IkiAcPenceresi acik={ikiAc} onKapat={() => setIkiAc(false)} setDurum={setDurum} kullanici={kayit.kullanici} />
+      <KodPenceresi
+        acik={kodIstek !== null}
+        onKapat={() => setKodIstek(null)}
+        baslik={kodIstek === "kapat" ? "İki adımlı doğrulamayı kapat" : kodIstek === "sifre" ? "Şifreyi kaydet" : "Doğrulama kodu"}
+        aciklama="Telefonunuzdaki doğrulama uygulamasında görünen 6 haneli kodu girin."
+        dugme={kodIstek === "kapat" ? "Kapat" : kodIstek === "sifre" ? "Kaydet" : "Bağlan"}
+        onOnay={async (kod) => {
+          if (kodIstek === "baglan") setDurum(await api<Durum>("/baglan", { kod }));
+          else if (kodIstek === "kapat") setDurum(await api<Durum>("/iki/kapat", { kod }));
+          else if (kodIstek === "sifre") {
+            setDurum(await api<Durum>("/rdp/sifre", { sifre, kod }));
+            setSifre("");
+            setSifreFormu(false);
+          }
+        }}
+      />
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
@@ -396,31 +442,6 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
   );
 }
 
-/** Pusula logosu: ortada, büyük; arkada yumuşak ışıma, üzerinden aralıklı ışık geçer (logo şekline maskeli). */
-function ParlayanLogo() {
-  const maske = {
-    WebkitMaskImage: `url(${pusulaLogo})`, maskImage: `url(${pusulaLogo})`,
-    WebkitMaskSize: "contain", maskSize: "contain",
-    WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
-    WebkitMaskPosition: "center", maskPosition: "center",
-  } as React.CSSProperties;
-  return (
-    <div className="flex justify-center">
-      <div className="relative">
-        <div className="absolute inset-0 -z-0 scale-125 rounded-full bg-primary/10 blur-xl" aria-hidden />
-        <img
-          src={pusulaLogo}
-          alt="Pusula Yazılım"
-          className="relative h-14 w-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.35)] select-none"
-          draggable={false}
-        />
-        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={maske} aria-hidden>
-          <div className="logo-parlama absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /** Orta panelin üst şeridi — başlık ortada; solda/sağda isteğe bağlı düğmeler (yardım talebi görünümü). */
 function OrtaBaslik({ sol, baslik, sag }: { sol?: React.ReactNode; baslik: string; sag?: React.ReactNode }) {

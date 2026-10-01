@@ -17,6 +17,13 @@
  *   İstemci:
  *     POST   /api/kayit                 { kod, surum, makine } → { token, kayit }
  *     GET    /api/profil                (Bearer) güncel profil; sonGorulme yazılır
+ *   İki adımlı doğrulama (cihaz başına, isteğe bağlı — kullanıcı uygulamadan açar):
+ *     POST   /api/2fa/baslat            (Bearer) yeni TOTP gizlisi → { gizli, uri } (henüz etkin değil)
+ *     POST   /api/2fa/onayla  { kod }   gizli doğrulanır, etkinleşir → { kasaAnahtari }
+ *     POST   /api/2fa/dogrula { kod }   her bağlanmada → { kasaAnahtari } (RDP şifresi bununla çözülür)
+ *     POST   /api/2fa/kapat   { kod }   → { kasaAnahtari } (istemci şifreyi kasaya geri yazar), kapanır
+ *     POST   /admin/cihazlar/:id/2fa-sifirla   Pusula sıfırlar (telefon kayboldu)
+ *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
  *     GET    /api/surum                 { son, min } — kendini güncelleme
  *     GET    /indir                     uygulama exe
  */
@@ -27,7 +34,7 @@ import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { stat, readFile } from "fs/promises"
 import { createReadStream } from "fs"
-import { randomBytes, createHash, timingSafeEqual } from "crypto"
+import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv, timingSafeEqual } from "crypto"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -74,6 +81,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_kodlar_firma ON kodlar(firmaId);
   CREATE INDEX IF NOT EXISTS idx_cihazlar_kod ON cihazlar(kodId);
 `)
+for (const [ad, tip] of [
+  ["totpGizli", "TEXT"],          // şifreli (AES-256-GCM, anahtar SERVICE_KEY'den)
+  ["totpAktif", "INTEGER NOT NULL DEFAULT 0"],
+  ["totpSonAdim", "INTEGER"],     // son kabul edilen 30 sn adımı — aynı kod ikinci kez geçmez
+  ["totpHata", "INTEGER NOT NULL DEFAULT 0"],
+  ["totpKilit", "TEXT"],          // bu ana kadar kod denenemez
+  ["kasaAnahtari", "TEXT"],       // şifreli; RDP şifresini çözen anahtar
+]) {
+  try { db.exec(`ALTER TABLE cihazlar ADD COLUMN ${ad} ${tip}`) } catch { /* zaten var */ }
+}
 
 const sql = {
   kodEkle: db.prepare(`INSERT INTO kodlar (id, kodOzet, firmaId, firmaAdi, kullanici, profil, olusturan, bitis)
@@ -82,9 +99,15 @@ const sql = {
   kodDurum: db.prepare(`UPDATE kodlar SET durum = ? WHERE id = ?`),
   kodlar: db.prepare(`SELECT id, firmaId, firmaAdi, kullanici, durum, olusturan, olusturma, bitis FROM kodlar
                       WHERE (@firma IS NULL OR firmaId = @firma) ORDER BY olusturma DESC LIMIT 500`),
-  cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
+  cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
   cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum) VALUES (?, ?, ?, ?, ?)`),
-  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.iptal, k.* FROM cihazlar c JOIN kodlar k ON k.id = c.kodId WHERE c.tokenOzet = ?`),
+  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari, k.*
+                            FROM cihazlar c JOIN kodlar k ON k.id = c.kodId WHERE c.tokenOzet = ?`),
+  totpBaslat: db.prepare(`UPDATE cihazlar SET totpGizli = ?, totpAktif = 0, totpSonAdim = NULL, totpHata = 0, totpKilit = NULL, kasaAnahtari = NULL WHERE id = ?`),
+  totpEtkin: db.prepare(`UPDATE cihazlar SET totpAktif = 1, kasaAnahtari = ?, totpSonAdim = ?, totpHata = 0, totpKilit = NULL WHERE id = ?`),
+  totpBasari: db.prepare(`UPDATE cihazlar SET totpSonAdim = ?, totpHata = 0, totpKilit = NULL WHERE id = ?`),
+  totpHata: db.prepare(`UPDATE cihazlar SET totpHata = ?, totpKilit = ? WHERE id = ?`),
+  totpSifirla: db.prepare(`UPDATE cihazlar SET totpGizli = NULL, totpAktif = 0, totpSonAdim = NULL, totpHata = 0, totpKilit = NULL, kasaAnahtari = NULL WHERE id = ?`),
   cihazGorundu: db.prepare(`UPDATE cihazlar SET sonGorulme = datetime('now'), surum = ? WHERE id = ?`),
   cihazIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE id = ?`),
   kodCihazlariIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE kodId = ?`),
@@ -112,12 +135,71 @@ function anahtarDogru(v) {
 }
 const simdiUtc = () => new Date().toISOString().replace("T", " ").slice(0, 19)
 
-/** İstemciye giden görünüm — profil + kimlik, başka bir şey yok. */
+/** İstemciye giden görünüm — profil + kimlik (+ cihazın 2FA durumu), başka bir şey yok. */
 function kayitGorunumu(k) {
   let profil = {}
   try { profil = JSON.parse(k.profil) } catch { /* bozuk */ }
-  return { firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil }
+  return { firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil, ikiAdim: { aktif: !!k.totpAktif } }
 }
+
+// ── İki adımlı doğrulama (RFC 6238 TOTP, SHA-1, 6 hane, 30 sn) ──
+const SIFRE_ANAHTARI = createHash("sha256").update("pusula-connect-2fa:" + SERVICE_KEY).digest()
+function sifrele(metin) {
+  const iv = randomBytes(12)
+  const c = createCipheriv("aes-256-gcm", SIFRE_ANAHTARI, iv)
+  const v = Buffer.concat([c.update(metin, "utf8"), c.final()])
+  return [iv, c.getAuthTag(), v].map((x) => x.toString("base64")).join(".")
+}
+function coz(paket) {
+  const [iv, tag, v] = String(paket).split(".").map((x) => Buffer.from(x, "base64"))
+  const d = createDecipheriv("aes-256-gcm", SIFRE_ANAHTARI, iv)
+  d.setAuthTag(tag)
+  return Buffer.concat([d.update(v), d.final()]).toString("utf8")
+}
+const B32 = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
+function base32(buf) {
+  let bit = 0, deger = 0, cikti = ""
+  for (const b of buf) {
+    deger = (deger << 8) | b; bit += 8
+    while (bit >= 5) { cikti += B32[(deger >>> (bit - 5)) & 31]; bit -= 5 }
+  }
+  if (bit > 0) cikti += B32[(deger << (5 - bit)) & 31]
+  return cikti
+}
+function base32Coz(metin) {
+  let bit = 0, deger = 0
+  const cikti = []
+  for (const ch of metin.replace(/=+$/, "").toUpperCase()) {
+    const i = B32.indexOf(ch)
+    if (i < 0) continue
+    deger = (deger << 5) | i; bit += 5
+    if (bit >= 8) { cikti.push((deger >>> (bit - 8)) & 255); bit -= 8 }
+  }
+  return Buffer.from(cikti)
+}
+function totp(gizli, adim) {
+  const sayac = Buffer.alloc(8)
+  sayac.writeBigUInt64BE(BigInt(adim))
+  const h = createHmac("sha1", gizli).update(sayac).digest()
+  const o = h[h.length - 1] & 15
+  return String((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000).padStart(6, "0")
+}
+/** Kodu ±1 adım (±30 sn saat kayması) içinde arar; bulunan adımı döner, yoksa null. Daha önce kullanılan adım geçmez. */
+function totpDogrula(gizliB32, kod, sonAdim) {
+  const k = String(kod ?? "").replace(/\D/g, "")
+  if (k.length !== 6) return null
+  const gizli = base32Coz(gizliB32)
+  const simdi = Math.floor(Date.now() / 30000)
+  for (const d of [0, -1, 1]) {
+    const adim = simdi + d
+    if (sonAdim != null && adim <= sonAdim) continue
+    const a = Buffer.from(totp(gizli, adim)), b = Buffer.from(k)
+    if (timingSafeEqual(a, b)) return adim
+  }
+  return null
+}
+const TOTP_HATA_SINIRI = 5
+const TOTP_KILIT_DK = 10
 
 const fastify = Fastify({ logger: { level: "info" }, bodyLimit: 1024 * 1024 })
 
@@ -161,6 +243,15 @@ fastify.post("/admin/kodlar/:id/iptal", async (req, reply) => {
   if (!yonetici(req, reply)) return
   sql.kodDurum.run("iptal", req.params.id)
   sql.kodCihazlariIptal.run(req.params.id)
+  return { tamam: true }
+})
+
+/** Telefon kayboldu vb.: 2FA kapanır, kayıtlı şifreli RDP şifresi de artık çözülemez (kullanıcı yeniden girer). */
+fastify.post("/admin/cihazlar/:id/2fa-sifirla", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const r = sql.totpSifirla.run(req.params.id)
+  if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  req.log.info({ cihaz: req.params.id }, "2fa sifirlandi (yonetici)")
   return { tamam: true }
 })
 
@@ -210,11 +301,76 @@ fastify.post("/api/kayit", async (req, reply) => {
   return { token, kayit: kayitGorunumu(k) }
 })
 
-fastify.get("/api/profil", async (req, reply) => {
+/** Bearer token → cihaz satırı; yoksa yanıtı yazar ve null döner. */
+function cihaz(req, reply) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? "")
   const c = m ? sql.cihazByToken.get(ozet(m[1].trim())) : null
-  if (!c) return reply.code(401).send({ hata: "Cihaz kaydı bulunamadı. Kurulum koduyla yeniden kaydolun." })
-  if (c.iptal || c.durum === "iptal") return reply.code(410).send({ hata: "Bu cihazın kaydı Pusula tarafından kapatılmış." })
+  if (!c) { reply.code(401).send({ hata: "Cihaz kaydı bulunamadı. Kurulum koduyla yeniden kaydolun." }); return null }
+  if (c.iptal || c.durum === "iptal") { reply.code(410).send({ hata: "Bu cihazın kaydı Pusula tarafından kapatılmış." }); return null }
+  return c
+}
+
+/** Kod denetimi: kilit, ±1 adım, tekrar kullanım, hata sayacı. Başarıda kabul edilen adımı döner; değilse yanıtı yazar, null döner. */
+function koduDenetle(c, kod, gizliB32, reply) {
+  if (c.totpKilit && c.totpKilit > simdiUtc()) {
+    reply.code(429).send({ hata: "Çok fazla hatalı kod. Birkaç dakika sonra tekrar deneyin." })
+    return null
+  }
+  const adim = totpDogrula(gizliB32, kod, c.totpSonAdim)
+  if (adim == null) {
+    const hata = (c.totpHata ?? 0) + 1
+    const kilit = hata >= TOTP_HATA_SINIRI
+      ? new Date(Date.now() + TOTP_KILIT_DK * 60000).toISOString().replace("T", " ").slice(0, 19)
+      : null
+    sql.totpHata.run(kilit ? 0 : hata, kilit, c.cihazId)
+    reply.code(400).send({ hata: kilit ? `Çok fazla hatalı kod. ${TOTP_KILIT_DK} dakika sonra tekrar deneyin.` : "Kod hatalı ya da süresi geçmiş." })
+    return null
+  }
+  return adim
+}
+
+fastify.post("/api/2fa/baslat", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (c.totpAktif) return reply.code(409).send({ hata: "İki adımlı doğrulama zaten açık." })
+  const gizli = base32(randomBytes(20))
+  sql.totpBaslat.run(sifrele(gizli), c.cihazId)
+  const etiket = encodeURIComponent("Pusula Connect:" + c.kullanici)
+  const uri = `otpauth://totp/${etiket}?secret=${gizli}&issuer=${encodeURIComponent("Pusula Connect")}&algorithm=SHA1&digits=6&period=30`
+  req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa baslat")
+  return { gizli, uri }
+})
+
+fastify.post("/api/2fa/onayla", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (c.totpAktif) return reply.code(409).send({ hata: "İki adımlı doğrulama zaten açık." })
+  if (!c.totpGizli) return reply.code(400).send({ hata: "Önce kurulumu başlatın." })
+  const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
+  const kasa = randomBytes(32).toString("base64")
+  sql.totpEtkin.run(sifrele(kasa), adim, c.cihazId)
+  req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa etkin")
+  return { kasaAnahtari: kasa }
+})
+
+fastify.post("/api/2fa/dogrula", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (!c.totpAktif || !c.totpGizli || !c.kasaAnahtari) return reply.code(409).send({ hata: "İki adımlı doğrulama kapalı." })
+  const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
+  sql.totpBasari.run(adim, c.cihazId)
+  return { kasaAnahtari: coz(c.kasaAnahtari) }
+})
+
+fastify.post("/api/2fa/kapat", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (!c.totpAktif || !c.totpGizli) return reply.code(409).send({ hata: "İki adımlı doğrulama zaten kapalı." })
+  const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
+  const kasa = c.kasaAnahtari ? coz(c.kasaAnahtari) : null
+  sql.totpSifirla.run(c.cihazId)
+  req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa kapatildi")
+  return { kasaAnahtari: kasa }
+})
+
+fastify.get("/api/profil", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
   sql.cihazGorundu.run(String(req.headers["x-surum"] ?? "").slice(0, 20) || null, c.cihazId)
   return kayitGorunumu(c)
 })

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
-import { AlertCircle, ArrowRight, Loader2, PlugZap } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -34,9 +34,6 @@ export function GirisEkrani({ durum, setDurum }: P) {
     <Kabuk genis>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="mb-1 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <PlugZap className="size-6" />
-          </div>
           <h1 className="text-2xl font-semibold tracking-tight">Pusula Connect</h1>
           <p className="text-sm text-muted-foreground">Pusula'nın size verdiği kurulum kodunu girin.</p>
           {durum.mesaj && <p className="text-sm text-amber-700 dark:text-amber-400">{durum.mesaj}</p>}

@@ -45,6 +45,12 @@ namespace PusulaConnect
 
         public Task<JObject> Profil() => Gonder(HttpMethod.Get, "api/profil", null);
         public Task<JObject> SurumBilgisi() => Gonder(HttpMethod.Get, "api/surum", null);
+
+        // İki adımlı doğrulama (bkz. services/pusula-connect: /api/2fa/*)
+        public Task<JObject> IkiBaslat() => Gonder(HttpMethod.Post, "api/2fa/baslat", new { });
+        public Task<JObject> IkiOnayla(string kod) => Gonder(HttpMethod.Post, "api/2fa/onayla", new { kod });
+        public Task<JObject> IkiDogrula(string kod) => Gonder(HttpMethod.Post, "api/2fa/dogrula", new { kod });
+        public Task<JObject> IkiKapat(string kod) => Gonder(HttpMethod.Post, "api/2fa/kapat", new { kod });
         public string IndirmeAdresi => Adres + "indir";
 
         private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde)

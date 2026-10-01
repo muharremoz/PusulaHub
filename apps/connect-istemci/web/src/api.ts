@@ -84,6 +84,8 @@ export type Durum = {
     terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null };
     rdpSifre: { kayitli: boolean; kullanici: string | null };
   };
+  /** Bu cihazda iki adımlı doğrulama (TOTP) açık mı. */
+  ikiAdim?: { aktif: boolean };
   vpnKurulum: {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -76,8 +77,33 @@ namespace PusulaConnect
 
         public static void SifreSil(string sunucu) => CredDelete("TERMSRV/" + sunucu, DomainPassword, 0);
 
-        /// <summary>.rdp üretip mstsc ile açar. Şifre dosyada YOK — kimlik kasasından gelir.</summary>
-        public static void Baglan(string ad, string sunucu, int port, string domain, string kullanici)
+        // ------------------------------------------------------------ 2FA açıkken şifre
+        // Kimlik kasasında DURMAZ (orada dursa mstsc ile kodsuz bağlanılırdı). DPAPI ile, ek entropi
+        // olarak servisin verdiği KASA ANAHTARIYLA saklanır: kod doğrulanmadan anahtar gelmez, şifre çözülmez.
+
+        private static string KasaDosyasi => Path.Combine(Kimlik.Klasor, "rdp-sifre.dat");
+        public static bool KasaliSifreVar => File.Exists(KasaDosyasi);
+
+        public static void KasaliKaydet(string sifre, string kasaAnahtari) =>
+            File.WriteAllBytes(KasaDosyasi, ProtectedData.Protect(Encoding.UTF8.GetBytes(sifre), Convert.FromBase64String(kasaAnahtari), DataProtectionScope.CurrentUser));
+
+        public static string KasaliOku(string kasaAnahtari)
+        {
+            try { return Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(KasaDosyasi), Convert.FromBase64String(kasaAnahtari), DataProtectionScope.CurrentUser)); }
+            catch (Exception e) when (e is CryptographicException || e is FileNotFoundException)
+            {
+                throw new KullaniciHatasi("Kayıtlı oturum şifresi açılamadı. Şifrenizi yeniden kaydedin.");
+            }
+        }
+
+        public static void KasaliSil() { try { File.Delete(KasaDosyasi); } catch { } }
+
+        /// <summary>
+        /// .rdp üretip mstsc ile açar. Normalde şifre dosyada YOK — kimlik kasasından gelir.
+        /// 2FA açıkken şifre verilir: mstsc'nin kabul ettiği "password 51:b:" (DPAPI, bu kullanıcı) olarak
+        /// tek kullanımlık dosyaya yazılır; mstsc okuduktan sonra dosya silinir.
+        /// </summary>
+        public static void Baglan(string ad, string sunucu, int port, string domain, string kullanici, string sifre = null)
         {
             var sb = new StringBuilder();
             sb.AppendLine("full address:s:" + sunucu + (port > 0 && port != 3389 ? ":" + port : ""));
@@ -93,8 +119,16 @@ namespace PusulaConnect
                 "bandwidthautodetect:i:1", "networkautodetect:i:1",
             }) sb.AppendLine(s);
             var dosya = Path.Combine(Kimlik.Klasor, ad + ".rdp");
+            if (sifre != null)
+            {
+                var blob = ProtectedData.Protect(Encoding.Unicode.GetBytes(sifre), null, DataProtectionScope.CurrentUser);
+                sb.AppendLine("password 51:b:" + BitConverter.ToString(blob).Replace("-", ""));
+                dosya = Path.Combine(Kimlik.Klasor, ad + "-" + Guid.NewGuid().ToString("N").Substring(0, 8) + ".rdp");
+            }
             File.WriteAllText(dosya, sb.ToString(), Encoding.Unicode);
             Process.Start(new ProcessStartInfo("mstsc.exe", "\"" + dosya + "\"") { UseShellExecute = true });
+            if (sifre != null)
+                _ = Task.Run(async () => { await Task.Delay(20000); try { File.Delete(dosya); } catch { } });
         }
 
         /// <summary>Terminale TCP bağlantısı (VPN açık mı sorusunun pratik cevabı). Gecikme ms ya da hata.</summary>

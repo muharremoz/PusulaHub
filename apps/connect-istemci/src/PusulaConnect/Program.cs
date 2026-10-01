@@ -108,9 +108,12 @@ namespace PusulaConnect
                 case "POST /kontrol": return _uygulama.KontrolEt();
                 case "POST /vpn/kur": return Task.FromResult(_uygulama.VpnKur());
                 case "POST /vpn/ac": return Task.FromResult(_uygulama.VpnAc());
-                case "POST /rdp/sifre": return _uygulama.SifreKaydet(i.Metin("sifre"));
+                case "POST /rdp/sifre": return _uygulama.SifreKaydet(i.Metin("sifre"), i.Metin("kod"));
                 case "POST /rdp/sifre/sil": return _uygulama.SifreSil();
-                case "POST /baglan": return _uygulama.Baglan();
+                case "POST /baglan": return _uygulama.Baglan(i.Metin("kod"));
+                case "POST /iki/baslat": return _uygulama.IkiBaslat();
+                case "POST /iki/onayla": return _uygulama.IkiOnayla(i.Metin("kod"), i.Metin("sifre"));
+                case "POST /iki/kapat": return _uygulama.IkiKapat(i.Metin("kod"));
                 case "POST /guncelle": return Task.FromResult(_uygulama.Guncelle());
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
