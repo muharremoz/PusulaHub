@@ -71,13 +71,13 @@ export function AnaEkran({ durum, setDurum }: P) {
           <div>
             <div className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Firma</div>
             <div className="mt-1 text-base leading-snug font-semibold">{kayit.firmaAdi}</div>
-            <div className="mt-0.5 font-mono text-xs text-muted-foreground">#{kayit.firmaId}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">#{kayit.firmaId}</div>
           </div>
           <dl className="flex flex-col gap-3 text-sm">
-            <SolSatir ikon={<UserRound />} ad="Kullanıcı" deger={<span className="font-mono">{kayit.kullanici}</span>} />
+            <SolSatir ikon={<UserRound />} ad="Kullanıcı" deger={<span className="font-medium">{kayit.kullanici}</span>} />
             <SolSatir ikon={<Laptop />} ad="Bu bilgisayar" deger={durum.makine} />
-            <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-mono">{kayit.profil.rdp}</span>} />
-            <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-mono">{kayit.profil.tunel}</span>} />
+            <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-medium">{kayit.profil.rdp}</span>} />
+            <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
           </dl>
 
           {durum.guncelleme.mevcut && (
@@ -161,7 +161,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         {vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
           <Bolum baslik="Kullanıcı adını FortiClient'a tanımlayın" ikon={<ShieldCheck />}>
             <p className="mb-3 text-sm text-muted-foreground">
-              FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-mono">{kayit.kullanici}</span>)
+              FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-medium">{kayit.kullanici}</span>)
               yazılır; bağlanırken yalnız şifrenizi girersiniz. Windows yönetici izni isteyecek.
             </p>
             <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
@@ -176,9 +176,9 @@ export function AnaEkran({ durum, setDurum }: P) {
               <li>FortiClient'ı açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
               <li>
                 {k.profil.kullaniciAdi ? (
-                  <>Kullanıcı adınız hazır (<span className="font-mono">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
+                  <>Kullanıcı adınız hazır (<span className="font-medium">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
                 ) : (
-                  <>Kullanıcı adı alanına <span className="font-mono font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
+                  <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
                 )}
               </li>
               <li className="text-muted-foreground">
@@ -195,7 +195,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         {sifreGoster && (
           <Bolum baslik={k.rdpSifre.kayitli ? "Oturum şifresini değiştir" : "Oturum şifresini kaydedin"} ikon={<KeyRound />}>
             <p className="mb-3 text-sm text-muted-foreground">
-              <span className="font-mono">{kayit.kullanici}</span> kullanıcısının Pusula oturum şifresi. Yalnız bu bilgisayarın Windows
+              <span className="font-medium">{kayit.kullanici}</span> kullanıcısının Pusula oturum şifresi. Yalnız bu bilgisayarın Windows
               kimlik kasasında saklanır; her bağlantıda tekrar sorulmaz.
             </p>
             <div className="flex gap-2">
