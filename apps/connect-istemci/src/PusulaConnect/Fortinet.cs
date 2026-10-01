@@ -14,8 +14,9 @@ namespace PusulaConnect
     ///   · MSI %TEMP% köküne değil ALT klasöre (FortiClient CA_CopyMSIToTemp 1603).
     ///   · İndirilen dosya gerçekten MSI mı (OLE imzası) — sunucu HTML hata sayfası dönebiliyor.
     ///   · ARM'de x64 paket kurulamıyor (sürücüler) → ayrı adres yoksa hiç indirilmez.
-    ///   · FortiClient'ın kimlik alan komut satırı/API'si YOK: kullanıcı adı + şifre
-    ///     kullanıcı tarafından FortiClient'ta bir kez girilir.
+    ///   · Kullanıcı adı FCConfig ile ÖNCEDEN yazılabiliyor (01.10.2026 denendi, v1'in "yazılamaz"
+    ///     notu yanlıştı) — bkz. KullaniciAdiYaz. ŞİFRE yazılamıyor: kullanıcı ilk bağlantıda
+    ///     FortiClient'a bir kez girer; "Save Password" FortiGate portal ayarına bağlı.
     /// </summary>
     internal static class Fortinet
     {
@@ -103,6 +104,71 @@ namespace PusulaConnect
                 k.SetValue("use_external_browser", 0, RegistryValueKind.DWord);
                 k.SetValue("azure_auto_login", 0, RegistryValueKind.DWord);
             }
+        }
+
+        /// <summary>FortiClient bu tünel için kullanıcı adı saklıyor mu (DATA1 — makineye bağlı şifreli).</summary>
+        public static bool KullaniciAdiTanimli(string tunel)
+        {
+            try
+            {
+                using (var kok = Hklm64())
+                using (var k = kok.OpenSubKey(TunelAnahtari(tunel)))
+                    return k != null && !string.IsNullOrEmpty(k.GetValue("DATA1") as string);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Kullanıcı adını FortiClient'a yazar (yönetici ister). FortiClient'ın kendi aracı FCConfig ile
+        /// tek bağlantılık bir ayar dosyası içe aktarılır; FortiClient adı DATA1'e kendisi şifreler.
+        /// Sahada denenen tuzaklar (FortiClient VPN 7.0.14):
+        ///   · Dosya BOM'SUZ UTF-8 olmalı — BOM'lu dosyayı hiçbir çıktı vermeden atlar.
+        ///   · -p zorunlu ve en az 8 karakter (dosya şifresi; içerik düz metin, rastgele verilir).
+        ///   · "-o importvpn" iş görmüyor, "-o import" çalışıyor. Diğer tünellere dokunmaz.
+        /// Başarısızsa false (profil yine çalışır, kullanıcı adı FortiClient'ta elle girilir).
+        /// </summary>
+        public static bool KullaniciAdiYaz(string tunel, string sunucu, string kullanici)
+        {
+            var exe = ExeYolu();
+            if (exe == null || string.IsNullOrWhiteSpace(kullanici)) return false;
+            var fcconfig = Path.Combine(Path.GetDirectoryName(exe), "FCConfig.exe");
+            if (!File.Exists(fcconfig)) { Gunluk.Yaz("FCConfig.exe yok: " + fcconfig); return false; }
+
+            string E(string s) => System.Security.SecurityElement.Escape(s ?? "");
+            var xml =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" +
+                "<forticlient_configuration><vpn><sslvpn><connections><connection>" +
+                "<name>" + E(tunel) + "</name><description>" + E(tunel) + "</description>" +
+                "<server>" + E(sunucu) + "</server><username>" + E(kullanici) + "</username>" +
+                "<single_user_mode>0</single_user_mode><prompt_certificate>0</prompt_certificate><prompt_username>0</prompt_username>" +
+                "</connection></connections></sslvpn></vpn></forticlient_configuration>\n";
+            var dosya = Path.Combine(Path.GetTempPath(), "PusulaConnect2", "vpn-" + Guid.NewGuid().ToString("N") + ".conf");
+            Directory.CreateDirectory(Path.GetDirectoryName(dosya));
+            File.WriteAllText(dosya, xml, new System.Text.UTF8Encoding(false));
+            try
+            {
+                var sifre = Guid.NewGuid().ToString("N").Substring(0, 16);
+                var psi = new System.Diagnostics.ProcessStartInfo(fcconfig, "-m vpn -f \"" + dosya + "\" -o import -p " + sifre + " -q")
+                {
+                    UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true,
+                    WorkingDirectory = Path.GetDirectoryName(fcconfig),
+                };
+                using (var p = System.Diagnostics.Process.Start(psi))
+                {
+                    var cikti = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
+                    if (!p.WaitForExit(60000)) { try { p.Kill(); } catch { } Gunluk.Yaz("FCConfig zaman aşımı"); return false; }
+                    Gunluk.Yaz("FCConfig çıkış " + p.ExitCode + ": " + cikti.Replace("\r", " ").Replace("\n", " ").Trim());
+                }
+                var tamam = KullaniciAdiTanimli(tunel) && ProfilDogru(tunel, sunucu);
+                Gunluk.Yaz("VPN kullanıcı adı " + (tamam ? "FortiClient'a yazıldı" : "YAZILAMADI (elle girilecek)"));
+                return tamam;
+            }
+            catch (Exception e)
+            {
+                Gunluk.Yaz("FCConfig hatası: " + e.Message);
+                return false;
+            }
+            finally { try { File.Delete(dosya); } catch { } }
         }
 
         // ------------------------------------------------------------ ARM

@@ -84,7 +84,13 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         <div className="grid grid-cols-2 gap-3">
           <Kart ikon={<ShieldCheck />} baslik="VPN programı" iyi={k.forti.kurulu} metin={k.forti.kurulu ? `FortiClient ${k.forti.surum ?? ""}` : "Kurulu değil"} />
-          <Kart ikon={<ShieldCheck />} baslik="VPN ayarı" iyi={k.profil.dogru} metin={k.profil.dogru ? `"${kayit.profil.tunel}" hazır` : "Eksik"} />
+          <Kart
+            ikon={<ShieldCheck />}
+            baslik="VPN ayarı"
+            iyi={k.profil.dogru && !!k.profil.kullaniciAdi}
+            uyari={k.profil.dogru && !k.profil.kullaniciAdi}
+            metin={!k.profil.dogru ? "Eksik" : k.profil.kullaniciAdi ? `"${kayit.profil.tunel}" hazır · kullanıcı adı tanımlı` : `"${kayit.profil.tunel}" hazır · kullanıcı adı yok`}
+          />
           <Kart
             ikon={<Server />}
             baslik="Pusula sunucusu"
@@ -96,7 +102,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         </div>
 
         {(!vpnHazir || vk.suruyor || vk.durum?.hata) && (
-          <Bolum baslik="VPN programını kur" ikon={<ShieldCheck />}>
+          <Bolum baslik={vpnHazir ? "VPN ayarı güncelleniyor" : "VPN programını kur"} ikon={<ShieldCheck />}>
             {vk.suruyor ? (
               <div className="flex flex-col gap-2">
                 <div className="text-sm">{vk.durum?.mesaj ?? "Hazırlanıyor… (Windows izin isterse \"Evet\" deyin)"}</div>
@@ -118,6 +124,40 @@ export function AnaEkran({ durum, setDurum }: P) {
                 </Button>
               </>
             )}
+          </Bolum>
+        )}
+
+        {vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
+          <Bolum baslik="Kullanıcı adını FortiClient'a tanımlayın" ikon={<ShieldCheck />}>
+            <p className="mb-3 text-sm text-muted-foreground">
+              FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-mono">{kayit.kullanici}</span>)
+              yazılır; bağlanırken yalnız şifrenizi girersiniz. Windows yönetici izni isteyecek.
+            </p>
+            <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
+              {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Tanımla
+            </Button>
+          </Bolum>
+        )}
+
+        {vpnHazir && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
+          <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
+            <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
+              <li>FortiClient'ı açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
+              <li>
+                {k.profil.kullaniciAdi ? (
+                  <>Kullanıcı adınız hazır (<span className="font-mono">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
+                ) : (
+                  <>Kullanıcı adı alanına <span className="font-mono font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
+                )}
+              </li>
+              <li className="text-muted-foreground">
+                İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
+                sorulmaz.
+              </li>
+            </ol>
+            <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
+              <ShieldCheck /> FortiClient'ı aç
+            </Button>
           </Bolum>
         )}
 
@@ -157,11 +197,9 @@ export function AnaEkran({ durum, setDurum }: P) {
             <AlertTriangle />
             <AlertDescription className="flex flex-col gap-2">
               <span>
-                Pusula sunucusuna ulaşılamıyor; önce VPN'e bağlanın. FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısını seçip kullanıcı
-                adınızı (<span className="font-mono">{kayit.kullanici}</span>) ve şifrenizi girin, <b>Bağlan</b>'a basın. Bağlandıktan sonra
-                buradan tekrar deneyin.
+                Pusula sunucusuna ulaşılamıyor; önce VPN'e bağlanın. FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısında şifrenizi girip
+                <b> Connect</b>'e basın, bağlandıktan sonra buradan tekrar deneyin.
               </span>
-              <span className="text-xs">İlk bağlantıda kullanıcı adını FortiClient'a siz yazarsınız; "şifreyi kaydet" seçeneği ikinci bağlantıda çıkar.</span>
               {k.forti.kurulu && (
                 <Button size="sm" variant="outline" className="self-start" onClick={() => void cagir("/vpn/ac")}>
                   <ShieldCheck /> FortiClient'ı aç

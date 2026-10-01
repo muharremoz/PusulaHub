@@ -27,6 +27,7 @@ namespace PusulaConnect
         private (bool erisim, int ms, string hata) _terminal;
         private DateTime _terminalZaman;
         private string _rdpKullanici;
+        private bool _vpnKullaniciAdi;      // FortiClient'ta bu tünel için kullanıcı adı kayıtlı mı
         private bool _vpnKuruluyor;
         private JObject _vpnDurum;
         private string _sonSurum;
@@ -97,7 +98,7 @@ namespace PusulaConnect
                     kontroller = new
                     {
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
-                        profil = new { dogru = _profilDogru },
+                        profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi },
                         terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s") },
                         rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici },
                     },
@@ -146,10 +147,11 @@ namespace PusulaConnect
                 var forti = Fortinet.KuruluSurum();
                 var profil = P("tunel") != null && P("vpn") != null && Fortinet.ProfilDogru(P("tunel"), P("vpn"));
                 var rdpKullanici = rdp != null ? Rdp.KayitliKullanici(rdp) : null;
+                var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
                 var t = rdp != null ? await Rdp.Yokla(rdp, RdpPort) : (false, 0, "profil yok");
                 lock (_kilit)
                 {
-                    _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici;
+                    _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici; _vpnKullaniciAdi = vpnKullaniciAdi;
                     _terminal = t; _terminalZaman = DateTime.Now;
                 }
             }
@@ -166,7 +168,9 @@ namespace PusulaConnect
 
         public object VpnKur()
         {
-            var profil = Profil ?? throw new KullaniciHatasi("Önce kurulum kodunu girin.");
+            var profil = (JObject)(Profil ?? throw new KullaniciHatasi("Önce kurulum kodunu girin.")).DeepClone();
+            // VPN kullanıcı adı = Pusula oturum kullanıcısı (Connect 1.5'te de aynı ad); yönetici adımı FortiClient'a yazar.
+            lock (_kilit) profil["kullanici"] = _kayit?.Value<string>("kullanici");
             if (!VpnKurulumu.Baslat(profil))
                 throw new KullaniciHatasi("Yönetici izni verilmedi. VPN programını kurmak için açılan Windows penceresinde \"Evet\"i seçin.");
             lock (_kilit) { _vpnKuruluyor = true; _vpnDurum = null; }

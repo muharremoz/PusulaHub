@@ -96,6 +96,12 @@ namespace PusulaConnect
 
                 DurumYaz("profil", 90, "VPN profili yazılıyor…");
                 Fortinet.ProfilYaz(tunel, vpn);
+                var kullanici = p.Value<string>("kullanici");
+                if (!string.IsNullOrWhiteSpace(kullanici))
+                {
+                    DurumYaz("profil", 95, "Kullanıcı adı FortiClient'a yazılıyor…");
+                    Fortinet.KullaniciAdiYaz(tunel, vpn, kullanici);   // başarısızsa elle girilir; kurulumu durdurmaz
+                }
                 Gunluk.Yaz("VPN kurulumu tamam");
                 DurumYaz("tamam", 100, "VPN hazır", bitti: true);
                 return 0;

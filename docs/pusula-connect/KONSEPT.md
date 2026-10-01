@@ -17,9 +17,13 @@ Müşterinin bilgisayarında **tek Pusula uygulaması**: bağlantıyı kurar (VP
 | Aktarım 2 | `apps/aktarim-istemci` + `services/pusula-aktarim2` | Uygulama iskeleti (WebView2 + yerel sunucu + React/shadcn), kodla giriş, servis, parça yükleme, dağıtım `/v2/indir` |
 | Bağlantı Testi | terminallerde (memory: baglanti-testi-araci) | RDP içinden bağlantı kanıtı |
 
-**Bilinen sınır (sahada öğrenildi, Connect 1.5 yorumları):** FortiClient'ın kimlik bilgisi alan komut
-satırı/API'si yok; `DATA1` makineye bağlı şifreli. Kullanıcı adı ve şifre FortiClient'ta **bir kez
-kullanıcı tarafından** girilir. Bu Connect 2'de de değişmez — uygulama bunu adım adım gösterir.
+**Kimlik bilgisi (01.10.2026 denendi, Connect 1.5 notunu düzeltir):** FortiClient'ın kendi aracı
+`FCConfig.exe -m vpn -f x.conf -o import -p <8+ karakter> -q` (yönetici) ile **kullanıcı adı önceden
+yazılabiliyor**: XML'deki düz metin `<username>` FortiClient tarafından `DATA1`'e şifrelenir. Dosya
+**BOM'suz UTF-8** olmalı (BOM'luyu sessizce atlar), `-o import` çalışır (`importvpn` değil), diğer
+tünellere dokunmaz. **Şifre yazılamıyor** (`<password>` ve `save_password` yok sayıldı; "Save Password"
+FortiGate portal ayarına bağlı) — kullanıcı ilk bağlantıda şifresini bir kez girer. Connect 2 (0.1.1+)
+kullanıcı adını yazar ve kısa bir bağlantı rehberi gösterir.
 
 ## Nasıl olur
 

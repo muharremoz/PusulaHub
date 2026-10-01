@@ -79,7 +79,8 @@ export type Durum = {
   servisErisim: boolean;
   kontroller: {
     forti: { kurulu: boolean; surum: string | null };
-    profil: { dogru: boolean };
+    /** kullaniciAdi: FortiClient bu tünel için kullanıcı adını saklıyor mu (FCConfig ile yazılır). */
+    profil: { dogru: boolean; kullaniciAdi?: boolean };
     terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null };
     rdpSifre: { kayitli: boolean; kullanici: string | null };
   };
