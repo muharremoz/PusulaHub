@@ -1,0 +1,2 @@
+# Kabuk betikleri Windows checkout'unda da LF kalsin (CRLF ile bash satir sonu hatasi verir)
+*.sh text eol=lf
