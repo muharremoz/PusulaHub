@@ -77,9 +77,9 @@ ve Başlat menüsü + masaüstü kısayolu oluşturur.
 
 Connect 1.5 ve Aktarım 2 değişmeden durur; Connect 2 memnun edince onların yerine geçer.
 
-## Açık kararlar
+## Kararlar (2026-10-01)
 
-1. Kimlik: Hub kurulum kodu mu, AD girişi mi (öneri: kod + kayıtlı oturum)?
-2. Kod imzalama sertifikası alınacak mı (öneri: evet, 1. aşamadan önce)?
-3. Aktarım 2 ayrı mı kalsın, Connect 2'nin içine mi taşınsın (öneri: 2. aşamada içine, ayrı exe de
-   bir süre dağıtılır)?
+1. **Kimlik: Hub'dan kurulum kodu.** Kod kullanıcıyı + firmayı belirler; profil servisten gelir;
+   cihaz kayıtlı oturumla (DPAPI) sürer.
+2. **Kod imzalama sonraya.** İlk sürümler imzasız (SmartScreen uyarısı beklenir).
+3. **Ayrı uygulama.** Connect 2 kendi exe'si; Aktarım 2 ayrı kalır (içine taşınmaz).

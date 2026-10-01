@@ -1,0 +1,68 @@
+using System;
+using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace PusulaConnect
+{
+    internal sealed class ServisHatasi : Exception
+    {
+        public int DurumKodu { get; }
+        public ServisHatasi(string mesaj, int kod) : base(mesaj) { DurumKodu = kod; }
+    }
+
+    /// <summary>services/pusula-connect ile konuşma. Adres PUSULA_CONNECT_URL ile değiştirilebilir.</summary>
+    internal sealed class ServisIstemci
+    {
+        public const string VarsayilanAdres = "https://aktarim.pusulanet.net/connect/";
+        public static readonly string Surum =
+            Assembly.GetExecutingAssembly().GetName().Version is Version v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0";
+
+        private readonly HttpClient _http;
+        public string Adres { get; }
+        public string Token { get; set; }
+
+        public ServisIstemci(string adres)
+        {
+            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
+            Adres = adres.EndsWith("/") ? adres : adres + "/";
+            _http = new HttpClient { BaseAddress = new Uri(Adres), Timeout = TimeSpan.FromSeconds(20) };
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd("PusulaConnect/" + Surum);
+            _http.DefaultRequestHeaders.Add("X-Surum", Surum);
+        }
+
+        public async Task<JObject> Kayit(string kod, string makine)
+        {
+            var j = await Gonder(HttpMethod.Post, "api/kayit", new { kod, surum = Surum, makine });
+            Token = j.Value<string>("token");
+            return (JObject)j["kayit"];
+        }
+
+        public Task<JObject> Profil() => Gonder(HttpMethod.Get, "api/profil", null);
+        public Task<JObject> SurumBilgisi() => Gonder(HttpMethod.Get, "api/surum", null);
+        public string IndirmeAdresi => Adres + "indir";
+
+        private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde)
+        {
+            using (var istek = new HttpRequestMessage(yontem, yol))
+            {
+                if (Token != null) istek.Headers.Authorization = new AuthenticationHeaderValue("Bearer", Token);
+                if (govde != null) istek.Content = new StringContent(JsonConvert.SerializeObject(govde), Encoding.UTF8, "application/json");
+                HttpResponseMessage yanit;
+                try { yanit = await _http.SendAsync(istek).ConfigureAwait(false); }
+                catch (Exception e) { throw new ServisHatasi("Pusula sunucusuna ulaşılamadı (" + e.GetBaseException().Message + ")", 0); }
+                var metin = await yanit.Content.ReadAsStringAsync().ConfigureAwait(false);
+                JObject j = null;
+                try { j = string.IsNullOrWhiteSpace(metin) ? new JObject() : JObject.Parse(metin); } catch { }
+                if (!yanit.IsSuccessStatusCode)
+                    throw new ServisHatasi(j?.Value<string>("hata") ?? $"Sunucu hatası ({(int)yanit.StatusCode})", (int)yanit.StatusCode);
+                return j ?? new JObject();
+            }
+        }
+    }
+}

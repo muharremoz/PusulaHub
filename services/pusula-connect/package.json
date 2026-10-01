@@ -1,0 +1,14 @@
+{
+  "name": "pusula-connect",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pusula Connect 2 — müşteri uygulamasının servisi (10.15.2.6). Kurulum kodu, cihaz kaydı, profil, dağıtım.",
+  "scripts": {
+    "dev": "node --env-file=.env.dev server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.9.0",
+    "fastify": "^5.8.5"
+  }
+}

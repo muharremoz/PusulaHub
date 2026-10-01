@@ -23,16 +23,16 @@ import type { SupabaseLike } from "@/lib/firma-credentials"
 import { createZip } from "@/lib/zip"
 
 /** Sabitler — kurulum programının varsayılanlarıyla aynı. */
-const VPN_SUNUCU = "vpn.pusulanet.net:17443"
-const TUNEL_ADI = "Pusula"
-const MSI_URL = "http://pusulanet.net/FortiClient.msi"
+export const VPN_SUNUCU = "vpn.pusulanet.net:17443"
+export const TUNEL_ADI = "Pusula"
+export const MSI_URL = "http://pusulanet.net/FortiClient.msi"
 /*  ARM işlemcili makineler için AYRI paket. Fortinet ARM'i ayrı bir
  *  kurulum dosyasıyla dağıtıyor ve x64 paketi ARM'de KURULAMIYOR:
  *  çekirdek modu ağ sürücüleri öykünemiyor, kurulum 1603 veriyor
  *  (2026-08-28, Snapdragon X Plus'lı bir müşteri makinesinde yaşandı).
  *  Adres tanımlanana kadar boş; kurulum programı ARM makinede durumu
  *  kullanıcıya açıkça söylüyor, 131 MB'ı boşuna indirmiyor.          */
-const MSI_URL_ARM = ""
+export const MSI_URL_ARM = ""
 
 /*  Kullanıcı adı üretilen .ini'ye düz metin gidiyor. Satır sonu ya da "="
  *  geçerse dosyaya başka anahtar enjekte edilebilirdi (örneğin msiurl'i

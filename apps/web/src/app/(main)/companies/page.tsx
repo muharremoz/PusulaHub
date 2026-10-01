@@ -136,6 +136,7 @@ function tagColor(tag: string): string {
 import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
+import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
@@ -595,6 +596,7 @@ export default function CompaniesPage() {
   const [pwResetAdServer, setPwResetAdServer]   = useState<{ domain?: string | null } | null>(null);
   const [pwResetRdpServer, setPwResetRdpServer] = useState<{ ip: string; rdpPort?: number | null } | null>(null);
   const [toggleUser, setToggleUser]         = useState<TabUser | null>(null);
+  const [connectKoduKullanici, setConnectKoduKullanici] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy]         = useState(false);
   const [deleteUser, setDeleteUser]         = useState<TabUser | null>(null);
   const [deleteConfirm, setDeleteConfirm]   = useState("");
@@ -2373,6 +2375,12 @@ tr:nth-child(even) td{background:#fafafa}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[11px] gap-2"
+                              onClick={() => setConnectKoduKullanici(usr.username)}
+                            >
+                              <KeyRound className="h-3.5 w-3.5" /> Connect 2 Kurulum Kodu
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2"
                               onClick={() => openPwReset(usr)}
                             >
                               <KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla
@@ -3649,6 +3657,10 @@ tr:nth-child(even) td{background:#fafafa}
           </Dialog>
 
           {/* Hesabı Askıya Al / Aktifleştir */}
+          {selectedFirma && (
+            <ConnectKoduDialog firkod={selectedFirma.firkod} kullanici={connectKoduKullanici} onClose={() => setConnectKoduKullanici(null)} />
+          )}
+
           <AlertDialog open={!!toggleUser} onOpenChange={(o) => { if (!o && !toggleBusy) setToggleUser(null) }}>
             <AlertDialogContent>
               <AlertDialogHeader>

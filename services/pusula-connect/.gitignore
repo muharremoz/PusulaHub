@@ -1,0 +1,4 @@
+node_modules/
+connect.db*
+istemci/
+.env.dev
