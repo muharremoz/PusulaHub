@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, CheckCircle2, CircleAlert, Download, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
-  Laptop, Server, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, Server, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -65,9 +65,9 @@ export function AnaEkran({ durum, setDurum }: P) {
           <div>
             <div className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Firma</div>
             <div className="mt-1 text-base leading-snug font-semibold">{kayit.firmaAdi}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground">#{kayit.firmaId}</div>
           </div>
           <dl className="flex flex-col gap-3 text-sm">
+            <SolSatir ikon={<Hash />} ad="Firma no" deger={kayit.firmaId} />
             <SolSatir ikon={<UserRound />} ad="Kullanıcı" deger={<span className="font-medium">{kayit.kullanici}</span>} />
             <SolSatir ikon={<Laptop />} ad="Bu bilgisayar" deger={durum.makine} />
             <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-medium">{kayit.profil.rdp}</span>} />
