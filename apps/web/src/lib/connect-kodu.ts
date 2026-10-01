@@ -58,3 +58,46 @@ export async function connectKoduUret(firkod: string, firmaAdi: string, kullanic
   if (!r.ok || !j.kod) return { ok: false, hata: j.hata ?? `Connect servisi: HTTP ${r.status}`, kod: 502 }
   return { ok: true, kod: j.kod, indir: CONNECT_INDIRME_ADRESI }
 }
+
+/* ── Cihazlar (kodla kaydolmuş bilgisayarlar) ─────────────────────────── */
+
+export interface ConnectCihaz {
+  id: string
+  makine: string | null
+  surum: string | null
+  ilkGiris: string
+  sonGorulme: string | null
+  iptal: boolean
+  ikiAdim: boolean
+  kodDurum: string
+}
+
+interface ServisKod {
+  id: string; kullanici: string; durum: string
+  cihazlar: { id: string; makine: string | null; surum: string | null; ilkGiris: string; sonGorulme: string | null; iptal: number; totpAktif: number }[]
+}
+
+/** Firmanın (isteğe bağlı: tek kullanıcının) Connect 2 cihazları, en son görüleni üstte. */
+export async function connectCihazlari(firkod: string, kullanici?: string): Promise<ConnectCihaz[]> {
+  const r = await fetch(`${BASE}/admin/kodlar?firma=${encodeURIComponent(firkod)}`, { headers: { "X-Service-Key": KEY }, cache: "no-store" })
+  if (!r.ok) throw new Error(`Connect servisi: HTTP ${r.status}`)
+  const kodlar = (await r.json()) as ServisKod[]
+  return kodlar
+    .filter((k) => !kullanici || k.kullanici.toLowerCase() === kullanici.toLowerCase())
+    .flatMap((k) => k.cihazlar.map((c) => ({
+      id: c.id, makine: c.makine, surum: c.surum, ilkGiris: c.ilkGiris, sonGorulme: c.sonGorulme,
+      iptal: !!c.iptal, ikiAdim: !!c.totpAktif, kodDurum: k.durum,
+    })))
+    .sort((a, b) => (b.sonGorulme ?? b.ilkGiris).localeCompare(a.sonGorulme ?? a.ilkGiris))
+}
+
+/** Cihaz işlemi — önce cihazın bu firmaya ait olduğu doğrulanır (başka firmanın cihaz id'si ile çağrılamaz). */
+export async function connectCihazIslem(firkod: string, cihazId: string, islem: "2fa-sifirla" | "iptal"): Promise<boolean> {
+  const cihazlar = await connectCihazlari(firkod)
+  if (!cihazlar.some((c) => c.id === cihazId)) return false
+  const r = await fetch(`${BASE}/admin/cihazlar/${encodeURIComponent(cihazId)}/${islem}`, {
+    method: "POST", headers: { "X-Service-Key": KEY }, cache: "no-store",
+  })
+  if (!r.ok) throw new Error(`Connect servisi: HTTP ${r.status}`)
+  return true
+}

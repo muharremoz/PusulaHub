@@ -133,10 +133,11 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
+import { ConnectCihazlarDialog } from "@/components/companies/connect-cihazlar-dialog";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
@@ -597,6 +598,7 @@ export default function CompaniesPage() {
   const [pwResetRdpServer, setPwResetRdpServer] = useState<{ ip: string; rdpPort?: number | null } | null>(null);
   const [toggleUser, setToggleUser]         = useState<TabUser | null>(null);
   const [connectKoduKullanici, setConnectKoduKullanici] = useState<string | null>(null);
+  const [connectCihazKullanici, setConnectCihazKullanici] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy]         = useState(false);
   const [deleteUser, setDeleteUser]         = useState<TabUser | null>(null);
   const [deleteConfirm, setDeleteConfirm]   = useState("");
@@ -2381,6 +2383,12 @@ tr:nth-child(even) td{background:#fafafa}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               className="text-[11px] gap-2"
+                              onClick={() => setConnectCihazKullanici(usr.username)}
+                            >
+                              <Laptop className="h-3.5 w-3.5" /> Connect 2 Cihazları
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-[11px] gap-2"
                               onClick={() => openPwReset(usr)}
                             >
                               <KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla
@@ -3659,6 +3667,7 @@ tr:nth-child(even) td{background:#fafafa}
           {/* Hesabı Askıya Al / Aktifleştir */}
           {selectedFirma && (
             <ConnectKoduDialog firkod={selectedFirma.firkod} kullanici={connectKoduKullanici} onClose={() => setConnectKoduKullanici(null)} />
+            <ConnectCihazlarDialog firkod={selectedFirma.firkod} kullanici={connectCihazKullanici} onClose={() => setConnectCihazKullanici(null)} />
           )}
 
           <AlertDialog open={!!toggleUser} onOpenChange={(o) => { if (!o && !toggleBusy) setToggleUser(null) }}>
