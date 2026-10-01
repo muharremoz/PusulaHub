@@ -25,7 +25,7 @@ const TUR_ETIKET: Record<Veritabani["tur"], string> = {
   sirket: "Şirket tanımları",
 };
 
-const VT_SAYFA = 25;
+const VT_SAYFA = 10;
 const KLASOR_SAYFA = 10;
 const GRUPLAR: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
 
