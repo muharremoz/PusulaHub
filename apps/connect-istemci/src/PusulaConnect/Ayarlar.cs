@@ -10,7 +10,7 @@ namespace PusulaConnect
     /// <summary>
     /// Kullanıcının uygulama ayarları (Ayarlar sayfası). %LOCALAPPDATA%\PusulaConnect2\ayarlar.json.
     /// "Windows ile başlat" dosyada tutulmaz: gerçeği HKCU\...\Run kaydıdır (kullanıcı orayı başka yerden
-    /// de kapatabilir). Sürücü yönlendirme BİLEREK ayar değil — her zaman kapalı.
+    /// de kapatabilir). Yönlendirme varsayılanları Connect 1.5'in .rdp'siyle aynı (sürücüler kapalı).
     /// </summary>
     internal sealed class Ayarlar
     {
@@ -20,6 +20,17 @@ namespace PusulaConnect
         public bool Pano { get; set; } = true;
         /// <summary>Uzak oturumun sesi bu bilgisayarda çalınsın.</summary>
         public bool Ses { get; set; }
+        public bool AkilliKart { get; set; } = true;
+        /// <summary>Seri/paralel bağlantı noktaları (COM, LPT).</summary>
+        public bool Portlar { get; set; } = true;
+        /// <summary>Bu bilgisayarın konumu oturuma iletilir (Windows konum izni gerekir).</summary>
+        public bool Konum { get; set; } = true;
+        /// <summary>Video yakalama cihazları (kamera).</summary>
+        public bool Kamera { get; set; } = true;
+        /// <summary>Desteklenen diğer Tak ve Kullan aygıtları (sonradan takılanlar dahil).</summary>
+        public bool Aygitlar { get; set; } = true;
+        /// <summary>Bu bilgisayarın diskleri oturumda görünür. Varsayılan KAPALI (güvenlik + yavaşlık).</summary>
+        public bool Suruculer { get; set; }
         /// <summary>Uygulama açılınca (sunucuya erişilebiliyorsa) kendiliğinden bağlan. 2FA açıksa kod yine sorulur.</summary>
         public bool OtomatikBaglan { get; set; }
 
@@ -58,6 +69,12 @@ namespace PusulaConnect
                 a.Yazici = B("yazici") ?? a.Yazici;
                 a.Pano = B("pano") ?? a.Pano;
                 a.Ses = B("ses") ?? a.Ses;
+                a.AkilliKart = B("akilliKart") ?? a.AkilliKart;
+                a.Portlar = B("portlar") ?? a.Portlar;
+                a.Konum = B("konum") ?? a.Konum;
+                a.Kamera = B("kamera") ?? a.Kamera;
+                a.Aygitlar = B("aygitlar") ?? a.Aygitlar;
+                a.Suruculer = B("suruculer") ?? a.Suruculer;
                 a.OtomatikBaglan = B("otomatikBaglan") ?? a.OtomatikBaglan;
                 var w = B("windowsIleBaslat");
                 if (w.HasValue) BaslangicAyarla(w.Value);
@@ -72,6 +89,12 @@ namespace PusulaConnect
             yazici = Yazici,
             pano = Pano,
             ses = Ses,
+            akilliKart = AkilliKart,
+            portlar = Portlar,
+            konum = Konum,
+            kamera = Kamera,
+            aygitlar = Aygitlar,
+            suruculer = Suruculer,
             otomatikBaglan = OtomatikBaglan,
             windowsIleBaslat = WindowsIleBaslat,
         };

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
-  CheckCircle2, Clipboard, Download, FileText, KeyRound, Loader2, LogOut, Maximize2, Power, Printer, RefreshCw, ShieldCheck, Volume2, Zap,
+  Cable, CheckCircle2, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
+  RefreshCw, ShieldCheck, Usb, Video, Volume2, Zap,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import {
@@ -10,7 +11,9 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 
-type AyarAdi = "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat" | "otomatikBaglan";
+type AyarAdi =
+  | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat" | "otomatikBaglan"
+  | "akilliKart" | "portlar" | "konum" | "kamera" | "aygitlar" | "suruculer";
 
 /**
  * Uygulama ayarları — orta panelde açılır. Değişiklik anında kaydedilir (Kaydet düğmesi yok).
@@ -80,6 +83,20 @@ export function AyarlarIcerik({
         <Satir ikon={<Printer />} ad="Yazıcılar" aciklama="Bu bilgisayarın yazıcıları oturumda kullanılabilir." kontrol={anahtar("yazici")} />
         <Satir ikon={<Clipboard />} ad="Pano (kopyala-yapıştır)" aciklama="Bu bilgisayarla oturum arasında kopyalayıp yapıştırın." kontrol={anahtar("pano")} />
         <Satir ikon={<Volume2 />} ad="Ses" aciklama="Oturumdaki sesler bu bilgisayarda çalınır." kontrol={anahtar("ses")} />
+      </Bolum>
+
+      <Bolum baslik="Yerel aygıtlar" aciklama="Bu bilgisayarın aygıtları oturumda kullanılabilir.">
+        <Satir ikon={<CreditCard />} ad="Akıllı kartlar" aciklama="E-imza, kart okuyucu." kontrol={anahtar("akilliKart")} />
+        <Satir ikon={<Cable />} ad="Bağlantı noktaları" aciklama="Seri (COM) ve paralel (LPT) bağlantı noktaları." kontrol={anahtar("portlar")} />
+        <Satir ikon={<MapPin />} ad="Konum" aciklama="Bu bilgisayarın konumu oturuma iletilir (Windows konum izni gerekir)." kontrol={anahtar("konum")} />
+        <Satir ikon={<Video />} ad="Video yakalama cihazları" aciklama="Kamera." kontrol={anahtar("kamera")} />
+        <Satir ikon={<Usb />} ad="Tak ve Kullan aygıtları" aciklama="Desteklenen diğer aygıtlar; sonradan takılanlar dahil." kontrol={anahtar("aygitlar")} />
+        <Satir
+          ikon={<HardDrive />}
+          ad="Sürücüler"
+          aciklama="Bu bilgisayarın diskleri oturumda görünür. Gerekmedikçe kapalı tutun: bağlantıyı yavaşlatabilir."
+          kontrol={anahtar("suruculer")}
+        />
       </Bolum>
 
       <Bolum baslik="Başlangıç">

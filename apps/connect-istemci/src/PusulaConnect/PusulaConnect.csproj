@@ -46,6 +46,8 @@
     <Reference Include="System.Net.Http" />
     <!-- ProtectedData (DPAPI) — oturum tokenı yalnız bu Windows kullanıcısına açık saklanır -->
     <Reference Include="System.Security" />
+    <!-- Konum yönlendirme (GeoCoordinateWatcher → SendLocation2D) -->
+    <Reference Include="System.Device" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <!-- Gömülü uzak masaüstü (OturumPaneli): Windows'un mstscax.dll'inden AxImp ile üretildi
          ("NETFX 4.8 Tools\x64\AxImp.exe C:\Windows\System32\mstscax.dll"). Costura exe'ye gömer. -->

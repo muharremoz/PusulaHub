@@ -16,6 +16,7 @@ namespace PusulaConnect
         public int Port;
         // Ayarlar sayfasından
         public bool TamEkran, Yazici = true, Pano = true, Ses;
+        public bool AkilliKart = true, Portlar = true, Konum = true, Kamera = true, Aygitlar = true, Suruculer;
     }
 
     /// <summary>
@@ -132,6 +133,7 @@ namespace PusulaConnect
                 Olc();
                 _olcum.Start();
                 if (_a.TamEkran) { try { _rdp.FullScreen = true; } catch { } }
+                KonumBaslat();
                 _rdp.Focus();
             };
             _rdp.OnAutoReconnecting2 += (s, e) => Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber);
@@ -160,10 +162,11 @@ namespace PusulaConnect
             ay.NegotiateSecurityLayer = true;
             ay.RedirectPrinters = _a.Yazici;
             ay.RedirectClipboard = _a.Pano;
-            ay.RedirectSmartCards = true;
-            ay.RedirectPorts = true;
-            ay.RedirectDevices = true;
-            ay.RedirectDrives = false;            // sürücüler BİLEREK kapalı (Rdp.Baglan ile aynı)
+            ay.RedirectSmartCards = _a.AkilliKart;
+            ay.RedirectPorts = _a.Portlar;
+            ay.RedirectDevices = _a.Aygitlar;
+            ay.RedirectDrives = _a.Suruculer;     // varsayılan kapalı (Ayarlar)
+            Yonlendirmeler();
             ay.AudioRedirectionMode = _a.Ses ? 0u : 2u; // 0 = bu bilgisayarda çal, 2 = çalma
             ay.EnableAutoReconnect = true;
             ay.MaxReconnectAttempts = 20;
@@ -188,6 +191,75 @@ namespace PusulaConnect
 
             _a.Sifre = null;
             _rdp.Connect();
+        }
+
+        /// <summary>
+        /// Tak ve Kullan aygıtları, sürücüler (sonradan takılanlar dahil) ve kamera — bunlar AdvancedSettings'te
+        /// değil, NonScriptable arayüzünün koleksiyonlarında. Eski Windows'ta arayüz yoksa sessizce atlanır.
+        /// </summary>
+        private void Yonlendirmeler()
+        {
+            IMsRdpClientNonScriptable7 ns;
+            try { ns = (IMsRdpClientNonScriptable7)_rdp.GetOcx(); }
+            catch { return; }
+            try
+            {
+                ns.RedirectDynamicDevices = _a.Aygitlar;
+                ns.RedirectDynamicDrives = _a.Suruculer;
+            }
+            catch { }
+            if (_a.Aygitlar)
+            {
+                try
+                {
+                    var c = ns.DeviceCollection;
+                    c.RescanDevices(true);
+                    for (uint i = 0; i < c.DeviceCount; i++) c.get_DeviceByIndex(i).RedirectionState = true;
+                }
+                catch (Exception e) { Gunluk.Yaz("Aygıt yönlendirme: " + e.Message); }
+            }
+            if (_a.Suruculer)
+            {
+                try
+                {
+                    var c = ns.DriveCollection;
+                    c.RescanDrives(true);
+                    for (uint i = 0; i < c.DriveCount; i++) c.get_DriveByIndex(i).RedirectionState = true;
+                }
+                catch (Exception e) { Gunluk.Yaz("Sürücü yönlendirme: " + e.Message); }
+            }
+            try
+            {
+                var k = ns.CameraRedirConfigCollection;
+                k.RedirectByDefault = _a.Kamera;
+                if (_a.Kamera)
+                {
+                    k.Rescan();
+                    for (uint i = 0; i < k.Count; i++) k.get_ByIndex(i).Redirected = true;
+                }
+            }
+            catch (Exception e) { Gunluk.Yaz("Kamera yönlendirme: " + e.Message); }
+        }
+
+        // Konum: bileşen konumu kendisi okumaz; Windows konum servisinden alınıp SendLocation2D ile iletilir.
+        private System.Device.Location.GeoCoordinateWatcher _konum;
+
+        private void KonumBaslat()
+        {
+            if (!_a.Konum || _konum != null) return;
+            try
+            {
+                _konum = new System.Device.Location.GeoCoordinateWatcher(System.Device.Location.GeoPositionAccuracy.Default);
+                _konum.PositionChanged += (s, e) =>
+                {
+                    var p = e.Position.Location;
+                    if (p.IsUnknown || _bitti) return;
+                    try { BeginInvoke((Action)(() => { try { if (!_bitti) ((IMsRdpClientNonScriptable7)_rdp.GetOcx()).SendLocation2D(p.Latitude, p.Longitude); } catch { } })); }
+                    catch { }
+                };
+                _konum.Start(true);
+            }
+            catch (Exception e) { Gunluk.Yaz("Konum başlatılamadı: " + e.Message); }
         }
 
         /// <summary>Kullanıcı "Bağlantıyı kes" dedi (veya pencere kapanıyor).</summary>
@@ -239,6 +311,8 @@ namespace PusulaConnect
             _bitti = true;
             _boyut.Stop();
             _olcum.Stop();
+            try { _konum?.Stop(); _konum?.Dispose(); } catch { }
+            _konum = null;
             BeginInvoke((Action)(() => Bitti?.Invoke(mesaj, sifreHatali)));
         }
 

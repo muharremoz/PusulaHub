@@ -292,6 +292,8 @@ namespace PusulaConnect
                 {
                     Ad = ad, Sunucu = rdp, Port = RdpPort, Domain = P("domain"), Kullanici = kullanici, Sifre = sifre,
                     TamEkran = ay.TamEkran, Yazici = ay.Yazici, Pano = ay.Pano, Ses = ay.Ses,
+                    AkilliKart = ay.AkilliKart, Portlar = ay.Portlar, Konum = ay.Konum, Kamera = ay.Kamera,
+                    Aygitlar = ay.Aygitlar, Suruculer = ay.Suruculer,
                 }, OturumBitti);
                 Gunluk.Yaz("Oturum açılıyor (uygulama içinde" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
