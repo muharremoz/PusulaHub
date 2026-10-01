@@ -57,7 +57,7 @@ export function AnaEkran({ durum, setDurum }: P) {
     <div className="flex h-svh overflow-hidden bg-muted/40">
       {/* ── Sol: firma bilgileri ───────────────────────────── */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="border-b px-5 py-3">
+        <div className="border-b px-5 py-1.5">
           <ParlayanLogo />
         </div>
 
@@ -358,7 +358,7 @@ function ParlayanLogo() {
     WebkitMaskPosition: "center", maskPosition: "center",
   } as React.CSSProperties;
   return (
-    <div className="flex justify-center py-2">
+    <div className="flex justify-center">
       <div className="relative">
         <div className="absolute inset-0 -z-0 scale-125 rounded-full bg-primary/10 blur-xl" aria-hidden />
         <img
