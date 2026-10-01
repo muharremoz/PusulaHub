@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, anahtarVar, nabziBaslat, type Durum } from "@/api";
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AnahtarYok, Bekleme } from "@/ekranlar/ortak";
@@ -58,7 +59,17 @@ function Icerik({ durum, setDurum, hata }: { durum: Durum | null; setDurum: (d: 
     case "giris":
       return <GirisEkrani {...p} />;
     case "sqlAraniyor":
-      return <Bekleme baslik="SQL Server aranıyor" alt={durum.ilerleme} />;
+      return (
+        <Bekleme
+          baslik="SQL Server aranıyor"
+          alt={durum.ilerleme}
+          aksiyon={
+            <Button variant="outline" size="sm" onClick={() => void api<Durum>("/sql/atla", {}).then(setDurum)}>
+              SQL olmadan devam et
+            </Button>
+          }
+        />
+      );
     case "sqlGiris":
       return <SqlGirisEkrani {...p} />;
     case "kesif":

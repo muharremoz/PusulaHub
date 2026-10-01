@@ -16,13 +16,14 @@ export function Kabuk({ children, genis }: { children: ReactNode; genis?: boolea
   );
 }
 
-export function Bekleme({ baslik, alt }: { baslik: string; alt?: string | null }) {
+export function Bekleme({ baslik, alt, aksiyon }: { baslik: string; alt?: string | null; aksiyon?: React.ReactNode }) {
   return (
     <Kabuk>
       <div className="flex flex-col items-center gap-3 text-center">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
         <h1 className="text-lg font-semibold">{baslik}</h1>
         {alt && <p className="text-sm text-muted-foreground">{alt}</p>}
+        {aksiyon && <div className="mt-3">{aksiyon}</div>}
       </div>
     </Kabuk>
   );

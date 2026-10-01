@@ -146,6 +146,7 @@ export type Veritabani = {
 export type KesifRaporu = {
   zaman: string;
   makine: string;
+  /** null: SQL atlandı (yalnız resim/program/dosya bilgisayarı). */
   sql: {
     sunucu: string;
     kaynak: string;
@@ -155,7 +156,7 @@ export type KesifRaporu = {
     surumu: string;
     sikistirmaVar: boolean;
     yedekKlasoru: string | null;
-  };
+  } | null;
   veritabanlari: Veritabani[];
   resimKlasorleri: { yol: string; var: boolean; dosyaSayisi: number; boyutMb: number; eksik: boolean; kullananlar: string[]; buyukDosya?: number; buyukMb?: number }[];
   programKlasorleri: { yol: string; exeler: string[]; parametreler: { ad: string; dataKodu: string | null }[] }[];
@@ -169,6 +170,8 @@ export type Durum = {
   oturum: Oturum | null;
   sql: { sunucu: string; kaynak: string; kullanici: string | null } | null;
   sqlDenemeleri: SqlDenemesi[];
+  /** Kullanıcı "SQL olmadan devam et" dedi. */
+  sqlAtlandi?: boolean;
   yerelSunucular: string[];
   ilerleme: string | null;
   kesif: KesifRaporu | null;

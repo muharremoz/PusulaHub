@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, MonitorUp, Plus,
-  RefreshCw, Search, Server, X, XCircle,
+  RefreshCw, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -103,6 +103,20 @@ export function RaporEkrani({ durum, setDurum }: P) {
     setEskiYil(new Set((r?.veritabanlari ?? []).filter(eskiYilMi).map((v) => v.ad)));
   }, [r]);
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
+  // Elle eklenen resim klasörleri (SQL'siz aktarım ya da şirket tanımında olmayan klasör)
+  const [ekResimKlasorleri, setEkResimKlasorleri] = useState<KesifRaporu["resimKlasorleri"]>([]);
+  const resimKlasorleri = useMemo(() => [...(r?.resimKlasorleri ?? []), ...ekResimKlasorleri], [r, ekResimKlasorleri]);
+  const resimKlasoruEkle = async () => {
+    const [{ yol } = { yol: "" }] = await dosyaSor({ baslik: "Resim klasörü", aciklama: "Resimlerin bulunduğu klasörü açın veya işaretleyin.", mod: "klasor" });
+    if (!yol || resimKlasorleri.some((x) => x.yol.toLowerCase() === yol.toLowerCase())) return;
+    const k = await api<KesifRaporu["resimKlasorleri"][number]>("/resim/klasor", { yol });
+    setEkResimKlasorleri((l) => [...l, k]);
+    const parca = yol.split(/[\\/]/).filter(Boolean);
+    const son = parca[parca.length - 1] ?? "";
+    const ad = /^resim(ler)?$/i.test(son) && parca.length > 1 ? parca[parca.length - 2] : son;
+    // İlk resim klasörü ana klasöre (Resimler\{firma}), sonrakiler kendi adıyla
+    setResimler((l) => [...l, { yol: k.yol, secili: k.var && k.dosyaSayisi > 0, altKlasor: l.length === 0 ? "" : ad }]);
+  };
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
   const [programDosyalari, setProgramDosyalari] = useState<ProgramDosyasi[]>([]);
   const [eskiDosyalar, setEskiDosyalar] = useState<Secilen[]>([]);
@@ -283,14 +297,14 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const programSayfaGecerli = Math.min(programSayfa, programSayfaSayisi);
   const programBas = (programSayfaGecerli - 1) * KLASOR_SAYFA;
   const resimSecilebilir = (yol: string) => {
-    const k = r?.resimKlasorleri.find((x) => x.yol === yol);
+    const k = resimKlasorleri.find((x) => x.yol === yol);
     return !!k && k.var && k.dosyaSayisi > 0;
   };
   const resimHepsiSecili = resimler.filter((x) => resimSecilebilir(x.yol)).every((x) => x.secili);
   // v1'deki gibi: seçili resim klasörlerinde 500 KB üzeri dosya → sıkıştırma önerisi.
   const buyukResim = resimler
     .filter((x) => x.secili)
-    .map((x) => r?.resimKlasorleri.find((k) => k.yol === x.yol))
+    .map((x) => resimKlasorleri.find((k) => k.yol === x.yol))
     .reduce((t, k) => ({ adet: t.adet + (k?.buyukDosya ?? 0), mb: t.mb + (k?.buyukMb ?? 0) }), { adet: 0, mb: 0 });
   const programHepsiSecili = programlar.length > 0 && programlar.every((x) => x.secili);
 
@@ -365,17 +379,27 @@ export function RaporEkrani({ durum, setDurum }: P) {
         {r && (
           <>
             <Bolum ikon={<Server className="size-4" />} baslik="SQL Server" renk="slate">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm sm:grid-cols-4">
-                <Bilgi l="Sunucu" v={r.sql.sunucu} mono />
-                <Bilgi l="Bilgisayar" v={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />
-                <Bilgi l="Sürüm" v={r.sql.surumu} />
-                <Bilgi l="Bağlantı" v={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />
-              </div>
+              {r.sql ? (
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm sm:grid-cols-4">
+                  <Bilgi l="Sunucu" v={r.sql.sunucu} mono />
+                  <Bilgi l="Bilgisayar" v={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />
+                  <Bilgi l="Sürüm" v={r.sql.surumu} />
+                  <Bilgi l="Bağlantı" v={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
+                  <Unplug className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 text-muted-foreground">SQL Server'a bağlanılmadı — bu bilgisayardan yalnız resim, program ve dosya aktarılır.</span>
+                  <Button variant="outline" size="sm" disabled={bekle} onClick={() => void api<Durum>("/sql/giris", {}).then(setDurum).catch((e) => setHata((e as Error).message))}>
+                    <Database /> SQL Server'a bağlan
+                  </Button>
+                </div>
+              )}
             </Bolum>
 
-            <Tabs defaultValue="vt" className="gap-3">
+            <Tabs defaultValue={r.sql ? "vt" : hedef.depo ? "resim" : "program"} className="gap-3">
               <TabsList className="p-1 group-data-horizontal/tabs:h-11">
-                <TabsTrigger value="vt" className={"px-4 text-sm [&_svg]:size-4 " + RENK.blue.sekme}><Database /> Veritabanları</TabsTrigger>
+                {r.sql && <TabsTrigger value="vt" className={"px-4 text-sm [&_svg]:size-4 " + RENK.blue.sekme}><Database /> Veritabanları</TabsTrigger>}
                 {hedef.depo && <TabsTrigger value="resim" className={"px-4 text-sm [&_svg]:size-4 " + RENK.violet.sekme}><Image /> Resimler</TabsTrigger>}
                 {hedef.depo && <TabsTrigger value="eski" className={"px-4 text-sm [&_svg]:size-4 " + RENK.amber.sekme}><FileArchive /> Eski yıl dosyaları</TabsTrigger>}
                 {hedef.rdp && <TabsTrigger value="program" className={"px-4 text-sm [&_svg]:size-4 " + RENK.emerald.sekme}><FolderOpen /> Programlar</TabsTrigger>}
@@ -383,6 +407,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
               </TabsList>
 
               {/* ── Veritabanları ───────────────────────────────────── */}
+              {r.sql && (
               <TabsContent value="vt">
                 <Bolum
                   ikon={<Database className="size-4" />}
@@ -535,11 +560,18 @@ export function RaporEkrani({ durum, setDurum }: P) {
                   </label>
                 </Bolum>
               </TabsContent>
+              )}
 
               {/* ── Resimler ───────────────────────────────────────── */}
               {hedef.depo && (
                 <TabsContent value="resim">
-                  <Bolum ikon={<Image className="size-4" />} renk="violet" baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
+                  <Bolum
+                    ikon={<Image className="size-4" />}
+                    renk="violet"
+                    baslik="Resim klasörleri"
+                    sag={`${resimler.length} klasör · ${resimSayisi} seçili`}
+                    aksiyon={<Button variant="outline" size="sm" onClick={() => void resimKlasoruEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
+                  >
                     {buyukResim.adet > 0 && (
                       <div className="flex items-start gap-2 border-b bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -551,7 +583,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       </div>
                     )}
                     {resimler.length === 0 ? (
-                      <Bos>Şirket tanımlarında resim klasörü yok.</Bos>
+                      <Bos>{r.sql ? "Şirket tanımlarında resim klasörü yok. Başka bir klasör varsa ekleyin." : "Aktarılacak resim klasörünü ekleyin."}</Bos>
                     ) : (
                       <Table>
                         <TableHeader>
@@ -574,7 +606,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         <TableBody>
                           {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
                             const i = resimBas + si;
-                            const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
+                            const k = resimKlasorleri.find((x) => x.yol === s.yol)!;
                             return (
                               <TableRow key={s.yol} data-state={s.secili ? "selected" : undefined}>
                                 <TableCell className="pl-4">

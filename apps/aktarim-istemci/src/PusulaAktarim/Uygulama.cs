@@ -30,6 +30,8 @@ namespace PusulaAktarim
         private readonly List<object> _sqlDenemeleri = new List<object>();
         private string _ilerleme;
         private KesifRaporu _kesif;
+        /// <summary>Kullanıcı "SQL olmadan devam et" dedi: yalnız resim/program/dosya aktarımı.</summary>
+        private bool _sqlAtlandi;
         private string _kesifHatasi;
         private bool _kesifGonderildi;
         private string _mesaj;
@@ -98,6 +100,7 @@ namespace PusulaAktarim
                     yerelSunucular = SqlBaglanti.YerelOrnekler(),
                     ilerleme = _ilerleme,
                     kesif = _kesif,
+                    sqlAtlandi = _sqlAtlandi,
                     kesifHatasi = _kesifHatasi,
                     kesifGonderildi = _kesifGonderildi,
                     mesaj = _mesaj,
@@ -155,13 +158,16 @@ namespace PusulaAktarim
             SqlHedef ilkBasarili = null;
             foreach (var aday in SqlBaglanti.Adaylar())
             {
+                if (SqlAtlandi) return;
                 lock (_kilit) _ilerleme = "Bağlanılıyor: " + aday.Sunucu + (aday.Kullanici == null ? " (Windows oturumu)" : " (" + aday.Kullanici + ")");
                 var hata = await SqlBaglanti.Dene(aday);
                 lock (_kilit) _sqlDenemeleri.Add(new { sunucu = aday.Sunucu, kaynak = aday.Kaynak, hata });
                 if (hata != null) continue;
+                if (SqlAtlandi) return;
                 if (await SqlBaglanti.SirketVar(aday)) { await Baglandi(aday); return; }
                 if (ilkBasarili == null) ilkBasarili = aday;
             }
+            if (SqlAtlandi) return;
             if (ilkBasarili != null) { await Baglandi(ilkBasarili); return; }
             lock (_kilit) _ilerleme = null;
             Asama("sqlGiris", "SQL Server'a otomatik bağlanılamadı. Sunucu adını ve SQL kullanıcısını girin.");
@@ -179,13 +185,47 @@ namespace PusulaAktarim
             };
             var hata = await SqlBaglanti.Dene(h);
             if (hata != null) throw new KullaniciHatasi("Bağlanılamadı: " + hata);
+            lock (_kilit) _sqlAtlandi = false;
             await Baglandi(h);
             return Durum();
         }
 
+        private bool SqlAtlandi { get { lock (_kilit) return _sqlAtlandi; } }
+
+        /// <summary>
+        /// Bu bilgisayarda SQL yok / gerekmiyor (yalnız resim, program, dosya): taramaya SQL'siz geçilir.
+        /// Arka planda süren otomatik arama sonucu artık uygulanmaz.
+        /// </summary>
+        public object SqlAtla()
+        {
+            lock (_kilit) { _sqlAtlandi = true; _sql = null; _ilerleme = null; }
+            _ = Task.Run(() => Baglandi(null));
+            return Durum();
+        }
+
+        /// <summary>Rapordan "SQL Server'a bağlan": elle giriş ekranına dön.</summary>
+        public object SqlGirisineDon()
+        {
+            lock (_kilit) { _sqlAtlandi = false; }
+            Asama("sqlGiris", "Pusula verilerinin bulunduğu SQL Server'ı girin.");
+            return Durum();
+        }
+
+        /// <summary>Elle eklenen resim klasörünü ölçer (dosya sayısı, boyut, 500 KB üzeri).</summary>
+        public Task<object> ResimKlasoruOlc(string yol)
+        {
+            if (string.IsNullOrWhiteSpace(yol)) throw new KullaniciHatasi("Klasör seçin.");
+            return Task.Run<object>(() => Kesif.ResimKlasoruOlc(yol));
+        }
+
         private Task Baglandi(SqlHedef h)
         {
-            lock (_kilit) { _sql = h; }
+            lock (_kilit)
+            {
+                // Kullanıcı "SQL olmadan devam et" dediyse geç gelen otomatik bağlantı uygulanmaz
+                if (h != null && _sqlAtlandi) return Task.CompletedTask;
+                _sql = h;
+            }
             // Yarım aktarım varsa taramayı atla, kaldığı yerden sür.
             var kayit = IsKaydi.Oku(OturumId);
             if (kayit != null && kayit.Ogeler.Count > 0)
@@ -219,10 +259,11 @@ namespace PusulaAktarim
             JObject oturum;
             lock (_kilit) { k = _kesif; oturum = _oturum; }
             if (k == null) throw new KullaniciHatasi("Önce tarama tamamlanmalı.");
+            if (k.Sql == null && ((secim?["veritabanlari"] as JArray)?.Count ?? 0) > 0) throw new KullaniciHatasi("SQL Server bağlı değil; veritabanı aktarılamaz.");
             secim = secim ?? new JObject();
             var hedefler = oturum?["hedefler"] as JObject;
             bool Acik(string h) => hedefler == null || hedefler.Value<bool?>(h) != false;
-            var kayit = new IsKaydi { OturumId = OturumId, Sikistir = k.Sql.SikistirmaVar, VeritabanlariAyir = secim.Value<bool?>("veritabanlariAyir") == true };
+            var kayit = new IsKaydi { OturumId = OturumId, Sikistir = k.Sql?.SikistirmaVar ?? false, VeritabanlariAyir = secim.Value<bool?>("veritabanlariAyir") == true };
             var adlar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // --- veritabanları
@@ -562,18 +603,25 @@ namespace PusulaAktarim
 
         public Task<object> YenidenKesif()
         {
-            if (_sql == null) throw new KullaniciHatasi("Önce SQL Server'a bağlanın.");
+            if (_sql == null && !SqlAtlandi) throw new KullaniciHatasi("Önce SQL Server'a bağlanın.");
             _ = Task.Run(KesifBaslat);
             return Task.FromResult(Durum());
         }
 
+        /// <summary>Her tarama numaralanır; sonra başlayan tarama varsa (SQL atlandı / yeniden tara) eskisinin sonucu atılır.</summary>
+        private int _kesifNo;
+
         private async Task KesifBaslat()
         {
-            lock (_kilit) { _kesif = null; _kesifHatasi = null; _kesifGonderildi = false; }
+            int no;
+            SqlHedef sql;
+            lock (_kilit) { no = ++_kesifNo; sql = _sql; _kesif = null; _kesifHatasi = null; _kesifGonderildi = false; }
             Asama("kesif");
+            bool Gecerli() { lock (_kilit) return no == _kesifNo; }
             try
             {
-                var rapor = await Kesif.Calistir(_sql, m => { lock (_kilit) _ilerleme = m; });
+                var rapor = await Kesif.Calistir(sql, m => { lock (_kilit) if (no == _kesifNo) _ilerleme = m; });
+                if (!Gecerli()) return;
                 lock (_kilit) { _kesif = rapor; _ilerleme = "Rapor Pusula'ya gönderiliyor…"; }
                 try
                 {
@@ -587,8 +635,10 @@ namespace PusulaAktarim
             }
             catch (Exception e)
             {
+                if (!Gecerli()) return;
                 lock (_kilit) _kesifHatasi = "Tarama tamamlanamadı: " + e.GetBaseException().Message;
             }
+            if (!Gecerli()) return;
             lock (_kilit) _ilerleme = null;
             Asama("hazir");
         }

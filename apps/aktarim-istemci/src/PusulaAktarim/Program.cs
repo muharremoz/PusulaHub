@@ -108,6 +108,9 @@ namespace PusulaAktarim
                 case "POST /nabiz": _sonNabiz = DateTime.Now; return Task.FromResult<object>(new { tamam = true });
                 case "POST /giris": return _uygulama.Giris(i.Metin("kod"));
                 case "POST /sql/elle": return _uygulama.ElleBaglan(i.Metin("sunucu"), i.Metin("kullanici"), i.Metin("sifre"));
+                case "POST /sql/atla": return Task.FromResult(_uygulama.SqlAtla());
+                case "POST /sql/giris": return Task.FromResult(_uygulama.SqlGirisineDon());
+                case "POST /resim/klasor": return _uygulama.ResimKlasoruOlc(i.Metin("yol"));
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
                 case "POST /aktarim/baslat":
                     return _uygulama.AktarimBaslat(i.Govde);

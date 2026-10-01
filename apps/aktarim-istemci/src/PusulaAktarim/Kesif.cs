@@ -84,6 +84,8 @@ namespace PusulaAktarim
     /// <summary>
     /// Keşif: bu makinedeki SQL Server'da Pusula datalarını, resim ve program
     /// klasörlerini bulur. Yalnız OKUR, hiçbir şey değiştirmez.
+    /// SQL'siz (h = null): yalnız resim/program bilgisayarları — veritabanı ve şirket tanımı okunmaz,
+    /// resim klasörleri elle eklenir (ResimKlasoruOlc).
     /// </summary>
     internal static class Kesif
     {
@@ -101,9 +103,10 @@ namespace PusulaAktarim
                 IstemciSurum = ServisIstemci.Surum,
             };
 
-            ilerleme("SQL Server bilgileri okunuyor…");
+            if (h != null)
             using (var c = new SqlConnection(h.BaglantiMetni("master", 10)))
             {
+                ilerleme("SQL Server bilgileri okunuyor…");
                 await c.OpenAsync().ConfigureAwait(false);
                 r.Sql = await SqlBilgisiOku(c, h).ConfigureAwait(false);
 
@@ -123,6 +126,7 @@ namespace PusulaAktarim
             ilerleme("Program klasörleri aranıyor…");
             r.ProgramKlasorleri = ProgramKlasorleri();
 
+            if (h == null) return r;
             if (!r.Sql.Yerel)
                 r.Uyarilar.Add("SQL Server bu bilgisayarda değil (" + r.Sql.MakineAdi + "). Yedek dosyaları o sunucuda oluşur; aktarım için uygulamayı SQL Server'ın kurulu olduğu bilgisayarda çalıştırın.");
             if (!r.Veritabanlari.Any(v => v.Tur == "firma"))
@@ -273,6 +277,14 @@ ORDER BY d.name";
         private const long BuyukResimSiniri = 500 * 1024;
         private static readonly TimeSpan ResimSureSiniri = TimeSpan.FromSeconds(45);
 
+        /// <summary>Elle eklenen resim klasörü (SQL'siz aktarım ya da şirket tanımında olmayan klasör) — aynı ölçüm.</summary>
+        public static KlasorBilgisi ResimKlasoruOlc(string yol)
+        {
+            var k = new KlasorBilgisi { Yol = (yol ?? "").Replace('/', '\\').TrimEnd('\\') };
+            Olc(k);
+            return k;
+        }
+
         private static List<KlasorBilgisi> ResimKlasorleri(List<Dictionary<string, object>> guvenlik, Action<string> ilerleme)
         {
             var yollar = new Dictionary<string, KlasorBilgisi>(StringComparer.OrdinalIgnoreCase);
@@ -288,8 +300,17 @@ ORDER BY d.name";
             foreach (var k in yollar.Values)
             {
                 ilerleme("Resim klasörü taranıyor: " + k.Yol);
+                Olc(k);
+            }
+            return yollar.Values.ToList();
+        }
+
+        /// <summary>Dosya sayısı, boyut, 500 KB üzeri — süre/sayı sınırıyla (aşılırsa Eksik).</summary>
+        private static void Olc(KlasorBilgisi k)
+        {
+            {
                 try { k.Var = Directory.Exists(k.Yol); } catch { k.Var = false; }
-                if (!k.Var) continue;
+                if (!k.Var) return;
                 var sure = Stopwatch.StartNew();
                 long bayt = 0;
                 long buyukBayt = 0;
@@ -318,7 +339,6 @@ ORDER BY d.name";
                 k.BuyukDosya = buyuk;
                 k.BuyukMb = Math.Round(buyukBayt / 1048576.0, 1);
             }
-            return yollar.Values.ToList();
         }
 
         // ------------------------------------------------------------ program klasörleri

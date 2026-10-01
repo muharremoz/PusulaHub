@@ -94,6 +94,15 @@ export function SqlGirisEkrani({ durum, setDurum }: P) {
         <Button size="lg" disabled={bekle || !sunucu.trim()} onClick={() => void baglan()}>
           {bekle ? <><Loader2 className="animate-spin" /> Bağlanılıyor…</> : "Bağlan"}
         </Button>
+
+        <div className="flex items-center gap-3 border-t pt-4">
+          <p className="flex-1 text-xs text-muted-foreground">
+            Bu bilgisayardan yalnız resim, program ya da dosya aktarılacaksa SQL Server gerekmez.
+          </p>
+          <Button variant="outline" disabled={bekle} onClick={() => void api<Durum>("/sql/atla", {}).then(setDurum).catch((e) => setHata((e as Error).message))}>
+            SQL olmadan devam et
+          </Button>
+        </div>
       </div>
     </Kabuk>
   );
