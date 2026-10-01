@@ -88,7 +88,7 @@ namespace PusulaConnect
                 "redirectsmartcards:i:1", "redirectwebauthn:i:1", "redirectcomports:i:1",
                 "drivestoredirect:s:",   // sürücüler BİLEREK kapalı (güvenlik + yavaş hatta yavaşlama)
                 "camerastoredirect:s:*", "devicestoredirect:s:*", "autoreconnection enabled:i:1",
-                "authentication level:i:2", "prompt for credentials:i:0", "negotiate security layer:i:1",
+                "authentication level:i:0", "prompt for credentials:i:0", "negotiate security layer:i:1",
                 "bandwidthautodetect:i:1", "networkautodetect:i:1",
             }) sb.AppendLine(s);
             var dosya = Path.Combine(Kimlik.Klasor, ad + ".rdp");

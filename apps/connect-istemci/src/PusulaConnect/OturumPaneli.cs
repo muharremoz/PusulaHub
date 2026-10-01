@@ -128,7 +128,9 @@ namespace PusulaConnect
             ay.RDPPort = _a.Port > 0 ? _a.Port : 3389;
             ay.ClearTextPassword = _a.Sifre;
             ay.EnableCredSspSupport = true;       // NLA
-            ay.AuthenticationLevel = 2;           // sertifika sorunu varsa uyar (mstsc ile aynı)
+            // Sertifika uyarısı ("uzak bilgisayarın kimliği doğrulanamıyor") SORULMAZ: sunucular kendinden imzalı
+            // sertifika kullanıyor, bağlantı zaten VPN tüneli içinde ve sunucu adı profilden geliyor.
+            ay.AuthenticationLevel = 0;
             ay.NegotiateSecurityLayer = true;
             ay.RedirectPrinters = true;
             ay.RedirectClipboard = true;
