@@ -29,7 +29,7 @@ echo "== Derleme"
 (cd "$KOK/apps/connect-istemci/web" && npm run build >/dev/null)
 (cd "$PROJE" && dotnet build -c Release -nologo -v q | tail -2)
 EXE="$PROJE/bin/Release/net48/PusulaConnect.exe"
-EXE_SURUM="$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "$EXE")').VersionInfo.FileVersion" | tr -d '')"
+EXE_SURUM="$(powershell -NoProfile -Command "(Get-Item '$(cygpath -w "$EXE")').VersionInfo.FileVersion" | tr -d '\r')"
 case "$EXE_SURUM" in "$SURUM"*) ;; *) echo "Derlenen exe sürümü ($EXE_SURUM) csproj ile tutmuyor"; exit 1 ;; esac
 SHA="$(sha256sum "$EXE" | cut -c1-64)"
 echo "exe: $(stat -c %s "$EXE") bayt, sha256 $SHA"
