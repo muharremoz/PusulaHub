@@ -159,9 +159,11 @@ namespace PusulaConnect
                 Controls.Remove(p);
                 _web.Visible = true;
                 p.Dispose();
+                BaslikCubugu(true);
                 bitti(mesaj, sifreHatali);
             };
             _oturum = p;
+            BaslikCubugu(false);
             SuspendLayout();
             Controls.Add(p);
             p.BringToFront();
@@ -175,7 +177,45 @@ namespace PusulaConnect
                 Controls.Remove(p);
                 _web.Visible = true;
                 p.Dispose();
+                BaslikCubugu(true);
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Oturumda Windows başlık çubuğu gizlenir (Pusula şeridi onun yerini alır). Kenarlıksız pencere
+        /// büyütülünce görev çubuğunu örtmesin diye büyütme sınırı çalışma alanı yapılır.
+        /// </summary>
+        private void BaslikCubugu(bool goster)
+        {
+            var buyuk = WindowState == FormWindowState.Maximized;
+            if (goster)
+            {
+                FormBorderStyle = FormBorderStyle.Sizable;
+                MaximizedBounds = Rectangle.Empty;
+            }
+            else
+            {
+                var ekran = Screen.FromControl(this).WorkingArea;
+                MaximizedBounds = new Rectangle(ekran.Location - (Size)Screen.FromControl(this).Bounds.Location, ekran.Size);
+                FormBorderStyle = FormBorderStyle.None;
+            }
+            if (buyuk)
+            {
+                // Yeni sınırın uygulanması için büyütmeyi tazele
+                WindowState = FormWindowState.Normal;
+                WindowState = FormWindowState.Maximized;
+            }
+        }
+
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                // Kenarlıksızken de görev çubuğundan küçültülüp geri getirilebilsin
+                var cp = base.CreateParams;
+                cp.Style |= 0x00020000; // WS_MINIMIZEBOX
+                return cp;
             }
         }
 

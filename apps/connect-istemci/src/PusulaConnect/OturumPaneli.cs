@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using AxMSTSCLib;
 using MSTSCLib;
@@ -69,12 +70,41 @@ namespace PusulaConnect
             _tamEkran.Click += (s, e) => { try { _rdp.FullScreen = true; } catch { } };
             var kes = Dugme("Bağlantıyı kes", true, P);
             kes.Click += (s, e) => Kes();
+            // Oturumda Windows başlık çubuğu gizli (ConnectPenceresi.OturumAc): küçültme şeritte
+            var kucult = new Button
+            {
+                Text = "", Font = new Font("Segoe MDL2 Assets", 9f), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                Size = new Size(P(40), P(30)), Margin = new Padding(P(10), 0, 0, 0), BackColor = Color.White,
+                ForeColor = Color.FromArgb(23, 23, 23), UseVisualStyleBackColor = false, TabStop = false,
+            };
+            kucult.FlatAppearance.BorderSize = 0;
+            kucult.FlatAppearance.MouseOverBackColor = Color.FromArgb(240, 240, 240);
+            kucult.Click += (s, e) => { var f = FindForm(); if (f != null) f.WindowState = FormWindowState.Minimized; };
+            new ToolTip().SetToolTip(kucult, "Simge durumuna küçült");
             sag.Controls.Add(_tamEkran);
             sag.Controls.Add(kes);
+            sag.Controls.Add(kucult);
 
             _serit.Controls.Add(_durum);
             _serit.Controls.Add(sag);
             _serit.Controls.Add(logo);
+            // Şerit başlık çubuğu gibi: sürükle = pencereyi taşı, çift tık = büyüt / eski boyut
+            foreach (var c in new Control[] { _serit, _durum, logo })
+            {
+                c.MouseDown += (s, e) =>
+                {
+                    if (e.Button != MouseButtons.Left || e.Clicks > 1) return;
+                    var f = FindForm();
+                    if (f == null || f.WindowState == FormWindowState.Maximized) return;
+                    ReleaseCapture();
+                    SendMessage(f.Handle, 0xA1, (IntPtr)2, IntPtr.Zero); // WM_NCLBUTTONDOWN, HTCAPTION
+                };
+                c.DoubleClick += (s, e) =>
+                {
+                    var f = FindForm();
+                    if (f != null) f.WindowState = f.WindowState == FormWindowState.Maximized ? FormWindowState.Normal : FormWindowState.Maximized;
+                };
+            }
             _durum.BringToFront(); // Fill en son yerleşsin
 
             _rdp = new AxMsRdpClient9NotSafeForScripting { Dock = DockStyle.Fill };
@@ -91,6 +121,9 @@ namespace PusulaConnect
 
             Durum("Bağlanıyor… " + _a.Sunucu, Soluk);
         }
+
+        [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+        [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr h, int msg, IntPtr w, IntPtr l);
 
         /// <summary>Panel forma eklendikten (tutamaç oluştuktan) sonra çağrılır.</summary>
         public void Baglan()
