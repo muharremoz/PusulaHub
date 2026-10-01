@@ -1,7 +1,10 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, Loader2, Pause, Play, WifiOff, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, Pause, Play, Plus, WifiOff, XCircle } from "lucide-react";
 import { api, type Durum, type IsOgesi } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -49,6 +52,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
   }, 0);
   const genel = Math.round((ilerleme / toplam) * 100);
 
+  const [yeniOnay, setYeniOnay] = useState(false);
   const cagir = async (yol: string) => {
     setBekle(true);
     try {
@@ -65,6 +69,11 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           <div className="text-xs text-muted-foreground">Aktarım · {durum.oturum?.firmaId}</div>
           <h1 className="truncate text-base font-semibold">{durum.oturum?.firmaAdi}</h1>
         </div>
+        {a.bitti && a.yeniAktarimOlur && (
+          <Button size="sm" disabled={bekle} onClick={() => setYeniOnay(true)}>
+            <Plus /> Yeni aktarım başlat
+          </Button>
+        )}
         {!a.bitti &&
           (a.suruyor ? (
             <Button variant="outline" size="sm" disabled={bekle} onClick={() => void cagir("/aktarim/duraklat")}>
@@ -91,6 +100,13 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             <div className="text-2xl font-bold tabular-nums">{genel}%</div>
           </div>
           <Progress value={genel} />
+          {a.bitti && !a.yeniAktarimOlur && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {a.veritabanlariAyir
+                ? "Pusula dosyaları sunuculara taşıyınca veritabanları ayrılacak; sonra yeni aktarım başlatabilirsiniz."
+                : "Pusula'ya bildiriliyor…"}
+            </p>
+          )}
           {!a.bitti && (
             <p className="mt-3 text-xs text-muted-foreground">
               Uygulamayı kapatırsanız aktarım duraklar; yeniden açtığınızda kaldığı yerden devam eder. SQL Server çalışmaya devam edebilir,
@@ -156,6 +172,22 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           </Table>
         </section>
       </main>
+
+      <AlertDialog open={yeniOnay} onOpenChange={setYeniOnay}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Yeni aktarım başlatılsın mı?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bu aktarımın yüklemesi tamamlandı; Pusula sunuculara taşımayı kendisi bitirir. Yeni aktarım için Pusula'dan aldığınız
+              yeni aktarım kodunu gireceksiniz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void cagir("/aktarim/yeni")}>Yeni kod gir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

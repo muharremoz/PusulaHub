@@ -135,6 +135,7 @@ namespace PusulaAktarim
                 case "POST /dosya/listele":
                     return Task.FromResult(DosyaGezgini.Listele(i.Metin("yol"), i.Mantik("dosyalar"), (i.Govde?["uzantilar"] as Newtonsoft.Json.Linq.JArray)?.Values<string>().ToArray()));
                 case "POST /aktarim/duraklat": return _uygulama.Duraklat();
+                case "POST /aktarim/yeni": return Task.FromResult(_uygulama.YeniAktarim());
                 case "POST /aktarim/devam": return _uygulama.Devam();
                 case "POST /cikis":
                     _ = Task.Run(async () => { await Task.Delay(300); Kapat(); });

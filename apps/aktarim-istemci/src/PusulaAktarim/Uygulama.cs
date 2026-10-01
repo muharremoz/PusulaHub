@@ -119,6 +119,7 @@ namespace PusulaAktarim
                         bilgi = _aktarici?.Bilgi,
                         bildirildi = _yuklemeBildirildi,
                         veritabanlariAyir = _is.VeritabanlariAyir,
+                        yeniAktarimOlur = YeniAktarimOlurKilitsiz,
                         yedekKlasoru = Yedekleyici.Klasor,
                         sunucu = _sunucu == null ? null : new
                         {
@@ -402,6 +403,39 @@ namespace PusulaAktarim
             }
         }
 
+        /// <summary>
+        /// Yükleme bitti ve Pusula'ya bildirildi → başka bir aktarım için yeni kod istenebilir. Ayırma (detach)
+        /// seçildiyse Pusula taşımayı bitirip veritabanları ayrılana kadar beklenir (ayırma bu oturuma bağlı).
+        /// </summary>
+        private bool YeniAktarimOlurKilitsiz =>
+            _is != null && _is.Bitti && _yuklemeBildirildi && !_aktarimSuruyor
+            && (!_is.VeritabanlariAyir || _ayirmaDurumu == "bitti");
+
+        public object YeniAktarim()
+        {
+            IsKaydi eski;
+            lock (_kilit)
+            {
+                if (!YeniAktarimOlurKilitsiz)
+                    throw new KullaniciHatasi(_is != null && _is.VeritabanlariAyir && _ayirmaDurumu != "bitti"
+                        ? "Veritabanları ayrılana kadar bekleyin (Pusula taşımayı bitirince otomatik yapılır)."
+                        : "Bu aktarım henüz bitmedi.");
+                eski = _is;
+                _oturumNo++;
+                _kesifNo++;                 // süren tarama varsa sonucu atılır
+                _oturum = null; _sql = null; _sqlAtlandi = false; _sqlDenemeleri.Clear();
+                _kesif = null; _kesifHatasi = null; _kesifGonderildi = false; _ilerleme = null; _mesaj = null;
+                _is = null; _aktarici = null; _aktarimSuruyor = false; _yuklemeBildirildi = false; _sunucu = null;
+                _ayirmaDurumu = null; _ayrilanlar.Clear(); _ayirmaHatalari.Clear(); _ayirmaDogrulama.Clear();
+                _servis.Token = null;
+                _asama = "giris";
+            }
+            // Biten oturumun tokenı: Pusula tarafı süren taşımayı kendi bitirir, istemcinin işi kalmadı
+            eski?.Sil();            // yüklemesi biten işin kaldığı-yer kaydı
+            IsKaydi.TokenSil();
+            return Durum();
+        }
+
         public Task<object> Duraklat()
         {
             _aktarimIptal?.Cancel();
@@ -460,25 +494,33 @@ namespace PusulaAktarim
 
         private JObject _sunucu;
         private int _izleniyor;
+        /// <summary>"Yeni aktarım" ile artar; eski oturumun izleme döngüsü yeni oturuma karışmasın.</summary>
+        private int _oturumNo;
 
         /// <summary>Pusula tarafında dosyaların sunuculara taşınmasını izler (tamamlanana kadar).</summary>
         private async Task SunucuyuIzle()
         {
             if (Interlocked.Exchange(ref _izleniyor, 1) == 1) return;
+            int no;
+            IsKaydi kayit;
+            lock (_kilit) { no = _oturumNo; kayit = _is; }
+            bool Gecerli() { lock (_kilit) return no == _oturumNo; }
             try
             {
                 for (var i = 0; i < 2000; i++)
                 {
+                    if (!Gecerli()) return;
                     try
                     {
                         var o = await _servis.Oturum();
+                        if (!Gecerli()) return;
                         lock (_kilit) _sunucu = o;
                         if (o.Value<string>("durum") == "tamamlandi")
                         {
-                            if (_is != null && _is.VeritabanlariAyir) await VeritabanlariniAyir(_is);
+                            if (kayit != null && kayit.VeritabanlariAyir) await VeritabanlariniAyir(kayit);
                             // Bitti: yarım iş kaydı ve oturum tokenı artık gereksiz.
-                            _is?.Sil();
-                            IsKaydi.TokenSil();
+                            kayit?.Sil();
+                            if (Gecerli()) IsKaydi.TokenSil();
                             return;
                         }
                     }

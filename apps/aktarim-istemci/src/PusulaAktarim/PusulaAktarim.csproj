@@ -25,7 +25,7 @@
     <AssemblyName>PusulaAktarim</AssemblyName>
     <RootNamespace>PusulaAktarim</RootNamespace>
     <!-- Servisteki MIN_ISTEMCI_SURUM ile karÅŸÄ±laÅŸtÄ±rÄ±lÄ±r (eskiyse 426). -->
-    <Version>0.2.4</Version>
+    <Version>0.2.5</Version>
     <Company>Pusula YazÄ±lÄ±m</Company>
     <Product>Pusula AktarÄ±m</Product>
     <AssemblyTitle>Pusula AktarÄ±m</AssemblyTitle>

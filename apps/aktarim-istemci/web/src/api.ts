@@ -107,6 +107,8 @@ export type Aktarim = {
   bitti: boolean;
   bilgi: string | null;
   bildirildi: boolean;
+  /** Yükleme bitti, bildirildi (ve ayırma seçildiyse ayrıldı) → yeni kodla başka aktarım başlatılabilir. */
+  yeniAktarimOlur?: boolean;
   veritabanlariAyir?: boolean;
   yedekKlasoru: string;
   /** Pusula tarafında sunuculara taşıma: yuklendi → aktariliyor → tamamlandi | hata */
