@@ -70,7 +70,7 @@ async function atanmisFirmalar(
       email:       x.email ?? "",
       ou:          x.ou ?? "",
       enabled:     x.enabled ?? true,
-      lastLogin:   x.last_login ?? "",
+      lastLogin:   trSaat(x.last_login),
       /*  Grup uyeligi DB'de tutulmuyor (yalniz canli AD taramasinda var).  */
       groups:      [],
     }
@@ -95,6 +95,10 @@ async function atanmisFirmalar(
 
   return { companies, users }
 }
+
+/** timestamptz (UTC) → "yyyy-aa-gg SS:dd" Türkiye saatiyle. */
+const trSaat = (iso: string | null | undefined): string =>
+  iso ? new Date(iso).toLocaleString("sv-SE", { timeZone: "Europe/Istanbul" }).slice(0, 16) : ""
 
 /**
  * GET /api/servers/[id]/detail

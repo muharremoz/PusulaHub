@@ -7,6 +7,10 @@ import { getSupabaseServer } from "@/lib/supabase/server"
  * Tablo, agent raporlarından agent-poller tarafından doldurulur.
  */
 
+/** timestamptz (UTC) → "yyyy-aa-gg SS:dd" Türkiye saatiyle. */
+const trSaat = (iso: string | null | undefined): string =>
+  iso ? new Date(iso).toLocaleString("sv-SE", { timeZone: "Europe/Istanbul" }).slice(0, 16) : ""
+
 export interface ADUserDto {
   id:          string
   username:    string
@@ -46,7 +50,7 @@ export async function GET() {
       email:       r.email,
       ou:          r.ou,
       enabled:     !!r.enabled,
-      lastLogin:   r.last_login ? r.last_login.slice(0, 16).replace("T", " ") : "",
+      lastLogin:   trSaat(r.last_login),
       createdAt:   r.created_at ? r.created_at.slice(0, 10) : "",
       server:      r.server ?? "",
     }))

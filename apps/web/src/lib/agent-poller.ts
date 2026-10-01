@@ -160,6 +160,27 @@ const POLL_INTERVAL_MS = 10_000  // 10 saniye
 const isReadOnly = (): boolean => process.env.POLLER_READONLY === "1"
 const toIso = (d: Date | null): string => (d ? d.toISOString() : "")
 
+/**
+ * Agent'ın gönderdiği tarihi ayrıştırır. Agent sunucu saatiyle "gg.aa.yyyy SS:dd" yazar
+ * (PusulaAgent.cs → dt.ToString("dd.MM.yyyy HH:mm")). `new Date("01.10.2026 12:38")`
+ * bunu AY.GÜN sanıp 10 Ocak yapıyordu; Türk biçimi burada elle çözülür. Sunucular
+ * Türkiye saatinde (UTC+3, yaz saati yok). ISO gibi diğer biçimler Date'e bırakılır.
+ */
+export function agentTarihi(raw: string | null | undefined): Date | null {
+  if (!raw) return null
+  const t = raw.trim()
+  if (!t || ["Hiç", "Hic", "Yok", "NULL"].includes(t)) return null
+  const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(t)
+  if (m) {
+    const [, g, a, y, ss = "0", dd = "0", sn = "0"] = m
+    const iki = (x: string) => x.padStart(2, "0")
+    const d = new Date(`${y}-${iki(a)}-${iki(g)}T${iki(ss)}:${iki(dd)}:${iki(sn)}+03:00`)
+    return isNaN(d.getTime()) ? null : d
+  }
+  const d = new Date(t)
+  return isNaN(d.getTime()) ? null : d
+}
+
 /* Agent state_desc UPPERCASE döner → normalize (eski CHECK constraint uyumu). */
 function normalizeDbStatus(raw: string | null | undefined): string {
   const s = (raw ?? "").trim().toUpperCase()
@@ -223,10 +244,7 @@ async function persistHeavyData(serverName: string, report: AgentReport, force =
       const users: unknown[] = []
       for (const company of report.ad.companies) {
         for (const user of company.users) {
-          let lastLogin: Date | null = null
-          if (user.lastLogin && !["Hiç", "Yok", ""].includes(user.lastLogin)) {
-            const p = new Date(user.lastLogin); if (!isNaN(p.getTime())) lastLogin = p
-          }
+          const lastLogin = agentTarihi(user.lastLogin)
           users.push({
             id: `${serverName}_${user.username}`.replace(/\s/g, "_"),
             username: user.username, displayName: user.displayName ?? "", email: user.email ?? "",
@@ -296,9 +314,7 @@ async function persistSqlDatabases(serverName: string, report: AgentReport): Pro
       const parseDate = (raw: Date | string | null | undefined): string => {
         if (!raw) return ""
         if (raw instanceof Date) return !isNaN(raw.getTime()) ? raw.toISOString() : ""
-        if (typeof raw === "string" && raw && !["Hiç", "Yok", "NULL", ""].includes(raw)) {
-          const d = new Date(raw); return !isNaN(d.getTime()) ? d.toISOString() : ""
-        }
+        if (typeof raw === "string") return toIso(agentTarihi(raw))
         return ""
       }
       const dbs = sourceDbs
