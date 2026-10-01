@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 
 import { Combobox } from "@/components/ui/combobox"
+import { firmaAra } from "@/lib/firma-arama"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@muharremoz/pusula-ui"
 import { copyToClipboard } from "@/lib/clipboard"
@@ -466,14 +467,7 @@ function NewTransferDialog({
   }, [open])
 
   const firmaFiltered = useMemo(() => {
-    const q = firmaSearch.trim().toLowerCase()
-    const list = !q
-      ? firmas.slice(0, 50)
-      : firmas
-          .filter((f) =>
-            f.firma.toLowerCase().includes(q) || (f.firkod || "").toLowerCase().includes(q),
-          )
-          .slice(0, 50)
+    const list = firmaAra(firmas, firmaSearch, (f) => f.firkod || "", (f) => f.firma)
     // Combobox seçili değeri yalnız `items` içinden bulur. Seçilen firma ilk 50'de
     // değilse (arama temizlenince) tetikleyicide "Firma seç..." görünüyordu.
     if (firma && !list.some((f) => f.firkod === firma.firkod)) return [firma, ...list]
@@ -554,12 +548,10 @@ function NewTransferDialog({
                   <span>{f.firma}</span>
                 </span>
               )}
-              renderItem={(f) => (
-                <span className="flex min-w-0 items-center">
-                  <span className="font-mono text-muted-foreground mr-2 shrink-0">{f.firkod}</span>
-                  <span className="truncate">{f.firma}</span>
-                </span>
-              )}
+              columns={[
+                { baslik: "Firma No", hucre: (f) => <span className="font-mono text-muted-foreground">{f.firkod}</span>, className: "w-16 shrink-0" },
+                { baslik: "Firma Adı", hucre: (f) => f.firma },
+              ]}
             />
           </div>
 

@@ -9,6 +9,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from "@/components/ui/combobox-select"
 
 import { Combobox } from "@/components/ui/combobox"
+import { firmaAra } from "@/lib/firma-arama"
 import { cn } from "@/lib/utils"
 import { FolderOpen, Globe, Loader2, Check } from "lucide-react"
 import type { WizardServiceDto } from "@/app/api/services/route"
@@ -103,12 +104,7 @@ export function IISSiteSheet({ open, onOpenChange, onSaved }: IISSiteSheetProps)
   const [hizmet,   setHizmet]   = useState("")
   const [status,   setStatus]   = useState("Started")
 
-  const firmaFiltered = firmaSearch.trim()
-    ? firmalar.filter((c) => {
-        const q = firmaSearch.toLowerCase()
-        return c.firkod.toLowerCase().includes(q) || c.firma.toLowerCase().includes(q)
-      }).slice(0, 50)
-    : firmalar.slice(0, 50)
+  const firmaFiltered = firmaAra(firmalar, firmaSearch, (c) => c.firkod, (c) => c.firma)
 
   const handleReset = () => {
     setSiteName(""); setServer("")
@@ -152,12 +148,10 @@ export function IISSiteSheet({ open, onOpenChange, onSaved }: IISSiteSheetProps)
                   searchPlaceholder="Firma adı veya kodu…"
                   emptyText="Bulunamadı"
                   maxListHeight="max-h-52"
-                  renderItem={(c) => (
-                    <span className="flex min-w-0 items-center">
-                      <span className="font-mono text-muted-foreground mr-2 shrink-0">{c.firkod}</span>
-                      <span className="truncate">{c.firma}</span>
-                    </span>
-                  )}
+                  columns={[
+                    { baslik: "Firma No", hucre: (c) => <span className="font-mono text-muted-foreground">{c.firkod}</span>, className: "w-16 shrink-0" },
+                    { baslik: "Firma Adı", hucre: (c) => c.firma },
+                  ]}
                 />
               </Field>
               <Field label="Hizmet">

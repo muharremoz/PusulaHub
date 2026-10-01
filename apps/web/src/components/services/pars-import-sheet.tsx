@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from "@/components/ui/sheet"
 import { Combobox } from "@/components/ui/combobox"
+import { firmaAra } from "@/lib/firma-arama"
 import { Checkbox } from "@/components/shared/form"
 import { Skeleton } from "@/components/ui/skeleton"
 import { AlertTriangle, Loader2, Building2, Search, X, Download } from "lucide-react"
@@ -40,6 +41,7 @@ export function ParsImportSheet({ open, onOpenChange, service, onImported }: Pro
   /** parsUserId → elle seçilen firma kodu (tespit edileni de ezer) */
   const [firmaSecim, setFirmaSecim] = useState<Record<number, string>>({})
   const [arama, setArama]       = useState("")
+  const [firmaArama, setFirmaArama] = useState("")
   const [aktariliyor, setAktariliyor] = useState(false)
 
   useEffect(() => {
@@ -224,7 +226,14 @@ export function ParsImportSheet({ open, onOpenChange, service, onImported }: Pro
                             <span className="text-[11px] font-mono">{r.hubFirmaId}</span>
                           ) : (
                             <Combobox
-                              items={firmalar}
+                              items={(() => {
+                                const l = firmaAra(firmalar, firmaArama, (f) => f.firkod, (f) => f.firma)
+                                const s = kod ? firmalar.find((f) => f.firkod === kod) : undefined
+                                return s && !l.includes(s) ? [s, ...l] : l
+                              })()}
+                              search={firmaArama}
+                              onSearchChange={setFirmaArama}
+                              contentClassName="min-w-72"
                               getKey={(f) => f.firkod}
                               getLabel={(f) => `${f.firkod} ${f.firma}`}
                               value={kod}
@@ -232,7 +241,10 @@ export function ParsImportSheet({ open, onOpenChange, service, onImported }: Pro
                               placeholder="Firma seç…"
                               searchPlaceholder="Firma ara…"
                               renderValue={(f) => <span className="truncate text-[12px]"><span className="font-mono">{f.firkod}</span> {f.firma}</span>}
-                              renderItem={(f) => <span className="truncate text-[12px]"><span className="font-mono">{f.firkod}</span> {f.firma}</span>}
+                              columns={[
+                                { baslik: "Firma No", hucre: (f) => <span className="font-mono text-muted-foreground">{f.firkod}</span>, className: "w-16 shrink-0" },
+                                { baslik: "Firma Adı", hucre: (f) => f.firma },
+                              ]}
                               className={cn("h-7", !kod && "border-amber-500/50")}
                             />
                           )}

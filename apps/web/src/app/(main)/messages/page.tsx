@@ -20,6 +20,7 @@ import {
 } from "@muharremoz/pusula-ui"
 
 import { ComboboxMulti } from "@/components/ui/combobox"
+import { firmaAra } from "@/lib/firma-arama"
 import { ListeKarti, ListeThead } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre, TarihFiltre, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
 import {
@@ -547,9 +548,7 @@ export default function MessagesPage() {
                           <ComboboxMulti
                             items={
                               companyPickerSearch.trim()
-                                ? companies.filter((c) =>
-                                    c.name.toLowerCase().includes(companyPickerSearch.toLowerCase()),
-                                  ).slice(0, 50)
+                                ? firmaAra(companies, companyPickerSearch, (c) => c.id, (c) => c.name)
                                 : companies.slice(0, 50)
                             }
                             getKey={(c) => c.id}
@@ -562,15 +561,12 @@ export default function MessagesPage() {
                             searchPlaceholder="Firma ara..."
                             emptyText="Sonuç bulunamadı"
                             renderSummary={(v) => `${v.length} firma seçildi`}
-                            renderItem={(c) => (
-                              <span className="flex min-w-0 items-center gap-2">
-                                <Building2 className="h-3 w-3 text-muted-foreground shrink-0" />
-                                <span className="flex-1 truncate">{c.name}</span>
-                                <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
-                                  {c.userCount}
-                                </span>
-                              </span>
-                            )}
+                            contentClassName="min-w-80"
+                            columns={[
+                              { baslik: "Firma No", hucre: (c) => <span className="font-mono text-muted-foreground">{c.id}</span>, className: "w-16 shrink-0" },
+                              { baslik: "Firma Adı", hucre: (c) => c.name },
+                              { baslik: "Kullanıcı", hucre: (c) => <span className="text-muted-foreground tabular-nums">{c.userCount}</span>, className: "w-16 shrink-0 text-right" },
+                            ]}
                           />
 
                           {/* Seçilen firma chip'leri */}

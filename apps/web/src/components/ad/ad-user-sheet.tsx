@@ -195,18 +195,11 @@ export function ADUserSheet({ open, onOpenChange }: ADUserSheetProps) {
                       </span>
                     </span>
                   )}
-                  renderItem={(c) => (
-                    <span className="flex w-full min-w-0 items-center justify-between gap-2">
-                      <span className="min-w-0 truncate">
-                        <span className="font-medium">{c.name}</span>
-                        <span className="text-[10px] text-muted-foreground ml-1.5">{c.sector}</span>
-                      </span>
-                      <span className="flex items-center gap-0.5 text-[9px] font-medium bg-muted text-muted-foreground px-1.5 py-0.5 rounded-[5px] shrink-0">
-                        <Users className="size-2.5" />
-                        {c.userCount}
-                      </span>
-                    </span>
-                  )}
+                  columns={[
+                    { baslik: "Firma", hucre: (c) => c.name },
+                    { baslik: "Sektör", hucre: (c) => <span className="text-muted-foreground">{c.sector}</span>, className: "w-24 shrink-0" },
+                    { baslik: "Kullanıcı", hucre: (c) => <span className="text-muted-foreground tabular-nums">{c.userCount}</span>, className: "w-14 shrink-0 text-right" },
+                  ]}
                 />
 
                 {/* Seçili firma bilgi satırı */}
