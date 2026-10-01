@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, CheckCircle2, CircleAlert, Download, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
-  Server, ShieldCheck, WifiOff, XCircle,
+  Laptop, Server, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -54,27 +54,58 @@ export function AnaEkran({ durum, setDurum }: P) {
   const sifreGoster = !k.rdpSifre.kayitli || sifreFormu;
 
   return (
-    <div className="min-h-svh bg-muted/40">
-      <header className="flex items-center gap-3 border-b bg-card px-5 py-3">
-        <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-          <PlugZap className="size-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-xs text-muted-foreground">Pusula Connect · {kayit.firmaId}</div>
-          <div className="truncate text-sm font-semibold">
-            {kayit.firmaAdi} <span className="font-normal text-muted-foreground">· {kayit.kullanici}</span>
+    <div className="flex h-svh overflow-hidden bg-muted/40">
+      {/* ── Sol: firma bilgileri ───────────────────────────── */}
+      <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
+        <div className="flex items-center gap-2.5 border-b px-5 py-4">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <PlugZap className="size-5" />
+          </span>
+          <div>
+            <div className="text-sm font-semibold">Pusula Connect</div>
+            <div className="text-xs text-muted-foreground">v{durum.surum}</div>
           </div>
         </div>
-        {durum.guncelleme.mevcut ? (
-          <Button size="sm" variant="outline" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
-            {durum.guncelleme.suruyor ? <Loader2 className="animate-spin" /> : <Download />} Güncelle ({durum.guncelleme.surum})
-          </Button>
-        ) : (
-          <span className="text-xs text-muted-foreground">v{durum.surum}</span>
-        )}
-      </header>
 
-      <main className="mx-auto flex max-w-2xl flex-col gap-4 p-5">
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+          <div>
+            <div className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Firma</div>
+            <div className="mt-1 text-base leading-snug font-semibold">{kayit.firmaAdi}</div>
+            <div className="mt-0.5 font-mono text-xs text-muted-foreground">#{kayit.firmaId}</div>
+          </div>
+          <dl className="flex flex-col gap-3 text-sm">
+            <SolSatir ikon={<UserRound />} ad="Kullanıcı" deger={<span className="font-mono">{kayit.kullanici}</span>} />
+            <SolSatir ikon={<Laptop />} ad="Bu bilgisayar" deger={durum.makine} />
+            <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-mono">{kayit.profil.rdp}</span>} />
+            <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-mono">{kayit.profil.tunel}</span>} />
+          </dl>
+
+          {durum.guncelleme.mevcut && (
+            <Button size="sm" variant="outline" className="self-start" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
+              {durum.guncelleme.suruyor ? <Loader2 className="animate-spin" /> : <Download />} Güncelle ({durum.guncelleme.surum})
+            </Button>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-1 border-t px-3 py-3">
+          <Button variant="ghost" size="sm" className="justify-start" disabled={!!bekle} onClick={() => void cagir("/kontrol", {}, "kontrol")}>
+            {bekle === "kontrol" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden kontrol et
+          </Button>
+          {k.rdpSifre.kayitli && !sifreFormu && (
+            <Button variant="ghost" size="sm" className="justify-start" onClick={() => setSifreFormu(true)}>
+              <KeyRound /> Şifreyi değiştir
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" className="justify-start" onClick={() => void api("/gunluk/ac", {})}>
+            <FileText /> Günlük
+          </Button>
+          <img src={pusulaLogo} alt="Pusula Yazılım" className="mt-2 ml-2 h-5 w-auto self-start select-none opacity-70" draggable={false} />
+        </div>
+      </aside>
+
+      {/* ── Orta: bağlantı durumu ──────────────────────────── */}
+      <main className="flex min-w-0 flex-1 justify-center overflow-y-auto">
+      <div className="flex w-full max-w-2xl flex-col gap-4 p-6">
         {!durum.servisErisim && (
           <Alert>
             <WifiOff />
@@ -214,22 +245,13 @@ export function AnaEkran({ durum, setDurum }: P) {
         </Button>
         {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
 
-        <div className="flex flex-wrap items-center justify-center gap-1 text-xs text-muted-foreground">
-          <Button variant="ghost" size="sm" disabled={!!bekle} onClick={() => void cagir("/kontrol", {}, "kontrol")}>
-            {bekle === "kontrol" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden kontrol et
-          </Button>
-          {k.rdpSifre.kayitli && !sifreFormu && (
-            <Button variant="ghost" size="sm" onClick={() => setSifreFormu(true)}>
-              <KeyRound /> Şifreyi değiştir
-            </Button>
-          )}
-          <Button variant="ghost" size="sm" onClick={() => void api("/gunluk/ac", {})}>
-            <FileText /> Günlük
-          </Button>
-        </div>
-
-        <img src={pusulaLogo} alt="Pusula Yazılım" className="mx-auto mt-2 h-6 w-auto select-none opacity-70" draggable={false} />
+      </div>
       </main>
+
+      {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
+      <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
+        <BaglantiGorseli bagli={k.terminal.erisim} />
+      </aside>
     </div>
   );
 }
@@ -259,5 +281,68 @@ function Bolum({ baslik, ikon, children }: { baslik: string; ikon: React.ReactNo
       </h2>
       {children}
     </section>
+  );
+}
+
+function SolSatir({ ikon, ad, deger }: { ikon: React.ReactNode; ad: string; deger: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-2.5 [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted-foreground">
+      {ikon}
+      <div className="min-w-0">
+        <dt className="text-xs text-muted-foreground">{ad}</dt>
+        <dd className="truncate">{deger}</dd>
+      </div>
+    </div>
+  );
+}
+
+/** Sağ panelin yer tutucu görseli: bilgisayar → güvenli tünel → Pusula sunucusu. */
+function BaglantiGorseli({ bagli }: { bagli: boolean }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
+      <svg viewBox="0 0 300 220" className="w-full max-w-[300px]" role="img" aria-label="Bilgisayardan Pusula sunucusuna güvenli bağlantı">
+        {/* arka plan halkaları */}
+        <g className="text-primary" fill="none" stroke="currentColor" strokeOpacity="0.08">
+          <circle cx="150" cy="110" r="100" />
+          <circle cx="150" cy="110" r="70" />
+          <circle cx="150" cy="110" r="40" />
+        </g>
+        {/* bağlantı hattı */}
+        <g className={bagli ? "text-emerald-500" : "text-muted-foreground"}>
+          <path d="M74 110 H228" stroke="currentColor" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 8" fill="none">
+            {bagli && <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />}
+          </path>
+        </g>
+        {/* bilgisayar */}
+        <g className="text-foreground" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round">
+          <rect x="22" y="82" width="48" height="34" rx="4" className="fill-card" />
+          <path d="M14 124 H78 L72 132 H20 Z" className="fill-card" />
+        </g>
+        {/* kalkan (VPN) */}
+        <g transform="translate(150 110)">
+          <circle r="26" className="fill-card text-primary" stroke="currentColor" strokeWidth="2.5" />
+          <path d="M0 -14 L11 -9 V0 C11 8 5 13 0 15 C-5 13 -11 8 -11 0 V-9 Z" className={bagli ? "fill-emerald-500/20 text-emerald-600" : "fill-primary/10 text-primary"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          {bagli && <path d="M-5 0 L-1 4 L6 -4" fill="none" className="text-emerald-600" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
+        </g>
+        {/* sunucu */}
+        <g className="text-foreground" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <rect x="234" y="78" width="44" height="18" rx="3" className="fill-card" />
+          <rect x="234" y="100" width="44" height="18" rx="3" className="fill-card" />
+          <rect x="234" y="122" width="44" height="18" rx="3" className="fill-card" />
+          <g className={bagli ? "text-emerald-500" : "text-muted-foreground"} fill="currentColor" stroke="none">
+            <circle cx="268" cy="87" r="2.5" /><circle cx="268" cy="109" r="2.5" /><circle cx="268" cy="131" r="2.5" />
+          </g>
+        </g>
+        <text x="46" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">Bu bilgisayar</text>
+        <text x="150" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">VPN</text>
+        <text x="256" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">Pusula</text>
+      </svg>
+      <div>
+        <div className="text-lg font-semibold">{bagli ? "Pusula'ya bağlantı hazır" : "Pusula'ya güvenli bağlantı"}</div>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {bagli ? "VPN açık, sunucuya erişiliyor." : "VPN ile şifreli tünel kurulur, programınız Pusula sunucusunda çalışır."}
+        </p>
+      </div>
+    </div>
   );
 }
