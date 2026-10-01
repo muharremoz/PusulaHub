@@ -5,7 +5,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Kabuk } from "./ortak";
+import { Ipucu, Kabuk } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -50,7 +50,7 @@ export function SqlGirisEkrani({ durum, setDurum }: P) {
                 <div className="min-w-0">
                   <span className="font-mono">{d.sunucu}</span>
                   <span className="text-muted-foreground"> · {d.kaynak === "windows" ? "Windows oturumu" : d.kaynak}</span>
-                  {d.hata && <div className="truncate text-muted-foreground" title={d.hata}>{d.hata}</div>}
+                  {d.hata && <Ipucu metin={d.hata}><div className="truncate text-muted-foreground">{d.hata}</div></Ipucu>}
                 </div>
               </div>
             ))}

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/pagination";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { mb } from "./ortak";
+import { Ipucu, mb } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -290,13 +290,14 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 <TableHeader>
                   <TableRow className="text-[10px] uppercase tracking-wider">
                     <TableHead className="w-10 pl-4">
-                      <Checkbox
-                        checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
-                        disabled={secilebilir.length === 0}
-                        onCheckedChange={(c) => tumunuSec(c === true)}
-                        aria-label="Listelenenlerin tümünü seç"
-                        title="Listelenenlerin (filtreye uyan) tümünü seç / kaldır"
-                      />
+                      <Ipucu metin="Listelenenlerin (filtreye uyan) tümünü seç / kaldır">
+                        <Checkbox
+                          checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
+                          disabled={secilebilir.length === 0}
+                          onCheckedChange={(c) => tumunuSec(c === true)}
+                          aria-label="Listelenenlerin tümünü seç"
+                        />
+                      </Ipucu>
                     </TableHead>
                     <TableHead className="px-4">Veritabanı</TableHead>
                     <TableHead className="px-4">Şirket</TableHead>
@@ -346,9 +347,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
                           <TableCell
                             className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
-                            title={v.sonHareket ? "CarHrk tablosundaki en son cari hareket tarihi" : "CarHrk tablosu yok veya okunamadı"}
                           >
-                            {v.sonHareket ? new Date(v.sonHareket).toLocaleDateString("tr") : "—"}
+                            <Ipucu metin={v.sonHareket ? "Son cari hareket (CarHrk)" + (eskiYilMi(v) ? " — eski yıl datası" : "") : "CarHrk tablosu yok veya okunamadı"}>
+                              <span>{v.sonHareket ? new Date(v.sonHareket).toLocaleDateString("tr") : "—"}</span>
+                            </Ipucu>
                           </TableCell>
                           <TableCell className="px-4 text-muted-foreground">{v.sonYedek ? new Date(v.sonYedek).toLocaleDateString("tr") : "—"}</TableCell>
                           {hedef.depo && (
@@ -437,9 +439,15 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 aria-label={s.yol + " aktarılsın"}
                               />
                             </TableCell>
-                            <TableCell className="max-w-72 truncate px-4 font-mono text-xs" title={s.yol}>{s.yol}</TableCell>
-                            <TableCell className="max-w-56 truncate px-4 text-muted-foreground" title={k.kullananlar.join(", ")}>
-                              {k.kullananlar.length === 0 ? "—" : k.kullananlar.length <= 2 ? k.kullananlar.join(", ") : `${k.kullananlar[0]} +${k.kullananlar.length - 1}`}
+                            <TableCell className="max-w-72 px-4 font-mono text-xs">
+                              <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
+                            </TableCell>
+                            <TableCell className="max-w-56 px-4 text-muted-foreground">
+                              <Ipucu metin={k.kullananlar.length > 2 ? k.kullananlar.join(", ") : undefined}>
+                                <div className="truncate">
+                                  {k.kullananlar.length === 0 ? "—" : k.kullananlar.length <= 2 ? k.kullananlar.join(", ") : `${k.kullananlar[0]} +${k.kullananlar.length - 1}`}
+                                </div>
+                              </Ipucu>
                             </TableCell>
                             <TableCell className="px-4 text-right tabular-nums">
                               {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
@@ -497,7 +505,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           onCheckedChange={(c) => setProgramlar((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="truncate font-mono text-xs" title={s.yol}>{s.yol}</div>
+                          <Ipucu metin={s.yol}><div className="truncate font-mono text-xs">{s.yol}</div></Ipucu>
                           <div className="truncate text-xs text-muted-foreground">
                             {p.parametreler.map((x) => `${x.ad}${x.dataKodu ? ` (${x.dataKodu})` : ""}`).join(", ")}
                           </div>
@@ -621,7 +629,7 @@ function Bilgi({ l, v, mono }: { l: string; v: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
       <div className="text-[11px] text-muted-foreground">{l}</div>
-      <div className={`truncate ${mono ? "font-mono" : ""}`} title={v}>{v || "—"}</div>
+      <Ipucu metin={v}><div className={`truncate ${mono ? "font-mono" : ""}`}>{v || "—"}</div></Ipucu>
     </div>
   );
 }
@@ -629,7 +637,7 @@ function Bilgi({ l, v, mono }: { l: string; v: string; mono?: boolean }) {
 function SatirSil({ metin, onSil }: { metin: string; onSil: () => void }) {
   return (
     <div className="flex items-center gap-2 border-b px-4 py-2 last:border-b-0">
-      <span className="min-w-0 flex-1 truncate font-mono text-xs" title={metin}>{metin}</span>
+      <Ipucu metin={metin}><span className="min-w-0 flex-1 truncate font-mono text-xs">{metin}</span></Ipucu>
       <Button variant="ghost" size="icon" className="size-7" onClick={onSil} aria-label="Kaldır">
         <X />
       </Button>

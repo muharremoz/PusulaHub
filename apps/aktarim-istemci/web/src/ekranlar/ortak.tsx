@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { api } from "@/api";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import pusulaLogo from "@/assets/pusula-logo.png";
 
 /** Ortalanmış giriş kartı — giriş, bağlantı ve bekleme ekranları. */
@@ -41,3 +42,17 @@ export const cikisYap = () => api("/cikis", {}).catch(() => {});
 
 export const mb = (x: number) =>
   x >= 1024 ? `${(x / 1024).toLocaleString("tr", { maximumFractionDigits: 1 })} GB` : `${x.toLocaleString("tr", { maximumFractionDigits: 0 })} MB`;
+
+/**
+ * shadcn ipucu — native `title` yerine. Çocuk tek bir eleman olmalı (asChild).
+ * `metin` boşsa ipucu hiç kurulmaz.
+ */
+export function Ipucu({ metin, children }: { metin?: ReactNode; children: ReactNode }) {
+  if (!metin) return <>{children}</>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="max-w-md break-all">{metin}</TooltipContent>
+    </Tooltip>
+  );
+}
