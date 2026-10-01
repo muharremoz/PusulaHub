@@ -58,13 +58,15 @@ export function AnaEkran({ durum, setDurum }: P) {
   };
 
   const vk = durum.vpnKurulum;
+  // Bağlanmak için gereken dört parçadan eksik olanlar (orta panel başlığındaki rozet)
+  const eksikAdim = [k.forti.kurulu, k.profil.dogru, k.terminal.erisim, k.rdpSifre.kayitli].filter((x) => !x).length;
   const sifreGoster = !k.rdpSifre.kayitli || sifreFormu;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
       {/* ── Sol: firma bilgileri ───────────────────────────── */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="border-b px-5 py-1.5">
+        <div className="flex h-16 shrink-0 items-center justify-center border-b px-5">
           <ParlayanLogo />
         </div>
 
@@ -115,21 +117,47 @@ export function AnaEkran({ durum, setDurum }: P) {
       {/* ── Orta: bağlantı durumu ──────────────────────────── */}
       {talepAcik ? (
         <main className="flex min-w-0 flex-1 flex-col">
-          <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
-            <Button variant="ghost" size="sm" onClick={() => setTalepAcik(false)}>
-              <ArrowLeft /> Bağlantı ekranına dön
-            </Button>
-            <span className="flex-1 text-center text-sm font-medium">Yardım talebi</span>
-            <Button variant="ghost" size="sm" asChild>
-              <a href={talepAdresi(kayit.firmaId)} target="_blank" rel="noreferrer">
-                <ExternalLink /> Tarayıcıda aç
-              </a>
-            </Button>
-          </div>
+          <OrtaBaslik
+            sol={
+              <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setTalepAcik(false)} aria-label="Bağlantı ekranına dön">
+                <ArrowLeft />
+              </Button>
+            }
+            baslik="Yardım talebi"
+            alt="Pusula destek ekibine iletilir"
+            sag={
+              <Button variant="ghost" size="sm" asChild>
+                <a href={talepAdresi(kayit.firmaId)} target="_blank" rel="noreferrer">
+                  <ExternalLink /> Tarayıcıda aç
+                </a>
+              </Button>
+            }
+          />
           <iframe src={talepAdresi(kayit.firmaId)} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
         </main>
       ) : (
-      <main className="flex min-w-0 flex-1 justify-center overflow-y-auto">
+      <main className="flex min-w-0 flex-1 flex-col">
+      <OrtaBaslik
+        baslik="Bağlantı"
+        alt={k.terminal.zaman ? `Son kontrol ${new Date(k.terminal.zaman).toLocaleTimeString("tr", { hour: "2-digit", minute: "2-digit" })}` : "Kontrol ediliyor…"}
+        rozet={
+          eksikAdim === 0 ? (
+            <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+              <CheckCircle2 className="size-3.5" /> Hazır
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+              <CircleAlert className="size-3.5" /> {eksikAdim} adım eksik
+            </span>
+          )
+        }
+        sag={
+          <Button variant="ghost" size="icon" disabled={!!bekle} onClick={() => void cagir("/kontrol", {}, "kontrol")} aria-label="Yeniden kontrol et">
+            {bekle === "kontrol" ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+          </Button>
+        }
+      />
+      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="flex w-full max-w-2xl flex-col gap-4 p-6">
         {!durum.servisErisim && (
           <Alert>
@@ -284,6 +312,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         </div>
 
       </div>
+      </div>
       </main>
       )}
 
@@ -413,5 +442,22 @@ function ParlayanLogo() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Orta panelin üst şeridi — bağlantı ve yardım talebi görünümlerinde aynı. */
+function OrtaBaslik({ sol, baslik, alt, rozet, sag }: { sol?: React.ReactNode; baslik: string; alt?: string; rozet?: React.ReactNode; sag?: React.ReactNode }) {
+  return (
+    <header className="flex h-16 shrink-0 items-center gap-3 border-b bg-card px-6">
+      {sol}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h1 className="text-base font-semibold">{baslik}</h1>
+          {rozet}
+        </div>
+        {alt && <div className="text-xs text-muted-foreground">{alt}</div>}
+      </div>
+      {sag}
+    </header>
   );
 }
