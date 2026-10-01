@@ -272,9 +272,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
       </ToggleGroup>
     );
 
-  const sekmeSayi = (n: number) =>
-    n > 0 ? <Badge variant="secondary" className="ml-1 h-4 min-w-4 rounded-full px-1 text-[10px] tabular-nums">{n}</Badge> : null;
-
   return (
     <div className="min-h-svh bg-muted/40 pb-20">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
@@ -326,12 +323,12 @@ export function RaporEkrani({ durum, setDurum }: P) {
             </Bolum>
 
             <Tabs defaultValue="vt" className="gap-3">
-              <TabsList className="h-9">
-                <TabsTrigger value="vt" className="px-3"><Database /> Veritabanları {sekmeSayi(secili.size)}</TabsTrigger>
-                {hedef.depo && <TabsTrigger value="resim" className="px-3"><Image /> Resimler {sekmeSayi(resimSayisi)}</TabsTrigger>}
-                {hedef.depo && <TabsTrigger value="eski" className="px-3"><FileArchive /> Eski yıl dosyaları {sekmeSayi(eskiDosyalar.length)}</TabsTrigger>}
-                {hedef.rdp && <TabsTrigger value="program" className="px-3"><FolderOpen /> Programlar {sekmeSayi(programSayisi + programDosyaSayisi)}</TabsTrigger>}
-                {hedef.rdp && <TabsTrigger value="ek" className="px-3"><FolderPlus /> Ek klasörler {sekmeSayi(ekKlasorler.length)}</TabsTrigger>}
+              <TabsList className="p-1 group-data-horizontal/tabs:h-11">
+                <TabsTrigger value="vt" className="px-4 text-sm [&_svg]:size-4"><Database /> Veritabanları</TabsTrigger>
+                {hedef.depo && <TabsTrigger value="resim" className="px-4 text-sm [&_svg]:size-4"><Image /> Resimler</TabsTrigger>}
+                {hedef.depo && <TabsTrigger value="eski" className="px-4 text-sm [&_svg]:size-4"><FileArchive /> Eski yıl dosyaları</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="program" className="px-4 text-sm [&_svg]:size-4"><FolderOpen /> Programlar</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="ek" className="px-4 text-sm [&_svg]:size-4"><FolderPlus /> Ek klasörler</TabsTrigger>}
               </TabsList>
 
               {/* ── Veritabanları ───────────────────────────────────── */}
