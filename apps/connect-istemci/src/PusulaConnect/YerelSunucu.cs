@@ -288,7 +288,7 @@ namespace PusulaConnect
                 // Monaco (2. aşama) blob: işçi + satır içi stil kullanır.
                 sb.Append("Content-Security-Policy: default-src 'self'; script-src 'self'; ")
                   .Append("style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; ")
-                  .Append("worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'\r\n");
+                  .Append("worker-src 'self' blob:; connect-src 'self'; frame-src https://talep.pusulanet.net; frame-ancestors 'none'\r\n");
             }
             sb.Append("Connection: close\r\n\r\n");
             var bas = Encoding.ASCII.GetBytes(sb.ToString());

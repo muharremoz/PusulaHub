@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  AlertTriangle, CheckCircle2, CircleAlert, Download, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
+  AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
   Hash, Laptop, LifeBuoy, Server, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import pusulaLogo from "@/assets/pusula-logo.png";
+
+const TALEP_ADRESI = "https://talep.pusulanet.net";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -22,6 +24,8 @@ export function AnaEkran({ durum, setDurum }: P) {
   const [vpnUyari, setVpnUyari] = useState(false);
   const [sifre, setSifre] = useState("");
   const [sifreFormu, setSifreFormu] = useState(false);
+  // Yardım talebi orta panelde açılır (iframe); exe CSP'si yalnız bu adrese frame-src izni verir.
+  const [talepAcik, setTalepAcik] = useState(false);
 
   const cagir = async (yol: string, govde: unknown = {}, ad = yol) => {
     setBekle(ad);
@@ -106,6 +110,22 @@ export function AnaEkran({ durum, setDurum }: P) {
       </aside>
 
       {/* ── Orta: bağlantı durumu ──────────────────────────── */}
+      {talepAcik ? (
+        <main className="flex min-w-0 flex-1 flex-col">
+          <div className="flex items-center gap-2 border-b bg-card px-4 py-2">
+            <Button variant="ghost" size="sm" onClick={() => setTalepAcik(false)}>
+              <ArrowLeft /> Bağlantı ekranına dön
+            </Button>
+            <span className="flex-1 text-center text-sm font-medium">Yardım talebi</span>
+            <Button variant="ghost" size="sm" asChild>
+              <a href={TALEP_ADRESI} target="_blank" rel="noreferrer">
+                <ExternalLink /> Tarayıcıda aç
+              </a>
+            </Button>
+          </div>
+          <iframe src={TALEP_ADRESI} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
+        </main>
+      ) : (
       <main className="flex min-w-0 flex-1 justify-center overflow-y-auto">
       <div className="flex w-full max-w-2xl flex-col gap-4 p-6">
         {!durum.servisErisim && (
@@ -255,15 +275,14 @@ export function AnaEkran({ durum, setDurum }: P) {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">Yardım mı gerekiyor?</div>
           </div>
-          <Button variant="outline" asChild>
-            <a href="https://talep.pusulanet.net" target="_blank" rel="noreferrer">
-              <LifeBuoy /> Yardım talebi
-            </a>
+          <Button variant="outline" onClick={() => setTalepAcik(true)}>
+            <LifeBuoy /> Yardım talebi
           </Button>
         </div>
 
       </div>
       </main>
+      )}
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
