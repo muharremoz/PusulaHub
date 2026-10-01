@@ -86,6 +86,8 @@ export type Durum = {
   };
   /** Bu cihazda iki adımlı doğrulama (TOTP) açık mı. */
   ikiAdim?: { aktif: boolean };
+  /** Uygulama içi uzak masaüstü: açık mı, son oturum hatayla bittiyse mesajı. */
+  oturum?: { acik: boolean; mesaj: string | null };
   vpnKurulum: {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;

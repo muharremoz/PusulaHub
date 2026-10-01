@@ -136,11 +136,64 @@ namespace PusulaConnect
             BringToFront();
         }
 
+        // ------------------------------------------------------------ gömülü uzak masaüstü
+
+        private OturumPaneli _oturum;
+
+        /// <summary>Oturum açık mı (Uygulama.Durum için; her iş parçacığından okunabilir).</summary>
+        public bool OturumAcik => _oturum != null;
+
+        /// <summary>
+        /// Uzak masaüstünü pencerenin tamamında açar (arayüz gizlenir). Bitince arayüz geri gelir ve
+        /// <paramref name="bitti"/> (mesaj, şifreHatalı) çağrılır. UI iş parçacığında çalışır.
+        /// </summary>
+        public void OturumAc(RdpAyar a, Action<string, bool> bitti)
+        {
+            if (InvokeRequired) { Invoke((Action)(() => OturumAc(a, bitti))); return; }
+            if (_oturum != null) { OneGetir(); return; }
+            var p = new OturumPaneli(a);
+            p.Bitti += (mesaj, sifreHatali) =>
+            {
+                if (_oturum != p) return;
+                _oturum = null;
+                Controls.Remove(p);
+                _web.Visible = true;
+                p.Dispose();
+                bitti(mesaj, sifreHatali);
+            };
+            _oturum = p;
+            SuspendLayout();
+            Controls.Add(p);
+            p.BringToFront();
+            _web.Visible = false;
+            ResumeLayout();
+            OneGetir();
+            try { p.Baglan(); }
+            catch
+            {
+                _oturum = null;
+                Controls.Remove(p);
+                _web.Visible = true;
+                p.Dispose();
+                throw;
+            }
+        }
+
         private bool _sayfaHazir;
         private volatile bool _soruldu;
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            if (_oturum != null && !SormadanKapat && e.CloseReason == CloseReason.UserClosing)
+            {
+                // Oturum açıkken arayüz gizli; onay Windows kutusuyla sorulur.
+                var c = MessageBox.Show(this,
+                    "Pusula oturumu açık. Bağlantı kesilip uygulama kapatılsın mı?\n\nAçık programlarınız sunucuda çalışmaya devam eder; yeniden bağlanınca kaldığınız yerden sürer.",
+                    "Pusula Connect", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+                if (c != DialogResult.Yes) { e.Cancel = true; return; }
+                SormadanKapat = true;
+                try { _oturum.Kes(); } catch { }
+            }
             if (!SormadanKapat && e.CloseReason == CloseReason.UserClosing)
             {
                 // Önce konsolun kendi onay penceresi; sayfa 1,5 sn içinde yanıtlamazsa

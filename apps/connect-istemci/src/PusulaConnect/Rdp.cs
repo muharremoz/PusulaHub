@@ -10,72 +10,45 @@ using System.Threading.Tasks;
 namespace PusulaConnect
 {
     /// <summary>
-    /// Uzak masaüstü: şifre Windows kimlik kasasında (CredWrite, TERMSRV/{sunucu}) —
-    /// Connect 1.5 ile aynı. .rdp dosyası uygulamanın klasöründe üretilir (masaüstüne
-    /// dosya bırakmaya gerek yok, kısayol uygulamanın kendisi). Ayarlar Connect 1.5'teki
-    /// RdpYaz ile birebir (Terminal 1 kullanıcılarıyla aynı yönlendirmeler, sürücüler kapalı).
+    /// Uzak masaüstü şifresi ve yedek mstsc yolu. Oturum normalde Connect penceresinde açılır
+    /// (OturumPaneli); şifre DPAPI ile uygulama klasöründe durur — 2FA kapalıyken sabit entropiyle
+    /// (rdp-sifre-yerel.dat), açıkken servisin kasa anahtarıyla (rdp-sifre.dat). Ayarlar Connect
+    /// 1.5'teki RdpYaz ile birebir (Terminal 1 kullanıcılarıyla aynı yönlendirmeler, sürücüler kapalı).
     /// </summary>
     internal static class Rdp
     {
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct CREDENTIAL
-        {
-            public uint Flags, Type;
-            public string TargetName, Comment;
-            public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
-            public uint CredentialBlobSize;
-            public IntPtr CredentialBlob;
-            public uint Persist, AttributeCount;
-            public IntPtr Attributes;
-            public string TargetAlias, UserName;
-        }
-
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool CredWrite([In] ref CREDENTIAL c, [In] uint flags);
-        [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        private static extern bool CredRead(string target, uint type, int flags, out IntPtr cred);
         [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
         private static extern bool CredDelete(string target, uint type, int flags);
-        [DllImport("advapi32.dll")]
-        private static extern void CredFree(IntPtr cred);
 
         private const uint DomainPassword = 2;
 
-        /// <summary>Kimlik kasasında bu sunucu için kayıtlı kullanıcı adı (yoksa null). Şifre okunmaz.</summary>
-        public static string KayitliKullanici(string sunucu)
-        {
-            if (!CredRead("TERMSRV/" + sunucu, DomainPassword, 0, out var p)) return null;
-            try { return ((CREDENTIAL)Marshal.PtrToStructure(p, typeof(CREDENTIAL))).UserName; }
-            finally { CredFree(p); }
-        }
-
-        public static void SifreKaydet(string sunucu, string kullanici, string sifre)
-        {
-            var blob = Encoding.Unicode.GetBytes(sifre);
-            var p = Marshal.AllocCoTaskMem(blob.Length);
-            try
-            {
-                Marshal.Copy(blob, 0, p, blob.Length);
-                var c = new CREDENTIAL
-                {
-                    Type = DomainPassword,
-                    TargetName = "TERMSRV/" + sunucu,
-                    CredentialBlob = p,
-                    CredentialBlobSize = (uint)blob.Length,
-                    Persist = 2,   // CRED_PERSIST_LOCAL_MACHINE
-                    UserName = kullanici,
-                };
-                if (!CredWrite(ref c, 0)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-            }
-            finally
-            {
-                // Bellekteki şifre kopyasını sıfırla
-                Marshal.Copy(new byte[blob.Length], 0, p, blob.Length);
-                Marshal.FreeCoTaskMem(p);
-            }
-        }
-
+        /// <summary>
+        /// Eski sürümlerin (0.1.0–0.1.1) kimlik kasasına yazdığı TERMSRV/{sunucu} kaydını siler. Gömülü oturum
+        /// kimlik kasasından şifre OKUYAMAZ (alan adı şifreleri uygulamalara kapalı), bu yüzden artık
+        /// kullanılmıyor; orada kalsa mstsc ile kodsuz bağlanılabilirdi.
+        /// </summary>
         public static void SifreSil(string sunucu) => CredDelete("TERMSRV/" + sunucu, DomainPassword, 0);
+
+        // ------------------------------------------------------------ 2FA kapalıyken şifre
+        // DPAPI (yalnız bu Windows kullanıcısı açabilir), sabit ek entropiyle. Gömülü oturum şifreyi buradan alır.
+
+        private static string YerelDosya => Path.Combine(Kimlik.Klasor, "rdp-sifre-yerel.dat");
+        private static readonly byte[] YerelEntropi = Encoding.UTF8.GetBytes("pusula-connect-rdp");
+        public static bool YerelSifreVar => File.Exists(YerelDosya);
+
+        public static void YerelKaydet(string sifre) =>
+            File.WriteAllBytes(YerelDosya, ProtectedData.Protect(Encoding.UTF8.GetBytes(sifre), YerelEntropi, DataProtectionScope.CurrentUser));
+
+        public static string YerelOku()
+        {
+            try { return Encoding.UTF8.GetString(ProtectedData.Unprotect(File.ReadAllBytes(YerelDosya), YerelEntropi, DataProtectionScope.CurrentUser)); }
+            catch (Exception e) when (e is CryptographicException || e is FileNotFoundException)
+            {
+                throw new KullaniciHatasi("Kayıtlı oturum şifresi açılamadı. Şifrenizi yeniden kaydedin.");
+            }
+        }
+
+        public static void YerelSil() { try { File.Delete(YerelDosya); } catch { } }
 
         // ------------------------------------------------------------ 2FA açıkken şifre
         // Kimlik kasasında DURMAZ (orada dursa mstsc ile kodsuz bağlanılırdı). DPAPI ile, ek entropi
@@ -99,9 +72,9 @@ namespace PusulaConnect
         public static void KasaliSil() { try { File.Delete(KasaDosyasi); } catch { } }
 
         /// <summary>
-        /// .rdp üretip mstsc ile açar. Normalde şifre dosyada YOK — kimlik kasasından gelir.
-        /// 2FA açıkken şifre verilir: mstsc'nin kabul ettiği "password 51:b:" (DPAPI, bu kullanıcı) olarak
-        /// tek kullanımlık dosyaya yazılır; mstsc okuduktan sonra dosya silinir.
+        /// YEDEK YOL (WebView2 penceresi yoksa; normalde oturum OturumPaneli'nde açılır): .rdp üretip mstsc ile
+        /// açar. Şifre mstsc'nin kabul ettiği "password 51:b:" (DPAPI, bu kullanıcı) olarak tek kullanımlık
+        /// dosyaya yazılır; mstsc okuduktan sonra dosya silinir.
         /// </summary>
         public static void Baglan(string ad, string sunucu, int port, string domain, string kullanici, string sifre = null)
         {

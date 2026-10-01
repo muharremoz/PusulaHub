@@ -265,6 +265,13 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Bolum>
         )}
 
+        {durum.oturum?.mesaj && !hata && (
+          <Alert variant="destructive">
+            <XCircle />
+            <AlertDescription>{durum.oturum.mesaj}</AlertDescription>
+          </Alert>
+        )}
+
         {hata && !vpnUyari && (
           <Alert variant="destructive">
             <XCircle />

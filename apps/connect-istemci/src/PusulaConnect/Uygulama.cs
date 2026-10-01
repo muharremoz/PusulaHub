@@ -21,6 +21,14 @@ namespace PusulaConnect
         private string _mesaj;
         private bool _servisErisim = true;
 
+        /// <summary>
+        /// Gömülü oturum (Program bağlar → ConnectPenceresi.OturumAc). Null ise (WebView2 yok, tarayıcıda
+        /// çalışıyor) yedek yol: mstsc. Geri çağrı (mesaj, şifreHatalı) oturum bitince gelir.
+        /// </summary>
+        public Action<RdpAyar, Action<string, bool>> OturumAc;
+        public Func<bool> OturumAcikMi;
+        private string _oturumMesaji;
+
         // kontroller
         private string _fortiSurum;
         private bool _profilDogru;
@@ -117,6 +125,7 @@ namespace PusulaConnect
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
                     ikiAdim = new { aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true },
+                    oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     guncelleme = new
                     {
                         mevcut = _sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0,
@@ -160,10 +169,8 @@ namespace PusulaConnect
                 var rdp = P("rdp");
                 var forti = Fortinet.KuruluSurum();
                 var profil = P("tunel") != null && P("vpn") != null && Fortinet.ProfilDogru(P("tunel"), P("vpn"));
-                // 2FA açıkken şifre kimlik kasasında değil, kasa dosyasında
-                var rdpKullanici = IkiAktif
-                    ? (Rdp.KasaliSifreVar ? _kayit?.Value<string>("kullanici") : null)
-                    : rdp != null ? Rdp.KayitliKullanici(rdp) : null;
+                // 2FA açıkken kasa anahtarlı dosyada, kapalıyken yerel DPAPI dosyasında
+                var rdpKullanici = (IkiAktif ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar) ? _kayit?.Value<string>("kullanici") : null;
                 var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
                 var t = rdp != null ? await Rdp.Yokla(rdp, RdpPort) : (false, 0, "profil yok");
                 lock (_kilit)
@@ -212,14 +219,15 @@ namespace PusulaConnect
                 var j = await _servis.IkiDogrula(kod.Trim());
                 Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
                 Rdp.SifreSil(rdp);
+                Rdp.YerelSil();
+                lock (_kilit) _oturumMesaji = null;
                 Gunluk.Yaz("RDP şifresi kaydedildi (2FA kasası)");
                 await Kontrol();
                 return Durum();
             }
-            string kullanici;
-            lock (_kilit) kullanici = _kayit?.Value<string>("kullanici");
-            var domain = P("domain");
-            Rdp.SifreKaydet(rdp, string.IsNullOrEmpty(domain) ? kullanici : domain + "\\" + kullanici, sifre);
+            Rdp.YerelKaydet(sifre);
+            Rdp.SifreSil(rdp);
+            lock (_kilit) _oturumMesaji = null;
             Gunluk.Yaz("RDP şifresi kaydedildi (" + rdp + ")");
             await Kontrol();
             return Durum();
@@ -230,12 +238,14 @@ namespace PusulaConnect
             var rdp = P("rdp");
             if (rdp != null) Rdp.SifreSil(rdp);
             Rdp.KasaliSil();
+            Rdp.YerelSil();
             await Kontrol();
             return Durum();
         }
 
         public async Task<object> Baglan(string kod = null)
         {
+            if (OturumAcikMi?.Invoke() == true) throw new KullaniciHatasi("Oturum zaten açık.");
             var rdp = P("rdp") ?? throw new KullaniciHatasi("Profil yok.");
             var t = await Rdp.Yokla(rdp, RdpPort);
             lock (_kilit) { _terminal = t; _terminalZaman = DateTime.Now; }
@@ -243,19 +253,46 @@ namespace PusulaConnect
                 throw new KullaniciHatasi("Pusula sunucusuna ulaşılamıyor. Önce VPN'e bağlanın (FortiClient → Bağlan), sonra tekrar deneyin.");
             string kullanici;
             lock (_kilit) kullanici = _kayit?.Value<string>("kullanici");
-            if (IkiAktif)
+            string sifre;
+            var iki = IkiAktif;
+            if (iki)
             {
                 if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
                 if (!Rdp.KasaliSifreVar) throw new KullaniciHatasi("Önce oturum şifresini kaydedin.");
                 var j = await _servis.IkiDogrula(kod.Trim());
-                var sifre = Rdp.KasaliOku(j.Value<string>("kasaAnahtari"));
-                Rdp.Baglan(P("tunel") ?? "Pusula", rdp, RdpPort, P("domain"), kullanici, sifre);
-                Gunluk.Yaz("RDP başlatıldı (2FA doğrulandı) → " + rdp + " (" + t.ms + " ms)");
-                return Durum();
+                sifre = Rdp.KasaliOku(j.Value<string>("kasaAnahtari"));
             }
-            Rdp.Baglan(P("tunel") ?? "Pusula", rdp, RdpPort, P("domain"), kullanici);
-            Gunluk.Yaz("RDP başlatıldı → " + rdp + " (" + t.ms + " ms)");
+            else
+            {
+                if (!Rdp.YerelSifreVar) throw new KullaniciHatasi("Önce oturum şifresini kaydedin.");
+                sifre = Rdp.YerelOku();
+            }
+            lock (_kilit) _oturumMesaji = null;
+            var ad = P("tunel") ?? "Pusula";
+            var ac = OturumAc;
+            if (ac != null)
+            {
+                ac(new RdpAyar { Ad = ad, Sunucu = rdp, Port = RdpPort, Domain = P("domain"), Kullanici = kullanici, Sifre = sifre }, OturumBitti);
+                Gunluk.Yaz("Oturum açılıyor (uygulama içinde" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
+            }
+            else
+            {
+                Rdp.Baglan(ad, rdp, RdpPort, P("domain"), kullanici, sifre);
+                Gunluk.Yaz("RDP başlatıldı (mstsc" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
+            }
             return Durum();
+        }
+
+        /// <summary>Gömülü oturum bitti. Kayıtlı şifre yanlışsa silinir → arayüzde şifre formu yeniden çıkar.</summary>
+        private void OturumBitti(string mesaj, bool sifreHatali)
+        {
+            if (sifreHatali)
+            {
+                if (IkiAktif) Rdp.KasaliSil(); else Rdp.YerelSil();
+                Gunluk.Yaz("Kayıtlı RDP şifresi geçersiz, silindi");
+            }
+            lock (_kilit) _oturumMesaji = mesaj;
+            _ = Task.Run(Kontrol);
         }
 
         // ------------------------------------------------------------ iki adımlı doğrulama
@@ -279,13 +316,14 @@ namespace PusulaConnect
             var j = await _servis.IkiOnayla(kod.Trim());
             Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
             Rdp.SifreSil(rdp);
+            Rdp.YerelSil();
             IkiDurumYaz(true);
             Gunluk.Yaz("İki adımlı doğrulama açıldı");
             await Kontrol();
             return Durum();
         }
 
-        /// <summary>Kapatırken şifre kasadan çözülüp kimlik kasasına geri yazılır (kullanıcı yeniden girmez).</summary>
+        /// <summary>Kapatırken şifre kasadan çözülüp yerel dosyaya geri yazılır (kullanıcı yeniden girmez).</summary>
         public async Task<object> IkiKapat(string kod)
         {
             if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
@@ -296,11 +334,7 @@ namespace PusulaConnect
             {
                 try
                 {
-                    var sifre = Rdp.KasaliOku(anahtar);
-                    string kullanici;
-                    lock (_kilit) kullanici = _kayit?.Value<string>("kullanici");
-                    var domain = P("domain");
-                    Rdp.SifreKaydet(rdp, string.IsNullOrEmpty(domain) ? kullanici : domain + "\\" + kullanici, sifre);
+                    Rdp.YerelKaydet(Rdp.KasaliOku(anahtar));
                 }
                 catch (Exception e) { Gunluk.Yaz("2FA kapatılırken şifre geri yazılamadı: " + e.Message); }
             }

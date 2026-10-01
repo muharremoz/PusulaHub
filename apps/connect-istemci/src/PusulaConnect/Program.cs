@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -45,6 +46,7 @@ namespace PusulaConnect
                     return 0;
                 }
 
+                DpiFarkinda();
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Gunluk.Yaz("Açıldı: sürüm " + ServisIstemci.Surum + ", " + Application.ExecutablePath);
@@ -71,6 +73,9 @@ namespace PusulaConnect
                 {
                     _pencere = new ConnectPenceresi(tamAdres, Kapat);
                     _pencere.Show();
+                    var pencere = _pencere;
+                    _uygulama.OturumAc = (a, bitti) => pencere.OturumAc(a, bitti);
+                    _uygulama.OturumAcikMi = () => !pencere.IsDisposed && pencere.OturumAcik;
                     GosterOlayiniDinle();
                 }
                 else TarayicidaAc(tamAdres);
@@ -174,6 +179,19 @@ namespace PusulaConnect
         {
             try { Process.Start(new ProcessStartInfo(adres) { UseShellExecute = true }); }
             catch (Exception e) { MessageBox.Show("Tarayıcı açılamadı:\n" + adres + "\n\n" + e.Message, Baslik); }
+        }
+
+        [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(IntPtr deger);
+        [DllImport("user32.dll")] private static extern bool SetProcessDPIAware();
+
+        /// <summary>
+        /// Ekran ölçekli (125/150 %) bilgisayarlarda pencere bulanık büyütülmesin: gömülü uzak masaüstü
+        /// gerçek piksellerle çizilsin (mstsc gibi). Per-Monitor V2 (Win10 1703+), yoksa sistem DPI.
+        /// </summary>
+        private static void DpiFarkinda()
+        {
+            try { if (SetProcessDpiAwarenessContext(new IntPtr(-4))) return; } catch { }
+            try { SetProcessDPIAware(); } catch { }
         }
 
         /// <summary>Geliştirmede (vite) exe'yi bulmak için.</summary>
