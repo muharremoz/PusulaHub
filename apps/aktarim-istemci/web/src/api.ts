@@ -116,6 +116,8 @@ export type Veritabani = {
   veriMb: number;
   logMb: number;
   sonYedek: string | null;
+  /** CarHrk.MAX(CariTrh) — tablo yoksa null. */
+  sonHareket?: string | null;
   tur: "firma" | "transfer" | "diger" | "sirket";
   guvenlikteVar: boolean;
   sirketAdlari: string[];

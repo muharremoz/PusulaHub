@@ -46,6 +46,8 @@ namespace PusulaAktarim
         public double VeriMb;
         public double LogMb;
         public string SonYedek;
+        /// <summary>CarHrk tablosundaki en son CariTrh — data güncel yıl mı, eski yıl mı (tablo yoksa null).</summary>
+        public string SonHareket;
         /// <summary>firma | transfer | diger — guvenlik'te satırı olan firma datası, URN*/TRANSFER, geri kalan.</summary>
         public string Tur;
         public bool GuvenlikteVar;
@@ -108,6 +110,8 @@ namespace PusulaAktarim
 
                 ilerleme("Şirket tanımları (guvenlik) okunuyor…");
                 r.Guvenlik = await GuvenlikOku(c, r.Uyarilar).ConfigureAwait(false);
+
+                await SonHareketleriOku(c, r.Veritabanlari, ilerleme).ConfigureAwait(false);
             }
             Siniflandir(r);
 
@@ -185,6 +189,31 @@ ORDER BY d.name";
                 }
             }
             return liste;
+        }
+
+        /// <summary>
+        /// Her çevrimiçi veritabanında MAX(CariTrh) — eski yıl datasını otomatik işaretlemek için.
+        /// Tablo yoksa / okunamazsa / süre aşılırsa null kalır; keşfi durdurmaz.
+        /// </summary>
+        private static async Task SonHareketleriOku(SqlConnection c, List<VeritabaniBilgisi> liste, Action<string> ilerleme)
+        {
+            var adaylar = liste.Where(v => v.Durum == "ONLINE" && !string.Equals(v.Ad, "sirket", StringComparison.OrdinalIgnoreCase)).ToList();
+            for (var i = 0; i < adaylar.Count; i++)
+            {
+                var v = adaylar[i];
+                if (i % 10 == 0) ilerleme($"Son hareket tarihleri okunuyor… ({i + 1}/{adaylar.Count})");
+                var db = "[" + v.Ad.Replace("]", "]]") + "]";
+                var sorgu = $"IF OBJECT_ID(N'{db.Replace("'", "''")}.dbo.CarHrk', N'U') IS NOT NULL SELECT MAX(CariTrh) FROM {db}.dbo.CarHrk";
+                try
+                {
+                    using (var k = new SqlCommand(sorgu, c) { CommandTimeout = 20 })
+                    {
+                        var sonuc = await k.ExecuteScalarAsync().ConfigureAwait(false);
+                        if (sonuc is DateTime t) v.SonHareket = t.ToString("s");
+                    }
+                }
+                catch (SqlException) { /* sütun yok, yetki yok, süre aşımı → bilinmiyor */ }
+            }
         }
 
         /// <summary>sirket.dbo.guvenlik — sütunlar kurulumdan kuruluma değişiyor, hepsini oku, gizlileri at.</summary>

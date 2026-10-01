@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FolderOpen, FolderPlus, Image, Info, Loader2, Plus,
   RefreshCw, Search, Server, X, XCircle,
@@ -28,6 +28,18 @@ const TUR_ETIKET: Record<Veritabani["tur"], string> = {
 const VT_SAYFA = 10;
 const KLASOR_SAYFA = 10;
 const GRUPLAR: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
+
+/**
+ * Eski yıl datası mı: son cari hareketi (CarHrk.CariTrh) bu yıldan önce ve 60 günden eski.
+ * 60 gün: Ocak-Şubat'ta güncel data hâlâ geçen yılın tarihini taşıyabilir. Tarih yoksa güncel sayılır.
+ */
+const ESKI_GUN = 60;
+function eskiYilMi(v: Veritabani): boolean {
+  if (!v.sonHareket) return false;
+  const t = new Date(v.sonHareket);
+  const simdi = new Date();
+  return t.getFullYear() < simdi.getFullYear() && simdi.getTime() - t.getTime() > ESKI_GUN * 86400000;
+}
 
 type ResimSecimi = { yol: string; secili: boolean; altKlasor: string };
 type ProgramSecimi = { yol: string; secili: boolean; program: string };
@@ -62,7 +74,12 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [secili, setSecili] = useState<Set<string>>(
     () => new Set((r?.veritabanlari ?? []).filter((v) => (v.tur === "firma" || v.tur === "transfer") && v.durum === "ONLINE").map((v) => v.ad)),
   );
-  const [eskiYil, setEskiYil] = useState<Set<string>>(() => new Set());
+  // Varsayılan: son cari hareketi eski yılda kalanlar "Eski yıl" (bkz. eskiYilMi).
+  const [eskiYil, setEskiYil] = useState<Set<string>>(() => new Set((r?.veritabanlari ?? []).filter(eskiYilMi).map((v) => v.ad)));
+  // "Yeniden tara" yeni rapor getirince varsayılanlar yeni tarihlere göre yeniden kurulur.
+  useEffect(() => {
+    setEskiYil(new Set((r?.veritabanlari ?? []).filter(eskiYilMi).map((v) => v.ad)));
+  }, [r]);
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
   const [eskiDosyalar, setEskiDosyalar] = useState<string[]>([]);
@@ -285,6 +302,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     <TableHead className="px-4">Şirket</TableHead>
                     <TableHead className="px-4">Program</TableHead>
                     <TableHead className="px-4 text-right">Veri</TableHead>
+                    <TableHead className="px-4">Son hareket</TableHead>
                     <TableHead className="px-4">Son yedek</TableHead>
                     {hedef.depo && <TableHead className="px-4">Aktarım</TableHead>}
                   </TableRow>
@@ -292,7 +310,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 <TableBody>
                   {filtreli.length === 0 && (
                     <TableRow className="hover:bg-transparent">
-                      <TableCell colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
                         Aramaya uyan veritabanı yok.
                       </TableCell>
                     </TableRow>
@@ -303,7 +321,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       ...(baslik
                         ? [
                             <TableRow key={"g-" + v.tur} className="bg-muted/40 hover:bg-muted/40">
-                              <TableCell colSpan={7} className="px-4 py-1 text-xs font-medium text-muted-foreground">
+                              <TableCell colSpan={8} className="px-4 py-1 text-xs font-medium text-muted-foreground">
                                 {TUR_ETIKET[v.tur]} · {grupSayisi.get(v.tur)}
                               </TableCell>
                             </TableRow>,
@@ -326,6 +344,12 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           <TableCell className="px-4">{v.sirketAdlari.join(", ") || "—"}</TableCell>
                           <TableCell className="px-4 text-muted-foreground">{v.prgTur === "909" ? "Perakende" : v.prgTur === "011" ? "Toptan" : v.prgTur ?? "—"}</TableCell>
                           <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
+                          <TableCell
+                            className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}
+                            title={v.sonHareket ? "CarHrk tablosundaki en son cari hareket tarihi" : "CarHrk tablosu yok veya okunamadı"}
+                          >
+                            {v.sonHareket ? new Date(v.sonHareket).toLocaleDateString("tr") : "—"}
+                          </TableCell>
                           <TableCell className="px-4 text-muted-foreground">{v.sonYedek ? new Date(v.sonYedek).toLocaleDateString("tr") : "—"}</TableCell>
                           {hedef.depo && (
                             <TableCell className="px-4">
