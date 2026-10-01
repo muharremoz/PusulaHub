@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { ListeKarti, ListeAksiyonButonu, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti"
 import { Field } from "@/components/shared/form"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -194,7 +194,7 @@ export default function Aktarim2Page() {
         </div>
       </ListeKarti>
 
-      <YeniAktarimSheet
+      <YeniAktarimDialog
         open={yeniAcik}
         onOpenChange={setYeniAcik}
         onCreated={(k) => { setYeniAcik(false); setKod(k); void yukle() }}
@@ -202,7 +202,7 @@ export default function Aktarim2Page() {
 
       <KodPenceresi kod={kod} onClose={() => setKod(null)} />
 
-      <KesifSheet id={detayId} onClose={() => setDetayId(null)} />
+      <KesifDialog id={detayId} onClose={() => setDetayId(null)} />
 
       <AlertDialog open={!!silinecek} onOpenChange={(o) => !o && setSilinecek(null)}>
         <AlertDialogContent>
@@ -229,7 +229,7 @@ export default function Aktarim2Page() {
 
 // ------------------------------------------------------------ yeni oturum
 
-function YeniAktarimSheet({
+function YeniAktarimDialog({
   open, onOpenChange, onCreated,
 }: {
   open: boolean
@@ -307,15 +307,17 @@ function YeniAktarimSheet({
   )
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="!w-[520px] !max-w-[520px]">
-        <SheetHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden rounded-[10px] p-0 sm:max-w-[520px]">
+        <DialogHeader className="flex-row items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12 text-left">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <MonitorDown className="size-[18px]" />
           </span>
-          <SheetTitle>Yeni Aktarım</SheetTitle>
-          <SheetDescription>Müşteriye verilecek tek seferlik kod üretilir.</SheetDescription>
-        </SheetHeader>
+          <div className="min-w-0">
+            <DialogTitle className="text-[15px] font-semibold">Yeni Aktarım</DialogTitle>
+            <DialogDescription className="text-[12px]">Müşteriye verilecek tek seferlik kod üretilir.</DialogDescription>
+          </div>
+        </DialogHeader>
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
           <Field label="Firma" required>
@@ -337,7 +339,7 @@ function YeniAktarimSheet({
               renderItem={(f) => <span className="flex min-w-0 items-center"><span className="font-mono text-muted-foreground mr-2 shrink-0">{f.firkod}</span><span className="truncate">{f.firma}</span></span>}
             />
           </Field>
-          <Field label="SQL Sunucusu" hint="Veritabanları bu sunucuya geri yüklenecek (3. aşama).">
+          <Field label="SQL Sunucusu" hint="Veritabanı yedekleri bu sunucuya (D:\SQLData\<firma>\aktarim) gönderilir.">
             {sunucuSecimi(sqlId, setSqlId, sqlSunuculari, "Seçilmedi")}
           </Field>
           <Field label="Depo Sunucusu" hint="Resimler ve eski yıl dataları.">
@@ -354,14 +356,14 @@ function YeniAktarimSheet({
           </Field>
         </div>
 
-        <SheetFooter className="flex-row">
+        <DialogFooter className="flex-row border-t p-4 sm:justify-stretch">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Vazgeç</Button>
           <Button className="flex-1" disabled={!firma || gonderiliyor} onClick={() => void olustur()}>
             {gonderiliyor ? "Oluşturuluyor…" : "Kod üret"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -420,7 +422,7 @@ const TUR: Record<Aktarim2Kesif["veritabanlari"][number]["tur"], string> = {
   firma: "Firma datası", transfer: "Transfer datası", diger: "Tanımsız", sirket: "Şirket tanımları",
 }
 
-function KesifSheet({ id, onClose }: { id: string | null; onClose: () => void }) {
+function KesifDialog({ id, onClose }: { id: string | null; onClose: () => void }) {
   const [detay, setDetay] = useState<Aktarim2Detay | null>(null)
   const [hata, setHata] = useState<string | null>(null)
 
@@ -434,17 +436,19 @@ function KesifSheet({ id, onClose }: { id: string | null; onClose: () => void })
 
   const k = detay?.kesif
   return (
-    <Sheet open={!!id} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="!w-[760px] !max-w-[760px]">
-        <SheetHeader>
+    <Dialog open={!!id} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden rounded-[10px] p-0 sm:max-w-[960px]">
+        <DialogHeader className="flex-row items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12 text-left">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <Database className="size-[18px]" />
           </span>
-          <SheetTitle>{detay ? `${detay.firmaId} — ${detay.firmaAdi}` : "Keşif raporu"}</SheetTitle>
-          <SheetDescription>
+          <div className="min-w-0">
+            <DialogTitle className="truncate text-[15px] font-semibold">{detay ? `${detay.firmaId} — ${detay.firmaAdi}` : "Keşif raporu"}</DialogTitle>
+            <DialogDescription className="text-[12px]">
             {detay?.kesifZamani ? `Müşteri bilgisayarı ${detay.makine} · ${zamanMetni(detay.kesifZamani)}` : "Müşteri uygulamasının gönderdiği tarama sonucu."}
-          </SheetDescription>
-        </SheetHeader>
+            </DialogDescription>
+          </div>
+        </DialogHeader>
 
         <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
           {hata && <p className="text-[13px] text-red-600 dark:text-red-400">{hata}</p>}
@@ -517,8 +521,8 @@ function KesifSheet({ id, onClose }: { id: string | null; onClose: () => void })
             </>
           )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
 
