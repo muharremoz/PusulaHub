@@ -350,57 +350,73 @@ export function RaporEkrani({ durum, setDurum }: P) {
             </Bolum>
 
             {hedef.depo && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <Bolum
-                  ikon={<Image className="size-4" />}
-                  baslik="Resim klasörleri"
-                  aksiyon={
-                    resimler.length > 1 ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setResimler((l) => l.map((x) => (resimSecilebilir(x.yol) ? { ...x, secili: !resimHepsiSecili } : x)))}
-                      >
-                        {resimHepsiSecili ? "Hiçbirini seçme" : "Tümünü seç"}
-                      </Button>
-                    ) : undefined
-                  }
-                >
-                  {resimler.length === 0 && <Bos>Şirket tanımlarında resim klasörü yok.</Bos>}
-                  {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
-                    const i = resimBas + si;
-                    const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
-                    return (
-                      <div key={s.yol} className="flex items-start gap-3 border-b px-4 py-2.5 last:border-b-0">
-                        <Checkbox
-                          className="mt-0.5"
-                          checked={s.secili}
-                          disabled={!k.var || k.dosyaSayisi === 0}
-                          onCheckedChange={(c) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-mono text-xs" title={s.yol}>{s.yol}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""} dosya · ${mb(k.boyutMb)}` : "Klasör bulunamadı"}
-                          </div>
-                          {s.secili && (
-                            <div className="mt-1.5 flex items-center gap-2 text-xs text-muted-foreground">
-                              <span className="shrink-0">Hedef: Resimler\{oturum?.firmaId}\</span>
-                              <Input
-                                value={s.altKlasor}
-                                placeholder="(ana klasör)"
-                                onChange={(e) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, altKlasor: e.target.value } : x)))}
-                                className="h-7 font-mono text-xs"
+              <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
+                {resimler.length === 0 ? (
+                  <Bos>Şirket tanımlarında resim klasörü yok.</Bos>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="text-[10px] uppercase tracking-wider">
+                        <TableHead className="w-10 pl-4">
+                          <Checkbox
+                            checked={resimHepsiSecili ? true : resimSayisi > 0 ? "indeterminate" : false}
+                            onCheckedChange={(c) => setResimler((l) => l.map((x) => (resimSecilebilir(x.yol) ? { ...x, secili: c === true } : x)))}
+                            aria-label="Tüm resim klasörlerini seç"
+                          />
+                        </TableHead>
+                        <TableHead className="px-4">Klasör</TableHead>
+                        <TableHead className="px-4">Kullanan şirketler</TableHead>
+                        <TableHead className="px-4 text-right">Dosya</TableHead>
+                        <TableHead className="px-4 text-right">Boyut</TableHead>
+                        <TableHead className="px-4">{`Hedef: Resimler\\${oturum?.firmaId ?? ""}\\`}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {resimler.slice(resimBas, resimBas + KLASOR_SAYFA).map((s, si) => {
+                        const i = resimBas + si;
+                        const k = r.resimKlasorleri.find((x) => x.yol === s.yol)!;
+                        return (
+                          <TableRow key={s.yol} data-state={s.secili ? "selected" : undefined}>
+                            <TableCell className="pl-4">
+                              <Checkbox
+                                checked={s.secili}
+                                disabled={!k.var || k.dosyaSayisi === 0}
+                                onCheckedChange={(c) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
+                                aria-label={s.yol + " aktarılsın"}
                               />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <Sayfalama sayfa={resimSayfaGecerli} sayfaSayisi={resimSayfaSayisi} onSayfa={setResimSayfa} bilgi={`${resimler.length} klasör · ${resimSayisi} seçili`} />
-                </Bolum>
+                            </TableCell>
+                            <TableCell className="max-w-72 truncate px-4 font-mono text-xs" title={s.yol}>{s.yol}</TableCell>
+                            <TableCell className="max-w-56 truncate px-4 text-muted-foreground" title={k.kullananlar.join(", ")}>
+                              {k.kullananlar.length === 0 ? "—" : k.kullananlar.length <= 2 ? k.kullananlar.join(", ") : `${k.kullananlar[0]} +${k.kullananlar.length - 1}`}
+                            </TableCell>
+                            <TableCell className="px-4 text-right tabular-nums">
+                              {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
+                            </TableCell>
+                            <TableCell className="px-4 text-right tabular-nums">{k.var ? mb(k.boyutMb) : "—"}</TableCell>
+                            <TableCell className="w-48 px-4 py-1">
+                              {s.secili ? (
+                                <Input
+                                  value={s.altKlasor}
+                                  placeholder="(ana klasör)"
+                                  onChange={(e) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, altKlasor: e.target.value } : x)))}
+                                  className="h-7 font-mono text-xs"
+                                />
+                              ) : (
+                                <span className="text-muted-foreground">—</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+                <Sayfalama sayfa={resimSayfaGecerli} sayfaSayisi={resimSayfaSayisi} onSayfa={setResimSayfa} bilgi={`${resimBas + 1}–${Math.min(resimBas + KLASOR_SAYFA, resimler.length)} / ${resimler.length}`} />
+              </Bolum>
+            )}
 
+            {hedef.depo && (
+              <div className="grid gap-4">
                 <Bolum
                   ikon={<FileArchive className="size-4" />}
                   baslik="Eski yıl dosyaları"
