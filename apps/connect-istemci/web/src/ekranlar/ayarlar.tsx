@@ -80,12 +80,12 @@ export function AyarlarIcerik({
 
       <Bolum baslik="Bağlantı" aciklama="Bir sonraki bağlanışta geçerli olur.">
         <Satir ikon={<Maximize2 />} ad="Tam ekran başlat" aciklama="Oturum açılınca doğrudan tam ekrana geçilir." kontrol={anahtar("tamEkran")} />
+      </Bolum>
+
+      <Bolum baslik="Yerel aygıtlar" aciklama="Bir sonraki bağlanışta geçerli olur.">
         <Satir ikon={<Printer />} ad="Yazıcılar" aciklama="Bu bilgisayarın yazıcıları oturumda kullanılabilir." kontrol={anahtar("yazici")} />
         <Satir ikon={<Clipboard />} ad="Pano (kopyala-yapıştır)" aciklama="Bu bilgisayarla oturum arasında kopyalayıp yapıştırın." kontrol={anahtar("pano")} />
         <Satir ikon={<Volume2 />} ad="Ses" aciklama="Oturumdaki sesler bu bilgisayarda çalınır." kontrol={anahtar("ses")} />
-      </Bolum>
-
-      <Bolum baslik="Yerel aygıtlar" aciklama="Bu bilgisayarın aygıtları oturumda kullanılabilir.">
         <Satir ikon={<CreditCard />} ad="Akıllı kartlar" aciklama="E-imza, kart okuyucu." kontrol={anahtar("akilliKart")} />
         <Satir ikon={<Cable />} ad="Bağlantı noktaları" aciklama="Seri (COM) ve paralel (LPT) bağlantı noktaları." kontrol={anahtar("portlar")} />
         <Satir ikon={<MapPin />} ad="Konum" aciklama="Bu bilgisayarın konumu oturuma iletilir (Windows konum izni gerekir)." kontrol={anahtar("konum")} />
