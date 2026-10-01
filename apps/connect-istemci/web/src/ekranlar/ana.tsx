@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, FileText, KeyRound, Loader2, Monitor, PlugZap, RefreshCw,
-  Hash, Laptop, LifeBuoy, Server, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, LifeBuoy, Network, Server, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -166,22 +166,34 @@ export function AnaEkran({ durum, setDurum }: P) {
         )}
 
         <div className="grid grid-cols-2 gap-3">
-          <Kart ikon={<ShieldCheck />} baslik="VPN programı" iyi={k.forti.kurulu} metin={k.forti.kurulu ? `FortiClient ${k.forti.surum ?? ""}` : "Kurulu değil"} />
           <Kart
             ikon={<ShieldCheck />}
+            baslik="VPN programı"
+            durum={k.forti.kurulu ? "iyi" : "hata"}
+            deger={k.forti.kurulu ? "FortiClient" : "Kurulu değil"}
+            alt={k.forti.kurulu ? `Sürüm ${k.forti.surum ?? "—"}` : "Aşağıdaki Kur düğmesiyle kurulur"}
+          />
+          <Kart
+            ikon={<Network />}
             baslik="VPN ayarı"
-            iyi={k.profil.dogru && !!k.profil.kullaniciAdi}
-            uyari={k.profil.dogru && !k.profil.kullaniciAdi}
-            metin={!k.profil.dogru ? "Eksik" : k.profil.kullaniciAdi ? `"${kayit.profil.tunel}" hazır · kullanıcı adı tanımlı` : `"${kayit.profil.tunel}" hazır · kullanıcı adı yok`}
+            durum={!k.profil.dogru ? "hata" : k.profil.kullaniciAdi ? "iyi" : "uyari"}
+            deger={!k.profil.dogru ? "Eksik" : k.profil.kullaniciAdi ? "Hazır" : "Kullanıcı adı yok"}
+            alt={!k.profil.dogru ? "VPN bağlantısı tanımlı değil" : `${kayit.profil.tunel}${k.profil.kullaniciAdi ? " · kullanıcı adı tanımlı" : ""}`}
           />
           <Kart
             ikon={<Server />}
             baslik="Pusula sunucusu"
-            iyi={k.terminal.erisim}
-            uyari={!k.terminal.erisim}
-            metin={k.terminal.erisim ? `Erişiliyor · ${k.terminal.ms} ms` : k.terminal.zaman ? "Erişilemiyor — VPN kapalı olabilir" : "Kontrol ediliyor…"}
+            durum={k.terminal.erisim ? (kalite(k.terminal.ms) >= 2 ? "iyi" : "uyari") : k.terminal.zaman ? "uyari" : "bekliyor"}
+            deger={k.terminal.erisim ? "Erişiliyor" : k.terminal.zaman ? "Erişilemiyor" : "Kontrol ediliyor…"}
+            alt={k.terminal.erisim ? <Sinyal ms={k.terminal.ms} /> : k.terminal.zaman ? "VPN kapalı olabilir" : "Bir saniye…"}
           />
-          <Kart ikon={<KeyRound />} baslik="Oturum şifresi" iyi={k.rdpSifre.kayitli} metin={k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"} />
+          <Kart
+            ikon={<KeyRound />}
+            baslik="Oturum şifresi"
+            durum={k.rdpSifre.kayitli ? "iyi" : "hata"}
+            deger={k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
+            alt={!k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
+          />
         </div>
 
         {(!vpnHazir || vk.suruyor || vk.durum?.hata) && (
@@ -344,19 +356,52 @@ export function AnaEkran({ durum, setDurum }: P) {
   );
 }
 
-function Kart({ ikon, baslik, metin, iyi, uyari }: { ikon: React.ReactNode; baslik: string; metin: string; iyi: boolean; uyari?: boolean }) {
-  const renk = iyi ? "text-emerald-700 dark:text-emerald-400" : uyari ? "text-amber-700 dark:text-amber-400" : "text-destructive";
+type KartDurumu = "iyi" | "uyari" | "hata" | "bekliyor";
+
+const KART_RENK: Record<KartDurumu, { kutu: string; rozet: string }> = {
+  iyi: { kutu: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400", rozet: "text-emerald-600 dark:text-emerald-400" },
+  uyari: { kutu: "bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400", rozet: "text-amber-600 dark:text-amber-400" },
+  hata: { kutu: "bg-red-500/10 text-red-600 ring-red-500/20 dark:text-red-400", rozet: "text-red-600 dark:text-red-400" },
+  bekliyor: { kutu: "bg-muted text-muted-foreground ring-border", rozet: "text-muted-foreground" },
+};
+
+/** Durum kartı: solda renkli ikon kutusu, başlık + kısa değer + açıklama, sağ üstte durum işareti. */
+function Kart({ ikon, baslik, deger, alt, durum }: { ikon: React.ReactNode; baslik: string; deger: string; alt: React.ReactNode; durum: KartDurumu }) {
+  const r = KART_RENK[durum];
   return (
-    <div className="rounded-lg border bg-card p-3">
-      <div className="flex items-center gap-1.5 text-xs text-muted-foreground [&_svg]:size-3.5">
-        {ikon}
-        {baslik}
-      </div>
-      <div className={`mt-1 flex items-start gap-1.5 text-sm font-medium ${renk} [&_svg]:size-4`}>
-        {iyi ? <CheckCircle2 className="mt-0.5 shrink-0" /> : <CircleAlert className="mt-0.5 shrink-0" />}
-        <span className="min-w-0 leading-snug">{metin}</span>
+    <div className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-xs">
+      <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${r.kutu}`}>{ikon}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">{baslik}</span>
+          <span className={`[&_svg]:size-4 ${r.rozet}`}>
+            {durum === "iyi" ? <CheckCircle2 /> : durum === "bekliyor" ? <Loader2 className="animate-spin" /> : <CircleAlert />}
+          </span>
+        </div>
+        <div className="truncate text-[15px] leading-tight font-semibold">{deger}</div>
+        <div className="mt-0.5 truncate text-xs text-muted-foreground">{alt}</div>
       </div>
     </div>
+  );
+}
+
+/** Gecikmeden bağlantı kalitesi (şeritteki ile aynı eşikler): 4 mükemmel … 1 zayıf. */
+function kalite(ms: number) {
+  return ms < 60 ? 4 : ms < 120 ? 3 : ms < 250 ? 2 : 1;
+}
+
+function Sinyal({ ms }: { ms: number }) {
+  const q = kalite(ms);
+  const renk = q >= 3 ? "bg-emerald-500" : q === 2 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <span className="inline-flex items-center gap-1.5" title={`Gecikme: ${ms} ms`}>
+      <span className="inline-flex items-end gap-[2px]">
+        {[0, 1, 2, 3].map((i) => (
+          <span key={i} className={`w-[3px] rounded-[1px] ${i < q ? renk : "bg-border"}`} style={{ height: 5 + i * 2 }} />
+        ))}
+      </span>
+      {q === 4 ? "Bağlantı mükemmel" : q === 3 ? "Bağlantı iyi" : q === 2 ? "Bağlantı orta" : "Bağlantı zayıf"}
+    </span>
   );
 }
 
