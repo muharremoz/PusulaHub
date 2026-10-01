@@ -174,7 +174,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             alt={k.forti.kurulu ? `Sürüm ${k.forti.surum ?? "—"}` : "Aşağıdaki Kur düğmesiyle kurulur"}
             aksiyon={
               k.forti.kurulu && (
-                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" disabled={bekle === "/vpn/ac"} onClick={() => void cagir("/vpn/ac")}>
+                <Button size="sm" variant="outline" className="ml-auto h-6 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3" disabled={bekle === "/vpn/ac"} onClick={() => void cagir("/vpn/ac")}>
                   {bekle === "/vpn/ac" ? <Loader2 className="animate-spin" /> : <ExternalLink />} VPN'i aç
                 </Button>
               )
@@ -386,8 +386,10 @@ function Kart({ ikon, baslik, deger, alt, durum, aksiyon }: { ikon: React.ReactN
           </span>
         </div>
         <div className="truncate text-[15px] leading-tight font-semibold">{deger}</div>
-        <div className="mt-0.5 truncate text-xs text-muted-foreground">{alt}</div>
-        {aksiyon && <div className="mt-2.5">{aksiyon}</div>}
+        <div className="mt-0.5 flex items-center gap-2">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{alt}</span>
+          {aksiyon}
+        </div>
       </div>
     </div>
   );
