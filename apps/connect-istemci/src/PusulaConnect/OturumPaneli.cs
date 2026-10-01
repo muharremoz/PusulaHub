@@ -108,7 +108,8 @@ namespace PusulaConnect
             _olcum.Tick += (s, e) => Olc();
             _boyut = new Timer { Interval = 500 };
             _boyut.Tick += (s, e) => { _boyut.Stop(); CozunurlukGuncelle(); };
-            _rdp.Resize += (s, e) => { if (_girisTamam) { _boyut.Stop(); _boyut.Start(); } };
+            // Simge durumundayken bileşen küçülür; o boyut oturuma GÖNDERİLMEZ (geri açınca 800x600 görünüyordu)
+            _rdp.Resize += (s, e) => { _boyut.Stop(); if (_girisTamam && !Kucuk) _boyut.Start(); };
 
             Durum("Bağlanıyor… " + _a.Sunucu, Soluk);
         }
@@ -124,6 +125,7 @@ namespace PusulaConnect
             {
                 _girisTamam = true;
                 _tamEkran.Enabled = true;
+                _sonW = (uint)_rdp.DesktopWidth; _sonH = (uint)_rdp.DesktopHeight;
                 BagliYaz();
                 Olc();
                 _olcum.Start();
@@ -258,14 +260,20 @@ namespace PusulaConnect
             finally { _olcuyor = false; }
         }
 
+        private uint _sonW, _sonH;
+
+        private bool Kucuk => FindForm()?.WindowState == FormWindowState.Minimized || _rdp.Width < 200 || _rdp.Height < 150;
+
         private void CozunurlukGuncelle()
         {
             if (!_girisTamam || _bitti) return;
             try
             {
-                if (_rdp.FullScreen) return;
+                if (_rdp.FullScreen || Kucuk) return;
                 var w = (uint)(Math.Max(800, _rdp.Width) & ~1);
                 var h = (uint)(Math.Max(600, _rdp.Height) & ~1);
+                if (w == _sonW && h == _sonH) return;
+                _sonW = w; _sonH = h;
                 _rdp.UpdateSessionDisplaySettings(w, h, w, h, 0, Olcek(), 100);
             }
             catch { }
