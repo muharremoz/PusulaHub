@@ -289,16 +289,7 @@ export function AnaEkran({ durum, setDurum }: P) {
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
-        {/* Magic UI Ripple: halkalar bağlıyken yeşil (--foreground yerelde ezilir), merkezden dışa silinir */}
-        <Ripple
-          mainCircleSize={170}
-          numCircles={7}
-          className="mask-[radial-gradient(circle,white_25%,transparent_70%)]"
-          style={k.terminal.erisim ? ({ "--foreground": "oklch(0.696 0.17 162.48)" } as React.CSSProperties) : undefined}
-        />
-        <div className="relative">
-          <BaglantiGorseli bagli={k.terminal.erisim} />
-        </div>
+        <BaglantiGorseli bagli={k.terminal.erisim} />
       </aside>
     </div>
   );
@@ -348,7 +339,16 @@ function SolSatir({ ikon, ad, deger }: { ikon: React.ReactNode; ad: string; dege
 function BaglantiGorseli({ bagli }: { bagli: boolean }) {
   return (
     <div className="flex h-svh flex-col items-center justify-center gap-6 p-8 text-center">
-      <svg viewBox="0 0 300 220" className="w-full max-w-[300px]" role="img" aria-label="Bilgisayardan Pusula sunucusuna güvenli bağlantı">
+      {/* Ripple'ın merkezi = SVG'nin merkezi = VPN kalkanı (viewBox 300x220, kalkan 150,110) */}
+      <div className="relative w-full max-w-[300px]">
+        {/* Magic UI Ripple: bağlıyken yeşil (--foreground yerelde ezilir), merkezden dışa silinir */}
+        <Ripple
+          mainCircleSize={170}
+          numCircles={7}
+          className="inset-auto top-1/2 left-1/2 size-[760px] -translate-x-1/2 -translate-y-1/2 mask-[radial-gradient(circle,white_20%,transparent_60%)]"
+          style={bagli ? ({ "--foreground": "oklch(0.696 0.17 162.48)" } as React.CSSProperties) : undefined}
+        />
+      <svg viewBox="0 0 300 220" className="relative w-full" role="img" aria-label="Bilgisayardan Pusula sunucusuna güvenli bağlantı">
         {/* bağlantı hattı */}
         <g className={bagli ? "text-emerald-500" : "text-muted-foreground"}>
           <path d="M74 110 H228" stroke="currentColor" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 8" fill="none">
@@ -379,7 +379,8 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
         <text x="150" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">VPN</text>
         <text x="256" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">Pusula</text>
       </svg>
-      <div>
+      </div>
+      <div className="relative">
         <div className="text-lg font-semibold">{bagli ? "Pusula'ya bağlantı hazır" : "Pusula'ya güvenli bağlantı"}</div>
         <p className="mt-1 text-sm text-muted-foreground">
           {bagli ? "VPN açık, sunucuya erişiliyor." : "VPN ile şifreli tünel kurulur, programınız Pusula sunucusunda çalışır."}
