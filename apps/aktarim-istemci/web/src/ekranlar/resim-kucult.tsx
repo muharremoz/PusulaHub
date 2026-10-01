@@ -32,6 +32,8 @@ const KALITELER = [
 type Tarama = {
   taramaNo: number;
   adet: number;
+  /** Yedeği "_orijinal" klasöründe olan, yani bu araçla daha önce küçültülmüş resim sayısı */
+  oncedenKucultulmus?: number;
   bayt: number;
   eksik: boolean;
   klasorler: { kok: string; var: boolean; adet: number; bayt: number }[];
@@ -328,6 +330,24 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                       </Toggle>
                     </div>
                     <Karsilastirma once={gorseller?.once} sonra={gorseller?.sonra} ornek={ornek} kalite={kalite} yukleniyor={ornekYukleniyor} buyut={buyut} />
+                    {!!tarama.oncedenKucultulmus && (
+                      <div className="flex items-start gap-2 border-t bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          <b>{tarama.oncedenKucultulmus.toLocaleString("tr")}</b> resim bu araçla daha önce küçültülmüş (orijinali <span className="font-mono">_orijinal</span> klasöründe).
+                          Tekrar küçültmek kayda değer kazanç sağlamaz; bunlara büyük ihtimalle dokunulmaz.
+                        </span>
+                      </div>
+                    )}
+                    {ornek?.atlanir && !ornekYukleniyor && (
+                      <div className="flex items-start gap-2 border-t bg-muted/50 px-4 py-2.5 text-sm text-muted-foreground">
+                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                        <span>
+                          Bu örnek {ornek.neden ? `küçültülemez: ${ornek.neden}.` : "zaten verimli kaydedilmiş: %10'dan az küçülüyor, dokunulmayacak."}
+                          {" "}Diğer örneklere bakabilir veya daha düşük kalite seçebilirsiniz.
+                        </span>
+                      </div>
+                    )}
                     {tahmin && (
                       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t bg-emerald-500/10 px-4 py-3 text-sm">
                         <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
@@ -474,11 +494,17 @@ function CalismaKarti({ c, onDurdur, onYeni }: { c: Calisma; onDurdur: () => voi
         <Progress value={yuzde} className="[&>[data-slot=progress-indicator]]:bg-violet-600" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Sayac ad="Küçültülen" deger={c.kucultulen.toLocaleString("tr")} renk="text-emerald-600 dark:text-emerald-400" />
-          <Sayac ad="Dokunulmayan" deger={c.atlanan.toLocaleString("tr")} />
+          <Sayac ad="Dokunulmayan" deger={c.atlanan.toLocaleString("tr")} alt={c.atlanan ? "%10'dan az küçülüyor" : undefined} />
           <Sayac ad="Hata" deger={c.hataSayisi.toLocaleString("tr")} renk={c.hataSayisi ? "text-destructive" : undefined} />
           <Sayac ad="Kazanılan" deger={boyutMetni(kazanc)} renk="text-emerald-600 dark:text-emerald-400" alt={c.onceBayt ? `${boyutMetni(c.onceBayt)} → ${boyutMetni(c.sonraBayt)}` : undefined} />
         </div>
-        {c.yedekKlasorleri.length > 0 && (
+        {!c.suruyor && c.kucultulen === 0 && c.atlanan > 0 && (
+          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+            Hiçbir resim küçültülmedi: hepsi zaten verimli kaydedilmiş (büyük ihtimalle daha önce küçültülmüş). Yeniden kodlamak en fazla
+            birkaç yüzde kazandıracak ve gereksiz kalite kaybı olacağı için orijinallere dokunulmadı.
+          </p>
+        )}
+        {c.yedekKlasorleri.length > 0 && c.kucultulen > 0 && (
           <p className="text-xs text-muted-foreground">
             Orijinaller: {c.yedekKlasorleri.map((y) => <span key={y} className="mr-2 font-mono">{y}</span>)}
           </p>

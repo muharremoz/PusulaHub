@@ -31,6 +31,8 @@ namespace PusulaAktarim
             public string Yol;
             public string Kok;
             public long Boyut;
+            /// <summary>"{kök}_orijinal" altında yedeği var → daha önce küçültülmüş.</summary>
+            public bool Kucultulmus;
         }
 
         private static readonly object Kilit = new object();
@@ -72,7 +74,9 @@ namespace PusulaAktarim
                         foreach (var f in new DirectoryInfo(d).EnumerateFiles())
                         {
                             if (f.Length <= esik || !JpegUzantilari.Contains(f.Extension.ToLowerInvariant())) continue;
-                            adaylar.Add(new Aday { Yol = f.FullName, Kok = kok.TrimEnd('\\'), Boyut = f.Length });
+                            var k = kok.TrimEnd('\\');
+                            var yedek = k + "_orijinal" + f.FullName.Substring(k.Length);
+                            adaylar.Add(new Aday { Yol = f.FullName, Kok = k, Boyut = f.Length, Kucultulmus = File.Exists(yedek) });
                             adet++; bayt += f.Length;
                         }
                         foreach (var alt in Directory.EnumerateDirectories(d))
@@ -102,6 +106,7 @@ namespace PusulaAktarim
                 eksik,
                 klasorler = ozet,
                 // Örnek seçimi için en büyükler
+                oncedenKucultulmus = adaylar.Count(a => a.Kucultulmus),
                 ornekler = adaylar.OrderByDescending(a => a.Boyut).Take(30).Select(a => new { yol = a.Yol, boyut = a.Boyut }).ToList(),
             };
         }
