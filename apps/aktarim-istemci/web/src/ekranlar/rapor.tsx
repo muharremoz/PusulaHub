@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, MonitorUp, Plus,
+  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, MonitorUp, Plus,
   RefreshCw, Search, Server, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
@@ -20,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { boyutMetni, useDosyaSecici, type Secilen } from "./dosya-secici";
+import { ResimKucultmeEkrani } from "./resim-kucult";
 import { Ipucu, mb } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
@@ -117,6 +118,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [programSayfa, setProgramSayfa] = useState(1);
   const [onay, setOnay] = useState<Onay | null>(null);
   const [dosyaSor, dosyaSecici] = useDosyaSecici();
+  // Resim küçültme aracı ayrı ekran; rapordaki seçimler bu bileşende kaldığı için geri dönünce kaybolmaz.
+  const [kucultme, setKucultme] = useState(false);
 
   const toplamMb = useMemo(
     () => (r?.veritabanlari ?? []).filter((v) => secili.has(v.ad)).reduce((t, v) => t + v.veriMb, 0),
@@ -302,6 +305,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
       </ToggleGroup>
     );
 
+  if (kucultme) return <ResimKucultmeEkrani rapor={r} onGeri={() => setKucultme(false)} />;
+
   return (
     <div className="min-h-svh bg-gradient-to-b from-blue-50 to-muted/40 to-60% pb-20 dark:from-blue-950/30">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
@@ -317,6 +322,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
             <CheckCircle2 className="size-4" /> Rapor Pusula'ya iletildi
           </span>
         ) : null}
+        <Button variant="outline" size="sm" onClick={() => setKucultme(true)} className="border-violet-500/40 text-violet-700 hover:bg-violet-500/10 hover:text-violet-800 dark:text-violet-400">
+          <Minimize2 /> Resim küçült
+        </Button>
         <Button variant="outline" size="sm" disabled={bekle} onClick={() => void yenile()}>
           {bekle ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden tara
         </Button>

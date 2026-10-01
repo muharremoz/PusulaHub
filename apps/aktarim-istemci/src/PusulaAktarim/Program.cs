@@ -111,6 +111,17 @@ namespace PusulaAktarim
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
                 case "POST /aktarim/baslat":
                     return _uygulama.AktarimBaslat(i.Govde);
+                // Resim küçültme (aktarımdan ayrı araç) — bkz. ResimKucultucu
+                case "POST /resim/tara":
+                    return Task.Run(() => ResimKucultucu.Tara((i.Govde?["klasorler"] as Newtonsoft.Json.Linq.JArray)?.Values<string>() ?? new string[0], (i.Sayi("esikKb") > 0 ? i.Sayi("esikKb") : 500)));
+                case "POST /resim/ornek":
+                    return Task.Run(() => ResimKucultucu.Ornek(i.Metin("yol"), (i.Sayi("kalite") > 0 ? i.Sayi("kalite") : 85)));
+                case "POST /resim/goruntu":
+                    return Task.Run<object>(() => ResimKucultucu.Goruntu(i.Metin("yol"), i.Sayi("kalite") > 0 ? (int?)i.Sayi("kalite") : null));
+                case "POST /resim/baslat":
+                    return Task.FromResult(ResimKucultucu.Baslat((i.Sayi("kalite") > 0 ? i.Sayi("kalite") : 85), i.Mantik("yedekle"), i.Sayi("taramaNo")));
+                case "GET /resim/durum": return Task.FromResult(ResimKucultucu.Durum());
+                case "POST /resim/durdur": return Task.FromResult(ResimKucultucu.Durdur());
                 case "POST /dosya/boyut":
                     return Task.Run(() => DosyaGezgini.KlasorBoyutu(i.Metin("yol")));
                 case "POST /dosya/listele":

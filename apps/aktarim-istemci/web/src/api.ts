@@ -59,6 +59,21 @@ export async function api<T = unknown>(yol: string, govde?: unknown): Promise<T>
   return json as T;
 }
 
+/** Resim gibi ikili yanıt (POST) → tarayıcı nesne adresi. Kullanan, işi bitince URL.revokeObjectURL ile bırakır. */
+export async function apiBlob(yol: string, govde: unknown): Promise<string> {
+  const yanit = await fetch("/api" + yol, {
+    method: "POST",
+    headers: { "X-Aktarim-Anahtar": anahtar ?? "", "Content-Type": "application/json" },
+    body: JSON.stringify(govde),
+    cache: "no-store",
+  });
+  if (!yanit.ok) {
+    const j = (await yanit.json().catch(() => null)) as { hata?: string } | null;
+    throw new ApiHatasi(j?.hata ?? `Hata (${yanit.status})`, yanit.status);
+  }
+  return URL.createObjectURL(await yanit.blob());
+}
+
 /** Pencere yoksa (tarayıcıda açıldıysa) exe sayfanın açık olduğunu nabızdan anlar. */
 export function nabziBaslat(): () => void {
   const at = () => void api("/nabiz", {}).catch(() => {});
