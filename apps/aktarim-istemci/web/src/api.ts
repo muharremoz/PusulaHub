@@ -96,6 +96,8 @@ export type IsOgesi = {
   gonderilen: number;
   hata: string | null;
   veriMb: number;
+  /** Sunucudaki hedef tür: veritabani | eski | resim | program | ek (paketlerde resim/ek) */
+  hedef?: string;
 };
 
 export type Aktarim = {
@@ -174,6 +176,11 @@ export type Durum = {
   kesifGonderildi: boolean;
   mesaj: string | null;
   /** Aktarım sonrası veritabanı ayırma (detach) sonucu. */
-  ayirma?: { durum: "suruyor" | "bitti"; ayrilanlar: string[]; hatalar: string[] } | null;
+  ayirma?: {
+    durum: "suruyor" | "bitti";
+    ayrilanlar: string[];
+    hatalar: string[];
+    dogrulama?: { ad: string; listedenCikti: boolean; dosyalarKontrolEdildi: boolean; dosyalarYerinde: boolean; dosyalar: string[] }[];
+  } | null;
   aktarim: Aktarim | null;
 };

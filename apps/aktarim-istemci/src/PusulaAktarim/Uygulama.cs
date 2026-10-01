@@ -43,6 +43,8 @@ namespace PusulaAktarim
         private string _ayirmaDurumu;              // null | suruyor | bitti
         private readonly List<string> _ayrilanlar = new List<string>();
         private readonly List<string> _ayirmaHatalari = new List<string>();
+        /// <summary>Her veritabanı için ayırma sonrası doğrulama: listeden çıktı mı, dosyaları diskte duruyor mu.</summary>
+        private readonly List<object> _ayirmaDogrulama = new List<object>();
 
         public Uygulama(ServisIstemci servis)
         {
@@ -99,11 +101,15 @@ namespace PusulaAktarim
                     kesifHatasi = _kesifHatasi,
                     kesifGonderildi = _kesifGonderildi,
                     mesaj = _mesaj,
-                    ayirma = _ayirmaDurumu == null ? null : new { durum = _ayirmaDurumu, ayrilanlar = _ayrilanlar.ToList(), hatalar = _ayirmaHatalari.ToList() },
+                    ayirma = _ayirmaDurumu == null ? null : new { durum = _ayirmaDurumu, ayrilanlar = _ayrilanlar.ToList(), hatalar = _ayirmaHatalari.ToList(), dogrulama = _ayirmaDogrulama.ToList() },
                     aktarim = _is == null ? null : new
                     {
                         // Paketlerin dosya listesi (on binlerce yol) ekrana gitmez.
-                        ogeler = _is.Ogeler.Select(o => new { o.Tip, o.Tur, o.Ad, o.Durum, o.Yuzde, o.Boyut, o.Gonderilen, o.Hata, o.VeriMb }).ToList(),
+                        ogeler = _is.Ogeler.Select(o => new
+                        {
+                            o.Tip, o.Tur, o.Ad, o.Durum, o.Yuzde, o.Boyut, o.Gonderilen, o.Hata, o.VeriMb,
+                            Hedef = o.Tip == "paket" && o.Meta != null && o.Meta.TryGetValue("hedefTur", out var ht) ? Convert.ToString(ht) : o.Tur,
+                        }).ToList(),
                         sikistir = _is.Sikistir,
                         suruyor = _aktarimSuruyor,
                         bitti = _is.Bitti,
@@ -449,7 +455,7 @@ namespace PusulaAktarim
         private async Task VeritabanlariniAyir(IsKaydi kayit)
         {
             var adlar = kayit.Ogeler.Where(x => x.Tip == "vt" && !string.IsNullOrEmpty(x.Veritabani)).Select(x => x.Veritabani).Distinct().ToList();
-            lock (_kilit) { _ayirmaDurumu = "suruyor"; _ayrilanlar.Clear(); _ayirmaHatalari.Clear(); }
+            lock (_kilit) { _ayirmaDurumu = "suruyor"; _ayrilanlar.Clear(); _ayirmaHatalari.Clear(); _ayirmaDogrulama.Clear(); }
             try
             {
                 using (var c = new SqlConnection(_sql.BaglantiMetni("master", 15)))
@@ -460,12 +466,50 @@ namespace PusulaAktarim
                         var q = "[" + ad.Replace("]", "]]") + "]";
                         try
                         {
+                            // Önce dosya yolları — ayrıldıktan sonra SQL artık bilmez.
+                            var dosyalar = new List<string>();
+                            using (var k = new SqlCommand("SELECT physical_name FROM sys.master_files WHERE database_id = DB_ID(@ad)", c))
+                            {
+                                k.Parameters.AddWithValue("@ad", ad);
+                                using (var o = await k.ExecuteReaderAsync())
+                                    while (await o.ReadAsync()) dosyalar.Add(o.GetString(0));
+                            }
                             using (var k = new SqlCommand($"ALTER DATABASE {q} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; EXEC sp_detach_db @dbname = @ad, @skipchecks = 'true';", c) { CommandTimeout = 120 })
                             {
                                 k.Parameters.AddWithValue("@ad", ad);
                                 await k.ExecuteNonQueryAsync();
                             }
-                            lock (_kilit) _ayrilanlar.Add(ad);
+                            // Doğrulama: veritabanı listeden çıktı mı, dosyalar diskte mi (SQL bu bilgisayarda ise bakılabilir).
+                            bool listedenCikti;
+                            using (var k = new SqlCommand("SELECT CASE WHEN DB_ID(@ad) IS NULL THEN 1 ELSE 0 END", c))
+                            {
+                                k.Parameters.AddWithValue("@ad", ad);
+                                listedenCikti = Convert.ToInt32(await k.ExecuteScalarAsync()) == 1;
+                            }
+                            // Dosya kontrolünü SQL Server'ın kendisi yapar: veri klasörü (Program Files\…\DATA) çoğu zaman
+                            // yalnız SQL servis hesabına açık, uygulama okuyamaz; SQL başka bilgisayarda da olabilir.
+                            var eksikDosya = new List<string>();
+                            var yerel = true;
+                            foreach (var f in dosyalar)
+                            {
+                                var var_ = await SqlDosyaVarMi(c, f);
+                                if (var_ == null) { yerel = false; break; }
+                                if (var_ == false) eksikDosya.Add(f);
+                            }
+                            lock (_kilit)
+                            {
+                                if (listedenCikti) _ayrilanlar.Add(ad);
+                                else _ayirmaHatalari.Add(ad + ": ayırma komutu çalıştı ama veritabanı hâlâ SQL Server'da görünüyor.");
+                                if (eksikDosya.Count > 0) _ayirmaHatalari.Add(ad + ": dosya bulunamadı → " + string.Join(", ", eksikDosya));
+                                _ayirmaDogrulama.Add(new
+                                {
+                                    ad,
+                                    listedenCikti,
+                                    dosyalarKontrolEdildi = yerel,
+                                    dosyalarYerinde = yerel && eksikDosya.Count == 0,
+                                    dosyalar,
+                                });
+                            }
                         }
                         catch (SqlException e)
                         {
@@ -489,6 +533,29 @@ namespace PusulaAktarim
                 lock (_kilit) _ayirmaHatalari.Add("SQL Server'a bağlanılamadı: " + e.Message);
             }
             lock (_kilit) _ayirmaDurumu = "bitti";
+        }
+
+        /// <summary>SQL Server'ın gördüğü dosya var mı: sys.dm_os_file_exists (2017+), yoksa xp_fileexist. Bakılamazsa null.</summary>
+        private static async Task<bool?> SqlDosyaVarMi(SqlConnection c, string yol)
+        {
+            foreach (var sorgu in new[]
+            {
+                "SELECT CAST(file_exists AS int) FROM sys.dm_os_file_exists(@p)",
+                "DECLARE @s TABLE (a int, b int, c int); INSERT @s EXEC master.dbo.xp_fileexist @p; SELECT TOP 1 a FROM @s",
+            })
+            {
+                try
+                {
+                    using (var k = new SqlCommand(sorgu, c) { CommandTimeout = 15 })
+                    {
+                        k.Parameters.AddWithValue("@p", yol);
+                        var r = await k.ExecuteScalarAsync();
+                        if (r != null && r != DBNull.Value) return Convert.ToInt32(r) == 1;
+                    }
+                }
+                catch (SqlException) { /* bu yol desteklenmiyor / yetki yok → sıradaki */ }
+            }
+            return null;
         }
 
         // ------------------------------------------------------------ keşif

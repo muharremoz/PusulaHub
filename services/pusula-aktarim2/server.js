@@ -558,7 +558,9 @@ function aktarimiBaslat(id) {
   aktar(id)
     .catch((err) => {
       fastify.log.error({ err: String(err?.message ?? err), oturum: id }, "tasima hatasi")
-      sql.aktarimDurumu.run({ id, durum: "hata", asama: null, ilerleme: 0, hata: String(err?.message ?? err).slice(0, 500) })
+      // asama korunur: istemci hangi adımda (veritabani/eski/resim/program/ek) durduğunu gösterir.
+      const o = sql.byId.get(id)
+      sql.aktarimDurumu.run({ id, durum: "hata", asama: o?.asama ?? null, ilerleme: o?.ilerleme ?? 0, hata: String(err?.message ?? err).slice(0, 500) })
     })
     .finally(() => suruyor.delete(id))
 }

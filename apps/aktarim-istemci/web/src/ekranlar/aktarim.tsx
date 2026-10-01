@@ -1,12 +1,23 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, Circle, Info, Loader2, Pause, Play, WifiOff, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Loader2, Pause, Play, WifiOff, XCircle } from "lucide-react";
 import { api, type Durum, type IsOgesi } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { AktarimAdimlari } from "./aktarim-adimlari";
 import { mb } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
+
+/** Öğe türü etiketi — rapor ekranındaki sekme renkleriyle aynı. */
+const TUR: Record<string, { ad: string; renk: string }> = {
+  veritabani: { ad: "Veritabanı", renk: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
+  eski: { ad: "Eski yıl", renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  resim: { ad: "Resim", renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  program: { ad: "Program", renk: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
+  ek: { ad: "Ek dosya", renk: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400" },
+};
 
 const ADIM: Record<IsOgesi["durum"], string> = {
   bekliyor: "Sırada",
@@ -74,7 +85,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                 {a.bitti ? "Tüm veriler Pusula'ya ulaştı" : a.suruyor ? "Aktarım sürüyor" : "Aktarım duraklatıldı"}
               </div>
               <div className="text-xs text-muted-foreground">
-                {tamam} / {a.ogeler.length} veritabanı tamamlandı{hatali ? ` · ${hatali} hatalı` : ""}
+                {tamam} / {a.ogeler.length} öğe yüklendi{hatali ? ` · ${hatali} hatalı` : ""}
               </div>
             </div>
             <div className="text-2xl font-bold tabular-nums">{genel}%</div>
@@ -100,110 +111,52 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             <AlertDescription>{durum.mesaj}</AlertDescription>
           </Alert>
         )}
-        {a.bitti && <SunucuDurumu a={a} />}
-        {a.bitti && a.veritabanlariAyir && <AyirmaDurumu d={durum} />}
+        <AktarimAdimlari d={durum} />
 
-        <section className="overflow-hidden rounded-lg border bg-card">
-          {a.ogeler.map((o) => (
-            <div key={o.ad} className="flex items-center gap-3 border-b px-4 py-3 last:border-b-0">
-              <Simge d={o.durum} suruyor={a.suruyor} />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="truncate font-mono text-sm">{o.ad}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {ADIM[o.durum]}
-                    {o.durum === "yukleniyor" && o.boyut > 0 && ` · ${bayt(o.gonderilen)} / ${bayt(o.boyut)}`}
-                    {o.durum !== "yukleniyor" && o.durum !== "tamam" && o.durum !== "hata" && o.durum !== "bekliyor" && ` · %${o.yuzde}`}
-                    {o.durum === "tamam" && o.boyut > 0 && ` · ${bayt(o.boyut)}`}
-                  </span>
-                </div>
-                {(o.durum === "yedekleniyor" || o.durum === "paketleniyor" || o.durum === "hazirlaniyor" || o.durum === "yukleniyor") && (
-                  <Progress value={o.yuzde} className="mt-1.5 h-1.5" />
-                )}
-                {o.hata && <div className="mt-1 text-xs text-destructive">{o.hata}</div>}
-              </div>
-            </div>
-          ))}
+        <section className="overflow-hidden rounded-lg border bg-card shadow-xs">
+          <Table>
+            <TableHeader>
+              <TableRow className="text-[10px] uppercase tracking-wider">
+                <TableHead className="w-10 pl-4" />
+                <TableHead>Öğe</TableHead>
+                <TableHead>Tür</TableHead>
+                <TableHead className="text-right">Boyut</TableHead>
+                <TableHead className="w-48 pr-4">Durum</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {a.ogeler.map((o) => {
+                const tur = TUR[o.hedef ?? o.tur] ?? TUR[o.tur];
+                const suren = o.durum === "yedekleniyor" || o.durum === "paketleniyor" || o.durum === "hazirlaniyor" || o.durum === "yukleniyor";
+                return (
+                  <TableRow key={o.ad}>
+                    <TableCell className="pl-4"><Simge d={o.durum} suruyor={a.suruyor} /></TableCell>
+                    <TableCell className="max-w-72">
+                      <div className="truncate font-medium">{o.ad}</div>
+                      {o.hata && <div className="mt-0.5 text-xs whitespace-normal text-destructive">{o.hata}</div>}
+                    </TableCell>
+                    <TableCell>
+                      {tur && <span className={"inline-flex rounded-md px-2 py-0.5 text-xs font-medium " + tur.renk}>{tur.ad}</span>}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                      {o.boyut > 0 ? bayt(o.boyut) : o.veriMb > 0 ? mb(o.veriMb) : "—"}
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <div className={"text-xs " + (o.durum === "tamam" ? "text-emerald-700 dark:text-emerald-400" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}>
+                        {ADIM[o.durum]}
+                        {o.durum === "yukleniyor" && o.boyut > 0 && ` · ${bayt(o.gonderilen)} / ${bayt(o.boyut)}`}
+                        {suren && o.durum !== "yukleniyor" && ` · %${o.yuzde}`}
+                      </div>
+                      {suren && <Progress value={o.yuzde} className="mt-1 h-1.5" />}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </section>
       </main>
     </div>
-  );
-}
-
-/** Yükleme bitti: Pusula tarafında dosyalar sunuculara taşınıyor. Müşterinin yapacağı bir şey yok. */
-function SunucuDurumu({ a }: { a: NonNullable<Durum["aktarim"]> }) {
-  const s = a.sunucu;
-  if (!a.bildirildi || !s) {
-    return (
-      <Alert>
-        <Loader2 className="animate-spin" />
-        <AlertDescription>Yükleme tamamlandı, Pusula'ya bildiriliyor…</AlertDescription>
-      </Alert>
-    );
-  }
-  if (s.durum === "tamamlandi") {
-    return (
-      <Alert>
-        <CheckCircle2 />
-        <AlertDescription>Aktarım tamamlandı. Verileriniz Pusula sunucularında; bu pencereyi kapatabilirsiniz.</AlertDescription>
-      </Alert>
-    );
-  }
-  if (s.durum === "hata") {
-    return (
-      <Alert>
-        <AlertTriangle />
-        <AlertDescription>
-          Dosyalarınız bize ulaştı; sunucuya yerleştirirken bir sorun çıktı ve ekibimiz ilgileniyor. Tekrar yüklemeniz gerekmiyor, bu pencereyi
-          kapatabilirsiniz.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-  return (
-    <Alert>
-      <Loader2 className="animate-spin" />
-      <AlertDescription>
-        Dosyalarınız bize ulaştı, Pusula sunucularına yerleştiriliyor ({s.ilerleme}%).{" "}
-        {a.veritabanlariAyir
-          ? "Pencereyi kapatmayın: işlem bitince veritabanları bu bilgisayardaki SQL Server'dan ayrılacak."
-          : "Bu pencereyi kapatabilirsiniz; işlem bizim tarafta sürer."}
-      </AlertDescription>
-    </Alert>
-  );
-}
-
-/** Aktarım tamamlandıktan sonra veritabanlarının SQL Server'dan ayrılması (detach). */
-function AyirmaDurumu({ d }: { d: Durum }) {
-  const y = d.ayirma;
-  if (!y) {
-    return (
-      <Alert>
-        <Info />
-        <AlertDescription>Aktarım tamamlanınca aktarılan veritabanları bu SQL Server'dan ayrılacak (dosyalar silinmez).</AlertDescription>
-      </Alert>
-    );
-  }
-  if (y.durum === "suruyor") {
-    return (
-      <Alert>
-        <Loader2 className="animate-spin" />
-        <AlertDescription>Veritabanları SQL Server'dan ayrılıyor… ({y.ayrilanlar.length} ayrıldı)</AlertDescription>
-      </Alert>
-    );
-  }
-  return (
-    <Alert variant={y.hatalar.length ? "destructive" : "default"}>
-      {y.hatalar.length ? <AlertTriangle /> : <CheckCircle2 />}
-      <AlertDescription>
-        <span>{y.ayrilanlar.length} veritabanı SQL Server'dan ayrıldı. Veri dosyaları diskte duruyor.</span>
-        {y.hatalar.length > 0 && (
-          <ul className="mt-1 list-disc pl-4 text-xs">
-            {y.hatalar.map((h) => <li key={h}>{h}</li>)}
-          </ul>
-        )}
-      </AlertDescription>
-    </Alert>
   );
 }
 
