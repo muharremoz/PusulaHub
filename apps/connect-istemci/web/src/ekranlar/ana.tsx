@@ -57,14 +57,8 @@ export function AnaEkran({ durum, setDurum }: P) {
     <div className="flex h-svh overflow-hidden bg-muted/40">
       {/* ── Sol: firma bilgileri ───────────────────────────── */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="flex items-center gap-2.5 border-b px-5 py-4">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <PlugZap className="size-5" />
-          </span>
-          <div>
-            <div className="text-sm font-semibold">Pusula Connect</div>
-            <div className="text-xs text-muted-foreground">v{durum.surum}</div>
-          </div>
+        <div className="border-b px-5 py-3">
+          <ParlayanLogo />
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
@@ -99,7 +93,15 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Button variant="ghost" size="sm" className="justify-start" onClick={() => void api("/gunluk/ac", {})}>
             <FileText /> Günlük
           </Button>
-          <img src={pusulaLogo} alt="Pusula Yazılım" className="mt-2 ml-2 h-5 w-auto self-start select-none opacity-70" draggable={false} />
+        </div>
+        <div className="flex items-center gap-2.5 border-t px-5 py-3">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+            <PlugZap className="size-4" />
+          </span>
+          <div>
+            <div className="text-sm font-semibold">Pusula Connect</div>
+            <div className="text-xs text-muted-foreground">v{durum.surum}</div>
+          </div>
         </div>
       </aside>
 
@@ -342,6 +344,32 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
         <p className="mt-1 text-sm text-muted-foreground">
           {bagli ? "VPN açık, sunucuya erişiliyor." : "VPN ile şifreli tünel kurulur, programınız Pusula sunucusunda çalışır."}
         </p>
+      </div>
+    </div>
+  );
+}
+
+/** Pusula logosu: ortada, büyük; arkada yumuşak ışıma, üzerinden aralıklı ışık geçer (logo şekline maskeli). */
+function ParlayanLogo() {
+  const maske = {
+    WebkitMaskImage: `url(${pusulaLogo})`, maskImage: `url(${pusulaLogo})`,
+    WebkitMaskSize: "contain", maskSize: "contain",
+    WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center", maskPosition: "center",
+  } as React.CSSProperties;
+  return (
+    <div className="flex justify-center py-2">
+      <div className="relative">
+        <div className="absolute inset-0 -z-0 scale-125 rounded-full bg-primary/10 blur-xl" aria-hidden />
+        <img
+          src={pusulaLogo}
+          alt="Pusula Yazılım"
+          className="relative h-10 w-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.35)] select-none"
+          draggable={false}
+        />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={maske} aria-hidden>
+          <div className="logo-parlama absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        </div>
       </div>
     </div>
   );
