@@ -172,6 +172,13 @@ export function AnaEkran({ durum, setDurum }: P) {
             durum={k.forti.kurulu ? "iyi" : "hata"}
             deger={k.forti.kurulu ? "FortiClient" : "Kurulu değil"}
             alt={k.forti.kurulu ? `Sürüm ${k.forti.surum ?? "—"}` : "Aşağıdaki Kur düğmesiyle kurulur"}
+            aksiyon={
+              k.forti.kurulu && (
+                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" disabled={bekle === "/vpn/ac"} onClick={() => void cagir("/vpn/ac")}>
+                  {bekle === "/vpn/ac" ? <Loader2 className="animate-spin" /> : <ExternalLink />} VPN'i aç
+                </Button>
+              )
+            }
           />
           <Kart
             ikon={<Network />}
@@ -366,7 +373,7 @@ const KART_RENK: Record<KartDurumu, { kutu: string; rozet: string }> = {
 };
 
 /** Durum kartı: solda renkli ikon kutusu, başlık + kısa değer + açıklama, sağ üstte durum işareti. */
-function Kart({ ikon, baslik, deger, alt, durum }: { ikon: React.ReactNode; baslik: string; deger: string; alt: React.ReactNode; durum: KartDurumu }) {
+function Kart({ ikon, baslik, deger, alt, durum, aksiyon }: { ikon: React.ReactNode; baslik: string; deger: string; alt: React.ReactNode; durum: KartDurumu; aksiyon?: React.ReactNode }) {
   const r = KART_RENK[durum];
   return (
     <div className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-xs">
@@ -380,6 +387,7 @@ function Kart({ ikon, baslik, deger, alt, durum }: { ikon: React.ReactNode; basl
         </div>
         <div className="truncate text-[15px] leading-tight font-semibold">{deger}</div>
         <div className="mt-0.5 truncate text-xs text-muted-foreground">{alt}</div>
+        {aksiyon && <div className="mt-2.5">{aksiyon}</div>}
       </div>
     </div>
   );
