@@ -344,7 +344,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 }}
                               >
                                 <ToggleGroupItem value="guncel" className="px-2 text-xs">Güncel</ToggleGroupItem>
-                                <ToggleGroupItem value="eski" className="px-2 text-xs">Eski yıl</ToggleGroupItem>
+                                <ToggleGroupItem value="eski" className="px-2 text-xs data-[state=on]:border-amber-500 data-[state=on]:bg-amber-500 data-[state=on]:text-white">Eski yıl</ToggleGroupItem>
                               </ToggleGroup>
                             </TableCell>
                           )}
