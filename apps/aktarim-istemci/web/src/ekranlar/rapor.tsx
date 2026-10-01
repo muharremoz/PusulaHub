@@ -159,6 +159,19 @@ export function RaporEkrani({ durum, setDurum }: P) {
       return y;
     });
 
+  // Toplu: filtreye uyan ve seçili olanların hepsi güncel / eski yıl.
+  const topluEskiYil = (eski: boolean) =>
+    setEskiYil((s) => {
+      const y = new Set(s);
+      for (const v of secilebilir) {
+        if (!secili.has(v.ad)) continue;
+        if (eski) y.add(v.ad);
+        else y.delete(v.ad);
+      }
+      return y;
+    });
+  const eskiSayisi = [...eskiYil].filter((ad) => secili.has(ad)).length;
+
   const resimSayfaSayisi = Math.max(1, Math.ceil(resimler.length / KLASOR_SAYFA));
   const resimSayfaGecerli = Math.min(resimSayfa, resimSayfaSayisi);
   const resimBas = (resimSayfaGecerli - 1) * KLASOR_SAYFA;
@@ -316,18 +329,23 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           <TableCell className="px-4 text-muted-foreground">{v.sonYedek ? new Date(v.sonYedek).toLocaleDateString("tr") : "—"}</TableCell>
                           {hedef.depo && (
                             <TableCell className="px-4">
-                              {secili.has(v.ad) && (
-                                <ToggleGroup
-                                  type="single"
-                                  size="sm"
-                                  variant="outline"
-                                  value={eskiYil.has(v.ad) ? "eski" : "guncel"}
-                                  onValueChange={(d) => d && setEskiYil((s) => setDegistir(s, v.ad, d === "eski"))}
-                                >
-                                  <ToggleGroupItem value="guncel" className="px-2 text-xs">Güncel</ToggleGroupItem>
-                                  <ToggleGroupItem value="eski" className="px-2 text-xs">Eski yıl</ToggleGroupItem>
-                                </ToggleGroup>
-                              )}
+                              {/* Her zaman görünür; seçili değilse soluk. Birine basmak satırı da seçer. */}
+                              <ToggleGroup
+                                type="single"
+                                size="sm"
+                                variant="outline"
+                                disabled={v.durum !== "ONLINE"}
+                                className={secili.has(v.ad) ? "" : "opacity-50 hover:opacity-100"}
+                                value={secili.has(v.ad) ? (eskiYil.has(v.ad) ? "eski" : "guncel") : ""}
+                                onValueChange={(d) => {
+                                  if (!d) return;
+                                  setSecili((s) => setDegistir(s, v.ad, true));
+                                  setEskiYil((s) => setDegistir(s, v.ad, d === "eski"));
+                                }}
+                              >
+                                <ToggleGroupItem value="guncel" className="px-2 text-xs">Güncel</ToggleGroupItem>
+                                <ToggleGroupItem value="eski" className="px-2 text-xs">Eski yıl</ToggleGroupItem>
+                              </ToggleGroup>
                             </TableCell>
                           )}
                         </TableRow>
@@ -343,9 +361,19 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 bilgi={`${(vtSayfaGecerli - 1) * VT_SAYFA + 1}–${Math.min(vtSayfaGecerli * VT_SAYFA, filtreli.length)} / ${filtreli.length} · ${secili.size} seçili`}
               />
               {hedef.depo && (
-                <p className="border-t px-4 py-2 text-xs text-muted-foreground">
-                  "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
-                </p>
+                <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
+                  <span className="min-w-0 flex-1">
+                    "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
+                    {eskiSayisi > 0 && <span className="ml-1 font-medium text-foreground">{eskiSayisi} eski yıl seçili.</span>}
+                  </span>
+                  <span>Seçilenleri ({filtreliSeciliSayisi}):</span>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(false)}>
+                    Güncel yap
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(true)}>
+                    Eski yıl yap
+                  </Button>
+                </div>
               )}
             </Bolum>
 
@@ -497,6 +525,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                   <span className="font-medium">{secili.size} veritabanı</span>
                   <span className="text-muted-foreground">
                     {" "}· {mb(toplamMb)}
+                    {eskiSayisi > 0 && ` (${eskiSayisi} eski yıl)`}
                     {resimSayisi > 0 && ` · ${resimSayisi} resim klasörü`}
                     {eskiDosyalar.length > 0 && ` · ${eskiDosyalar.length} eski yıl dosyası`}
                     {programSayisi > 0 && ` · ${programSayisi} program`}
