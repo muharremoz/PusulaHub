@@ -1,22 +1,22 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    PUSULA AKTARIM 2 — müşteri PC'sinde çalışan aktarım uygulaması.
-    Plan: docs/aktarim2/PLAN.md. İskelet SQL Konsol web sürümünden (PusulaCRM/sql-konsol):
-    penceresiz exe → yalnız 127.0.0.1'i dinleyen küçük web sunucusu → WebView2 penceresi.
-    Arayüz (../../web, React + Vite) derlenip exe'ye gömülür; Costura ile tek dosya.
+    PUSULA AKTARIM 2 â€” mÃ¼ÅŸteri PC'sinde Ã§alÄ±ÅŸan aktarÄ±m uygulamasÄ±.
+    Plan: docs/aktarim2/PLAN.md. Ä°skelet SQL Konsol web sÃ¼rÃ¼mÃ¼nden (PusulaCRM/sql-konsol):
+    penceresiz exe â†’ yalnÄ±z 127.0.0.1'i dinleyen kÃ¼Ã§Ã¼k web sunucusu â†’ WebView2 penceresi.
+    ArayÃ¼z (../../web, React + Vite) derlenip exe'ye gÃ¶mÃ¼lÃ¼r; Costura ile tek dosya.
 
     Derleme:
       1) apps/aktarim-istemci/web:  npm install && npm run build
-      2) bu klasörde:               dotnet build -c Release
-    (2. adım web/dist yoksa 1. adımı kendisi çalıştırır.)
+      2) bu klasÃ¶rde:               dotnet build -c Release
+    (2. adÄ±m web/dist yoksa 1. adÄ±mÄ± kendisi Ã§alÄ±ÅŸtÄ±rÄ±r.)
   -->
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <!-- 64 bit çalışsın: 32 bit süreçte Windows "Program Files" ve HKLM SOFTWARE yollarını
-         WOW6432Node görünümüne yönlendirir → FortiClient görünmez, VPN profili yanlış yere
-         yazılır (2026-10-01 yerel denemede yakalandı). -->
+    <!-- 64 bit Ã§alÄ±ÅŸsÄ±n: 32 bit sÃ¼reÃ§te Windows "Program Files" ve HKLM SOFTWARE yollarÄ±nÄ±
+         WOW6432Node gÃ¶rÃ¼nÃ¼mÃ¼ne yÃ¶nlendirir â†’ FortiClient gÃ¶rÃ¼nmez, VPN profili yanlÄ±ÅŸ yere
+         yazÄ±lÄ±r (2026-10-01 yerel denemede yakalandÄ±). -->
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <TargetFramework>net48</TargetFramework>
@@ -24,13 +24,13 @@
     <Nullable>disable</Nullable>
     <AssemblyName>PusulaAktarim</AssemblyName>
     <RootNamespace>PusulaAktarim</RootNamespace>
-    <!-- Servisteki MIN_ISTEMCI_SURUM ile karşılaştırılır (eskiyse 426). -->
-    <Version>0.1.1</Version>
-    <Company>Pusula Yazılım</Company>
-    <Product>Pusula Aktarım</Product>
-    <AssemblyTitle>Pusula Aktarım</AssemblyTitle>
-    <Description>Pusula Aktarım — verilerinizi Pusula sunucularına taşır</Description>
-    <Copyright>© Pusula Yazılım</Copyright>
+    <!-- Servisteki MIN_ISTEMCI_SURUM ile karÅŸÄ±laÅŸtÄ±rÄ±lÄ±r (eskiyse 426). -->
+    <Version>0.2.0</Version>
+    <Company>Pusula YazÄ±lÄ±m</Company>
+    <Product>Pusula AktarÄ±m</Product>
+    <AssemblyTitle>Pusula AktarÄ±m</AssemblyTitle>
+    <Description>Pusula AktarÄ±m â€” verilerinizi Pusula sunucularÄ±na taÅŸÄ±r</Description>
+    <Copyright>Â© Pusula YazÄ±lÄ±m</Copyright>
     <ApplicationIcon>uygulama.ico</ApplicationIcon>
     <UseWindowsForms>true</UseWindowsForms>
     <DebugType>embedded</DebugType>
@@ -44,20 +44,20 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
-    <!-- ProtectedData (DPAPI) — oturum tokenı yalnız bu Windows kullanıcısına açık saklanır -->
+    <!-- ProtectedData (DPAPI) â€” oturum tokenÄ± yalnÄ±z bu Windows kullanÄ±cÄ±sÄ±na aÃ§Ä±k saklanÄ±r -->
     <Reference Include="System.Security" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
     <PackageReference Include="Fody" Version="6.8.1" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Derlenmiş web arayüzü exe'ye gömülür: kaynak adı = "web/" + göreli yol. -->
+  <!-- DerlenmiÅŸ web arayÃ¼zÃ¼ exe'ye gÃ¶mÃ¼lÃ¼r: kaynak adÄ± = "web/" + gÃ¶reli yol. -->
   <ItemGroup>
     <EmbeddedResource Include="$(WebKlasoru)dist\**\*" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 
   <Target Name="WebArayuzuDerle" BeforeTargets="BeforeBuild" Condition="!Exists('$(WebKlasoru)dist\index.html')">
-    <Message Importance="high" Text="Web arayüzü derleniyor (aktarim-istemci/web)…" />
+    <Message Importance="high" Text="Web arayÃ¼zÃ¼ derleniyor (aktarim-istemci/web)â€¦" />
     <Exec Command="npm install" WorkingDirectory="$(WebKlasoru)" Condition="!Exists('$(WebKlasoru)node_modules')" />
     <Exec Command="npm run build" WorkingDirectory="$(WebKlasoru)" />
     <ItemGroup>
@@ -65,7 +65,7 @@
     </ItemGroup>
   </Target>
 
-  <!-- WebView2'nin yerel yükleyicisi exe'ye gömülür (tek dosya); AktarimPenceresi çıkarır. -->
+  <!-- WebView2'nin yerel yÃ¼kleyicisi exe'ye gÃ¶mÃ¼lÃ¼r (tek dosya); AktarimPenceresi Ã§Ä±karÄ±r. -->
   <ItemGroup>
     <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll" LogicalName="webview2/x64/WebView2Loader.dll" />
     <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll" LogicalName="webview2/x86/WebView2Loader.dll" />
