@@ -3666,8 +3666,10 @@ tr:nth-child(even) td{background:#fafafa}
 
           {/* Hesabı Askıya Al / Aktifleştir */}
           {selectedFirma && (
-            <ConnectKoduDialog firkod={selectedFirma.firkod} kullanici={connectKoduKullanici} onClose={() => setConnectKoduKullanici(null)} />
-            <ConnectCihazlarDialog firkod={selectedFirma.firkod} kullanici={connectCihazKullanici} onClose={() => setConnectCihazKullanici(null)} />
+            <>
+              <ConnectKoduDialog firkod={selectedFirma.firkod} kullanici={connectKoduKullanici} onClose={() => setConnectKoduKullanici(null)} />
+              <ConnectCihazlarDialog firkod={selectedFirma.firkod} kullanici={connectCihazKullanici} onClose={() => setConnectCihazKullanici(null)} />
+            </>
           )}
 
           <AlertDialog open={!!toggleUser} onOpenChange={(o) => { if (!o && !toggleBusy) setToggleUser(null) }}>
