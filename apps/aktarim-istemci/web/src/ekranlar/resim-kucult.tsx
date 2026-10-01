@@ -56,7 +56,8 @@ type Calisma = {
 
 type Klasor = { yol: string; secili: boolean; adet?: number; mb?: number };
 
-export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | null; onGeri: () => void }) {
+/** onGeri(degisti): bu ekranda en az bir resim küçültüldüyse true — rapor taraması yenilensin diye. */
+export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | null; onGeri: (degisti: boolean) => void }) {
   const [klasorler, setKlasorler] = useState<Klasor[]>(() =>
     (rapor?.resimKlasorleri ?? [])
       .filter((k) => k.var)
@@ -77,6 +78,8 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
   const [dosyaSor, dosyaSecici] = useDosyaSecici();
 
   const seciliKlasorler = klasorler.filter((k) => k.secili).map((k) => k.yol);
+  const degisti = useRef(false);
+  if ((calisma?.kucultulen ?? 0) > 0) degisti.current = true;
   const suruyor = !!calisma?.suruyor;
 
   // Açılışta önceki/süren işin durumu
@@ -173,7 +176,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
   return (
     <div className="min-h-svh bg-gradient-to-b from-violet-50 to-muted/40 to-60% pb-20 dark:from-violet-950/30">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
-        <Button variant="ghost" size="icon" onClick={onGeri} disabled={suruyor} aria-label="Geri">
+        <Button variant="ghost" size="icon" onClick={() => onGeri(degisti.current)} disabled={suruyor} aria-label="Geri">
           <ArrowLeft />
         </Button>
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm">

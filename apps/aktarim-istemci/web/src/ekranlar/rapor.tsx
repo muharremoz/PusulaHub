@@ -305,7 +305,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
       </ToggleGroup>
     );
 
-  if (kucultme) return <ResimKucultmeEkrani rapor={r} onGeri={() => setKucultme(false)} />;
+  if (kucultme)
+    return (
+      <ResimKucultmeEkrani
+        rapor={r}
+        onGeri={(degisti) => {
+          setKucultme(false);
+          // Küçültülen klasörlerin boyutları değişti → tarama yenilensin.
+          if (degisti) void yenile();
+        }}
+      />
+    );
 
   return (
     <div className="min-h-svh bg-gradient-to-b from-blue-50 to-muted/40 to-60% pb-20 dark:from-blue-950/30">
@@ -535,7 +545,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                         <span>
                           <b>{buyukResim.adet.toLocaleString("tr")}</b> adet resim 500 KB'tan büyük (toplam {mb(buyukResim.mb)}). Yükleme öncesi
-                          sıkıştırmanızı öneririz — yükleme süresi azalır ve depolama tasarrufu sağlanır.
+                          <b> Resim küçült</b> aracıyla sıkıştırmanızı öneririz — yükleme süresi azalır, depolama tasarrufu sağlanır. Küçültülmüş
+                          yüksek çözünürlüklü resimler 500 KB üzerinde kalabilir; bu normaldir.
                         </span>
                       </div>
                     )}
