@@ -24,7 +24,7 @@
  *     POST   /api/2fa/kapat   { kod }   → { kasaAnahtari } (istemci şifreyi kasaya geri yazar), kapanır
  *     POST   /admin/cihazlar/:id/2fa-sifirla   Pusula sıfırlar (telefon kayboldu)
  *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
- *     GET    /api/surum                 { son, min } — kendini güncelleme
+ *     GET    /api/surum                 { son, min, sha256, boyut, notlar } — kendini güncelleme
  *     GET    /indir                     uygulama exe
  */
 
@@ -46,6 +46,8 @@ const MIN_SURUM   = process.env.MIN_ISTEMCI_SURUM ?? "0.1.0"
 /** Yayındaki exe ve sürümü — istemci kendini buna göre günceller. */
 const ISTEMCI_EXE = process.env.ISTEMCI_EXE ?? join(__dirname, "istemci", "PusulaConnect.exe")
 const SON_SURUM_DOSYASI = process.env.SON_SURUM_DOSYASI ?? join(__dirname, "istemci", "surum.txt")
+/** İsteğe bağlı: güncelleme penceresinde gösterilen "bu sürümde neler var" (düz metin, satır başına bir madde). */
+const NOTLAR_DOSYASI = process.env.NOTLAR_DOSYASI ?? join(__dirname, "istemci", "notlar.txt")
 
 if (!SERVICE_KEY) {
   console.error("TRANSFER_SERVICE_KEY env değişkeni tanımlı değil")
@@ -375,11 +377,28 @@ fastify.get("/api/profil", async (req, reply) => {
   return kayitGorunumu(c)
 })
 
+/**
+ * Yayındaki exe'nin SHA-256'sı: istemci indirdiğini bununla doğrular (yarım/bozuk/değiştirilmiş dosya
+ * kurulmaz). Exe değişince (boyut/zaman) yeniden hesaplanır.
+ */
+let exeOzeti = null // { anahtar, sha256, boyut }
+async function yayinOzeti() {
+  const st = await stat(ISTEMCI_EXE)
+  const anahtar = st.size + ":" + st.mtimeMs
+  if (exeOzeti?.anahtar === anahtar) return exeOzeti
+  const h = createHash("sha256")
+  await new Promise((tamam, hata) => createReadStream(ISTEMCI_EXE).on("data", (p) => h.update(p)).on("end", tamam).on("error", hata))
+  exeOzeti = { anahtar, sha256: h.digest("hex"), boyut: st.size }
+  return exeOzeti
+}
+
 /** Yayındaki sürüm: exe ile birlikte istemci/surum.txt'ye yazılır (yayınlama adımı). */
 fastify.get("/api/surum", async () => {
-  let son = null
+  let son = null, notlar = null, ozet = null
   try { son = (await readFile(SON_SURUM_DOSYASI, "utf8")).trim() || null } catch { /* yayın yok */ }
-  return { son, min: MIN_SURUM }
+  try { notlar = (await readFile(NOTLAR_DOSYASI, "utf8")).trim() || null } catch { /* not yok */ }
+  if (son) { try { ozet = await yayinOzeti() } catch { son = null /* exe yoksa yayın da yok */ } }
+  return { son, min: MIN_SURUM, sha256: ozet?.sha256 ?? null, boyut: ozet?.boyut ?? null, notlar }
 })
 
 fastify.get("/indir", async (req, reply) => {

@@ -87,23 +87,60 @@ namespace PusulaConnect
             return 0;
         }
 
-        /// <summary>Yeni sürümü indirip kurulu kopyanın yerine koyar ve yeniden başlatır.</summary>
-        public static async Task Guncelle(string indirmeAdresi, Action kapat)
+        /// <summary>
+        /// Yeni sürümü indirir, SHA-256'sını servisin bildirdiğiyle karşılaştırır, kurulu kopyanın yerine koyar
+        /// ve yeniden başlatır. Bir önceki sürüm "PusulaConnect.exe.onceki" olarak kalır (elle geri dönüş için).
+        /// </summary>
+        public static async Task Guncelle(string indirmeAdresi, string beklenenSha256, Action<int> ilerleme, Action kapat)
         {
             Directory.CreateDirectory(KuruluKlasor);
             var yeni = KuruluExe + ".yeni";
-            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) })
-            using (var akis = await http.GetStreamAsync(indirmeAdresi))
-            using (var f = File.Create(yeni))
-                await akis.CopyToAsync(f);
+            using (var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
+            using (var yanit = await http.GetAsync(indirmeAdresi, HttpCompletionOption.ResponseHeadersRead))
+            {
+                yanit.EnsureSuccessStatusCode();
+                var toplam = yanit.Content.Headers.ContentLength ?? 0;
+                using (var akis = await yanit.Content.ReadAsStreamAsync())
+                using (var f = File.Create(yeni))
+                {
+                    var tampon = new byte[81920];
+                    long okunan = 0;
+                    int n, son = -1;
+                    while ((n = await akis.ReadAsync(tampon, 0, tampon.Length)) > 0)
+                    {
+                        await f.WriteAsync(tampon, 0, n);
+                        okunan += n;
+                        var yuzde = toplam > 0 ? (int)(okunan * 100 / toplam) : 0;
+                        if (yuzde != son) { son = yuzde; ilerleme?.Invoke(yuzde); }
+                    }
+                }
+            }
             // Gerçekten exe mi (sunucu hata sayfası dönebilir) — "MZ" + makul boyut
             var fi = new FileInfo(yeni);
             var bas = new byte[2];
             using (var f = File.OpenRead(yeni)) f.Read(bas, 0, 2);
-            if (fi.Length < 200 * 1024 || bas[0] != 'M' || bas[1] != 'Z') { File.Delete(yeni); throw new Exception("İndirilen güncelleme geçersiz"); }
-            if (File.Exists(KuruluExe)) EskiyiKenaraAl(KuruluExe);
+            if (fi.Length < 200 * 1024 || bas[0] != 'M' || bas[1] != 'Z') { File.Delete(yeni); throw new Exception("İndirilen dosya geçerli bir uygulama değil."); }
+            if (!string.IsNullOrEmpty(beklenenSha256))
+            {
+                string ozet;
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                using (var f = File.OpenRead(yeni))
+                    ozet = BitConverter.ToString(sha.ComputeHash(f)).Replace("-", "").ToLowerInvariant();
+                if (!string.Equals(ozet, beklenenSha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Delete(yeni);
+                    throw new Exception("İndirilen güncelleme doğrulanamadı (özet tutmuyor). Tekrar deneyin.");
+                }
+            }
+            var onceki = KuruluExe + ".onceki";
+            if (File.Exists(KuruluExe))
+            {
+                try { if (File.Exists(onceki)) File.Delete(onceki); File.Move(KuruluExe, onceki); }
+                catch { EskiyiKenaraAl(KuruluExe); }   // çalışan exe yeniden adlandırılabilir
+            }
+            var yeniSurum = SurumOku(yeni);
             File.Move(yeni, KuruluExe);
-            Gunluk.Yaz("Güncellendi → " + SurumOku(KuruluExe) + ", yeniden başlatılıyor");
+            Gunluk.Yaz("Güncellendi → " + yeniSurum + ", yeniden başlatılıyor");
             Process.Start(new ProcessStartInfo(KuruluExe, "--guncellendi") { UseShellExecute = true, WorkingDirectory = KuruluKlasor });
             kapat();
         }

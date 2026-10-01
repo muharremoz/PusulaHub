@@ -97,6 +97,17 @@ export type Durum = {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;
   };
-  guncelleme: { mevcut: boolean; surum: string | null; suruyor: boolean };
+  guncelleme: {
+    mevcut: boolean;
+    surum: string | null;
+    suruyor: boolean;
+    /** İndirme ilerlemesi (0–100). */
+    yuzde?: number;
+    /** Yayındaki sürümün notları (satır başına bir madde). */
+    notlar?: string | null;
+    /** Bu sürüm servisin desteklediği en düşük sürümün altında (yalnız uyarı). */
+    zorunlu?: boolean;
+    hata?: string | null;
+  };
   gunluk: string;
 };

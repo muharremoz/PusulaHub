@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
 import { AyarlarIcerik } from "./ayarlar";
+import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
 import { ParlayanLogo } from "./ortak";
 
@@ -170,6 +171,20 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Alert>
             <WifiOff />
             <AlertDescription>Pusula sunucusuna şu an ulaşılamadı; kayıtlı ayarlarla çalışılıyor.</AlertDescription>
+          </Alert>
+        )}
+
+        {durum.guncelleme.zorunlu && (
+          <Alert className="border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-300">
+            <AlertTriangle />
+            <AlertDescription className="flex flex-wrap items-center gap-x-3 gap-y-2 text-inherit">
+              <span className="flex-1">Bu sürüm ({durum.surum}) artık desteklenmiyor. Sorun yaşamamak için güncelleyin.</span>
+              {durum.guncelleme.mevcut && (
+                <Button size="sm" variant="outline" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
+                  <Download /> Güncelle
+                </Button>
+              )}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -346,6 +361,7 @@ export function AnaEkran({ durum, setDurum }: P) {
       </main>
       )}
 
+      <GuncellemePenceresi durum={durum} setDurum={setDurum} />
       <IkiAcPenceresi acik={ikiAc} onKapat={() => setIkiAc(false)} setDurum={setDurum} kullanici={kayit.kullanici} />
       <KodPenceresi
         acik={kodIstek !== null}

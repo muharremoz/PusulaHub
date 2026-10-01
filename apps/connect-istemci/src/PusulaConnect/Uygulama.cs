@@ -40,6 +40,8 @@ namespace PusulaConnect
         private JObject _vpnDurum;
         private string _sonSurum;
         private bool _guncelleniyor;
+        private string _minSurum, _sonSha256, _guncellemeNotlari, _guncellemeHatasi;
+        private int _guncellemeYuzde;
 
         public Action Kapat { get; set; }
 
@@ -132,6 +134,11 @@ namespace PusulaConnect
                         mevcut = _sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0,
                         surum = _sonSurum,
                         suruyor = _guncelleniyor,
+                        yuzde = _guncellemeYuzde,
+                        notlar = _guncellemeNotlari,
+                        // Servisin desteklediği en düşük sürümün altında: yalnız uyarı (bağlanma engellenmez)
+                        zorunlu = _minSurum != null && Yerlesim.SurumKarsilastir(ServisIstemci.Surum, _minSurum) < 0,
+                        hata = _guncellemeHatasi,
                     },
                     gunluk = Gunluk.Dosya,
                 };
@@ -379,25 +386,40 @@ namespace PusulaConnect
             try
             {
                 var s = await _servis.SurumBilgisi();
-                lock (_kilit) _sonSurum = s.Value<string>("son");
+                lock (_kilit)
+                {
+                    _sonSurum = s.Value<string>("son");
+                    _minSurum = s.Value<string>("min");
+                    _sonSha256 = s.Value<string>("sha256");
+                    _guncellemeNotlari = s.Value<string>("notlar");
+                }
+                if (_sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0)
+                    Gunluk.Yaz("Yeni sürüm var: " + _sonSurum);
             }
             catch { }
         }
 
         public object Guncelle()
         {
+            // Oturum açıkken uygulama yeniden başlarsa bağlantı kopar
+            if (OturumAcikMi?.Invoke() == true) throw new KullaniciHatasi("Önce bağlantıyı kesin, sonra güncelleyin.");
+            string sha;
             lock (_kilit)
             {
                 if (_guncelleniyor) return Durum();
                 _guncelleniyor = true;
+                _guncellemeYuzde = 0;
+                _guncellemeHatasi = null;
+                sha = _sonSha256;
             }
+            Gunluk.Yaz("Güncelleme indiriliyor: " + _sonSurum);
             _ = Task.Run(async () =>
             {
-                try { await Yerlesim.Guncelle(_servis.IndirmeAdresi, () => Kapat?.Invoke()); }
+                try { await Yerlesim.Guncelle(_servis.IndirmeAdresi, sha, y => { lock (_kilit) _guncellemeYuzde = y; }, () => Kapat?.Invoke()); }
                 catch (Exception e)
                 {
                     Gunluk.Yaz("Güncelleme hatası: " + e.Message);
-                    lock (_kilit) { _guncelleniyor = false; _mesaj = "Güncelleme yapılamadı: " + e.Message; }
+                    lock (_kilit) { _guncelleniyor = false; _guncellemeHatasi = "Güncelleme yapılamadı: " + e.Message; }
                 }
             });
             return Durum();
