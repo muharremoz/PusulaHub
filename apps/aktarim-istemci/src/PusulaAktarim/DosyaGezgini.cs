@@ -56,6 +56,29 @@ namespace PusulaAktarim
             return new { yol = d.FullName, ust = UstYol(d.FullName), hata, ogeler };
         }
 
+        /// <summary>Klasörün toplam boyutu ve dosya sayısı (alt klasörler dahil). Çok büyük klasörde süre sınırında durur → eksik.</summary>
+        public static object KlasorBoyutu(string yol)
+        {
+            long bayt = 0;
+            var sayi = 0;
+            var eksik = false;
+            var sure = System.Diagnostics.Stopwatch.StartNew();
+            var yigin = new Stack<string>();
+            if (!string.IsNullOrWhiteSpace(yol) && Directory.Exists(yol)) yigin.Push(yol);
+            while (yigin.Count > 0)
+            {
+                if (sure.Elapsed > TimeSpan.FromSeconds(30)) { eksik = true; break; }
+                var d = yigin.Pop();
+                try
+                {
+                    foreach (var f in new DirectoryInfo(d).EnumerateFiles()) { sayi++; bayt += f.Length; }
+                    foreach (var alt in Directory.EnumerateDirectories(d)) yigin.Push(alt);
+                }
+                catch { /* erişim yok → atla */ }
+            }
+            return new { boyut = bayt, dosyaSayisi = sayi, eksik };
+        }
+
         private static object Kokler()
         {
             var suruculer = new List<object>();

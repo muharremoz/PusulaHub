@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Plus,
+  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, MonitorUp, Plus,
   RefreshCw, Search, Server, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
@@ -32,6 +32,8 @@ const TUR_ETIKET: Record<Veritabani["tur"], string> = {
 };
 
 const VT_SAYFA = 10;
+/** Seçili filtre / program düğmesi: ana renk (mavi) dolgu. */
+const FILTRE_ACIK = "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground";
 const KLASOR_SAYFA = 10;
 const GRUPLAR: Veritabani["tur"][] = ["firma", "transfer", "diger", "sirket"];
 
@@ -103,7 +105,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
   const [programDosyalari, setProgramDosyalari] = useState<ProgramDosyasi[]>([]);
   const [eskiDosyalar, setEskiDosyalar] = useState<Secilen[]>([]);
-  const [ekKlasorler, setEkKlasorler] = useState<string[]>([]);
+  // boyut undefined = exe hesaplıyor (büyük klasörde birkaç saniye sürebilir).
+  const [ekKlasorler, setEkKlasorler] = useState<{ yol: string; boyut?: number | null; dosyaSayisi?: number }[]>([]);
   const [veritabanlariAyir, setVeritabanlariAyir] = useState(false);
   const [basliyor, setBasliyor] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
@@ -153,7 +156,14 @@ export function RaporEkrani({ durum, setDurum }: P) {
   };
   const klasorEkle = async () => {
     const [{ yol } = { yol: "" }] = await dosyaSor({ baslik: "Ek klasör", aciklama: "Göndermek istediğiniz klasörü açın veya işaretleyin.", mod: "klasor" });
-    if (yol) setEkKlasorler((s) => (s.includes(yol) ? s : [...s, yol]));
+    if (!yol || ekKlasorler.some((x) => x.yol === yol)) return;
+    setEkKlasorler((s) => [...s, { yol }]);
+    try {
+      const b = await api<{ boyut: number; dosyaSayisi: number; eksik: boolean }>("/dosya/boyut", { yol });
+      setEkKlasorler((s) => s.map((x) => (x.yol === yol ? { ...x, boyut: b.boyut, dosyaSayisi: b.dosyaSayisi } : x)));
+    } catch {
+      setEkKlasorler((s) => s.map((x) => (x.yol === yol ? { ...x, boyut: null } : x)));
+    }
   };
   const programDosyasiSec = async (id: number, tur: "exe" | "param") => {
     const yollar = await dosyaSor(
@@ -178,7 +188,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
           eskiDosyalar: eskiDosyalar.map((x) => x.yol),
           programlar: programlar.filter((x) => x.secili).map((x) => ({ yol: x.yol, program: x.program })),
           programDosyalari: programDosyalari.filter((x) => x.exe || x.param).map((x) => ({ program: x.program, exe: x.exe, param: x.param })),
-          ekKlasorler,
+          ekKlasorler: ekKlasorler.map((x) => x.yol),
           veritabanlariAyir: veritabanlariAyir && secili.size > 0,
         }),
       );
@@ -287,16 +297,19 @@ export function RaporEkrani({ durum, setDurum }: P) {
     ) : (
       <ToggleGroup type="single" size="sm" variant="outline" className="flex-wrap justify-start" value={deger} onValueChange={(v) => v && onDeger(v)}>
         {katalog.map((k) => (
-          <ToggleGroupItem key={k.name} value={k.name} className="px-2 text-xs">{k.name}</ToggleGroupItem>
+          <ToggleGroupItem key={k.name} value={k.name} className={"px-2 text-xs " + FILTRE_ACIK}>{k.name}</ToggleGroupItem>
         ))}
       </ToggleGroup>
     );
 
   return (
-    <div className="min-h-svh bg-muted/40 pb-20">
+    <div className="min-h-svh bg-gradient-to-b from-blue-50 to-muted/40 to-60% pb-20 dark:from-blue-950/30">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+          <MonitorUp className="size-[18px]" />
+        </span>
         <div className="min-w-0 flex-1">
-          <div className="text-xs text-muted-foreground">Aktarım · {oturum?.firmaId}</div>
+          <div className="text-xs font-medium text-primary">Aktarım · {oturum?.firmaId}</div>
           <h1 className="truncate text-base font-semibold">{oturum?.firmaAdi}</h1>
         </div>
         {durum.kesifGonderildi ? (
@@ -311,10 +324,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
       <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         {oturum?.notlar && (
-          <Alert>
+          <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200">
             <Info />
-            <AlertDescription>
-              <span className="font-medium text-foreground">Pusula'nın notu:</span> {oturum.notlar}
+            <AlertDescription className="text-blue-900/80 dark:text-blue-200/80">
+              <span className="font-medium text-blue-900 dark:text-blue-100">Pusula'nın notu:</span> {oturum.notlar}
             </AlertDescription>
           </Alert>
         )}
@@ -333,7 +346,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
         {r && (
           <>
-            <Bolum ikon={<Server className="size-4" />} baslik="SQL Server">
+            <Bolum ikon={<Server className="size-4" />} baslik="SQL Server" renk="slate">
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm sm:grid-cols-4">
                 <Bilgi l="Sunucu" v={r.sql.sunucu} mono />
                 <Bilgi l="Bilgisayar" v={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />
@@ -344,17 +357,18 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
             <Tabs defaultValue="vt" className="gap-3">
               <TabsList className="p-1 group-data-horizontal/tabs:h-11">
-                <TabsTrigger value="vt" className="px-4 text-sm [&_svg]:size-4"><Database /> Veritabanları</TabsTrigger>
-                {hedef.depo && <TabsTrigger value="resim" className="px-4 text-sm [&_svg]:size-4"><Image /> Resimler</TabsTrigger>}
-                {hedef.depo && <TabsTrigger value="eski" className="px-4 text-sm [&_svg]:size-4"><FileArchive /> Eski yıl dosyaları</TabsTrigger>}
-                {hedef.rdp && <TabsTrigger value="program" className="px-4 text-sm [&_svg]:size-4"><FolderOpen /> Programlar</TabsTrigger>}
-                {hedef.rdp && <TabsTrigger value="ek" className="px-4 text-sm [&_svg]:size-4"><FolderPlus /> Ek klasörler</TabsTrigger>}
+                <TabsTrigger value="vt" className={"px-4 text-sm [&_svg]:size-4 " + RENK.blue.sekme}><Database /> Veritabanları</TabsTrigger>
+                {hedef.depo && <TabsTrigger value="resim" className={"px-4 text-sm [&_svg]:size-4 " + RENK.violet.sekme}><Image /> Resimler</TabsTrigger>}
+                {hedef.depo && <TabsTrigger value="eski" className={"px-4 text-sm [&_svg]:size-4 " + RENK.amber.sekme}><FileArchive /> Eski yıl dosyaları</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="program" className={"px-4 text-sm [&_svg]:size-4 " + RENK.emerald.sekme}><FolderOpen /> Programlar</TabsTrigger>}
+                {hedef.rdp && <TabsTrigger value="ek" className={"px-4 text-sm [&_svg]:size-4 " + RENK.cyan.sekme}><FolderPlus /> Ek klasörler</TabsTrigger>}
               </TabsList>
 
               {/* ── Veritabanları ───────────────────────────────────── */}
               <TabsContent value="vt">
                 <Bolum
                   ikon={<Database className="size-4" />}
+                  renk="blue"
                   baslik="Veritabanları"
                   sag={`${r.veritabanlari.length} veritabanı · ${mb(r.veritabanlari.reduce((t, v) => t + v.veriMb, 0))}`}
                 >
@@ -382,9 +396,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         setVtSayfa(1);
                       }}
                     >
-                      <ToggleGroupItem value="hepsi" className="px-2 text-xs">Tümü</ToggleGroupItem>
+                      <ToggleGroupItem value="hepsi" className={"px-2 text-xs " + FILTRE_ACIK}>Tümü</ToggleGroupItem>
                       {GRUPLAR.filter((g) => r.veritabanlari.some((v) => v.tur === g)).map((g) => (
-                        <ToggleGroupItem key={g} value={g} className="px-2 text-xs">{TUR_ETIKET[g]}</ToggleGroupItem>
+                        <ToggleGroupItem key={g} value={g} className={"px-2 text-xs " + FILTRE_ACIK}>{TUR_ETIKET[g]}</ToggleGroupItem>
                       ))}
                     </ToggleGroup>
                   </div>
@@ -433,7 +447,15 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-2">{v.durum}</Badge>}
                           </TableCell>
                           <TableCell className="px-4">{v.sirketAdlari.join(", ") || "—"}</TableCell>
-                          <TableCell className="px-4 text-muted-foreground">{v.prgTur === "909" ? "Perakende" : v.prgTur === "011" ? "Toptan" : v.prgTur ?? "—"}</TableCell>
+                          <TableCell className="px-4">
+                            {v.prgTur === "909" ? (
+                              <span className="inline-flex rounded-md bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-400">Perakende</span>
+                            ) : v.prgTur === "011" ? (
+                              <span className="inline-flex rounded-md bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400">Toptan</span>
+                            ) : (
+                              <span className="text-muted-foreground">{v.prgTur ?? "—"}</span>
+                            )}
+                          </TableCell>
                           <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
                           <TableCell className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
                             <Ipucu metin={v.sonHareket ? "Son cari hareket (CarHrk)" + (eskiYilMi(v) ? " — eski yıl datası" : "") : "CarHrk tablosu yok veya okunamadı"}>
@@ -499,7 +521,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
               {/* ── Resimler ───────────────────────────────────────── */}
               {hedef.depo && (
                 <TabsContent value="resim">
-                  <Bolum ikon={<Image className="size-4" />} baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
+                  <Bolum ikon={<Image className="size-4" />} renk="violet" baslik="Resim klasörleri" sag={`${resimler.length} klasör · ${resimSayisi} seçili`}>
                     {buyukResim.adet > 0 && (
                       <div className="flex items-start gap-2 border-b bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
@@ -606,6 +628,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 <TabsContent value="eski">
                   <Bolum
                     ikon={<FileArchive className="size-4" />}
+                    renk="amber"
                     baslik="Eski yıl dosyaları"
                     aksiyon={<Button variant="outline" size="sm" onClick={() => void dosyaEkle().catch((e) => setHata(e.message))}><Plus /> Dosya ekle</Button>}
                   >
@@ -627,7 +650,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
               {/* ── Programlar ─────────────────────────────────────── */}
               {hedef.rdp && (
                 <TabsContent value="program" className="flex flex-col gap-4">
-                  <Bolum ikon={<FolderOpen className="size-4" />} baslik="Program klasörleri" sag={`${programlar.length} klasör · ${programSayisi} seçili`}>
+                  <Bolum ikon={<FolderOpen className="size-4" />} renk="emerald" baslik="Program klasörleri" sag={`${programlar.length} klasör · ${programSayisi} seçili`}>
                     {programlar.length === 0 ? (
                       <Bos>Pusula program klasörü bulunamadı.</Bos>
                     ) : (
@@ -687,6 +710,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
                   <Bolum
                     ikon={<FileCode2 className="size-4" />}
+                    renk="teal"
                     baslik="Program dosyaları"
                     aksiyon={<Button variant="outline" size="sm" onClick={programDosyasiEkle}><Plus /> Program ekle</Button>}
                   >
@@ -750,13 +774,21 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 <TabsContent value="ek">
                   <Bolum
                     ikon={<FolderPlus className="size-4" />}
+                    renk="cyan"
                     baslik="Ek klasörler"
                     aksiyon={<Button variant="outline" size="sm" onClick={() => void klasorEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
                   >
                     {ekKlasorler.length === 0 ? (
                       <Bos>Raporlar, şablonlar gibi göndermek istediğiniz klasörler varsa ekleyin.</Bos>
                     ) : (
-                      <YolTablosu basliklar={["Klasör", "Konum"]} yollar={ekKlasorler} ad={dosyaAdi} onSil={(y) => setEkKlasorler((s) => s.filter((x) => x !== y))} />
+                      <YolTablosu
+                        basliklar={["Klasör", "Konum"]}
+                        yollar={ekKlasorler.map((x) => x.yol)}
+                        boyutlar={Object.fromEntries(ekKlasorler.map((x) => [x.yol, x.boyut]))}
+                        adetler={Object.fromEntries(ekKlasorler.map((x) => [x.yol, x.dosyaSayisi]))}
+                        ad={dosyaAdi}
+                        onSil={(y) => setEkKlasorler((s) => s.filter((x) => x.yol !== y))}
+                      />
                     )}
                   </Bolum>
                 </TabsContent>
@@ -819,11 +851,25 @@ export function RaporEkrani({ durum, setDurum }: P) {
   );
 }
 
-function Bolum({ ikon, baslik, sag, aksiyon, children }: { ikon: React.ReactNode; baslik: string; sag?: string; aksiyon?: React.ReactNode; children: React.ReactNode }) {
+/** Bölüm / sekme renkleri — her alan kendi tonunda (koyu temada bir ton açık). */
+const RENK = {
+  slate: { rozet: "bg-slate-500/15 text-slate-600 dark:text-slate-300", sekme: "data-[state=active]:[&_svg]:text-slate-600" },
+  blue: { rozet: "bg-blue-500/15 text-blue-600 dark:text-blue-400", sekme: "data-[state=active]:[&_svg]:text-blue-600 dark:data-[state=active]:[&_svg]:text-blue-400" },
+  violet: { rozet: "bg-violet-500/15 text-violet-600 dark:text-violet-400", sekme: "data-[state=active]:[&_svg]:text-violet-600 dark:data-[state=active]:[&_svg]:text-violet-400" },
+  amber: { rozet: "bg-amber-500/15 text-amber-600 dark:text-amber-400", sekme: "data-[state=active]:[&_svg]:text-amber-600 dark:data-[state=active]:[&_svg]:text-amber-400" },
+  emerald: { rozet: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", sekme: "data-[state=active]:[&_svg]:text-emerald-600 dark:data-[state=active]:[&_svg]:text-emerald-400" },
+  teal: { rozet: "bg-teal-500/15 text-teal-600 dark:text-teal-400", sekme: "" },
+  cyan: { rozet: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400", sekme: "data-[state=active]:[&_svg]:text-cyan-600 dark:data-[state=active]:[&_svg]:text-cyan-400" },
+} as const;
+type Renk = keyof typeof RENK;
+
+function Bolum({
+  ikon, baslik, sag, aksiyon, renk = "slate", children,
+}: { ikon: React.ReactNode; baslik: string; sag?: string; aksiyon?: React.ReactNode; renk?: Renk; children: React.ReactNode }) {
   return (
-    <section className="overflow-hidden rounded-lg border bg-card">
-      <div className="flex min-h-11 items-center gap-2 border-b px-4 py-2">
-        <span className="text-muted-foreground">{ikon}</span>
+    <section className="overflow-hidden rounded-lg border bg-card shadow-xs">
+      <div className="flex min-h-12 items-center gap-2.5 border-b px-4 py-2">
+        <span className={"flex size-7 shrink-0 items-center justify-center rounded-md " + RENK[renk].rozet}>{ikon}</span>
         <h2 className="text-sm font-semibold">{baslik}</h2>
         {sag && <span className="ml-auto text-xs text-muted-foreground">{sag}</span>}
         {aksiyon && <div className="ml-auto">{aksiyon}</div>}
@@ -835,8 +881,17 @@ function Bolum({ ikon, baslik, sag, aksiyon, children }: { ikon: React.ReactNode
 
 /** Eski yıl dosyaları / ek klasörler: ad + bulunduğu yer + kaldır. */
 function YolTablosu({
-  basliklar, yollar, boyutlar, ad, onSil,
-}: { basliklar: [string, string]; yollar: string[]; boyutlar?: Record<string, number | null>; ad: (y: string) => string; onSil: (y: string) => void }) {
+  basliklar, yollar, boyutlar, adetler, ad, onSil,
+}: {
+  basliklar: [string, string];
+  yollar: string[];
+  /** undefined = hesaplanıyor, null = bilinmiyor */
+  boyutlar?: Record<string, number | null | undefined>;
+  /** Klasörlerde dosya sayısı (ipucu) */
+  adetler?: Record<string, number | undefined>;
+  ad: (y: string) => string;
+  onSil: (y: string) => void;
+}) {
   const toplam = boyutlar ? Object.values(boyutlar).reduce<number>((t, b) => t + (b ?? 0), 0) : 0;
   return (
     <Table>
@@ -856,7 +911,17 @@ function YolTablosu({
               <Ipucu metin={y}><div className="truncate">{klasorAdi(y) || "—"}</div></Ipucu>
             </TableCell>
             {boyutlar && (
-              <TableCell className="px-4 text-right tabular-nums">{boyutlar[y] != null ? boyutMetni(boyutlar[y]!) : "—"}</TableCell>
+              <TableCell className="px-4 text-right tabular-nums">
+                {boyutlar[y] === undefined ? (
+                  <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" /> hesaplanıyor</span>
+                ) : boyutlar[y] === null ? (
+                  "—"
+                ) : (
+                  <Ipucu metin={adetler?.[y] != null ? `${adetler[y]!.toLocaleString("tr")} dosya` : undefined}>
+                    <span>{boyutMetni(boyutlar[y]!)}</span>
+                  </Ipucu>
+                )}
+              </TableCell>
             )}
             <TableCell className="pr-4">
               <Button variant="ghost" size="icon" className="size-7" onClick={() => onSil(y)} aria-label="Kaldır">
@@ -867,7 +932,7 @@ function YolTablosu({
         ))}
         {boyutlar && yollar.length > 1 && (
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={2} className="px-4 text-xs text-muted-foreground">{yollar.length} dosya</TableCell>
+            <TableCell colSpan={2} className="px-4 text-xs text-muted-foreground">{yollar.length} {adetler ? "klasör" : "dosya"}</TableCell>
             <TableCell className="px-4 text-right text-xs font-medium tabular-nums">{boyutMetni(toplam)}</TableCell>
             <TableCell />
           </TableRow>
