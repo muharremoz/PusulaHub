@@ -31,11 +31,12 @@ namespace PusulaConnect
         private readonly RdpAyar _a;
         private readonly AxMsRdpClient9NotSafeForScripting _rdp;
         private readonly Panel _serit;
-        private readonly Label _durum;
+        private readonly DurumGostergesi _durum;
+        private readonly Timer _olcum;
+        private bool _olcuyor;
         private readonly Button _tamEkran;
         private readonly Timer _boyut;
         private bool _girisTamam, _kesiliyor, _bitti;
-        private string _gecikme = "";
 
         private static readonly Color Cizgi = Color.FromArgb(229, 229, 229);
         private static readonly Color Soluk = Color.FromArgb(115, 115, 115);
@@ -55,11 +56,7 @@ namespace PusulaConnect
             _serit.Paint += (s, e) => { using (var k = new Pen(Cizgi)) e.Graphics.DrawLine(k, 0, _serit.Height - 1, _serit.Width, _serit.Height - 1); };
 
             var logo = new PictureBox { Dock = DockStyle.Left, Width = P(104), SizeMode = PictureBoxSizeMode.Zoom, Image = Logo(), Margin = Padding.Empty };
-            _durum = new Label
-            {
-                Dock = DockStyle.Fill, AutoSize = false, TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font("Segoe UI", 9.5f), ForeColor = Soluk, Padding = new Padding(P(14), 0, 0, 0),
-            };
+            _durum = new DurumGostergesi(_a.Sunucu, _a.Kullanici) { Dock = DockStyle.Fill };
             var sag = new FlowLayoutPanel
             {
                 Dock = DockStyle.Right, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
@@ -107,6 +104,8 @@ namespace PusulaConnect
             _rdp.BringToFront();
 
             // Pencere boyutu değişince oturum çözünürlüğü de değişsin (bırakınca, yarım saniye sonra)
+            _olcum = new Timer { Interval = 5000 };
+            _olcum.Tick += (s, e) => Olc();
             _boyut = new Timer { Interval = 500 };
             _boyut.Tick += (s, e) => { _boyut.Stop(); CozunurlukGuncelle(); };
             _rdp.Resize += (s, e) => { if (_girisTamam) { _boyut.Stop(); _boyut.Start(); } };
@@ -126,15 +125,12 @@ namespace PusulaConnect
                 _girisTamam = true;
                 _tamEkran.Enabled = true;
                 BagliYaz();
+                Olc();
+                _olcum.Start();
                 _rdp.Focus();
             };
             _rdp.OnAutoReconnecting2 += (s, e) => Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber);
             _rdp.OnAutoReconnected += (s, e) => BagliYaz();
-            _rdp.OnNetworkStatusChanged += (s, e) =>
-            {
-                _gecikme = e.rtt > 0 ? " · " + e.rtt + " ms" : "";
-                if (_girisTamam) BagliYaz();
-            };
             _rdp.OnDisconnected += (s, e) => Kesildi(e.discReason);
 
             var w = Math.Max(800, _rdp.Width) & ~1;
@@ -237,15 +233,29 @@ namespace PusulaConnect
             if (_bitti) return;
             _bitti = true;
             _boyut.Stop();
+            _olcum.Stop();
             BeginInvoke((Action)(() => Bitti?.Invoke(mesaj, sifreHatali)));
         }
 
-        private void BagliYaz() => Durum("● Bağlı · " + _a.Sunucu + _gecikme + "  ·  " + _a.Kullanici, Yesil);
+        private void BagliYaz() => _durum.Bagli();
 
-        private void Durum(string metin, Color renk)
+        private void Durum(string metin, Color renk) => _durum.Bekliyor(metin, renk);
+
+        /// <summary>
+        /// Bağlantı kalitesi: 5 sn'de bir sunucunun RDP kapısına TCP bağlantı süresi (bileşenin kendi rtt
+        /// değeri gerçeği yansıtmıyor — LAN'da 6 ms'ye 400 ms gösterdi).
+        /// </summary>
+        private async void Olc()
         {
-            _durum.Text = metin;
-            _durum.ForeColor = renk;
+            if (_olcuyor || _bitti || !_girisTamam) return;
+            _olcuyor = true;
+            try
+            {
+                var t = await Rdp.Yokla(_a.Sunucu, _a.Port, 3000);
+                if (!_bitti) _durum.Gecikme(t.erisim ? t.ms : -1);
+            }
+            catch { }
+            finally { _olcuyor = false; }
         }
 
         private void CozunurlukGuncelle()
@@ -294,8 +304,120 @@ namespace PusulaConnect
             if (disposing)
             {
                 _boyut.Dispose();
+                _olcum.Dispose();
                 try { if (_rdp.Connected != 0) _rdp.Disconnect(); } catch { }
             }
+            base.Dispose(disposing);
+        }
+    }
+
+    /// <summary>
+    /// Şeritteki durum: renkli nokta + "Bağlı", sinyal çubukları + "Bağlantı mükemmel/iyi/orta/zayıf",
+    /// kullanıcı adı. Ayrıntı (sunucu, ms) üzerine gelince ipucunda — kullanıcıya ms değil anlamı gösterilir.
+    /// </summary>
+    internal sealed class DurumGostergesi : Control
+    {
+        private static readonly Color Yesil = Color.FromArgb(5, 150, 105);
+        private static readonly Color Amber = Color.FromArgb(217, 119, 6);
+        private static readonly Color Kirmizi = Color.FromArgb(220, 38, 38);
+        private static readonly Color Koyu = Color.FromArgb(23, 23, 23);
+        private static readonly Color Soluk = Color.FromArgb(115, 115, 115);
+        private static readonly Color Bos = Color.FromArgb(222, 222, 222);
+
+        private readonly string _sunucu, _kullanici;
+        private readonly ToolTip _ipucu = new ToolTip { InitialDelay = 300 };
+        private bool _bagli;
+        private string _metin;
+        private Color _renk;
+        private int _ms = -2; // -2 ölçülmedi, -1 ulaşılamadı
+
+        public DurumGostergesi(string sunucu, string kullanici)
+        {
+            _sunucu = sunucu;
+            _kullanici = kullanici;
+            DoubleBuffered = true;
+            BackColor = Color.White;
+            Font = new Font("Segoe UI", 9.5f);
+        }
+
+        public void Bekliyor(string metin, Color renk) { _bagli = false; _metin = metin; _renk = renk; Yenile(); }
+        public void Bagli() { _bagli = true; Yenile(); }
+        public void Gecikme(int ms) { _ms = ms; Yenile(); }
+
+        /// <summary>0 = ulaşılamıyor … 4 = mükemmel</summary>
+        private int Seviye => _ms == -2 ? 4 : _ms < 0 ? 0 : _ms < 60 ? 4 : _ms < 120 ? 3 : _ms < 250 ? 2 : 1;
+
+        private static string SeviyeAdi(int s) =>
+            s == 4 ? "Bağlantı mükemmel" : s == 3 ? "Bağlantı iyi" : s == 2 ? "Bağlantı orta" : s == 1 ? "Bağlantı zayıf" : "Sunucuya ulaşılamıyor";
+
+        private static Color SeviyeRengi(int s) => s >= 3 ? Yesil : s == 2 ? Amber : Kirmizi;
+
+        private void Yenile()
+        {
+            if (_bagli)
+                _ipucu.SetToolTip(this, "Sunucu: " + _sunucu + "\nKullanıcı: " + _kullanici +
+                    (_ms >= 0 ? "\nGecikme: " + _ms + " ms" : _ms == -1 ? "\nSunucu yanıt vermiyor" : ""));
+            else _ipucu.SetToolTip(this, null);
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var o = DeviceDpi / 96f;
+            int P(float v) => (int)Math.Round(v * o);
+            float x = P(14), orta = Height / 2f;
+            var bayrak = TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+
+            void Nokta(Color c)
+            {
+                using (var hale = new SolidBrush(Color.FromArgb(50, c))) g.FillEllipse(hale, x - P(3), orta - P(7), P(14), P(14));
+                using (var b = new SolidBrush(c)) g.FillEllipse(b, x, orta - P(4), P(8), P(8));
+                x += P(18);
+            }
+            void Yazi(string m, Font f, Color c)
+            {
+                var w = TextRenderer.MeasureText(g, m, f, Size.Empty, bayrak).Width;
+                TextRenderer.DrawText(g, m, f, new Rectangle((int)x, 0, w + 2, Height), c, bayrak);
+                x += w;
+            }
+            void Ayrac()
+            {
+                x += P(14);
+                using (var k = new Pen(Bos)) g.DrawLine(k, x, orta - P(9), x, orta + P(9));
+                x += P(14);
+            }
+
+            if (!_bagli)
+            {
+                Nokta(_renk);
+                Yazi(_metin ?? "", Font, Koyu);
+                return;
+            }
+
+            var seviye = Seviye;
+            Nokta(seviye == 0 ? Kirmizi : Yesil);
+            using (var kalin = new Font(Font, FontStyle.Bold)) Yazi("Bağlı", kalin, Koyu);
+            Ayrac();
+
+            // sinyal çubukları
+            var renk = SeviyeRengi(seviye);
+            for (var i = 0; i < 4; i++)
+            {
+                var h = P(5 + i * 3);
+                using (var b = new SolidBrush(i < seviye ? renk : Bos))
+                    g.FillRectangle(b, x + i * P(5), orta + P(7) - h, P(3), h);
+            }
+            x += P(4 * 5 + 6);
+            Yazi(SeviyeAdi(seviye), Font, seviye >= 3 ? Koyu : renk);
+            Ayrac();
+            Yazi(_kullanici, Font, Soluk);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _ipucu.Dispose();
             base.Dispose(disposing);
         }
     }
