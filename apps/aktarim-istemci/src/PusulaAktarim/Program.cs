@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -110,58 +111,14 @@ namespace PusulaAktarim
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
                 case "POST /aktarim/baslat":
                     return _uygulama.AktarimBaslat(i.Govde);
-                case "POST /sec/dosyalar": return Sec(p => DosyaSec(p, i.Metin("tur")));
-                case "POST /sec/klasor": return Sec(p => KlasorSec(p, i.Metin("aciklama")));
+                case "POST /dosya/listele":
+                    return Task.FromResult(DosyaGezgini.Listele(i.Metin("yol"), i.Mantik("dosyalar"), (i.Govde?["uzantilar"] as Newtonsoft.Json.Linq.JArray)?.Values<string>().ToArray()));
                 case "POST /aktarim/duraklat": return _uygulama.Duraklat();
                 case "POST /aktarim/devam": return _uygulama.Devam();
                 case "POST /cikis":
                     _ = Task.Run(async () => { await Task.Delay(300); Kapat(); });
                     return Task.FromResult<object>(new { tamam = true });
                 default: throw new KullaniciHatasi("Bilinmeyen istek: " + i.Yontem + " " + i.Yol, 404);
-            }
-        }
-
-        // ------------------------------------------------------------ Windows dosya/klasör seçimi
-        // Web arayüzündeki <input type=file> dosyanın YOLUNU vermez; uygulama yolu bilmeli
-        // (paketleme, devam). Bu yüzden seçim pencereleri exe'de, Windows'un kendi penceresi.
-
-        private static Task<object> Sec(Func<IWin32Window, object> goster)
-        {
-            var sonuc = new TaskCompletionSource<object>();
-            void Calistir(IWin32Window sahip)
-            {
-                try { sonuc.SetResult(goster(sahip)); } catch (Exception e) { sonuc.SetException(e); }
-            }
-            var p = _pencere;
-            if (p != null && !p.IsDisposed && p.Visible) p.BeginInvoke((Action)(() => Calistir(p)));
-            else
-            {
-                // Pencere yok (tarayıcı modu) → ayrı STA iş parçacığı
-                var t = new Thread(() => Calistir(null)) { IsBackground = true };
-                t.SetApartmentState(ApartmentState.STA);
-                t.Start();
-            }
-            return sonuc.Task;
-        }
-
-        /// <summary>tur: eski (varsayılan, çoklu) | exe | param — program dosyası seçimi tek dosya.</summary>
-        private static object DosyaSec(IWin32Window sahip, string tur)
-        {
-            var (baslik, filtre, coklu) =
-                tur == "exe" ? ("Program dosyasını (.exe) seçin", "Program dosyası|*.exe", false) :
-                tur == "param" ? ("Parametre dosyasını (.txt) seçin", "Parametre dosyası|*.txt|Tüm dosyalar|*.*", false) :
-                ("Eski yıl dataları seçin", "Veritabanı ve arşiv dosyaları|*.mdf;*.ldf;*.ndf;*.bak;*.zip;*.rar;*.7z|Tüm dosyalar|*.*", true);
-            using (var d = new OpenFileDialog { Title = baslik, Multiselect = coklu, Filter = filtre })
-            {
-                return new { yollar = d.ShowDialog(sahip) == DialogResult.OK ? d.FileNames : new string[0] };
-            }
-        }
-
-        private static object KlasorSec(IWin32Window sahip, string aciklama)
-        {
-            using (var d = new FolderBrowserDialog { Description = aciklama ?? "Klasör seçin", ShowNewFolderButton = false })
-            {
-                return new { yol = d.ShowDialog(sahip) == DialogResult.OK ? d.SelectedPath : null };
             }
         }
 

@@ -19,6 +19,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useDosyaSecici } from "./dosya-secici";
 import { Ipucu, mb } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
@@ -108,6 +109,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [resimSayfa, setResimSayfa] = useState(1);
   const [programSayfa, setProgramSayfa] = useState(1);
   const [onay, setOnay] = useState<Onay | null>(null);
+  const [dosyaSor, dosyaSecici] = useDosyaSecici();
 
   const toplamMb = useMemo(
     () => (r?.veritabanlari ?? []).filter((v) => secili.has(v.ad)).reduce((t, v) => t + v.veriMb, 0),
@@ -137,15 +139,24 @@ export function RaporEkrani({ durum, setDurum }: P) {
   };
 
   const dosyaEkle = async () => {
-    const { yollar } = await api<{ yollar: string[] }>("/sec/dosyalar", {});
+    const yollar = await dosyaSor({
+      baslik: "Eski yıl dosyaları",
+      mod: "dosya",
+      coklu: true,
+      uzantilar: [".mdf", ".ldf", ".ndf", ".bak", ".zip", ".rar", ".7z"],
+    });
     setEskiDosyalar((s) => [...s, ...yollar.filter((y) => !s.includes(y))]);
   };
   const klasorEkle = async () => {
-    const { yol } = await api<{ yol: string | null }>("/sec/klasor", { aciklama: "Ek dosyaların bulunduğu klasörü seçin" });
+    const [yol] = await dosyaSor({ baslik: "Ek klasör", aciklama: "Göndermek istediğiniz klasörü açın veya işaretleyin.", mod: "klasor" });
     if (yol) setEkKlasorler((s) => (s.includes(yol) ? s : [...s, yol]));
   };
   const programDosyasiSec = async (id: number, tur: "exe" | "param") => {
-    const { yollar } = await api<{ yollar: string[] }>("/sec/dosyalar", { tur });
+    const yollar = await dosyaSor(
+      tur === "exe"
+        ? { baslik: "Program dosyası", mod: "dosya", uzantilar: [".exe"] }
+        : { baslik: "Parametre dosyası", mod: "dosya", uzantilar: [".txt"] },
+    );
     if (!yollar[0]) return;
     setProgramDosyalari((l) => l.map((x) => (x.id === id ? { ...x, [tur]: yollar[0] } : x)));
   };
@@ -745,6 +756,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
           </div>
         </footer>
       )}
+
+      {dosyaSecici}
 
       <AlertDialog open={!!onay} onOpenChange={(o) => !o && setOnay(null)}>
         <AlertDialogContent>
