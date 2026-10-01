@@ -41,6 +41,48 @@ export const COMBOBOX_TRIGGER_CN =
   "hover:border-ring/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 " +
   "disabled:cursor-not-allowed disabled:opacity-50";
 
+/** Liste görünümü sütunu — başlık + hücre. Genişliği `className` ile verin (ör. "w-14"); verilmeyen sütun kalan alanı alır. */
+export interface ComboboxSutun<T> {
+  baslik: string;
+  hucre: (item: T) => React.ReactNode;
+  className?: string;
+}
+
+/** Sütunlu satır: hücreler aynı genişlikle hizalanır (başlık satırı da aynı sınıfları kullanır). */
+function SutunSatiri<T>({ sutunlar, item }: { sutunlar: readonly ComboboxSutun<T>[]; item?: T }) {
+  return (
+    <span className="flex min-w-0 flex-1 items-center gap-3">
+      {sutunlar.map((c, i) => (
+        <span key={i} className={cn("min-w-0 truncate", c.className ?? "flex-1")}>
+          {item === undefined ? c.baslik : c.hucre(item)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function SutunBasligi<T>({ sutunlar, sagBosluk }: { sutunlar: readonly ComboboxSutun<T>[]; sagBosluk: string }) {
+  return (
+    <div className="flex items-center border-b px-3 py-1.5 text-[10px] font-medium tracking-wider text-muted-foreground uppercase">
+      <SutunSatiri sutunlar={sutunlar} />
+      <span className={cn("shrink-0", sagBosluk)} />
+    </div>
+  );
+}
+
+/** Arama değişince liste en üste dönsün — cmdk eski kaydırma konumunu koruyor, en yakın eşleşme başlığın altında kalıyordu. */
+function useListeBasaDon(query: string) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const l = ref.current?.querySelector<HTMLElement>("[cmdk-list]");
+      if (l) l.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [query]);
+  return ref;
+}
+
 export interface ComboboxProps<T> {
   items: readonly T[];
   /** Her item için benzersiz anahtar — seçili değerle karşılaştırılan değerdir. */
@@ -74,6 +116,8 @@ export interface ComboboxProps<T> {
   align?: "start" | "center" | "end";
   /** Popover genişliği; varsayılan tetikleyici genişliği. */
   contentClassName?: string;
+  /** Verilirse liste tablo gibi çizilir: başlık satırı + hizalı sütunlar (`renderItem` yerine). */
+  columns?: readonly ComboboxSutun<T>[];
 }
 
 export function Combobox<T>({
@@ -97,6 +141,7 @@ export function Combobox<T>({
   loading,
   align = "start",
   contentClassName,
+  columns,
 }: ComboboxProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [icQuery, setIcQuery] = React.useState("");
@@ -105,6 +150,7 @@ export function Combobox<T>({
   const kontrollu = search !== undefined;
   const query = kontrollu ? search : icQuery;
 
+  const listeRef = useListeBasaDon(query);
   const setQuery = (v: string) => {
     if (kontrollu) onSearchChange?.(v);
     else setIcQuery(v);
@@ -154,13 +200,14 @@ export function Combobox<T>({
         align={align}
         className={cn("w-[var(--radix-popover-trigger-width)] min-w-44 p-0 rounded-[5px]", contentClassName)}
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} ref={listeRef}>
           <CommandInput
             placeholder={searchPlaceholder}
             className="text-[13px] h-8"
             value={query}
             onValueChange={setQuery}
           />
+          {columns && !loading && gosterilecek.length > 0 && <SutunBasligi sutunlar={columns} sagBosluk="ml-2 w-3.5" />}
           <CommandList
             className={cn(maxListHeight, "overflow-y-auto")}
             onWheel={(e) => e.stopPropagation()}
@@ -191,9 +238,13 @@ export function Combobox<T>({
                     }}
                     className="text-[13px]"
                   >
-                    <span className="min-w-0 flex-1 truncate">
-                      {renderItem ? renderItem(item) : getLabel(item)}
-                    </span>
+                    {columns ? (
+                      <SutunSatiri sutunlar={columns} item={item} />
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate">
+                        {renderItem ? renderItem(item) : getLabel(item)}
+                      </span>
+                    )}
                     <Check className={cn("size-3.5 ml-2 shrink-0", aktif ? "opacity-100" : "opacity-0")} />
                   </CommandItem>
                 );
@@ -239,12 +290,14 @@ export function ComboboxMulti<T>({
   loading,
   align = "start",
   contentClassName,
+  columns,
 }: ComboboxMultiProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [icQuery, setIcQuery] = React.useState("");
 
   const kontrollu = search !== undefined;
   const query = kontrollu ? search : icQuery;
+  const listeRef = useListeBasaDon(query);
   const setQuery = (v: string) => {
     if (kontrollu) onSearchChange?.(v);
     else setIcQuery(v);
@@ -287,13 +340,14 @@ export function ComboboxMulti<T>({
         align={align}
         className={cn("w-[var(--radix-popover-trigger-width)] min-w-44 p-0 rounded-[5px]", contentClassName)}
       >
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} ref={listeRef}>
           <CommandInput
             placeholder={searchPlaceholder}
             className="text-[13px] h-8"
             value={query}
             onValueChange={setQuery}
           />
+          {columns && gosterilecek.length > 0 && <SutunBasligi sutunlar={columns} sagBosluk="ml-2 w-4" />}
           <CommandList className={cn(maxListHeight, "overflow-y-auto")} onWheel={(e) => e.stopPropagation()}>
             {!loading && (
               <CommandEmpty className="text-[11px] text-muted-foreground py-3 text-center">
@@ -311,9 +365,13 @@ export function ComboboxMulti<T>({
                     onSelect={() => toggle(key)}
                     className="text-[13px] gap-2"
                   >
-                    <span className="min-w-0 flex-1 truncate">
-                      {renderItem ? renderItem(item) : getLabel(item)}
-                    </span>
+                    {columns ? (
+                      <SutunSatiri sutunlar={columns} item={item} />
+                    ) : (
+                      <span className="min-w-0 flex-1 truncate">
+                        {renderItem ? renderItem(item) : getLabel(item)}
+                      </span>
+                    )}
                     <span
                       className={cn(
                         "flex size-4 shrink-0 items-center justify-center rounded-[4px] border",

@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Combobox } from "@/components/ui/combobox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -269,8 +268,26 @@ function YeniAktarimDialog({
   }, [open])
 
   const filtreli = useMemo(() => {
-    const q = arama.trim().toLowerCase()
-    const liste = (q ? firmalar.filter((f) => f.firma.toLowerCase().includes(q) || f.firkod.toLowerCase().includes(q)) : firmalar).slice(0, 50)
+    const q = arama.trim().toLocaleLowerCase("tr-TR")
+    // En yakın üstte: firma no birebir → no ile başlayan → ad ile başlayan → no içeren → ad içeren.
+    const puan = (f: FirmaItem) => {
+      const kod = f.firkod.toLocaleLowerCase("tr-TR")
+      const ad = f.firma.toLocaleLowerCase("tr-TR")
+      if (kod === q) return 0
+      if (kod.startsWith(q)) return 1
+      if (ad.startsWith(q)) return 2
+      if (kod.includes(q)) return 3
+      if (ad.includes(q)) return 4
+      return -1
+    }
+    const liste = q
+      ? firmalar
+          .map((f) => ({ f, p: puan(f) }))
+          .filter((x) => x.p >= 0)
+          .sort((a, b) => a.p - b.p || a.f.firkod.length - b.f.firkod.length || a.f.firkod.localeCompare(b.f.firkod, "tr", { numeric: true }))
+          .slice(0, 50)
+          .map((x) => x.f)
+      : firmalar.slice(0, 50)
     return firma && !liste.some((f) => f.firkod === firma.firkod) ? [firma, ...liste] : liste
   }, [firmalar, arama, firma])
 
@@ -298,12 +315,22 @@ function YeniAktarimDialog({
   }
 
   const sunucuSecimi = (deger: string, set: (v: string) => void, liste: ServerOption[], bos: string) => (
-    <Select value={deger} onValueChange={set}>
-      <SelectTrigger className="h-8 w-full text-[13px]"><SelectValue placeholder={bos} /></SelectTrigger>
-      <SelectContent>
-        {liste.map((s) => <SelectItem key={s.id} value={s.id} className="text-[13px]">{s.name} ({s.ip})</SelectItem>)}
-      </SelectContent>
-    </Select>
+    <Combobox
+      items={liste}
+      getKey={(s) => s.id}
+      getLabel={(s) => `${s.name} ${s.ip}`}
+      value={deger}
+      onChange={set}
+      clearable
+      placeholder={bos}
+      searchPlaceholder="Sunucu ara..."
+      contentClassName="min-w-80"
+      renderValue={(s) => <span className="truncate">{s.name} <span className="font-mono text-muted-foreground">{s.ip}</span></span>}
+      columns={[
+        { baslik: "Sunucu", hucre: (s) => s.name },
+        { baslik: "IP", hucre: (s) => <span className="font-mono text-muted-foreground">{s.ip}</span>, className: "w-28 shrink-0" },
+      ]}
+    />
   )
 
   return (
@@ -336,7 +363,10 @@ function YeniAktarimDialog({
               placeholder="Firma seç..."
               searchPlaceholder="Firma ara..."
               renderValue={(f) => <span className="truncate"><span className="font-mono text-muted-foreground">{f.firkod}</span> — {f.firma}</span>}
-              renderItem={(f) => <span className="flex min-w-0 items-center"><span className="font-mono text-muted-foreground mr-2 shrink-0">{f.firkod}</span><span className="truncate">{f.firma}</span></span>}
+              columns={[
+                { baslik: "Firma No", hucre: (f) => <span className="font-mono text-muted-foreground">{f.firkod}</span>, className: "w-16 shrink-0" },
+                { baslik: "Firma Adı", hucre: (f) => f.firma },
+              ]}
             />
           </Field>
           <Field label="SQL Sunucusu" hint="Veritabanı yedekleri bu sunucuya (D:\SQLData\<firma>\aktarim) gönderilir.">
