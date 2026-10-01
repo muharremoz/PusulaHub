@@ -8,9 +8,12 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Ripple } from "@/components/ui/ripple";
 import pusulaLogo from "@/assets/pusula-logo.png";
 
+/** Destek formu (PusulaWeb-v2 /destek-talebi). ?firmaid=<firkod> ile firma adı, yetkili ve telefon CRM'den dolar. */
 const TALEP_ADRESI = "https://talep.pusulanet.net";
+const talepAdresi = (firmaId?: string) => (firmaId ? `${TALEP_ADRESI}/?firmaid=${encodeURIComponent(firmaId)}` : TALEP_ADRESI);
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -118,12 +121,12 @@ export function AnaEkran({ durum, setDurum }: P) {
             </Button>
             <span className="flex-1 text-center text-sm font-medium">Yardım talebi</span>
             <Button variant="ghost" size="sm" asChild>
-              <a href={TALEP_ADRESI} target="_blank" rel="noreferrer">
+              <a href={talepAdresi(kayit.firmaId)} target="_blank" rel="noreferrer">
                 <ExternalLink /> Tarayıcıda aç
               </a>
             </Button>
           </div>
-          <iframe src={TALEP_ADRESI} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
+          <iframe src={talepAdresi(kayit.firmaId)} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
         </main>
       ) : (
       <main className="flex min-w-0 flex-1 justify-center overflow-y-auto">
@@ -286,7 +289,16 @@ export function AnaEkran({ durum, setDurum }: P) {
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
-        <BaglantiGorseli bagli={k.terminal.erisim} />
+        {/* Magic UI Ripple: halkalar bağlıyken yeşil (--foreground yerelde ezilir), merkezden dışa silinir */}
+        <Ripple
+          mainCircleSize={170}
+          numCircles={7}
+          className="mask-[radial-gradient(circle,white_25%,transparent_70%)]"
+          style={k.terminal.erisim ? ({ "--foreground": "oklch(0.696 0.17 162.48)" } as React.CSSProperties) : undefined}
+        />
+        <div className="relative">
+          <BaglantiGorseli bagli={k.terminal.erisim} />
+        </div>
       </aside>
     </div>
   );
@@ -335,14 +347,8 @@ function SolSatir({ ikon, ad, deger }: { ikon: React.ReactNode; ad: string; dege
 /** Sağ panelin yer tutucu görseli: bilgisayar → güvenli tünel → Pusula sunucusu. */
 function BaglantiGorseli({ bagli }: { bagli: boolean }) {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 p-8 text-center">
+    <div className="flex h-svh flex-col items-center justify-center gap-6 p-8 text-center">
       <svg viewBox="0 0 300 220" className="w-full max-w-[300px]" role="img" aria-label="Bilgisayardan Pusula sunucusuna güvenli bağlantı">
-        {/* arka plan halkaları */}
-        <g className="text-primary" fill="none" stroke="currentColor" strokeOpacity="0.08">
-          <circle cx="150" cy="110" r="100" />
-          <circle cx="150" cy="110" r="70" />
-          <circle cx="150" cy="110" r="40" />
-        </g>
         {/* bağlantı hattı */}
         <g className={bagli ? "text-emerald-500" : "text-muted-foreground"}>
           <path d="M74 110 H228" stroke="currentColor" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 8" fill="none">
