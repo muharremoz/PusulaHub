@@ -242,9 +242,9 @@ function Kart({ ikon, baslik, metin, iyi, uyari }: { ikon: React.ReactNode; basl
         {ikon}
         {baslik}
       </div>
-      <div className={`mt-1 flex items-center gap-1.5 text-sm font-medium ${renk} [&_svg]:size-4`}>
-        {iyi ? <CheckCircle2 /> : <CircleAlert />}
-        <span className="truncate">{metin}</span>
+      <div className={`mt-1 flex items-start gap-1.5 text-sm font-medium ${renk} [&_svg]:size-4`}>
+        {iyi ? <CheckCircle2 className="mt-0.5 shrink-0" /> : <CircleAlert className="mt-0.5 shrink-0" />}
+        <span className="min-w-0 leading-snug">{metin}</span>
       </div>
     </div>
   );
