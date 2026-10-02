@@ -64,7 +64,7 @@ T3'teki sürümler:
 - [ ] OpenOffice 4.1.16 (tr)
 - [ ] SumatraPDF 3.6.1 (tüm kullanıcılar) — `.pdf` makine varsayılanı SumatraPDF
 - [ ] 7-Zip (x64)
-- [ ] Microsoft Edge + WebView2 Runtime
+- ~~Microsoft Edge + WebView2 Runtime~~ — gerek yok (kullanıcı kararı 02.10)
 - [ ] PusulaAgent → Hub'a "Terminal 4" kaydı (`__exec.mjs "Terminal 4"` ile doğrula)
 
 ## D. Kurulum sonrası
