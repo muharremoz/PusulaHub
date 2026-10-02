@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { TaramaEkrani } from "@/ekranlar/tarama";
 import { api, anahtarVar, nabziBaslat, type Durum } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
@@ -70,6 +71,8 @@ function Icerik({ durum, setDurum, hata }: { durum: Durum | null; setDurum: (d: 
       );
     case "sqlGiris":
       return <SqlGirisEkrani {...p} />;
+    case "taramaBekliyor":
+      return <TaramaEkrani {...p} />;
     case "kesif":
       return <Bekleme baslik="Verileriniz taranıyor" alt={durum.ilerleme} />;
     case "hazir":

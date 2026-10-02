@@ -460,6 +460,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         </TableHead>
                         <TableHead className="px-4">Veritabanı</TableHead>
                         <TableHead className="px-4">Şirket</TableHead>
+                        <TableHead className="px-4">Kod</TableHead>
                         <TableHead className="px-4">Program</TableHead>
                         <TableHead className="px-4 text-right">Veri</TableHead>
                         <TableHead className="px-4">Son hareket</TableHead>
@@ -470,7 +471,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     <TableBody>
                       {filtreli.length === 0 && (
                         <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                          <TableCell colSpan={9} className="px-4 py-6 text-center text-sm text-muted-foreground">
                             Aramaya uyan veritabanı yok.
                           </TableCell>
                         </TableRow>
@@ -490,6 +491,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-2">{v.durum}</Badge>}
                           </TableCell>
                           <TableCell className="px-4">{v.sirketAdlari.join(", ") || "—"}</TableCell>
+                          <TableCell className="px-4 font-mono tabular-nums">{v.kod ?? "—"}</TableCell>
                           <TableCell className="px-4">
                             {v.prgTur === "909" ? (
                               <span className="inline-flex rounded-md bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-400">Perakende</span>

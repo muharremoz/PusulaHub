@@ -84,7 +84,7 @@ export function nabziBaslat(): () => void {
 
 // ---------------------------------------------------------------- tipler
 
-export type Asama = "acilis" | "giris" | "sqlAraniyor" | "sqlGiris" | "kesif" | "hazir" | "aktarim";
+export type Asama = "acilis" | "giris" | "sqlAraniyor" | "sqlGiris" | "taramaBekliyor" | "kesif" | "hazir" | "aktarim";
 
 export type IsOgesi = {
   tip: "vt" | "dosya" | "paket";

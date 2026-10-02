@@ -237,7 +237,10 @@ namespace PusulaAktarim
                 else _ = Task.Run(YuklemeyiBildir);
                 return Task.CompletedTask;
             }
-            return KesifBaslat();
+            // Tarama açılışta kendiliğinden başlamaz; kullanıcı "Taramayı başlat" der (/kesif/yenile).
+            lock (_kilit) _ilerleme = null;
+            Asama("taramaBekliyor");
+            return Task.CompletedTask;
         }
 
         private string OturumId { get { lock (_kilit) return _oturum?.Value<string>("id"); } }
