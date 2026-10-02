@@ -28,6 +28,8 @@ interface FileRow {
   date:         string
   selected:     boolean
   programCode:  string
+  /** Hedef ada {firkod}_ öneki eklensin mi (varsayılan evet) */
+  firmaOneki:   boolean
 }
 interface Step { stepId: string; label: string; status: "running" | "done" | "error"; error?: string }
 
@@ -104,7 +106,7 @@ export function OldDataRestoreSheet({
       setFiles(data.files.map((f) => ({
         fileName: f.fileName, databaseName: f.databaseName, fileSizeMB: f.fileSizeMB, date: f.date,
         kind: f.kind ?? "bak", ldfFileName: f.ldfFileName,
-        selected: false, programCode: progs.length === 1 ? progs[0].programCode : "",
+        selected: false, programCode: progs.length === 1 ? progs[0].programCode : "", firmaOneki: true,
       })))
       setPhase("select")
     } catch (e) {
@@ -156,7 +158,7 @@ export function OldDataRestoreSheet({
           path: pathInput.trim(),
           files: selectedFiles.map((f) => ({
             fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode,
-            kind: f.kind, ldfFileName: f.ldfFileName,
+            kind: f.kind, ldfFileName: f.ldfFileName, firmaOneki: f.firmaOneki,
           })),
           yedekAl,
         }),
@@ -323,13 +325,26 @@ export function OldDataRestoreSheet({
                             <div className="space-y-0.5">
                               <Label className="text-[9px] text-muted-foreground">Hedef DB adı</Label>
                               <div className="flex items-center gap-1">
-                                <span className="text-[10px] font-mono text-muted-foreground shrink-0">{firkod}_</span>
+                                {f.firmaOneki && (
+                                  <span className="text-[10px] font-mono text-muted-foreground shrink-0">{firkod}_</span>
+                                )}
                                 <Input
                                   value={f.databaseName}
                                   onChange={(e) => updateFile(f.fileName, { databaseName: e.target.value })}
                                   className="h-7 rounded-[5px] text-[11px] font-mono"
                                 />
                               </div>
+                              {/*  Öneksiz: tetiklerin/programın sabit adla aradığı
+                                  transfer dataları (URN*, *_TRANSFER) için.  */}
+                              <label className="flex cursor-pointer items-center gap-1.5 pt-1 select-none">
+                                <Checkbox checked={f.firmaOneki} onCheckedChange={(c) => updateFile(f.fileName, { firmaOneki: !!c })} />
+                                <span className="text-[10px]">Firma öneki ({firkod}_)</span>
+                              </label>
+                              {!f.firmaOneki && (
+                                <p className="text-[9px] text-amber-600 dark:text-amber-400">
+                                  Öneksiz: {f.databaseName.trim() || "—"} · aynı adda DB varsa atlanır
+                                </p>
+                              )}
                             </div>
                             <div className="space-y-0.5">
                               <Label className="text-[9px] text-muted-foreground">Program</Label>

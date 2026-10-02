@@ -6,7 +6,9 @@
  * BİREBİR şekilde geri yükler:
  *
  *   1) .bak SQL sunucusunda değilse Depo'dan kimlik-doğrulamalı kopyala (net use)
- *   2) RESTORE DATABASE  → hedef ad: {firmaId}_{databaseName}
+ *   2) RESTORE DATABASE  → hedef ad: {firmaId}_{databaseName} (firmaOneki=false ise
+ *      yalnız {databaseName} — tetiklerin öneksiz adla aradığı transfer dataları için;
+ *      bu adda DB varsa ÜZERİNE YAZILMAZ, dosya atlanır)
  *   3) DB owner = firmanın mevcut SQL login'i ({firmaId}_*)
  *   4) sirket DB erişimi (idempotent)
  *   5) sirket.dbo.guvenlik kaydı (programCode)
@@ -45,6 +47,8 @@ import {
 interface FileReq {
   fileName:     string
   databaseName: string   // baz ad (firma prefix'siz) — hedef = {firmaId}_{base}
+  /** false → hedef ad öneksiz (yalnız databaseName). Varsayılan true. */
+  firmaOneki?:  boolean
   programCode:  string
   /** ".bak" → RESTORE (varsayılan), ".mdf" → CREATE DATABASE ... FOR ATTACH */
   kind?:        "bak" | "mdf"
@@ -169,7 +173,22 @@ export async function POST(
             }
 
             for (const f of files) {
-              const targetDb = `${firkod}_${f.databaseName}`
+              const oneksiz  = f.firmaOneki === false
+              const targetDb = oneksiz ? f.databaseName : `${firkod}_${f.databaseName}`
+
+              /*  Öneksiz ad firmaya ait değil: aynı adda başka bir firmanın
+               *  datası (ör. URNTRANSFER) olabilir. Restore REPLACE, attach
+               *  DROP ile çalıştığı için var olan DB'yi silerdi — atlanır.  */
+              if (oneksiz) {
+                const var_ = await masterPool.request().input("n", targetDb)
+                  .query<{ c: number }>("SELECT COUNT(*) c FROM sys.databases WHERE name = @n")
+                if ((var_.recordset[0]?.c ?? 0) > 0) {
+                  step(`exists_${targetDb}`, `Atlandı: ${targetDb} sunucuda zaten var`, "error", {
+                    error: "Öneksiz adla var olan veritabanının üzerine yazılmaz. Farklı bir ad verin ya da firma önekini açın.",
+                  })
+                  continue
+                }
+              }
               // SQL sunucusundaki dosya yerinde kalır; Depo'dakinin kopyası
               // geçici klasöre alınır ve sonunda yalnız o silinir.
               const isLocal  = source === "sql"
