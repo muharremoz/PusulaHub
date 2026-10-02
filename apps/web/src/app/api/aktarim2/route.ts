@@ -25,6 +25,11 @@ async function hedef(id: string | null | undefined): Promise<Aktarim2Hedef | nul
     .select("name, ip, username, password, sql_username, sql_password").eq("id", id).maybeSingle()
   if (!data) return null
   const r = data as { name: string; ip: string; username: string | null; password: string | null; sql_username: string | null; sql_password: string | null }
+  // Servis kullanıcı adı ya da şifresi olmayan hedefi "yok" sayar ve istemcide o sekmeleri gizler
+  // (02.10: Terminal 4 kullanıcı adı boştu, Programlar/Ek klasörler görünmedi) — kod üretmeden durdur.
+  if (!r.username?.trim() || !coz(r.password)) {
+    throw new Error(`${r.name} sunucusunun Windows kullanıcı adı ya da şifresi Hub'da kayıtlı değil (Sunucular → düzenle).`)
+  }
   return {
     ad: r.name, ip: r.ip,
     kullanici: r.username, sifre: coz(r.password),
