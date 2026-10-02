@@ -6,6 +6,12 @@
  * Program datalar listesini guvenlik.srkkod'a göre büyükten küçüğe diziyor;
  * burada üstteki satır programda da en üstte görünür. Kaydet firmanın
  * srkkod numaralarını satırlar arasında yer değiştirir (bkz. lib/giris-sirasi.ts).
+ *
+ * Program bazında gruplu: her program giriş ekranında yalnız kendi (PrgTur)
+ * datalarını gösterdiği için sıra grup içinde anlamlı. Sürükleme grup
+ * içinde kalır; kaydedilen tam listede her grup ORİJİNAL listedeki kendi
+ * yerlerini (slotlarını) korur, yani numaralar yalnız aynı programın
+ * dataları arasında yer değiştirir.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -30,6 +36,12 @@ import { cn } from "@/lib/utils"
 import { dataYili, type GirisSatiri } from "@/lib/giris-sirasi"
 
 interface SonDegisiklik { id: number; kullanici: string | null; geri_alindi: boolean; created_at: string }
+
+/** Bir programın satırlarını tam listede o programın yerlerine sırayla yerleştirir. */
+function yerlestir(l: GirisSatiri[], prgTur: string, satirlar: GirisSatiri[]): GirisSatiri[] {
+  let i = 0
+  return l.map((x) => (x.prgTur === prgTur ? satirlar[i++] : x))
+}
 
 function Satir({ s, sira }: { s: GirisSatiri; sira: number }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: s.srkkod })
@@ -74,6 +86,20 @@ export function GirisSirasiSheet({
   const [son, setSon]           = useState<SonDegisiklik | null>(null)
   const [onay, setOnay]         = useState<"kaydet" | "geriAl" | null>(null)
   const [saving, setSaving]     = useState(false)
+  /** PrgTur → program adı (hizmet kataloğundaki programCode; 909 iki programda ortak) */
+  const [programAdlari, setProgramAdlari] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!open) return
+    fetch("/api/services?onlyActive=true").then((r) => (r.ok ? r.json() : [])).then((svc: unknown) => {
+      const ad: Record<string, string[]> = {}
+      for (const x of Array.isArray(svc) ? svc as { type?: string; name: string; config?: { programCode?: string | null } }[] : []) {
+        const kod = x.type === "pusula-program" ? x.config?.programCode?.trim() : null
+        if (kod) (ad[kod] ??= []).push(x.name)
+      }
+      setProgramAdlari(Object.fromEntries(Object.entries(ad).map(([k, v]) => [k, v.join(" / ")])))
+    }).catch(() => {})
+  }, [open])
 
   const yukle = useCallback(async () => {
     setLoading(true); setError(null)
@@ -100,22 +126,37 @@ export function GirisSirasiSheet({
     const { active, over } = e
     if (!over || active.id === over.id) return
     setListe((l) => {
-      const from = l.findIndex((x) => x.srkkod === active.id)
-      const to   = l.findIndex((x) => x.srkkod === over.id)
-      return arrayMove(l, from, to)
+      const a = l.find((x) => x.srkkod === active.id), b = l.find((x) => x.srkkod === over.id)
+      if (!a || !b || a.prgTur !== b.prgTur) return l   // grup dışına taşınmaz
+      const grup = l.filter((x) => x.prgTur === a.prgTur)
+      const tasindi = arrayMove(grup, grup.indexOf(a), grup.indexOf(b))
+      return yerlestir(l, a.prgTur, tasindi)
     })
   }
+
+  /*  Gruplar ilk göründükleri sırayla (en büyük srkkod'lu program üstte).  */
+  const gruplar = useMemo(() => {
+    const m = new Map<string, GirisSatiri[]>()
+    for (const x of liste) { if (!m.has(x.prgTur)) m.set(x.prgTur, []); m.get(x.prgTur)!.push(x) }
+    return [...m.entries()].map(([prgTur, satirlar]) => ({ prgTur, satirlar }))
+  }, [liste])
 
   /*  En yeni yıl en üstte; aynı yılda mevcut sıra korunur, yılı
    *  okunamayanlar sona.                                              */
   const yilaGoreSirala = () => {
-    setListe((l) => [...l].sort((a, b) => {
-      const ya = dataYili(a.dataYolu || a.srkadi), yb = dataYili(b.dataYolu || b.srkadi)
-      if (ya === yb) return 0
-      if (ya === null) return 1
-      if (yb === null) return -1
-      return yb - ya
-    }))
+    setListe((l) => {
+      const sirali = [...l].sort((a, b) => {
+        const ya = dataYili(a.dataYolu || a.srkadi), yb = dataYili(b.dataYolu || b.srkadi)
+        if (ya === yb) return 0
+        if (ya === null) return 1
+        if (yb === null) return -1
+        return yb - ya
+      })
+      // Her program kendi yerlerinde kalır, yalnız grup içi sıra değişir.
+      let out = l
+      for (const kod of new Set(l.map((x) => x.prgTur))) out = yerlestir(out, kod, sirali.filter((x) => x.prgTur === kod))
+      return out
+    })
   }
 
   /*  degisen: numarası değişecek satır (DB'ye yazılan) — tek sürükleme
@@ -178,7 +219,7 @@ export function GirisSirasiSheet({
                   <Undo2 className="size-3.5" /> Son değişikliği geri al
                 </Button>
               )}
-              <span className="ml-auto text-[11px] text-muted-foreground">Üstteki programda da en üstte</span>
+              <span className="ml-auto text-[11px] text-muted-foreground">Her program kendi listesinde · üstteki programda da üstte</span>
             </div>
 
             {loading ? (
@@ -194,12 +235,24 @@ export function GirisSirasiSheet({
                 &quot;Yeni Veritabanı Ekle&quot; ile data ekleyin.
               </div>
             ) : (
-              <div className="shrink-0 overflow-hidden rounded-[5px] border border-border/50">
-                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-                  <SortableContext items={liste.map((s) => s.srkkod)} strategy={verticalListSortingStrategy}>
-                    {liste.map((s, i) => <Satir key={s.srkkod} s={s} sira={i + 1} />)}
-                  </SortableContext>
-                </DndContext>
+              <div className="flex shrink-0 flex-col gap-3">
+                {gruplar.map((g) => (
+                  <div key={g.prgTur || "-"} className="overflow-hidden rounded-[5px] border border-border/50">
+                    <div className="flex items-center gap-2 border-b border-border/50 bg-[var(--section-bg)] px-3 py-1.5">
+                      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                        {g.prgTur ? (programAdlari[g.prgTur] ?? "Program") : "Program tanımsız"}
+                      </span>
+                      {g.prgTur && <span className="font-mono text-[10px] text-muted-foreground">{g.prgTur}</span>}
+                      <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{g.satirlar.length} data</span>
+                    </div>
+                    {/*  Her grup ayrı DndContext: sürükleme grup dışına çıkamaz.  */}
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+                      <SortableContext items={g.satirlar.map((s) => s.srkkod)} strategy={verticalListSortingStrategy}>
+                        {g.satirlar.map((s, i) => <Satir key={s.srkkod} s={s} sira={i + 1} />)}
+                      </SortableContext>
+                    </DndContext>
+                  </div>
+                ))}
               </div>
             )}
 
