@@ -262,9 +262,7 @@ function YeniAktarimDialog({
       setSqlSunuculari(Array.isArray(s) ? s : [])
       setDepoSunuculari(Array.isArray(d) ? d : [])
       setRdpSunuculari(Array.isArray(r) ? r : [])
-      // Tek seçenek varsa önceden seç
-      if (Array.isArray(s) && s.length === 1) setSqlId(s[0].id)
-      if (Array.isArray(d) && d.length === 1) setDepoId(d[0].id)
+      // Sunucular bilerek önceden seçilmez: her aktarımda neyin taşınacağına kullanıcı karar verir
     })
   }, [open])
 
@@ -275,6 +273,7 @@ function YeniAktarimDialog({
 
   async function olustur() {
     if (!firma) return toast.error("Firma seçin")
+    if (!sqlId && !depoId && !rdpId) return toast.error("En az bir sunucu seçin")
     setGonderiliyor(true)
     try {
       const r = await fetch("/api/aktarim2", {
@@ -370,7 +369,7 @@ function YeniAktarimDialog({
 
         <DialogFooter className="flex-row border-t p-4 sm:justify-stretch">
           <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)}>Vazgeç</Button>
-          <Button className="flex-1" disabled={!firma || gonderiliyor} onClick={() => void olustur()}>
+          <Button className="flex-1" disabled={!firma || !(sqlId || depoId || rdpId) || gonderiliyor} onClick={() => void olustur()}>
             {gonderiliyor ? "Oluşturuluyor…" : "Kod üret"}
           </Button>
         </DialogFooter>
