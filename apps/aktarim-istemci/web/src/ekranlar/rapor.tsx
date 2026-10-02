@@ -216,12 +216,18 @@ export function RaporEkrani({ durum, setDurum }: P) {
     }
   };
 
-  // Filtre (ad / şirket + tür) → tür sırasına diz → sayfala.
+  // Filtre (ad / şirket / kod + tür) → tür sırasına diz → sayfala.
+  // Virgülle birden çok terim: herhangi biri tutan satır listelenir ("6572, 65723, 6574").
+  // Kod birebir eşleşir (6572 yazınca 65723 gelmesin); ad ve şirket içinde aranır.
   const filtreli = useMemo(() => {
-    const q = arama.trim().toLocaleLowerCase("tr");
+    const terimler = arama.split(",").map((x) => x.trim().toLocaleLowerCase("tr")).filter(Boolean);
+    const tutar = (v: Veritabani, q: string) =>
+      (v.kod ?? "").trim().toLocaleLowerCase("tr") === q ||
+      v.ad.toLocaleLowerCase("tr").includes(q) ||
+      v.sirketAdlari.some((x) => x.toLocaleLowerCase("tr").includes(q));
     const l = (r?.veritabanlari ?? []).filter((v) => {
       if (turFiltre !== "hepsi" && v.tur !== turFiltre) return false;
-      if (q && !v.ad.toLocaleLowerCase("tr").includes(q) && !v.sirketAdlari.some((x) => x.toLocaleLowerCase("tr").includes(q))) return false;
+      if (terimler.length && !terimler.some((q) => tutar(v, q))) return false;
       return true;
     });
     return GRUPLAR.flatMap((g) => l.filter((v) => v.tur === g));
@@ -424,7 +430,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           setArama(e.target.value);
                           setVtSayfa(1);
                         }}
-                        placeholder="Veritabanı veya şirket ara…"
+                        placeholder="Veritabanı, şirket ya da kod ara… (virgülle birden çok)"
                         className="h-8 pl-8 text-sm"
                       />
                     </div>
