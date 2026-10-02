@@ -106,3 +106,21 @@ Pano sarmalıyla (`select sum("TBL0"."Bakiye") from (…) "TBL0"`) da aynı kaza
 etki: FindBalance kaynaklı ~311 bin okuma → ~10 bin; toplam 413 bin → ~110 bin. Kalan yük
 `FindStock` (2 × 33 bin) ve `Report_Position` (34 bin) — incelenmedi.
 Betik: `apps/web/__pano-duzelt-test.mjs`. Canlıya/pano tanımına (Report.Report XML) UYGULANMADI.
+
+## TEST'te uygulanan düzeltme (02.10 akşam, `TEST_6796_ALTINSEV_X`)
+
+Pano tanımında (Report.Id 11) 3 `FindBalance` çağrısı `CROSS APPLY` biçimine çevrildi; özgün tanım
+`TEST_6796_ALTINSEV_X.dbo.Report_yedek_pano` tablosunda. Betik: `apps/web/__pano-yama.mjs` (yalnız TEST_ veritabanı kabul eder,
+sonuç birebir aynı değilse yazmaz). Pano veri kaynaklarının toplamı:
+
+| | Süre | CPU | Okuma |
+|---|---|---|---|
+| Önce | 315 ms | 311 ms | 171.324 |
+| Sonra | 196 ms | 194 ms | 70.012 |
+
+Kalan okumanın neredeyse tamamı `FindStock` (Query_2, 33 bin) ve `Report_Position` (Query_3, 34 bin). `FindStock`/`FindStockT`
+içinde tablo değişkeni (`@listStock`) satır tahmini yüzünden `DovizB` her satırda yeniden taranıyor; `OPTION (RECOMPILE)` denendi:
+okuma yarıya indi ama süre 2 katına çıktı (derleme maliyeti) → geri alındı, fonksiyonlar özgün.
+
+Programda denemek için `Sirket.dbo.guvenlik`'e satır eklendi: srkkod **644**, "TEST ALTINSEV", DataYolu `TEST_6796_ALTINSEV_X`,
+KOD 6796 (kullanıcı kararı — firmanın kullanıcıları da görür), YedekAl 0. Giriş sırası srkkod DESC olduğu için listede EN ÜSTTE.
