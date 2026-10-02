@@ -7,7 +7,6 @@ import { AnahtarYok, Bekleme } from "@/ekranlar/ortak";
 import { GirisEkrani } from "@/ekranlar/giris";
 import { SqlGirisEkrani } from "@/ekranlar/baglanti";
 import { RaporEkrani } from "@/ekranlar/rapor";
-import { KapatmaOnayi } from "@/ekranlar/kapatma-onayi";
 import { AktarimEkrani } from "@/ekranlar/aktarim";
 
 export function App() {
@@ -42,7 +41,6 @@ export function App() {
     <TooltipProvider delayDuration={200}>
       <Icerik durum={durum} setDurum={setDurum} hata={hata} />
       <Toaster position="bottom-right" />
-      {anahtarVar() && <KapatmaOnayi />}
     </TooltipProvider>
   );
 }

@@ -11,10 +11,10 @@ using System.Windows.Forms;
 namespace PusulaAktarim
 {
     /// <summary>
-    /// Başlatıcı: yerel web sunucusu + tepsi simgesi + pencere (WebView2).
-    /// SQL Konsol web sürümünün (PusulaCRM/sql-konsol) yaşam döngüsüyle aynı:
-    /// pencere varsa ömrü o belirler; yoksa (WebView2 eksik → tarayıcı) sayfa
-    /// 5 sn'de bir /api/nabiz atar, 45 sn kesilirse exe çıkar.
+    /// Başlatıcı: yerel web sunucusu + tepsi simgesi; arayüz varsayılan tarayıcıda açılır.
+    /// Sayfa 5 sn'de bir /api/nabiz atar; 45 sn kesilirse (sekme kapandı) exe çıkar —
+    /// ama aktarım ya da resim küçültme sürerken kapanmaz, tepsiden yeniden açılır.
+    /// (0.2.4-0.2.5'teki WebView2 penceresi 0.2.6'da kaldırıldı.)
     /// </summary>
     internal static class Program
     {
@@ -27,8 +27,6 @@ namespace PusulaAktarim
         private static DateTime _sonNabiz = DateTime.MinValue;
         private static readonly DateTime _baslangic = DateTime.Now;
         private static int _kapaniyor;
-        private static AktarimPenceresi _pencere;
-        private const string GosterOlayi = @"Local\PusulaAktarim-goster";
         private const string Baslik = "Pusula Aktarım";
 
         [STAThread]
@@ -41,11 +39,6 @@ namespace PusulaAktarim
             {
                 if (!ilk)
                 {
-                    try
-                    {
-                        if (EventWaitHandle.TryOpenExisting(GosterOlayi, out var olay)) { olay.Set(); return; }
-                    }
-                    catch { }
                     var adres = AdresDosyasiOku();
                     if (adres != null) TarayicidaAc(adres);
                     else MessageBox.Show("Uygulama zaten açık. Tepsi simgesinden açabilirsiniz.", Baslik,
@@ -74,21 +67,7 @@ namespace PusulaAktarim
                 var tamAdres = _sunucu.Adres + "#anahtar=" + _sunucu.Anahtar;
                 AdresDosyasiYaz(tamAdres);
                 TepsiKur(tamAdres);
-                _adres = tamAdres;
-                // WebView2 yoksa (Windows Server'da sık) kur — arayüz tarayıcıda değil uygulamanın penceresinde açılsın
-                var pencereVar = AktarimPenceresi.CalismaZamaniVar() || WebViewKurulum.Kur(AktarimPenceresi.CalismaZamaniVar);
-                if (pencereVar)
-                {
-                    PencereAc();
-                    GosterOlayiniDinle();
-                }
-                else
-                {
-                    // Son çare: bileşen kurulamadı (internet/izin) — arayüz tarayıcıda
-                    MessageBox.Show("Uygulama penceresi için gereken Microsoft WebView2 bileşeni kurulamadı.\n\nArayüz tarayıcıda açılacak; aktarım normal çalışır.",
-                        Baslik, MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    TarayicidaAc(tamAdres);
-                }
+                TarayicidaAc(tamAdres);
 
                 var bekci = new System.Windows.Forms.Timer { Interval = 5000 };
                 bekci.Tick += (s, e) => Bekci();
@@ -148,7 +127,8 @@ namespace PusulaAktarim
 
         private static void Bekci()
         {
-            if (_pencere != null && !_pencere.IsDisposed && _pencere.Visible) return;
+            // Sekme kapalı olsa da süren iş yarıda kesilmesin (tepsiden yeniden açılır)
+            if (_uygulama != null && _uygulama.Mesgul) { _sonNabiz = DateTime.Now; return; }
             var simdi = DateTime.Now;
             var sinir = _sonNabiz == DateTime.MinValue ? _baslangic + IlkNabizSiniri : _sonNabiz + NabizSiniri;
             if (simdi > sinir) Kapat();
@@ -159,18 +139,13 @@ namespace PusulaAktarim
             if (Interlocked.Exchange(ref _kapaniyor, 1) == 1) return;
             try { _uygulama?.Kapat(); } catch { }
             try { _sunucu?.Durdur(); } catch { }
-            if (_pencere != null && !_pencere.IsDisposed)
-            {
-                _pencere.SormadanKapat = true;
-                try { _pencere.Close(); } catch { }
-            }
             Application.Exit();
         }
 
         private static void TepsiKur(string adres)
         {
             var menu = new ContextMenuStrip();
-            menu.Items.Add("Göster", null, (s, e) => Goster(adres));
+            menu.Items.Add("Aç", null, (s, e) => TarayicidaAc(adres));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Kapat", null, (s, e) => Kapat());
             _tepsi = new NotifyIcon
@@ -180,33 +155,7 @@ namespace PusulaAktarim
                 ContextMenuStrip = menu,
                 Visible = true,
             };
-            _tepsi.DoubleClick += (s, e) => Goster(adres);
-        }
-
-        private static string _adres;
-
-        private static void PencereAc()
-        {
-            _pencere = new AktarimPenceresi(_adres, Kapat);
-            _pencere.Show();
-        }
-
-        /// <summary>Tepsiden: pencere varsa öne getir, kapanmışsa yeniden aç (tarayıcıya yalnız WebView2 yoksa).</summary>
-        private static void Goster(string adres)
-        {
-            if (_pencere != null && !_pencere.IsDisposed && !_pencere.SormadanKapat) _pencere.OneGetir();
-            else if (Interlocked.CompareExchange(ref _kapaniyor, 0, 0) == 0 && AktarimPenceresi.CalismaZamaniVar()) PencereAc();
-            else TarayicidaAc(adres);
-        }
-
-        private static void GosterOlayiniDinle()
-        {
-            var olay = new EventWaitHandle(false, EventResetMode.AutoReset, GosterOlayi);
-            ThreadPool.RegisterWaitForSingleObject(olay, (d, zamanAsimi) =>
-            {
-                var p = _pencere;
-                if (p != null && !p.IsDisposed) p.BeginInvoke((Action)p.OneGetir);
-            }, null, Timeout.Infinite, false);
+            _tepsi.DoubleClick += (s, e) => TarayicidaAc(adres);
         }
 
         private static void TarayicidaAc(string adres)

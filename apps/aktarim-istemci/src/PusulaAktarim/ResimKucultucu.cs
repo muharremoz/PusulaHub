@@ -43,6 +43,7 @@ namespace PusulaAktarim
 
         // Çalışma durumu
         private static bool _suruyor, _bitti, _durduruldu;
+        public static bool Suruyor => _suruyor;
         private static int _toplam, _islenen, _kucultulen, _atlanan, _hataSayisi;
         private static long _onceBayt, _sonraBayt;
         private static readonly List<string> _hatalar = new List<string>();

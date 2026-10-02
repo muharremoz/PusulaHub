@@ -407,6 +407,12 @@ namespace PusulaAktarim
         /// Yükleme bitti ve Pusula'ya bildirildi → başka bir aktarım için yeni kod istenebilir. Ayırma (detach)
         /// seçildiyse Pusula taşımayı bitirip veritabanları ayrılana kadar beklenir (ayırma bu oturuma bağlı).
         /// </summary>
+        /// <summary>Aktarım ya da resim küçültme sürüyor mu — sürüyorsa exe sekme kapansa da açık kalır.</summary>
+        public bool Mesgul
+        {
+            get { lock (_kilit) if (_aktarimSuruyor) return true; return ResimKucultucu.Suruyor; }
+        }
+
         private bool YeniAktarimOlurKilitsiz =>
             _is != null && _is.Bitti && _yuklemeBildirildi && !_aktarimSuruyor
             && (!_is.VeritabanlariAyir || _ayirmaDurumu == "bitti");
