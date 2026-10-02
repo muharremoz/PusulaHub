@@ -19,6 +19,7 @@ import {
 import {
   LayoutGrid,
   Server,
+  ChartLine,
   Building2,
   ArrowLeftRight,
   MonitorDown,
@@ -67,6 +68,7 @@ const NAV: NavGroupDef[] = [
     items: [
       { title: "Dashboard", url: "/dashboard", icon: LayoutGrid, moduleKey: "dashboard" },
       { title: "Sunucular", url: "/servers", icon: Server, moduleKey: "servers" },
+      { title: "Sunucu Raporu", url: "/server-report", icon: ChartLine, moduleKey: "servers" },
       { title: "Firmalar", url: "/companies", icon: Building2, moduleKey: "companies" },
       { title: "Aktarım", url: "/aktarim", icon: ArrowLeftRight, moduleKey: "aktarim" },
       { title: "Aktarım 2", url: "/aktarim2", icon: MonitorDown, moduleKey: "aktarim" },

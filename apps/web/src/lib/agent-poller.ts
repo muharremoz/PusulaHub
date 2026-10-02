@@ -18,6 +18,7 @@ import { markReadByMsgId, getPendingForServer, markRecipientDelivered, markServe
 import type { AgentReport } from "./agent-types"
 import { withSqlConnection } from "./sql-external"
 import { decrypt } from "./crypto"
+import { metrikEkle } from "./server-metrics"
 
 const hub = () => getSupabaseAdmin().schema("hub")
 
@@ -411,6 +412,9 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
       os: (data.os === "linux" ? "linux" : "windows") as "windows" | "linux",
       version: data.version ?? "unknown", port, report,
     })
+
+    // 5 dakikalık ölçüm geçmişi (Sunucu Raporu) — salt-okunur modda yazılmaz
+    if (!isReadOnly()) metrikEkle(server.Id, server.Name, report)
 
     const hasSqlRole = Array.isArray(report.roles) && report.roles.some((r) => String(r).toUpperCase() === "SQL")
     if (report.ad?.companies || report.iis || report.sql || report.userProcesses || hasSqlRole) {
