@@ -205,6 +205,13 @@ namespace PusulaConnect
                         _vpnKuruluyor = false;
                         var vh = _vpnDurum.Value<string>("hata");
                         _ = _servis.Olay(vh == null ? "vpn_kuruldu" : "vpn_kurulum_hatasi", vh);
+                        // Ayar değişti ve eski bağlantı kesildi: FortiClient yeni ayarla açılır, kullanıcı yeniden bağlanır.
+                        if (_vpnDurum.Value<bool?>("vpnKesildi") == true)
+                        {
+                            _terminal.erisim = false;
+                            try { var fc = Fortinet.ExeYolu(); if (fc != null) Process.Start(new ProcessStartInfo(fc) { UseShellExecute = true }); }
+                            catch (Exception e) { Gunluk.Yaz("FortiClient açılamadı: " + e.Message); }
+                        }
                         _ = Task.Run(Kontrol);
                     }
                 }

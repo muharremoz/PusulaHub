@@ -1,6 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
+using System.Net.NetworkInformation;
+using System.Threading;
 using System.Runtime.InteropServices;
 using Microsoft.Win32;
 
@@ -84,6 +88,54 @@ namespace PusulaConnect
                     return k != null && string.Equals(k.GetValue("Server") as string, sunucu, StringComparison.OrdinalIgnoreCase);
             }
             catch { return false; }
+        }
+
+        /// <summary>SSL VPN tüneli açık mı (Fortinet SSL VPN sanal bağdaştırıcısı "Up").</summary>
+        public static bool SslVpnBagli()
+        {
+            try
+            {
+                return NetworkInterface.GetAllNetworkInterfaces().Any(n =>
+                    n.OperationalStatus == OperationalStatus.Up && n.Description.IndexOf("Fortinet SSL VPN", StringComparison.OrdinalIgnoreCase) >= 0);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Açık SSL VPN tünelini keser — YÖNETİCİ ister. FortiClient VPN'in (7.0) komut satırından
+        /// "disconnect" aracı yok (FortiSSLVPNclient.exe yalnız eski/tam sürümde); tüneli taşıyan
+        /// FortiSSLVPNdaemon.exe sonlandırılır, FortiClient bağlantıyı kopmuş görür. Olmazsa sanal
+        /// bağdaştırıcı kapatılıp açılır. Profil değişince eski ayarla açık kalan bağlantı böylece düşer;
+        /// kullanıcı yeni ayarla yeniden bağlanır.
+        /// </summary>
+        public static bool SslVpnKes()
+        {
+            foreach (var p in Process.GetProcessesByName("FortiSSLVPNdaemon"))
+            {
+                try { p.Kill(); p.WaitForExit(5000); } catch (Exception e) { Gunluk.Yaz("FortiSSLVPNdaemon sonlandırılamadı: " + e.Message); }
+                finally { p.Dispose(); }
+            }
+            for (var i = 0; i < 20 && SslVpnBagli(); i++) Thread.Sleep(500);
+            if (!SslVpnBagli()) return true;
+
+            foreach (var n in NetworkInterface.GetAllNetworkInterfaces().Where(n => n.Description.IndexOf("Fortinet SSL VPN", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                Netsh("interface set interface name=\"" + n.Name + "\" admin=disabled");
+                Thread.Sleep(1500);
+                Netsh("interface set interface name=\"" + n.Name + "\" admin=enabled");
+            }
+            for (var i = 0; i < 10 && SslVpnBagli(); i++) Thread.Sleep(500);
+            return !SslVpnBagli();
+        }
+
+        private static void Netsh(string argumanlar)
+        {
+            try
+            {
+                using (var p = Process.Start(new ProcessStartInfo("netsh.exe", argumanlar) { UseShellExecute = false, CreateNoWindow = true }))
+                    p.WaitForExit(15000);
+            }
+            catch (Exception e) { Gunluk.Yaz("netsh " + argumanlar + ": " + e.Message); }
         }
 
         /// <summary>HKLM'ye yazar — yönetici ister. Değerler Connect 1.5 ile birebir (sahadaki çalışan profiller).</summary>

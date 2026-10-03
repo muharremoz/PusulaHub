@@ -29,15 +29,21 @@ export type ConnectKoduSonuc =
  * Girilmemişse kurulum paketinin sabiti (VPN_SUNUCU). Değişince uygulamalar profil imzasıyla fark eder,
  * FortiClient ayarını yeniden yazar.
  */
+// Son okunan ayar: Supabase anlık hata verirse sabite DÜŞÜLMEZ — yoksa profil eski/yeni arasında
+// gidip gelir ve müşteride "VPN ayarını güncelleyin" boşuna tekrar çıkar.
+let sonVpnAdresi: string | null = null
+
 export async function connectVpnAdresi(): Promise<string> {
   try {
-    const { data } = await getSupabaseAdmin().schema("hub").from("settings")
+    const { data, error } = await getSupabaseAdmin().schema("hub").from("settings")
       .select("key, value").in("key", ["connect_vpn_sunucu", "connect_vpn_port"])
+    if (error) throw error
     const a = new Map(((data ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, (r.value ?? "").trim()]))
     const sunucu = a.get("connect_vpn_sunucu"), port = a.get("connect_vpn_port")
-    if (sunucu) return port ? `${sunucu}:${port}` : sunucu
-  } catch { /* ayar okunamadı → sabit */ }
-  return VPN_SUNUCU
+    sonVpnAdresi = sunucu ? (port ? `${sunucu}:${port}` : sunucu) : VPN_SUNUCU
+    return sonVpnAdresi
+  } catch { /* ayar okunamadı → son bilinen, o da yoksa sabit */ }
+  return sonVpnAdresi ?? VPN_SUNUCU
 }
 
 export interface ConnectProfil {
