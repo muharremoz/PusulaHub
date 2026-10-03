@@ -53,6 +53,8 @@ namespace PusulaConnect
                 Application.SetCompatibleTextRenderingDefault(false);
                 Gunluk.Yaz("Açıldı: sürüm " + ServisIstemci.Surum + ", " + Application.ExecutablePath);
                 Yerlesim.Yerles();
+                // Güncellemeden sonra ilk açılış: kısayollardaki eski ikon önbelleğini tazele
+                if (args.Contains("--guncellendi")) _ = Task.Run(Yerlesim.IkonlariTazele);
                 _ = Task.Run(YaziciAjani.GerekirseBaslat);
 
                 var adres = Environment.GetEnvironmentVariable("PUSULA_CONNECT_URL");

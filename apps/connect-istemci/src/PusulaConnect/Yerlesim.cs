@@ -22,6 +22,16 @@ namespace PusulaConnect
         public static bool KurulukopyadanMi => string.Equals(Path.GetFullPath(CalisanExe), Path.GetFullPath(KuruluExe), StringComparison.OrdinalIgnoreCase);
 
         /// <summary>İndirilen exe'den açıldıysa kendini yerleştirir; kısayollar her açılışta onarılır.</summary>
+        [System.Runtime.InteropServices.DllImport("shell32.dll")]
+        private static extern void SHChangeNotify(int olay, uint bayrak, IntPtr a, IntPtr b);
+
+        /// <summary>Explorer'a "ilişkilendirmeler/ikonlar değişti" der — kısayollardaki eski ikon önbelleği tazelenir.</summary>
+        public static void IkonlariTazele()
+        {
+            try { SHChangeNotify(0x08000000 /* SHCNE_ASSOCCHANGED */, 0 /* SHCNF_IDLIST */, IntPtr.Zero, IntPtr.Zero); }
+            catch (Exception e) { Gunluk.Yaz("İkon önbelleği tazelenemedi: " + e.Message); }
+        }
+
         public static void Yerles()
         {
             try

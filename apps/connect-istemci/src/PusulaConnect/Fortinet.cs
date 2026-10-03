@@ -90,6 +90,25 @@ namespace PusulaConnect
             catch { return false; }
         }
 
+        private const string SslvpnAnahtari = @"SOFTWARE\Fortinet\FortiClient\Sslvpn";
+
+        /// <summary>
+        /// Geçersiz sertifika uyarısı kapalı mı (Sslvpn\no_warn_invalid_cert = 1). Pusula'nın FortiGate'i fabrika
+        /// sertifikasıyla (CN=FG1K5DT918801859, Fortinet CA) yayın yapıyor; vpn.pusulanet.net adı sertifikada yok →
+        /// FortiClient her bağlanışta "Security Alert" gösteriyordu. Asıl çözüm FortiGate'e geçerli sertifika.
+        /// Tünelin "ServerCert"=0 değeri bu uyarıyı kapatmaya yetmiyor (sahada görüldü, 03.10.2026).
+        /// </summary>
+        public static bool SertifikaUyarisiKapali()
+        {
+            try
+            {
+                using (var kok = Hklm64())
+                using (var k = kok.OpenSubKey(SslvpnAnahtari))
+                    return k != null && Convert.ToInt32(k.GetValue("no_warn_invalid_cert") ?? 0) == 1;
+            }
+            catch { return false; }
+        }
+
         /// <summary>SSL VPN tüneli açık mı (Fortinet SSL VPN sanal bağdaştırıcısı "Up").</summary>
         public static bool SslVpnBagli()
         {
@@ -156,6 +175,10 @@ namespace PusulaConnect
                 k.SetValue("use_external_browser", 0, RegistryValueKind.DWord);
                 k.SetValue("azure_auto_login", 0, RegistryValueKind.DWord);
             }
+            // Genel SSL VPN ayarı: geçersiz sertifika uyarısı gösterilmesin (bkz. SertifikaUyarisiKapali)
+            using (var kok = Hklm64())
+            using (var k = kok.CreateSubKey(SslvpnAnahtari))
+                k?.SetValue("no_warn_invalid_cert", 1, RegistryValueKind.DWord);
         }
 
         /// <summary>FortiClient bu tünel için kullanıcı adı saklıyor mu (DATA1 — makineye bağlı şifreli).</summary>

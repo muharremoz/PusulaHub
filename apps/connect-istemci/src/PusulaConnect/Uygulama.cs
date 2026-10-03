@@ -347,7 +347,8 @@ namespace PusulaConnect
             {
                 var rdp = P("rdp");
                 var forti = Fortinet.KuruluSurum();
-                var profil = P("tunel") != null && P("vpn") != null && Fortinet.ProfilDogru(P("tunel"), P("vpn"));
+                // Sertifika uyarısı açık kalmışsa da "VPN ayarını güncelleyin" çıkar (eski kurulumlar bir kez günceller)
+                var profil = P("tunel") != null && P("vpn") != null && Fortinet.ProfilDogru(P("tunel"), P("vpn")) && Fortinet.SertifikaUyarisiKapali();
                 // 2FA açıkken kasa anahtarlı dosyada, kapalıyken yerel DPAPI dosyasında
                 var rdpKullanici = (IkiAktif ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar) ? _kayit?.Value<string>("kullanici") : null;
                 var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
