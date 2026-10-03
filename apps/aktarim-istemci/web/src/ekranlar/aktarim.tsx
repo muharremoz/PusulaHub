@@ -15,11 +15,11 @@ type P = { durum: Durum; setDurum: (d: Durum) => void };
 
 /** Öğe türü etiketi — rapor ekranındaki sekme renkleriyle aynı. */
 const TUR: Record<string, { ad: string; renk: string }> = {
-  veritabani: { ad: "Veritabanı", renk: "bg-blue-500/15 text-blue-700 dark:text-blue-400" },
-  eski: { ad: "Eski yıl", renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  resim: { ad: "Resim", renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
-  program: { ad: "Program", renk: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
-  ek: { ad: "Ek dosya", renk: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400" },
+  veritabani: { ad: "Veritabanı", renk: "bg-muted text-foreground" },
+  eski: { ad: "Eski yıl", renk: "bg-muted text-foreground" },
+  resim: { ad: "Resim", renk: "bg-muted text-foreground" },
+  program: { ad: "Program", renk: "bg-muted text-foreground" },
+  ek: { ad: "Ek dosya", renk: "bg-muted text-foreground" },
 };
 
 const ADIM: Record<IsOgesi["durum"], string> = {
@@ -158,7 +158,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                       {o.boyut > 0 ? bayt(o.boyut) : o.veriMb > 0 ? mb(o.veriMb) : "—"}
                     </TableCell>
                     <TableCell className="pr-4">
-                      <div className={"text-xs " + (o.durum === "tamam" ? "text-emerald-700 dark:text-emerald-400" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}>
+                      <div className={"text-xs " + (o.durum === "tamam" ? "text-foreground" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}>
                         {ADIM[o.durum]}
                         {o.durum === "yukleniyor" && o.boyut > 0 && ` · ${bayt(o.gonderilen)} / ${bayt(o.boyut)}`}
                         {suren && o.durum !== "yukleniyor" && ` · %${o.yuzde}`}
@@ -193,7 +193,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
 }
 
 function Simge({ d, suruyor }: { d: IsOgesi["durum"]; suruyor: boolean }) {
-  if (d === "tamam") return <CheckCircle2 className="size-5 shrink-0 text-emerald-600" />;
+  if (d === "tamam") return <CheckCircle2 className="size-5 shrink-0 text-foreground" />;
   if (d === "hata") return <XCircle className="size-5 shrink-0 text-destructive" />;
   if (d === "bekliyor" || !suruyor) return <Circle className="size-5 shrink-0 text-muted-foreground" />;
   return <Loader2 className="size-5 shrink-0 animate-spin text-primary" />;

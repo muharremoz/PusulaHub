@@ -176,16 +176,16 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
   };
 
   return (
-    <div className="min-h-svh bg-gradient-to-b from-violet-50 to-muted/40 to-60% pb-20 dark:from-violet-950/30">
+    <div className="min-h-svh bg-muted/40 pb-20">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
         <Button variant="ghost" size="icon" onClick={() => onGeri(degisti.current)} disabled={suruyor} aria-label="Geri">
           <ArrowLeft />
         </Button>
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-violet-600 text-white shadow-sm">
+        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <Minimize2 className="size-[18px]" />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-violet-600 dark:text-violet-400">Araç</div>
+          <div className="text-xs font-medium text-foreground">Araç</div>
           <h1 className="truncate text-base font-semibold">Resim küçültme</h1>
         </div>
         <span className="hidden text-xs text-muted-foreground sm:block">Çözünürlük değişmez · dosya adları aynı kalır · aktarımdan bağımsız</span>
@@ -207,7 +207,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
             {/* 1) Klasörler */}
             <Kart
               ikon={<Image className="size-4" />}
-              renk="bg-violet-500/15 text-violet-600 dark:text-violet-400"
+              renk="bg-muted text-foreground"
               baslik="Klasörler"
               sag={<Button variant="outline" size="sm" onClick={() => void klasorEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
             >
@@ -240,7 +240,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                         </TableCell>
                         <TableCell className="px-4 text-right tabular-nums">
                           {k.adet == null ? <span className="text-muted-foreground">tarayınca</span> : k.adet === 0 ? <span className="text-muted-foreground">—</span> : (
-                            <span className="text-amber-600 dark:text-amber-400">{k.adet.toLocaleString("tr")}</span>
+                            <span className="text-foreground">{k.adet.toLocaleString("tr")}</span>
                           )}
                         </TableCell>
                         <TableCell className="px-4 text-right tabular-nums text-muted-foreground">{k.mb ? mb(k.mb) : "—"}</TableCell>
@@ -261,7 +261,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                       <ToggleGroupItem
                         key={k.deger}
                         value={String(k.deger)}
-                        className="h-auto flex-col items-start gap-0 px-3 py-1.5 data-[state=on]:border-violet-600 data-[state=on]:bg-violet-600 data-[state=on]:text-white"
+                        className="h-auto flex-col items-start gap-0 px-3 py-1.5 data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
                       >
                         <span className="text-sm font-semibold">{k.ad}</span>
                         <span className="text-[11px] opacity-80">{k.aciklama}</span>
@@ -295,7 +295,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
             {tarama && (
               <Kart
                 ikon={<ZoomIn className="size-4" />}
-                renk="bg-blue-500/15 text-blue-600 dark:text-blue-400"
+                renk="bg-muted text-foreground"
                 baslik="Önizleme"
                 sag={
                   <span className="text-xs text-muted-foreground">
@@ -325,13 +325,13 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                       <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
                         Örnek {ornekNo + 1}/{tarama.ornekler.length} · {ornekYol}
                       </span>
-                      <Toggle variant="outline" size="sm" pressed={buyut} onPressedChange={setBuyut} className="data-[state=on]:bg-blue-600 data-[state=on]:text-white">
+                      <Toggle variant="outline" size="sm" pressed={buyut} onPressedChange={setBuyut} className="data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
                         <ZoomIn /> %100 boyut
                       </Toggle>
                     </div>
                     <Karsilastirma once={gorseller?.once} sonra={gorseller?.sonra} ornek={ornek} kalite={kalite} yukleniyor={ornekYukleniyor} buyut={buyut} />
                     {!!tarama.oncedenKucultulmus && (
-                      <div className="flex items-start gap-2 border-t bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+                      <div className="flex items-start gap-2 border-t bg-muted px-4 py-2.5 text-sm text-foreground">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                         <span>
                           <b>{tarama.oncedenKucultulmus.toLocaleString("tr")}</b> resim bu araçla daha önce küçültülmüş (orijinali <span className="font-mono">_orijinal</span> klasöründe).
@@ -349,12 +349,12 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                       </div>
                     )}
                     {tahmin && (
-                      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t bg-emerald-500/10 px-4 py-3 text-sm">
-                        <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
+                      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t bg-muted px-4 py-3 text-sm">
+                        <CheckCircle2 className="size-4 text-foreground" />
                         <span>
                           Tahmini sonuç: <b>{boyutMetni(tarama.bayt)}</b> → <b>{boyutMetni(tahmin.sonra)}</b>
                         </span>
-                        <span className="font-semibold text-emerald-700 dark:text-emerald-400">
+                        <span className="font-semibold text-foreground">
                           ≈ {boyutMetni(tahmin.kazanc)} kazanç (%{tahmin.yuzde})
                         </span>
                         <span className="text-xs text-muted-foreground">Örneğe göre tahmin; gerçek sonuç resme göre değişir.</span>
@@ -377,7 +377,7 @@ export function ResimKucultmeEkrani({ rapor, onGeri }: { rapor: KesifRaporu | nu
                 : "Önce klasörleri seçip tarayın."}
             </span>
             <Button
-              className="bg-violet-600 text-white hover:bg-violet-700"
+              className="bg-primary text-primary-foreground"
               disabled={!tarama || tarama.adet === 0}
               onClick={() => (yedekle ? void baslat() : setYedeksizOnay(true))}
             >
@@ -426,7 +426,7 @@ function Karsilastirma({
   const panel = ({ baslik, alt, src, r, diger, vurgu }: { baslik: string; alt: React.ReactNode; src?: string; r: React.RefObject<HTMLDivElement | null>; diger: React.RefObject<HTMLDivElement | null>; vurgu?: boolean }) => (
     <div className="min-w-0 flex-1">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <span className={cn("text-sm font-medium", vurgu && "text-violet-700 dark:text-violet-400")}>{baslik}</span>
+        <span className={cn("text-sm font-medium", vurgu && "text-foreground")}>{baslik}</span>
         <span className="text-xs text-muted-foreground tabular-nums">{alt}</span>
       </div>
       <div
@@ -451,11 +451,11 @@ function Karsilastirma({
         vurgu: true,
         alt:
           ornek?.atlanir ? (
-            <span className="text-amber-600 dark:text-amber-400">{ornek.neden ?? "yeterince küçülmüyor — dokunulmaz"}</span>
+            <span className="text-foreground">{ornek.neden ?? "yeterince küçülmüyor — dokunulmaz"}</span>
           ) : ornek?.yeni ? (
             <>
               {boyutMetni(ornek.yeni)} · {ornek.genislik}×{ornek.yukseklik}{" "}
-              <span className="font-semibold text-emerald-600 dark:text-emerald-400">−%{azalma}</span>
+              <span className="font-semibold text-foreground">−%{azalma}</span>
             </>
           ) : (
             ""
@@ -474,7 +474,7 @@ function CalismaKarti({ c, onDurdur, onYeni }: { c: Calisma; onDurdur: () => voi
   return (
     <Kart
       ikon={c.suruyor ? <Loader2 className="size-4 animate-spin" /> : <CheckCircle2 className="size-4" />}
-      renk={c.suruyor ? "bg-violet-500/15 text-violet-600 dark:text-violet-400" : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"}
+      renk={c.suruyor ? "bg-muted text-foreground" : "bg-muted text-foreground"}
       baslik={c.suruyor ? "Küçültülüyor…" : c.durduruldu ? "Durduruldu" : "Tamamlandı"}
       sag={
         c.suruyor ? (
@@ -491,15 +491,15 @@ function CalismaKarti({ c, onDurdur, onYeni }: { c: Calisma; onDurdur: () => voi
           </div>
           <div className="text-2xl font-bold tabular-nums">{yuzde}%</div>
         </div>
-        <Progress value={yuzde} className="[&>[data-slot=progress-indicator]]:bg-violet-600" />
+        <Progress value={yuzde} className="[&>[data-slot=progress-indicator]]:bg-primary" />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Sayac ad="Küçültülen" deger={c.kucultulen.toLocaleString("tr")} renk="text-emerald-600 dark:text-emerald-400" />
+          <Sayac ad="Küçültülen" deger={c.kucultulen.toLocaleString("tr")} renk="text-foreground" />
           <Sayac ad="Dokunulmayan" deger={c.atlanan.toLocaleString("tr")} alt={c.atlanan ? "%10'dan az küçülüyor" : undefined} />
           <Sayac ad="Hata" deger={c.hataSayisi.toLocaleString("tr")} renk={c.hataSayisi ? "text-destructive" : undefined} />
-          <Sayac ad="Kazanılan" deger={boyutMetni(kazanc)} renk="text-emerald-600 dark:text-emerald-400" alt={c.onceBayt ? `${boyutMetni(c.onceBayt)} → ${boyutMetni(c.sonraBayt)}` : undefined} />
+          <Sayac ad="Kazanılan" deger={boyutMetni(kazanc)} renk="text-foreground" alt={c.onceBayt ? `${boyutMetni(c.onceBayt)} → ${boyutMetni(c.sonraBayt)}` : undefined} />
         </div>
         {!c.suruyor && c.kucultulen === 0 && c.atlanan > 0 && (
-          <p className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">
+          <p className="rounded-md bg-muted px-3 py-2 text-sm text-foreground">
             Hiçbir resim küçültülmedi: hepsi zaten verimli kaydedilmiş (büyük ihtimalle daha önce küçültülmüş). Yeniden kodlamak en fazla
             birkaç yüzde kazandıracak ve gereksiz kalite kaybı olacağı için orijinallere dokunulmadı.
           </p>

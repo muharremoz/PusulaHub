@@ -338,7 +338,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
     );
 
   return (
-    <div className="min-h-svh bg-gradient-to-b from-blue-50 to-muted/40 to-60% pb-20 dark:from-blue-950/30">
+    <div className="min-h-svh bg-muted/40 pb-20">
       <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
           <MonitorUp className="size-[18px]" />
@@ -348,11 +348,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
           <h1 className="truncate text-base font-semibold">{oturum?.firmaAdi}</h1>
         </div>
         {durum.kesifGonderildi ? (
-          <span className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+          <span className="flex items-center gap-1.5 text-xs text-foreground">
             <CheckCircle2 className="size-4" /> Rapor Pusula'ya iletildi
           </span>
         ) : null}
-        <Button variant="outline" size="sm" onClick={() => setKucultme(true)} className="border-violet-500/40 text-violet-700 hover:bg-violet-500/10 hover:text-violet-800 dark:text-violet-400">
+        <Button variant="outline" size="sm" onClick={() => setKucultme(true)} className="text-foreground">
           <Minimize2 /> Resim küçült
         </Button>
         <Button variant="outline" size="sm" disabled={bekle} onClick={() => void yenile()}>
@@ -362,10 +362,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
       <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         {oturum?.notlar && (
-          <Alert className="border-blue-500/30 bg-blue-500/10 text-blue-900 dark:text-blue-200">
+          <Alert className="bg-muted text-foreground">
             <Info />
-            <AlertDescription className="text-blue-900/80 dark:text-blue-200/80">
-              <span className="font-medium text-blue-900 dark:text-blue-100">Pusula'nın notu:</span> {oturum.notlar}
+            <AlertDescription className="text-muted-foreground">
+              <span className="font-medium text-foreground">Pusula'nın notu:</span> {oturum.notlar}
             </AlertDescription>
           </Alert>
         )}
@@ -500,15 +500,15 @@ export function RaporEkrani({ durum, setDurum }: P) {
                           <TableCell className="px-4 font-mono tabular-nums">{v.kod ?? "—"}</TableCell>
                           <TableCell className="px-4">
                             {v.prgTur === "909" ? (
-                              <span className="inline-flex rounded-md bg-sky-500/15 px-2 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-400">Perakende</span>
+                              <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">Perakende</span>
                             ) : v.prgTur === "011" ? (
-                              <span className="inline-flex rounded-md bg-violet-500/15 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400">Toptan</span>
+                              <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">Toptan</span>
                             ) : (
                               <span className="text-muted-foreground">{v.prgTur ?? "—"}</span>
                             )}
                           </TableCell>
                           <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
-                          <TableCell className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground")}>
+                          <TableCell className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-foreground" : "text-muted-foreground")}>
                             <Ipucu metin={v.sonHareket ? "Son cari hareket (CarHrk)" + (eskiYilMi(v) ? " — eski yıl datası" : "") : "CarHrk tablosu yok veya okunamadı"}>
                               <span>{tarih(v.sonHareket)}</span>
                             </Ipucu>
@@ -526,8 +526,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 value={secili.has(v.ad) ? (eskiYil.has(v.ad) ? "eski" : "guncel") : ""}
                                 onValueChange={(d) => d && satirAktarimi(v, d as "guncel" | "eski")}
                               >
-                                <ToggleGroupItem value="guncel" className="px-2 text-xs data-[state=on]:border-emerald-600 data-[state=on]:bg-emerald-600 data-[state=on]:text-white">Güncel</ToggleGroupItem>
-                                <ToggleGroupItem value="eski" className="px-2 text-xs data-[state=on]:border-amber-500 data-[state=on]:bg-amber-500 data-[state=on]:text-white">Eski yıl</ToggleGroupItem>
+                                <ToggleGroupItem value="guncel" className="px-2 text-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Güncel</ToggleGroupItem>
+                                <ToggleGroupItem value="eski" className="px-2 text-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Eski yıl</ToggleGroupItem>
                               </ToggleGroup>
                             </TableCell>
                           )}
@@ -581,7 +581,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     aksiyon={<Button variant="outline" size="sm" onClick={() => void resimKlasoruEkle().catch((e) => setHata(e.message))}><Plus /> Klasör ekle</Button>}
                   >
                     {buyukResim.adet > 0 && (
-                      <div className="flex items-start gap-2 border-b bg-amber-500/10 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300">
+                      <div className="flex items-start gap-2 border-b bg-muted px-4 py-2.5 text-sm text-foreground">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                         <span>
                           <b>{buyukResim.adet.toLocaleString("tr")}</b> adet resim 500 KB'tan büyük (toplam {mb(buyukResim.mb)}). Yükleme öncesi
@@ -650,7 +650,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 <TableCell className="px-4 text-right tabular-nums">
                                   {k.buyukDosya ? (
                                     <Ipucu metin={`${k.buyukDosya.toLocaleString("tr")} dosya 500 KB'tan büyük, toplam ${mb(k.buyukMb ?? 0)}`}>
-                                      <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                                      <span className="inline-flex items-center gap-1 text-foreground">
                                         <AlertTriangle className="size-3.5" />
                                         {k.buyukDosya.toLocaleString("tr")}
                                       </span>
@@ -913,12 +913,12 @@ export function RaporEkrani({ durum, setDurum }: P) {
 /** Bölüm / sekme renkleri — her alan kendi tonunda (koyu temada bir ton açık). */
 const RENK = {
   slate: { rozet: "bg-slate-500/15 text-slate-600 dark:text-slate-300", sekme: "data-[state=active]:[&_svg]:text-slate-600" },
-  blue: { rozet: "bg-blue-500/15 text-blue-600 dark:text-blue-400", sekme: "data-[state=active]:[&_svg]:text-blue-600 dark:data-[state=active]:[&_svg]:text-blue-400" },
-  violet: { rozet: "bg-violet-500/15 text-violet-600 dark:text-violet-400", sekme: "data-[state=active]:[&_svg]:text-violet-600 dark:data-[state=active]:[&_svg]:text-violet-400" },
-  amber: { rozet: "bg-amber-500/15 text-amber-600 dark:text-amber-400", sekme: "data-[state=active]:[&_svg]:text-amber-600 dark:data-[state=active]:[&_svg]:text-amber-400" },
-  emerald: { rozet: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400", sekme: "data-[state=active]:[&_svg]:text-emerald-600 dark:data-[state=active]:[&_svg]:text-emerald-400" },
-  teal: { rozet: "bg-teal-500/15 text-teal-600 dark:text-teal-400", sekme: "" },
-  cyan: { rozet: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400", sekme: "data-[state=active]:[&_svg]:text-cyan-600 dark:data-[state=active]:[&_svg]:text-cyan-400" },
+  blue: { rozet: "bg-muted text-foreground", sekme: "" },
+  violet: { rozet: "bg-muted text-foreground", sekme: "" },
+  amber: { rozet: "bg-muted text-foreground", sekme: "" },
+  emerald: { rozet: "bg-muted text-foreground", sekme: "" },
+  teal: { rozet: "bg-muted text-foreground", sekme: "" },
+  cyan: { rozet: "bg-muted text-foreground", sekme: "" },
 } as const;
 type Renk = keyof typeof RENK;
 

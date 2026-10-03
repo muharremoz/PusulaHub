@@ -111,7 +111,7 @@ export function AktarimAdimlari({ d }: { d: Durum }) {
             {/* Bağlantı çizgisi */}
             {i < adimlar.length - 1 && (
               <span
-                className={cn("absolute top-6 bottom-0 left-[11px] w-0.5", x.durum === "tamam" ? "bg-emerald-500/50" : "bg-border")}
+                className={cn("absolute top-6 bottom-0 left-[11px] w-0.5", x.durum === "tamam" ? "bg-muted" : "bg-border")}
                 aria-hidden
               />
             )}
@@ -132,16 +132,16 @@ export function AktarimAdimlari({ d }: { d: Durum }) {
 
 function Simge({ d }: { d: AdimDurumu }) {
   const ortak = "relative z-10 size-6 shrink-0 rounded-full bg-card";
-  if (d === "tamam") return <CheckCircle2 className={cn(ortak, "text-emerald-600 dark:text-emerald-400")} />;
+  if (d === "tamam") return <CheckCircle2 className={cn(ortak, "text-foreground")} />;
   if (d === "hata") return <XCircle className={cn(ortak, "text-destructive")} />;
   if (d === "suruyor") return <Loader2 className={cn(ortak, "animate-spin text-primary")} />;
-  if (d === "duraklatildi") return <PauseCircle className={cn(ortak, "text-amber-500")} />;
+  if (d === "duraklatildi") return <PauseCircle className={cn(ortak, "text-muted-foreground")} />;
   return <Circle className={cn(ortak, "text-muted-foreground/50")} />;
 }
 
 function Isaret({ iyi, metin }: { iyi: boolean; metin: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-1", iyi ? "text-emerald-700 dark:text-emerald-400" : "text-destructive")}>
+    <span className={cn("inline-flex items-center gap-1", iyi ? "text-foreground" : "text-destructive")}>
       {iyi ? <CheckCircle2 className="size-3.5" /> : <XCircle className="size-3.5" />}
       {metin}
     </span>

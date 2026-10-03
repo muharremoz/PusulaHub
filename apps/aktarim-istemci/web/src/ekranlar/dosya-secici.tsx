@@ -173,7 +173,7 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (s: Secilen
               </div>
             ) : (
               <>
-                {liste?.hata && <p className="border-b bg-amber-500/10 px-4 py-2 text-xs text-amber-700 dark:text-amber-400">{liste.hata}</p>}
+                {liste?.hata && <p className="border-b bg-muted px-4 py-2 text-xs text-foreground">{liste.hata}</p>}
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-card">
                     <TableRow className="text-[10px] uppercase tracking-wider">
@@ -229,7 +229,7 @@ function DosyaSecici({ ayar, onKapat }: { ayar: SeciciAyar; onKapat: (s: Secilen
                               {o.surucu ? (
                                 <HardDrive className="size-4 shrink-0 text-muted-foreground" />
                               ) : o.klasor ? (
-                                <Folder className="size-4 shrink-0 fill-amber-400/30 text-amber-500" />
+                                <Folder className="size-4 shrink-0 fill-muted-foreground/30 text-muted-foreground" />
                               ) : (
                                 <File className="size-4 shrink-0 text-muted-foreground" />
                               )}
