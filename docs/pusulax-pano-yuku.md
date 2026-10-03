@@ -65,7 +65,7 @@ pano sorgusu canlı ve test üzerinde yan yana ölçüldü — süre ve okuma ay
 
 ## Araçlar
 
-SQL'de iki Extended Events oturumu tanımlı ama **durdurulmuş**: `Pusula6030Izleme`, `Pusula6796Izleme`
+SQL'deki Extended Events oturumları (`Pusula6030Izleme`, `Pusula6796Izleme`) ve test kopyaları 02.10 akşam **silindi**.
 (dosyalar `D:\SQLData\6030\test\*.xel`). Yeniden başlatma: `ALTER EVENT SESSION <ad> ON SERVER STATE = START`.
 Yerel betikler (git dışı, `apps/web/`): `__xe-izle.mjs` (canlı okuma; `XE_AD`, `XE_PANO=1`),
 `__ab-6030.mjs` (canlı/test karşılaştırma), `__olc-6030.mjs`, `__pano-prosedur.mjs`.

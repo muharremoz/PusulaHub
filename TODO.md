@@ -19,12 +19,20 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ## SQL Yedek Kontrolü
 
-- [ ] 🟡 **2026-09-18 sabahı yedek kontrolünü tekrarla** — `node apps/web/__yedek.mjs scripts/sql/yedek-kontrol.sql`.
-  17 Eylül 20:04'te 198 DB'nin 185'inde taban sağlamdı; o gün oluşturulan 13 DB'nin
-  (11× `2642_MERS_*`, `651_PIR2025`, `URNTRANSFER`) SpareBackup tam yedeği yoktu, 08:00 turunda
-  düzelmeleri bekleniyor. `URNTRANSFER` 18:00 COPY_ONLY turunda da yoktu → Backup Master kapsamına bak.
-  Yan iş: `C:\ProgramData\SpareBackup`'ta Nisan–Haziran'dan 730 yetim zip (710 MB); yeni tarihli
-  kapsam dışı DB'ler (`651_REGOLD25`, `651_RG_ATL_*25`, `5055_CIHAN23`, `5702_INCI25`) bilinçli mi?
+- ✅ **2026-09-18 yedek kontrolü tekrarı** — 19 Eylül 10:30'da yapıldı: 17 Eylül'deki 13 DB'nin
+  hepsi 08:00 turunda düzeldi. 730 yetim diff `C:\SpareBackup-yetim-20260917`'ye taşındı (kalıcı silme kullanıcıda).
+  Kontrol: `node apps/web/__yedek.mjs scripts/sql/yedek-kontrol.sql`.
+- ✅ **SpareBackup adında `-` olan DB'yi atlıyordu** — kullanıcı 2026-09-19 öğlen yeni sürümü yayınladı;
+  `4260_ARN-DUBAI` ilk tam yedeğini 12:33'te aldı, 20:05 kontrolünde 214/214 temiz.
+- ✅ **Backup Master listesinde eski ad** — 2026-09-19 10:38'de iki işte de `2642_URNTRANSFER` →
+  `URNTRANSFER` yapıldı (211 DB, başka fark yok). Yedek `Jobs.xml.hub-ayar-20260919103849`.
+  Doğrulandı: URNTRANSFER aynı gün 18:16'da ilk COPY_ONLY yedeğini aldı.
+- ✅ **Yedek teslim + geri yükleme testi kuruldu** (2026-09-19) — `apps/web/__teslim.mjs` (msdb ↔ Spare Cloud
+  birebir), `apps/web/__geri-yukleme-testi.mjs` (buluttan indir → VERIFYONLY → geri yükle → DBCC CHECKDB, bu PC'de).
+  İlk sonuç: 12.112 yedeğin 12.070'i bulutta (eksikler SpareBackup güncellemesinin kestiği 12:15 turu); 3 test temiz.
+- [ ] 🟡 **SpareBackup yedeği CHECKSUM'suz alıyor** — `SpareBackup/.../lib/backup/sql-backup.ts` `withClause`'a
+  `CHECKSUM` ekle (diff için `WITH DIFFERENTIAL, CHECKSUM`). Yedek sırasında bozuk sayfa yakalanır. (kullanıcı yayınlar)
+- [ ] ⚪ **Geri yükleme testini zamanla** — şu an elle; kullanıcının PC'sinde haftalık Görev Zamanlayıcı işi önerildi.
 
 ---
 
