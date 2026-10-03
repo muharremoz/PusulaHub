@@ -55,6 +55,7 @@ namespace PusulaConnect
         public Uygulama(ServisIstemci servis)
         {
             _servis = servis;
+            _ = Task.Run(GuncellemeDongusu);
             var token = Kimlik.Token();
             if (token == null) { _asama = "kayit"; return; }
             _servis.Token = token;
@@ -675,6 +676,16 @@ namespace PusulaConnect
         }
 
         // ------------------------------------------------------------ güncelleme
+
+        /// <summary>Açıkken de yeni sürüm aranır (açılıştaki ilk bakış ProfilTazele'de). Bulunursa arayüz alt ortada bildirir.</summary>
+        private async Task GuncellemeDongusu()
+        {
+            for (;;)
+            {
+                await Task.Delay(TimeSpan.FromMinutes(30));
+                if (!_guncelleniyor) await GuncellemeyeBak();
+            }
+        }
 
         private async Task GuncellemeyeBak()
         {

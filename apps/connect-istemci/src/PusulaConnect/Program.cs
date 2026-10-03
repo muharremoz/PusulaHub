@@ -14,6 +14,7 @@ namespace PusulaConnect
     /// Başlatıcı (Aktarım 2 iskeleti): yerel web sunucusu + pencere (WebView2) + tepsi.
     /// Ek kipler:
     ///   --vpn-kur       yönetici olarak FortiClient kurulumu (pencere yok) — bkz. VpnKurulumu
+    ///   --yazici-izin   yönetici olarak yazıcı ajanının URL ACL + güvenlik duvarı kaydı — bkz. YaziciAjani
     ///   --guncellendi   kendini güncelledikten sonra yeniden açılış (eski kopyanın kapanmasını bekler)
     /// </summary>
     internal static class Program
@@ -33,6 +34,7 @@ namespace PusulaConnect
         private static int Main(string[] args)
         {
             if (args.Contains("--vpn-kur")) return VpnKurulumu.YoneticiOlarakCalistir();
+            if (args.Contains("--yazici-izin") || args.Contains("--yazici-izin-sil")) return YaziciAjani.YoneticiOlarakCalistir(args);
 
             using (var tekil = new Mutex(false, @"Local\PusulaConnect2"))
             {
@@ -51,6 +53,7 @@ namespace PusulaConnect
                 Application.SetCompatibleTextRenderingDefault(false);
                 Gunluk.Yaz("Açıldı: sürüm " + ServisIstemci.Surum + ", " + Application.ExecutablePath);
                 Yerlesim.Yerles();
+                _ = Task.Run(YaziciAjani.GerekirseBaslat);
 
                 var adres = Environment.GetEnvironmentVariable("PUSULA_CONNECT_URL");
                 _uygulama = new Uygulama(new ServisIstemci(string.IsNullOrWhiteSpace(adres) ? ServisIstemci.VarsayilanAdres : adres)) { Kapat = Kapat };
@@ -136,6 +139,11 @@ namespace PusulaConnect
                 case "POST /ayarlar": return Task.FromResult(_uygulama.AyarKaydet(i.Govde));
                 case "POST /sifre/goster": return _uygulama.SifreGoster(i.Metin("kod"));
                 case "POST /duyuru/okundu": return _uygulama.DuyuruOkundu(i.Metin("id"));
+                case "POST /yazici/durum": return Task.Run(YaziciAjani.Durum);
+                case "POST /yazici/port": return YaziciAjani.PortDenetle(i.Sayi("port"));
+                case "POST /yazici/kur": return YaziciAjani.Kur(i.Metin("yazici"), i.Sayi("port"));
+                case "POST /yazici/test": return YaziciAjani.Test();
+                case "POST /yazici/kaldir": return YaziciAjani.Kaldir();
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
                     return Task.FromResult<object>(new { tamam = true });

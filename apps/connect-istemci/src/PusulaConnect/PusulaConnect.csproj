@@ -62,6 +62,8 @@
     <EmbeddedResource Include="$(WebKlasoru)dist\**\*" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
     <!-- Oturum şeridindeki logo -->
     <EmbeddedResource Include="$(WebKlasoru)src\assets\pusula-logo.png" LogicalName="logo.png" />
+    <!-- Pusula X yazıcı ajanı (PusulaX deposundan derlenmiş, .NET 4.8) — Ayarlar'dan kurulur; bkz. YaziciAjani.cs -->
+    <EmbeddedResource Include="lib\PusulaXPrintAgent.exe" LogicalName="yazici-ajani/PusulaXPrintAgent.exe" />
   </ItemGroup>
 
   <Target Name="WebArayuzuDerle" BeforeTargets="BeforeBuild" Condition="!Exists('$(WebKlasoru)dist\index.html')">

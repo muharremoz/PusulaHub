@@ -10,6 +10,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { YaziciAjaniBolumu } from "./yazici-ajani";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
@@ -98,6 +99,8 @@ export function AyarlarIcerik({
           kontrol={anahtar("suruculer")}
         />
       </Bolum>
+
+      <YaziciAjaniBolumu />
 
       <Bolum baslik="Başlangıç">
         <Satir ikon={<Power />} ad="Windows açılınca başlat" aciklama="Bilgisayar açılınca Pusula Connect de açılır." kontrol={anahtar("windowsIleBaslat")} />
@@ -203,7 +206,7 @@ export function AyarlarIcerik({
   );
 }
 
-function Bolum({ baslik, aciklama, children }: { baslik: string; aciklama?: string; children: React.ReactNode }) {
+export function Bolum({ baslik, aciklama, children }: { baslik: string; aciklama?: string; children: React.ReactNode }) {
   return (
     <section>
       <div className="mb-2 flex items-baseline justify-between gap-3 px-1">

@@ -111,11 +111,6 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
           </dl>
 
-          {durum.guncelleme.mevcut && (
-            <Button size="sm" variant="outline" className="self-start" disabled={durum.guncelleme.suruyor} onClick={() => void cagir("/guncelle")}>
-              {durum.guncelleme.suruyor ? <Loader2 className="animate-spin" /> : <Download />} Güncelle ({durum.guncelleme.surum})
-            </Button>
-          )}
         </div>
 
         <div className="flex flex-col gap-1 border-t px-3 py-3">
