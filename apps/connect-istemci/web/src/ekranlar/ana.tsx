@@ -475,22 +475,31 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        {/* Pusula sunucusuna erişim yoksa (VPN bağlı değil) bağlanılamaz: düğme pasif. Erişim ~10 sn'de bir denetlenir. */}
-        <RainbowButton
-          size="lg"
-          className="h-14 w-full rounded-lg text-base before:w-full"
-          disabled={!!bekle || !k.rdpSifre.kayitli || !k.terminal.erisim}
-          onClick={() => void baglan()}
-        >
-          {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
-        </RainbowButton>
+        {/* Pusula sunucusuna erişim yoksa (VPN bağlı değil) bağlanılamaz. Soluk pasif düğme yerine ne yapılacağını
+            söyleyen, tam renkli ama tıklanmayan bir düğme (erişim ~10 sn'de bir denetlenir). */}
         {!k.terminal.erisim ? (
-          <p className="-mt-2 text-center text-xs text-muted-foreground">
+          <Button
+            size="lg"
+            variant="outline"
+            disabled
+            className="h-14 w-full rounded-lg border-dashed text-base text-foreground disabled:opacity-100"
+          >
+            <WifiOff className="text-amber-600 dark:text-amber-400" />
             {k.terminal.zaman ? "Bağlanmak için önce VPN'e bağlanın." : "Pusula sunucusuna erişim denetleniyor…"}
-          </p>
-        ) : !k.rdpSifre.kayitli ? (
-          <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>
-        ) : null}
+          </Button>
+        ) : (
+          <>
+            <RainbowButton
+              size="lg"
+              className="h-14 w-full rounded-lg text-base before:w-full"
+              disabled={!!bekle || !k.rdpSifre.kayitli}
+              onClick={() => void baglan()}
+            >
+              {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
+            </RainbowButton>
+            {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
+          </>
+        )}
 
         {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
         <div className="mt-2 flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
