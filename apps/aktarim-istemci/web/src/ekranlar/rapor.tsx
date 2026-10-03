@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Building2, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, Plus,
-  RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
+  ListChecks, RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -897,34 +897,67 @@ export function RaporEkrani({ durum, setDurum }: P) {
       </div>
       </main>
 
-      {r && !taraniyor && (
-        <footer className="shrink-0 border-t bg-card">
-          <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
-            <div className="min-w-0 flex-1 truncate text-sm">
-              {hata ? (
-                <span className="text-destructive">{hata}</span>
-              ) : (
-                <>
-                  <span className="font-medium">{secili.size} veritabanı</span>
-                  <span className="text-muted-foreground">
-                    {" "}· {mb(toplamMb)}
-                    {eskiSayisi > 0 && ` (${eskiSayisi} eski yıl)`}
-                    {resimSayisi > 0 && ` · ${resimSayisi} resim klasörü`}
-                    {eskiDosyalar.length > 0 && ` · ${eskiDosyalar.length} eski yıl dosyası`}
-                    {programSayisi + programDosyaSayisi > 0 && ` · ${programSayisi + programDosyaSayisi} program`}
-                    {ekKlasorler.length > 0 && ` · ${ekKlasorler.length} ek klasör`}
-                    {veritabanlariAyir && secili.size > 0 && " · sonra ayrılacak"}
-                  </span>
-                </>
+      </div>
+
+      {/* Sağ panel: seçilenlerin özeti + Aktarımı başlat (eskiden alttaki çubuktaydı) */}
+      <aside className="flex w-80 shrink-0 flex-col border-l bg-card">
+        <div className="flex h-16 shrink-0 items-center gap-2 border-b px-5">
+          <ListChecks className="size-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Özet</h2>
+        </div>
+
+        {r && !taraniyor ? (
+          <>
+            <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
+              <dl className="flex flex-col divide-y rounded-lg border">
+                <OzetSatiri
+                  ikon={<Database />}
+                  ad="Veritabanları"
+                  sayi={secili.size}
+                  ek={secili.size > 0 ? mb(toplamMb) : undefined}
+                  alt={[
+                    eskiSayisi > 0 ? `${eskiSayisi} eski yıl` : null,
+                    veritabanlariAyir && secili.size > 0 ? "aktarımdan sonra ayrılacak" : null,
+                  ].filter(Boolean).join(" · ") || undefined}
+                />
+                <OzetSatiri ikon={<Image />} ad="Resim klasörleri" sayi={resimSayisi} />
+                <OzetSatiri ikon={<FileCode2 />} ad="Programlar" sayi={programSayisi + programDosyaSayisi} />
+                <OzetSatiri ikon={<FileArchive />} ad="Eski yıl dosyaları" sayi={eskiDosyalar.length} />
+                <OzetSatiri ikon={<FolderPlus />} ad="Ek klasörler" sayi={ekKlasorler.length} />
+              </dl>
+
+              <div className="flex items-baseline justify-between px-1">
+                <span className="text-sm text-muted-foreground">Toplam veritabanı</span>
+                <span className="text-xl font-semibold tabular-nums">{mb(toplamMb)}</span>
+              </div>
+
+              {programEksik && (
+                <Alert>
+                  <AlertTriangle />
+                  <AlertDescription>Seçili programlardan bazılarının Pusula karşılığı seçilmedi.</AlertDescription>
+                </Alert>
+              )}
+              {hata && (
+                <Alert variant="destructive">
+                  <XCircle />
+                  <AlertDescription>{hata}</AlertDescription>
+                </Alert>
               )}
             </div>
-            <Button disabled={basliyor || bosSecim || programEksik} onClick={() => void baslat()}>
-              {basliyor ? <Loader2 className="animate-spin" /> : null} Aktarımı başlat <ArrowRight />
-            </Button>
+
+            <div className="border-t px-5 py-4">
+              <Button size="lg" className="w-full" disabled={basliyor || bosSecim || programEksik} onClick={() => void baslat()}>
+                {basliyor ? <Loader2 className="animate-spin" /> : null} Aktarımı başlat <ArrowRight />
+              </Button>
+              {bosSecim && <p className="mt-2 text-center text-xs text-muted-foreground">Aktarılacak en az bir şey seçin.</p>}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            {taraniyor ? "Tarama sürüyor…" : "Tarama bitince seçimleriniz burada özetlenir."}
           </div>
-        </footer>
-      )}
-      </div>
+        )}
+      </aside>
 
       {dosyaSecici}
 
@@ -1135,6 +1168,24 @@ function PanelBilgi({ ad, deger, mono, sar }: { ad: string; deger: string; mono?
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{ad}</dt>
       <dd className={(sar ? "font-medium leading-snug break-words " : "truncate ") + (mono ? "font-mono" : "")} title={deger}>{deger}</dd>
+    </div>
+  );
+}
+
+/** Sağ paneldeki özet satırı: ikon, kategori, adet (0 ise soluk "—"), isteğe bağlı boyut ve alt satır. */
+function OzetSatiri({ ikon, ad, sayi, ek, alt }: { ikon: React.ReactNode; ad: string; sayi: number; ek?: string; alt?: string }) {
+  const bos = sayi === 0;
+  return (
+    <div className={"flex items-start gap-3 px-3 py-2.5 " + (bos ? "text-muted-foreground" : "")}>
+      <span className="mt-0.5 [&_svg]:size-4">{ikon}</span>
+      <div className="min-w-0 flex-1">
+        <dt className="text-sm">{ad}</dt>
+        {alt && <dd className="text-xs text-muted-foreground">{alt}</dd>}
+      </div>
+      <dd className="text-right text-sm tabular-nums">
+        <div className={bos ? "" : "font-semibold"}>{bos ? "—" : sayi}</div>
+        {ek && <div className="text-xs text-muted-foreground">{ek}</div>}
+      </dd>
     </div>
   );
 }
