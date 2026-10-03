@@ -138,6 +138,7 @@ import type { AdProvisionService } from "@/components/company-setup/ad-provision
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
 import { ConnectCihazlarDialog } from "@/components/companies/connect-cihazlar-dialog";
+import { TerminalDegistirSheet } from "@/components/companies/terminal-degistir-sheet";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
@@ -598,6 +599,7 @@ export default function CompaniesPage() {
   const [pwResetRdpServer, setPwResetRdpServer] = useState<{ ip: string; rdpPort?: number | null } | null>(null);
   const [toggleUser, setToggleUser]         = useState<TabUser | null>(null);
   const [connectKoduKullanici, setConnectKoduKullanici] = useState<string | null>(null);
+  const [terminalDegistirAcik, setTerminalDegistirAcik] = useState(false);
   const [connectCihazKullanici, setConnectCihazKullanici] = useState<string | null>(null);
   const [toggleBusy, setToggleBusy]         = useState(false);
   const [deleteUser, setDeleteUser]         = useState<TabUser | null>(null);
@@ -2787,6 +2789,13 @@ tr:nth-child(even) td{background:#fafafa}
                                   copyValue={rdpTarget || accessInfo.windows.ip}
                                 />
                               )}
+                              {accessInfo.windows && (
+                                <div className="flex justify-end px-3 py-2">
+                                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[11px]" onClick={() => setTerminalDegistirAcik(true)}>
+                                    <Server className="h-3.5 w-3.5" /> Terminal sunucusunu değiştir
+                                  </Button>
+                                </div>
+                              )}
                               {sqlIp && <AccessDetailRow label="SQL Sunucusu" value={sqlIp} copyValue={sqlIp} />}
                               {!accessInfo.ad && !accessInfo.windows && !sqlIp && <AccessEmpty text="Sunucu ataması yok" />}
                             </div>
@@ -3669,6 +3678,13 @@ tr:nth-child(even) td{background:#fafafa}
             <>
               <ConnectKoduDialog firkod={selectedFirma.firkod} kullanici={connectKoduKullanici} onClose={() => setConnectKoduKullanici(null)} />
               <ConnectCihazlarDialog firkod={selectedFirma.firkod} kullanici={connectCihazKullanici} onClose={() => setConnectCihazKullanici(null)} />
+              <TerminalDegistirSheet
+                open={terminalDegistirAcik}
+                onOpenChange={setTerminalDegistirAcik}
+                firkod={selectedFirma.firkod}
+                firmaAdi={selectedFirma.firma}
+                onBitti={() => void loadAccessTab(selectedFirma.firkod)}
+              />
             </>
           )}
 
