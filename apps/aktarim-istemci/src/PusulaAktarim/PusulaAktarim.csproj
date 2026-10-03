@@ -3,7 +3,7 @@
   <!--
     PUSULA AKTARIM 2 â€” mÃ¼ÅŸteri PC'sinde Ã§alÄ±ÅŸan aktarÄ±m uygulamasÄ±.
     Plan: docs/aktarim2/PLAN.md. Ä°skelet SQL Konsol web sÃ¼rÃ¼mÃ¼nden (PusulaCRM/sql-konsol):
-    penceresiz exe â†’ yalnÄ±z 127.0.0.1'i dinleyen kÃ¼Ã§Ã¼k web sunucusu â†’ varsayılan tarayıcı.
+    penceresiz exe â†’ yalnÄ±z 127.0.0.1'i dinleyen kÃ¼Ã§Ã¼k web sunucusu â†’ WebView2 penceresi.
     ArayÃ¼z (../../web, React + Vite) derlenip exe'ye gÃ¶mÃ¼lÃ¼r; Costura ile tek dosya.
 
     Derleme:
@@ -41,6 +41,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <!-- ProtectedData (DPAPI) â€” oturum tokenÄ± yalnÄ±z bu Windows kullanÄ±cÄ±sÄ±na aÃ§Ä±k saklanÄ±r -->
@@ -64,4 +65,10 @@
     </ItemGroup>
   </Target>
 
+  <!-- WebView2'nin yerel yÃ¼kleyicisi exe'ye gÃ¶mÃ¼lÃ¼r (tek dosya); AktarimPenceresi Ã§Ä±karÄ±r. -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll" LogicalName="webview2/x64/WebView2Loader.dll" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll" LogicalName="webview2/x86/WebView2Loader.dll" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-arm64\native\WebView2Loader.dll" LogicalName="webview2/arm64/WebView2Loader.dll" />
+  </ItemGroup>
 </Project>

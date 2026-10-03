@@ -11,10 +11,11 @@ using System.Windows.Forms;
 namespace PusulaAktarim
 {
     /// <summary>
-    /// Başlatıcı: yerel web sunucusu + tepsi simgesi; arayüz varsayılan tarayıcıda açılır.
-    /// Sayfa 5 sn'de bir /api/nabiz atar; 45 sn kesilirse (sekme kapandı) exe çıkar —
-    /// ama aktarım ya da resim küçültme sürerken kapanmaz, tepsiden yeniden açılır.
-    /// (0.2.4-0.2.5'teki WebView2 penceresi 0.2.6'da kaldırıldı.)
+    /// Başlatıcı: yerel web sunucusu + tepsi simgesi + pencere (WebView2).
+    /// SQL Konsol web sürümünün (PusulaCRM/sql-konsol) yaşam döngüsüyle aynı:
+    /// pencere varsa ömrü o belirler; yoksa (WebView2 kurulamadı → Edge/Chrome uygulama penceresi) sayfa
+    /// 5 sn'de bir /api/nabiz atar, 45 sn kesilirse exe çıkar — aktarım/resim küçültme sürerken çıkmaz.
+    /// (0.2.6'da WebView2 kaldırılmıştı; 0.3.0'da Connect gibi geri geldi.)
     /// </summary>
     internal static class Program
     {
@@ -27,6 +28,8 @@ namespace PusulaAktarim
         private static DateTime _sonNabiz = DateTime.MinValue;
         private static readonly DateTime _baslangic = DateTime.Now;
         private static int _kapaniyor;
+        private static AktarimPenceresi _pencere;
+        private const string GosterOlayi = @"Local\PusulaAktarim-goster";
         private const string Baslik = "Pusula Aktarım";
 
         [STAThread]
@@ -39,6 +42,11 @@ namespace PusulaAktarim
             {
                 if (!ilk)
                 {
+                    try
+                    {
+                        if (EventWaitHandle.TryOpenExisting(GosterOlayi, out var olay)) { olay.Set(); return; }
+                    }
+                    catch { }
                     var adres = AdresDosyasiOku();
                     if (adres != null) TarayicidaAc(adres);
                     else MessageBox.Show("Uygulama zaten açık. Tepsi simgesinden açabilirsiniz.", Baslik,
@@ -67,7 +75,19 @@ namespace PusulaAktarim
                 var tamAdres = _sunucu.Adres + "#anahtar=" + _sunucu.Anahtar;
                 AdresDosyasiYaz(tamAdres);
                 TepsiKur(tamAdres);
-                TarayicidaAc(tamAdres);
+                _adres = tamAdres;
+                // WebView2 yoksa (Windows Server'da sık) kur — arayüz tarayıcıda değil uygulamanın penceresinde açılsın
+                var pencereVar = AktarimPenceresi.CalismaZamaniVar() || WebViewKurulum.Kur(AktarimPenceresi.CalismaZamaniVar);
+                if (pencereVar)
+                {
+                    PencereAc();
+                    GosterOlayiniDinle();
+                }
+                else
+                {
+                    // Son çare: bileşen kurulamadı (internet/izin) — Edge/Chrome uygulama penceresi, o da yoksa tarayıcı sekmesi
+                    TarayicidaAc(tamAdres);
+                }
 
                 var bekci = new System.Windows.Forms.Timer { Interval = 5000 };
                 bekci.Tick += (s, e) => Bekci();
@@ -96,6 +116,7 @@ namespace PusulaAktarim
                 case "POST /sql/giris": return Task.FromResult(_uygulama.SqlGirisineDon());
                 case "POST /resim/klasor": return _uygulama.ResimKlasoruOlc(i.Metin("yol"));
                 case "POST /kesif/yenile": return _uygulama.YenidenKesif();
+                case "POST /kesif/onceki": return _uygulama.OncekiTaramayiKullan();
                 case "POST /aktarim/baslat":
                     return _uygulama.AktarimBaslat(i.Govde);
                 // Resim küçültme (aktarımdan ayrı araç) — bkz. ResimKucultucu
@@ -127,7 +148,8 @@ namespace PusulaAktarim
 
         private static void Bekci()
         {
-            // Sekme kapalı olsa da süren iş yarıda kesilmesin (tepsiden yeniden açılır)
+            if (_pencere != null && !_pencere.IsDisposed && _pencere.Visible) return;
+            // Tarayıcı modunda sekme kapalı olsa da süren aktarım / resim küçültme yarıda kesilmesin (tepsiden yeniden açılır)
             if (_uygulama != null && _uygulama.Mesgul) { _sonNabiz = DateTime.Now; return; }
             var simdi = DateTime.Now;
             var sinir = _sonNabiz == DateTime.MinValue ? _baslangic + IlkNabizSiniri : _sonNabiz + NabizSiniri;
@@ -139,13 +161,18 @@ namespace PusulaAktarim
             if (Interlocked.Exchange(ref _kapaniyor, 1) == 1) return;
             try { _uygulama?.Kapat(); } catch { }
             try { _sunucu?.Durdur(); } catch { }
+            if (_pencere != null && !_pencere.IsDisposed)
+            {
+                _pencere.SormadanKapat = true;
+                try { _pencere.Close(); } catch { }
+            }
             Application.Exit();
         }
 
         private static void TepsiKur(string adres)
         {
             var menu = new ContextMenuStrip();
-            menu.Items.Add("Aç", null, (s, e) => TarayicidaAc(adres));
+            menu.Items.Add("Göster", null, (s, e) => Goster(adres));
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Kapat", null, (s, e) => Kapat());
             _tepsi = new NotifyIcon
@@ -155,17 +182,78 @@ namespace PusulaAktarim
                 ContextMenuStrip = menu,
                 Visible = true,
             };
-            _tepsi.DoubleClick += (s, e) => TarayicidaAc(adres);
+            _tepsi.DoubleClick += (s, e) => Goster(adres);
         }
 
+        private static string _adres;
+
+        private static void PencereAc()
+        {
+            _pencere = new AktarimPenceresi(_adres, Kapat);
+            _pencere.Show();
+        }
+
+        /// <summary>Tepsiden: pencere varsa öne getir, kapanmışsa yeniden aç (tarayıcıya yalnız WebView2 yoksa).</summary>
+        private static void Goster(string adres)
+        {
+            if (_pencere != null && !_pencere.IsDisposed && !_pencere.SormadanKapat) _pencere.OneGetir();
+            else if (Interlocked.CompareExchange(ref _kapaniyor, 0, 0) == 0 && AktarimPenceresi.CalismaZamaniVar()) PencereAc();
+            else TarayicidaAc(adres);
+        }
+
+        private static void GosterOlayiniDinle()
+        {
+            var olay = new EventWaitHandle(false, EventResetMode.AutoReset, GosterOlayi);
+            ThreadPool.RegisterWaitForSingleObject(olay, (d, zamanAsimi) =>
+            {
+                var p = _pencere;
+                if (p != null && !p.IsDisposed) p.BeginInvoke((Action)p.OneGetir);
+            }, null, Timeout.Infinite, false);
+        }
+
+        /// <summary>
+        /// WebView2 yoksa: önce Edge, sonra Chrome "--app" ile (adres çubuğu/sekme olmayan uygulama penceresi —
+        /// Connect ile aynı), ikisi de yoksa varsayılan tarayıcı sekmesi.
+        /// </summary>
         private static void TarayicidaAc(string adres)
         {
+            foreach (var exe in new[] { "msedge.exe", "chrome.exe" })
+            {
+                var yol = UygulamaYolu(exe);
+                if (yol == null) continue;
+                try
+                {
+                    Process.Start(new ProcessStartInfo(yol, "--app=\"" + adres + "\"") { UseShellExecute = false });
+                    return;
+                }
+                catch { /* sıradakini dene */ }
+            }
             try { Process.Start(new ProcessStartInfo(adres) { UseShellExecute = true }); }
             catch (Exception e)
             {
                 MessageBox.Show("Tarayıcı açılamadı. Adresi elle açın:\n\n" + adres + "\n\n" + e.Message,
                     Baslik, MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
+        }
+
+        /// <summary>Kayıtlı uygulama yolu (App Paths) — önce kullanıcı, sonra makine (64 ve 32 bit görünüm).</summary>
+        private static string UygulamaYolu(string exe)
+        {
+            var anahtar = @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\" + exe;
+            foreach (var kovan in new[] { Microsoft.Win32.RegistryHive.CurrentUser, Microsoft.Win32.RegistryHive.LocalMachine })
+                foreach (var gorunum in new[] { Microsoft.Win32.RegistryView.Registry64, Microsoft.Win32.RegistryView.Registry32 })
+                {
+                    try
+                    {
+                        using (var k = Microsoft.Win32.RegistryKey.OpenBaseKey(kovan, gorunum).OpenSubKey(anahtar))
+                        {
+                            var yol = (k?.GetValue(null) as string)?.Trim('"');
+                            if (!string.IsNullOrEmpty(yol) && System.IO.File.Exists(yol)) return yol;
+                        }
+                    }
+                    catch { }
+                }
+            return null;
         }
 
         private static string AdresDosyasi =>

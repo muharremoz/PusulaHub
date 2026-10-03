@@ -186,6 +186,8 @@ export type Durum = {
   kesif: KesifRaporu | null;
   kesifHatasi: string | null;
   kesifGonderildi: boolean;
+  /** Aynı bilgisayar + aynı SQL için 24 saat içindeki tarama — yeni kodda yeniden taramadan kullanılabilir (0.3.0+). */
+  oncekiTarama?: { zaman: string; veritabaniSayisi: number; resimKlasoruSayisi: number } | null;
   mesaj: string | null;
   /** Aktarım sonrası veritabanı ayırma (detach) sonucu. */
   ayirma?: {

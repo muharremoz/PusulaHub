@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, Building2, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, Plus,
-  ListChecks, RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
+  History, ListChecks, RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -164,6 +164,19 @@ export function RaporEkrani({ durum, setDurum }: P) {
     if (acik) y.add(ad);
     else y.delete(ad);
     return y;
+  };
+
+  // Yeni kodda: aynı bilgisayarın 24 saat içindeki taraması kullanılır (yeniden taramadan)
+  const oncekiKullan = async () => {
+    setBekle(true);
+    setHata(null);
+    try {
+      setDurum(await api<Durum>("/kesif/onceki", {}));
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      setBekle(false);
+    }
   };
 
   const yenile = async () => {
@@ -440,6 +453,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
             taraniyor={taraniyor}
             bekle={bekle}
             onTara={() => void yenile()}
+            onOnceki={() => void oncekiKullan()}
             onSql={() => void api<Durum>("/sql/giris", {}).then(setDurum).catch((e) => setHata((e as Error).message))}
           />
         )}
@@ -1133,9 +1147,18 @@ const Bos = ({ children }: { children: React.ReactNode }) => <p className="px-4 
  * Ana ekranın ortasındaki tarama kartı: henüz tarama yoksa SQL durumu + "Taramayı başlat";
  * tarama sürerken aynı kartta ilerleme. (Eskiden ayrı "tarama" ekranı vardı.)
  */
-function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
-  durum: Durum; taraniyor: boolean; bekle: boolean; onTara: () => void; onSql: () => void;
+/** "12 dakika önce", "3 saat önce" */
+function oncesi(s: string): string {
+  const dk = Math.max(0, Math.round((Date.now() - new Date(s).getTime()) / 60000));
+  if (dk < 1) return "az önce";
+  if (dk < 60) return `${dk} dakika önce`;
+  return `${Math.round(dk / 60)} saat önce`;
+}
+
+function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql, onOnceki }: {
+  durum: Durum; taraniyor: boolean; bekle: boolean; onTara: () => void; onSql: () => void; onOnceki: () => void;
 }) {
+  const onceki = !taraniyor ? durum.oncekiTarama : null;
   return (
     <div className="flex flex-col items-center gap-5 rounded-xl border bg-card px-6 py-10 text-center shadow-xs">
       <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-foreground">
@@ -1172,9 +1195,26 @@ function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
         )}
       </div>
 
+      {onceki && (
+        <div className="flex w-full max-w-md flex-col gap-3 rounded-lg border bg-card p-4 text-left">
+          <div className="flex items-start gap-3">
+            <History className="mt-0.5 size-5 shrink-0 text-muted-foreground" />
+            <div className="min-w-0 text-sm">
+              <div className="font-medium">Bu bilgisayar {oncesi(onceki.zaman)} tarandı</div>
+              <div className="text-xs text-muted-foreground">
+                {onceki.veritabaniSayisi} veritabanı · {onceki.resimKlasoruSayisi} resim klasörü — yeniden taramadan devam edebilirsiniz.
+              </div>
+            </div>
+          </div>
+          <Button size="lg" className="w-full" disabled={bekle} onClick={onOnceki}>
+            {bekle ? <Loader2 className="animate-spin" /> : <History />} Önceki taramayı kullan
+          </Button>
+        </div>
+      )}
+
       {!taraniyor && (
-        <Button size="lg" className="w-full max-w-md" disabled={bekle} onClick={onTara}>
-          {bekle ? <Loader2 className="animate-spin" /> : <ScanSearch />} Taramayı başlat
+        <Button size="lg" variant={onceki ? "outline" : "default"} className="w-full max-w-md" disabled={bekle} onClick={onTara}>
+          {bekle ? <Loader2 className="animate-spin" /> : <ScanSearch />} {onceki ? "Yeniden tara" : "Taramayı başlat"}
         </Button>
       )}
     </div>

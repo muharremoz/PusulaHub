@@ -103,6 +103,8 @@ namespace PusulaAktarim
                     sqlAtlandi = _sqlAtlandi,
                     kesifHatasi = _kesifHatasi,
                     kesifGonderildi = _kesifGonderildi,
+                    // Aynı bilgisayar + aynı SQL için 24 saat içindeki tarama: yeni kodda yeniden taramadan kullanılabilir
+                    oncekiTarama = _asama == "taramaBekliyor" ? OncekiTaramaOzeti() : null,
                     mesaj = _mesaj,
                     ayirma = _ayirmaDurumu == null ? null : new { durum = _ayirmaDurumu, ayrilanlar = _ayrilanlar.ToList(), hatalar = _ayirmaHatalari.ToList(), dogrulama = _ayirmaDogrulama.ToList() },
                     aktarim = _is == null ? null : new
@@ -662,6 +664,102 @@ namespace PusulaAktarim
         /// <summary>Her tarama numaralanır; sonra başlayan tarama varsa (SQL atlandı / yeniden tara) eskisinin sonucu atılır.</summary>
         private int _kesifNo;
 
+        // ------------------------------------------------------------ önceki tarama (yeni kodda yeniden kullanım)
+        //
+        // Eski Pusula sunucularında tek SQL'de yüzlerce veritabanı + dev resim klasörleri var; aynı bilgisayardan art arda
+        // firma aktarırken her kodda yeniden taramak dakikalar alıyordu. Başarılı her tarama diske yazılır; yeni oturumda
+        // aynı SQL sunucusu (ya da SQL'siz) için 24 saatten yeni rapor varsa arayüz "Önceki taramayı kullan" sunar.
+
+        private static readonly TimeSpan OncekiTaramaOmru = TimeSpan.FromHours(24);
+        private static string OncekiTaramaDosyasi =>
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PusulaAktarim", "son-tarama.json");
+
+        private sealed class OncekiTarama
+        {
+            public string Anahtar;
+            public DateTime Zaman;
+            public KesifRaporu Rapor;
+        }
+
+        private static string TaramaAnahtari(SqlHedef sql) => sql == null ? "(sqlsiz)" : (sql.Sunucu ?? "").Trim().ToLowerInvariant();
+
+        private static void OncekiTaramaKaydet(KesifRaporu rapor, SqlHedef sql)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(OncekiTaramaDosyasi));
+                File.WriteAllText(OncekiTaramaDosyasi, Newtonsoft.Json.JsonConvert.SerializeObject(
+                    new OncekiTarama { Anahtar = TaramaAnahtari(sql), Zaman = DateTime.Now, Rapor = rapor }));
+            }
+            catch { /* önbellek: yazılamazsa bir sonraki kodda yeniden taranır */ }
+        }
+
+        // Durum her yoklamada sorar; dosya yalnız değişince (ya da anahtar değişince) yeniden okunur
+        private OncekiTarama _oncekiOnbellek;
+        private string _oncekiOnbellekImza;
+
+        private OncekiTarama OncekiTaramaOku(SqlHedef sql)
+        {
+            try
+            {
+                var f = new FileInfo(OncekiTaramaDosyasi);
+                if (!f.Exists) return null;
+                var imza = TaramaAnahtari(sql) + "|" + f.LastWriteTimeUtc.Ticks;
+                if (imza != _oncekiOnbellekImza)
+                {
+                    _oncekiOnbellek = Newtonsoft.Json.JsonConvert.DeserializeObject<OncekiTarama>(File.ReadAllText(f.FullName));
+                    _oncekiOnbellekImza = imza;
+                }
+                var o = _oncekiOnbellek;
+                if (o?.Rapor == null || o.Anahtar != TaramaAnahtari(sql) || DateTime.Now - o.Zaman > OncekiTaramaOmru) return null;
+                return o;
+            }
+            catch { return null; }
+        }
+
+        /// <summary>Arayüz için kısa özet (Durum içinde; _kilit altında çağrılır).</summary>
+        private object OncekiTaramaOzeti()
+        {
+            var o = OncekiTaramaOku(_sql);
+            return o == null ? null : new
+            {
+                zaman = o.Zaman.ToString("s"),
+                veritabaniSayisi = o.Rapor.Veritabanlari?.Count ?? 0,
+                resimKlasoruSayisi = o.Rapor.ResimKlasorleri?.Count ?? 0,
+            };
+        }
+
+        /// <summary>"Önceki taramayı kullan": rapor bu oturumun raporu olur ve Pusula'ya gönderilir (tarama yapılmaz).</summary>
+        public Task<object> OncekiTaramayiKullan()
+        {
+            OncekiTarama o;
+            int no;
+            lock (_kilit)
+            {
+                o = OncekiTaramaOku(_sql);
+                if (o == null) throw new KullaniciHatasi("Kullanılabilir önceki tarama yok (24 saatten eski ya da başka SQL sunucusu). Taramayı başlatın.");
+                no = ++_kesifNo;
+                _kesif = o.Rapor;
+                _kesifHatasi = null;
+                _kesifGonderildi = false;
+                _ilerleme = null;
+            }
+            Asama("hazir");
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _servis.KesifGonder(o.Rapor);
+                    lock (_kilit) if (no == _kesifNo) _kesifGonderildi = true;
+                }
+                catch (Exception e)
+                {
+                    lock (_kilit) if (no == _kesifNo) _kesifHatasi = "Rapor gönderilemedi: " + e.Message;
+                }
+            });
+            return Task.FromResult(Durum());
+        }
+
         private async Task KesifBaslat()
         {
             int no;
@@ -674,6 +772,7 @@ namespace PusulaAktarim
                 var rapor = await Kesif.Calistir(sql, m => { lock (_kilit) if (no == _kesifNo) _ilerleme = m; });
                 if (!Gecerli()) return;
                 lock (_kilit) { _kesif = rapor; _ilerleme = "Rapor Pusula'ya gönderiliyor…"; }
+                OncekiTaramaKaydet(rapor, sql);
                 try
                 {
                     await _servis.KesifGonder(rapor);
