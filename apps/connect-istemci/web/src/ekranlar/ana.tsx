@@ -371,7 +371,7 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        <RainbowButton size="lg" className="h-14 w-full rounded-lg text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
+        <RainbowButton size="lg" className="h-14 w-full rounded-lg text-base before:w-full" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
           {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
         </RainbowButton>
         {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
