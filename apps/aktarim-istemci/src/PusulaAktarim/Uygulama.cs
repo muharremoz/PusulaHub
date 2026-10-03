@@ -149,8 +149,27 @@ namespace PusulaAktarim
             IsKaydi.TokenYaz(_servis.Token);
             lock (_kilit) { _oturum = oturum; }
             Asama("sqlAraniyor");
-            _ = Task.Run(OtomatikBaglan);
+            _ = Task.Run(OncekiyleYaDaOtomatikBaglan);
             return Durum();
+        }
+
+        // "Yeni aktarım" öncesindeki SQL bağlantısı — aynı bilgisayarda yeni kodla tekrar aranmaz (diske yazılmaz: şifre içerebilir)
+        private SqlHedef _oncekiSql;
+        private bool _oncekiSqlAtlandi;
+
+        private async Task OncekiyleYaDaOtomatikBaglan()
+        {
+            SqlHedef onceki;
+            bool atlandi;
+            lock (_kilit) { onceki = _oncekiSql; atlandi = _oncekiSqlAtlandi; _oncekiSql = null; _oncekiSqlAtlandi = false; }
+            if (atlandi) { SqlAtla(); return; }
+            if (onceki != null)
+            {
+                lock (_kilit) _ilerleme = "Önceki SQL bağlantısı kullanılıyor: " + onceki.Sunucu;
+                if (await SqlBaglanti.Dene(onceki) == null) { await Baglandi(onceki); return; }
+                // Artık bağlanılamıyor (servis durmuş vb.) → baştan ara
+            }
+            await OtomatikBaglan();
         }
 
         // ------------------------------------------------------------ SQL bağlantısı
@@ -432,6 +451,9 @@ namespace PusulaAktarim
                         ? "Veritabanları ayrılana kadar bekleyin (Pusula taşımayı bitirince otomatik yapılır)."
                         : "Bu aktarım henüz bitmedi.");
                 eski = _is;
+                // Aynı bilgisayar: yeni kodda SQL baştan aranmasın — son çalışan bağlantı (ya da "SQL olmadan") yalnız bellekte kalır
+                _oncekiSql = _sql;
+                _oncekiSqlAtlandi = _sqlAtlandi;
                 _oturumNo++;
                 _kesifNo++;                 // süren tarama varsa sonucu atılır
                 _oturum = null; _sql = null; _sqlAtlandi = false; _sqlDenemeleri.Clear();
