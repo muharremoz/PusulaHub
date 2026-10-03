@@ -7,23 +7,23 @@ import { Button } from "@/components/ui/button";
 const tarih = (s: string) =>
   new Date(s.replace(" ", "T") + "Z").toLocaleString("tr-TR", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-const ONEM: Record<Duyuru["onem"], { ikon: React.ReactNode; kutu: string; serit: string; ad: string }> = {
+const ONEM: Record<Duyuru["onem"], { ikon: React.ReactNode; kutu: string; rozet: string; ad: string }> = {
   bilgi: {
     ikon: <Info />,
     kutu: "bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400",
-    serit: "border-sky-500/30 bg-sky-500/5",
+    rozet: "bg-sky-500 text-white",
     ad: "Bilgi",
   },
   uyari: {
     ikon: <AlertTriangle />,
     kutu: "bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400",
-    serit: "border-amber-500/30 bg-amber-500/10",
+    rozet: "bg-amber-500 text-black",
     ad: "Uyarı",
   },
   kritik: {
     ikon: <OctagonAlert />,
     kutu: "bg-red-500/10 text-red-600 ring-red-500/20 dark:text-red-400",
-    serit: "border-red-500/30 bg-red-500/10",
+    rozet: "bg-red-500 text-white",
     ad: "Önemli",
   },
 };
@@ -55,13 +55,22 @@ export function DuyuruSeritleri({ durum, setDurum, onTumu }: { durum: Durum; set
       {l.slice(0, 2).map((d) => {
         const o = ONEM[d.onem] ?? ONEM.bilgi;
         return (
-          <div key={d.id} className={`flex items-start gap-3 rounded-lg border p-3 ${o.serit}`}>
-            <span className={`flex size-8 shrink-0 items-center justify-center rounded-md ring-1 [&_svg]:size-4 ${o.kutu}`}>{o.ikon}</span>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">{d.baslik}</div>
-              <p className="mt-0.5 line-clamp-3 text-sm whitespace-pre-line text-muted-foreground">{d.metin}</p>
-            </div>
-            <Button size="sm" variant="outline" className="shrink-0" disabled={bekle === d.id} onClick={() => void okundu(d.id)}>
+          // Koyu bildirim çubuğu: "Pusula'ya bağlan" ile aynı dil; önem yalnız rozetin renginde
+          <div key={d.id} className="flex items-center gap-3 rounded-lg bg-primary py-2 pr-2 pl-3 text-primary-foreground shadow-sm">
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold tracking-wide uppercase [&_svg]:size-3 ${o.rozet}`}>
+              {o.ikon} {o.ad}
+            </span>
+            <p className="line-clamp-2 min-w-0 flex-1 text-sm" title={d.metin}>
+              <span className="font-semibold">{d.baslik}</span>
+              {d.metin && <span className="text-primary-foreground/70"> — {d.metin}</span>}
+            </p>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+              disabled={bekle === d.id}
+              onClick={() => void okundu(d.id)}
+            >
               {bekle === d.id ? <Loader2 className="animate-spin" /> : <Check />} Okudum
             </Button>
           </div>
