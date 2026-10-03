@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Circle, Loader2, Pause, Play, Plus, WifiOff, XCircle } from "lucide-react";
 import { api, type Durum, type IsOgesi } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -6,6 +6,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AktarimAdimlari } from "./aktarim-adimlari";
@@ -34,6 +35,15 @@ const ADIM: Record<IsOgesi["durum"], string> = {
 
 const bayt = (b: number) => mb(b / 1048576);
 
+/** Öğenin tek parça ilerlemesi (0–1): aşama değişince çubuk başa dönmesin. */
+function ogeIlerlemesi(o: IsOgesi): number {
+  if (o.durum === "tamam") return 1;
+  if (o.durum === "yukleniyor") return 0.4 + 0.6 * (o.yuzde / 100);
+  if (o.durum === "hazirlaniyor") return 0.35;
+  if (o.durum === "yedekleniyor" || o.durum === "paketleniyor") return 0.3 * (o.yuzde / 100);
+  return 0;
+}
+
 /** Aktarım ilerlemesi — veritabanı başına yedek → doğrulama → yükleme. */
 export function AktarimEkrani({ durum, setDurum }: P) {
   const a = durum.aktarim!;
@@ -42,15 +52,32 @@ export function AktarimEkrani({ durum, setDurum }: P) {
   const hatali = a.ogeler.filter((o) => o.durum === "hata").length;
   // Genel ilerleme: her öğe eşit ağırlık değil, veri boyutuna göre.
   const toplam = a.ogeler.reduce((t, o) => t + Math.max(1, o.veriMb), 0);
-  const ilerleme = a.ogeler.reduce((t, o) => {
-    const agirlik = Math.max(1, o.veriMb);
-    if (o.durum === "tamam") return t + agirlik;
-    if (o.durum === "yukleniyor") return t + agirlik * (0.4 + 0.6 * (o.yuzde / 100));
-    if (o.durum === "hazirlaniyor") return t + agirlik * 0.35;
-    if (o.durum === "yedekleniyor") return t + agirlik * 0.3 * (o.yuzde / 100);
-    return t;
-  }, 0);
-  const genel = Math.round((ilerleme / toplam) * 100);
+  const ilerleme = a.ogeler.reduce((t, o) => t + Math.max(1, o.veriMb) * ogeIlerlemesi(o), 0);
+  // Genel yüzde geri gitmez: paketlerin boyutu paketleme bitince belli olur, toplam büyüyünce yüzde düşüyordu.
+  const enYuksek = useRef(0);
+  const hesap = Math.round((ilerleme / toplam) * 100);
+  if (hesap > enYuksek.current || a.bitti) enYuksek.current = a.bitti ? 100 : hesap;
+  const genel = enYuksek.current;
+
+  // Her şey bittiğinde (yükleme + yerleştirme + seçildiyse ayırma) bir kez "Aktarım tamamlandı" penceresi
+  const hepsiBitti =
+    a.sunucu?.durum === "tamamlandi" &&
+    (!a.veritabanlariAyir || (durum.ayirma?.durum === "bitti" && !durum.ayirma.hatalar.length));
+  const [tamamPenceresi, setTamamPenceresi] = useState(false);
+  const gosterildi = useRef(false);
+  useEffect(() => {
+    if (!hepsiBitti || gosterildi.current) return;
+    gosterildi.current = true;
+    const anahtar = "aktarim.tamamGosterildi." + (durum.oturum?.id ?? "");
+    try {
+      if (sessionStorage.getItem(anahtar)) return;
+      sessionStorage.setItem(anahtar, "1");
+    } catch {
+      /* depolama kapalı: yine göster */
+    }
+    setTamamPenceresi(true);
+  }, [hepsiBitti, durum.oturum?.id]);
+  const toplamBoyut = a.ogeler.reduce((t, o) => t + (o.boyut > 0 ? o.boyut : o.veriMb * 1048576), 0);
 
   const [yeniOnay, setYeniOnay] = useState(false);
   const cagir = async (yol: string) => {
@@ -165,7 +192,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                         {ADIM[o.durum]}
                         {suren && ` · %${o.yuzde}`}
                       </div>
-                      {suren && <Progress value={o.yuzde} className="mt-1 h-1.5" />}
+                      {suren && <Progress value={Math.round(ogeIlerlemesi(o) * 100)} className="mt-1 h-1.5" />}
                     </TableCell>
                   </TableRow>
                 );
@@ -175,6 +202,34 @@ export function AktarimEkrani({ durum, setDurum }: P) {
         </section>
         </div>
       </main>
+
+      <Dialog open={tamamPenceresi} onOpenChange={setTamamPenceresi}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="items-center text-center">
+            <span className="mb-1 flex size-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+              <CheckCircle2 className="size-8" />
+            </span>
+            <DialogTitle className="text-xl">Aktarım tamamlandı</DialogTitle>
+            <DialogDescription>
+              Verileriniz Pusula sunucularına yerleştirildi{a.veritabanlariAyir ? " ve veritabanları bu bilgisayardan ayrıldı" : ""}.
+              Bu pencereyi ve uygulamayı kapatabilirsiniz.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/40 p-4 text-center">
+            <div>
+              <div className="text-2xl font-semibold tabular-nums">{a.ogeler.filter((o) => o.durum === "tamam").length}</div>
+              <div className="text-xs text-muted-foreground">öğe aktarıldı</div>
+            </div>
+            <div>
+              <div className="text-2xl font-semibold tabular-nums">{bayt(toplamBoyut)}</div>
+              <div className="text-xs text-muted-foreground">toplam</div>
+            </div>
+          </div>
+          <DialogFooter className="sm:justify-center">
+            <Button className="min-w-32" onClick={() => setTamamPenceresi(false)}>Tamam</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={yeniOnay} onOpenChange={setYeniOnay}>
         <AlertDialogContent>
