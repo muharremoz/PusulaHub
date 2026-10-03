@@ -96,10 +96,14 @@ export function Globe({
         state.phi = phiRef.current + rs.get()
         if (nabiz && config.markers?.length) {
           const t = performance.now() - baslangic
-          state.markers = config.markers.map((m, i) => ({
+          const canli = config.markers.map((m, i) => ({
             ...m,
             size: m.size * (1 + nabiz * (0.5 + 0.5 * Math.sin(t / 420 + i * 1.7))),
           }))
+          // cobe 0.6.5 hatası: onRender'da işaretçi sayacını uzunluğun 2 katı yerine 1 katı yazıyor →
+          // yalnız ilk yarı çizilir. Aynı sayıda boş (size 0) işaretçiyle tamamla; fazlası 64'lük
+          // shader dizisine sığmaz, WebGL yok sayar.
+          state.markers = [...canli, ...canli.map(() => ({ location: [0, 0] as [number, number], size: 0 }))]
         }
         state.width = widthRef.current * 2
         state.height = widthRef.current * 2

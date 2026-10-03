@@ -1,16 +1,20 @@
 import { useMemo } from "react";
 import type { COBEOptions } from "cobe";
 import { Globe } from "@/components/ui/globe";
-import { MUSTERI_ULKELERI } from "@/lib/musteri-ulkeleri";
+import { MUSTERI_ILLERI, MUSTERI_ULKELERI } from "@/lib/musteri-konumlari";
 
 /**
- * Orta panelin arka planı: dönen dünya (Magic UI Globe / cobe). Pusula müşterilerinin olduğu ülkeler
- * işaretli; işaretçi büyüklüğü firma sayısıyla (log) büyür ve nabız gibi atar. Türkiye ortada kalır (±6° salınır).
+ * Orta panelin arka planı: dünya (Magic UI Globe / cobe). Pusula müşterilerinin olduğu iller ve ülkeler
+ * işaretli — İstanbul ve Ankara belirgin, diğerleri firma sayısıyla (log) büyür; hepsi nabız gibi atar. Türkiye ortada kalır (±6° salınır).
  * Bağlıyken yeşil, değilken gri.
  */
 
-/** 1 firma ≈ 0,03 · Türkiye (~4.900) ≈ 0,1 */
-const boyut = (firma: number) => 0.03 + 0.019 * Math.log10(Math.max(1, firma));
+const log = (n: number) => Math.log10(Math.max(1, n));
+/** İller: İstanbul ve Ankara öne çıkar, diğerleri küçük nokta (10 firma ≈ 0,017 · 150 ≈ 0,023) */
+const ilBoyutu = (ad: string, firma: number) =>
+  ad === "İstanbul" ? 0.085 : ad === "Ankara" ? 0.065 : 0.012 + 0.005 * log(firma);
+/** Yurt dışı: tek tek göründükleri için biraz daha iri (1 firma ≈ 0,026 · Almanya 33 ≈ 0,041) */
+const ulkeBoyutu = (firma: number) => 0.026 + 0.01 * log(firma);
 
 export function AgArkaplan({ bagli }: { bagli: boolean }) {
   // Uygulama yalnız .dark sınıfıyla koyulaşır (sistem teması değil)
@@ -33,7 +37,11 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       baseColor: koyu ? [0.3, 0.3, 0.3] : [1, 1, 1],
       markerColor: isaret,
       glowColor: koyu ? [0.15, 0.15, 0.15] : [1, 1, 1],
-      markers: MUSTERI_ULKELERI.map((u) => ({ location: u.konum, size: boyut(u.firma) })),
+      // cobe en çok 64 işaretçi çizer (13 ülke + 51 il)
+      markers: [
+        ...MUSTERI_ILLERI.map((i) => ({ location: i.konum, size: ilBoyutu(i.ad, i.firma) })),
+        ...MUSTERI_ULKELERI.map((u) => ({ location: u.konum, size: ulkeBoyutu(u.firma) })),
+      ],
     };
   }, [bagli, koyu]);
 
