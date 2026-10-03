@@ -344,8 +344,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
     <div className="flex h-svh bg-muted/40">
       {/* Sol panel: firma, SQL Server, Pusula'nın notu, rapor durumu ve eylemler (eskiden üst şeritteydi) */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="border-b px-5 py-2.5">
-          <ParlayanLogo yukseklik="h-20" />
+        {/* Connect'in sol paneliyle aynı: 64 px sabit alan, ortalı parlayan logo */}
+        <div className="flex h-16 shrink-0 items-center justify-center border-b px-5">
+          <ParlayanLogo />
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
@@ -367,7 +368,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
               <dl className="flex flex-col gap-2 text-sm">
                 <PanelBilgi ad="Sunucu" deger={r?.sql?.sunucu ?? durum.sql?.sunucu ?? "—"} mono />
                 {r?.sql && <PanelBilgi ad="Bilgisayar" deger={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />}
-                {r?.sql && <PanelBilgi ad="Sürüm" deger={r.sql.surumu} />}
                 {r?.sql && <PanelBilgi ad="Bağlantı" deger={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />}
               </dl>
             ) : (
