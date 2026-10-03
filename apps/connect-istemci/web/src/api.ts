@@ -94,6 +94,8 @@ export type Durum = {
     terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null };
     rdpSifre: { kayitli: boolean; kullanici: string | null };
   };
+  /** Pusula'dan şifre güncellemesi: bekliyor = 2FA açık, yeni şifre bir sonraki kodla alınacak; mesaj = kullanıcıya bilgi. */
+  sifreGuncelleme?: { bekliyor: boolean; mesaj: string | null };
   /** Bu cihazda iki adımlı doğrulama (TOTP) açık mı. */
   ikiAdim?: { aktif: boolean };
   /** Uygulama içi uzak masaüstü: açık mı, son oturum hatayla bittiyse mesajı. */

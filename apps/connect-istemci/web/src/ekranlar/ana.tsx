@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, KeyRound, Loader2, Monitor, PlugZap,
+  AlertTriangle, ArrowLeft, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor, PlugZap,
   Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -38,7 +38,20 @@ export function AnaEkran({ durum, setDurum }: P) {
   // İki adımlı doğrulama: açma penceresi + kod sorma (bağlan / kapat / şifre kaydet)
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [ikiAc, setIkiAc] = useState(false);
-  const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre">(null);
+  const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre" | "goster">(null);
+  // VPN şifresi = oturum şifresi; FortiClient'a otomatik yazılamadığı için ekranda gösterilir (60 sn)
+  const [gosterilen, setGosterilen] = useState<string | null>(null);
+  const sifreyiGoster = async (kod?: string) => {
+    const r = await api<{ sifre: string }>("/sifre/goster", kod ? { kod } : {});
+    setGosterilen(r.sifre);
+    window.setTimeout(() => setGosterilen(null), 60_000);
+  };
+  const gosterTikla = async () => {
+    if (ikiAktif) { setKodIstek("goster"); return; }
+    setHata(null);
+    try { await sifreyiGoster(); } catch (e) { setHata((e as Error).message); }
+  };
+  const sg = durum.sifreGuncelleme;
 
   const cagir = async (yol: string, govde: unknown = {}, ad = yol) => {
     setBekle(ad);
@@ -209,6 +222,18 @@ export function AnaEkran({ durum, setDurum }: P) {
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
+        {sg?.mesaj && (
+          <Alert className="border-sky-500/30 bg-sky-500/10">
+            <KeyRound />
+            <AlertDescription className="flex flex-col gap-2">
+              <span>
+                {sg.mesaj} <b>VPN (FortiClient) şifreniz de aynıdır</b>; FortiClient şifre sorarsa yeni şifreyi oraya girin.
+              </span>
+              <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
+            </AlertDescription>
+          </Alert>
+        )}
+
         {!durum.servisErisim && (
           <Alert>
             <WifiOff />
@@ -269,7 +294,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         </div>
 
         {(!vpnHazir || vk.suruyor || vk.durum?.hata) && (
-          <Bolum baslik={vpnHazir ? "VPN ayarı güncelleniyor" : "VPN programını kur"} ikon={<ShieldCheck />}>
+          <Bolum baslik={vk.suruyor ? "VPN ayarı güncelleniyor" : k.forti.kurulu ? "VPN ayarını güncelleyin" : "VPN programını kur"} ikon={<ShieldCheck />}>
             {vk.suruyor ? (
               <div className="flex flex-col gap-2">
                 <div className="text-sm">{vk.durum?.mesaj ?? "Hazırlanıyor… (Windows izin isterse \"Evet\" deyin)"}</div>
@@ -284,10 +309,12 @@ export function AnaEkran({ durum, setDurum }: P) {
                   </Alert>
                 )}
                 <p className="mb-3 text-sm text-muted-foreground">
-                  FortiClient VPN kurulur ve Pusula bağlantısı ayarlanır. Windows yönetici izni isteyecek.
+                  {k.forti.kurulu
+                    ? "FortiClient'taki Pusula bağlantısı eksik ya da Pusula'nın VPN sunucu bilgisi değişmiş; bağlantı ayarı yeniden yazılır. Windows yönetici izni isteyecek."
+                    : "FortiClient VPN kurulur ve Pusula bağlantısı ayarlanır. Windows yönetici izni isteyecek."}
                 </p>
                 <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
-                  {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {vk.durum?.hata ? "Yeniden dene" : "Kur"}
+                  {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {vk.durum?.hata ? "Yeniden dene" : k.forti.kurulu ? "Güncelle" : "Kur"}
                 </Button>
               </>
             )}
@@ -317,6 +344,11 @@ export function AnaEkran({ durum, setDurum }: P) {
                   <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
                 )}
               </li>
+              {k.rdpSifre.kayitli && (
+                <li className="list-none">
+                  <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
+                </li>
+              )}
               <li className="text-muted-foreground">
                 İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
                 sorulmaz.
@@ -408,12 +440,13 @@ export function AnaEkran({ durum, setDurum }: P) {
       <KodPenceresi
         acik={kodIstek !== null}
         onKapat={() => setKodIstek(null)}
-        baslik={kodIstek === "kapat" ? "İki adımlı doğrulamayı kapat" : kodIstek === "sifre" ? "Şifreyi kaydet" : "Doğrulama kodu"}
+        baslik={kodIstek === "kapat" ? "İki adımlı doğrulamayı kapat" : kodIstek === "sifre" ? "Şifreyi kaydet" : kodIstek === "goster" ? "Şifreyi göster" : "Doğrulama kodu"}
         aciklama="Telefonunuzdaki doğrulama uygulamasında görünen 6 haneli kodu girin."
-        dugme={kodIstek === "kapat" ? "Kapat" : kodIstek === "sifre" ? "Kaydet" : "Bağlan"}
+        dugme={kodIstek === "kapat" ? "Kapat" : kodIstek === "sifre" ? "Kaydet" : kodIstek === "goster" ? "Göster" : "Bağlan"}
         onOnay={async (kod) => {
           if (kodIstek === "baglan") setDurum(await api<Durum>("/baglan", { kod }));
           else if (kodIstek === "kapat") setDurum(await api<Durum>("/iki/kapat", { kod }));
+          else if (kodIstek === "goster") await sifreyiGoster(kod);
           else if (kodIstek === "sifre") {
             setDurum(await api<Durum>("/rdp/sifre", { sifre, kod }));
             setSifre("");
@@ -425,6 +458,35 @@ export function AnaEkran({ durum, setDurum }: P) {
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
         <BaglantiGorseli bagli={k.terminal.erisim} />
       </aside>
+    </div>
+  );
+}
+
+/** Oturum (= VPN) şifresini gösterme: düğme → şifre + kopyala + gizle. 60 sn sonra kendiliğinden gizlenir. */
+function SifreGosterici({ gosterilen, onGoster, onGizle }: { gosterilen: string | null; onGoster: () => void; onGizle: () => void }) {
+  const [kopyalandi, setKopyalandi] = useState(false);
+  if (!gosterilen) {
+    return (
+      <Button size="sm" variant="outline" className="self-start" onClick={onGoster}>
+        <Eye /> Şifreyi göster
+      </Button>
+    );
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <code className="rounded-md border bg-card px-3 py-1.5 font-mono text-sm select-all">{gosterilen}</code>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          void navigator.clipboard.writeText(gosterilen).then(() => { setKopyalandi(true); window.setTimeout(() => setKopyalandi(false), 1500); }).catch(() => {});
+        }}
+      >
+        {kopyalandi ? <Check /> : <Copy />} {kopyalandi ? "Kopyalandı" : "Kopyala"}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onGizle}>
+        <EyeOff /> Gizle
+      </Button>
     </div>
   );
 }

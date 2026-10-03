@@ -62,6 +62,8 @@ namespace PusulaConnect
             var j = await GonderHam(HttpMethod.Get, "api/duyurular", null).ConfigureAwait(false);
             return j as JArray ?? new JArray();
         }
+        /// <summary>Hub'daki güncel şifre (Hub'dan sıfırlanınca). 2FA açıksa kod şart; yanıtta kasaAnahtari da gelir.</summary>
+        public Task<JObject> Sifre(string kod) => Gonder(HttpMethod.Post, "api/sifre", new { kod });
         public Task<JObject> DuyuruOkundu(string id) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/okundu", new { });
         public async Task Olay(string tur, object ayrinti = null)
         {

@@ -104,6 +104,10 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   kod_olusturuldu: { ad: "Kurulum kodu üretildi", ton: "notr" },
   kod_iptal: { ad: "Kurulum kodu iptal", ton: "uyari" },
   duyuru_yayinlandi: { ad: "Duyuru yayınlandı", ton: "notr" },
+  profil_guncellendi: { ad: "Sunucu bilgisi güncellendi", ton: "notr" },
+  sifre_iletildi: { ad: "Şifre Hub'dan iletildi", ton: "notr" },
+  sifre_guncellendi: { ad: "Şifre Pusula'dan alındı", ton: "iyi" },
+  sifre_gosterildi: { ad: "Şifre ekranda gösterildi", ton: "uyari" },
   duyuru_kaldirildi: { ad: "Duyuru kaldırıldı", ton: "notr" },
 }
 const TON_SINIF: Record<Ton, string> = {

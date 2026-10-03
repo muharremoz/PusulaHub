@@ -12,6 +12,8 @@
  */
 
 import { getFirmaErisim } from "@/lib/firma-erisim"
+import type { SupabaseLike } from "@/lib/firma-credentials"
+import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { GUVENLI_KULLANICI_ADI, MSI_URL, MSI_URL_ARM, TUNEL_ADI, VPN_SUNUCU } from "@/lib/kurulum-paketi"
 
 const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
@@ -22,14 +24,57 @@ export type ConnectKoduSonuc =
   | { ok: true; kod: string; indir: string }
   | { ok: false; hata: string; kod: number }
 
+/**
+ * Connect'in VPN sunucusu — Hub Ayarlar > Pusula Connect (hub.settings: connect_vpn_sunucu, connect_vpn_port).
+ * Girilmemişse kurulum paketinin sabiti (VPN_SUNUCU). Değişince uygulamalar profil imzasıyla fark eder,
+ * FortiClient ayarını yeniden yazar.
+ */
+export async function connectVpnAdresi(): Promise<string> {
+  try {
+    const { data } = await getSupabaseAdmin().schema("hub").from("settings")
+      .select("key, value").in("key", ["connect_vpn_sunucu", "connect_vpn_port"])
+    const a = new Map(((data ?? []) as { key: string; value: string | null }[]).map((r) => [r.key, (r.value ?? "").trim()]))
+    const sunucu = a.get("connect_vpn_sunucu"), port = a.get("connect_vpn_port")
+    if (sunucu) return port ? `${sunucu}:${port}` : sunucu
+  } catch { /* ayar okunamadı → sabit */ }
+  return VPN_SUNUCU
+}
+
+export interface ConnectProfil {
+  vpn: string; tunel: string; rdp: string; rdpPort: number; domain: string; msiurl: string; msiurlArm: string
+}
+
+/**
+ * Firmanın GÜNCEL Connect profili (VPN + RDP hedefi + domain). Kod üretirken de, Connect servisi
+ * sorduğunda da (/api/hub/connect/profil) aynı yerden üretilir → Hub'da sunucu değişince uygulamaya yansır.
+ * client: oturumsuz (servis-servis) çağrıda admin istemcisi verilmeli.
+ */
+export async function connectProfili(firkod: string, client?: SupabaseLike):
+  Promise<{ ok: true; profil: ConnectProfil } | { ok: false; hata: string; kod: number }> {
+  const [erisim, vpn] = await Promise.all([getFirmaErisim(firkod, client), connectVpnAdresi()])
+  if (!erisim) return { ok: false, hata: "Firma bulunamadı", kod: 404 }
+  const rdp = erisim.windows?.dns || erisim.windows?.ip || ""
+  if (!rdp) return { ok: false, hata: "Firmaya RDP sunucusu atanmamış", kod: 409 }
+  const domain = (erisim.ad?.domain ?? "").split(".")[0].toUpperCase() || "PUSULADC"
+  return {
+    ok: true,
+    profil: {
+      vpn,
+      tunel: TUNEL_ADI,
+      rdp,
+      rdpPort: erisim.windows?.rdpPort ?? 3389,
+      domain,
+      msiurl: MSI_URL,
+      msiurlArm: MSI_URL_ARM,
+    },
+  }
+}
+
 export async function connectKoduUret(firkod: string, firmaAdi: string, kullanici: string, olusturan: string | null): Promise<ConnectKoduSonuc> {
   if (!GUVENLI_KULLANICI_ADI.test(kullanici)) return { ok: false, hata: "Geçersiz kullanıcı adı", kod: 400 }
 
-  const erisim = await getFirmaErisim(firkod)
-  if (!erisim) return { ok: false, hata: "Firma bulunamadı", kod: 404 }
-  const rdp = erisim.windows?.dns || erisim.windows?.ip || ""
-  if (!rdp) return { ok: false, hata: "Firmaya RDP sunucusu atanmamış — kod üretilemez", kod: 409 }
-  const domain = (erisim.ad?.domain ?? "").split(".")[0].toUpperCase() || "PUSULADC"
+  const p = await connectProfili(firkod)
+  if (!p.ok) return { ok: false, hata: p.kod === 409 ? "Firmaya RDP sunucusu atanmamış — kod üretilemez" : p.hata, kod: p.kod }
 
   const r = await fetch(`${BASE}/admin/kodlar`, {
     method: "POST",
@@ -41,15 +86,7 @@ export async function connectKoduUret(firkod: string, firmaAdi: string, kullanic
       kullanici,
       olusturan,
       gunSayisi: 7,
-      profil: {
-        vpn: VPN_SUNUCU,
-        tunel: TUNEL_ADI,
-        rdp,
-        rdpPort: erisim.windows?.rdpPort ?? 3389,
-        domain,
-        msiurl: MSI_URL,
-        msiurlArm: MSI_URL_ARM,
-      },
+      profil: p.profil,
     }),
   })
   const metin = await r.text()

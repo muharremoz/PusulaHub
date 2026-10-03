@@ -29,6 +29,9 @@
  *     GET    /admin/olaylar?firma=&cihaz=&limit=&once=   olay kaydı (yeniden eskiye)
  *   İstemci (Bearer token):
  *     POST   /api/nabiz                 { oturum, terminal, ayarlar, ... } — ~60 sn'de bir canlı durum
+ *                                        (yanıt: duyuru imzası + profilImza → istemci değişince profili tazeler)
+ *     POST   /api/sifre  { kod? }       kullanıcının Hub'daki güncel şifresi (2FA açıksa kod şart); saklanmaz
+ *   Profil Hub'dan (HUB_URL /api/hub/connect/profil) güncel alınır: firmanın sunucusu değişince yansır.
  *     POST   /api/olay                  { tur, ayrinti } — oturum açıldı/bitti, güncellendi…
  *     GET    /api/duyurular             bu cihaza yayındaki duyurular (+ okundu zamanı)
  *     POST   /api/duyurular/:id/okundu  kullanıcı okudu
@@ -58,6 +61,8 @@ const DB_PATH     = process.env.DB_PATH ?? join(__dirname, "connect.db")
 const PORT        = parseInt(process.env.PORT ?? "5200", 10)
 const HOST        = process.env.HOST ?? "127.0.0.1"
 const MIN_SURUM   = process.env.MIN_ISTEMCI_SURUM ?? "0.1.0"
+/** Hub: güncel profil (sunucu değişince) + kullanıcı şifresi (Hub'dan sıfırlanınca) buradan alınır. */
+const HUB_URL     = (process.env.HUB_URL ?? "https://hub.pusulanet.net").replace(/\/+$/, "")
 /** Yayındaki exe ve sürümü — istemci kendini buna göre günceller. */
 const ISTEMCI_EXE = process.env.ISTEMCI_EXE ?? join(__dirname, "istemci", "PusulaConnect.exe")
 const SON_SURUM_DOSYASI = process.env.SON_SURUM_DOSYASI ?? join(__dirname, "istemci", "surum.txt")
@@ -231,6 +236,7 @@ const sql = {
     LEFT JOIN duyuru_okuma o ON o.duyuruId = d.id AND o.cihazId = @cihazId
     WHERE ${DUYURU_YAYINDA} AND ${DUYURU_HEDEF} AND (d.bitis IS NOT NULL OR d.olusturma > datetime('now', '-30 days'))
     ORDER BY d.olusturma DESC LIMIT 50`),
+  kodProfil: db.prepare(`UPDATE kodlar SET profil = ? WHERE id = ?`),
   duyuruOku: db.prepare(`INSERT OR IGNORE INTO duyuru_okuma (duyuruId, cihazId) VALUES (?, ?)`),
 }
 
@@ -280,11 +286,64 @@ function anahtarDogru(v) {
 }
 const simdiUtc = () => new Date().toISOString().replace("T", " ").slice(0, 19)
 
-/** İstemciye giden görünüm — profil + kimlik (+ cihazın 2FA durumu), başka bir şey yok. */
-function kayitGorunumu(k) {
+/**
+ * İstemciye giden görünüm — profil + kimlik (+ cihazın 2FA durumu), başka bir şey yok.
+ * hub: Hub'dan gelen güncel profil (varsa saklı profilin yerine geçer) + şifre sürümü.
+ * profilImza: profil ya da şifre sürümü değişince değişir — nabız yanıtında da gider, istemci farkı görüp tazeler.
+ */
+function kayitGorunumu(k, hub = null) {
   let profil = {}
   try { profil = JSON.parse(k.profil) } catch { /* bozuk */ }
-  return { firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil, ikiAdim: { aktif: !!k.totpAktif } }
+  if (hub?.profil) profil = { ...profil, ...hub.profil }
+  const sifreSurumu = hub?.sifreSurumu ?? null
+  return {
+    firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil, ikiAdim: { aktif: !!k.totpAktif },
+    sifreSurumu, profilImza: ozet(JSON.stringify(profil) + "|" + (sifreSurumu ?? "")).slice(0, 16),
+  }
+}
+
+// ── Hub'dan güncel profil + şifre ──
+// Hub'da firmanın sunucusu değişince ya da kullanıcının şifresi sıfırlanınca uygulama bunu nabızla fark eder.
+// Önbellek kullanıcı başına 2 dk (nabız ~60 sn'de bir gelir; Hub'ı her nabızda sormayalım).
+// Hub'a ulaşılamazsa saklı profille devam (null).
+const HUB_ONBELLEK_MS = 2 * 60_000
+const hubOnbellek = new Map() // "firma|kullanici" → { t, veri }
+async function hubProfil(k) {
+  const anahtar = k.firmaId + "|" + k.kullanici.toLowerCase()
+  const o = hubOnbellek.get(anahtar)
+  if (o && Date.now() - o.t < HUB_ONBELLEK_MS) return o.veri
+  try {
+    const r = await fetch(`${HUB_URL}/api/hub/connect/profil?firma=${encodeURIComponent(k.firmaId)}&kullanici=${encodeURIComponent(k.kullanici)}`,
+      { headers: { "X-Service-Key": SERVICE_KEY }, signal: AbortSignal.timeout(8000) })
+    if (!r.ok) throw new Error("Hub HTTP " + r.status)
+    const veri = await r.json()
+    hubOnbellek.set(anahtar, { t: Date.now(), veri })
+    // Saklı profil de güncellensin: Hub'a sonradan ulaşılamazsa son bilinen doğru olsun
+    if (veri?.profil) {
+      let eski = {}
+      try { eski = JSON.parse(k.profil) } catch { /* bozuk */ }
+      const yeni = JSON.stringify({ ...eski, ...veri.profil })
+      if (yeni !== k.profil) {
+        sql.kodProfil.run(yeni, k.id)
+        olay("profil_guncellendi", { firmaId: k.firmaId, kullanici: k.kullanici, kaynak: "servis", ayrinti: { onceki: eski.rdp ?? null, yeni: veri.profil.rdp ?? null } })
+      }
+    }
+    return veri
+  } catch (e) {
+    fastify.log.warn({ err: e.message, firma: k.firmaId }, "hub profil alinamadi")
+    if (o) return o.veri
+    hubOnbellek.set(anahtar, { t: Date.now() - HUB_ONBELLEK_MS + 30_000, veri: null }) // 30 sn sonra tekrar dene
+    return null
+  }
+}
+async function hubSifre(k) {
+  const r = await fetch(`${HUB_URL}/api/hub/connect/sifre`, {
+    method: "POST", headers: { "X-Service-Key": SERVICE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ firma: k.firmaId, kullanici: k.kullanici }), signal: AbortSignal.timeout(8000),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || !j.sifre) throw Object.assign(new Error(j.error ?? `Hub HTTP ${r.status}`), { durum: r.status === 404 ? 404 : 502 })
+  return j
 }
 
 // ── İki adımlı doğrulama (RFC 6238 TOTP, SHA-1, 6 hane, 30 sn) ──
@@ -599,7 +658,30 @@ fastify.post("/api/2fa/kapat", async (req, reply) => {
 fastify.get("/api/profil", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   sql.cihazGorundu.run(String(req.headers["x-surum"] ?? "").slice(0, 20) || null, c.cihazId)
-  return kayitGorunumu(c)
+  return kayitGorunumu(c, await hubProfil(c))
+})
+
+/**
+ * Kullanıcının Hub'daki güncel şifresi — Hub'dan şifre sıfırlanınca uygulama kendisi alır.
+ * 2FA açıksa kod şart (kasa anahtarı da döner, istemci şifreyi kasaya yazar); kapalıysa cihaz token'ı yeter.
+ * Şifre burada SAKLANMAZ, yalnız Hub'dan alınıp iletilir.
+ */
+fastify.post("/api/sifre", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  let kasa = null
+  if (c.totpAktif) {
+    if (!c.totpGizli || !c.kasaAnahtari) return reply.code(409).send({ hata: "İki adımlı doğrulama bozuk; Pusula'dan sıfırlatın." })
+    const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
+    sql.totpBasari.run(adim, c.cihazId)
+    kasa = coz(c.kasaAnahtari)
+  }
+  try {
+    const j = await hubSifre(c)
+    olay("sifre_iletildi", { cihaz: c, kaynak: "servis", ip: istemciIp(req), ayrinti: c.totpAktif ? "2FA ile" : null })
+    return { sifre: j.sifre, sifreSurumu: j.sifreSurumu ?? null, kasaAnahtari: kasa }
+  } catch (e) {
+    return reply.code(e.durum ?? 502).send({ hata: e.durum === 404 ? "Şifreniz Pusula'da kayıtlı değil; elle girin." : "Şifre Pusula'dan alınamadı: " + e.message })
+  }
 })
 
 /** Canlı durum: istemci ~60 sn'de bir (ve oturum açılıp kapanınca hemen) gönderir. */
@@ -617,7 +699,7 @@ fastify.post("/api/nabiz", async (req, reply) => {
     ip: istemciIp(req),
     durumJson: JSON.stringify(durum).slice(0, 4000),
   })
-  return { tamam: true, duyuru: duyuruImzasi(c) }
+  return { tamam: true, duyuru: duyuruImzasi(c), profilImza: kayitGorunumu(c, await hubProfil(c)).profilImza }
 })
 
 fastify.get("/api/duyurular", async (req, reply) => {
@@ -636,7 +718,7 @@ fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {
 
 /** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
 const ISTEMCI_OLAYLARI = new Set(["oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
-  "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
+  "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
 fastify.post("/api/olay", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   const tur = String(req.body?.tur ?? "")

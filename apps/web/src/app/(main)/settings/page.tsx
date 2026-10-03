@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { PageContainer } from "@/components/layout/page-container";
-import { Settings, Server, Database, Shield, Building2, Eye, EyeOff } from "lucide-react";
+import { Settings, Server, Database, Shield, Building2, Eye, EyeOff, PlugZap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -97,6 +97,10 @@ export default function SettingsPage() {
   const [firmaApiEnabled, setFirmaApiEnabled]   = useState(false);
   const [showApiPassword, setShowApiPassword]   = useState(false);
 
+  // Pusula Connect — müşteri uygulamasının VPN sunucusu (uygulamalar nabızla fark edip FortiClient'ı günceller)
+  const [connectVpnSunucu, setConnectVpnSunucu] = useState("");
+  const [connectVpnPort, setConnectVpnPort]     = useState("");
+
   // Güvenlik
   const [sessionTimeout, setSessionTimeout]   = useState("");
   const [maxFailedLogins, setMaxFailedLogins] = useState("");
@@ -116,6 +120,8 @@ export default function SettingsPage() {
         setFirmaApiPassword(d.firma_api_password ?? "");
         setFirmaApiTimeout(d.firma_api_timeout ?? "10");
         setFirmaApiEnabled(d.firma_api_enabled === "true");
+        setConnectVpnSunucu(d.connect_vpn_sunucu ?? "vpn.pusulanet.net");
+        setConnectVpnPort(d.connect_vpn_port ?? "17443");
         setSessionTimeout(d.session_timeout ?? "30");
         setMaxFailedLogins(d.max_failed_logins ?? "5");
         setIpWhitelist(d.ip_whitelist ?? "");
@@ -303,6 +309,23 @@ export default function SettingsPage() {
             }
           >
             {saving === "firma_api" ? "Kaydediliyor..." : "Kaydet"}
+          </Button>
+        </Section>
+
+        {/* Pusula Connect */}
+        <Section icon={PlugZap} title="Pusula Connect" footer="Müşteri bilgisayarlarındaki Connect uygulaması bu VPN sunucusuna bağlanır; değişince uygulamalar bir dakika içinde fark eder ve FortiClient ayarını günceller">
+          <Field label="VPN Sunucusu">
+            <Input value={connectVpnSunucu} onChange={(e) => setConnectVpnSunucu(e.target.value.trim())}
+              placeholder="vpn.pusulanet.net" className="h-8 text-[13px] rounded-[5px] font-mono" />
+          </Field>
+          <Field label="VPN Portu">
+            <Input type="number" value={connectVpnPort} onChange={(e) => setConnectVpnPort(e.target.value)}
+              placeholder="17443" className="h-8 text-[13px] rounded-[5px] w-28 font-mono" />
+          </Field>
+          <Button size="sm" className="rounded-[5px] text-xs"
+            disabled={saving === "connect" || !connectVpnSunucu || !/^\d{1,5}$/.test(connectVpnPort)}
+            onClick={() => save("connect", { connect_vpn_sunucu: connectVpnSunucu, connect_vpn_port: connectVpnPort })}>
+            {saving === "connect" ? "Kaydediliyor..." : "Kaydet"}
           </Button>
         </Section>
 

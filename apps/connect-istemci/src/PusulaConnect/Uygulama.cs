@@ -68,11 +68,7 @@ namespace PusulaConnect
         {
             try
             {
-                var k = await _servis.Profil();
-                Kimlik.ProfilYaz(k);
-                // Pusula 2FA'yı sıfırladıysa eski kasa dosyası artık çözülemez — temizle (kullanıcı şifreyi yeniden girer)
-                if (k["ikiAdim"]?.Value<bool?>("aktif") != true && Rdp.KasaliSifreVar) Rdp.KasaliSil();
-                lock (_kilit) { _kayit = k; _asama = "hazir"; _servisErisim = true; }
+                KayitUygula(await _servis.Profil());
                 var onceki = Yerlesim.OncekiSurumAl();
                 if (onceki != null) _ = _servis.Olay("guncellendi", onceki + " → " + ServisIstemci.Surum);
                 else _ = _servis.Olay("uygulama_acildi", ServisIstemci.Surum);
@@ -90,8 +86,91 @@ namespace PusulaConnect
             }
             _ = Task.Run(GuncellemeyeBak);
             _ = Task.Run(() => DuyurulariTazele());
+            await SifreyiEsitle();
             await Kontrol();
         }
+
+        private void KayitUygula(JObject k)
+        {
+            Kimlik.ProfilYaz(k);
+            // Pusula 2FA'yı sıfırladıysa eski kasa dosyası artık çözülemez — temizle (kullanıcı şifreyi yeniden girer)
+            if (k["ikiAdim"]?.Value<bool?>("aktif") != true && Rdp.KasaliSifreVar) Rdp.KasaliSil();
+            lock (_kilit) { _kayit = k; _asama = "hazir"; _servisErisim = true; _profilImza = k.Value<string>("profilImza"); }
+        }
+
+        // ------------------------------------------------------------ Hub'dan gelen değişiklikler (sunucu, şifre)
+
+        private string _profilImza;
+        private int _profilYenileniyor;
+        private bool _sifreBekliyor;          // 2FA açık: yeni şifre bir sonraki bağlanmada kodla alınacak
+        private string _sifreBilgi;
+        private DateTime _sifreBilgiZaman;
+
+        /// <summary>Nabızda profil imzası değişti: Hub'da sunucu ya da şifre değişmiş — profili tazele, şifreyi eşitle.</summary>
+        private async Task ProfilYenile()
+        {
+            if (Interlocked.Exchange(ref _profilYenileniyor, 1) == 1) return;
+            try
+            {
+                var eskiRdp = P("rdp");
+                KayitUygula(await _servis.Profil());
+                var yeniRdp = P("rdp");
+                if (eskiRdp != null && yeniRdp != null && eskiRdp != yeniRdp)
+                {
+                    Gunluk.Yaz("Sunucu bilgisi Pusula'dan güncellendi: " + eskiRdp + " → " + yeniRdp);
+                    Rdp.SifreSil(eskiRdp);
+                }
+                await SifreyiEsitle();
+                await Kontrol();
+            }
+            catch (Exception e) { Gunluk.Yaz("Profil yenilenemedi: " + e.Message); }
+            finally { Interlocked.Exchange(ref _profilYenileniyor, 0); }
+        }
+
+        /// <summary>Son alınan/bilinen Hub şifre sürümü — aynı şifre tekrar tekrar çekilmesin.</summary>
+        private static string BilinenSurumDosyasi => System.IO.Path.Combine(Kimlik.Klasor, "sifre-surumu.txt");
+        private static string BilinenSurum
+        {
+            get { try { return System.IO.File.Exists(BilinenSurumDosyasi) ? System.IO.File.ReadAllText(BilinenSurumDosyasi).Trim() : null; } catch { return null; } }
+            set { try { if (value == null) System.IO.File.Delete(BilinenSurumDosyasi); else System.IO.File.WriteAllText(BilinenSurumDosyasi, value); } catch { } }
+        }
+        private string HubSurum { get { lock (_kilit) return _kayit?.Value<string>("sifreSurumu"); } }
+
+        /// <summary>
+        /// Hub'da şifre sıfırlandıysa (sürüm değişti) ya da hiç kayıtlı şifre yoksa yeni şifreyi Hub'dan al.
+        /// 2FA açıksa kod gerektiği için bekletilir; bir sonraki bağlanmada kodla alınır.
+        /// Kayıtlı şifre geçersiz çıkıp silinmişse ve Hub'daki aynı sürümse tekrar çekilmez (döngü olmasın; kullanıcı girer).
+        /// </summary>
+        private async Task SifreyiEsitle()
+        {
+            var hub = HubSurum;
+            if (hub == null) return;
+            var bilinen = BilinenSurum;
+            if (hub == bilinen) return;
+            var iki = IkiAktif;
+            var kayitli = iki ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar;
+            // İlk kez: kullanıcının kendi girdiği şifre duruyor → güncel kabul et
+            if (kayitli && bilinen == null) { BilinenSurum = hub; return; }
+            if (iki)
+            {
+                lock (_kilit) { _sifreBekliyor = true; SifreBilgi("Şifreniz Pusula tarafından değiştirildi. Bağlanırken doğrulama kodunu girdiğinizde yeni şifre otomatik alınır."); }
+                return;
+            }
+            try
+            {
+                var j = await _servis.Sifre(null);
+                Rdp.YerelKaydet(j.Value<string>("sifre"));
+                var rdp = P("rdp"); if (rdp != null) Rdp.SifreSil(rdp);
+                BilinenSurum = j.Value<string>("sifreSurumu") ?? hub;
+                lock (_kilit) { _oturumMesaji = null; SifreBilgi(kayitli ? "Şifreniz Pusula tarafından değiştirildi; yeni şifre otomatik alındı." : "Oturum şifreniz Pusula'dan alındı."); }
+                Gunluk.Yaz("RDP şifresi Pusula'dan alındı (" + (kayitli ? "değişti" : "ilk") + ")");
+                _ = _servis.Olay("sifre_guncellendi", kayitli ? "değişti" : "ilk");
+            }
+            catch (ServisHatasi e) when (e.DurumKodu == 404) { BilinenSurum = hub; /* Hub'da şifre yok: kullanıcı girer */ }
+            catch (Exception e) { Gunluk.Yaz("Şifre Pusula'dan alınamadı: " + e.Message); }
+        }
+
+        private void SifreBilgi(string m) { _sifreBilgi = m; _sifreBilgiZaman = DateTime.Now; }
 
         private JObject Profil { get { lock (_kilit) return _kayit?["profil"] as JObject; } }
         /// <summary>Bu cihazda iki adımlı doğrulama açık mı (servisten gelen kayıt).</summary>
@@ -140,6 +219,12 @@ namespace PusulaConnect
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
                     ikiAdim = new { aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true },
+                    // Pusula'dan şifre güncellemesi: bekleyen (2FA) sürekli, bilgi mesajı 3 dk görünür
+                    sifreGuncelleme = new
+                    {
+                        bekliyor = _sifreBekliyor,
+                        mesaj = _sifreBekliyor || DateTime.Now - _sifreBilgiZaman < TimeSpan.FromMinutes(3) ? _sifreBilgi : null,
+                    },
                     oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
                     duyurular = _duyurular,
@@ -182,7 +267,8 @@ namespace PusulaConnect
             Gunluk.Yaz("Cihaz kaydı kaldırıldı (kullanıcı)");
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; }
+            BilinenSurum = null;
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; }
             return Durum();
         }
 
@@ -250,7 +336,8 @@ namespace PusulaConnect
                 Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
                 Rdp.SifreSil(rdp);
                 Rdp.YerelSil();
-                lock (_kilit) _oturumMesaji = null;
+                BilinenSurum = HubSurum;
+                lock (_kilit) { _oturumMesaji = null; _sifreBekliyor = false; }
                 Gunluk.Yaz("RDP şifresi kaydedildi (2FA kasası)");
                 _ = _servis.Olay("sifre_kaydedildi", "2FA kasası");
                 await Kontrol();
@@ -258,6 +345,7 @@ namespace PusulaConnect
             }
             Rdp.YerelKaydet(sifre);
             Rdp.SifreSil(rdp);
+            BilinenSurum = HubSurum;
             lock (_kilit) _oturumMesaji = null;
             Gunluk.Yaz("RDP şifresi kaydedildi (" + rdp + ")");
             _ = _servis.Olay("sifre_kaydedildi");
@@ -288,7 +376,20 @@ namespace PusulaConnect
             lock (_kilit) kullanici = _kayit?.Value<string>("kullanici");
             string sifre;
             var iki = IkiAktif;
-            if (iki)
+            bool bekliyor; lock (_kilit) bekliyor = _sifreBekliyor;
+            if (iki && bekliyor)
+            {
+                // Pusula şifreyi değiştirmiş: aynı kodla yeni şifre + kasa anahtarı gelir, kasaya yazılır
+                if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
+                var j = await _servis.Sifre(kod.Trim());
+                sifre = j.Value<string>("sifre");
+                Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
+                BilinenSurum = j.Value<string>("sifreSurumu") ?? HubSurum;
+                lock (_kilit) { _sifreBekliyor = false; SifreBilgi("Şifreniz Pusula tarafından değiştirildi; yeni şifre alındı."); }
+                Gunluk.Yaz("RDP şifresi Pusula'dan alındı (2FA kodu ile)");
+                _ = _servis.Olay("sifre_guncellendi", "2FA ile");
+            }
+            else if (iki)
             {
                 if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
                 if (!Rdp.KasaliSifreVar) throw new KullaniciHatasi("Önce oturum şifresini kaydedin.");
@@ -324,6 +425,43 @@ namespace PusulaConnect
                 Gunluk.Yaz("RDP başlatıldı (mstsc" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
             return Durum();
+        }
+
+        /// <summary>
+        /// Kayıtlı oturum şifresini ekranda göster — VPN (FortiClient) şifresi aynı ve oraya otomatik yazılamıyor.
+        /// 2FA açıksa kod şart; Pusula şifreyi değiştirmiş ve bekliyorsa aynı kodla yeni şifre alınır, kasaya yazılır.
+        /// </summary>
+        public async Task<object> SifreGoster(string kod)
+        {
+            string sifre;
+            if (IkiAktif)
+            {
+                if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
+                bool bekliyor; lock (_kilit) bekliyor = _sifreBekliyor;
+                if (bekliyor)
+                {
+                    var j = await _servis.Sifre(kod.Trim());
+                    sifre = j.Value<string>("sifre");
+                    Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
+                    BilinenSurum = j.Value<string>("sifreSurumu") ?? HubSurum;
+                    lock (_kilit) _sifreBekliyor = false;
+                    _ = _servis.Olay("sifre_guncellendi", "2FA ile");
+                }
+                else
+                {
+                    if (!Rdp.KasaliSifreVar) throw new KullaniciHatasi("Bu bilgisayarda kayıtlı şifre yok.");
+                    var j = await _servis.IkiDogrula(kod.Trim());
+                    sifre = Rdp.KasaliOku(j.Value<string>("kasaAnahtari"));
+                }
+            }
+            else
+            {
+                if (!Rdp.YerelSifreVar) throw new KullaniciHatasi("Bu bilgisayarda kayıtlı şifre yok.");
+                sifre = Rdp.YerelOku();
+            }
+            Gunluk.Yaz("Oturum şifresi ekranda gösterildi (VPN için)");
+            _ = _servis.Olay("sifre_gosterildi");
+            return new { sifre };
         }
 
         public object AyarKaydet(JObject d)
@@ -414,6 +552,9 @@ namespace PusulaConnect
                 var yanit = await _servis.Nabiz(durum);
                 _sonNabizGonderim = DateTime.Now;
                 // Yayındaki duyurular ya da okunma durumları değiştiyse listeyi yeniden çek
+                var pImza = yanit.Value<string>("profilImza");
+                string bilinenImza; lock (_kilit) bilinenImza = _profilImza;
+                if (pImza != null && pImza != bilinenImza) _ = Task.Run(ProfilYenile);
                 var imza = yanit["duyuru"]?.Value<string>("imza");
                 string onceki; lock (_kilit) onceki = _duyuruImza;
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));
