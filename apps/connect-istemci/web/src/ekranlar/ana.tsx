@@ -532,7 +532,8 @@ function Kart({ ikon, baslik, deger, alt, durum, aksiyon, ortu }: { ikon: React.
       {/* Örtü: kart bu adımda anlamsızsa (ör. VPN yokken sunucu) üstüne yarı saydam bekleme katmanı */}
       {ortu && (
         <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-card/70 px-4 text-center text-sm font-medium text-muted-foreground backdrop-blur-[2px]">
-          <Loader2 className="size-4 shrink-0 animate-spin" />
+          {/* Sabit simge: dönen simge "kuruluyor" gibi algılanıyordu */}
+          <WifiOff className="size-4 shrink-0" />
           {ortu}
         </div>
       )}
