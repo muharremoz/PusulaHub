@@ -356,43 +356,6 @@ namespace PusulaConnect
             return Durum();
         }
 
-        /// <summary>
-        /// Kayıtlı şifreyle VPN'i bağlar (DENEYSEL, 0.3.9): ilk seferde FortiClient'a otomatik bağlanma yazılır
-        /// (UAC bir kez), sonra FortiTray yeniden başlatılır; FortiClient kayıtlı şifreyle kendisi bağlanır.
-        /// En çok 40 sn beklenir; bağlanmazsa VPN uygulaması açılır (kullanıcı elle bağlanır).
-        /// </summary>
-        public async Task<object> VpnBaglan()
-        {
-            var tunel = P("tunel") ?? throw new KullaniciHatasi("Profil yok.");
-            if (Fortinet.ExeYolu() == null) throw new KullaniciHatasi("FortiClient kurulu değil.");
-            if (Fortinet.SifreKayitDurumu(tunel) != "kayitli")
-                throw new KullaniciHatasi("VPN şifreniz FortiClient'ta kayıtlı değil. VPN uygulamasında bir kez bağlanıp Save Password'ü işaretleyin.");
-            if (Fortinet.SslVpnBagli()) { await Kontrol(); return Durum(); }
-
-            if (!VpnKurulumu.OtomatikTanimli(tunel))
-            {
-                var kod = await VpnKurulumu.OtomatikYaz(tunel);
-                if (kod == -1) throw new KullaniciHatasi("Yönetici izni verilmedi. VPN'in otomatik bağlanabilmesi için açılan Windows penceresinde \"Evet\"i seçin.");
-                if (kod != 0) { Gunluk.Yaz("Otomatik bağlanma yazılamadı (çıkış " + kod + ")"); VpnAc(); throw new KullaniciHatasi("VPN otomatik bağlanacak şekilde ayarlanamadı; VPN uygulaması açıldı, oradan bağlanın."); }
-            }
-
-            Gunluk.Yaz("VPN bağlantısı tetikleniyor (FortiTray yeniden başlatılıyor)");
-            _ = _servis.Olay("vpn_baglan_tetiklendi");
-            try { Fortinet.TepsiYenidenBaslat(); }
-            catch (Exception e) { throw new KullaniciHatasi("VPN uygulaması yeniden başlatılamadı: " + e.Message); }
-
-            for (var i = 0; i < 80 && !Fortinet.SslVpnBagli(); i++) await Task.Delay(500);
-            var bagli = Fortinet.SslVpnBagli();
-            Gunluk.Yaz("VPN otomatik bağlantı: " + (bagli ? "bağlandı" : "40 sn içinde bağlanmadı"));
-            if (!bagli)
-            {
-                VpnAc();
-                throw new KullaniciHatasi("VPN kendiliğinden bağlanmadı; VPN uygulaması açıldı, Connect'e basarak bağlanın.");
-            }
-            await Kontrol();
-            return Durum();
-        }
-
         public object VpnAc()
         {
             var exe = Fortinet.ExeYolu() ?? throw new KullaniciHatasi("FortiClient kurulu değil.");

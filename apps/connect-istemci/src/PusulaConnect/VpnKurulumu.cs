@@ -65,41 +65,6 @@ namespace PusulaConnect
             if (File.Exists(DurumDosyasi)) File.Replace(gecici, DurumDosyasi, null); else File.Move(gecici, DurumDosyasi);
         }
 
-        // ------------------------------------------------------------ otomatik bağlanma
-
-        private static string OtomatikDosyasi => Path.Combine(Klasor, "otomatik-baglan.txt");
-
-        /// <summary>FortiClient'a otomatik bağlanma bu tünel için yazıldı mı (yönetici adımının bıraktığı işaret).</summary>
-        public static bool OtomatikTanimli(string tunel)
-        {
-            try { return File.Exists(OtomatikDosyasi) && File.ReadAllText(OtomatikDosyasi).Trim() == tunel; }
-            catch { return false; }
-        }
-
-        /// <summary>Normal süreçten: "--vpn-otomatik &lt;tünel&gt;" yönetici olarak; UAC reddedilirse -1, bitince çıkış kodu.</summary>
-        public static async System.Threading.Tasks.Task<int> OtomatikYaz(string tunel)
-        {
-            Process p;
-            try { p = Process.Start(new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, "--vpn-otomatik \"" + tunel + "\"") { Verb = "runas", UseShellExecute = true }); }
-            catch (Win32Exception e) when (e.NativeErrorCode == 1223) { return -1; }
-            using (p)
-            {
-                for (var i = 0; i < 1200 && !p.HasExited; i++) await System.Threading.Tasks.Task.Delay(100);
-                return p.HasExited ? p.ExitCode : -2;
-            }
-        }
-
-        /// <summary>"--vpn-otomatik &lt;tünel&gt;" yönetici süreci.</summary>
-        public static int OtomatikYoneticiOlarak(string[] args)
-        {
-            var i = Array.IndexOf(args, "--vpn-otomatik");
-            var tunel = i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
-            if (string.IsNullOrWhiteSpace(tunel)) return 2;
-            if (!Fortinet.OtomatikBaglanYaz(tunel)) return 1;
-            try { File.WriteAllText(OtomatikDosyasi, tunel); } catch { }
-            return 0;
-        }
-
         /// <summary>"--vpn-kur" ile yönetici olarak çalışan kısım. Pencere açmaz.</summary>
         public static int YoneticiOlarakCalistir()
         {

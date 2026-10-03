@@ -34,7 +34,6 @@ namespace PusulaConnect
         private static int Main(string[] args)
         {
             if (args.Contains("--vpn-kur")) return VpnKurulumu.YoneticiOlarakCalistir();
-            if (args.Contains("--vpn-otomatik")) return VpnKurulumu.OtomatikYoneticiOlarak(args);
             if (args.Contains("--yazici-izin") || args.Contains("--yazici-izin-sil")) return YaziciAjani.YoneticiOlarakCalistir(args);
 
             using (var tekil = new Mutex(false, @"Local\PusulaConnect2"))
@@ -129,7 +128,6 @@ namespace PusulaConnect
                 case "POST /kontrol": return _uygulama.KontrolEt();
                 case "POST /vpn/kur": return Task.FromResult(_uygulama.VpnKur());
                 case "POST /vpn/ac": return Task.FromResult(_uygulama.VpnAc());
-                case "POST /vpn/baglan": return _uygulama.VpnBaglan();
                 case "POST /rdp/sifre": return _uygulama.SifreKaydet(i.Metin("sifre"), i.Metin("kod"));
                 case "POST /rdp/sifre/sil": return _uygulama.SifreSil();
                 case "POST /baglan": return _uygulama.Baglan(i.Metin("kod"));

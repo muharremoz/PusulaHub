@@ -215,15 +215,6 @@ namespace PusulaConnect
                 "<server>" + E(sunucu) + "</server><username>" + E(kullanici) + "</username>" +
                 "<single_user_mode>0</single_user_mode><prompt_certificate>0</prompt_certificate><prompt_username>0</prompt_username>" +
                 "</connection></connections></sslvpn></vpn></forticlient_configuration>\n";
-            if (!FcIceAktar(fcconfig, xml)) return false;
-            var tamam = KullaniciAdiTanimli(tunel) && ProfilDogru(tunel, sunucu);
-            Gunluk.Yaz("VPN kullanıcı adı " + (tamam ? "FortiClient'a yazıldı" : "YAZILAMADI (elle girilecek)"));
-            return tamam;
-        }
-
-        /// <summary>FCConfig ile tek seferlik ayar içe aktarımı (yönetici ister). Tuzaklar: KullaniciAdiYaz'daki not.</summary>
-        private static bool FcIceAktar(string fcconfig, string xml)
-        {
             var dosya = Path.Combine(Path.GetTempPath(), "PusulaConnect2", "vpn-" + Guid.NewGuid().ToString("N") + ".conf");
             Directory.CreateDirectory(Path.GetDirectoryName(dosya));
             File.WriteAllText(dosya, xml, new System.Text.UTF8Encoding(false));
@@ -240,8 +231,10 @@ namespace PusulaConnect
                     var cikti = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
                     if (!p.WaitForExit(60000)) { try { p.Kill(); } catch { } Gunluk.Yaz("FCConfig zaman aşımı"); return false; }
                     Gunluk.Yaz("FCConfig çıkış " + p.ExitCode + ": " + cikti.Replace("\r", " ").Replace("\n", " ").Trim());
-                    return p.ExitCode == 0;
                 }
+                var tamam = KullaniciAdiTanimli(tunel) && ProfilDogru(tunel, sunucu);
+                Gunluk.Yaz("VPN kullanıcı adı " + (tamam ? "FortiClient'a yazıldı" : "YAZILAMADI (elle girilecek)"));
+                return tamam;
             }
             catch (Exception e)
             {
@@ -249,46 +242,6 @@ namespace PusulaConnect
                 return false;
             }
             finally { try { File.Delete(dosya); } catch { } }
-        }
-
-        // ------------------------------------------------------------ otomatik bağlanma (kayıtlı şifreyle)
-
-        /// <summary>
-        /// FortiClient VPN 7.0'da bağlantıyı başlatan komut yok. Kendi "Auto Connect" özelliği var: tepsi bileşeni
-        /// (FortiTray) açılırken vpn/options/autoconnect_tunnel'daki tüneli, şifre kayıtlıysa kendisi bağlar.
-        /// Bu ayar FCConfig ile yazılır (yönetici); sonrasında FortiTray yeniden başlatılarak bağlantı tetiklenir.
-        /// Yan etki: FortiClient Windows açılışında da bu tünele bağlanır.
-        /// </summary>
-        public static bool OtomatikBaglanYaz(string tunel)
-        {
-            var exe = ExeYolu();
-            if (exe == null) return false;
-            var fcconfig = Path.Combine(Path.GetDirectoryName(exe), "FCConfig.exe");
-            if (!File.Exists(fcconfig)) { Gunluk.Yaz("FCConfig.exe yok: " + fcconfig); return false; }
-            var xml =
-                "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n" +
-                "<forticlient_configuration><vpn><options>" +
-                "<autoconnect_tunnel>" + System.Security.SecurityElement.Escape(tunel) + "</autoconnect_tunnel>" +
-                "<autoconnect_only_when_offnet>0</autoconnect_only_when_offnet>" +
-                "</options></vpn></forticlient_configuration>\n";
-            var tamam = FcIceAktar(fcconfig, xml);
-            Gunluk.Yaz("FortiClient otomatik bağlanma (" + tunel + "): " + (tamam ? "yazıldı" : "YAZILAMADI"));
-            return tamam;
-        }
-
-        /// <summary>FortiTray'i (kullanıcı oturumunda, kullanıcının hesabıyla çalışır) yeniden başlatır — otomatik bağlanma bu açılışta tetiklenir.</summary>
-        public static void TepsiYenidenBaslat()
-        {
-            var exe = ExeYolu() ?? throw new Exception("FortiClient kurulu değil.");
-            var tepsi = Path.Combine(Path.GetDirectoryName(exe), "FortiTray.exe");
-            if (!File.Exists(tepsi)) throw new Exception("FortiTray bulunamadı.");
-            foreach (var p in Process.GetProcessesByName("FortiTray"))
-            {
-                try { p.Kill(); p.WaitForExit(5000); }
-                catch (Exception e) { Gunluk.Yaz("FortiTray kapatılamadı: " + e.Message); }
-                finally { p.Dispose(); }
-            }
-            Process.Start(new ProcessStartInfo(tepsi) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(tepsi) });
         }
 
         // ------------------------------------------------------------ ARM

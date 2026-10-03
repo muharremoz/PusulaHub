@@ -404,11 +404,6 @@ export function AnaEkran({ durum, setDurum }: P) {
                 </li>
               ) : null}
             </ol>
-            {k.profil.sifre === "kayitli" && (
-              <Button size="sm" className="mr-2" disabled={!!bekle} onClick={() => void cagir("/vpn/baglan")}>
-                {bekle === "/vpn/baglan" ? <Loader2 className="animate-spin" /> : <PlugZap />} {bekle === "/vpn/baglan" ? "Bağlanıyor…" : "VPN'e bağlan"}
-              </Button>
-            )}
             <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
               <ShieldCheck /> VPN uygulamasını aç
             </Button>
