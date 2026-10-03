@@ -16,11 +16,7 @@ import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
-import { ParlayanLogo } from "./ortak";
-
-/** Destek formu (PusulaWeb-v2 /destek-talebi). ?firmaid=<firkod> ile firma adı, yetkili ve telefon CRM'den dolar. */
-const TALEP_ADRESI = "https://talep.pusulanet.net";
-const talepAdresi = (firmaId?: string) => (firmaId ? `${TALEP_ADRESI}/?firmaid=${encodeURIComponent(firmaId)}` : TALEP_ADRESI);
+import { OrtaBaslik, ParlayanLogo, talepAdresi } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -754,12 +750,3 @@ function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir }: { bagli: boolean; k
 
 
 /** Orta panelin üst şeridi — başlık ortada; solda/sağda isteğe bağlı düğmeler (yardım talebi görünümü). */
-function OrtaBaslik({ sol, baslik, sag }: { sol?: React.ReactNode; baslik: string; sag?: React.ReactNode }) {
-  return (
-    <header className="grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b bg-card px-6">
-      <div className="flex justify-start">{sol}</div>
-      <h1 className="text-base font-semibold">{baslik}</h1>
-      <div className="flex justify-end">{sag}</div>
-    </header>
-  );
-}

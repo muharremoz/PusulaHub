@@ -4,6 +4,20 @@ import { api } from "@/api";
 import pusulaLogo from "@/assets/pusula-logo.png";
 
 /** Ortalanmış giriş kartı — giriş, bağlantı ve bekleme ekranları. */
+/** Destek formu (PusulaWeb-v2 /destek-talebi). ?firmaid=<firkod> ile firma adı, yetkili ve telefon CRM'den dolar. */
+export const TALEP_ADRESI = "https://talep.pusulanet.net";
+export const talepAdresi = (firmaId?: string) => (firmaId ? `${TALEP_ADRESI}/?firmaid=${encodeURIComponent(firmaId)}` : TALEP_ADRESI);
+
+export function OrtaBaslik({ sol, baslik, sag }: { sol?: ReactNode; baslik: string; sag?: ReactNode }) {
+  return (
+    <header className="grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b bg-card px-6">
+      <div className="flex justify-start">{sol}</div>
+      <h1 className="text-base font-semibold">{baslik}</h1>
+      <div className="flex justify-end">{sag}</div>
+    </header>
+  );
+}
+
 export function Kabuk({ children, genis }: { children: ReactNode; genis?: boolean }) {
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
