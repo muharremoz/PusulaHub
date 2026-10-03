@@ -68,8 +68,6 @@ export type Profil = {
   domain: string;
   msiurl: string;
   msiurlArm: string;
-  /** Firmanın CRM'deki şehri (ham; il-koordinatlari ile çözülür). Eski kayıtlarda yok. */
-  sehir?: string | null;
 };
 
 export type Duyuru = {

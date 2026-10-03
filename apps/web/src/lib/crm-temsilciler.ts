@@ -23,15 +23,13 @@ export interface CrmTemsilci {
 interface CrmYanit {
   ok?:       boolean
   toplam?:   number
-  firmalar?: { firkod: string; sehir?: string | null; temsilci: CrmTemsilci | null; ekTemsilci?: CrmTemsilci | null }[]
+  firmalar?: { firkod: string; temsilci: CrmTemsilci | null; ekTemsilci?: CrmTemsilci | null }[]
 }
 
 interface Haritalar {
   temsilci: Map<string, CrmTemsilci>
   /** CRM'deki ek temsilci (customers.secondary_manager_id) — ör. EMRE + BILKAR */
   ek:       Map<string, CrmTemsilci>
-  /** CRM'deki firma şehri (customers.city, PARS'tan ham) — Connect dünyasında firmanın ili */
-  sehir:    Map<string, string>
 }
 
 const TTL_MS = 15 * 60_000
@@ -50,12 +48,11 @@ async function cek(): Promise<Haritalar> {
   })
   if (!r.ok) throw new Error(`CRM ${r.status}`)
   const j = (await r.json()) as CrmYanit
-  const harita: Haritalar = { temsilci: new Map(), ek: new Map(), sehir: new Map() }
+  const harita: Haritalar = { temsilci: new Map(), ek: new Map() }
   for (const f of j.firmalar ?? []) {
     if (!f.firkod) continue
     if (f.temsilci?.id) harita.temsilci.set(String(f.firkod), f.temsilci)
     if (f.ekTemsilci?.id) harita.ek.set(String(f.firkod), f.ekTemsilci)
-    if (f.sehir?.trim()) harita.sehir.set(String(f.firkod), f.sehir.trim())
   }
   return harita
 }
@@ -73,11 +70,6 @@ export async function firmaEkTemsilcileri(): Promise<Map<string, CrmTemsilci>> {
   return (await haritalar()).ek
 }
 
-/** firkod → CRM'deki şehir (ham). Aynı istek/önbellekten; CRM'e ulaşılamazsa ya da şehir yoksa null. */
-export async function firmaSehri(firkod: string): Promise<string | null> {
-  return (await haritalar()).sehir.get(String(firkod)) ?? null
-}
-
 async function haritalar(): Promise<Haritalar> {
   if (onbellek && Date.now() - onbellek.t < TTL_MS) return onbellek.harita
   // Aynı anda gelen isteklerde tek çağrı yapılsın (1,1 MB yanıt).
@@ -86,7 +78,7 @@ async function haritalar(): Promise<Haritalar> {
       .then((harita) => { onbellek = { t: Date.now(), harita }; return harita })
       .catch((err) => {
         console.error("[crm-temsilciler]", err instanceof Error ? err.message : err)
-        return onbellek?.harita ?? { temsilci: new Map<string, CrmTemsilci>(), ek: new Map<string, CrmTemsilci>(), sehir: new Map<string, string>() }
+        return onbellek?.harita ?? { temsilci: new Map<string, CrmTemsilci>(), ek: new Map<string, CrmTemsilci>() }
       })
       .finally(() => { akan = null })
   }

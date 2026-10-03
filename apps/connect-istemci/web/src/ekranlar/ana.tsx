@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
-import { AgArkaplan } from "@/components/ag-arkaplan";
 import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
@@ -194,9 +193,8 @@ export function AnaEkran({ durum, setDurum }: P) {
           <iframe src={talepAdresi(kayit.firmaId)} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
         </main>
       ) : (
-      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-      <AgArkaplan bagli={k.terminal.erisim} sehir={kayit.profil.sehir} />
-      <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto">
+      <main className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
