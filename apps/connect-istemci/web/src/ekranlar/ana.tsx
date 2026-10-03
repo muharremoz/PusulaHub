@@ -368,7 +368,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         {vpnHazir && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
           <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
             <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
-              <li>FortiClient'ı açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
+              <li>VPN uygulamasını (FortiClient) açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
               <li>
                 {k.profil.kullaniciAdi ? (
                   <>Kullanıcı adınız hazır (<span className="font-medium">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
@@ -387,7 +387,7 @@ export function AnaEkran({ durum, setDurum }: P) {
               </li>
             </ol>
             <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
-              <ShieldCheck /> FortiClient'ı aç
+              <ShieldCheck /> VPN uygulamasını aç
             </Button>
           </Bolum>
         )}
@@ -437,7 +437,7 @@ export function AnaEkran({ durum, setDurum }: P) {
               </span>
               {k.forti.kurulu && (
                 <Button size="sm" variant="outline" className="self-start" onClick={() => void cagir("/vpn/ac")}>
-                  <ShieldCheck /> FortiClient'ı aç
+                  <ShieldCheck /> VPN uygulamasını aç
                 </Button>
               )}
             </AlertDescription>
@@ -668,7 +668,7 @@ function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir }: { bagli: boolean; k
             : !kontrolEdildi
               ? "Pusula sunucusuna erişim deneniyor."
               : vpnHazir
-                ? "Pusula sunucusuna ulaşılamıyor. FortiClient'ı açıp Pusula bağlantısına bağlanın."
+                ? "Pusula sunucusuna ulaşılamıyor. VPN uygulamasını açıp Pusula bağlantısına bağlanın."
                 : "Pusula sunucusuna ulaşmak için önce VPN programını kurun, ardından FortiClient ile bağlanın."}
         </p>
       </div>
