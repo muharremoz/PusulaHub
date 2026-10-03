@@ -371,11 +371,15 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        {/* Kenarda dönen ışık (border-beam); düğme pasifken durur. Düğme koyu (açık temada siyah) → beam "dark" */}
+        {/* border-beam: düğmenin çevresinde nefes alan renkli hale; pasifken durur. Hale zemine taştığı için tema zemine göre */}
         <BorderBeam
           className="w-full"
-          size="md"
-          theme={document.documentElement.classList.contains("dark") ? "light" : "dark"}
+          size="pulse-outside"
+          brightness={2.2}
+          saturation={1.6}
+          glowSize={1.6}
+          duration={2.6}
+          theme={document.documentElement.classList.contains("dark") ? "dark" : "light"}
           active={!bekle && k.rdpSifre.kayitli}
         >
           <Button size="lg" className="h-14 w-full rounded-lg text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
