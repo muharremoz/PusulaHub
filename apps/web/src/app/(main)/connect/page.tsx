@@ -109,6 +109,7 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   sifre_iletildi: { ad: "Şifre Hub'dan iletildi", ton: "notr" },
   sifre_guncellendi: { ad: "Şifre Pusula'dan alındı", ton: "iyi" },
   sifre_gosterildi: { ad: "Şifre ekranda gösterildi", ton: "uyari" },
+  vpn_baglan_tetiklendi: { ad: "VPN otomatik bağlantı tetiklendi", ton: "notr" },
   token_yenilendi: { ad: "Cihaz tokenı yenilendi", ton: "notr" },
   duyuru_kaldirildi: { ad: "Duyuru kaldırıldı", ton: "notr" },
 }

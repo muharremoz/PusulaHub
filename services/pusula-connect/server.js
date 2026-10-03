@@ -751,7 +751,7 @@ fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {
 })
 
 /** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
-const ISTEMCI_OLAYLARI = new Set(["oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
+const ISTEMCI_OLAYLARI = new Set(["vpn_baglan_tetiklendi", "oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
   "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
 fastify.post("/api/olay", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
