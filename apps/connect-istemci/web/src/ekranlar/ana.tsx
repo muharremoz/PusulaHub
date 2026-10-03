@@ -223,7 +223,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         squareSize={4}
         gridGap={6}
         flickerChance={0.12}
-        maxOpacity={0.28}
+        maxOpacity={0.15}
         color={k.terminal.erisim ? "#10b981" : "#64748b"}
       />
       <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto">
