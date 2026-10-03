@@ -159,6 +159,27 @@ namespace PusulaConnect
         }
 
         /// <summary>FortiClient bu tünel için kullanıcı adı saklıyor mu (DATA1 — makineye bağlı şifreli).</summary>
+        /// <summary>
+        /// FortiClient'ta bu tünelin şifresi kaydedilmiş mi — Windows kullanıcısına özel kopyadan (HKCU) okunur;
+        /// şifrenin kendisi okunmaz. FortiClient VPN 7.0.14'te (03.10.2026) görülen değerler:
+        ///   SavePass=1 + DATA2 dolu  → "Save Password" işaretli, şifre kayıtlı      → "kayitli"
+        ///   show_remember_password=1 → FortiGate kutuyu gösteriyor ama işaretsiz    → "isaretsiz"
+        ///   ikisi de yok              → ilk bağlantı henüz yapılmamış, kutu çıkmadı → "yok"
+        /// </summary>
+        public static string SifreKayitDurumu(string tunel)
+        {
+            try
+            {
+                using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Fortinet\FortiClient\Sslvpn\Tunnels\" + tunel))
+                {
+                    if (k == null) return "yok";
+                    if (Convert.ToInt32(k.GetValue("SavePass") ?? 0) == 1 && !string.IsNullOrEmpty(k.GetValue("DATA2") as string)) return "kayitli";
+                    return Convert.ToInt32(k.GetValue("show_remember_password") ?? 0) == 1 ? "isaretsiz" : "yok";
+                }
+            }
+            catch { return "yok"; }
+        }
+
         public static bool KullaniciAdiTanimli(string tunel)
         {
             try

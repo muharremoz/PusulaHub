@@ -36,6 +36,7 @@ namespace PusulaConnect
         private DateTime _terminalZaman;
         private string _rdpKullanici;
         private bool _vpnKullaniciAdi;      // FortiClient'ta bu tünel için kullanıcı adı kayıtlı mı
+        private string _vpnSifre = "yok";   // FortiClient'ta şifre: kayitli | isaretsiz | yok (Fortinet.SifreKayitDurumu)
         private bool _vpnKuruluyor;
         private JObject _vpnDurum;
         private string _sonSurum;
@@ -241,7 +242,7 @@ namespace PusulaConnect
                     kontroller = new
                     {
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
-                        profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi },
+                        profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s") },
                         rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici },
                     },
@@ -324,10 +325,11 @@ namespace PusulaConnect
                 // 2FA açıkken kasa anahtarlı dosyada, kapalıyken yerel DPAPI dosyasında
                 var rdpKullanici = (IkiAktif ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar) ? _kayit?.Value<string>("kullanici") : null;
                 var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
+                var vpnSifre = P("tunel") != null ? Fortinet.SifreKayitDurumu(P("tunel")) : "yok";
                 var t = rdp != null ? await Rdp.Yokla(rdp, RdpPort) : (false, 0, "profil yok");
                 lock (_kilit)
                 {
-                    _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici; _vpnKullaniciAdi = vpnKullaniciAdi;
+                    _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici; _vpnKullaniciAdi = vpnKullaniciAdi; _vpnSifre = vpnSifre;
                     _terminal = t; _terminalZaman = DateTime.Now;
                 }
             }
@@ -591,7 +593,7 @@ namespace PusulaConnect
                         terminal = new { erisim = _terminal.erisim, ms = _terminal.ms },
                         os = WindowsSurumu(),
                         forti = _fortiSurum,
-                        vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi },
+                        vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         sifreKayitli = _rdpKullanici != null,
                         ayarlar = Ayarlar.Simdiki.Gorunum(),
                     };

@@ -16,7 +16,8 @@ export interface ConnectAyarlar {
 export interface ConnectCihazDurum {
   os: string | null
   forti: string | null
-  vpnProfil: { dogru: boolean; kullaniciAdi: boolean } | null
+  /** sifre: FortiClient'ta VPN şifresi kayıtlı mı (0.3.9+; eski istemcide yok) */
+  vpnProfil: { dogru: boolean; kullaniciAdi: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" } | null
   sifreKayitli: boolean | null
   ayarlar: ConnectAyarlar | null
 }

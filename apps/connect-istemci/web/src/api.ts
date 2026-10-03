@@ -90,7 +90,8 @@ export type Durum = {
   kontroller: {
     forti: { kurulu: boolean; surum: string | null };
     /** kullaniciAdi: FortiClient bu tünel için kullanıcı adını saklıyor mu (FCConfig ile yazılır). */
-    profil: { dogru: boolean; kullaniciAdi?: boolean };
+    /** sifre: FortiClient'ta şifre kayıtlı mı — kayitli | isaretsiz (Save Password kutusu var, işaretsiz) | yok (kutu henüz çıkmadı). */
+    profil: { dogru: boolean; kullaniciAdi?: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" };
     terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null };
     rdpSifre: { kayitli: boolean; kullanici: string | null };
   };

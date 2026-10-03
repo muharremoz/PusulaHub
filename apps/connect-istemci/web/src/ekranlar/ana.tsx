@@ -380,21 +380,29 @@ export function AnaEkran({ durum, setDurum }: P) {
             <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
               <li>VPN uygulamasını (FortiClient) açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
               <li>
-                {k.profil.kullaniciAdi ? (
+                {k.profil.sifre === "kayitli" ? (
+                  <>Kullanıcı adınız ve şifreniz FortiClient'ta kayıtlı; yalnız <b>Connect</b>'e basın.</>
+                ) : k.profil.kullaniciAdi ? (
                   <>Kullanıcı adınız hazır (<span className="font-medium">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
                 ) : (
                   <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
                 )}
               </li>
-              {k.rdpSifre.kayitli && (
+              {k.rdpSifre.kayitli && k.profil.sifre !== "kayitli" && (
                 <li className="list-none">
                   <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
                 </li>
               )}
-              <li className="text-muted-foreground">
-                İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
-                sorulmaz.
-              </li>
+              {k.profil.sifre === "isaretsiz" ? (
+                <li className="font-medium text-amber-700 dark:text-amber-400">
+                  Bağlanırken <b>Save Password</b> kutusunu işaretleyin; şifre bir daha sorulmaz.
+                </li>
+              ) : k.profil.sifre !== "kayitli" ? (
+                <li className="text-muted-foreground">
+                  İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
+                  sorulmaz.
+                </li>
+              ) : null}
             </ol>
             <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
               <ShieldCheck /> VPN uygulamasını aç

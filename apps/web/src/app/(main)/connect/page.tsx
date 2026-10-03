@@ -685,6 +685,11 @@ function CihazDetay({
                 <Bilgi ad="FortiClient">{c.durum?.forti ?? "—"}</Bilgi>
                 <Bilgi ad="VPN profili">
                   {c.durum?.vpnProfil == null ? "—" : c.durum.vpnProfil.dogru ? (c.durum.vpnProfil.kullaniciAdi ? "Hazır · kullanıcı adı tanımlı" : "Hazır · kullanıcı adı yok") : "Eksik"}
+                  {c.durum?.vpnProfil?.sifre && (
+                    <span className={c.durum.vpnProfil.sifre === "kayitli" ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400"}>
+                      {" · "}{c.durum.vpnProfil.sifre === "kayitli" ? "şifre kayıtlı" : c.durum.vpnProfil.sifre === "isaretsiz" ? "şifre kaydedilmemiş" : "şifre kutusu henüz çıkmadı"}
+                    </span>
+                  )}
                 </Bilgi>
                 <Bilgi ad="Sunucu">{c.rdp ?? "—"}</Bilgi>
                 <Bilgi ad="Sunucuya erişim">
