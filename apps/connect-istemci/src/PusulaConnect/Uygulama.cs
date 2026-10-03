@@ -62,6 +62,9 @@ namespace PusulaConnect
             _servis.Token = token;
             _kayit = Kimlik.Profil();
             _asama = _kayit != null ? "hazir" : "kayit";
+            // Yerel denetim (FortiClient, VPN ayarı, şifre, sunucu) diskteki profille hemen başlar — servisten
+            // profilin gelmesini beklerse ilk ekran birkaç saniye boş/yanlış görünüyordu. ProfilTazele sonra yeniden denetler.
+            if (_kayit != null) _ = Task.Run(Kontrol);
             _ = Task.Run(ProfilTazele);
         }
 
@@ -335,9 +338,11 @@ namespace PusulaConnect
 
         private int _kontrolSuruyor;
 
+        private int _kontrolTekrar;   // denetim sürerken yeni istek geldi (ör. profil değişti) → bitince bir kez daha
+
         public async Task Kontrol()
         {
-            if (Interlocked.Exchange(ref _kontrolSuruyor, 1) == 1) return;
+            if (Interlocked.Exchange(ref _kontrolSuruyor, 1) == 1) { Interlocked.Exchange(ref _kontrolTekrar, 1); return; }
             try
             {
                 var rdp = P("rdp");
@@ -354,7 +359,11 @@ namespace PusulaConnect
                     _terminal = t; _terminalZaman = DateTime.Now;
                 }
             }
-            finally { Interlocked.Exchange(ref _kontrolSuruyor, 0); }
+            finally
+            {
+                Interlocked.Exchange(ref _kontrolSuruyor, 0);
+                if (Interlocked.Exchange(ref _kontrolTekrar, 0) == 1) _ = Task.Run(Kontrol);
+            }
             await NabizGonder(false);
         }
 

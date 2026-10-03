@@ -90,7 +90,10 @@ export function AnaEkran({ durum, setDurum }: P) {
   };
 
   const vk = durum.vpnKurulum;
-  const sifreGoster = !k.rdpSifre.kayitli;
+  // İlk denetim (FortiClient, VPN ayarı, şifre, sunucu) bitene kadar değerler henüz okunmadı — "yok" sayılmaz;
+  // kartlar "Kontrol ediliyor…" gösterir, Kur/şifre bölümleri açılmaz. Denetim tüm alanları birlikte yazar.
+  const denetlendi = !!k.terminal.zaman;
+  const sifreGoster = denetlendi && !k.rdpSifre.kayitli;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
@@ -309,9 +312,9 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Kart
             ikon={<ShieldCheck />}
             baslik="VPN programı"
-            durum={k.forti.kurulu ? "iyi" : "hata"}
-            deger={k.forti.kurulu ? "FortiClient" : "Kurulu değil"}
-            alt={k.forti.kurulu ? `Sürüm ${k.forti.surum ?? "—"}` : "Aşağıdaki Kur düğmesiyle kurulur"}
+            durum={!denetlendi ? "bekliyor" : k.forti.kurulu ? "iyi" : "hata"}
+            deger={!denetlendi ? "Kontrol ediliyor…" : k.forti.kurulu ? "FortiClient" : "Kurulu değil"}
+            alt={!denetlendi ? "Bir saniye…" : k.forti.kurulu ? `Sürüm ${k.forti.surum ?? "—"}` : "Aşağıdaki Kur düğmesiyle kurulur"}
             aksiyon={
               k.forti.kurulu && (
                 <Button size="sm" variant="outline" className="ml-auto h-6 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3" disabled={bekle === "/vpn/ac"} onClick={() => void cagir("/vpn/ac")}>
@@ -323,9 +326,9 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Kart
             ikon={<Network />}
             baslik="VPN ayarı"
-            durum={!k.profil.dogru ? "hata" : k.profil.kullaniciAdi ? "iyi" : "uyari"}
-            deger={!k.profil.dogru ? "Eksik" : k.profil.kullaniciAdi ? "Hazır" : "Kullanıcı adı yok"}
-            alt={!k.profil.dogru ? "VPN bağlantısı tanımlı değil" : `${kayit.profil.tunel}${k.profil.kullaniciAdi ? " · kullanıcı adı tanımlı" : ""}`}
+            durum={!denetlendi ? "bekliyor" : !k.profil.dogru ? "hata" : k.profil.kullaniciAdi ? "iyi" : "uyari"}
+            deger={!denetlendi ? "Kontrol ediliyor…" : !k.profil.dogru ? "Eksik" : k.profil.kullaniciAdi ? "Hazır" : "Kullanıcı adı yok"}
+            alt={!denetlendi ? "Bir saniye…" : !k.profil.dogru ? "VPN bağlantısı tanımlı değil" : `${kayit.profil.tunel}${k.profil.kullaniciAdi ? " · kullanıcı adı tanımlı" : ""}`}
           />
           <Kart
             ikon={<Server />}
@@ -342,13 +345,13 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Kart
             ikon={<KeyRound />}
             baslik="Oturum şifresi"
-            durum={k.rdpSifre.kayitli ? "iyi" : "hata"}
-            deger={k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
-            alt={!k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
+            durum={!denetlendi ? "bekliyor" : k.rdpSifre.kayitli ? "iyi" : "hata"}
+            deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
+            alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
         </div>
 
-        {(!vpnHazir || vk.suruyor || vk.durum?.hata) && (
+        {((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (
           <Bolum baslik={vk.suruyor ? "VPN ayarı güncelleniyor" : k.forti.kurulu ? "VPN ayarını güncelleyin" : "VPN programını kur"} ikon={<ShieldCheck />}>
             {vk.suruyor ? (
               <div className="flex flex-col gap-2">
@@ -376,7 +379,7 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Bolum>
         )}
 
-        {vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
+        {denetlendi && vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
           <Bolum baslik="Kullanıcı adını FortiClient'a tanımlayın" ikon={<ShieldCheck />}>
             <p className="mb-3 text-sm text-muted-foreground">
               FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-medium">{kayit.kullanici}</span>)
