@@ -496,7 +496,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         </TableRow>
                       )}
                       {sayfadakiler.map((v) => (
-                        <TableRow key={v.ad} data-state={secili.has(v.ad) ? "selected" : undefined}>
+                        <TableRow
+                          key={v.ad}
+                          data-state={secili.has(v.ad) ? "selected" : undefined}
+                          // Satıra tıklayınca işaretlenir; içerideki kutu / düğmeler kendi işini yapar (çift değişmesin)
+                          className={v.durum === "ONLINE" ? "cursor-pointer" : undefined}
+                          onClick={(e) => {
+                            if (v.durum !== "ONLINE") return;
+                            if ((e.target as HTMLElement).closest("button, input, a, [role=checkbox], [role=radio], [role=group]")) return;
+                            setSecili((s) => setDegistir(s, v.ad, !s.has(v.ad)));
+                          }}
+                        >
                           <TableCell className="py-1 pl-3">
                             <Checkbox
                               checked={secili.has(v.ad)}
@@ -573,10 +583,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     <Checkbox className="mt-0.5" checked={veritabanlariAyir} onCheckedChange={(c) => setVeritabanlariAyir(c === true)} />
                     <span>
                       <span className="font-medium">Aktarım bitince veritabanlarını bu SQL Server'dan ayır (detach)</span>
-                      <span className="block text-xs text-muted-foreground">
-                        Pusula aktarımı tamamladıktan sonra aktarılan veritabanları ayrılır; programınız artık bu verilere bağlanamaz.
-                        Veri dosyaları (.mdf/.ldf) silinmez, gerekirse yeniden bağlanabilir.
-                      </span>
                     </span>
                   </label>
                 </Bolum>
