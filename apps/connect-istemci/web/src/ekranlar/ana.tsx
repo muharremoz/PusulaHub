@@ -127,6 +127,7 @@ export function AnaEkran({ durum, setDurum }: P) {
                         · {durum.yazdirma.vpnIp}{vpnIpSabitMi(durum.yazdirma.vpnIp) ? "" : " (sabit değil)"}
                       </span>
                     )}
+                    {durum.yazdirma.vpnIp && <KopyalaIkon metin={durum.yazdirma.vpnIp} etiket="VPN IP adresini kopyala" />}
                   </span>
                 }
               />
@@ -601,6 +602,27 @@ function Bolum({ baslik, ikon, children }: { baslik: string; ikon: React.ReactNo
       </h2>
       {children}
     </section>
+  );
+}
+
+/** Yalnız ikon: tıklanınca metni panoya kopyalar, kısa süre onay işareti gösterir. */
+function KopyalaIkon({ metin, etiket }: { metin: string; etiket: string }) {
+  const [tamam, setTamam] = useState(false);
+  return (
+    <button
+      type="button"
+      title={tamam ? "Kopyalandı" : etiket}
+      aria-label={etiket}
+      className="inline-flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground [&_svg]:size-3.5"
+      onClick={() => {
+        void navigator.clipboard?.writeText(metin).then(() => {
+          setTamam(true);
+          window.setTimeout(() => setTamam(false), 1500);
+        });
+      }}
+    >
+      {tamam ? <Check className="text-emerald-600 dark:text-emerald-400" /> : <Copy />}
+    </button>
   );
 }
 
