@@ -551,6 +551,8 @@ namespace PusulaConnect
                 }
                 var yanit = await _servis.Nabiz(durum);
                 _sonNabizGonderim = DateTime.Now;
+                // Açılışta servis yoktuysa "ulaşılamadı" uyarısı kalıyordu: başarılı nabız kaldırır
+                lock (_kilit) _servisErisim = true;
                 // Yayındaki duyurular ya da okunma durumları değiştiyse listeyi yeniden çek
                 var pImza = yanit.Value<string>("profilImza");
                 string bilinenImza; lock (_kilit) bilinenImza = _profilImza;
@@ -559,6 +561,7 @@ namespace PusulaConnect
                 string onceki; lock (_kilit) onceki = _duyuruImza;
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));
             }
+            catch (ServisHatasi e) when (e.DurumKodu == 0) { lock (_kilit) _servisErisim = false; /* ağ yok: sonra tekrar */ }
             catch { /* servis yoksa sonra tekrar */ }
             finally { Interlocked.Exchange(ref _nabizSuruyor, 0); }
         }
