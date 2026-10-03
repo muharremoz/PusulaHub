@@ -17,7 +17,7 @@ export function Kabuk({ children, genis, altLogo = true }: { children: ReactNode
 }
 
 /** Pusula logosu + üzerinden geçen ışık (Connect ile aynı). Işık logonun şekliyle maskelenir, dışına taşmaz. */
-export function ParlayanLogo() {
+export function ParlayanLogo({ yukseklik = "h-14" }: { yukseklik?: string }) {
   const maske = {
     WebkitMaskImage: `url(${pusulaLogo})`, maskImage: `url(${pusulaLogo})`,
     WebkitMaskSize: "contain", maskSize: "contain",
@@ -31,7 +31,7 @@ export function ParlayanLogo() {
         <img
           src={pusulaLogo}
           alt="Pusula Yazılım"
-          className="relative h-14 w-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.35)] select-none"
+          className={`relative ${yukseklik} w-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.35)] select-none`}
           draggable={false}
         />
         <div className="pointer-events-none absolute inset-0 overflow-hidden" style={maske} aria-hidden>
