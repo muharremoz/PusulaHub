@@ -53,27 +53,35 @@ export function AyarlarIcerik({
   // Anahtar tıklanınca hemen döner (kayıt arkada); kilitlenmez — "engel" imleci çıkmasın.
   // Kayıt başarısız olursa sunucudaki değere geri döner.
   const [yerel, setYerel] = useState<Partial<Record<AyarAdi, boolean>>>({});
-  const degistir = async (ad: AyarAdi, deger: boolean) => {
-    setYerel((y) => ({ ...y, [ad]: deger }));
+  // Birden çok ayar tek istekte (iki adımlı doğrulama seçenekleri birlikte değişebilir).
+  const degistirCok = async (degerler: Partial<Record<AyarAdi, boolean>>) => {
+    setYerel((y) => ({ ...y, ...degerler }));
     setHata(null);
     try {
-      setDurum(await api<Durum>("/ayarlar", { [ad]: deger }));
+      setDurum(await api<Durum>("/ayarlar", degerler));
     } catch (e) {
       setHata((e as Error).message);
     } finally {
       setYerel((y) => {
-        const { [ad]: _, ...kalan } = y;
+        const kalan = { ...y };
+        for (const k of Object.keys(degerler)) delete kalan[k as AyarAdi];
         return kalan;
       });
     }
   };
+  const degistir = (ad: AyarAdi, deger: boolean) => degistirCok({ [ad]: deger });
 
-  // İki adımlı doğrulama seçenekleri: en az biri açık kalır (sonuncusu kapatılamaz).
+  // İki adımlı doğrulama seçenekleri: en az biri açık kalır — biri kapatılınca diğeri kapalıysa kendiliğinden açılır.
   const ikiDeger = (ad: "ikiAcilis" | "ikiBaglanti") => yerel[ad] ?? (ad === "ikiBaglanti" ? ay?.ikiBaglanti ?? true : !!ay?.ikiAcilis);
   const ikiAnahtar = (ad: "ikiAcilis" | "ikiBaglanti") => {
-    const acik = ikiDeger(ad);
-    const digeri = ikiDeger(ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis");
-    return <Switch checked={acik} disabled={!ay || (acik && !digeri)} onCheckedChange={(v) => void degistir(ad, v)} />;
+    const digerAd = ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis";
+    return (
+      <Switch
+        checked={ikiDeger(ad)}
+        disabled={!ay}
+        onCheckedChange={(v) => void degistirCok(!v && !ikiDeger(digerAd) ? { [ad]: false, [digerAd]: true } : { [ad]: v })}
+      />
+    );
   };
 
   const anahtar = (ad: AyarAdi) => (
