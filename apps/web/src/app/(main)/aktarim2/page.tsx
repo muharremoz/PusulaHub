@@ -23,10 +23,7 @@ import {
 import { copyToClipboard } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import {
-  AlertTriangle, Ban, Copy, Database, Eye, FolderOpen, Image as ImageIcon, KeyRound, MonitorDown,
-  MoreVertical, Plus, RotateCw, Server, Trash2,
-} from "lucide-react"
+import { AlertTriangle, Ban, Copy, Database, Eye, FolderOpen, Image as ImageIcon, KeyRound, MonitorDown, MoreVertical, Plus, RotateCw, Server, Trash2, Download, Link2 } from "lucide-react"
 import type { Aktarim2Detay, Aktarim2Durum, Aktarim2Kesif, Aktarim2Oturum } from "@/lib/aktarim2-proxy"
 
 interface FirmaItem { firkod: string; firma: string; windowsServerId?: string | null }
@@ -58,6 +55,9 @@ const tarih = (s: string | null) => (s ? new Date(s.replace(" ", "T") + "Z") : n
 const zamanMetni = (s: string | null) => tarih(s)?.toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" }) ?? "—"
 const mb = (x: number) =>
   x >= 1024 ? `${(x / 1024).toLocaleString("tr", { maximumFractionDigits: 1 })} GB` : `${x.toLocaleString("tr", { maximumFractionDigits: 0 })} MB`
+
+/** Aktarım 2 müşteri uygulaması (Pusula Aktarım exe) — servis /v2/indir güncel sürümü verir. */
+const UYGULAMA_INDIR = "https://aktarim.pusulanet.net/v2/indir"
 
 export default function Aktarim2Page() {
   const [items, setItems] = useState<Aktarim2Oturum[]>([])
@@ -108,7 +108,30 @@ export default function Aktarim2Page() {
         baslik="Aktarımlar"
         ikon={<MonitorDown className="size-3.5" />}
         toplam={items.length}
-        aksiyon={<ListeAksiyonButonu onClick={() => setYeniAcik(true)}><Plus className="size-3.5" />Yeni Aktarım</ListeAksiyonButonu>}
+        aksiyon={
+          <div className="flex items-center gap-2">
+            {/* Müşteriye gönderilecek uygulama: servisteki güncel exe (yeni sürüm yayınlanınca bu adres de günceller) */}
+            <a
+              href={UYGULAMA_INDIR}
+              className="hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-[5px] border px-2.5 py-1 text-[12px] font-medium transition-colors"
+            >
+              <Download className="size-3.5" />Uygulamayı indir
+            </a>
+            <button
+              type="button"
+              title="İndirme bağlantısını kopyala"
+              className="hover:bg-muted text-muted-foreground hover:text-foreground inline-flex size-[26px] items-center justify-center rounded-[5px] border transition-colors"
+              onClick={() =>
+                void navigator.clipboard.writeText(UYGULAMA_INDIR)
+                  .then(() => toast.success("İndirme bağlantısı kopyalandı", { description: UYGULAMA_INDIR }))
+                  .catch(() => toast.error("Kopyalanamadı"))
+              }
+            >
+              <Link2 className="size-3.5" />
+            </button>
+            <ListeAksiyonButonu onClick={() => setYeniAcik(true)}><Plus className="size-3.5" />Yeni Aktarım</ListeAksiyonButonu>
+          </div>
+        }
       >
         <div className="overflow-x-auto">
           <table className="w-full text-[14px] font-medium leading-[20px]">
