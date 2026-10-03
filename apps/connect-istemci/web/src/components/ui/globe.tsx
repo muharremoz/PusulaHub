@@ -37,9 +37,12 @@ const GLOBE_CONFIG: COBEOptions = {
 export function Globe({
   className,
   config = GLOBE_CONFIG,
+  salinim,
 }: {
   className?: string
   config?: COBEOptions
+  /** Verilirse sürekli dönmez: config.phi çevresinde ± bu kadar (radyan) salınır — bir yer merkezde kalır. */
+  salinim?: number
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const phiRef = useRef(config.phi)
@@ -79,12 +82,14 @@ export function Globe({
     window.addEventListener("resize", onResize)
     onResize()
 
+    const baslangic = performance.now()
     const globe = createGlobe(canvasRef.current!, {
       ...config,
       width: widthRef.current * 2,
       height: widthRef.current * 2,
       onRender: (state) => {
-        if (!pointerInteracting.current) phiRef.current += 0.005
+        if (salinim != null) phiRef.current = config.phi + Math.sin((performance.now() - baslangic) / 6000) * salinim
+        else if (!pointerInteracting.current) phiRef.current += 0.005
         state.phi = phiRef.current + rs.get()
         state.width = widthRef.current * 2
         state.height = widthRef.current * 2
@@ -96,7 +101,7 @@ export function Globe({
       globe.destroy()
       window.removeEventListener("resize", onResize)
     }
-  }, [rs, config])
+  }, [rs, config, salinim])
 
   return (
     <div
