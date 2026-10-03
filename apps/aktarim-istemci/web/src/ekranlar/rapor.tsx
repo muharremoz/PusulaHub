@@ -450,9 +450,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
                   renk="blue"
                   baslik="Veritabanları"
                   sag={`${r.veritabanlari.length} veritabanı · ${mb(r.veritabanlari.reduce((t, v) => t + v.veriMb, 0))}`}
-                >
-                  <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-                    <div className="relative min-w-48 flex-1">
+                  orta={
+                    <div className="relative">
                       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                       <Input
                         value={arama}
@@ -464,7 +463,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         className="h-8 pl-8 text-sm"
                       />
                     </div>
-                  </div>
+                  }
+                >
                   <Table>
                     <TableHeader>
                       <TableRow className="text-[10px] uppercase tracking-wider">
@@ -996,14 +996,15 @@ const RENK = {
 type Renk = keyof typeof RENK;
 
 function Bolum({
-  ikon, baslik, sag, aksiyon, renk = "slate", children,
-}: { ikon: React.ReactNode; baslik: string; sag?: string; aksiyon?: React.ReactNode; renk?: Renk; children: React.ReactNode }) {
+  ikon, baslik, sag, aksiyon, orta, renk = "slate", children,
+}: { ikon: React.ReactNode; baslik: string; sag?: string; aksiyon?: React.ReactNode; orta?: React.ReactNode; renk?: Renk; children: React.ReactNode }) {
   return (
     <section className="overflow-hidden rounded-lg border bg-card shadow-xs">
       <div className="flex min-h-12 items-center gap-2.5 border-b px-4 py-2">
         <span className={"flex size-7 shrink-0 items-center justify-center rounded-md " + RENK[renk].rozet}>{ikon}</span>
-        <h2 className="text-sm font-semibold">{baslik}</h2>
-        {sag && <span className="ml-auto text-xs text-muted-foreground">{sag}</span>}
+        <h2 className="shrink-0 text-sm font-semibold">{baslik}</h2>
+        {orta && <div className="mx-2 min-w-0 flex-1">{orta}</div>}
+        {sag && <span className={"shrink-0 text-xs text-muted-foreground " + (orta ? "" : "ml-auto")}>{sag}</span>}
         {aksiyon && <div className="ml-auto">{aksiyon}</div>}
       </div>
       {children}
