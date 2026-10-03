@@ -143,6 +143,14 @@ namespace PusulaConnect
         /// <summary>Oturum açık mı (Uygulama.Durum için; her iş parçacığından okunabilir).</summary>
         public bool OturumAcik => _oturum != null;
 
+        /// <summary>Açık oturumu keser (Bitti olayı normal yoldan gelir, arayüz geri döner).</summary>
+        public void OturumKes()
+        {
+            if (IsDisposed) return;
+            if (InvokeRequired) { BeginInvoke((Action)OturumKes); return; }
+            _oturum?.Kes();
+        }
+
         /// <summary>
         /// Uzak masaüstünü pencerenin tamamında açar (arayüz gizlenir). Bitince arayüz geri gelir ve
         /// <paramref name="bitti"/> (mesaj, şifreHatalı) çağrılır. UI iş parçacığında çalışır.

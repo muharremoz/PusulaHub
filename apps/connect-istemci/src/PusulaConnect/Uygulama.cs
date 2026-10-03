@@ -27,6 +27,8 @@ namespace PusulaConnect
         /// </summary>
         public Action<RdpAyar, Action<string, bool, int>> OturumAc;
         public Func<bool> OturumAcikMi;
+        /// <summary>Açık gömülü oturumu keser (kayıt Pusula'dan kapatılınca).</summary>
+        public Action OturumKes;
         private string _oturumMesaji;
 
         // kontroller
@@ -80,9 +82,7 @@ namespace PusulaConnect
             }
             catch (ServisHatasi e) when (e.DurumKodu == 401 || e.DurumKodu == 410)
             {
-                Gunluk.Yaz("Cihaz kaydı geçersiz: " + e.Message);
-                Kimlik.Sil();
-                lock (_kilit) { _kayit = null; _asama = "kayit"; _mesaj = e.Message; }
+                KaydiKapat(e.Message);
             }
             catch (Exception e)
             {
@@ -622,6 +622,31 @@ namespace PusulaConnect
         }
 
         /// <summary>Canlı durum servise: ~60 sn'de bir (Kontrol'den), oturum açılıp kapanınca hemen.</summary>
+        /// <summary>
+        /// Servis kaydı reddetti (kod/cihaz Hub'dan iptal edildi = 410, token geçersiz = 401): açık oturum kesilir,
+        /// bu bilgisayardaki şifreler silinir, kod ekranına dönülür. Eskiden yalnız açılışta bakılıyordu; açık
+        /// uygulama/oturum iptalden sonra çalışmaya devam ediyordu — artık nabızda (~1 dk) da yakalanır.
+        /// </summary>
+        private void KaydiKapat(string mesaj)
+        {
+            string rdp;
+            lock (_kilit)
+            {
+                if (_asama == "kayit" && _kayit == null && _servis.Token == null) return;
+                rdp = P("rdp");
+            }
+            Gunluk.Yaz("Cihaz kaydı Pusula tarafından kapatıldı / geçersiz: " + mesaj);
+            try { if (OturumAcikMi?.Invoke() == true) OturumKes?.Invoke(); } catch (Exception e) { Gunluk.Yaz("Oturum kesilemedi: " + e.Message); }
+            try { if (rdp != null) Rdp.SifreSil(rdp); Rdp.YerelSil(); Rdp.KasaliSil(); } catch (Exception e) { Gunluk.Yaz("Şifreler silinemedi: " + e.Message); }
+            Kimlik.Sil();
+            BilinenSurum = null;
+            lock (_kilit)
+            {
+                _kayit = null; _asama = "kayit"; _mesaj = mesaj; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null;
+                _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false;
+            }
+        }
+
         private async Task NabizGonder(bool zorla)
         {
             if (_servis.Token == null) return;
@@ -665,6 +690,7 @@ namespace PusulaConnect
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));
             }
             catch (ServisHatasi e) when (e.DurumKodu == 0) { lock (_kilit) _servisErisim = false; /* ağ yok: sonra tekrar */ }
+            catch (ServisHatasi e) when (e.DurumKodu == 401 || e.DurumKodu == 410) { KaydiKapat(e.Message); }
             catch { /* servis yoksa sonra tekrar */ }
             finally { Interlocked.Exchange(ref _nabizSuruyor, 0); }
         }

@@ -98,6 +98,7 @@ namespace PusulaConnect
                     var pencere = _pencere;
                     _uygulama.OturumAc = (a, bitti) => pencere.OturumAc(a, bitti);
                     _uygulama.OturumAcikMi = () => !pencere.IsDisposed && pencere.OturumAcik;
+                    _uygulama.OturumKes = () => pencere.OturumKes();
                     GosterOlayiniDinle();
                 }
                 else TarayicidaAc(tamAdres);
