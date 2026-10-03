@@ -82,7 +82,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const r = durum.kesif;
   const oturum = durum.oturum;
   // Tarama ana ekrandan: henüz yapılmadıysa ortada "Taramayı başlat", sürerken ilerleme (ayrı ekran yok)
-  const taraniyor = durum.asama === "kesif";
+  // Tarama arka planda başlar; sunucu "kesif" aşamasını bir sonraki yoklamada bildirir. Arada ekran donuk
+  // kalmasın (ve düğmeye ikinci kez basılmasın) diye istek anından itibaren taranıyor sayılır.
+  // Değer: istek anındaki raporun zamanı ("" = rapor yoktu); null = istek yok. Sunucu "kesif" derse ya da
+  // farklı zamanlı yeni bir rapor gelirse (tarama yoklamadan önce bittiyse) bekleme kalkar.
+  const [taramaIstendi, setTaramaIstendi] = useState<string | null>(null);
+  useEffect(() => {
+    if (taramaIstendi === null) return;
+    const yeniRapor = !!durum.kesif && durum.kesif.zaman !== taramaIstendi;
+    if (durum.asama === "kesif" || yeniRapor || durum.kesifHatasi) setTaramaIstendi(null);
+  }, [durum.asama, durum.kesif, durum.kesifHatasi, taramaIstendi]);
+  const taraniyor = durum.asama === "kesif" || taramaIstendi !== null;
   const taramaYok = !r && !taraniyor;
   const hedef = oturum?.hedefler ?? { sql: true, depo: true, rdp: true };
   const katalog: Katalog = oturum?.programlar ?? [];
@@ -148,9 +158,13 @@ export function RaporEkrani({ durum, setDurum }: P) {
   };
 
   const yenile = async () => {
+    setTaramaIstendi(durum.kesif?.zaman ?? "");
     setBekle(true);
     try {
       setDurum(await api<Durum>("/kesif/yenile", {}));
+    } catch (e) {
+      setTaramaIstendi(null);
+      setHata((e as Error).message);
     } finally {
       setBekle(false);
     }
