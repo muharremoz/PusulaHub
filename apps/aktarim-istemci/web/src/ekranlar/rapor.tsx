@@ -77,7 +77,7 @@ const klasorAdi = (yol: string) => {
   return /^[A-Za-z]:$/.test(k) ? k + "\\" : k;
 };
 
-type Onay = { baslik: string; mesaj: React.ReactNode; uygula: () => void };
+type Onay = { baslik: string; mesaj: React.ReactNode; uygula: () => void; dugme?: string };
 
 /** Keşif sonucu + aktarılacakların seçimi. Alanlar sekmelerde. */
 export function RaporEkrani({ durum, setDurum }: P) {
@@ -261,22 +261,39 @@ export function RaporEkrani({ durum, setDurum }: P) {
       return y;
     });
 
-  /** Tek satır Güncel / Eski yıl. Eski yıl datası (tarihe göre) "Güncel" yapılırsa önce sorulur. */
+  /**
+   * Tek satır Güncel / Eski yıl. Tarihe aykırı seçimde önce sorulur: eski yıl datası "Güncel" yapılırsa ya da
+   * son cari hareketi BU YIL olan data "Eski yıl" yapılırsa (eski yıl kurulmaz, arşive gider — yanlışlıkla seçilmesin).
+   */
   const satirAktarimi = (v: Veritabani, d: "guncel" | "eski") => {
     const uygula = () => {
       setSecili((s) => setDegistir(s, v.ad, true));
       setEskiYil((s) => setDegistir(s, v.ad, d === "eski"));
     };
+    const buYil = !!v.sonHareket && new Date(v.sonHareket).getFullYear() === new Date().getFullYear();
     if (d === "guncel" && eskiYilMi(v)) {
       setOnay({
         baslik: "Eski yıl datası güncel olarak aktarılsın mı?",
         mesaj: (
           <>
-            <span className="font-mono">{v.ad}</span> veritabanının son cari hareketi <b>{tarih(v.sonHareket)}</b>. Güncel olarak
-            işaretlerseniz Pusula'da kurulacak veriler arasına girer.
+            <b>{v.ad}</b> veritabanının son cari hareketi <b>{tarih(v.sonHareket)}</b>. Güncel olarak işaretlerseniz Pusula'da
+            kurulacak veriler arasına girer.
           </>
         ),
         uygula,
+        dugme: "Evet, güncel olarak aktar",
+      });
+    } else if (d === "eski" && buYil) {
+      setOnay({
+        baslik: "Bu yıl kullanılan data eski yıl olarak aktarılsın mı?",
+        mesaj: (
+          <>
+            <b>{v.ad}</b> veritabanının son cari hareketi <b>{tarih(v.sonHareket)}</b> — bu yıl kullanılıyor. Eski yıl olarak
+            işaretlerseniz Pusula'da kurulmaz, arşive alınır.
+          </>
+        ),
+        uygula,
+        dugme: "Evet, eski yıl olarak aktar",
       });
     } else uygula();
   };
@@ -965,7 +982,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 setOnay(null);
               }}
             >
-              Evet, güncel olarak aktar
+              {onay?.dugme ?? "Evet"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
