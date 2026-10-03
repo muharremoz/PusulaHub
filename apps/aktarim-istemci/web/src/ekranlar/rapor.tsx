@@ -150,6 +150,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
     [r, secili],
   );
   const resimSayisi = resimler.filter((x) => x.secili).length;
+  const resimMb = resimler.filter((x) => x.secili).reduce((t, x) => t + (resimKlasorleri.find((y) => y.yol === x.yol)?.boyutMb ?? 0), 0);
+  const eskiDosyaMb = eskiDosyalar.reduce((t, x) => t + (x.boyut ?? 0), 0) / 1048576;
+  const ekKlasorMb = ekKlasorler.reduce((t, x) => t + (x.boyut ?? 0), 0) / 1048576;
   const programSayisi = programlar.filter((x) => x.secili).length;
   const programDosyaSayisi = programDosyalari.filter((x) => x.exe || x.param).length;
   const bosSecim = secili.size + resimSayisi + programSayisi + programDosyaSayisi + eskiDosyalar.length + ekKlasorler.length === 0;
@@ -904,8 +907,9 @@ export function RaporEkrani({ durum, setDurum }: P) {
               <OzetKarti
                 ikon={<Image />}
                 ad="Resim klasörleri"
+                boyut={resimSayisi > 0 && resimMb > 0 ? mb(resimMb) : undefined}
                 ogeler={resimler.filter((x) => x.secili).map((x) => {
-                  const k = r.resimKlasorleri.find((y) => y.yol === x.yol);
+                  const k = resimKlasorleri.find((y) => y.yol === x.yol);
                   return { anahtar: x.yol, ad: x.yol, sag: k ? `${k.dosyaSayisi.toLocaleString("tr")} dosya` : undefined };
                 })}
               />
@@ -922,20 +926,27 @@ export function RaporEkrani({ durum, setDurum }: P) {
               <OzetKarti
                 ikon={<FileArchive />}
                 ad="Eski yıl dosyaları"
+                boyut={eskiDosyaMb > 0 ? mb(eskiDosyaMb) : undefined}
                 ogeler={eskiDosyalar.map((x) => ({ anahtar: x.yol, ad: dosyaAdi(x.yol), alt: klasorAdi(x.yol), sag: x.boyut != null ? boyutMetni(x.boyut) : undefined }))}
               />
               <OzetKarti
                 ikon={<FolderPlus />}
                 ad="Ek klasörler"
+                boyut={ekKlasorMb > 0 ? mb(ekKlasorMb) : undefined}
                 ogeler={ekKlasorler.map((x) => ({ anahtar: x.yol, ad: x.yol, sag: x.boyut != null ? boyutMetni(x.boyut) : undefined }))}
               />
               {veritabanlariAyir && secili.size > 0 && (
                 <p className="px-1 text-xs text-muted-foreground">Veritabanları aktarımdan sonra bu SQL Server'dan ayrılacak.</p>
               )}
 
-              <div className="flex items-baseline justify-between px-1">
-                <span className="text-sm text-muted-foreground">Toplam veritabanı</span>
-                <span className="text-xl font-semibold tabular-nums">{mb(toplamMb)}</span>
+              <div className="flex flex-col gap-0.5 px-1">
+                <div className="flex items-baseline justify-between">
+                  <span className="text-sm text-muted-foreground">Toplam boyut</span>
+                  <span className="text-xl font-semibold tabular-nums">{mb(toplamMb + resimMb + eskiDosyaMb + ekKlasorMb)}</span>
+                </div>
+                {programSayisi + programDosyaSayisi > 0 && (
+                  <span className="text-right text-xs text-muted-foreground">program dosyaları hariç</span>
+                )}
               </div>
 
               {programEksik && (
