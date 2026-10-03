@@ -33,7 +33,14 @@ export class ApiHatasi extends Error {
   }
 }
 
+/** Geliştirme simülasyonu (simulasyon.ts) aktarım uçlarını burada yakalar; undefined → istek exe'ye gider. */
+export const simulasyonApi: { yakala: ((yol: string) => unknown) | null } = { yakala: null };
+
 export async function api<T = unknown>(yol: string, govde?: unknown): Promise<T> {
+  if (simulasyonApi.yakala) {
+    const y = simulasyonApi.yakala(yol);
+    if (y !== undefined) return y as T;
+  }
   let yanit: Response;
   try {
     yanit = await fetch("/api" + yol, {

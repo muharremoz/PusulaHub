@@ -83,3 +83,11 @@ export function Ipucu({ metin, children }: { metin?: ReactNode; children: ReactN
     </Tooltip>
   );
 }
+
+/** SQL sunucu adı ekranda: "." / (local) / localhost / 127.0.0.1 → "Bu bilgisayar" (adlandırılmış örnek korunur: .\SQLEXPRESS → Bu bilgisayar\SQLEXPRESS). */
+export function sunucuGorunumu(sunucu: string | null | undefined): string {
+  if (!sunucu) return "—";
+  const [ana, ...ornek] = sunucu.split("\\");
+  const yerel = [".", "(local)", "localhost", "127.0.0.1"].includes(ana.trim().toLowerCase());
+  return yerel ? ["Bu bilgisayar", ...ornek].join("\\") : sunucu;
+}

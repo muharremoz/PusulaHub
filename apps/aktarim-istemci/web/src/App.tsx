@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, anahtarVar, nabziBaslat, type Durum } from "@/api";
+import { api, anahtarVar, nabziBaslat, simulasyonApi, type Durum } from "@/api";
+import { simulasyonDurumu, simulasyonIstegi, simulasyonKipi } from "@/simulasyon";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -37,9 +38,28 @@ export function App() {
     return () => window.clearInterval(id);
   }, [suruyor, tazele]);
 
+  // Geliştirme: ?simule=aktarim → aktarım ekranı sahte verilerle ilerler (gerçek aktarım başlamaz)
+  const sim = simulasyonKipi();
+  const [, setTik] = useState(0);
+  useEffect(() => {
+    if (!sim) return;
+    simulasyonApi.yakala = (yol) => simulasyonIstegi(yol, durum);
+    const id = window.setInterval(() => setTik((x) => x + 1), 400);
+    return () => {
+      window.clearInterval(id);
+      simulasyonApi.yakala = null;
+    };
+  }, [sim, durum]);
+  const gosterilen = sim ? simulasyonDurumu(durum) : durum;
+
   return (
     <TooltipProvider delayDuration={200}>
-      <Icerik durum={durum} setDurum={setDurum} hata={hata} />
+      {sim && (
+        <div className="pointer-events-none fixed top-2 left-1/2 z-50 -translate-x-1/2 rounded-full bg-foreground px-3 py-1 text-[11px] font-semibold tracking-wider text-background uppercase">
+          Simülasyon · {sim}
+        </div>
+      )}
+      <Icerik durum={gosterilen} setDurum={sim ? () => {} : setDurum} hata={hata} />
       <Toaster position="bottom-right" />
     </TooltipProvider>
   );

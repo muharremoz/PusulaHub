@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { boyutMetni, useDosyaSecici, type Secilen } from "./dosya-secici";
 import { ResimKucultmeEkrani } from "./resim-kucult";
-import { Ipucu, mb, ParlayanLogo } from "./ortak";
+import { Ipucu, mb, ParlayanLogo, sunucuGorunumu } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -349,7 +349,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
             </div>
             {durum.sql || r?.sql ? (
               <dl className="flex flex-col gap-2 text-sm">
-                <PanelBilgi ad="Sunucu" deger={r?.sql?.sunucu ?? durum.sql?.sunucu ?? "—"} mono />
+                <PanelBilgi ad="Sunucu" deger={sunucuGorunumu(r?.sql?.sunucu ?? durum.sql?.sunucu)} />
                 {r?.sql && <PanelBilgi ad="Bilgisayar" deger={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />}
                 {r?.sql && <PanelBilgi ad="Bağlantı" deger={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />}
               </dl>
@@ -1128,7 +1128,7 @@ function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
           {durum.sql ? (
             <>
               <div className="font-medium">SQL Server bağlı</div>
-              <div className="truncate font-mono text-xs text-muted-foreground">{durum.sql.sunucu}</div>
+              <div className="truncate text-xs text-muted-foreground">{sunucuGorunumu(durum.sql.sunucu)}</div>
             </>
           ) : (
             <>
