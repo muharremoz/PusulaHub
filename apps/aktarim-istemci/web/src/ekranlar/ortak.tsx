@@ -4,13 +4,39 @@ import { api } from "@/api";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import pusulaLogo from "@/assets/pusula-logo.png";
 
-/** Ortalanmış giriş kartı — giriş, bağlantı ve bekleme ekranları. */
-export function Kabuk({ children, genis }: { children: ReactNode; genis?: boolean }) {
+/** Ortalanmış giriş kartı — giriş, bağlantı ve bekleme ekranları. altLogo: üstte ParlayanLogo varsa alttaki küçük logo gizlenir. */
+export function Kabuk({ children, genis, altLogo = true }: { children: ReactNode; genis?: boolean; altLogo?: boolean }) {
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/40 p-6">
       <div className={`w-full ${genis ? "max-w-lg" : "max-w-sm"} rounded-xl border bg-card p-8 shadow-sm`}>
         {children}
-        <img src={pusulaLogo} alt="Pusula Yazılım" className="mx-auto mt-8 h-7 w-auto select-none opacity-80" draggable={false} />
+        {altLogo && <img src={pusulaLogo} alt="Pusula Yazılım" className="mx-auto mt-8 h-7 w-auto select-none opacity-80" draggable={false} />}
+      </div>
+    </div>
+  );
+}
+
+/** Pusula logosu + üzerinden geçen ışık (Connect ile aynı). Işık logonun şekliyle maskelenir, dışına taşmaz. */
+export function ParlayanLogo() {
+  const maske = {
+    WebkitMaskImage: `url(${pusulaLogo})`, maskImage: `url(${pusulaLogo})`,
+    WebkitMaskSize: "contain", maskSize: "contain",
+    WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+    WebkitMaskPosition: "center", maskPosition: "center",
+  } as React.CSSProperties;
+  return (
+    <div className="flex justify-center">
+      <div className="relative">
+        <div className="absolute inset-0 -z-0 scale-125 rounded-full bg-primary/10 blur-xl" aria-hidden />
+        <img
+          src={pusulaLogo}
+          alt="Pusula Yazılım"
+          className="relative h-14 w-auto drop-shadow-[0_0_10px_rgba(255,255,255,0.35)] select-none"
+          draggable={false}
+        />
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={maske} aria-hidden>
+          <div className="logo-parlama absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
+        </div>
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
-import { AlertCircle, ArrowRight, Loader2, UploadCloud } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
-import { Kabuk } from "./ortak";
+import { Kabuk, ParlayanLogo } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 const KOD_UZUNLUK = 8;
@@ -31,11 +31,11 @@ export function GirisEkrani({ durum, setDurum }: P) {
   };
 
   return (
-    <Kabuk genis>
+    <Kabuk genis altLogo={false}>
       <div className="flex flex-col gap-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="mb-1 flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <UploadCloud className="size-6" />
+          <div className="mb-3">
+            <ParlayanLogo />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Pusula Aktarım</h1>
           <p className="text-sm text-muted-foreground">Pusula'nın size verdiği aktarım kodunu girin.</p>

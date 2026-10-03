@@ -141,3 +141,10 @@
     @apply font-sans;
     }
 }
+/* Pusula logosu üzerinden geçen ışık (giriş ekranı, ParlayanLogo — Connect ile aynı) */
+@keyframes logo-parlama {
+  0% { transform: translateX(0) skewX(-20deg); }
+  35%, 100% { transform: translateX(400%) skewX(-20deg); }
+}
+.logo-parlama { animation: logo-parlama 3.5s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .logo-parlama { animation: none; display: none; } }
