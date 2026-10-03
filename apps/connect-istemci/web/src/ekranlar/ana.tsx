@@ -144,6 +144,25 @@ export function AnaEkran({ durum, setDurum }: P) {
                 }
               />
             )}
+            {durum.rfid?.kurulu && (
+              <SolSatir
+                ikon={<Printer />}
+                ad="RFID yardımcısı (eski programlar)"
+                deger={
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <span className={"size-2 rounded-full " + (durum.rfid.calisiyor ? "bg-emerald-500" : "bg-amber-500")} />
+                    {durum.rfid.calisiyor ? "Çalışıyor" : "Çalışmıyor"}
+                    {/* VPN IP'si yukarıda (Pusula X yardımcısı) gösteriliyorsa tekrar yazılmaz */}
+                    {durum.rfid.vpnIp && !durum.yazdirma?.kurulu && (
+                      <>
+                        <span className="font-mono font-normal text-muted-foreground">· {durum.rfid.vpnIp}</span>
+                        <KopyalaIkon metin={durum.rfid.vpnIp} etiket="VPN IP adresini kopyala" />
+                      </>
+                    )}
+                  </span>
+                }
+              />
+            )}
           </dl>
 
         </div>

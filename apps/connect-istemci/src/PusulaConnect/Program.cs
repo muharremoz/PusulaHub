@@ -15,6 +15,8 @@ namespace PusulaConnect
     /// Ek kipler:
     ///   --vpn-kur       yönetici olarak FortiClient kurulumu (pencere yok) — bkz. VpnKurulumu
     ///   --yazici-izin   yönetici olarak yazıcı ajanının URL ACL + güvenlik duvarı kaydı — bkz. YaziciAjani
+    ///   --rfid-izin     yönetici olarak eski programların RFID yardımcısı: URL ACL + güvenlik duvarı + yazıcı paylaşımı — bkz. RfidYardimcisi
+    ///   --rfid-baslat   Windows açılışı: RFID yardımcısını başlatıp penceresini gizler (Connect penceresi açılmaz)
     ///   --guncellendi   kendini güncelledikten sonra yeniden açılış (eski kopyanın kapanmasını bekler)
     /// </summary>
     internal static class Program
@@ -35,6 +37,8 @@ namespace PusulaConnect
         {
             if (args.Contains("--vpn-kur")) return VpnKurulumu.YoneticiOlarakCalistir();
             if (args.Contains("--yazici-izin") || args.Contains("--yazici-izin-sil")) return YaziciAjani.YoneticiOlarakCalistir(args);
+            if (args.Contains("--rfid-izin") || args.Contains("--rfid-izin-sil")) return RfidYardimcisi.YoneticiOlarakCalistir(args);
+            if (args.Contains("--rfid-baslat")) return RfidYardimcisi.AcilistaBaslat();
 
             using (var tekil = new Mutex(false, @"Local\PusulaConnect2"))
             {
@@ -56,6 +60,7 @@ namespace PusulaConnect
                 // Güncellemeden sonra ilk açılış: kısayollardaki eski ikon önbelleğini tazele
                 if (args.Contains("--guncellendi")) _ = Task.Run(Yerlesim.IkonlariTazele);
                 _ = Task.Run(YaziciAjani.GerekirseBaslat);
+                _ = Task.Run(RfidYardimcisi.GerekirseBaslat);
 
                 var adres = Environment.GetEnvironmentVariable("PUSULA_CONNECT_URL");
                 _uygulama = new Uygulama(new ServisIstemci(string.IsNullOrWhiteSpace(adres) ? ServisIstemci.VarsayilanAdres : adres)) { Kapat = Kapat };
@@ -147,6 +152,11 @@ namespace PusulaConnect
                 case "POST /yazici/kur": return YaziciAjani.Kur(i.Metin("yazici"), i.Sayi("port"));
                 case "POST /yazici/test": return YaziciAjani.Test();
                 case "POST /yazici/kaldir": return YaziciAjani.Kaldir();
+                case "POST /rfid/durum": return Task.Run(RfidYardimcisi.Durum);
+                case "POST /rfid/port": return RfidYardimcisi.PortDenetle(i.Sayi("port"));
+                case "POST /rfid/kur": return RfidYardimcisi.Kur(i.Metin("yazici"), i.Sayi("port"));
+                case "POST /rfid/test": return RfidYardimcisi.Test();
+                case "POST /rfid/kaldir": return RfidYardimcisi.Kaldir();
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
                     return Task.FromResult<object>(new { tamam = true });

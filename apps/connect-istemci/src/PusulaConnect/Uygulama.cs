@@ -302,6 +302,7 @@ namespace PusulaConnect
                     oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
                     yazdirma = YaziciAjani.KisaDurum(),
+                    rfid = RfidYardimcisi.KisaDurum(),
                     duyurular = _duyurular,
                     guncelleme = new
                     {

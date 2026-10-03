@@ -119,6 +119,8 @@ export type Durum = {
   };
   /** Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — sol panel. */
   yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
+  /** Eski programların RFID yardımcısı (0.4.7+) */
+  rfid?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
   /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
   duyurular?: Duyuru[];
   vpnKurulum: {

@@ -20,6 +20,8 @@ type AjanDurum = {
   eskiKurulum: string[];
   yazicilar: string[];
   vpnIp: string | null;
+  /** Yalnız RFID yardımcısı: yazıcının paylaşım adı */
+  paylasim?: string | null;
 };
 type PortSonuc = { port: number; bos: boolean; ajan: boolean; oneri: number | null };
 type Ping = { ok: boolean; ms: number; hata: string | null };
@@ -35,16 +37,53 @@ type TestSonuc = {
   urlacl: boolean;
   guvenlikDuvari: boolean;
   baslangic: boolean;
+  paylasim?: string | null;
+  paylasimHizmeti?: boolean;
 };
 
-const VARSAYILAN_PORT = 5556;
+/** İki yardımcı aynı bölümü kullanır: Pusula X'in ajanı ve eski programların RFID yardımcısı. */
+type Tur = {
+  uc: "/yazici" | "/rfid";
+  baslik: string;
+  aciklama: string;
+  ad: string;
+  varsayilanPort: number;
+  kurulmamis: string;
+  program: string;
+  rfid?: boolean;
+};
+
+/** Yerel yazıcı paylaşımı: \\127.0.0.1\AD */
+const unc = (ad: string) => `\\\\127.0.0.1\\${ad}`;
+
+const PUSULAX: Tur = {
+  uc: "/yazici",
+  baslik: "Pusula X yazdırma yardımcısı",
+  aciklama: "RFID / etiket yazdırma",
+  ad: "Yazdırma yardımcısı",
+  varsayilanPort: 5556,
+  kurulmamis: "Pusula X'in bu bilgisayardaki yazıcıya yazdırabilmesi için kurun.",
+  program: "Pusula X",
+};
+
+export const ESKI_PROGRAMLAR: Tur = {
+  uc: "/rfid",
+  baslik: "Eski programlar yazdırma yardımcısı",
+  aciklama: "Eski Pusula programlarından RFID / etiket yazdırma",
+  ad: "RFID yardımcısı",
+  varsayilanPort: 5252,
+  kurulmamis: "Eski Pusula programlarının bu bilgisayardaki yazıcıya yazdırabilmesi için kurun.",
+  program: "Eski program",
+  rfid: true,
+};
 
 /**
  * Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — terminaldeki Pusula X, VPN üzerinden bu bilgisayarın
  * yazıcısına (RFID etiket) yazdırır. Eskiden elle kopyalanıp Başlangıç'a eklenirdi; artık buradan kurulur:
  * yazıcı + port seçilir → Kur (port izni ve güvenlik duvarı için bir kez yönetici izni) → Windows açılışında başlar.
  */
-export function YaziciAjaniBolumu() {
+export function YaziciAjaniBolumu({ tur = PUSULAX }: { tur?: Tur }) {
+  const VARSAYILAN_PORT = tur.varsayilanPort;
   const [d, setD] = useState<AjanDurum | null>(null);
   const [yazici, setYazici] = useState("");
   const [port, setPort] = useState(String(VARSAYILAN_PORT));
@@ -58,7 +97,7 @@ export function YaziciAjaniBolumu() {
   const yukle = async () => {
     setBekle("yukle");
     try {
-      const s = await api<AjanDurum>("/yazici/durum", {});
+      const s = await api<AjanDurum>(`${tur.uc}/durum`, {});
       setD(s);
       if (ilk.current) {
         ilk.current = false;
@@ -83,7 +122,7 @@ export function YaziciAjaniBolumu() {
     setPortSonuc(null);
     if (!portGecerli) return;
     const id = window.setTimeout(() => {
-      api<PortSonuc>("/yazici/port", { port: portNo }).then(setPortSonuc).catch(() => {});
+      api<PortSonuc>(`${tur.uc}/port`, { port: portNo }).then(setPortSonuc).catch(() => {});
     }, 400);
     return () => window.clearTimeout(id);
   }, [port]);
@@ -93,11 +132,11 @@ export function YaziciAjaniBolumu() {
     setHata(null);
     try {
       if (ne === "kaldir") {
-        setD(await api<AjanDurum>("/yazici/kaldir", {}));
+        setD(await api<AjanDurum>(`${tur.uc}/kaldir`, {}));
         setTest(null);
       } else {
-        setTest(await api<TestSonuc>(ne === "kur" ? "/yazici/kur" : "/yazici/test", ne === "kur" ? { yazici, port: portNo } : {}));
-        setD(await api<AjanDurum>("/yazici/durum", {}));
+        setTest(await api<TestSonuc>(ne === "kur" ? `${tur.uc}/kur` : `${tur.uc}/test`, ne === "kur" ? { yazici, port: portNo } : {}));
+        setD(await api<AjanDurum>(`${tur.uc}/durum`, {}));
       }
     } catch (e) {
       setHata((e as Error).message);
@@ -120,19 +159,19 @@ export function YaziciAjaniBolumu() {
   );
 
   return (
-    <Bolum baslik="Pusula X yazdırma yardımcısı" aciklama="RFID / etiket yazdırma">
+    <Bolum baslik={tur.baslik} aciklama={tur.aciklama}>
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
           <Printer />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">Yazdırma yardımcısı</div>
+          <div className="text-sm font-medium">{tur.ad}</div>
           <div className="text-xs text-muted-foreground">
             {!d
               ? "Durum okunuyor…"
               : d.kurulu
-                ? `${d.yazici ?? "—"} · port ${d.port}${d.baslangic ? " · Windows açılışında başlar" : ""}`
-                : "Pusula X'in bu bilgisayardaki yazıcıya yazdırabilmesi için kurun."}
+                ? `${d.yazici ?? "—"}${d.paylasim ? ` (${unc(d.paylasim)})` : ""} · port ${d.port}${d.baslangic ? " · Windows açılışında başlar" : ""}`
+                : tur.kurulmamis}
           </div>
         </div>
         <div className="shrink-0">{durumRozeti}</div>
@@ -177,7 +216,7 @@ export function YaziciAjaniBolumu() {
           </div>
         )}
         {portSonuc?.ajan && !d?.bizimki && (
-          <p className="text-xs text-muted-foreground">Bu portta elle kurulmuş yazdırma yardımcısı çalışıyor; kurulumda durdurulup yerine bu kurulum geçer.</p>
+          <p className="text-xs text-muted-foreground">Bu portta elle kurulmuş {tur.ad.toLocaleLowerCase("tr")} çalışıyor; kurulumda durdurulup yerine bu kurulum geçer.</p>
         )}
         {d && d.eskiKurulum.length > 0 && (
           <p className="text-xs text-muted-foreground">
@@ -204,7 +243,16 @@ export function YaziciAjaniBolumu() {
             </Button>
           )}
         </div>
-        {bekle === "kur" && <p className="text-xs text-muted-foreground">Kuruluyor… Port izni ve güvenlik duvarı için Windows yönetici izni isteyebilir.</p>}
+        {tur.rfid && (
+          <p className="text-xs text-muted-foreground">
+            Yazıcı paylaşılmamışsa kurulumda "RFID" adıyla paylaşılır (eski programlar {unc("RFID")} gibi bir paylaşıma ham yazdırır).
+          </p>
+        )}
+        {bekle === "kur" && (
+          <p className="text-xs text-muted-foreground">
+            Kuruluyor… Port izni, güvenlik duvarı{tur.rfid ? " ve yazıcı paylaşımı" : ""} için Windows yönetici izni isteyebilir.
+          </p>
+        )}
         {hata && <p className="text-xs text-destructive">{hata}</p>}
 
         {test && (
@@ -213,8 +261,14 @@ export function YaziciAjaniBolumu() {
             {test.vpn && (
               <Sonuc ok={test.vpn.ok} metin={test.vpn.ok ? `VPN adresinden erişiliyor (${test.vpnIp})` : `VPN adresinden erişilemiyor (${test.vpnIp}): ${test.vpn.hata ?? ""}`} />
             )}
-            {!test.vpnIp && <Sonuc ok={null} metin="VPN bağlı değil — Pusula X'in erişimi VPN bağlanınca denenebilir." />}
+            {!test.vpnIp && <Sonuc ok={null} metin={`VPN bağlı değil — ${tur.program} erişimi VPN bağlanınca denenebilir.`} />}
             <Sonuc ok={test.yaziciBulundu} metin={test.yaziciBulundu ? `Yazıcı bulundu: ${test.eslesenYazici}` : `Yazıcı bulunamadı: ${test.yazici ?? "—"}`} />
+            {tur.rfid && (
+              <Sonuc ok={!!test.paylasim} metin={test.paylasim ? `Yazıcı paylaşımı: ${unc(test.paylasim)}` : "Yazıcı paylaşılmamış"} />
+            )}
+            {tur.rfid && test.paylasimHizmeti === false && (
+              <Sonuc ok={false} metin="Windows 'Sunucu' (LanmanServer) hizmeti çalışmıyor — paylaşılan yazıcıya yazdırılamaz" />
+            )}
             <Sonuc ok={test.urlacl} metin={test.urlacl ? "Ağ izni (URL ACL) kayıtlı" : "Ağ izni yok — yalnız bu bilgisayardan erişilebilir"} />
             <Sonuc ok={test.guvenlikDuvari} metin={test.guvenlikDuvari ? `Güvenlik duvarında port ${test.port} açık` : `Güvenlik duvarı kuralı yok (port ${test.port})`} />
             <Sonuc ok={test.baslangic} metin={test.baslangic ? "Windows açılışında başlar" : "Başlangıçta kayıtlı değil"} />
@@ -226,13 +280,13 @@ export function YaziciAjaniBolumu() {
             <CircleAlert className="mt-px size-3.5 shrink-0" />
             <span>
               VPN adresi <b className="font-mono">{adres}</b> sabit değil ({SABIT_VPN_ONEKI}x olmalı). Her bağlanışta değişebilir;
-              Pusula X bu bilgisayara yazdıramayabilir. Kullanıcıya sabit VPN IP'si tanımlanması için Pusula'ya haber verin.
+              {tur.program} bu bilgisayara yazdıramayabilir. Kullanıcıya sabit VPN IP'si tanımlanması için Pusula'ya haber verin.
             </span>
           </div>
         )}
         {adres && d?.kurulu && (
           <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
-            <span className="text-muted-foreground">Pusula X yazıcı IP adresi</span>
+            <span className="text-muted-foreground">{tur.program} yazıcı IP adresi</span>
             <span className="flex-1 truncate font-mono font-medium">{adres}</span>
             <Button
               size="sm"

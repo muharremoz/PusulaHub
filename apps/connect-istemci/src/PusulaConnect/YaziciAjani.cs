@@ -103,7 +103,7 @@ namespace PusulaConnect
 
         // ------------------------------------------------------------ port
 
-        private static bool Dinleniyor(int port)
+        internal static bool Dinleniyor(int port)
         {
             try { return IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners().Any(e => e.Port == port); }
             catch { return false; }
@@ -118,7 +118,7 @@ namespace PusulaConnect
             return new { port, bos = ajan, ajan, oneri = ajan ? (int?)null : BosPortOner(port) };
         }
 
-        private static int? BosPortOner(int port)
+        internal static int? BosPortOner(int port)
         {
             for (var p = port + 1; p <= Math.Min(65535, port + 200); p++) if (!Dinleniyor(p)) return p;
             return null;
@@ -364,14 +364,14 @@ namespace PusulaConnect
             }
         }
 
-        private static void Tasi(string kaynak, string klasor)
+        internal static void Tasi(string kaynak, string klasor)
         {
             var h = Path.Combine(klasor, Path.GetFileName(kaynak));
             if (File.Exists(h)) h = Path.Combine(klasor, Path.GetFileNameWithoutExtension(kaynak) + "." + DateTime.Now.ToString("yyyyMMddHHmmss") + Path.GetExtension(kaynak));
             File.Move(kaynak, h);
         }
 
-        private static string KisayolHedefi(string lnk)
+        internal static string KisayolHedefi(string lnk)
         {
             try
             {
@@ -414,7 +414,7 @@ namespace PusulaConnect
             catch { return false; }
         }
 
-        private static bool YolEsit(string a, string b)
+        internal static bool YolEsit(string a, string b)
         {
             try { return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase); }
             catch { return false; }
@@ -431,7 +431,7 @@ namespace PusulaConnect
             return (acl, kural);
         }
 
-        private static int Netsh(string argumanlar, out string cikti)
+        internal static int Netsh(string argumanlar, out string cikti)
         {
             cikti = "";
             try
@@ -450,7 +450,7 @@ namespace PusulaConnect
         }
 
         /// <summary>Aynı exe'yi yönetici olarak çalıştırır; UAC reddedilirse -1.</summary>
-        private static async Task<int> YoneticiCalistir(string argumanlar)
+        internal static async Task<int> YoneticiCalistir(string argumanlar)
         {
             Process p;
             try { p = Process.Start(new ProcessStartInfo(Assembly.GetExecutingAssembly().Location, argumanlar) { Verb = "runas", UseShellExecute = true }); }

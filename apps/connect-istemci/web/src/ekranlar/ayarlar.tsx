@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { YaziciAjaniBolumu } from "./yazici-ajani";
+import { ESKI_PROGRAMLAR, YaziciAjaniBolumu } from "./yazici-ajani";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
@@ -146,6 +146,7 @@ export function AyarlarIcerik({
 
         <TabsContent value="yazdirma" className="flex flex-col gap-4">
           <YaziciAjaniBolumu />
+          <YaziciAjaniBolumu tur={ESKI_PROGRAMLAR} />
         </TabsContent>
 
         <TabsContent value="guvenlik" className="flex flex-col gap-4">

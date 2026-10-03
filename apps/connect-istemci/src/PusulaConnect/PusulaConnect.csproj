@@ -48,6 +48,8 @@
     <Reference Include="System.Security" />
     <!-- Konum yönlendirme (GeoCoordinateWatcher → SendLocation2D) -->
     <Reference Include="System.Device" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.ServiceProcess" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <!-- Gömülü uzak masaüstü (OturumPaneli): Windows'un mstscax.dll'inden AxImp ile üretildi
          ("NETFX 4.8 Tools\x64\AxImp.exe C:\Windows\System32\mstscax.dll"). Costura exe'ye gömer. -->
@@ -64,6 +66,8 @@
     <EmbeddedResource Include="$(WebKlasoru)src\assets\pusula-logo.png" LogicalName="logo.png" />
     <!-- Pusula X yazıcı ajanı (PusulaX deposundan derlenmiş, .NET 4.8) — Ayarlar'dan kurulur; bkz. YaziciAjani.cs -->
     <EmbeddedResource Include="lib\PusulaXPrintAgent.exe" LogicalName="yazici-ajani/PusulaXPrintAgent.exe" />
+    <!-- Eski programların RFID yardımcısı (RFIDSERVER.exe, 2014 — kaynağı yok, olduğu gibi) — bkz. RfidYardimcisi.cs -->
+    <EmbeddedResource Include="lib\RFIDSERVER.exe" LogicalName="rfid/RFIDSERVER.exe" />
   </ItemGroup>
 
   <Target Name="WebArayuzuDerle" BeforeTargets="BeforeBuild" Condition="!Exists('$(WebKlasoru)dist\index.html')">
