@@ -31,6 +31,10 @@ namespace PusulaConnect
             ProfilYaz(kayit);
         }
 
+        /// <summary>Servis tokenı döndürüldüğünde (nabızda yeniToken) yalnız token yeniden yazılır.</summary>
+        public static void TokenYaz(string token) =>
+            File.WriteAllBytes(TokenDosyasi, ProtectedData.Protect(Encoding.UTF8.GetBytes(token), null, DataProtectionScope.CurrentUser));
+
         public static void ProfilYaz(JObject kayit) => File.WriteAllText(ProfilDosyasi, kayit.ToString(), Encoding.UTF8);
 
         public static string Token()

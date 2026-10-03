@@ -8,16 +8,17 @@
  * Değerler kurulum paketiyle AYNI kaynaktan (getFirmaErisim + aynı sabitler).
  *
  * Env: CONNECT_SERVICE_URL (varsayılan https://aktarim.pusulanet.net/connect),
- *      TRANSFER_SERVICE_KEY (aktarım servisleriyle ortak anahtar)
+ *      CONNECT_SERVICE_KEY (yoksa TRANSFER_SERVICE_KEY — bkz. connect-hub-ic.ts)
  */
 
+import { connectServisAnahtari } from "@/lib/connect-hub-ic"
 import { getFirmaErisim } from "@/lib/firma-erisim"
 import type { SupabaseLike } from "@/lib/firma-credentials"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { GUVENLI_KULLANICI_ADI, MSI_URL, MSI_URL_ARM, TUNEL_ADI, VPN_SUNUCU } from "@/lib/kurulum-paketi"
 
 const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
-const KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
+const KEY = connectServisAnahtari()
 export const CONNECT_INDIRME_ADRESI = `${BASE}/indir`
 
 export type ConnectKoduSonuc =

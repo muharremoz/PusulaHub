@@ -106,7 +106,7 @@ namespace PusulaConnect
         /// Yeni sürümü indirir, SHA-256'sını servisin bildirdiğiyle karşılaştırır, kurulu kopyanın yerine koyar
         /// ve yeniden başlatır. Bir önceki sürüm "PusulaConnect.exe.onceki" olarak kalır (elle geri dönüş için).
         /// </summary>
-        public static async Task Guncelle(string indirmeAdresi, string beklenenSha256, Action<int> ilerleme, Action kapat)
+        public static async Task Guncelle(string indirmeAdresi, string beklenenSha256, string imza, Action<int> ilerleme, Action kapat)
         {
             Directory.CreateDirectory(KuruluKlasor);
             var yeni = KuruluExe + ".yeni";
@@ -146,6 +146,13 @@ namespace PusulaConnect
                     File.Delete(yeni);
                     throw new Exception("İndirilen güncelleme doğrulanamadı (özet tutmuyor). Tekrar deneyin.");
                 }
+            }
+            // İmza şart: servis ele geçirilse bile Pusula'nın anahtarıyla imzalanmamış exe kurulmaz.
+            if (!GuncellemeImzasi.Dogru(yeni, imza))
+            {
+                File.Delete(yeni);
+                Gunluk.Yaz("Güncelleme REDDEDİLDİ: imza " + (string.IsNullOrEmpty(imza) ? "yok" : "geçersiz"));
+                throw new Exception("İndirilen güncelleme Pusula imzası taşımıyor; kurulmadı. Pusula'ya haber verin.");
             }
             var onceki = KuruluExe + ".onceki";
             if (File.Exists(KuruluExe))

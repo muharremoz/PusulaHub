@@ -9,9 +9,16 @@ import { createHash, timingSafeEqual } from "crypto"
 import { decrypt } from "@/lib/crypto"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 
-/** X-Service-Key = TRANSFER_SERVICE_KEY (Connect/Aktarım servisleriyle ortak). */
+/**
+ * Connect servisiyle paylaşılan anahtar. CONNECT_SERVICE_KEY tanımlıysa YALNIZ o geçer; Aktarım'la ortak
+ * TRANSFER_SERVICE_KEY'e yalnız geçiş döneminde (CONNECT_SERVICE_KEY boşken) düşülür. Ayrı olmasının sebebi:
+ * Aktarım sunucusu/anahtarı ele geçirilirse Hub'dan şifre çekilememesi (03.10.2026 güvenlik gözden geçirmesi).
+ */
+export const connectServisAnahtari = (): string => process.env.CONNECT_SERVICE_KEY || process.env.TRANSFER_SERVICE_KEY || ""
+
+/** X-Service-Key = connectServisAnahtari(). */
 export function servisAnahtariDogru(gelen: string | null): boolean {
-  const beklenen = process.env.TRANSFER_SERVICE_KEY ?? ""
+  const beklenen = connectServisAnahtari()
   if (!beklenen || !gelen) return false
   const a = Buffer.from(gelen), b = Buffer.from(beklenen)
   return a.length === b.length && timingSafeEqual(a, b)

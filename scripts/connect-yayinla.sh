@@ -9,12 +9,16 @@
 # Sıra önemli: önce exe (geçici adla yüklenip tek hamlede yerine taşınır — yarım dosya indirilmez),
 # EN SON surum.txt. İstemciler yeni sürümü surum.txt'den görür; exe hazır olmadan görmezler.
 # Servis /api/surum'da exe'nin SHA-256'sını verir; istemci indirdiğini onunla doğrular.
+# İMZA: exe ~/.ssh/pusula-connect-imza.pem (RSA-3072, ÇEVRİMDIŞI — sunucuya hiç gitmez) ile imzalanır,
+# .sig olarak exe'nin yanına konur; istemci (GuncellemeImzasi.cs) gömülü açık anahtarla doğrular, imzasız
+# yayını yok sayar. Anahtar kaybolursa yeni anahtarla yayın yapılamaz: yedeğini güvenli yerde tutun.
 set -euo pipefail
 
 KOK="$(cd "$(dirname "$0")/.." && pwd)"
 PROJE="$KOK/apps/connect-istemci/src/PusulaConnect"
 SUNUCU="root@10.15.2.6"
 ANAHTAR="$USERPROFILE/.ssh/claude_ops"
+IMZA_ANAHTARI="$USERPROFILE/.ssh/pusula-connect-imza.pem"
 HEDEF="/opt/pusula-connect/istemci"
 NOTLAR="${1:-}"
 SSH=(ssh -i "$ANAHTAR" -o ConnectTimeout=15 "$SUNUCU")
@@ -34,13 +38,32 @@ case "$EXE_SURUM" in "$SURUM"*) ;; *) echo "Derlenen exe sürümü ($EXE_SURUM) 
 SHA="$(sha256sum "$EXE" | cut -c1-64)"
 echo "exe: $(stat -c %s "$EXE") bayt, sha256 $SHA"
 
+echo "== İmza"
+[ -f "$IMZA_ANAHTARI" ] || { echo "İmza anahtarı yok: $IMZA_ANAHTARI"; exit 1; }
+SIG="$EXE.sig"
+# Gömülü açık anahtar bu özel anahtarla eşleşiyor mu (yanlış anahtarla imzalanan yayını hiçbir istemci kurmaz)
+node -e '
+const c=require("crypto"),fs=require("fs");
+const priv=c.createPrivateKey(fs.readFileSync(process.argv[1]));
+const n=Buffer.from(c.createPublicKey(priv).export({format:"jwk"}).n,"base64url").toString("base64");
+const cs=fs.readFileSync(process.argv[3],"utf8");
+if(!cs.includes("\""+n+"\"")){console.error("GuncellemeImzasi.cs içindeki açık anahtar bu özel anahtarla eşleşmiyor");process.exit(1)}
+const exe=fs.readFileSync(process.argv[2]);
+const sig=c.sign("sha256",exe,priv);
+if(!c.verify("sha256",exe,c.createPublicKey(priv),sig)){console.error("imza doğrulanamadı");process.exit(1)}
+fs.writeFileSync(process.argv[2]+".sig",sig.toString("base64"));
+console.log("imzalandı: "+sig.length+" bayt");
+' "$IMZA_ANAHTARI" "$EXE" "$PROJE/GuncellemeImzasi.cs"
+
 echo "== Yükleme"
 "${SSH[@]}" "mkdir -p $HEDEF"
 scp -q -i "$ANAHTAR" "$EXE" "$SUNUCU:$HEDEF/PusulaConnect.exe.yukleniyor"
 UZAK_SHA="$("${SSH[@]}" "sha256sum $HEDEF/PusulaConnect.exe.yukleniyor | cut -c1-64")"
 [ "$UZAK_SHA" = "$SHA" ] || { echo "Sunucudaki dosyanın özeti tutmuyor ($UZAK_SHA)"; exit 1; }
 # Bir önceki yayın geri dönüş için saklanır
-"${SSH[@]}" "cd $HEDEF && { [ -f PusulaConnect.exe ] && cp -p PusulaConnect.exe PusulaConnect.exe.onceki || true; } && mv -f PusulaConnect.exe.yukleniyor PusulaConnect.exe"
+scp -q -i "$ANAHTAR" "$SIG" "$SUNUCU:$HEDEF/PusulaConnect.exe.sig.yukleniyor"
+# exe ve imzası birlikte yer değiştirir (surum.txt'den önce): istemci bir an bile eski exe + yeni imza görmez
+"${SSH[@]}" "cd $HEDEF && { [ -f PusulaConnect.exe ] && cp -p PusulaConnect.exe PusulaConnect.exe.onceki || true; } && { [ -f PusulaConnect.exe.sig ] && cp -p PusulaConnect.exe.sig PusulaConnect.exe.sig.onceki || true; } && mv -f PusulaConnect.exe.yukleniyor PusulaConnect.exe && mv -f PusulaConnect.exe.sig.yukleniyor PusulaConnect.exe.sig"
 if [ -n "$NOTLAR" ]; then scp -q -i "$ANAHTAR" "$NOTLAR" "$SUNUCU:$HEDEF/notlar.txt"; else "${SSH[@]}" "rm -f $HEDEF/notlar.txt"; fi
 "${SSH[@]}" "[ -f $HEDEF/surum.txt ] && cp -p $HEDEF/surum.txt $HEDEF/surum.txt.onceki; printf '%s' '$SURUM' > $HEDEF/surum.txt"
 

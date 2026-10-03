@@ -3,8 +3,10 @@
  * Servis: services/pusula-connect (X-Service-Key). Yalnız sunucu tarafında kullanılır.
  */
 
+import { connectServisAnahtari } from "@/lib/connect-hub-ic"
+
 const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
-const KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
+const KEY = connectServisAnahtari()
 
 export interface ConnectAyarlar {
   tamEkran?: boolean; yazici?: boolean; pano?: boolean; ses?: boolean; windowsIleBaslat?: boolean

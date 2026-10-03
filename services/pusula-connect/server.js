@@ -42,7 +42,7 @@
  *     GET    /admin/duyurular/:id/okuyanlar   hedefteki cihazlar, okuduysa zamanı
  *     POST   /admin/duyurular/:id/iptal       yayından kaldır { yapan }
  *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
- *     GET    /api/surum                 { son, min, sha256, boyut, notlar } — kendini güncelleme
+ *     GET    /api/surum                 { son, min, sha256, boyut, imza, notlar } — kendini güncelleme (imza: exe'nin RSA imzası)
  *     GET    /indir                     uygulama exe
  */
 
@@ -56,7 +56,16 @@ import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv, 
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-const SERVICE_KEY = process.env.TRANSFER_SERVICE_KEY ?? ""
+/**
+ * CONNECT_SERVICE_KEY: Hub ile bu servis arasındaki anahtar (Hub'ın /admin/* çağrıları ve bizim Hub'a
+ * sorduğumuz /api/hub/connect/*). Aktarım servisiyle ORTAK OLMASIN diye ayrı (03.10.2026 güvenlik
+ * gözden geçirmesi): Aktarım'ın anahtarı sızsa Connect üzerinden şifre çekilemesin. Boşsa eski ortak
+ * anahtara (TRANSFER_SERVICE_KEY) düşer — geçiş için.
+ * CONNECT_KASA_ANAHTARI: DB'deki TOTP gizlisi ve kasa anahtarlarının şifreleme tuzu. DEĞİŞTİRİLEMEZ —
+ * değişirse mevcut 2FA kayıtları çözülemez. Boşsa TRANSFER_SERVICE_KEY (ilk sürümdeki davranış).
+ */
+const SERVICE_KEY = process.env.CONNECT_SERVICE_KEY || process.env.TRANSFER_SERVICE_KEY || ""
+const KASA_TUZU   = process.env.CONNECT_KASA_ANAHTARI || process.env.TRANSFER_SERVICE_KEY || SERVICE_KEY
 const DB_PATH     = process.env.DB_PATH ?? join(__dirname, "connect.db")
 const PORT        = parseInt(process.env.PORT ?? "5200", 10)
 const HOST        = process.env.HOST ?? "127.0.0.1"
@@ -68,6 +77,8 @@ const ISTEMCI_EXE = process.env.ISTEMCI_EXE ?? join(__dirname, "istemci", "Pusul
 const SON_SURUM_DOSYASI = process.env.SON_SURUM_DOSYASI ?? join(__dirname, "istemci", "surum.txt")
 /** İsteğe bağlı: güncelleme penceresinde gösterilen "bu sürümde neler var" (düz metin, satır başına bir madde). */
 const NOTLAR_DOSYASI = process.env.NOTLAR_DOSYASI ?? join(__dirname, "istemci", "notlar.txt")
+/** Exe'nin imzası (RSA-3072 / SHA-256, base64) — yayınlama betiği çevrimdışı anahtarla üretir; istemci gömülü açık anahtarla doğrular. */
+const IMZA_DOSYASI = process.env.IMZA_DOSYASI ?? join(__dirname, "istemci", "PusulaConnect.exe.sig")
 
 if (!SERVICE_KEY) {
   console.error("TRANSFER_SERVICE_KEY env değişkeni tanımlı değil")
@@ -118,6 +129,10 @@ for (const [ad, tip] of [
   ["terminalMs", "INTEGER"],
   ["ip", "TEXT"],
   ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar } — yalnız gösterim
+  // token döndürme: nabızda TOKEN_OMRU_GUN'den eski token yenilenir; eskisi TOKEN_GECIS_DK boyunca da geçer
+  ["tokenZaman", "TEXT"],
+  ["eskiTokenOzet", "TEXT"],
+  ["eskiTokenZaman", "TEXT"],
 ]) {
   try { db.exec(`ALTER TABLE cihazlar ADD COLUMN ${ad} ${tip}`) } catch { /* zaten var */ }
 }
@@ -182,9 +197,12 @@ const sql = {
   kodlar: db.prepare(`SELECT id, firmaId, firmaAdi, kullanici, durum, olusturan, olusturma, bitis FROM kodlar
                       WHERE (@firma IS NULL OR firmaId = @firma) ORDER BY olusturma DESC LIMIT 500`),
   cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
-  cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum) VALUES (?, ?, ?, ?, ?)`),
-  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari, k.*
-                            FROM cihazlar c JOIN kodlar k ON k.id = c.kodId WHERE c.tokenOzet = ?`),
+  cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum, tokenZaman) VALUES (?, ?, ?, ?, ?, datetime('now'))`),
+  tokenYenile: db.prepare(`UPDATE cihazlar SET eskiTokenOzet = tokenOzet, eskiTokenZaman = datetime('now'), tokenOzet = ?, tokenZaman = datetime('now') WHERE id = ?`),
+  cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari,
+                                   c.tokenZaman, (c.tokenOzet = @ozet) AS guncelToken, k.*
+                            FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
+                            WHERE c.tokenOzet = @ozet OR (c.eskiTokenOzet = @ozet AND c.eskiTokenZaman > @esik)`),
   totpBaslat: db.prepare(`UPDATE cihazlar SET totpGizli = ?, totpAktif = 0, totpSonAdim = NULL, totpHata = 0, totpKilit = NULL, kasaAnahtari = NULL WHERE id = ?`),
   totpEtkin: db.prepare(`UPDATE cihazlar SET totpAktif = 1, kasaAnahtari = ?, totpSonAdim = ?, totpHata = 0, totpKilit = NULL WHERE id = ?`),
   totpBasari: db.prepare(`UPDATE cihazlar SET totpSonAdim = ?, totpHata = 0, totpKilit = NULL WHERE id = ?`),
@@ -347,7 +365,7 @@ async function hubSifre(k) {
 }
 
 // ── İki adımlı doğrulama (RFC 6238 TOTP, SHA-1, 6 hane, 30 sn) ──
-const SIFRE_ANAHTARI = createHash("sha256").update("pusula-connect-2fa:" + SERVICE_KEY).digest()
+const SIFRE_ANAHTARI = createHash("sha256").update("pusula-connect-2fa:" + KASA_TUZU).digest()
 function sifrele(metin) {
   const iv = randomBytes(12)
   const c = createCipheriv("aes-256-gcm", SIFRE_ANAHTARI, iv)
@@ -404,6 +422,9 @@ function totpDogrula(gizliB32, kod, sonAdim) {
 }
 const TOTP_HATA_SINIRI = 5
 const TOTP_KILIT_DK = 10
+/** Token döndürme: çalınan bir tokenın ömrü en çok bu kadar (+ geçiş süresi). */
+const TOKEN_OMRU_GUN = 7
+const TOKEN_GECIS_DK = 15
 
 var fastify = Fastify({ logger: { level: "info" }, bodyLimit: 1024 * 1024 })
 
@@ -587,7 +608,8 @@ fastify.post("/api/kayit", async (req, reply) => {
 /** Bearer token → cihaz satırı; yoksa yanıtı yazar ve null döner. */
 function cihaz(req, reply) {
   const m = /^Bearer\s+(.+)$/i.exec(req.headers.authorization ?? "")
-  const c = m ? sql.cihazByToken.get(ozet(m[1].trim())) : null
+  const esik = new Date(Date.now() - TOKEN_GECIS_DK * 60000).toISOString().replace("T", " ").slice(0, 19)
+  const c = m ? sql.cihazByToken.get({ ozet: ozet(m[1].trim()), esik }) : null
   if (!c) { reply.code(401).send({ hata: "Cihaz kaydı bulunamadı. Kurulum koduyla yeniden kaydolun." }); return null }
   if (c.iptal || c.durum === "iptal") { reply.code(410).send({ hata: "Bu cihazın kaydı Pusula tarafından kapatılmış." }); return null }
   return c
@@ -699,7 +721,17 @@ fastify.post("/api/nabiz", async (req, reply) => {
     ip: istemciIp(req),
     durumJson: JSON.stringify(durum).slice(0, 4000),
   })
-  return { tamam: true, duyuru: duyuruImzasi(c), profilImza: kayitGorunumu(c, await hubProfil(c)).profilImza }
+  const yanit = { tamam: true, duyuru: duyuruImzasi(c), profilImza: kayitGorunumu(c, await hubProfil(c)).profilImza }
+  // Token döndürme: güncel tokenla gelen ve süresi dolmuş cihaza yeni token. Eski token TOKEN_GECIS_DK daha geçer
+  // (istemci kaydedene kadar). Eski tokenla gelen isteğe (geçiş süresinde) yeniden üretilmez — tek sefer.
+  const sinir = new Date(Date.now() - TOKEN_OMRU_GUN * 86400000).toISOString().replace("T", " ").slice(0, 19)
+  if (c.guncelToken && (!c.tokenZaman || c.tokenZaman < sinir)) {
+    const yeni = randomBytes(32).toString("base64url")
+    sql.tokenYenile.run(ozet(yeni), c.cihazId)
+    olay("token_yenilendi", { cihaz: c, kaynak: "servis", ayrinti: c.tokenZaman ? "önceki " + c.tokenZaman : "ilk döndürme" })
+    yanit.yeniToken = yeni
+  }
+  return yanit
 })
 
 fastify.get("/api/duyurular", async (req, reply) => {
@@ -748,7 +780,9 @@ fastify.get("/api/surum", async () => {
   try { son = (await readFile(SON_SURUM_DOSYASI, "utf8")).trim() || null } catch { /* yayın yok */ }
   try { notlar = (await readFile(NOTLAR_DOSYASI, "utf8")).trim() || null } catch { /* not yok */ }
   if (son) { try { ozet = await yayinOzeti() } catch { son = null /* exe yoksa yayın da yok */ } }
-  return { son, min: MIN_SURUM, sha256: ozet?.sha256 ?? null, boyut: ozet?.boyut ?? null, notlar }
+  let imza = null
+  try { imza = (await readFile(IMZA_DOSYASI, "utf8")).trim() || null } catch { /* imzasız yayın: 0.3.7+ istemci yok sayar */ }
+  return { son, min: MIN_SURUM, sha256: ozet?.sha256 ?? null, boyut: ozet?.boyut ?? null, imza, notlar }
 })
 
 fastify.get("/indir", async (req, reply) => {

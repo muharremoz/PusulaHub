@@ -40,7 +40,7 @@ namespace PusulaConnect
         private JObject _vpnDurum;
         private string _sonSurum;
         private bool _guncelleniyor;
-        private string _minSurum, _sonSha256, _guncellemeNotlari, _guncellemeHatasi;
+        private string _minSurum, _sonSha256, _sonImza, _guncellemeNotlari, _guncellemeHatasi;
         private int _guncellemeYuzde;
 
         // duyurular (Hub → müşteri)
@@ -597,6 +597,13 @@ namespace PusulaConnect
                 }
                 var yanit = await _servis.Nabiz(durum);
                 _sonNabizGonderim = DateTime.Now;
+                // Token döndürme: önce diske (DPAPI), sonra belleğe — kayıt başarısızsa eski tokenla devam (servis 15 dk daha kabul eder)
+                var yeniToken = yanit.Value<string>("yeniToken");
+                if (!string.IsNullOrEmpty(yeniToken))
+                {
+                    try { Kimlik.TokenYaz(yeniToken); _servis.Token = yeniToken; Gunluk.Yaz("Servis tokenı yenilendi"); }
+                    catch (Exception e) { Gunluk.Yaz("Yeni token kaydedilemedi: " + e.Message); }
+                }
                 // Açılışta servis yoktuysa "ulaşılamadı" uyarısı kalıyordu: başarılı nabız kaldırır
                 lock (_kilit) _servisErisim = true;
                 // Yayındaki duyurular ya da okunma durumları değiştiyse listeyi yeniden çek
@@ -768,7 +775,10 @@ namespace PusulaConnect
                     _sonSurum = s.Value<string>("son");
                     _minSurum = s.Value<string>("min");
                     _sonSha256 = s.Value<string>("sha256");
+                    _sonImza = s.Value<string>("imza");
                     _guncellemeNotlari = s.Value<string>("notlar");
+                    // İmzasız yayın yok sayılır (0.3.7+): servis ele geçirilip imzasız exe konursa kullanıcıya güncelleme hiç sunulmaz
+                    if (_sonSurum != null && string.IsNullOrEmpty(_sonImza)) { Gunluk.Yaz("Yayındaki sürüm " + _sonSurum + " imzasız — yok sayıldı"); _sonSurum = null; }
                 }
                 if (_sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0)
                     Gunluk.Yaz("Yeni sürüm var: " + _sonSurum);
@@ -780,7 +790,7 @@ namespace PusulaConnect
         {
             // Oturum açıkken uygulama yeniden başlarsa bağlantı kopar
             if (OturumAcikMi?.Invoke() == true) throw new KullaniciHatasi("Önce bağlantıyı kesin, sonra güncelleyin.");
-            string sha;
+            string sha, imza;
             lock (_kilit)
             {
                 if (_guncelleniyor) return Durum();
@@ -788,11 +798,12 @@ namespace PusulaConnect
                 _guncellemeYuzde = 0;
                 _guncellemeHatasi = null;
                 sha = _sonSha256;
+                imza = _sonImza;
             }
             Gunluk.Yaz("Güncelleme indiriliyor: " + _sonSurum);
             _ = Task.Run(async () =>
             {
-                try { await Yerlesim.Guncelle(_servis.IndirmeAdresi, sha, y => { lock (_kilit) _guncellemeYuzde = y; }, () => Kapat?.Invoke()); }
+                try { await Yerlesim.Guncelle(_servis.IndirmeAdresi, sha, imza, y => { lock (_kilit) _guncellemeYuzde = y; }, () => Kapat?.Invoke()); }
                 catch (Exception e)
                 {
                     Gunluk.Yaz("Güncelleme hatası: " + e.Message);

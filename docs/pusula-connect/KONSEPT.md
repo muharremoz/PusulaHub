@@ -87,3 +87,25 @@ Connect 1.5 ve Aktarım 2 değişmeden durur; Connect 2 memnun edince onların y
    cihaz kayıtlı oturumla (DPAPI) sürer.
 2. **Kod imzalama sonraya.** İlk sürümler imzasız (SmartScreen uyarısı beklenir).
 3. **Ayrı uygulama.** Connect 2 kendi exe'si; Aktarım 2 ayrı kalır (içine taşınmaz).
+
+## Güvenlik notları (03.10.2026 gözden geçirmesi)
+
+Tehdit senaryoları ve karar: bir müşteri bilgisayarı ele geçirilirse tek gerçek koruma 2FA'dır (token + yerel
+şifre DPAPI ile aynı Windows kullanıcısına açıktır). Servis ya da anahtar ele geçirilirse etki alanını
+daraltan üç önlem alındı:
+
+1. **Ayrı servis anahtarı.** Hub ↔ Connect servisi `CONNECT_SERVICE_KEY` ile konuşur; Aktarım'la ortak
+   `TRANSFER_SERVICE_KEY` yalnız bu değişken boşken (geçiş) kabul edilir. Ayarlanacağı yerler: Hub (Coolify env),
+   servis (`/opt/pusula-connect/.env`), geliştirme (`apps/web/.env.local`). Serviste `CONNECT_KASA_ANAHTARI`
+   DB'deki 2FA kayıtlarının şifreleme tuzudur, boşsa `TRANSFER_SERVICE_KEY`; **asla değiştirilmez**.
+   Hub `/api/hub/connect/sifre` ayrıca kullanıcının serviste iptal edilmemiş bir cihazı olmasını şart koşar.
+2. **İmzalı güncelleme.** `scripts/connect-yayinla.sh` exe'yi `~/.ssh/pusula-connect-imza.pem` (RSA-3072,
+   çevrimdışı, sunucuya gitmez) ile imzalar → `PusulaConnect.exe.sig`; servis `/api/surum`'da `imza` verir;
+   istemci (`GuncellemeImzasi.cs`, gömülü açık anahtar) imzasız/yanlış imzalı yayını kurmaz, imzasız yayını
+   hiç göstermez. Anahtar kaybolursa yeni sürüm yayınlanamaz — yedeğini güvenli yerde tut. Anahtar
+   değiştirilecekse önce eski anahtarla, yeni açık anahtarı içeren bir sürüm yayınlanır.
+3. **Token döndürme.** Servis nabızda 7 günden eski tokenı yeniler (`yeniToken`); eski token 15 dk daha geçer.
+   İstemci yeni tokenı DPAPI ile yazıp belleğe alır. Çalınan tokenın ömrü böylece en çok 7 gün + 15 dk.
+
+Alınmayan/ertelenen: 2FA'yı Hub'dan zorunlu kılma, sertifika sabitleme, kod üretme yetkisini ayırma,
+yazdırma yardımcısı güvenlik duvarı kuralını terminal IP'leriyle sınırlama.
