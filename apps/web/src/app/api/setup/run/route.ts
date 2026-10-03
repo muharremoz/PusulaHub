@@ -1308,6 +1308,36 @@ export async function POST(req: NextRequest) {
                     }
                   }
 
+                  // ── Pusula X resim yolu ──
+                  // Pusula X resim yolunu guvenlik'te değil kendi Sabitler.ImagePath'inde tutar.
+                  // Yanlış/eski yol (ulaşılamayan paylaşım) programı açılışta ve içeride
+                  // ağ zaman aşımı kadar dondurur (~22 sn; donma şikâyetlerinin çoğu bu).
+                  // Pusula X ile Perakende aynı program kodunu (909) kullandığı için hizmet
+                  // exe adından tanınır; yalnız ImagePath sütunu olan DB'ye yazılır.
+                  const pusulaXSecili = pusulaServices.some(
+                    (s) => ((s.config as PusulaProgramConfig | null)?.exeName ?? "").trim().toLowerCase() === "pusulax.exe",
+                  )
+                  // Depo adımı atlanmışsa (skipDepo) resim paylaşımı için bulunan Depo adresi
+                  const resimDepoIp = depoSrv?.ip ?? resimDepo?.ip ?? null
+                  if (pusulaXSecili && resimDepoIp && restoredDbNames.length > 0) {
+                    const resimYolu = `\\\\${resimDepoIp}\\Resimler\\${payload.firmaId}\\`
+                    for (const dbName of restoredDbNames) {
+                      const db = dbName.replace(/]/g, "]]")
+                      await runSqlStep(
+                        `sql_resimyolu_${dbName}`,
+                        `Pusula X resim yolu: [${dbName}]`,
+                        async () => {
+                          const r = await masterPool.request().input("yol", resimYolu).query(
+                            `IF COL_LENGTH(N'[${db}].dbo.Sabitler', N'ImagePath') IS NULL SELECT CAST(-1 AS int) AS n
+                             ELSE BEGIN UPDATE [${db}].dbo.Sabitler SET ImagePath = @yol; SELECT @@ROWCOUNT AS n END`,
+                          )
+                          const n = (r.recordset?.[0] as { n?: number } | undefined)?.n ?? 0
+                          return n < 0 ? "Pusula X verisi değil (Sabitler.ImagePath yok) — atlandı" : `Sabitler.ImagePath = ${resimYolu} (${n} satır)`
+                        },
+                      )
+                    }
+                  }
+
                   // ── Firma 1. kullanıcısı için SQL Authentication login + user mapping ──
                   // Şart: en az 1 başarılı restore + payload.users[0] mevcut
                   const firstUser = payload.users[0]
