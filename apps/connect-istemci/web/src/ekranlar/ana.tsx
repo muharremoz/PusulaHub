@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor, PlugZap,
+  AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
   Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -16,7 +16,8 @@ import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
-import { OrtaBaslik, ParlayanLogo, talepAdresi } from "./ortak";
+import uygulamaIkonu from "@/assets/uygulama-ikon.png";
+import { OrtaBaslik, talepAdresi } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -95,8 +96,9 @@ export function AnaEkran({ durum, setDurum }: P) {
     <div className="flex h-svh overflow-hidden bg-muted/40">
       {/* ── Sol: firma bilgileri ───────────────────────────── */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="flex h-16 shrink-0 items-center justify-center border-b px-5">
-          <ParlayanLogo />
+        <div className="flex h-16 shrink-0 items-center justify-center gap-2.5 border-b px-5">
+          <img src={uygulamaIkonu} alt="" className="size-10 shrink-0 drop-shadow-sm" draggable={false} />
+          <span className="text-base font-semibold tracking-tight">Pusula Connect</span>
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
@@ -191,9 +193,7 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Button>
         </div>
         <div className="flex items-center gap-2.5 border-t px-5 py-3">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <PlugZap className="size-4" />
-          </span>
+          <img src={uygulamaIkonu} alt="" className="size-8 shrink-0" draggable={false} />
           <div>
             <div className="text-sm font-semibold">Pusula Connect</div>
             <div className="text-xs text-muted-foreground">v{durum.surum}</div>
