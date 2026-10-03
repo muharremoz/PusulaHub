@@ -5,7 +5,7 @@ import { MUSTERI_ULKELERI } from "@/lib/musteri-ulkeleri";
 
 /**
  * Orta panelin arka planı: dönen dünya (Magic UI Globe / cobe). Pusula müşterilerinin olduğu ülkeler
- * işaretli; işaretçi büyüklüğü firma sayısıyla (log) büyür. Türkiye ortada kalır (±6° salınır).
+ * işaretli; işaretçi büyüklüğü firma sayısıyla (log) büyür ve nabız gibi atar. Türkiye ortada kalır (±6° salınır).
  * Bağlıyken yeşil, değilken gri.
  */
 
@@ -43,6 +43,7 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       <Globe
         config={config}
         salinim={0.1}
+        nabiz={0.6}
         className="inset-auto bottom-0 left-1/2 w-[min(100%,110vh)] max-w-[900px] -translate-x-1/2 translate-y-1/2 opacity-70"
       />
     </div>

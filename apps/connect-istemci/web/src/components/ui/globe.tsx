@@ -38,11 +38,14 @@ export function Globe({
   className,
   config = GLOBE_CONFIG,
   salinim,
+  nabiz,
 }: {
   className?: string
   config?: COBEOptions
   /** Verilirse sürekli dönmez: config.phi çevresinde ± bu kadar (radyan) salınır — bir yer merkezde kalır. */
   salinim?: number
+  /** Verilirse işaretçiler nabız gibi büyüyüp küçülür: boyut × (1 … 1 + nabiz), her biri farklı ritimde. */
+  nabiz?: number
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const phiRef = useRef(config.phi)
@@ -91,6 +94,13 @@ export function Globe({
         if (salinim != null) phiRef.current = config.phi + Math.sin((performance.now() - baslangic) / 6000) * salinim
         else if (!pointerInteracting.current) phiRef.current += 0.005
         state.phi = phiRef.current + rs.get()
+        if (nabiz && config.markers?.length) {
+          const t = performance.now() - baslangic
+          state.markers = config.markers.map((m, i) => ({
+            ...m,
+            size: m.size * (1 + nabiz * (0.5 + 0.5 * Math.sin(t / 420 + i * 1.7))),
+          }))
+        }
         state.width = widthRef.current * 2
         state.height = widthRef.current * 2
       },
@@ -101,7 +111,7 @@ export function Globe({
       globe.destroy()
       window.removeEventListener("resize", onResize)
     }
-  }, [rs, config, salinim])
+  }, [rs, config, salinim, nabiz])
 
   return (
     <div
