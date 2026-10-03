@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, Plus,
+  AlertTriangle, ArrowRight, Building2, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, Plus,
   RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
@@ -21,8 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { boyutMetni, useDosyaSecici, type Secilen } from "./dosya-secici";
 import { ResimKucultmeEkrani } from "./resim-kucult";
-import { Ipucu, mb } from "./ortak";
-import pusulaLogo from "@/assets/pusula-logo.png";
+import { Ipucu, mb, ParlayanLogo } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -345,15 +344,21 @@ export function RaporEkrani({ durum, setDurum }: P) {
     <div className="flex h-svh bg-muted/40">
       {/* Sol panel: firma, SQL Server, Pusula'nın notu, rapor durumu ve eylemler (eskiden üst şeritteydi) */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="flex flex-col gap-4 border-b px-5 py-5">
-          <img src={pusulaLogo} alt="Pusula Yazılım" className="h-7 w-auto self-start select-none" draggable={false} />
-          <div className="min-w-0">
-            <div className="text-xs font-medium text-muted-foreground">Aktarım · {oturum?.firmaId}</div>
-            <h1 className="mt-0.5 text-base leading-snug font-semibold">{oturum?.firmaAdi}</h1>
-          </div>
+        <div className="border-b px-5 py-6">
+          <ParlayanLogo />
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              <Building2 className="size-3.5" /> Firma
+            </div>
+            <dl className="flex flex-col gap-2 text-sm">
+              <PanelBilgi ad="Firma no" deger={oturum?.firmaId ?? "—"} />
+              <PanelBilgi ad="Firma adı" deger={oturum?.firmaAdi ?? "—"} sar />
+            </dl>
+          </div>
+
           <div className="flex flex-col gap-2.5">
             <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
               <Server className="size-3.5" /> SQL Server
@@ -1124,11 +1129,11 @@ function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
 }
 
 /** Sol paneldeki ad/değer satırı. */
-function PanelBilgi({ ad, deger, mono }: { ad: string; deger: string; mono?: boolean }) {
+function PanelBilgi({ ad, deger, mono, sar }: { ad: string; deger: string; mono?: boolean; sar?: boolean }) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-muted-foreground">{ad}</dt>
-      <dd className={"truncate " + (mono ? "font-mono" : "")} title={deger}>{deger}</dd>
+      <dd className={(sar ? "font-medium leading-snug break-words " : "truncate ") + (mono ? "font-mono" : "")} title={deger}>{deger}</dd>
     </div>
   );
 }
