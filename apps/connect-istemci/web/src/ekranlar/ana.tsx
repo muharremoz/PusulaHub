@@ -8,7 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
-import { RainbowButton } from "@/components/ui/rainbow-button";
+import { BorderBeam } from "border-beam";
 import { Ripple } from "@/components/ui/ripple";
 import { AgArkaplan } from "@/components/ag-arkaplan";
 import { AyarlarIcerik } from "./ayarlar";
@@ -371,9 +371,17 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        <RainbowButton size="lg" className="h-14 w-full rounded-lg text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
-          {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
-        </RainbowButton>
+        {/* Kenarda dönen ışık (border-beam); düğme pasifken durur. Düğme koyu (açık temada siyah) → beam "dark" */}
+        <BorderBeam
+          className="w-full"
+          size="md"
+          theme={document.documentElement.classList.contains("dark") ? "light" : "dark"}
+          active={!bekle && k.rdpSifre.kayitli}
+        >
+          <Button size="lg" className="h-14 w-full rounded-lg text-base" disabled={!!bekle || !k.rdpSifre.kayitli} onClick={() => void baglan()}>
+            {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
+          </Button>
+        </BorderBeam>
         {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
 
         {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
