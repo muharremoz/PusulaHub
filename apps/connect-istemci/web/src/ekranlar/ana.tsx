@@ -109,7 +109,20 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<Hash />} ad="Firma no" deger={kayit.firmaId} />
             <SolSatir ikon={<UserRound />} ad="Kullanıcı" deger={<span className="font-medium">{kayit.kullanici}</span>} />
             <SolSatir ikon={<Laptop />} ad="Bu bilgisayar" deger={durum.makine} />
-            <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-medium">{kayit.profil.rdp}</span>} />
+            <SolSatir
+              ikon={<Server />}
+              ad="Sunucu"
+              deger={
+                <span className="font-medium">
+                  {kayit.profil.rdp}
+                  {k.terminal.dnsYok && kayit.profil.rdpIp && (
+                    <span className="block text-xs font-normal text-amber-700 dark:text-amber-400" title="Bu bilgisayarın DNS'i sunucu adını çözemiyor; IP ile bağlanılıyor">
+                      DNS çözülemedi · {kayit.profil.rdpIp}
+                    </span>
+                  )}
+                </span>
+              }
+            />
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
             {durum.yazdirma?.kurulu && (
               <SolSatir

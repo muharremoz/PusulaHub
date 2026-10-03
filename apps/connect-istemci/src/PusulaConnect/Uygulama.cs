@@ -209,6 +209,27 @@ namespace PusulaConnect
         private string P(string ad) => Profil?.Value<string>(ad);
         private int RdpPort => Profil?.Value<int?>("rdpPort") ?? 3389;
 
+        // Sunucu adı DNS ile çözülemezse (modem/ISS özel adres yanıtını düşürüyor) profildeki IP'ye düşülür.
+        private bool _dnsYok;
+        /// <summary>Bağlanılacak adres: ad çözülüyorsa ad, çözülmüyorsa ve IP biliniyorsa IP.</summary>
+        private string RdpHedef { get { var ip = P("rdpIp"); lock (_kilit) return _dnsYok && !string.IsNullOrEmpty(ip) ? ip : P("rdp"); } }
+
+        /// <summary>Adı dener; çözülmezse IP ile yoklar. Sonuç _dnsYok'a yazılır (bir kez değişince günlüğe ve olaya düşer).</summary>
+        private async Task<(bool erisim, int ms, string hata)> SunucuyuYokla()
+        {
+            var rdp = P("rdp");
+            if (rdp == null) return (false, 0, "profil yok");
+            var ip = P("rdpIp");
+            var dnsYok = !string.IsNullOrEmpty(ip) && !await Rdp.AdCozulur(rdp);
+            bool onceki; lock (_kilit) { onceki = _dnsYok; _dnsYok = dnsYok; }
+            if (dnsYok != onceki)
+            {
+                Gunluk.Yaz(dnsYok ? "Sunucu adı çözülemedi (" + rdp + "), IP ile devam: " + ip : "Sunucu adı yeniden çözülüyor (" + rdp + ")");
+                if (dnsYok) _ = _servis.Olay("dns_cozulemedi", new { ad = rdp, ip });
+            }
+            return await Rdp.Yokla(dnsYok ? ip : rdp, RdpPort);
+        }
+
         public object Durum()
         {
             lock (_kilit)
@@ -243,7 +264,7 @@ namespace PusulaConnect
                     {
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
                         profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
-                        terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s") },
+                        terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s"), dnsYok = _dnsYok },
                         rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici },
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
@@ -326,7 +347,7 @@ namespace PusulaConnect
                 var rdpKullanici = (IkiAktif ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar) ? _kayit?.Value<string>("kullanici") : null;
                 var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
                 var vpnSifre = P("tunel") != null ? Fortinet.SifreKayitDurumu(P("tunel")) : "yok";
-                var t = rdp != null ? await Rdp.Yokla(rdp, RdpPort) : (false, 0, "profil yok");
+                var t = await SunucuyuYokla();
                 lock (_kilit)
                 {
                     _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici; _vpnKullaniciAdi = vpnKullaniciAdi; _vpnSifre = vpnSifre;
@@ -407,7 +428,8 @@ namespace PusulaConnect
         {
             if (OturumAcikMi?.Invoke() == true) throw new KullaniciHatasi("Oturum zaten açık.");
             var rdp = P("rdp") ?? throw new KullaniciHatasi("Profil yok.");
-            var t = await Rdp.Yokla(rdp, RdpPort);
+            var t = await SunucuyuYokla();
+            var hedef = RdpHedef;
             lock (_kilit) { _terminal = t; _terminalZaman = DateTime.Now; }
             if (!t.erisim)
                 throw new KullaniciHatasi("Pusula sunucusuna ulaşılamıyor. Önce VPN'e bağlanın (FortiClient → Bağlan), sonra tekrar deneyin.");
@@ -457,7 +479,7 @@ namespace PusulaConnect
                 var ay = Ayarlar.Simdiki;
                 ac(new RdpAyar
                 {
-                    Ad = ad, Sunucu = rdp, Port = RdpPort, Domain = P("domain"), Kullanici = kullanici, Sifre = sifre,
+                    Ad = ad, Sunucu = hedef, Port = RdpPort, Domain = P("domain"), Kullanici = kullanici, Sifre = sifre,
                     TamEkran = ay.TamEkran, Yazici = ay.Yazici, Pano = ay.Pano, Ses = ay.Ses,
                     // Akıllı kart ve konum yönlendirmesi kaldırıldı (03.10.2026): ayar yok, hep kapalı
                     AkilliKart = false, Portlar = ay.Portlar, Konum = false, Kamera = ay.Kamera,
@@ -470,7 +492,7 @@ namespace PusulaConnect
             }
             else
             {
-                Rdp.Baglan(ad, rdp, RdpPort, P("domain"), kullanici, sifre);
+                Rdp.Baglan(ad, hedef, RdpPort, P("domain"), kullanici, sifre);
                 Gunluk.Yaz("RDP başlatıldı (mstsc" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
             return Durum();
@@ -591,6 +613,7 @@ namespace PusulaConnect
                     {
                         oturum = OturumAcikMi?.Invoke() == true,
                         terminal = new { erisim = _terminal.erisim, ms = _terminal.ms },
+                        dnsYok = _dnsYok,
                         os = WindowsSurumu(),
                         forti = _fortiSurum,
                         vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },

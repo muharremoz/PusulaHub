@@ -105,6 +105,22 @@ namespace PusulaConnect
         }
 
         /// <summary>Terminale TCP bağlantısı (VPN açık mı sorusunun pratik cevabı). Gecikme ms ya da hata.</summary>
+        /// <summary>
+        /// Ad DNS ile çözülüyor mu (IP verilirse true). Kısa zaman aşımı: çözülemeyen ad Windows'ta saniyelerce bekletebilir.
+        /// ps*.databag.net gibi adlar genel DNS'te özel adrese çözülür; bazı modem/ISS DNS'leri bu yanıtı düşürür.
+        /// </summary>
+        public static async Task<bool> AdCozulur(string ad, int zamanAsimiMs = 3000)
+        {
+            if (System.Net.IPAddress.TryParse(ad, out _)) return true;
+            try
+            {
+                var t = System.Net.Dns.GetHostAddressesAsync(ad);
+                if (await Task.WhenAny(t, Task.Delay(zamanAsimiMs)) != t) return false;
+                return (await t).Length > 0;
+            }
+            catch { return false; }
+        }
+
         public static async Task<(bool erisim, int ms, string hata)> Yokla(string sunucu, int port, int zamanAsimiMs = 2500)
         {
             var sure = Stopwatch.StartNew();

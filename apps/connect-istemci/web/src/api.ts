@@ -68,6 +68,8 @@ export type Profil = {
   domain: string;
   msiurl: string;
   msiurlArm: string;
+  /** Sunucu IP'si — ad DNS ile çözülemezse buna düşülür. */
+  rdpIp?: string | null;
 };
 
 export type Duyuru = {
@@ -92,7 +94,8 @@ export type Durum = {
     /** kullaniciAdi: FortiClient bu tünel için kullanıcı adını saklıyor mu (FCConfig ile yazılır). */
     /** sifre: FortiClient'ta şifre kayıtlı mı — kayitli | isaretsiz (Save Password kutusu var, işaretsiz) | yok (kutu henüz çıkmadı). */
     profil: { dogru: boolean; kullaniciAdi?: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" };
-    terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null };
+    /** dnsYok: sunucu adı bu bilgisayarda çözülemedi, IP ile bağlanılıyor. */
+    terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null; dnsYok?: boolean };
     rdpSifre: { kayitli: boolean; kullanici: string | null };
   };
   /** Pusula'dan şifre güncellemesi: bekliyor = 2FA açık, yeni şifre bir sonraki kodla alınacak; mesaj = kullanıcıya bilgi. */

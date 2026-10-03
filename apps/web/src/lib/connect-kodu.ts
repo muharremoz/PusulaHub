@@ -49,6 +49,11 @@ export async function connectVpnAdresi(): Promise<string> {
 
 export interface ConnectProfil {
   vpn: string; tunel: string; rdp: string; rdpPort: number; domain: string; msiurl: string; msiurlArm: string
+  /**
+   * RDP sunucusunun IP'si (rdp bir DNS adıysa). ps*.databag.net gibi adlar genel DNS'te özel adrese (10.15.x)
+   * çözülür; bazı modem/ISS DNS'leri bunu "DNS rebinding" sayıp düşürür → istemci adı çözemezse buna düşer.
+   */
+  rdpIp: string | null
 }
 
 /**
@@ -70,6 +75,7 @@ export async function connectProfili(firkod: string, client?: SupabaseLike):
       tunel: TUNEL_ADI,
       rdp,
       rdpPort: erisim.windows?.rdpPort ?? 3389,
+      rdpIp: erisim.windows?.dns && erisim.windows.ip && erisim.windows.ip !== rdp ? erisim.windows.ip : null,
       domain,
       msiurl: MSI_URL,
       msiurlArm: MSI_URL_ARM,

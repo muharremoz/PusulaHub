@@ -20,6 +20,8 @@ export interface ConnectCihazDurum {
   vpnProfil: { dogru: boolean; kullaniciAdi: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" } | null
   sifreKayitli: boolean | null
   ayarlar: ConnectAyarlar | null
+  /** Sunucu adı bu bilgisayarda DNS ile çözülemedi, IP ile bağlanıyor (0.4.2+) */
+  dnsYok?: boolean | null
 }
 
 export interface ConnectCihazSatir {

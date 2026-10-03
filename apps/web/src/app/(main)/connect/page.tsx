@@ -110,6 +110,7 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   sifre_guncellendi: { ad: "Şifre Pusula'dan alındı", ton: "iyi" },
   sifre_gosterildi: { ad: "Şifre ekranda gösterildi", ton: "uyari" },
   vpn_baglan_tetiklendi: { ad: "VPN otomatik bağlantı tetiklendi", ton: "notr" },
+  dns_cozulemedi: { ad: "Sunucu adı çözülemedi (IP ile bağlanıyor)", ton: "uyari" },
   token_yenilendi: { ad: "Cihaz tokenı yenilendi", ton: "notr" },
   duyuru_kaldirildi: { ad: "Duyuru kaldırıldı", ton: "notr" },
 }
@@ -695,6 +696,7 @@ function CihazDetay({
                 <Bilgi ad="Sunucu">{c.rdp ?? "—"}</Bilgi>
                 <Bilgi ad="Sunucuya erişim">
                   {c.terminalErisim == null ? "—" : c.terminalErisim ? `Erişiyor${c.terminalMs != null ? ` · ${c.terminalMs} ms` : ""}` : "Erişemiyor"}
+                  {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS çözülemedi, IP ile</span>}
                 </Bilgi>
                 <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
                 <Bilgi ad="Dış IP"><span className="font-mono">{c.ip ?? "—"}</span></Bilgi>

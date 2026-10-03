@@ -711,7 +711,7 @@ fastify.post("/api/nabiz", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   const b = req.body ?? {}
   const t = b.terminal ?? {}
-  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null }
+  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null, dnsYok: b.dnsYok ?? null }
   sql.nabiz.run({
     id: c.cihazId,
     surum: String(req.headers["x-surum"] ?? "").slice(0, 20) || null,
@@ -751,7 +751,7 @@ fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {
 })
 
 /** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
-const ISTEMCI_OLAYLARI = new Set(["vpn_baglan_tetiklendi", "oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
+const ISTEMCI_OLAYLARI = new Set(["vpn_baglan_tetiklendi", "dns_cozulemedi", "oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "vpn_kuruldu", "vpn_kurulum_hatasi",
   "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
 fastify.post("/api/olay", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
