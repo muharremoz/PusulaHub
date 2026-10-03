@@ -244,6 +244,19 @@ namespace PusulaConnect
                     {
                         _vpnKuruluyor = false;
                         var vh = _vpnDurum.Value<string>("hata");
+                        // Ayarlar hemen yeniden okunur (yerel kayıt defteri, hızlı): tam denetim birkaç sn sürdüğü için
+                        // arada eski "ayar eksik" sonucu kalıyor, "VPN ayarını güncelleyin" alanı gidip geri geliyordu.
+                        if (vh == null)
+                        {
+                            try
+                            {
+                                var tunel = P("tunel"); var vpn = P("vpn");
+                                _fortiSurum = Fortinet.KuruluSurum();
+                                _profilDogru = tunel != null && vpn != null && Fortinet.ProfilDogru(tunel, vpn) && Fortinet.SertifikaUyarisiKapali();
+                                _vpnKullaniciAdi = tunel != null && Fortinet.KullaniciAdiTanimli(tunel);
+                            }
+                            catch (Exception e) { Gunluk.Yaz("Kurulum sonrası ayar okunamadı: " + e.Message); }
+                        }
                         _ = _servis.Olay(vh == null ? "vpn_kuruldu" : "vpn_kurulum_hatasi", vh);
                         // Ayar değişti ve eski bağlantı kesildi: FortiClient yeni ayarla açılır, kullanıcı yeniden bağlanır.
                         if (_vpnDurum.Value<bool?>("vpnKesildi") == true)
