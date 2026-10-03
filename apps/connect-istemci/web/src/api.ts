@@ -105,6 +105,8 @@ export type Durum = {
     tamEkran: boolean; yazici: boolean; pano: boolean; ses: boolean; windowsIleBaslat: boolean;
     akilliKart: boolean; portlar: boolean; konum: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
   };
+  /** Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — sol panel. */
+  yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
   /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
   duyurular?: Duyuru[];
   vpnKurulum: {

@@ -39,7 +39,7 @@ type TestSonuc = {
 const VARSAYILAN_PORT = 5556;
 
 /**
- * Pusula X yazıcı ajanı (PusulaXPrintAgent) — terminaldeki Pusula X, VPN üzerinden bu bilgisayarın
+ * Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — terminaldeki Pusula X, VPN üzerinden bu bilgisayarın
  * yazıcısına (RFID etiket) yazdırır. Eskiden elle kopyalanıp Başlangıç'a eklenirdi; artık buradan kurulur:
  * yazıcı + port seçilir → Kur (port izni ve güvenlik duvarı için bir kez yönetici izni) → Windows açılışında başlar.
  */
@@ -108,7 +108,7 @@ export function YaziciAjaniBolumu() {
   const yazicilar = d ? (yazici && !d.yazicilar.includes(yazici) ? [yazici, ...d.yazicilar] : d.yazicilar) : [];
   const degisti = !!d?.kurulu && (yazici !== (d.yazici ?? "") || portNo !== d.port);
   const portDolu = portSonuc && !portSonuc.bos;
-  const adres = d?.vpnIp ? `http://${d.vpnIp}:${d.kurulu ? d.port : portNo}` : null;
+  const adres = d?.vpnIp ?? null;
 
   const durumRozeti = !d ? null : !d.kurulu ? (
     <Badge variant="outline">Kurulu değil</Badge>
@@ -119,13 +119,13 @@ export function YaziciAjaniBolumu() {
   );
 
   return (
-    <Bolum baslik="Pusula X yazıcı ajanı" aciklama="RFID / etiket yazdırma">
+    <Bolum baslik="Pusula X yazdırma yardımcısı" aciklama="RFID / etiket yazdırma">
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
           <Printer />
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">Yazıcı ajanı</div>
+          <div className="text-sm font-medium">Yazdırma yardımcısı</div>
           <div className="text-xs text-muted-foreground">
             {!d
               ? "Durum okunuyor…"
@@ -176,7 +176,7 @@ export function YaziciAjaniBolumu() {
           </div>
         )}
         {portSonuc?.ajan && !d?.bizimki && (
-          <p className="text-xs text-muted-foreground">Bu portta elle kurulmuş yazıcı ajanı çalışıyor; kurulumda durdurulup yerine bu kurulum geçer.</p>
+          <p className="text-xs text-muted-foreground">Bu portta elle kurulmuş yazdırma yardımcısı çalışıyor; kurulumda durdurulup yerine bu kurulum geçer.</p>
         )}
         {d && d.eskiKurulum.length > 0 && (
           <p className="text-xs text-muted-foreground">
@@ -208,7 +208,7 @@ export function YaziciAjaniBolumu() {
 
         {test && (
           <ul className="flex flex-col gap-1.5 rounded-md border bg-muted/30 p-3 text-xs">
-            <Sonuc ok={test.yerel.ok} metin={test.yerel.ok ? `Ajan yanıt veriyor (port ${test.port}, ${test.yerel.ms} ms)` : `Ajan yanıt vermiyor: ${test.yerel.hata ?? "bilinmiyor"}`} />
+            <Sonuc ok={test.yerel.ok} metin={test.yerel.ok ? `Yardımcı yanıt veriyor (port ${test.port}, ${test.yerel.ms} ms)` : `Yardımcı yanıt vermiyor: ${test.yerel.hata ?? "bilinmiyor"}`} />
             {test.vpn && (
               <Sonuc ok={test.vpn.ok} metin={test.vpn.ok ? `VPN adresinden erişiliyor (${test.vpnIp})` : `VPN adresinden erişilemiyor (${test.vpnIp}): ${test.vpn.hata ?? ""}`} />
             )}
@@ -222,7 +222,7 @@ export function YaziciAjaniBolumu() {
 
         {adres && d?.kurulu && (
           <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
-            <span className="text-muted-foreground">Pusula X yazıcı adresi</span>
+            <span className="text-muted-foreground">Pusula X yazıcı IP adresi</span>
             <span className="flex-1 truncate font-mono font-medium">{adres}</span>
             <Button
               size="sm"

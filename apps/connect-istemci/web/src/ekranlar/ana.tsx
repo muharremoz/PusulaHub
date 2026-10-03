@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  AlertTriangle, ArrowLeft, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor, PlugZap,
+  AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor, PlugZap,
   Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -109,6 +109,19 @@ export function AnaEkran({ durum, setDurum }: P) {
             <SolSatir ikon={<Laptop />} ad="Bu bilgisayar" deger={durum.makine} />
             <SolSatir ikon={<Server />} ad="Sunucu" deger={<span className="font-medium">{kayit.profil.rdp}</span>} />
             <SolSatir ikon={<ShieldCheck />} ad="VPN" deger={<span className="font-medium">{kayit.profil.tunel}</span>} />
+            {durum.yazdirma?.kurulu && (
+              <SolSatir
+                ikon={<Printer />}
+                ad="Yazdırma yardımcısı"
+                deger={
+                  <span className="inline-flex items-center gap-1.5 font-medium">
+                    <span className={"size-2 rounded-full " + (durum.yazdirma.calisiyor ? "bg-emerald-500" : "bg-amber-500")} />
+                    {durum.yazdirma.calisiyor ? "Çalışıyor" : "Çalışmıyor"}
+                    {durum.yazdirma.vpnIp && <span className="font-mono font-normal text-muted-foreground">· {durum.yazdirma.vpnIp}</span>}
+                  </span>
+                }
+              />
+            )}
           </dl>
 
         </div>

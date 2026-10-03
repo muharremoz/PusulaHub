@@ -62,6 +62,21 @@ namespace PusulaConnect
             };
         }
 
+        private static object _kisa;
+        private static DateTime _kisaZaman;
+
+        /// <summary>Sol panel için (her /durum'da çağrılır): 5 sn önbellekli, süreç yolu okunmaz.</summary>
+        public static object KisaDurum()
+        {
+            if (_kisa != null && (DateTime.Now - _kisaZaman).TotalSeconds < 5) return _kisa;
+            var kurulu = Kurulu;
+            var calisiyor = false;
+            foreach (var p in Process.GetProcessesByName(SurecAdi)) { calisiyor = true; p.Dispose(); }
+            _kisa = new { kurulu, calisiyor, port = kurulu ? AyarOku(AyarDosyasi).port ?? VarsayilanPort : (int?)null, vpnIp = kurulu ? VpnIp() : null };
+            _kisaZaman = DateTime.Now;
+            return _kisa;
+        }
+
         public static string[] Yazicilar()
         {
             try { return PrinterSettings.InstalledPrinters.Cast<string>().OrderBy(p => p, StringComparer.CurrentCultureIgnoreCase).ToArray(); }
@@ -133,7 +148,7 @@ namespace PusulaConnect
 
         public static async Task<object> Test()
         {
-            if (!Kurulu) throw new KullaniciHatasi("Yazıcı ajanı kurulu değil.");
+            if (!Kurulu) throw new KullaniciHatasi("Yazdırma yardımcısı kurulu değil.");
             var (yazici, portN) = AyarOku(AyarDosyasi);
             var port = portN ?? VarsayilanPort;
             var yerel = await Ping(port, 3000);
@@ -209,6 +224,7 @@ namespace PusulaConnect
 
             using (var k = Registry.CurrentUser.CreateSubKey(RunAnahtari)) k.SetValue(RunAdi, "\"" + Exe + "\"");
             Baslat();
+            _kisa = null;
 
             // Ajanın dinlemeye başlamasını bekle
             for (var i = 0; i < 20 && !(await Ping(port, 500)).ok; i++) await Task.Delay(250);
@@ -224,6 +240,7 @@ namespace PusulaConnect
             var izin = IzinVar(port);
             if (izin.urlacl || izin.kural) await YoneticiCalistir("--yazici-izin-sil " + port);   // reddedilirse kalır, zararsız
             Gunluk.Yaz("Yazıcı ajanı kaldırıldı");
+            _kisa = null;
             return Durum();
         }
 
@@ -247,7 +264,7 @@ namespace PusulaConnect
             foreach (var p in Process.GetProcessesByName(SurecAdi))
             {
                 try { p.Kill(); p.WaitForExit(5000); Gunluk.Yaz("Yazıcı ajanı durduruldu (PID " + p.Id + ")"); }
-                catch (Exception e) { throw new KullaniciHatasi("Çalışan yazıcı ajanı durdurulamadı (başka bir kullanıcı/yönetici olarak açılmış olabilir): " + e.Message); }
+                catch (Exception e) { throw new KullaniciHatasi("Çalışan yazdırma yardımcısı durdurulamadı (başka bir kullanıcı/yönetici olarak açılmış olabilir): " + e.Message); }
                 finally { p.Dispose(); }
             }
         }

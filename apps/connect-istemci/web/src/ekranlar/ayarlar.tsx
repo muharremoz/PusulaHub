@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Cable, CheckCircle2, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
+  Cable, CheckCircle2, ChevronDown, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
   RefreshCw, ShieldCheck, Usb, Video, Volume2,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -10,6 +10,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { YaziciAjaniBolumu } from "./yazici-ajani";
 
 type AyarAdi =
@@ -72,7 +73,7 @@ export function AyarlarIcerik({
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5 p-6">
+    <div className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-6">
       {hata && (
         <Alert variant="destructive">
           <AlertDescription>{hata}</AlertDescription>
@@ -206,15 +207,35 @@ export function AyarlarIcerik({
   );
 }
 
+/** Açılır-kapanır ayar bölümü; açık/kapalı durumu bu bilgisayarda hatırlanır. */
 export function Bolum({ baslik, aciklama, children }: { baslik: string; aciklama?: string; children: React.ReactNode }) {
+  const anahtar = "connect-ayar-bolum:" + baslik;
+  const [acik, setAcik] = useState(() => {
+    try {
+      return localStorage.getItem(anahtar) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const degistir = (a: boolean) => {
+    setAcik(a);
+    try {
+      localStorage.setItem(anahtar, a ? "1" : "0");
+    } catch {
+      /* depolama kapalı */
+    }
+  };
   return (
-    <section>
-      <div className="mb-2 flex items-baseline justify-between gap-3 px-1">
-        <h2 className="text-sm font-semibold">{baslik}</h2>
+    <Collapsible open={acik} onOpenChange={degistir} className="rounded-xl border bg-card shadow-xs">
+      <CollapsibleTrigger className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left hover:bg-muted/40">
+        <h2 className="flex-1 text-sm font-semibold">{baslik}</h2>
         {aciklama && <span className="text-xs text-muted-foreground">{aciklama}</span>}
-      </div>
-      <div className="divide-y rounded-xl border bg-card shadow-xs">{children}</div>
-    </section>
+        <ChevronDown className={"size-4 shrink-0 text-muted-foreground transition-transform " + (acik ? "rotate-180" : "")} />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="divide-y border-t">{children}</div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
