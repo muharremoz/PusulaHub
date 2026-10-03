@@ -69,6 +69,17 @@ namespace PusulaConnect
                 var tamAdres = _sunucu.Adres + "#anahtar=" + _sunucu.Anahtar;
                 AdresYaz(tamAdres);
                 TepsiKur(tamAdres);
+                // Yeni duyuru: tepsi bildirimi (oturum tam ekrandayken de görünür); tıklanınca pencere öne gelir.
+                var tepsi = _tepsi;
+                _uygulama.Bildir = (baslik, metin, onem) =>
+                {
+                    var kisa = string.IsNullOrEmpty(metin) ? "" : metin.Length > 200 ? metin.Substring(0, 197) + "…" : metin;
+                    var ikon = onem == "kritik" ? ToolTipIcon.Error : onem == "uyari" ? ToolTipIcon.Warning : ToolTipIcon.Info;
+                    void goster() => tepsi.ShowBalloonTip(15000, "Pusula duyurusu: " + baslik, kisa.Length > 0 ? kisa : baslik, ikon);
+                    var p = _pencere;
+                    if (p != null && !p.IsDisposed && p.IsHandleCreated) p.BeginInvoke((Action)goster); else goster();
+                };
+                _tepsi.BalloonTipClicked += (s, e) => Goster(tamAdres);
                 if (ConnectPenceresi.CalismaZamaniVar())
                 {
                     _pencere = new ConnectPenceresi(tamAdres, Kapat);
@@ -122,6 +133,7 @@ namespace PusulaConnect
                 case "POST /guncelle": return Task.FromResult(_uygulama.Guncelle());
                 case "POST /guncelleme/denetle": return _uygulama.GuncellemeDenetle();
                 case "POST /ayarlar": return Task.FromResult(_uygulama.AyarKaydet(i.Govde));
+                case "POST /duyuru/okundu": return _uygulama.DuyuruOkundu(i.Metin("id"));
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
                     return Task.FromResult<object>(new { tamam = true });

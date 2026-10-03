@@ -55,6 +55,14 @@ namespace PusulaConnect
 
         // Hub izleme merkezi: canlı durum (~60 sn) ve olay kaydı. Hata yutulur — izleme asıl işi bozmasın.
         public Task<JObject> Nabiz(object durum) => Gonder(HttpMethod.Post, "api/nabiz", durum);
+
+        // Duyurular (Hub → müşteri). Nabız yanıtındaki imza değişince liste yeniden çekilir.
+        public async Task<JArray> Duyurular()
+        {
+            var j = await GonderHam(HttpMethod.Get, "api/duyurular", null).ConfigureAwait(false);
+            return j as JArray ?? new JArray();
+        }
+        public Task<JObject> DuyuruOkundu(string id) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/okundu", new { });
         public async Task Olay(string tur, object ayrinti = null)
         {
             if (Token == null) return;
@@ -62,7 +70,11 @@ namespace PusulaConnect
             catch (Exception e) { Gunluk.Yaz("Olay gönderilemedi (" + tur + "): " + e.Message); }
         }
 
-        private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde)
+        private async Task<JObject> Gonder(HttpMethod yontem, string yol, object govde) =>
+            await GonderHam(yontem, yol, govde).ConfigureAwait(false) as JObject ?? new JObject();
+
+        /// <summary>Yanıt nesne ya da dizi olabilir (duyuru listesi dizi döner).</summary>
+        private async Task<JToken> GonderHam(HttpMethod yontem, string yol, object govde)
         {
             using (var istek = new HttpRequestMessage(yontem, yol))
             {
@@ -72,10 +84,10 @@ namespace PusulaConnect
                 try { yanit = await _http.SendAsync(istek).ConfigureAwait(false); }
                 catch (Exception e) { throw new ServisHatasi("Pusula sunucusuna ulaşılamadı (" + e.GetBaseException().Message + ")", 0); }
                 var metin = await yanit.Content.ReadAsStringAsync().ConfigureAwait(false);
-                JObject j = null;
-                try { j = string.IsNullOrWhiteSpace(metin) ? new JObject() : JObject.Parse(metin); } catch { }
+                JToken j = null;
+                try { j = string.IsNullOrWhiteSpace(metin) ? new JObject() : JToken.Parse(metin); } catch { }
                 if (!yanit.IsSuccessStatusCode)
-                    throw new ServisHatasi(j?.Value<string>("hata") ?? $"Sunucu hatası ({(int)yanit.StatusCode})", (int)yanit.StatusCode);
+                    throw new ServisHatasi((j as JObject)?.Value<string>("hata") ?? $"Sunucu hatası ({(int)yanit.StatusCode})", (int)yanit.StatusCode);
                 return j ?? new JObject();
             }
         }

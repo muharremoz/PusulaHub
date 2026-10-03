@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, CircleAlert, Download, ExternalLink, KeyRound, Loader2, Monitor, PlugZap,
-  Hash, Laptop, LifeBuoy, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
 import { AyarlarIcerik } from "./ayarlar";
+import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
 import { ParlayanLogo } from "./ortak";
@@ -30,8 +31,9 @@ export function AnaEkran({ durum, setDurum }: P) {
   const [hata, setHata] = useState<string | null>(null);
   const [vpnUyari, setVpnUyari] = useState(false);
   const [sifre, setSifre] = useState("");
-  // Orta panel: bağlantı (ana), yardım talebi (iframe; exe CSP'si yalnız bu adrese frame-src izni verir), ayarlar
-  const [orta, setOrta] = useState<"ana" | "talep" | "ayarlar">("ana");
+  // Orta panel: bağlantı (ana), yardım talebi (iframe; exe CSP'si yalnız bu adrese frame-src izni verir), ayarlar, duyurular
+  const [orta, setOrta] = useState<"ana" | "talep" | "ayarlar" | "duyurular">("ana");
+  const okunmamis = okunmamislar(durum).length;
   // İki adımlı doğrulama: açma penceresi + kod sorma (bağlan / kapat / şifre kaydet)
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [ikiAc, setIkiAc] = useState(false);
@@ -104,6 +106,19 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         <div className="flex flex-col gap-1 border-t px-3 py-3">
           <Button
+            variant={orta === "duyurular" ? "secondary" : "ghost"}
+            size="sm"
+            className="justify-start"
+            onClick={() => setOrta(orta === "duyurular" ? "ana" : "duyurular")}
+          >
+            <Megaphone /> Duyurular
+            {okunmamis > 0 && (
+              <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground tabular-nums">
+                {okunmamis}
+              </span>
+            )}
+          </Button>
+          <Button
             variant={orta === "ayarlar" ? "secondary" : "ghost"}
             size="sm"
             className="justify-start"
@@ -124,7 +139,21 @@ export function AnaEkran({ durum, setDurum }: P) {
       </aside>
 
       {/* ── Orta: bağlantı durumu ──────────────────────────── */}
-      {orta === "ayarlar" ? (
+      {orta === "duyurular" ? (
+        <main className="flex min-w-0 flex-1 flex-col">
+          <OrtaBaslik
+            sol={
+              <Button variant="ghost" size="icon" className="-ml-2" onClick={() => setOrta("ana")} aria-label="Bağlantı ekranına dön">
+                <ArrowLeft />
+              </Button>
+            }
+            baslik="Duyurular"
+          />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <DuyurularIcerik durum={durum} setDurum={setDurum} />
+          </div>
+        </main>
+      ) : orta === "ayarlar" ? (
         <main className="flex min-w-0 flex-1 flex-col">
           <OrtaBaslik
             sol={
@@ -167,6 +196,8 @@ export function AnaEkran({ durum, setDurum }: P) {
       <main className="flex min-w-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
+        <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
+
         {!durum.servisErisim && (
           <Alert>
             <WifiOff />

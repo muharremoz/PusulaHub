@@ -70,6 +70,16 @@ export type Profil = {
   msiurlArm: string;
 };
 
+export type Duyuru = {
+  id: string;
+  baslik: string;
+  metin: string;
+  onem: "bilgi" | "uyari" | "kritik";
+  olusturma: string;
+  bitis: string | null;
+  okundu: string | null;
+};
+
 export type Durum = {
   asama: "acilis" | "kayit" | "hazir";
   surum: string;
@@ -93,6 +103,8 @@ export type Durum = {
     tamEkran: boolean; yazici: boolean; pano: boolean; ses: boolean; windowsIleBaslat: boolean;
     akilliKart: boolean; portlar: boolean; konum: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
   };
+  /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
+  duyurular?: Duyuru[];
   vpnKurulum: {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;

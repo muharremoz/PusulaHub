@@ -106,3 +106,54 @@ export async function connectSurum(): Promise<{ son: string | null; min: string 
     return { son: null, min: null }
   }
 }
+
+// ------------------------------------------------------------ duyurular
+
+export type ConnectDuyuruOnem = "bilgi" | "uyari" | "kritik"
+
+export interface ConnectDuyuru {
+  id: string
+  baslik: string
+  metin: string
+  onem: ConnectDuyuruOnem
+  /** null = tüm müşteriler */
+  firmaId: string | null
+  firmaAdi: string | null
+  /** null = firmanın tüm kullanıcıları */
+  kullanici: string | null
+  olusturan: string | null
+  olusturma: string
+  /** null = süresiz */
+  bitis: string | null
+  iptal: boolean
+  iptalEden: string | null
+  iptalZaman: string | null
+  /** Hedefteki etkin cihaz sayısı */
+  hedefCihaz: number
+  okuyan: number
+}
+
+export interface ConnectDuyuruOkuyan {
+  cihazId: string; makine: string | null; firmaId: string; firmaAdi: string; kullanici: string
+  /** null = okumadı */
+  okundu: string | null
+}
+
+export interface ConnectDuyuruYeni {
+  baslik: string; metin: string; onem: ConnectDuyuruOnem
+  firmaId?: string | null; firmaAdi?: string | null; kullanici?: string | null
+  /** 0/boş = süresiz */
+  gunSayisi?: number | null
+  olusturan: string | null
+}
+
+export const connectDuyurular = () => istek<ConnectDuyuru[]>("/admin/duyurular")
+
+export const connectDuyuruEkle = (d: ConnectDuyuruYeni) =>
+  istek<{ id: string }>("/admin/duyurular", { method: "POST", body: JSON.stringify(d) })
+
+export const connectDuyuruOkuyanlar = (id: string) =>
+  istek<ConnectDuyuruOkuyan[]>(`/admin/duyurular/${encodeURIComponent(id)}/okuyanlar`)
+
+export const connectDuyuruKaldir = (id: string, yapan: string | null) =>
+  istek<{ tamam: boolean }>(`/admin/duyurular/${encodeURIComponent(id)}/iptal`, { method: "POST", body: JSON.stringify({ yapan }) })

@@ -23,9 +23,10 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
-  Activity, Ban, CheckCircle2, History, KeyRound, Laptop, LockOpen, MonitorPlay, MoreVertical, PlugZap,
+  Activity, Ban, CheckCircle2, History, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
   RefreshCw, ShieldCheck, ShieldOff, TriangleAlert, Wifi,
 } from "lucide-react"
+import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
 import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
 
 // ------------------------------------------------------------ yardımcılar
@@ -102,6 +103,8 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   cihaz_etkinlestirildi: { ad: "Cihaz yeniden açıldı", ton: "iyi" },
   kod_olusturuldu: { ad: "Kurulum kodu üretildi", ton: "notr" },
   kod_iptal: { ad: "Kurulum kodu iptal", ton: "uyari" },
+  duyuru_yayinlandi: { ad: "Duyuru yayınlandı", ton: "notr" },
+  duyuru_kaldirildi: { ad: "Duyuru kaldırıldı", ton: "notr" },
 }
 const TON_SINIF: Record<Ton, string> = {
   iyi: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -254,6 +257,7 @@ export default function ConnectPage() {
               <TabsTrigger value="cihazlar" className="h-7 gap-1.5 text-[12px]"><Laptop className="size-3.5" />Cihazlar</TabsTrigger>
               <TabsTrigger value="olaylar" className="h-7 gap-1.5 text-[12px]"><History className="size-3.5" />Olay kaydı</TabsTrigger>
               <TabsTrigger value="kodlar" className="h-7 gap-1.5 text-[12px]"><KeyRound className="size-3.5" />Kurulum kodları</TabsTrigger>
+              <TabsTrigger value="duyurular" className="h-7 gap-1.5 text-[12px]"><Megaphone className="size-3.5" />Duyurular</TabsTrigger>
             </TabsList>
             <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle() }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
@@ -268,6 +272,9 @@ export default function ConnectPage() {
           </TabsContent>
           <TabsContent value="kodlar" className="mt-3">
             <KodListesi kodlar={kodlar} onIptal={setKodOnay} />
+          </TabsContent>
+          <TabsContent value="duyurular" className="mt-3">
+            <DuyurularSekmesi cihazlar={cihazlar} />
           </TabsContent>
         </Tabs>
       </div>

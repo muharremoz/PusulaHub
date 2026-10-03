@@ -30,6 +30,14 @@
  *   İstemci (Bearer token):
  *     POST   /api/nabiz                 { oturum, terminal, ayarlar, ... } — ~60 sn'de bir canlı durum
  *     POST   /api/olay                  { tur, ayrinti } — oturum açıldı/bitti, güncellendi…
+ *     GET    /api/duyurular             bu cihaza yayındaki duyurular (+ okundu zamanı)
+ *     POST   /api/duyurular/:id/okundu  kullanıcı okudu
+ *     (nabız yanıtı { duyuru: { imza, okunmamis } } — imza değişince istemci listeyi yeniden çeker)
+ *   Duyurular (Hub → müşteri; X-Service-Key):
+ *     POST   /admin/duyurular           { baslik, metin, onem, firmaId?, firmaAdi?, kullanici?, gunSayisi?, olusturan }
+ *     GET    /admin/duyurular           hedef cihaz + okuyan sayısıyla
+ *     GET    /admin/duyurular/:id/okuyanlar   hedefteki cihazlar, okuduysa zamanı
+ *     POST   /admin/duyurular/:id/iptal       yayından kaldır { yapan }
  *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
  *     GET    /api/surum                 { son, min, sha256, boyut, notlar } — kendini güncelleme
  *     GET    /indir                     uygulama exe
@@ -126,6 +134,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_olaylar_firma ON olaylar(firmaId, zaman);
   CREATE INDEX IF NOT EXISTS idx_olaylar_cihaz ON olaylar(cihazId, zaman);
 `)
+// Duyurular: Hub'dan müşterilere mesaj. firmaId NULL = herkes, kullanici NULL = firmanın tümü.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS duyurular (
+    id         TEXT PRIMARY KEY,
+    baslik     TEXT NOT NULL,
+    metin      TEXT NOT NULL,
+    onem       TEXT NOT NULL DEFAULT 'bilgi',   -- bilgi | uyari | kritik
+    firmaId    TEXT,
+    firmaAdi   TEXT,
+    kullanici  TEXT,
+    olusturan  TEXT,
+    olusturma  TEXT NOT NULL DEFAULT (datetime('now')),
+    bitis      TEXT,                            -- NULL = süresiz
+    iptal      INTEGER NOT NULL DEFAULT 0,
+    iptalEden  TEXT,
+    iptalZaman TEXT
+  );
+  CREATE TABLE IF NOT EXISTS duyuru_okuma (
+    duyuruId TEXT NOT NULL REFERENCES duyurular(id) ON DELETE CASCADE,
+    cihazId  TEXT NOT NULL,
+    zaman    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (duyuruId, cihazId)
+  );
+`)
+const DUYURU_ONEM = new Set(["bilgi", "uyari", "kritik"])
+/** Duyurunun hedefi bu cihaz mı (SQL'de aynı koşul: DUYURU_HEDEF). */
+const DUYURU_HEDEF = `(d.firmaId IS NULL OR d.firmaId = k.firmaId) AND (d.kullanici IS NULL OR d.kullanici = k.kullanici)`
+const DUYURU_YAYINDA = `d.iptal = 0 AND (d.bitis IS NULL OR d.bitis > datetime('now'))`
+
 /** Olay kaydı 180 gün tutulur. */
 const OLAY_GUN = 180
 const olayTemizle = () => db.prepare(`DELETE FROM olaylar WHERE zaman < datetime('now', ?)`).run(`-${OLAY_GUN} days`)
@@ -172,6 +209,35 @@ const sql = {
                        WHERE (@firma IS NULL OR firmaId = @firma) AND (@cihaz IS NULL OR cihazId = @cihaz)
                          AND (@once IS NULL OR id < @once)
                        ORDER BY id DESC LIMIT @limit`),
+  duyuruEkle: db.prepare(`INSERT INTO duyurular (id, baslik, metin, onem, firmaId, firmaAdi, kullanici, olusturan, bitis)
+                          VALUES (@id, @baslik, @metin, @onem, @firmaId, @firmaAdi, @kullanici, @olusturan, @bitis)`),
+  duyuruIptal: db.prepare(`UPDATE duyurular SET iptal = 1, iptalEden = ?, iptalZaman = datetime('now') WHERE id = ? AND iptal = 0`),
+  duyuruBul: db.prepare(`SELECT * FROM duyurular WHERE id = ?`),
+  // Hub listesi: hedefteki etkin cihaz sayısı ve okuyan cihaz sayısıyla
+  duyurularAdmin: db.prepare(`SELECT d.*,
+      (SELECT COUNT(*) FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
+        WHERE c.iptal = 0 AND k.durum <> 'iptal' AND ${DUYURU_HEDEF}) AS hedefCihaz,
+      (SELECT COUNT(*) FROM duyuru_okuma o WHERE o.duyuruId = d.id) AS okuyan
+    FROM duyurular d ORDER BY d.olusturma DESC LIMIT 500`),
+  duyuruOkuyanlar: db.prepare(`SELECT c.id AS cihazId, c.makine, k.firmaId, k.firmaAdi, k.kullanici, o.zaman AS okundu
+    FROM duyurular d
+    JOIN cihazlar c ON c.iptal = 0
+    JOIN kodlar k ON k.id = c.kodId AND k.durum <> 'iptal' AND ${DUYURU_HEDEF}
+    LEFT JOIN duyuru_okuma o ON o.duyuruId = d.id AND o.cihazId = c.id
+    WHERE d.id = ? ORDER BY o.zaman IS NULL, o.zaman DESC, k.firmaId, k.kullanici`),
+  // İstemci: bu cihaza yayındaki duyurular (son 30 gün içinde yayınlananlar ya da süresi sürenler)
+  duyurularCihaz: db.prepare(`SELECT d.id, d.baslik, d.metin, d.onem, d.olusturma, d.bitis, o.zaman AS okundu
+    FROM duyurular d JOIN kodlar k ON k.id = @kodId
+    LEFT JOIN duyuru_okuma o ON o.duyuruId = d.id AND o.cihazId = @cihazId
+    WHERE ${DUYURU_YAYINDA} AND ${DUYURU_HEDEF} AND (d.bitis IS NOT NULL OR d.olusturma > datetime('now', '-30 days'))
+    ORDER BY d.olusturma DESC LIMIT 50`),
+  duyuruOku: db.prepare(`INSERT OR IGNORE INTO duyuru_okuma (duyuruId, cihazId) VALUES (?, ?)`),
+}
+
+/** Nabız yanıtındaki imza: yayındaki duyuru kümesi ya da okunma durumu değişince değişir → istemci listeyi yeniden çeker. */
+function duyuruImzasi(c) {
+  const l = sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId })
+  return { imza: ozet(l.map((d) => d.id + (d.okundu ? "+" : "")).join(",")).slice(0, 16), okunmamis: l.filter((d) => !d.okundu).length }
 }
 
 /** Olay kaydı — hata yutulur (kayıt yazılamadı diye asıl iş bozulmasın). */
@@ -373,6 +439,44 @@ fastify.get("/admin/olaylar", async (req, reply) => {
   return sql.olaylar.all({ firma: q.firma ? String(q.firma) : null, cihaz: q.cihaz ? String(q.cihaz) : null, once: q.once ? parseInt(q.once, 10) : null, limit })
 })
 
+// ── Duyurular (Hub → müşteri uygulaması) ──
+fastify.post("/admin/duyurular", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const b = req.body ?? {}
+  const baslik = String(b.baslik ?? "").trim().slice(0, 120)
+  const metin = String(b.metin ?? "").trim().slice(0, 4000)
+  if (!baslik || !metin) return reply.code(400).send({ hata: "Başlık ve metin gerekli" })
+  const onem = DUYURU_ONEM.has(b.onem) ? b.onem : "bilgi"
+  const firmaId = b.firmaId ? String(b.firmaId) : null
+  const kullanici = firmaId && b.kullanici ? String(b.kullanici) : null
+  const gun = Number(b.gunSayisi)
+  const bitis = Number.isFinite(gun) && gun > 0 ? new Date(Date.now() + Math.min(gun, 365) * 86400000).toISOString().replace("T", " ").slice(0, 19) : null
+  const id = randomBytes(8).toString("hex")
+  sql.duyuruEkle.run({ id, baslik, metin, onem, firmaId, firmaAdi: firmaId ? String(b.firmaAdi ?? "") || null : null, kullanici, olusturan: b.olusturan ?? null, bitis })
+  olay("duyuru_yayinlandi", { firmaId, kullanici, kaynak: "yonetici", ayrinti: (b.olusturan ? b.olusturan + " · " : "") + baslik })
+  return { id }
+})
+
+fastify.get("/admin/duyurular", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  return sql.duyurularAdmin.all().map((d) => ({ ...d, iptal: !!d.iptal }))
+})
+
+fastify.get("/admin/duyurular/:id/okuyanlar", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  if (!sql.duyuruBul.get(req.params.id)) return reply.code(404).send({ hata: "bulunamadi" })
+  return sql.duyuruOkuyanlar.all(req.params.id)
+})
+
+fastify.post("/admin/duyurular/:id/iptal", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const d = sql.duyuruBul.get(req.params.id)
+  if (!d) return reply.code(404).send({ hata: "bulunamadi" })
+  sql.duyuruIptal.run(req.body?.yapan ?? null, req.params.id)
+  olay("duyuru_kaldirildi", { firmaId: d.firmaId, kullanici: d.kullanici, kaynak: "yonetici", ayrinti: (req.body?.yapan ? req.body.yapan + " · " : "") + d.baslik })
+  return { tamam: true }
+})
+
 fastify.post("/admin/cihazlar/:id/iptal", async (req, reply) => {
   if (!yonetici(req, reply)) return
   const r = sql.cihazIptal.run(req.params.id)
@@ -513,6 +617,20 @@ fastify.post("/api/nabiz", async (req, reply) => {
     ip: istemciIp(req),
     durumJson: JSON.stringify(durum).slice(0, 4000),
   })
+  return { tamam: true, duyuru: duyuruImzasi(c) }
+})
+
+fastify.get("/api/duyurular", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  return sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId })
+})
+
+fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  // Yalnız bu cihaza yayınlanmış bir duyuru okunabilir
+  const d = sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId }).find((x) => x.id === req.params.id)
+  if (!d) return reply.code(404).send({ hata: "Duyuru bulunamadı" })
+  sql.duyuruOku.run(d.id, c.cihazId)
   return { tamam: true }
 })
 

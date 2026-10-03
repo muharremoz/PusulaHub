@@ -43,6 +43,13 @@ namespace PusulaConnect
         private string _minSurum, _sonSha256, _guncellemeNotlari, _guncellemeHatasi;
         private int _guncellemeYuzde;
 
+        // duyurular (Hub → müşteri)
+        private JArray _duyurular = new JArray();
+        private string _duyuruImza;
+        private int _duyuruTazeleniyor;
+        /// <summary>Yeni (okunmamış, daha önce bildirilmemiş) duyuru geldi: (başlık, metin, önem). Program tepside bildirim gösterir.</summary>
+        public Action<string, string, string> Bildir;
+
         public Action Kapat { get; set; }
 
         public Uygulama(ServisIstemci servis)
@@ -82,6 +89,7 @@ namespace PusulaConnect
                 Gunluk.Yaz("Profil tazelenemedi (son bilinen kullanılıyor): " + e.Message);
             }
             _ = Task.Run(GuncellemeyeBak);
+            _ = Task.Run(() => DuyurulariTazele());
             await Kontrol();
         }
 
@@ -134,6 +142,7 @@ namespace PusulaConnect
                     ikiAdim = new { aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true },
                     oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
+                    duyurular = _duyurular,
                     guncelleme = new
                     {
                         mevcut = _sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0,
@@ -173,7 +182,7 @@ namespace PusulaConnect
             Gunluk.Yaz("Cihaz kaydı kaldırıldı (kullanıcı)");
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; }
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; }
             return Durum();
         }
 
@@ -402,11 +411,66 @@ namespace PusulaConnect
                         ayarlar = Ayarlar.Simdiki.Gorunum(),
                     };
                 }
-                await _servis.Nabiz(durum);
+                var yanit = await _servis.Nabiz(durum);
                 _sonNabizGonderim = DateTime.Now;
+                // Yayındaki duyurular ya da okunma durumları değiştiyse listeyi yeniden çek
+                var imza = yanit["duyuru"]?.Value<string>("imza");
+                string onceki; lock (_kilit) onceki = _duyuruImza;
+                if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));
             }
             catch { /* servis yoksa sonra tekrar */ }
             finally { Interlocked.Exchange(ref _nabizSuruyor, 0); }
+        }
+
+        // ------------------------------------------------------------ duyurular
+
+        /// <summary>Daha önce tepside bildirilen duyurular — uygulama yeniden açılınca aynı duyuru tekrar bildirilmesin.</summary>
+        private static string BildirilenDosyasi => System.IO.Path.Combine(Kimlik.Klasor, "duyuru-bildirilen.txt");
+
+        /// <summary>Listeyi çeker; yeni duyuruları bildirir. imza: nabızda gelen — başarıyla çekilince saklanır, aynı imza için tekrar çekilmez.</summary>
+        private async Task DuyurulariTazele(string imza = null)
+        {
+            if (_servis.Token == null) return;
+            if (Interlocked.Exchange(ref _duyuruTazeleniyor, 1) == 1) return;
+            try
+            {
+                var liste = await _servis.Duyurular();
+                var yeniler = new System.Collections.Generic.List<JToken>();
+                var bildirilen = new System.Collections.Generic.HashSet<string>();
+                try { if (System.IO.File.Exists(BildirilenDosyasi)) foreach (var s in System.IO.File.ReadAllLines(BildirilenDosyasi)) bildirilen.Add(s.Trim()); } catch { }
+                foreach (var d in liste)
+                {
+                    var id = d.Value<string>("id");
+                    if (id != null && d["okundu"]?.Type == JTokenType.Null && bildirilen.Add(id)) yeniler.Add(d);
+                }
+                if (yeniler.Count > 0)
+                {
+                    // Yalnız yayındakiler saklanır (dosya büyümesin)
+                    var yayinda = new System.Collections.Generic.HashSet<string>();
+                    foreach (var d in liste) yayinda.Add(d.Value<string>("id"));
+                    try { System.IO.File.WriteAllLines(BildirilenDosyasi, System.Linq.Enumerable.Where(bildirilen, yayinda.Contains)); } catch { }
+                }
+                lock (_kilit) { _duyurular = liste; if (imza != null) _duyuruImza = imza; }
+                foreach (var d in yeniler)
+                {
+                    Gunluk.Yaz("Yeni duyuru: " + d.Value<string>("baslik"));
+                    try { Bildir?.Invoke(d.Value<string>("baslik"), d.Value<string>("metin"), d.Value<string>("onem")); } catch { }
+                }
+            }
+            catch (Exception e) { Gunluk.Yaz("Duyurular alınamadı: " + e.Message); }
+            finally { Interlocked.Exchange(ref _duyuruTazeleniyor, 0); }
+        }
+
+        public async Task<object> DuyuruOkundu(string id)
+        {
+            if (string.IsNullOrEmpty(id)) throw new KullaniciHatasi("Duyuru belirtilmedi.");
+            await _servis.DuyuruOkundu(id);
+            lock (_kilit)
+            {
+                foreach (var d in _duyurular)
+                    if (d.Value<string>("id") == id && d["okundu"]?.Type == JTokenType.Null) d["okundu"] = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            }
+            return Durum();
         }
 
         // ------------------------------------------------------------ iki adımlı doğrulama
