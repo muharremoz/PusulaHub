@@ -52,7 +52,7 @@ export function AyarlarSekmesi() {
   }
 
   return (
-    <div className="bg-[var(--section-bg)] max-w-[560px] rounded-[8px] p-2">
+    <div className="bg-[var(--section-bg)] w-full rounded-[8px] p-2" style={{ maxWidth: 520 }}>
       <div className="text-muted-foreground flex items-center gap-1.5 px-2 pt-1 pb-2 text-[10px] font-medium tracking-wider uppercase">
         <Settings className="size-3.5" /> VPN sunucusu
       </div>
