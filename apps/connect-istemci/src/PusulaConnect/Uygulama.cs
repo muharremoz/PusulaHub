@@ -135,6 +135,8 @@ namespace PusulaConnect
             set { try { if (value == null) System.IO.File.Delete(BilinenSurumDosyasi); else System.IO.File.WriteAllText(BilinenSurumDosyasi, value); } catch { } }
         }
         private string HubSurum { get { lock (_kilit) return _kayit?.Value<string>("sifreSurumu"); } }
+        /// <summary>"Hub'da şifre yoktu" işareti — sonradan Hub'dan sıfırlanınca fark (yeni sürüm) görülsün.</summary>
+        private const string YokSurum = "-";
 
         /// <summary>
         /// Hub'da şifre sıfırlandıysa (sürüm değişti) ya da hiç kayıtlı şifre yoksa yeni şifreyi Hub'dan al.
@@ -144,12 +146,13 @@ namespace PusulaConnect
         private async Task SifreyiEsitle()
         {
             var hub = HubSurum;
-            if (hub == null) return;
             var bilinen = BilinenSurum;
-            if (hub == bilinen) return;
             var iki = IkiAktif;
             var kayitli = iki ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar;
-            // İlk kez: kullanıcının kendi girdiği şifre duruyor → güncel kabul et
+            // Hub'da şifre yok: bunu not et ("-") — sonradan Hub'dan şifre sıfırlanırsa değişiklik sayılır
+            if (hub == null) { if (kayitli && bilinen == null) BilinenSurum = YokSurum; return; }
+            if (hub == bilinen) return;
+            // Eski sürümden gelen cihaz, Hub'da şifre zaten varken: kullanıcının girdiği şifreyi güncel kabul et
             if (kayitli && bilinen == null) { BilinenSurum = hub; return; }
             if (iki)
             {
@@ -336,7 +339,7 @@ namespace PusulaConnect
                 Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
                 Rdp.SifreSil(rdp);
                 Rdp.YerelSil();
-                BilinenSurum = HubSurum;
+                BilinenSurum = HubSurum ?? YokSurum;
                 lock (_kilit) { _oturumMesaji = null; _sifreBekliyor = false; }
                 Gunluk.Yaz("RDP şifresi kaydedildi (2FA kasası)");
                 _ = _servis.Olay("sifre_kaydedildi", "2FA kasası");
@@ -345,7 +348,7 @@ namespace PusulaConnect
             }
             Rdp.YerelKaydet(sifre);
             Rdp.SifreSil(rdp);
-            BilinenSurum = HubSurum;
+            BilinenSurum = HubSurum ?? YokSurum;
             lock (_kilit) _oturumMesaji = null;
             Gunluk.Yaz("RDP şifresi kaydedildi (" + rdp + ")");
             _ = _servis.Olay("sifre_kaydedildi");
