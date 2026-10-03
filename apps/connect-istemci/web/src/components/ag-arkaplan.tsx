@@ -1,35 +1,32 @@
 import { useMemo } from "react";
 import type { COBEOptions } from "cobe";
 import { Globe } from "@/components/ui/globe";
-import { MUSTERI_ILLERI, MUSTERI_ULKELERI } from "@/lib/musteri-konumlari";
+import { cozumleKonum } from "@/lib/il-koordinatlari";
 
 /**
- * Orta panelin arka planı: dünya (Magic UI Globe / cobe). Pusula müşterilerinin olduğu iller ve ülkeler
- * işaretli — İstanbul ve Ankara belirgin, diğerleri firma sayısıyla (log) büyür; hepsi nabız gibi atar. Türkiye ortada kalır (±6° salınır).
- * Bağlıyken yeşil, değilken gri.
+ * Orta panelin arka planı: dünya (Magic UI Globe / cobe). Yalnız firmanın ili (CRM'deki şehri, profil.sehir)
+ * işaretli ve nabız gibi atar; dünya o ile ortalı, hafifçe salınır. Şehir yoksa ya da çözülemezse
+ * işaretsiz, Türkiye ortada. Bağlıyken yeşil, değilken gri.
  */
 
-const log = (n: number) => Math.log10(Math.max(1, n));
-// Boyutlar cobe 2 ölçeğinde (0.6'dakinin ~⅓'ü).
-/** İller: İstanbul ve Ankara öne çıkar, diğerleri küçük nokta (1 firma ≈ 0,004 · 150 ≈ 0,0075) */
-const ilBoyutu = (ad: string, firma: number) =>
-  ad === "İstanbul" ? 0.028 : ad === "Ankara" ? 0.021 : 0.004 + 0.0016 * log(firma);
-/** Yurt dışı: tek tek göründükleri için biraz daha iri (1 firma ≈ 0,009 · Almanya 33 ≈ 0,014) */
-const ulkeBoyutu = (firma: number) => 0.009 + 0.0033 * log(firma);
+/** Türkiye'nin yaklaşık ortası — şehir bilinmezken */
+const TURKIYE: [number, number] = [39.0, 35.0];
 
-export function AgArkaplan({ bagli }: { bagli: boolean }) {
+export function AgArkaplan({ bagli, sehir }: { bagli: boolean; sehir?: string | null }) {
   // Uygulama yalnız .dark sınıfıyla koyulaşır (sistem teması değil)
   const koyu = typeof document !== "undefined" && document.documentElement.classList.contains("dark");
+  const konum = useMemo(() => cozumleKonum(sehir), [sehir]);
 
   const config = useMemo<COBEOptions>(() => {
     const isaret: [number, number, number] = bagli ? [16 / 255, 185 / 255, 129 / 255] : [0.45, 0.5, 0.58];
+    const merkez: [number, number] = konum ? [konum.lat, konum.lng] : TURKIYE;
     return {
       width: 800,
       height: 800,
       devicePixelRatio: 2,
-      // Türkiye (35° D) ortada: cobe'de boylam λ için φ = π − (λ − π/2)
-      phi: Math.PI - ((35 * Math.PI) / 180 - Math.PI / 2),
-      theta: 0.2, // kuzey öne eğik: Türkiye + Avrupa kartların altındaki görünen yarının ortasına iner
+      // Merkezdeki boylam önde: cobe'de boylam λ için φ = π − (λ − π/2)
+      phi: Math.PI - ((merkez[1] * Math.PI) / 180 - Math.PI / 2),
+      theta: 0.2, // kuzey öne eğik: Türkiye kartların altındaki görünen yarının ortasına iner
       dark: koyu ? 1 : 0,
       diffuse: 0.4,
       mapSamples: 16000,
@@ -37,12 +34,9 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       baseColor: koyu ? [0.3, 0.3, 0.3] : [1, 1, 1],
       markerColor: isaret,
       glowColor: koyu ? [0.15, 0.15, 0.15] : [1, 1, 1],
-      markers: [
-        ...MUSTERI_ILLERI.map((i) => ({ location: i.konum, size: ilBoyutu(i.ad, i.firma) })),
-        ...MUSTERI_ULKELERI.map((u) => ({ location: u.konum, size: ulkeBoyutu(u.firma) })),
-      ],
+      markers: konum ? [{ location: [konum.lat, konum.lng], size: 0.03 }] : [],
     };
-  }, [bagli, koyu]);
+  }, [bagli, koyu, konum]);
 
   return (
     // Panelin altında, yarısı dışarıda (ufuktan doğan dünya)

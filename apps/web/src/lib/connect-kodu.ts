@@ -12,6 +12,7 @@
  */
 
 import { getFirmaErisim } from "@/lib/firma-erisim"
+import { firmaSehri } from "@/lib/crm-temsilciler"
 import { GUVENLI_KULLANICI_ADI, MSI_URL, MSI_URL_ARM, TUNEL_ADI, VPN_SUNUCU } from "@/lib/kurulum-paketi"
 
 const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
@@ -30,6 +31,8 @@ export async function connectKoduUret(firkod: string, firmaAdi: string, kullanic
   const rdp = erisim.windows?.dns || erisim.windows?.ip || ""
   if (!rdp) return { ok: false, hata: "Firmaya RDP sunucusu atanmamış — kod üretilemez", kod: 409 }
   const domain = (erisim.ad?.domain ?? "").split(".")[0].toUpperCase() || "PUSULADC"
+  // Uygulamadaki dünyada firmanın ili işaretlenir (CRM yoksa şehirsiz devam)
+  const sehir = await firmaSehri(firkod).catch(() => null)
 
   const r = await fetch(`${BASE}/admin/kodlar`, {
     method: "POST",
@@ -49,6 +52,7 @@ export async function connectKoduUret(firkod: string, firmaAdi: string, kullanic
         domain,
         msiurl: MSI_URL,
         msiurlArm: MSI_URL_ARM,
+        sehir,
       },
     }),
   })

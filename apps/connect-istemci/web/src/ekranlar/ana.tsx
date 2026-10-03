@@ -195,7 +195,7 @@ export function AnaEkran({ durum, setDurum }: P) {
         </main>
       ) : (
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
-      <AgArkaplan bagli={k.terminal.erisim} />
+      <AgArkaplan bagli={k.terminal.erisim} sehir={kayit.profil.sehir} />
       <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
