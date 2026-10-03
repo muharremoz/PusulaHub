@@ -457,7 +457,8 @@ namespace PusulaConnect
                 {
                     Ad = ad, Sunucu = rdp, Port = RdpPort, Domain = P("domain"), Kullanici = kullanici, Sifre = sifre,
                     TamEkran = ay.TamEkran, Yazici = ay.Yazici, Pano = ay.Pano, Ses = ay.Ses,
-                    AkilliKart = ay.AkilliKart, Portlar = ay.Portlar, Konum = ay.Konum, Kamera = ay.Kamera,
+                    // Akıllı kart ve konum yönlendirmesi kaldırıldı (03.10.2026): ayar yok, hep kapalı
+                    AkilliKart = false, Portlar = ay.Portlar, Konum = false, Kamera = ay.Kamera,
                     Aygitlar = ay.Aygitlar, Suruculer = ay.Suruculer,
                 }, OturumBitti);
                 _oturumBaslangic = DateTime.Now;

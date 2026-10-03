@@ -109,7 +109,7 @@ export type Durum = {
   /** Ayarlar sayfası (anında kaydedilir). */
   ayarlar?: {
     tamEkran: boolean; yazici: boolean; pano: boolean; ses: boolean; windowsIleBaslat: boolean;
-    akilliKart: boolean; portlar: boolean; konum: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
+    portlar: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
     /** İki adımlı doğrulama: kod uygulama açılışında / Pusula bağlantısında sorulsun (en az biri açık). */
     ikiAcilis?: boolean; ikiBaglanti?: boolean;
   };
