@@ -465,10 +465,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     </div>
                   }
                 >
-                  <Table>
+                  <Table className="text-[13px]">
                     <TableHeader>
-                      <TableRow className="text-[10px] uppercase tracking-wider">
-                        <TableHead className="w-10 pl-4">
+                      <TableRow className="text-[10px] uppercase tracking-wider hover:bg-transparent">
+                        <TableHead className="h-8 w-9 pl-3">
                           <Ipucu metin="Listelenenlerin (filtreye uyan) tümünü seç / kaldır">
                             <Checkbox
                               checked={hepsiSecili ? true : filtreliSeciliSayisi > 0 ? "indeterminate" : false}
@@ -478,14 +478,14 @@ export function RaporEkrani({ durum, setDurum }: P) {
                             />
                           </Ipucu>
                         </TableHead>
-                        <TableHead className="px-4">Veritabanı</TableHead>
-                        <TableHead className="px-4">Şirket</TableHead>
-                        <TableHead className="px-4">Kod</TableHead>
-                        <TableHead className="px-4">Program</TableHead>
-                        <TableHead className="px-4 text-right">Veri</TableHead>
-                        <TableHead className="px-4">Son hareket</TableHead>
-                        <TableHead className="px-4">Son yedek</TableHead>
-                        {hedef.depo && <TableHead className="px-4">Aktarım</TableHead>}
+                        <TableHead className="h-8 px-3">Veritabanı</TableHead>
+                        <TableHead className="h-8 px-3">Şirket</TableHead>
+                        <TableHead className="h-8 px-3">Kod</TableHead>
+                        <TableHead className="h-8 px-3">Program</TableHead>
+                        <TableHead className="h-8 px-3 text-right">Boyut</TableHead>
+                        <TableHead className="h-8 px-3">Son hareket</TableHead>
+                        <TableHead className="h-8 px-3">Son yedek</TableHead>
+                        {hedef.depo && <TableHead className="h-8 px-3">Aktarım</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -498,7 +498,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       )}
                       {sayfadakiler.map((v) => (
                         <TableRow key={v.ad} data-state={secili.has(v.ad) ? "selected" : undefined}>
-                          <TableCell className="pl-4">
+                          <TableCell className="py-1 pl-3">
                             <Checkbox
                               checked={secili.has(v.ad)}
                               disabled={v.durum !== "ONLINE"}
@@ -506,30 +506,30 @@ export function RaporEkrani({ durum, setDurum }: P) {
                               aria-label={v.ad + " aktarılsın"}
                             />
                           </TableCell>
-                          <TableCell className="px-4 font-mono">
+                          <TableCell className="py-1 px-3 whitespace-nowrap font-mono">
                             {v.ad}
-                            {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-2">{v.durum}</Badge>}
+                            {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-1.5 h-[18px] px-1.5 text-[10px]">{v.durum}</Badge>}
                           </TableCell>
-                          <TableCell className="px-4">{v.sirketAdlari.join(", ") || "—"}</TableCell>
-                          <TableCell className="px-4 font-mono tabular-nums">{v.kod ?? "—"}</TableCell>
-                          <TableCell className="px-4">
+                          <TableCell className="py-1 px-3 whitespace-nowrap">{v.sirketAdlari.join(", ") || "—"}</TableCell>
+                          <TableCell className="py-1 px-3 whitespace-nowrap font-mono tabular-nums">{v.kod ?? "—"}</TableCell>
+                          <TableCell className="py-1 px-3 whitespace-nowrap">
                             {v.prgTur === "909" ? (
-                              <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">Perakende</span>
+                              <span className="inline-flex rounded bg-muted px-1.5 py-px text-[11px] font-medium text-foreground">Perakende</span>
                             ) : v.prgTur === "011" ? (
-                              <span className="inline-flex rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-foreground">Toptan</span>
+                              <span className="inline-flex rounded bg-muted px-1.5 py-px text-[11px] font-medium text-foreground">Toptan</span>
                             ) : (
                               <span className="text-muted-foreground">{v.prgTur ?? "—"}</span>
                             )}
                           </TableCell>
-                          <TableCell className="px-4 text-right tabular-nums">{mb(v.veriMb)}</TableCell>
-                          <TableCell className={"px-4 tabular-nums " + (eskiYilMi(v) ? "text-foreground" : "text-muted-foreground")}>
+                          <TableCell className="py-1 px-3 whitespace-nowrap text-right tabular-nums">{mb(v.veriMb)}</TableCell>
+                          <TableCell className={"py-1 px-3 whitespace-nowrap tabular-nums " + (eskiYilMi(v) ? "text-foreground" : "text-muted-foreground")}>
                             <Ipucu metin={v.sonHareket ? "Son cari hareket (CarHrk)" + (eskiYilMi(v) ? " — eski yıl datası" : "") : "CarHrk tablosu yok veya okunamadı"}>
                               <span>{tarih(v.sonHareket)}</span>
                             </Ipucu>
                           </TableCell>
-                          <TableCell className="px-4 text-muted-foreground">{tarih(v.sonYedek)}</TableCell>
+                          <TableCell className="py-1 px-3 whitespace-nowrap text-muted-foreground">{tarih(v.sonYedek)}</TableCell>
                           {hedef.depo && (
-                            <TableCell className="px-4">
+                            <TableCell className="py-1 px-3 whitespace-nowrap">
                               {/* Her zaman görünür; seçili değilse soluk. Birine basmak satırı da seçer. */}
                               <ToggleGroup
                                 type="single"
@@ -540,8 +540,8 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 value={secili.has(v.ad) ? (eskiYil.has(v.ad) ? "eski" : "guncel") : ""}
                                 onValueChange={(d) => d && satirAktarimi(v, d as "guncel" | "eski")}
                               >
-                                <ToggleGroupItem value="guncel" className="px-2 text-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Güncel</ToggleGroupItem>
-                                <ToggleGroupItem value="eski" className="px-2 text-xs data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Eski yıl</ToggleGroupItem>
+                                <ToggleGroupItem value="guncel" className="h-6 px-2 text-[11px] data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Güncel</ToggleGroupItem>
+                                <ToggleGroupItem value="eski" className="h-6 px-2 text-[11px] data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">Eski yıl</ToggleGroupItem>
                               </ToggleGroup>
                             </TableCell>
                           )}
