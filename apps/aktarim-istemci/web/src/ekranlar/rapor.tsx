@@ -25,6 +25,8 @@ import { Ipucu, mb, ParlayanLogo } from "./ortak";
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
 const VT_SAYFA = 10;
+/** Resim küçültme aracı şimdilik gizli (03.10.2026). Araç (resim-kucult.tsx, ResimKucultucu.cs) yerinde; açmak için true. */
+const RESIM_KUCULTME = false;
 /** Seçili filtre / program düğmesi: ana renk (mavi) dolgu. */
 const FILTRE_ACIK = "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground";
 const KLASOR_SAYFA = 10;
@@ -387,9 +389,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
               {bekle || taraniyor ? <Loader2 className="animate-spin" /> : <RefreshCw />} {taraniyor ? "Taranıyor…" : "Yeniden tara"}
             </Button>
           )}
-          <Button variant="outline" className="justify-start" onClick={() => setKucultme(true)}>
-            <Minimize2 /> Resim küçült
-          </Button>
+          {RESIM_KUCULTME && (
+            <Button variant="outline" className="justify-start" onClick={() => setKucultme(true)}>
+              <Minimize2 /> Resim küçült
+            </Button>
+          )}
         </div>
       </aside>
 
@@ -579,9 +583,15 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       <div className="flex items-start gap-2 border-b bg-muted px-4 py-2.5 text-sm text-foreground">
                         <AlertTriangle className="mt-0.5 size-4 shrink-0" />
                         <span>
-                          <b>{buyukResim.adet.toLocaleString("tr")}</b> adet resim 500 KB'tan büyük (toplam {mb(buyukResim.mb)}). Yükleme öncesi
-                          <b> Resim küçült</b> aracıyla sıkıştırmanızı öneririz — yükleme süresi azalır, depolama tasarrufu sağlanır. Küçültülmüş
-                          yüksek çözünürlüklü resimler 500 KB üzerinde kalabilir; bu normaldir.
+                          <b>{buyukResim.adet.toLocaleString("tr")}</b> adet resim 500 KB'tan büyük (toplam {mb(buyukResim.mb)}).
+                          {RESIM_KUCULTME ? (
+                            <>
+                              {" "}Yükleme öncesi <b>Resim küçült</b> aracıyla sıkıştırmanızı öneririz — yükleme süresi azalır, depolama tasarrufu
+                              sağlanır. Küçültülmüş yüksek çözünürlüklü resimler 500 KB üzerinde kalabilir; bu normaldir.
+                            </>
+                          ) : (
+                            " Yükleme bu nedenle uzun sürebilir."
+                          )}
                         </span>
                       </div>
                     )}
