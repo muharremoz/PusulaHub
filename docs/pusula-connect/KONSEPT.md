@@ -104,7 +104,7 @@ daraltan üç önlem alındı:
    imzalar → `PusulaConnect.exe.sig`. İstemci iki açık anahtar tanır (0.4.6+): ANA ve YEDEK; yedekle imza yalnız
    ana kaybolur/çalınırsa (`CONNECT_IMZA_YEDEK=1`). Kurulum: `scripts/connect-imza-kur.ps1` (bir kez, 03.10.2026);
    yeni bilgisayar/geri yükleme: Hub şifre kasasındaki iki kayıttan `.enc.pem` + `scripts/connect-imza-parola.ps1`.
-   Parola Hub kasasında DEĞİL. Eski not: servis `/api/surum`'da `imza` verir;
+   Parola Hub kasasında DEĞİL. Parola ipucu: `sezyum133`. Eski not: servis `/api/surum`'da `imza` verir;
    istemci (`GuncellemeImzasi.cs`, gömülü açık anahtar) imzasız/yanlış imzalı yayını kurmaz, imzasız yayını
    hiç göstermez. Anahtar kaybolursa yeni sürüm yayınlanamaz — yedeğini güvenli yerde tut. Anahtar
    değiştirilecekse önce eski anahtarla, yeni açık anahtarı içeren bir sürüm yayınlanır.
