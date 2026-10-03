@@ -223,15 +223,21 @@ export function AnaEkran({ durum, setDurum }: P) {
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
         {sg?.mesaj && (
-          <Alert className="border-sky-500/30 bg-sky-500/10">
-            <KeyRound />
-            <AlertDescription className="flex flex-col gap-2">
-              <span>
-                {sg.mesaj} <b>VPN (FortiClient) şifreniz de aynıdır</b>; FortiClient şifre sorarsa yeni şifreyi oraya girin.
-              </span>
+          // Şifre değişti: dikkat çekmeli — opak kart, kalın amber kenar, ikon kutusu, başlık
+          <section className="flex items-start gap-3 rounded-xl border-2 border-amber-500/60 bg-card p-4 shadow-md ring-4 ring-amber-500/10">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
+              <KeyRound className="size-5" />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div>
+                <div className="text-[15px] font-semibold">Şifreniz değişti</div>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {sg.mesaj} <b className="text-foreground">VPN (FortiClient) şifreniz de aynıdır</b>; FortiClient şifre sorarsa yeni şifreyi oraya girin.
+                </p>
+              </div>
               <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
-            </AlertDescription>
-          </Alert>
+            </div>
+          </section>
         )}
 
         {!durum.servisErisim && (
