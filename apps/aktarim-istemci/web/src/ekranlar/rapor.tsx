@@ -909,22 +909,39 @@ export function RaporEkrani({ durum, setDurum }: P) {
         {r && !taraniyor ? (
           <>
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
-              <dl className="flex flex-col divide-y rounded-lg border">
-                <OzetSatiri
-                  ikon={<Database />}
-                  ad="Veritabanları"
-                  sayi={secili.size}
-                  ek={secili.size > 0 ? mb(toplamMb) : undefined}
-                  alt={[
-                    eskiSayisi > 0 ? `${eskiSayisi} eski yıl` : null,
-                    veritabanlariAyir && secili.size > 0 ? "aktarımdan sonra ayrılacak" : null,
-                  ].filter(Boolean).join(" · ") || undefined}
-                />
-                <OzetSatiri ikon={<Image />} ad="Resim klasörleri" sayi={resimSayisi} />
-                <OzetSatiri ikon={<FileCode2 />} ad="Programlar" sayi={programSayisi + programDosyaSayisi} />
-                <OzetSatiri ikon={<FileArchive />} ad="Eski yıl dosyaları" sayi={eskiDosyalar.length} />
-                <OzetSatiri ikon={<FolderPlus />} ad="Ek klasörler" sayi={ekKlasorler.length} />
-              </dl>
+              {/* Özet tablosu: tür / adet / boyut; veritabanlarının altında seçilenler tek tek */}
+              <div className="overflow-hidden rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="h-8 px-3 text-[10px] font-medium tracking-wider uppercase">Tür</TableHead>
+                      <TableHead className="h-8 px-2 text-right text-[10px] font-medium tracking-wider uppercase">Adet</TableHead>
+                      <TableHead className="h-8 px-3 text-right text-[10px] font-medium tracking-wider uppercase">Boyut</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    <OzetSatiri ikon={<Database />} ad="Veritabanları" sayi={secili.size} boyut={secili.size > 0 ? mb(toplamMb) : undefined} />
+                    {(r.veritabanlari ?? []).filter((v) => secili.has(v.ad)).map((v) => (
+                      <TableRow key={v.ad} className="hover:bg-transparent">
+                        <TableCell className="max-w-0 py-1 pr-1 pl-9 text-xs" colSpan={2}>
+                          <span className="block truncate font-mono" title={v.ad}>
+                            {v.ad}
+                            {eskiYil.has(v.ad) && <span className="ml-1.5 font-sans text-muted-foreground">eski yıl</span>}
+                          </span>
+                        </TableCell>
+                        <TableCell className="py-1 px-3 text-right text-xs tabular-nums text-muted-foreground">{mb(v.veriMb)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <OzetSatiri ikon={<Image />} ad="Resim klasörleri" sayi={resimSayisi} />
+                    <OzetSatiri ikon={<FileCode2 />} ad="Programlar" sayi={programSayisi + programDosyaSayisi} />
+                    <OzetSatiri ikon={<FileArchive />} ad="Eski yıl dosyaları" sayi={eskiDosyalar.length} />
+                    <OzetSatiri ikon={<FolderPlus />} ad="Ek klasörler" sayi={ekKlasorler.length} />
+                  </TableBody>
+                </Table>
+              </div>
+              {veritabanlariAyir && secili.size > 0 && (
+                <p className="px-1 text-xs text-muted-foreground">Veritabanları aktarımdan sonra bu SQL Server'dan ayrılacak.</p>
+              )}
 
               <div className="flex items-baseline justify-between px-1">
                 <span className="text-sm text-muted-foreground">Toplam veritabanı</span>
@@ -1172,20 +1189,16 @@ function PanelBilgi({ ad, deger, mono, sar }: { ad: string; deger: string; mono?
   );
 }
 
-/** Sağ paneldeki özet satırı: ikon, kategori, adet (0 ise soluk "—"), isteğe bağlı boyut ve alt satır. */
-function OzetSatiri({ ikon, ad, sayi, ek, alt }: { ikon: React.ReactNode; ad: string; sayi: number; ek?: string; alt?: string }) {
+/** Sağ paneldeki özet tablosunun kategori satırı: ikon + tür, adet (0 ise soluk "—"), boyut. */
+function OzetSatiri({ ikon, ad, sayi, boyut }: { ikon: React.ReactNode; ad: string; sayi: number; boyut?: string }) {
   const bos = sayi === 0;
   return (
-    <div className={"flex items-start gap-3 px-3 py-2.5 " + (bos ? "text-muted-foreground" : "")}>
-      <span className="mt-0.5 [&_svg]:size-4">{ikon}</span>
-      <div className="min-w-0 flex-1">
-        <dt className="text-sm">{ad}</dt>
-        {alt && <dd className="text-xs text-muted-foreground">{alt}</dd>}
-      </div>
-      <dd className="text-right text-sm tabular-nums">
-        <div className={bos ? "" : "font-semibold"}>{bos ? "—" : sayi}</div>
-        {ek && <div className="text-xs text-muted-foreground">{ek}</div>}
-      </dd>
-    </div>
+    <TableRow className={"hover:bg-transparent " + (bos ? "text-muted-foreground" : "")}>
+      <TableCell className="px-3 py-2">
+        <span className="flex items-center gap-2 [&_svg]:size-4 [&_svg]:shrink-0">{ikon}{ad}</span>
+      </TableCell>
+      <TableCell className={"px-2 py-2 text-right tabular-nums " + (bos ? "" : "font-semibold")}>{bos ? "—" : sayi}</TableCell>
+      <TableCell className="px-3 py-2 text-right tabular-nums">{boyut ?? (bos ? "" : "—")}</TableCell>
+    </TableRow>
   );
 }
