@@ -145,6 +145,8 @@ export default function ConnectPage() {
   const [onay, setOnay] = useState<{ c: ConnectCihazSatir; islem: ConnectCihazIslemi } | null>(null)
   const [kodOnay, setKodOnay] = useState<ConnectKod | null>(null)
   const [yenileniyor, setYenileniyor] = useState(false)
+  /** "Yenile" düğmesi: kendi verisini tutan sekmeler (duyurular) bunu izler */
+  const [yenileSayac, setYenileSayac] = useState(0)
 
   const yukle = useCallback(async () => {
     setYenileniyor(true)
@@ -259,7 +261,7 @@ export default function ConnectPage() {
               <TabsTrigger value="kodlar" className="h-7 gap-1.5 text-[12px]"><KeyRound className="size-3.5" />Kurulum kodları</TabsTrigger>
               <TabsTrigger value="duyurular" className="h-7 gap-1.5 text-[12px]"><Megaphone className="size-3.5" />Duyurular</TabsTrigger>
             </TabsList>
-            <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle() }}>
+            <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle(); setYenileSayac((n) => n + 1) }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
             </Button>
           </div>
@@ -274,7 +276,7 @@ export default function ConnectPage() {
             <KodListesi kodlar={kodlar} onIptal={setKodOnay} />
           </TabsContent>
           <TabsContent value="duyurular" className="mt-3">
-            <DuyurularSekmesi cihazlar={cihazlar} />
+            <DuyurularSekmesi cihazlar={cihazlar} yenile={yenileSayac} />
           </TabsContent>
         </Tabs>
       </div>

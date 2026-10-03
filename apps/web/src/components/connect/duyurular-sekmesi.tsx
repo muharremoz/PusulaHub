@@ -58,7 +58,7 @@ function OnemRozeti({ onem }: { onem: ConnectDuyuruOnem }) {
   return <span className={cn("inline-flex items-center gap-1 rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", o.sinif)}>{o.ikon}{o.ad}</span>
 }
 
-export function DuyurularSekmesi({ cihazlar }: { cihazlar: ConnectCihazSatir[] | null }) {
+export function DuyurularSekmesi({ cihazlar, yenile = 0 }: { cihazlar: ConnectCihazSatir[] | null; yenile?: number }) {
   const [duyurular, setDuyurular] = useState<ConnectDuyuru[] | null>(null)
   const [yeniAcik, setYeniAcik] = useState(false)
   const [secili, setSecili] = useState<ConnectDuyuru | null>(null)
@@ -75,7 +75,13 @@ export function DuyurularSekmesi({ cihazlar }: { cihazlar: ConnectCihazSatir[] |
       setDuyurular((o) => o ?? [])
     }
   }, [])
-  useEffect(() => { void yukle() }, [yukle])
+  // İlk yükleme + 30 sn'de bir: okunma bilgisi istemcilerden nabızla (~60 sn) gelir
+  useEffect(() => {
+    void yukle()
+    const t = window.setInterval(() => { if (document.visibilityState === "visible") void yukle() }, 30_000)
+    return () => window.clearInterval(t)
+  }, [yukle])
+  useEffect(() => { if (yenile) void yukle() }, [yenile, yukle])
 
   const kaldirOnayla = async () => {
     if (!kaldir) return
@@ -95,7 +101,7 @@ export function DuyurularSekmesi({ cihazlar }: { cihazlar: ConnectCihazSatir[] |
     <>
       <DuyuruListesi duyurular={duyurular} onYeni={() => setYeniAcik(true)} onSec={setSecili} onKaldir={setKaldir} />
       <YeniDuyuru acik={yeniAcik} cihazlar={cihazlar} onKapat={() => setYeniAcik(false)} onYayinlandi={() => { setYeniAcik(false); void yukle() }} />
-      <DuyuruDetay duyuru={secili} onKapat={() => setSecili(null)} onKaldir={(d) => { setSecili(null); setKaldir(d) }} />
+      <DuyuruDetay duyuru={secili} onKapat={() => { setSecili(null); void yukle() }} onKaldir={(d) => { setSecili(null); setKaldir(d) }} />
       <AlertDialog open={!!kaldir} onOpenChange={(o) => !o && setKaldir(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
