@@ -25,13 +25,6 @@ import { Ipucu, mb, ParlayanLogo } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
-const TUR_ETIKET: Record<Veritabani["tur"], string> = {
-  firma: "Firma datası",
-  transfer: "Transfer datası",
-  diger: "Tanımsız",
-  sirket: "Şirket tanımları",
-};
-
 const VT_SAYFA = 10;
 /** Seçili filtre / program düğmesi: ana renk (mavi) dolgu. */
 const FILTRE_ACIK = "data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground";
@@ -129,7 +122,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
   const [basliyor, setBasliyor] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
   const [arama, setArama] = useState("");
-  const [turFiltre, setTurFiltre] = useState<"hepsi" | Veritabani["tur"]>("hepsi");
   const [vtSayfa, setVtSayfa] = useState(1);
   const [resimSayfa, setResimSayfa] = useState(1);
   const [programSayfa, setProgramSayfa] = useState(1);
@@ -229,12 +221,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
       v.ad.toLocaleLowerCase("tr").includes(q) ||
       v.sirketAdlari.some((x) => x.toLocaleLowerCase("tr").includes(q));
     const l = (r?.veritabanlari ?? []).filter((v) => {
-      if (turFiltre !== "hepsi" && v.tur !== turFiltre) return false;
       if (terimler.length && !terimler.some((q) => tutar(v, q))) return false;
       return true;
     });
     return GRUPLAR.flatMap((g) => l.filter((v) => v.tur === g));
-  }, [r, arama, turFiltre]);
+  }, [r, arama]);
   const vtSayfaSayisi = Math.max(1, Math.ceil(filtreli.length / VT_SAYFA));
   const vtSayfaGecerli = Math.min(vtSayfa, vtSayfaSayisi);
   const sayfadakiler = filtreli.slice((vtSayfaGecerli - 1) * VT_SAYFA, vtSayfaGecerli * VT_SAYFA);
@@ -473,22 +464,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
                         className="h-8 pl-8 text-sm"
                       />
                     </div>
-                    <ToggleGroup
-                      type="single"
-                      size="sm"
-                      variant="outline"
-                      value={turFiltre}
-                      onValueChange={(v) => {
-                        if (!v) return;
-                        setTurFiltre(v as typeof turFiltre);
-                        setVtSayfa(1);
-                      }}
-                    >
-                      <ToggleGroupItem value="hepsi" className={"px-2 text-xs " + FILTRE_ACIK}>Tümü</ToggleGroupItem>
-                      {GRUPLAR.filter((g) => r.veritabanlari.some((v) => v.tur === g)).map((g) => (
-                        <ToggleGroupItem key={g} value={g} className={"px-2 text-xs " + FILTRE_ACIK}>{TUR_ETIKET[g]}</ToggleGroupItem>
-                      ))}
-                    </ToggleGroup>
                   </div>
                   <Table>
                     <TableHeader>
@@ -909,36 +884,43 @@ export function RaporEkrani({ durum, setDurum }: P) {
         {r && !taraniyor ? (
           <>
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-5 py-5">
-              {/* Özet tablosu: tür / adet / boyut; veritabanlarının altında seçilenler tek tek */}
-              <div className="overflow-hidden rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="h-8 px-3 text-[10px] font-medium tracking-wider uppercase">Tür</TableHead>
-                      <TableHead className="h-8 px-2 text-right text-[10px] font-medium tracking-wider uppercase">Adet</TableHead>
-                      <TableHead className="h-8 px-3 text-right text-[10px] font-medium tracking-wider uppercase">Boyut</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <OzetSatiri ikon={<Database />} ad="Veritabanları" sayi={secili.size} boyut={secili.size > 0 ? mb(toplamMb) : undefined} />
-                    {(r.veritabanlari ?? []).filter((v) => secili.has(v.ad)).map((v) => (
-                      <TableRow key={v.ad} className="hover:bg-transparent">
-                        <TableCell className="max-w-0 py-1 pr-1 pl-9 text-xs" colSpan={2}>
-                          <span className="block truncate font-mono" title={v.ad}>
-                            {v.ad}
-                            {eskiYil.has(v.ad) && <span className="ml-1.5 font-sans text-muted-foreground">eski yıl</span>}
-                          </span>
-                        </TableCell>
-                        <TableCell className="py-1 px-3 text-right text-xs tabular-nums text-muted-foreground">{mb(v.veriMb)}</TableCell>
-                      </TableRow>
-                    ))}
-                    <OzetSatiri ikon={<Image />} ad="Resim klasörleri" sayi={resimSayisi} />
-                    <OzetSatiri ikon={<FileCode2 />} ad="Programlar" sayi={programSayisi + programDosyaSayisi} />
-                    <OzetSatiri ikon={<FileArchive />} ad="Eski yıl dosyaları" sayi={eskiDosyalar.length} />
-                    <OzetSatiri ikon={<FolderPlus />} ad="Ek klasörler" sayi={ekKlasorler.length} />
-                  </TableBody>
-                </Table>
-              </div>
+              {/* Her tür ayrı kart; seçilenler kartın içinde listelenir (en çok 5 satır görünür, fazlası kayar) */}
+              <OzetKarti
+                ikon={<Database />}
+                ad="Veritabanları"
+                boyut={secili.size > 0 ? mb(toplamMb) : undefined}
+                ogeler={(r.veritabanlari ?? []).filter((v) => secili.has(v.ad)).map((v) => ({
+                  anahtar: v.ad, ad: v.ad, mono: true, sag: mb(v.veriMb), alt: eskiYil.has(v.ad) ? "eski yıl" : undefined,
+                }))}
+              />
+              <OzetKarti
+                ikon={<Image />}
+                ad="Resim klasörleri"
+                ogeler={resimler.filter((x) => x.secili).map((x) => {
+                  const k = r.resimKlasorleri.find((y) => y.yol === x.yol);
+                  return { anahtar: x.yol, ad: x.yol, sag: k ? `${k.dosyaSayisi.toLocaleString("tr")} dosya` : undefined };
+                })}
+              />
+              <OzetKarti
+                ikon={<FileCode2 />}
+                ad="Programlar"
+                ogeler={[
+                  ...programlar.filter((x) => x.secili).map((x) => ({ anahtar: x.yol, ad: x.program || "Program seçilmedi", alt: x.yol })),
+                  ...programDosyalari.filter((x) => x.exe || x.param).map((x) => ({
+                    anahtar: "d" + x.id, ad: x.program || "Program seçilmedi", alt: [x.exe, x.param].filter(Boolean).map((y) => dosyaAdi(y!)).join(" · "),
+                  })),
+                ]}
+              />
+              <OzetKarti
+                ikon={<FileArchive />}
+                ad="Eski yıl dosyaları"
+                ogeler={eskiDosyalar.map((x) => ({ anahtar: x.yol, ad: dosyaAdi(x.yol), alt: klasorAdi(x.yol), sag: x.boyut != null ? boyutMetni(x.boyut) : undefined }))}
+              />
+              <OzetKarti
+                ikon={<FolderPlus />}
+                ad="Ek klasörler"
+                ogeler={ekKlasorler.map((x) => ({ anahtar: x.yol, ad: x.yol, sag: x.boyut != null ? boyutMetni(x.boyut) : undefined }))}
+              />
               {veritabanlariAyir && secili.size > 0 && (
                 <p className="px-1 text-xs text-muted-foreground">Veritabanları aktarımdan sonra bu SQL Server'dan ayrılacak.</p>
               )}
@@ -1189,16 +1171,42 @@ function PanelBilgi({ ad, deger, mono, sar }: { ad: string; deger: string; mono?
   );
 }
 
-/** Sağ paneldeki özet tablosunun kategori satırı: ikon + tür, adet (0 ise soluk "—"), boyut. */
-function OzetSatiri({ ikon, ad, sayi, boyut }: { ikon: React.ReactNode; ad: string; sayi: number; boyut?: string }) {
-  const bos = sayi === 0;
+type OzetOgesi = { anahtar: string; ad: string; alt?: string; sag?: string; mono?: boolean };
+
+/**
+ * Sağ paneldeki tür kartı: başlıkta ikon, tür, adet (+ toplam boyut); altında seçilenler.
+ * Liste uzamasın diye en çok 5 satır görünür, fazlası kartın içinde kayar. Boşsa yalnız başlık (soluk).
+ */
+function OzetKarti({ ikon, ad, ogeler, boyut }: { ikon: React.ReactNode; ad: string; ogeler: OzetOgesi[]; boyut?: string }) {
+  const bos = ogeler.length === 0;
   return (
-    <TableRow className={"hover:bg-transparent " + (bos ? "text-muted-foreground" : "")}>
-      <TableCell className="px-3 py-2">
-        <span className="flex items-center gap-2 [&_svg]:size-4 [&_svg]:shrink-0">{ikon}{ad}</span>
-      </TableCell>
-      <TableCell className={"px-2 py-2 text-right tabular-nums " + (bos ? "" : "font-semibold")}>{bos ? "—" : sayi}</TableCell>
-      <TableCell className="px-3 py-2 text-right tabular-nums">{boyut ?? (bos ? "" : "—")}</TableCell>
-    </TableRow>
+    <section className={"overflow-hidden rounded-lg border bg-card " + (bos ? "text-muted-foreground" : "")}>
+      <div className="flex items-center gap-2 px-3 py-2.5 [&_svg]:size-4 [&_svg]:shrink-0">
+        {ikon}
+        <span className="flex-1 text-sm font-medium">{ad}</span>
+        {bos ? (
+          <span className="text-xs">Seçilmedi</span>
+        ) : (
+          <span className="text-sm tabular-nums">
+            <span className="font-semibold">{ogeler.length}</span>
+            {boyut && <span className="text-muted-foreground"> · {boyut}</span>}
+          </span>
+        )}
+      </div>
+      {!bos && (
+        // 5 satır ≈ 5 × 34 px; fazlası kayar
+        <ul className="max-h-[170px] divide-y overflow-y-auto border-t">
+          {ogeler.map((o) => (
+            <li key={o.anahtar} className="flex items-center gap-2 px-3 py-1.5 text-xs">
+              <div className="min-w-0 flex-1">
+                <div className={"truncate " + (o.mono ? "font-mono" : "")} title={o.ad}>{o.ad}</div>
+                {o.alt && <div className="truncate text-muted-foreground" title={o.alt}>{o.alt}</div>}
+              </div>
+              {o.sag && <span className="shrink-0 tabular-nums text-muted-foreground">{o.sag}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
