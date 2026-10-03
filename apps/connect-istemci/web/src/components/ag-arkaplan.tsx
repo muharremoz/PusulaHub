@@ -1,16 +1,15 @@
 import { useMemo } from "react";
 import type { COBEOptions } from "cobe";
 import { Globe } from "@/components/ui/globe";
+import { MUSTERI_ULKELERI } from "@/lib/musteri-ulkeleri";
 
 /**
- * Orta panelin arka planı: dönen dünya (Magic UI Globe / cobe). İstanbul (Pusula) büyük, Türkiye'deki
- * şehirler küçük işaretçi. Bağlıyken işaretçiler yeşil, değilken gri. Tema açık/koyuya göre renk.
+ * Orta panelin arka planı: dönen dünya (Magic UI Globe / cobe). Pusula müşterilerinin olduğu ülkeler
+ * işaretli; işaretçi büyüklüğü firma sayısıyla (log) büyür. Bağlıyken yeşil, değilken gri.
  */
 
-const SEHIRLER: [number, number][] = [
-  [39.93, 32.86], [38.42, 27.14], [36.89, 30.71], [37.0, 35.32], [40.19, 29.06], [37.87, 32.48], [41.0, 39.72],
-  [37.07, 37.38], [38.73, 35.48], [39.75, 37.02], [37.91, 40.23], [38.5, 43.38], [41.29, 36.33],
-];
+/** 1 firma ≈ 0,03 · Türkiye (~4.900) ≈ 0,1 */
+const boyut = (firma: number) => 0.03 + 0.019 * Math.log10(Math.max(1, firma));
 
 export function AgArkaplan({ bagli }: { bagli: boolean }) {
   // Uygulama yalnız .dark sınıfıyla koyulaşır (sistem teması değil)
@@ -23,8 +22,9 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       height: 800,
       onRender: () => {},
       devicePixelRatio: 2,
-      phi: 0,
-      theta: 0.3,
+      // Açılışta Türkiye (35° D) önde: cobe'de boylam λ için φ = π − (λ − π/2)
+      phi: Math.PI - ((35 * Math.PI) / 180 - Math.PI / 2),
+      theta: 0.05, // yarısı panelin altında: eğim az olsun ki Türkiye (39° K) görünen yarının ortasına gelsin
       dark: koyu ? 1 : 0,
       diffuse: 0.4,
       mapSamples: 16000,
@@ -32,10 +32,7 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       baseColor: koyu ? [0.3, 0.3, 0.3] : [1, 1, 1],
       markerColor: isaret,
       glowColor: koyu ? [0.15, 0.15, 0.15] : [1, 1, 1],
-      markers: [
-        { location: [41.0082, 28.9784], size: 0.09 },
-        ...SEHIRLER.map((location) => ({ location, size: 0.025 })),
-      ],
+      markers: MUSTERI_ULKELERI.map((u) => ({ location: u.konum, size: boyut(u.firma) })),
     };
   }, [bagli, koyu]);
 
