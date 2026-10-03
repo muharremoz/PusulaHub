@@ -99,8 +99,12 @@ daraltan üç önlem alındı:
    servis (`/opt/pusula-connect/.env`), geliştirme (`apps/web/.env.local`). Serviste `CONNECT_KASA_ANAHTARI`
    DB'deki 2FA kayıtlarının şifreleme tuzudur, boşsa `TRANSFER_SERVICE_KEY`; **asla değiştirilmez**.
    Hub `/api/hub/connect/sifre` ayrıca kullanıcının serviste iptal edilmemiş bir cihazı olmasını şart koşar.
-2. **İmzalı güncelleme.** `scripts/connect-yayinla.sh` exe'yi `~/.ssh/pusula-connect-imza.pem` (RSA-3072,
-   çevrimdışı, sunucuya gitmez) ile imzalar → `PusulaConnect.exe.sig`; servis `/api/surum`'da `imza` verir;
+2. **İmzalı güncelleme.** `scripts/connect-yayinla.sh` exe'yi `~/.ssh/pusula-connect-imza.enc.pem` (RSA-3072,
+   parolalı PKCS#8; parola DPAPI ile `pusula-connect-imza.parola`'da, yalnız bu Windows kullanıcısı çözer) ile
+   imzalar → `PusulaConnect.exe.sig`. İstemci iki açık anahtar tanır (0.4.6+): ANA ve YEDEK; yedekle imza yalnız
+   ana kaybolur/çalınırsa (`CONNECT_IMZA_YEDEK=1`). Kurulum: `scripts/connect-imza-kur.ps1` (bir kez, 03.10.2026);
+   yeni bilgisayar/geri yükleme: Hub şifre kasasındaki iki kayıttan `.enc.pem` + `scripts/connect-imza-parola.ps1`.
+   Parola Hub kasasında DEĞİL. Eski not: servis `/api/surum`'da `imza` verir;
    istemci (`GuncellemeImzasi.cs`, gömülü açık anahtar) imzasız/yanlış imzalı yayını kurmaz, imzasız yayını
    hiç göstermez. Anahtar kaybolursa yeni sürüm yayınlanamaz — yedeğini güvenli yerde tut. Anahtar
    değiştirilecekse önce eski anahtarla, yeni açık anahtarı içeren bir sürüm yayınlanır.

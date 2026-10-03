@@ -18,7 +18,11 @@ KOK="$(cd "$(dirname "$0")/.." && pwd)"
 PROJE="$KOK/apps/connect-istemci/src/PusulaConnect"
 SUNUCU="root@10.15.2.6"
 ANAHTAR="$USERPROFILE/.ssh/claude_ops"
-IMZA_ANAHTARI="$USERPROFILE/.ssh/pusula-connect-imza.pem"
+# Parolalı anahtarlar (scripts/connect-imza-kur.ps1). Normalde ANA ile imzalanır; ana kaybolur/çalınırsa
+# CONNECT_IMZA_YEDEK=1 ile YEDEK kullanılır (istemci ikisini de tanır, 0.4.6+). Parola DPAPI dosyasından okunur.
+if [ "${CONNECT_IMZA_YEDEK:-0}" = "1" ]; then IMZA_ANAHTARI="$USERPROFILE/.ssh/pusula-connect-imza-yedek.enc.pem"
+else IMZA_ANAHTARI="$USERPROFILE/.ssh/pusula-connect-imza.enc.pem"; fi
+IMZA_PAROLA_DOSYASI="$USERPROFILE/.ssh/pusula-connect-imza.parola"
 HEDEF="/opt/pusula-connect/istemci"
 NOTLAR="${1:-}"
 SSH=(ssh -i "$ANAHTAR" -o ConnectTimeout=15 "$SUNUCU")
@@ -39,12 +43,14 @@ SHA="$(sha256sum "$EXE" | cut -c1-64)"
 echo "exe: $(stat -c %s "$EXE") bayt, sha256 $SHA"
 
 echo "== İmza"
-[ -f "$IMZA_ANAHTARI" ] || { echo "İmza anahtarı yok: $IMZA_ANAHTARI"; exit 1; }
+[ -f "$IMZA_ANAHTARI" ] || { echo "İmza anahtarı yok: $IMZA_ANAHTARI (önce scripts/connect-imza-kur.ps1)"; exit 1; }
+[ -f "$IMZA_PAROLA_DOSYASI" ] || { echo "Parola dosyası yok: $IMZA_PAROLA_DOSYASI (scripts/connect-imza-kur.ps1)"; exit 1; }
 SIG="$EXE.sig"
+# Parola: DPAPI ile yalnız bu Windows kullanıcısı çözer; node'a standart girişten gider (komut satırında görünmez).
 # Gömülü açık anahtar bu özel anahtarla eşleşiyor mu (yanlış anahtarla imzalanan yayını hiçbir istemci kurmaz)
-node -e '
+powershell -NoProfile -Command "Add-Type -AssemblyName System.Security; [Console]::Out.Write([Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Unprotect([IO.File]::ReadAllBytes('$(cygpath -w "$IMZA_PAROLA_DOSYASI")'), \$null, 'CurrentUser')))" | node -e '
 const c=require("crypto"),fs=require("fs");
-const priv=c.createPrivateKey(fs.readFileSync(process.argv[1]));
+const priv=c.createPrivateKey({key:fs.readFileSync(process.argv[1]),passphrase:Buffer.from(fs.readFileSync(0,"utf8").trim(),"base64").toString("utf8")});
 const n=Buffer.from(c.createPublicKey(priv).export({format:"jwk"}).n,"base64url").toString("base64");
 const cs=fs.readFileSync(process.argv[3],"utf8");
 if(!cs.includes("\""+n+"\"")){console.error("GuncellemeImzasi.cs içindeki açık anahtar bu özel anahtarla eşleşmiyor");process.exit(1)}
