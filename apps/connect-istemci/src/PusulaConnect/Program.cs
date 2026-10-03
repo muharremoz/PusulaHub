@@ -80,7 +80,8 @@ namespace PusulaConnect
                     if (p != null && !p.IsDisposed && p.IsHandleCreated) p.BeginInvoke((Action)goster); else goster();
                 };
                 _tepsi.BalloonTipClicked += (s, e) => Goster(tamAdres);
-                if (ConnectPenceresi.CalismaZamaniVar())
+                // WebView2 yoksa (eski Windows 10/Server) önce kurulmaya çalışılır — yoksa arayüz tarayıcıya düşerdi
+                if (ConnectPenceresi.CalismaZamaniVar() || WebViewYoksaKur())
                 {
                     _pencere = new ConnectPenceresi(tamAdres, Kapat);
                     _pencere.Show();
@@ -190,10 +191,55 @@ namespace PusulaConnect
             }, null, Timeout.Infinite, false);
         }
 
+        private static bool WebViewYoksaKur()
+        {
+            Gunluk.Yaz("WebView2 yok — kuruluyor");
+            var tamam = WebViewKurulum.Kur(ConnectPenceresi.CalismaZamaniVar);
+            Gunluk.Yaz(tamam ? "WebView2 kuruldu" : "WebView2 kurulamadı — arayüz tarayıcıda açılacak");
+            return tamam;
+        }
+
+        /// <summary>
+        /// Yedek yol (WebView2 kurulamadı): arayüz Edge'de, yoksa Chrome'da "uygulama penceresi" olarak
+        /// (--app: adres çubuğu/sekme yok) açılır. Varsayılan tarayıcıya bırakılmaz — o Internet Explorer
+        /// olabiliyor ve arayüz IE'de çalışmıyor (boş sayfa; 03.10.2026 PUSULALOCAL'da yaşandı).
+        /// </summary>
         private static void TarayicidaAc(string adres)
         {
+            foreach (var exe in new[] { "msedge.exe", "chrome.exe" })
+            {
+                var yol = UygulamaYolu(exe);
+                if (yol == null) continue;
+                try
+                {
+                    Process.Start(new ProcessStartInfo(yol, "--app=\"" + adres + "\"") { UseShellExecute = false });
+                    Gunluk.Yaz("Arayüz " + exe + " uygulama penceresinde açıldı");
+                    return;
+                }
+                catch (Exception e) { Gunluk.Yaz(exe + " açılamadı: " + e.Message); }
+            }
             try { Process.Start(new ProcessStartInfo(adres) { UseShellExecute = true }); }
             catch (Exception e) { MessageBox.Show("Tarayıcı açılamadı:\n" + adres + "\n\n" + e.Message, Baslik); }
+        }
+
+        /// <summary>Kayıtlı uygulama yolu (App Paths) — önce kullanıcı, sonra makine (64 ve 32 bit görünüm).</summary>
+        private static string UygulamaYolu(string exe)
+        {
+            var anahtar = @"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\" + exe;
+            foreach (var kovan in new[] { Microsoft.Win32.RegistryHive.CurrentUser, Microsoft.Win32.RegistryHive.LocalMachine })
+                foreach (var gorunum in new[] { Microsoft.Win32.RegistryView.Registry64, Microsoft.Win32.RegistryView.Registry32 })
+                {
+                    try
+                    {
+                        using (var k = Microsoft.Win32.RegistryKey.OpenBaseKey(kovan, gorunum).OpenSubKey(anahtar))
+                        {
+                            var yol = (k?.GetValue(null) as string)?.Trim('"');
+                            if (!string.IsNullOrEmpty(yol) && File.Exists(yol)) return yol;
+                        }
+                    }
+                    catch { }
+                }
+            return null;
         }
 
         [DllImport("user32.dll")] private static extern bool SetProcessDpiAwarenessContext(IntPtr deger);
