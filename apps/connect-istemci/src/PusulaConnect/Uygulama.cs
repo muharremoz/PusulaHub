@@ -165,7 +165,7 @@ namespace PusulaConnect
                 Rdp.YerelKaydet(j.Value<string>("sifre"));
                 var rdp = P("rdp"); if (rdp != null) Rdp.SifreSil(rdp);
                 BilinenSurum = j.Value<string>("sifreSurumu") ?? hub;
-                lock (_kilit) { _oturumMesaji = null; SifreBilgi(kayitli ? "Şifreniz Pusula tarafından değiştirildi; yeni şifre otomatik alındı." : "Oturum şifreniz Pusula'dan alındı."); }
+                lock (_kilit) { _oturumMesaji = null; SifreBilgi(kayitli ? "Şifreniz Pusula tarafından değiştirildi; yeni şifre otomatik alındı." : "Oturum şifreniz Pusula'dan alındı; elle girmeniz gerekmez.", ilk: !kayitli); }
                 Gunluk.Yaz("RDP şifresi Pusula'dan alındı (" + (kayitli ? "değişti" : "ilk") + ")");
                 _ = _servis.Olay("sifre_guncellendi", kayitli ? "değişti" : "ilk");
             }
@@ -173,7 +173,9 @@ namespace PusulaConnect
             catch (Exception e) { Gunluk.Yaz("Şifre Pusula'dan alınamadı: " + e.Message); }
         }
 
-        private void SifreBilgi(string m) { _sifreBilgi = m; _sifreBilgiZaman = DateTime.Now; }
+        /// <summary>ilk: şifre ilk kurulumda alındı (değişmedi) — arayüz "değişti" demez; kart VPN bağlanana kadar kalır.</summary>
+        private void SifreBilgi(string m, bool ilk = false) { _sifreBilgi = m; _sifreBilgiZaman = DateTime.Now; _sifreBilgiIlk = ilk; }
+        private bool _sifreBilgiIlk;
 
         private JObject Profil { get { lock (_kilit) return _kayit?["profil"] as JObject; } }
         /// <summary>Bu cihazda iki adımlı doğrulama açık mı (servisten gelen kayıt).</summary>
@@ -226,7 +228,9 @@ namespace PusulaConnect
                     sifreGuncelleme = new
                     {
                         bekliyor = _sifreBekliyor,
-                        mesaj = _sifreBekliyor || DateTime.Now - _sifreBilgiZaman < TimeSpan.FromMinutes(3) ? _sifreBilgi : null,
+                        ilk = _sifreBilgiIlk,
+                        // İlk kurulumda kullanıcı bu şifreyi FortiClient'a girecek: VPN bağlanana kadar görünür
+                        mesaj = _sifreBekliyor || DateTime.Now - _sifreBilgiZaman < TimeSpan.FromMinutes(3) || (_sifreBilgiIlk && !_terminal.erisim) ? _sifreBilgi : null,
                     },
                     oturum = new { acik = OturumAcikMi?.Invoke() == true, mesaj = _oturumMesaji },
                     ayarlar = Ayarlar.Simdiki.Gorunum(),

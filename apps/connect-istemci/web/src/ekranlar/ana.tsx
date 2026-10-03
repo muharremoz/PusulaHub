@@ -223,16 +223,29 @@ export function AnaEkran({ durum, setDurum }: P) {
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
         {sg?.mesaj && (
-          // Şifre değişti: dikkat çekmeli — opak kart, kalın amber kenar, ikon kutusu, başlık
-          <section className="flex items-start gap-3 rounded-xl border-2 border-amber-500/60 bg-card p-4 shadow-md ring-4 ring-amber-500/10">
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
+          // Şifre değişti: dikkat çekmeli (amber). İlk kurulumda şifre değişmedi, yalnız alındı → sakin kart (yeşil)
+          <section
+            className={
+              sg.ilk
+                ? "flex items-start gap-3 rounded-xl border border-emerald-500/40 bg-card p-4 shadow-xs"
+                : "flex items-start gap-3 rounded-xl border-2 border-amber-500/60 bg-card p-4 shadow-md ring-4 ring-amber-500/10"
+            }
+          >
+            <span
+              className={
+                sg.ilk
+                  ? "flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400"
+                  : "flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400"
+              }
+            >
               <KeyRound className="size-5" />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <div>
-                <div className="text-[15px] font-semibold">Şifreniz değişti</div>
+                <div className="text-[15px] font-semibold">{sg.ilk ? "Oturum şifreniz hazır" : "Şifreniz değişti"}</div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {sg.mesaj} <b className="text-foreground">VPN (FortiClient) şifreniz de aynıdır</b>; FortiClient şifre sorarsa yeni şifreyi oraya girin.
+                  {sg.mesaj} <b className="text-foreground">VPN (FortiClient) şifreniz de aynıdır</b>;{" "}
+                  {sg.ilk ? "FortiClient ilk bağlanmada şifre sorduğunda bu şifreyi girin." : "FortiClient şifre sorarsa yeni şifreyi oraya girin."}
                 </p>
               </div>
               <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
@@ -289,6 +302,11 @@ export function AnaEkran({ durum, setDurum }: P) {
             durum={k.terminal.erisim ? (kalite(k.terminal.ms) >= 2 ? "iyi" : "uyari") : k.terminal.zaman ? "uyari" : "bekliyor"}
             deger={k.terminal.erisim ? "Erişiliyor" : k.terminal.zaman ? "Erişilemiyor" : "Kontrol ediliyor…"}
             alt={k.terminal.erisim ? <Sinyal ms={k.terminal.ms} /> : k.terminal.zaman ? "VPN kapalı olabilir" : "Bir saniye…"}
+            ortu={
+              !k.terminal.erisim && k.terminal.zaman
+                ? vpnHazir ? "VPN bağlantısı bekleniyor" : "VPN kurulumu ve bağlantısı bekleniyor"
+                : undefined
+            }
           />
           <Kart
             ikon={<KeyRound />}
@@ -462,7 +480,7 @@ export function AnaEkran({ durum, setDurum }: P) {
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
-        <BaglantiGorseli bagli={k.terminal.erisim} />
+        <BaglantiGorseli bagli={k.terminal.erisim} kontrolEdildi={!!k.terminal.zaman} vpnHazir={vpnHazir} />
       </aside>
     </div>
   );
@@ -507,10 +525,17 @@ const KART_RENK: Record<KartDurumu, { kutu: string; rozet: string }> = {
 };
 
 /** Durum kartı: solda renkli ikon kutusu, başlık + kısa değer + açıklama, sağ üstte durum işareti. */
-function Kart({ ikon, baslik, deger, alt, durum, aksiyon }: { ikon: React.ReactNode; baslik: string; deger: string; alt: React.ReactNode; durum: KartDurumu; aksiyon?: React.ReactNode }) {
+function Kart({ ikon, baslik, deger, alt, durum, aksiyon, ortu }: { ikon: React.ReactNode; baslik: string; deger: string; alt: React.ReactNode; durum: KartDurumu; aksiyon?: React.ReactNode; ortu?: string }) {
   const r = KART_RENK[durum];
   return (
-    <div className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-xs">
+    <div className="relative flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
+      {/* Örtü: kart bu adımda anlamsızsa (ör. VPN yokken sunucu) üstüne yarı saydam bekleme katmanı */}
+      {ortu && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-card/70 px-4 text-center text-sm font-medium text-muted-foreground backdrop-blur-[2px]">
+          <Loader2 className="size-4 shrink-0 animate-spin" />
+          {ortu}
+        </div>
+      )}
       <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${r.kutu}`}>{ikon}</span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
@@ -574,7 +599,8 @@ function SolSatir({ ikon, ad, deger }: { ikon: React.ReactNode; ad: string; dege
 }
 
 /** Sağ panelin yer tutucu görseli: bilgisayar → güvenli tünel → Pusula sunucusu. */
-function BaglantiGorseli({ bagli }: { bagli: boolean }) {
+function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir }: { bagli: boolean; kontrolEdildi: boolean; vpnHazir: boolean }) {
+  const kopuk = !bagli && kontrolEdildi;
   return (
     <div className="flex h-svh flex-col items-center justify-center gap-6 p-8 text-center">
       {/* Ripple'ın merkezi = SVG'nin merkezi = VPN kalkanı (viewBox 300x220, kalkan 150,110) */}
@@ -588,7 +614,7 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
         />
       <svg viewBox="0 0 300 220" className="relative w-full" role="img" aria-label="Bilgisayardan Pusula sunucusuna güvenli bağlantı">
         {/* bağlantı hattı */}
-        <g className={bagli ? "text-emerald-500" : "text-muted-foreground"}>
+        <g className={bagli ? "text-emerald-500" : kopuk ? "text-amber-500" : "text-muted-foreground"}>
           <path d="M74 110 H228" stroke="currentColor" strokeOpacity="0.7" strokeWidth="3" strokeLinecap="round" strokeDasharray="2 8" fill="none">
             {bagli && <animate attributeName="stroke-dashoffset" from="20" to="0" dur="1s" repeatCount="indefinite" />}
           </path>
@@ -601,7 +627,7 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
         {/* kalkan (VPN) */}
         <g transform="translate(150 110)">
           <circle r="26" className="fill-card text-primary" stroke="currentColor" strokeWidth="2.5" />
-          <path d="M0 -14 L11 -9 V0 C11 8 5 13 0 15 C-5 13 -11 8 -11 0 V-9 Z" className={bagli ? "fill-emerald-500/20 text-emerald-600" : "fill-primary/10 text-primary"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
+          <path d="M0 -14 L11 -9 V0 C11 8 5 13 0 15 C-5 13 -11 8 -11 0 V-9 Z" className={bagli ? "fill-emerald-500/20 text-emerald-600" : kopuk ? "fill-amber-500/15 text-amber-600" : "fill-primary/10 text-primary"} stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />
           {bagli && <path d="M-5 0 L-1 4 L6 -4" fill="none" className="text-emerald-600" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />}
         </g>
         {/* sunucu */}
@@ -618,10 +644,23 @@ function BaglantiGorseli({ bagli }: { bagli: boolean }) {
         <text x="256" y="160" textAnchor="middle" className="fill-muted-foreground" fontSize="11">Pusula</text>
       </svg>
       </div>
-      <div className="relative">
-        <div className="text-lg font-semibold">{bagli ? "Pusula'ya bağlantı hazır" : "Pusula'ya güvenli bağlantı"}</div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {bagli ? "VPN açık, sunucuya erişiliyor." : "VPN ile şifreli tünel kurulur, programınız Pusula sunucusunda çalışır."}
+      <div className="relative flex flex-col items-center">
+        {!bagli && kontrolEdildi && (
+          <span className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400">
+            <span className="size-1.5 rounded-full bg-amber-500" /> Bağlantı yok
+          </span>
+        )}
+        <div className="text-lg font-semibold">
+          {bagli ? "Pusula'ya bağlantı hazır" : !kontrolEdildi ? "Bağlantı kontrol ediliyor…" : vpnHazir ? "VPN bağlı değil" : "VPN kurulumu bekleniyor"}
+        </div>
+        <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
+          {bagli
+            ? "VPN açık, sunucuya erişiliyor."
+            : !kontrolEdildi
+              ? "Pusula sunucusuna erişim deneniyor."
+              : vpnHazir
+                ? "Pusula sunucusuna ulaşılamıyor. FortiClient'ı açıp Pusula bağlantısına bağlanın."
+                : "Pusula sunucusuna ulaşmak için önce VPN programını kurun, ardından FortiClient ile bağlanın."}
         </p>
       </div>
     </div>
