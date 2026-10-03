@@ -24,9 +24,10 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   Activity, Ban, CheckCircle2, History, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
-  RefreshCw, ShieldCheck, ShieldOff, TriangleAlert, Wifi,
+  RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
+import { AyarlarSekmesi } from "@/components/connect/ayarlar-sekmesi"
 import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
 
 // ------------------------------------------------------------ yardımcılar
@@ -264,6 +265,7 @@ export default function ConnectPage() {
               <TabsTrigger value="olaylar" className="h-7 gap-1.5 text-[12px]"><History className="size-3.5" />Olay kaydı</TabsTrigger>
               <TabsTrigger value="kodlar" className="h-7 gap-1.5 text-[12px]"><KeyRound className="size-3.5" />Kurulum kodları</TabsTrigger>
               <TabsTrigger value="duyurular" className="h-7 gap-1.5 text-[12px]"><Megaphone className="size-3.5" />Duyurular</TabsTrigger>
+              <TabsTrigger value="ayarlar" className="h-7 gap-1.5 text-[12px]"><Settings className="size-3.5" />Ayarlar</TabsTrigger>
             </TabsList>
             <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle(); setYenileSayac((n) => n + 1) }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
@@ -281,6 +283,9 @@ export default function ConnectPage() {
           </TabsContent>
           <TabsContent value="duyurular" className="mt-3">
             <DuyurularSekmesi cihazlar={cihazlar} yenile={yenileSayac} />
+          </TabsContent>
+          <TabsContent value="ayarlar" className="mt-3">
+            <AyarlarSekmesi />
           </TabsContent>
         </Tabs>
       </div>
