@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, MonitorUp, Plus,
+  AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, Plus,
   RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
@@ -22,6 +22,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { boyutMetni, useDosyaSecici, type Secilen } from "./dosya-secici";
 import { ResimKucultmeEkrani } from "./resim-kucult";
 import { Ipucu, mb } from "./ortak";
+import pusulaLogo from "@/assets/pusula-logo.png";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -341,39 +342,74 @@ export function RaporEkrani({ durum, setDurum }: P) {
     );
 
   return (
-    <div className="min-h-svh bg-muted/40 pb-20">
-      <header className="flex items-center gap-3 border-b bg-card px-6 py-3">
-        <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-          <MonitorUp className="size-[18px]" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-medium text-primary">Aktarım · {oturum?.firmaId}</div>
-          <h1 className="truncate text-base font-semibold">{oturum?.firmaAdi}</h1>
+    <div className="flex h-svh bg-muted/40">
+      {/* Sol panel: firma, SQL Server, Pusula'nın notu, rapor durumu ve eylemler (eskiden üst şeritteydi) */}
+      <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
+        <div className="flex flex-col gap-4 border-b px-5 py-5">
+          <img src={pusulaLogo} alt="Pusula Yazılım" className="h-7 w-auto self-start select-none" draggable={false} />
+          <div className="min-w-0">
+            <div className="text-xs font-medium text-muted-foreground">Aktarım · {oturum?.firmaId}</div>
+            <h1 className="mt-0.5 text-base leading-snug font-semibold">{oturum?.firmaAdi}</h1>
+          </div>
         </div>
-        {durum.kesifGonderildi ? (
-          <span className="flex items-center gap-1.5 text-xs text-foreground">
-            <CheckCircle2 className="size-4" /> Rapor Pusula'ya iletildi
-          </span>
-        ) : null}
-        <Button variant="outline" size="sm" onClick={() => setKucultme(true)} className="text-foreground">
-          <Minimize2 /> Resim küçült
-        </Button>
-        {r && (
-          <Button variant="outline" size="sm" disabled={bekle || taraniyor} onClick={() => void yenile()}>
-            {bekle || taraniyor ? <Loader2 className="animate-spin" /> : <RefreshCw />} {taraniyor ? "Taranıyor…" : "Yeniden tara"}
-          </Button>
-        )}
-      </header>
 
-      <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
-        {oturum?.notlar && (
-          <Alert className="bg-muted text-foreground">
-            <Info />
-            <AlertDescription className="text-muted-foreground">
-              <span className="font-medium text-foreground">Pusula'nın notu:</span> {oturum.notlar}
-            </AlertDescription>
-          </Alert>
-        )}
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+              <Server className="size-3.5" /> SQL Server
+            </div>
+            {durum.sql || r?.sql ? (
+              <dl className="flex flex-col gap-2 text-sm">
+                <PanelBilgi ad="Sunucu" deger={r?.sql?.sunucu ?? durum.sql?.sunucu ?? "—"} mono />
+                {r?.sql && <PanelBilgi ad="Bilgisayar" deger={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />}
+                {r?.sql && <PanelBilgi ad="Sürüm" deger={r.sql.surumu} />}
+                {r?.sql && <PanelBilgi ad="Bağlantı" deger={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />}
+              </dl>
+            ) : (
+              <div className="flex flex-col gap-2 text-sm">
+                <span className="flex items-start gap-2 text-muted-foreground">
+                  <Unplug className="mt-0.5 size-4 shrink-0" /> Bağlanılmadı — yalnız resim, program ve dosya aktarılır.
+                </span>
+                <Button variant="outline" size="sm" className="self-start" disabled={bekle || taraniyor} onClick={() => void api<Durum>("/sql/giris", {}).then(setDurum).catch((e) => setHata((e as Error).message))}>
+                  <Database /> SQL Server'a bağlan
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {oturum?.notlar && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                <Info className="size-3.5" /> Pusula'nın notu
+              </div>
+              <p className="rounded-lg bg-muted px-3 py-2.5 text-sm">{oturum.notlar}</p>
+            </div>
+          )}
+
+          {durum.kesifGonderildi && (
+            <div className="flex items-center gap-2 text-sm">
+              <CheckCircle2 className="size-4 shrink-0" /> Rapor Pusula'ya iletildi
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2 border-t px-5 py-4">
+          {r && (
+            <Button variant="outline" className="justify-start" disabled={bekle || taraniyor} onClick={() => void yenile()}>
+              {bekle || taraniyor ? <Loader2 className="animate-spin" /> : <RefreshCw />} {taraniyor ? "Taranıyor…" : "Yeniden tara"}
+            </Button>
+          )}
+          <Button variant="outline" className="justify-start" onClick={() => setKucultme(true)}>
+            <Minimize2 /> Resim küçült
+          </Button>
+          <div className="mt-2 truncate text-xs text-muted-foreground">{durum.makine} · sürüm {durum.surum}</div>
+        </div>
+      </aside>
+
+      {/* Sağ sütun: içerik kayar, aktarım çubuğu altta sabit */}
+      <div className="flex min-w-0 flex-1 flex-col">
+      <main className="flex-1 overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
         {durum.kesifHatasi && (
           <Alert variant="destructive">
             <XCircle />
@@ -399,24 +435,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
 
         {r && !taraniyor && (
           <>
-            <Bolum ikon={<Server className="size-4" />} baslik="SQL Server" renk="slate">
-              {r.sql ? (
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1 px-4 py-3 text-sm sm:grid-cols-4">
-                  <Bilgi l="Sunucu" v={r.sql.sunucu} mono />
-                  <Bilgi l="Bilgisayar" v={r.sql.makineAdi + (r.sql.yerel ? "" : " (uzak)")} />
-                  <Bilgi l="Sürüm" v={r.sql.surumu} />
-                  <Bilgi l="Bağlantı" v={r.sql.kaynak === "windows" ? "Windows oturumu" : r.sql.kaynak} />
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm">
-                  <Unplug className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="flex-1 text-muted-foreground">SQL Server'a bağlanılmadı — bu bilgisayardan yalnız resim, program ve dosya aktarılır.</span>
-                  <Button variant="outline" size="sm" disabled={bekle} onClick={() => void api<Durum>("/sql/giris", {}).then(setDurum).catch((e) => setHata((e as Error).message))}>
-                    <Database /> SQL Server'a bağlan
-                  </Button>
-                </div>
-              )}
-            </Bolum>
 
             <Tabs defaultValue={r.sql ? "vt" : hedef.depo ? "resim" : "program"} className="gap-3">
               <TabsList className="p-1 group-data-horizontal/tabs:h-11">
@@ -870,10 +888,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
             </Tabs>
           </>
         )}
+      </div>
       </main>
 
       {r && !taraniyor && (
-        <footer className="fixed inset-x-0 bottom-0 border-t bg-card/95 backdrop-blur">
+        <footer className="shrink-0 border-t bg-card">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
             <div className="min-w-0 flex-1 truncate text-sm">
               {hata ? (
@@ -899,6 +918,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
           </div>
         </footer>
       )}
+      </div>
 
       {dosyaSecici}
 
@@ -1048,14 +1068,6 @@ function Sayfalama({ sayfa, sayfaSayisi, onSayfa, bilgi }: { sayfa: number; sayf
   );
 }
 
-function Bilgi({ l, v, mono }: { l: string; v: string; mono?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[11px] text-muted-foreground">{l}</div>
-      <Ipucu metin={v}><div className={`truncate ${mono ? "font-mono" : ""}`}>{v || "—"}</div></Ipucu>
-    </div>
-  );
-}
 
 const Bos = ({ children }: { children: React.ReactNode }) => <p className="px-4 py-3 text-sm text-muted-foreground">{children}</p>;
 
@@ -1107,6 +1119,16 @@ function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
           {bekle ? <Loader2 className="animate-spin" /> : <ScanSearch />} Taramayı başlat
         </Button>
       )}
+    </div>
+  );
+}
+
+/** Sol paneldeki ad/değer satırı. */
+function PanelBilgi({ ad, deger, mono }: { ad: string; deger: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-xs text-muted-foreground">{ad}</dt>
+      <dd className={"truncate " + (mono ? "font-mono" : "")} title={deger}>{deger}</dd>
     </div>
   );
 }
