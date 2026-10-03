@@ -113,6 +113,7 @@ export default function Aktarim2Page() {
         <div className="overflow-x-auto">
           <table className="w-full text-[14px] font-medium leading-[20px]">
             <ListeThead>
+              <th className="px-4 py-1.5 text-left font-medium">Firma No</th>
               <th className="px-4 py-1.5 text-left font-medium">Firma</th>
               <th className="px-4 py-1.5 text-left font-medium">Durum</th>
               <th className="px-4 py-1.5 text-left font-medium">Bilgisayar</th>
@@ -126,20 +127,21 @@ export default function Aktarim2Page() {
               {loading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <tr key={i}>
-                    {Array.from({ length: 8 }).map((__, j) => (
+                    {Array.from({ length: 9 }).map((__, j) => (
                       <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
                     ))}
                   </tr>
                 ))
               ) : error ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-[13px] text-red-600 dark:text-red-400">{error}</td></tr>
               ) : items.length === 0 ? (
-                <ListeBosSatir sutunSayisi={8} toplam={0} bosMesaj="Henüz Aktarım 2 oturumu yok. “Yeni Aktarım” ile müşteriye kod üretin." />
+                <ListeBosSatir sutunSayisi={9} toplam={0} bosMesaj="Henüz Aktarım 2 oturumu yok. “Yeni Aktarım” ile müşteriye kod üretin." />
               ) : (
                 items.map((o) => (
                   <tr key={o.id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-1.5 whitespace-nowrap tabular-nums">{o.firmaId}</td>
                     <td className="px-4 py-1.5 whitespace-nowrap">
-                      <span className="font-mono text-muted-foreground mr-2">{o.firmaId}</span>{o.firmaAdi}
+                      {o.firmaAdi}
                       {o.olusturan && <div className="text-muted-foreground text-[12px]">{o.olusturan}</div>}
                     </td>
                     <td className="px-4 py-1.5 whitespace-nowrap">
