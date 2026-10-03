@@ -382,18 +382,20 @@ export function RaporEkrani({ durum, setDurum }: P) {
             )}
           </div>
 
-          {oturum?.notlar && (
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
-                <Info className="size-3.5" /> Pusula'nın notu
-              </div>
-              <p className="rounded-lg bg-muted px-3 py-2.5 text-sm">{oturum.notlar}</p>
-            </div>
-          )}
 
           {durum.kesifGonderildi && (
             <div className="flex items-center gap-2 text-sm">
               <CheckCircle2 className="size-4 shrink-0" /> Rapor Pusula'ya iletildi
+            </div>
+          )}
+
+          {/* Not: panelin altına sabit (eylem düğmelerinin hemen üstü) */}
+          {oturum?.notlar && (
+            <div className="mt-auto flex flex-col gap-2">
+              <div className="flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground uppercase">
+                <Info className="size-3.5" /> Not
+              </div>
+              <p className="rounded-lg bg-muted px-3 py-2.5 text-sm">{oturum.notlar}</p>
             </div>
           )}
         </div>
