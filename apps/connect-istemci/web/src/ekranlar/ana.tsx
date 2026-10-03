@@ -17,7 +17,7 @@ import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
 import uygulamaIkonu from "@/assets/uygulama-ikon.png";
-import { OrtaBaslik, talepAdresi } from "./ortak";
+import { OrtaBaslik, ParlayanLogo, talepAdresi } from "./ortak";
 
 type P = { durum: Durum; setDurum: (d: Durum) => void };
 
@@ -96,9 +96,8 @@ export function AnaEkran({ durum, setDurum }: P) {
     <div className="flex h-svh overflow-hidden bg-muted/40">
       {/* ── Sol: firma bilgileri ───────────────────────────── */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
-        <div className="flex h-16 shrink-0 items-center justify-center gap-2.5 border-b px-5">
-          <img src={uygulamaIkonu} alt="" className="size-10 shrink-0 drop-shadow-sm" draggable={false} />
-          <span className="text-base font-semibold tracking-tight">Pusula Connect</span>
+        <div className="flex h-16 shrink-0 items-center justify-center border-b px-5">
+          <ParlayanLogo />
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
