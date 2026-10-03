@@ -40,8 +40,12 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
   }, [bagli, koyu]);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-hidden">
-      <Globe config={config} className="relative inset-auto mx-0 w-[min(100%,100vh)] max-w-[820px] opacity-70" />
+    // Panelin altında, yarısı dışarıda (ufuktan doğan dünya)
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+      <Globe
+        config={config}
+        className="inset-auto bottom-0 left-1/2 w-[min(100%,110vh)] max-w-[900px] -translate-x-1/2 translate-y-1/2 opacity-70"
+      />
     </div>
   );
 }
