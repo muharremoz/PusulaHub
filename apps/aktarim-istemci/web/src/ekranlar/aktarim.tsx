@@ -159,7 +159,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                     </TableCell>
                     <TableCell className="py-1.5 pr-3 pl-2">
                       <div
-                        className={"truncate " + (o.durum === "tamam" ? "text-foreground" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}
+                        className={"truncate " + (o.durum === "tamam" ? "text-emerald-600 dark:text-emerald-400" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}
                         title={o.durum === "yukleniyor" && o.boyut > 0 ? `${bayt(o.gonderilen)} / ${bayt(o.boyut)}` : undefined}
                       >
                         {ADIM[o.durum]}
@@ -196,7 +196,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
 }
 
 function Simge({ d, suruyor }: { d: IsOgesi["durum"]; suruyor: boolean }) {
-  if (d === "tamam") return <CheckCircle2 className="size-4 shrink-0 text-foreground" />;
+  if (d === "tamam") return <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />;
   if (d === "hata") return <XCircle className="size-4 shrink-0 text-destructive" />;
   if (d === "bekliyor" || !suruyor) return <Circle className="size-4 shrink-0 text-muted-foreground" />;
   return <Loader2 className="size-4 shrink-0 animate-spin text-primary" />;
