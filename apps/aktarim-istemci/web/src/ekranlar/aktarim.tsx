@@ -86,7 +86,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           ))}
       </header>
 
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+      <main className="mx-auto flex max-w-6xl flex-col gap-4 p-6">
         <section className="rounded-lg border bg-card p-5">
           <div className="mb-3 flex items-end justify-between">
             <div>
@@ -127,17 +127,19 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             <AlertDescription>{durum.mesaj}</AlertDescription>
           </Alert>
         )}
+        {/* Adımlar ve öğeler yan yana (dar pencerede alt alta) */}
+        <div className="grid items-start gap-4 lg:grid-cols-2">
         <AktarimAdimlari d={durum} />
 
-        <section className="overflow-hidden rounded-lg border bg-card shadow-xs">
-          <Table>
+        <section className="min-w-0 overflow-hidden rounded-lg border bg-card shadow-xs">
+          <Table className="table-fixed text-[13px]">
             <TableHeader>
-              <TableRow className="text-[10px] uppercase tracking-wider">
-                <TableHead className="w-10 pl-4" />
-                <TableHead>Öğe</TableHead>
-                <TableHead>Tür</TableHead>
-                <TableHead className="text-right">Boyut</TableHead>
-                <TableHead className="w-48 pr-4">Durum</TableHead>
+              <TableRow className="text-[10px] uppercase tracking-wider hover:bg-transparent">
+                <TableHead className="h-8 w-9 pl-3" />
+                <TableHead className="h-8 px-2">Öğe</TableHead>
+                <TableHead className="h-8 w-24 px-2">Tür</TableHead>
+                <TableHead className="h-8 w-20 px-2 text-right">Boyut</TableHead>
+                <TableHead className="h-8 w-36 pr-3 pl-2">Durum</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -146,22 +148,22 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                 const suren = o.durum === "yedekleniyor" || o.durum === "paketleniyor" || o.durum === "hazirlaniyor" || o.durum === "yukleniyor";
                 return (
                   <TableRow key={o.ad}>
-                    <TableCell className="pl-4"><Simge d={o.durum} suruyor={a.suruyor} /></TableCell>
-                    <TableCell className="max-w-72">
-                      <div className="truncate font-medium">{o.ad}</div>
+                    <TableCell className="py-1.5 pl-3"><Simge d={o.durum} suruyor={a.suruyor} /></TableCell>
+                    <TableCell className="px-2 py-1.5">
+                      <div className="truncate" title={o.ad}>{o.ad}</div>
                       {o.hata && <div className="mt-0.5 text-xs whitespace-normal text-destructive">{o.hata}</div>}
                     </TableCell>
-                    <TableCell>
-                      {tur && <span className={"inline-flex rounded-md px-2 py-0.5 text-xs font-medium " + tur.renk}>{tur.ad}</span>}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums text-muted-foreground">
+                    <TableCell className="truncate px-2 py-1.5 text-muted-foreground">{tur?.ad ?? "—"}</TableCell>
+                    <TableCell className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
                       {o.boyut > 0 ? bayt(o.boyut) : o.veriMb > 0 ? mb(o.veriMb) : "—"}
                     </TableCell>
-                    <TableCell className="pr-4">
-                      <div className={"text-xs " + (o.durum === "tamam" ? "text-foreground" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}>
+                    <TableCell className="py-1.5 pr-3 pl-2">
+                      <div
+                        className={"truncate " + (o.durum === "tamam" ? "text-foreground" : o.durum === "hata" ? "text-destructive" : "text-muted-foreground")}
+                        title={o.durum === "yukleniyor" && o.boyut > 0 ? `${bayt(o.gonderilen)} / ${bayt(o.boyut)}` : undefined}
+                      >
                         {ADIM[o.durum]}
-                        {o.durum === "yukleniyor" && o.boyut > 0 && ` · ${bayt(o.gonderilen)} / ${bayt(o.boyut)}`}
-                        {suren && o.durum !== "yukleniyor" && ` · %${o.yuzde}`}
+                        {suren && ` · %${o.yuzde}`}
                       </div>
                       {suren && <Progress value={o.yuzde} className="mt-1 h-1.5" />}
                     </TableCell>
@@ -171,6 +173,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             </TableBody>
           </Table>
         </section>
+        </div>
       </main>
 
       <AlertDialog open={yeniOnay} onOpenChange={setYeniOnay}>
@@ -193,8 +196,8 @@ export function AktarimEkrani({ durum, setDurum }: P) {
 }
 
 function Simge({ d, suruyor }: { d: IsOgesi["durum"]; suruyor: boolean }) {
-  if (d === "tamam") return <CheckCircle2 className="size-5 shrink-0 text-foreground" />;
-  if (d === "hata") return <XCircle className="size-5 shrink-0 text-destructive" />;
-  if (d === "bekliyor" || !suruyor) return <Circle className="size-5 shrink-0 text-muted-foreground" />;
-  return <Loader2 className="size-5 shrink-0 animate-spin text-primary" />;
+  if (d === "tamam") return <CheckCircle2 className="size-4 shrink-0 text-foreground" />;
+  if (d === "hata") return <XCircle className="size-4 shrink-0 text-destructive" />;
+  if (d === "bekliyor" || !suruyor) return <Circle className="size-4 shrink-0 text-muted-foreground" />;
+  return <Loader2 className="size-4 shrink-0 animate-spin text-primary" />;
 }
