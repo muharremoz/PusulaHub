@@ -25,7 +25,7 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       devicePixelRatio: 2,
       // Türkiye (35° D) ortada: cobe'de boylam λ için φ = π − (λ − π/2)
       phi: Math.PI - ((35 * Math.PI) / 180 - Math.PI / 2),
-      theta: 0.05, // yarısı panelin altında: eğim az olsun ki Türkiye (39° K) görünen yarının ortasına gelsin
+      theta: 0.2, // kuzey öne eğik: Türkiye + Avrupa kartların altındaki görünen yarının ortasına iner
       dark: koyu ? 1 : 0,
       diffuse: 0.4,
       mapSamples: 16000,
