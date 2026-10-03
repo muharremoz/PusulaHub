@@ -104,9 +104,13 @@ export function RaporEkrani({ durum, setDurum }: P) {
   // Varsayılan: son cari hareketi eski yılda kalanlar "Eski yıl" (bkz. eskiYilMi).
   const [eskiYil, setEskiYil] = useState<Set<string>>(() => new Set((r?.veritabanlari ?? []).filter(eskiYilMi).map((v) => v.ad)));
   // "Yeniden tara" yeni rapor getirince varsayılanlar yeni tarihlere göre yeniden kurulur.
+  // Yalnız gerçekten yeni bir tarama gelince (rapor zamanı değişince) varsayılana dön. Rapor nesnesi her
+  // yoklamada (4 sn) yeniden geldiği için [r]'ye bağlı olunca kullanıcının "Eski yıl" seçimi geri alınıyordu.
+  const raporZamani = r?.zaman;
   useEffect(() => {
     setEskiYil(new Set((r?.veritabanlari ?? []).filter(eskiYilMi).map((v) => v.ad)));
-  }, [r]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [raporZamani]);
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
   // Elle eklenen resim klasörleri (SQL'siz aktarım ya da şirket tanımında olmayan klasör)
   const [ekResimKlasorleri, setEkResimKlasorleri] = useState<KesifRaporu["resimKlasorleri"]>([]);
