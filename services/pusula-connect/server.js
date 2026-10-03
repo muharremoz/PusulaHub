@@ -725,7 +725,9 @@ fastify.post("/api/nabiz", async (req, reply) => {
   // Token döndürme: güncel tokenla gelen ve süresi dolmuş cihaza yeni token. Eski token TOKEN_GECIS_DK daha geçer
   // (istemci kaydedene kadar). Eski tokenla gelen isteğe (geçiş süresinde) yeniden üretilmez — tek sefer.
   const sinir = new Date(Date.now() - TOKEN_OMRU_GUN * 86400000).toISOString().replace("T", " ").slice(0, 19)
-  if (c.guncelToken && (!c.tokenZaman || c.tokenZaman < sinir)) {
+  // Yalnız yeniToken'ı tanıyan istemciler (0.3.7+): eski istemci yanıtı yok sayar, 15 dk sonra kaydı düşerdi.
+  const istemciSurum = String(req.headers["x-surum"] ?? "0.0.0")
+  if (c.guncelToken && surumKarsilastir(istemciSurum, "0.3.7") >= 0 && (!c.tokenZaman || c.tokenZaman < sinir)) {
     const yeni = randomBytes(32).toString("base64url")
     sql.tokenYenile.run(ozet(yeni), c.cihazId)
     olay("token_yenilendi", { cihaz: c, kaynak: "servis", ayrinti: c.tokenZaman ? "önceki " + c.tokenZaman : "ilk döndürme" })
