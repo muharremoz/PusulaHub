@@ -24,13 +24,16 @@ import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
   Activity, Ban, CheckCircle2, History, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
-  RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi,
+  RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
 import { AyarlarSekmesi } from "@/components/connect/ayarlar-sekmesi"
 import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
 
 // ------------------------------------------------------------ yardımcılar
+
+/** Müşteriye gönderilecek uygulama: servisteki güncel (imzalı) exe — yeni sürüm yayınlanınca bu adres de günceller */
+const UYGULAMA_INDIR = "https://aktarim.pusulanet.net/connect/indir"
 
 /** Servis zamanları SQLite datetime('now') = UTC "YYYY-MM-DD HH:MM:SS". */
 const zaman = (s: string | null) => (s ? new Date(s.replace(" ", "T") + "Z") : null)
@@ -270,9 +273,29 @@ export default function ConnectPage() {
               <TabsTrigger value="duyurular" className="h-7 gap-1.5 text-[12px]"><Megaphone className="size-3.5" />Duyurular</TabsTrigger>
               <TabsTrigger value="ayarlar" className="h-7 gap-1.5 text-[12px]"><Settings className="size-3.5" />Ayarlar</TabsTrigger>
             </TabsList>
+            <div className="flex items-center gap-2">
+            <a
+              href={UYGULAMA_INDIR}
+              className="hover:bg-muted text-foreground inline-flex h-8 items-center gap-1.5 rounded-[5px] border px-2.5 text-[12px] font-medium transition-colors"
+            >
+              <Download className="size-3.5" />Uygulamayı indir
+            </a>
+            <button
+              type="button"
+              title="İndirme bağlantısını kopyala"
+              className="hover:bg-muted text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-[5px] border transition-colors"
+              onClick={() =>
+                void navigator.clipboard.writeText(UYGULAMA_INDIR)
+                  .then(() => toast.success("İndirme bağlantısı kopyalandı", { description: UYGULAMA_INDIR }))
+                  .catch(() => toast.error("Kopyalanamadı"))
+              }
+            >
+              <Link2 className="size-3.5" />
+            </button>
             <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle(); setYenileSayac((n) => n + 1) }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
             </Button>
+            </div>
           </div>
 
           <TabsContent value="cihazlar" className="mt-3">
