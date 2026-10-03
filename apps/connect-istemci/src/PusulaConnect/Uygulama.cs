@@ -180,6 +180,21 @@ namespace PusulaConnect
 
         private JObject Profil { get { lock (_kilit) return _kayit?["profil"] as JObject; } }
         /// <summary>Bu cihazda iki adımlı doğrulama açık mı (servisten gelen kayıt).</summary>
+        // Bu açılışta doğru kodla gelen kasa anahtarı (yalnız bellekte). "Pusula bağlantısında kod sor" kapalıysa
+        // bağlanırken bununla çözülür. _kilitAcik: açılış kilidi bu açılışta açıldı mı.
+        private string _kasaAnahtari;
+        private bool _kilitAcik;
+
+        /// <summary>Bağlanmak için kod gerekiyor mu: bağlantıda sorulacak, ya da anahtar henüz yok, ya da yeni şifre bekleniyor.</summary>
+        private bool KodGerekli
+        {
+            get
+            {
+                if (!IkiAktif) return false;
+                lock (_kilit) return Ayarlar.Simdiki.IkiBaglanti || _kasaAnahtari == null || _sifreBekliyor;
+            }
+        }
+
         private bool IkiAktif { get { lock (_kilit) return _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true; } }
         private void IkiDurumYaz(bool aktif)
         {
@@ -231,7 +246,13 @@ namespace PusulaConnect
                         rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici },
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
-                    ikiAdim = new { aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true },
+                    ikiAdim = new
+                    {
+                        aktif = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true,
+                        // Açılışta kod: doğrulanana kadar arayüz kilit ekranı gösterir
+                        kilitli = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true && Ayarlar.Simdiki.IkiAcilis && !_kilitAcik,
+                        kodGerekli = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true && (Ayarlar.Simdiki.IkiBaglanti || _kasaAnahtari == null || _sifreBekliyor),
+                    },
                     // Pusula'dan şifre güncellemesi: bekleyen (2FA) sürekli, bilgi mesajı 3 dk görünür
                     sifreGuncelleme = new
                     {
@@ -284,7 +305,7 @@ namespace PusulaConnect
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
             BilinenSurum = null;
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; }
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; }
             return Durum();
         }
 
@@ -401,16 +422,25 @@ namespace PusulaConnect
                 sifre = j.Value<string>("sifre");
                 Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
                 BilinenSurum = j.Value<string>("sifreSurumu") ?? HubSurum;
-                lock (_kilit) { _sifreBekliyor = false; SifreBilgi("Şifreniz Pusula tarafından değiştirildi; yeni şifre alındı."); }
+                lock (_kilit) { _sifreBekliyor = false; _kasaAnahtari = j.Value<string>("kasaAnahtari"); SifreBilgi("Şifreniz Pusula tarafından değiştirildi; yeni şifre alındı."); }
                 Gunluk.Yaz("RDP şifresi Pusula'dan alındı (2FA kodu ile)");
                 _ = _servis.Olay("sifre_guncellendi", "2FA ile");
             }
             else if (iki)
             {
-                if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
                 if (!Rdp.KasaliSifreVar) throw new KullaniciHatasi("Önce oturum şifresini kaydedin.");
-                var j = await _servis.IkiDogrula(kod.Trim());
-                sifre = Rdp.KasaliOku(j.Value<string>("kasaAnahtari"));
+                string anahtar;
+                if (!KodGerekli && string.IsNullOrWhiteSpace(kod))
+                {
+                    lock (_kilit) anahtar = _kasaAnahtari;   // açılışta kodla alındı
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
+                    anahtar = (await _servis.IkiDogrula(kod.Trim())).Value<string>("kasaAnahtari");
+                    lock (_kilit) _kasaAnahtari = anahtar;
+                }
+                sifre = Rdp.KasaliOku(anahtar);
             }
             else
             {
@@ -649,15 +679,47 @@ namespace PusulaConnect
         public async Task<object> IkiOnayla(string kod, string sifre)
         {
             if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
-            if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Oturum şifrenizi girin.");
             var rdp = P("rdp") ?? throw new KullaniciHatasi("Profil yok.");
+            // Şifre kullanıcıdan istenmez: önce Pusula'daki güncel şifre (2FA henüz açık değil → kodsuz), olmazsa bu bilgisayarda kayıtlı olan.
+            if (string.IsNullOrEmpty(sifre))
+            {
+                try { sifre = (await _servis.Sifre(null)).Value<string>("sifre"); }
+                catch (Exception e) { Gunluk.Yaz("2FA açılırken şifre Pusula'dan alınamadı: " + e.Message); }
+                if (string.IsNullOrEmpty(sifre) && Rdp.YerelSifreVar) sifre = Rdp.YerelOku();
+                if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Oturum şifreniz bulunamadı. Önce ana ekrandan oturum şifresini kaydedin, sonra iki adımlı doğrulamayı açın.");
+            }
             var j = await _servis.IkiOnayla(kod.Trim());
             Rdp.KasaliKaydet(sifre, j.Value<string>("kasaAnahtari"));
+            lock (_kilit) { _kasaAnahtari = j.Value<string>("kasaAnahtari"); _kilitAcik = true; }
             Rdp.SifreSil(rdp);
             Rdp.YerelSil();
             IkiDurumYaz(true);
             Gunluk.Yaz("İki adımlı doğrulama açıldı");
             await Kontrol();
+            return Durum();
+        }
+
+        /// <summary>
+        /// Açılış kilidi: doğru kodla kasa anahtarı alınır ve bu açılış boyunca bellekte tutulur. Pusula şifreyi
+        /// değiştirmişse aynı kodla yeni şifre de alınıp kasaya yazılır.
+        /// </summary>
+        public async Task<object> IkiKilitAc(string kod)
+        {
+            if (string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
+            bool bekliyor; lock (_kilit) bekliyor = _sifreBekliyor;
+            string anahtar;
+            if (bekliyor)
+            {
+                var j = await _servis.Sifre(kod.Trim());
+                anahtar = j.Value<string>("kasaAnahtari");
+                Rdp.KasaliKaydet(j.Value<string>("sifre"), anahtar);
+                BilinenSurum = j.Value<string>("sifreSurumu") ?? HubSurum;
+                lock (_kilit) { _sifreBekliyor = false; SifreBilgi("Şifreniz Pusula tarafından değiştirildi; yeni şifre alındı."); }
+                _ = _servis.Olay("sifre_guncellendi", "2FA ile (açılış)");
+            }
+            else anahtar = (await _servis.IkiDogrula(kod.Trim())).Value<string>("kasaAnahtari");
+            lock (_kilit) { _kasaAnahtari = anahtar; _kilitAcik = true; }
+            Gunluk.Yaz("Açılış kilidi açıldı (2FA)");
             return Durum();
         }
 
@@ -678,6 +740,7 @@ namespace PusulaConnect
             }
             Rdp.KasaliSil();
             IkiDurumYaz(false);
+            lock (_kilit) { _kasaAnahtari = null; _kilitAcik = false; }
             Gunluk.Yaz("İki adımlı doğrulama kapatıldı");
             await Kontrol();
             return Durum();

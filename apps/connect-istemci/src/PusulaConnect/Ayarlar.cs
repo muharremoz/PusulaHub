@@ -32,6 +32,11 @@ namespace PusulaConnect
         /// <summary>Bu bilgisayarın diskleri oturumda görünür. Varsayılan KAPALI (güvenlik + yavaşlık).</summary>
         public bool Suruculer { get; set; }
 
+        /// <summary>İki adımlı doğrulama açıkken: uygulama açılışında kod sorulsun (kilit ekranı).</summary>
+        public bool IkiAcilis { get; set; }
+        /// <summary>İki adımlı doğrulama açıkken: her "Pusula'ya bağlan"da kod sorulsun. İkisinden biri hep açık kalır.</summary>
+        public bool IkiBaglanti { get; set; } = true;
+
         [JsonIgnore]
         public bool WindowsIleBaslat => BaslangicKaydi() != null;
 
@@ -73,6 +78,12 @@ namespace PusulaConnect
                 a.Kamera = B("kamera") ?? a.Kamera;
                 a.Aygitlar = B("aygitlar") ?? a.Aygitlar;
                 a.Suruculer = B("suruculer") ?? a.Suruculer;
+                var acilis = B("ikiAcilis") ?? a.IkiAcilis;
+                var baglanti = B("ikiBaglanti") ?? a.IkiBaglanti;
+                // Kod hiç sorulmazsa iki adımlı doğrulamanın anlamı kalmaz (kasa anahtarı yine de yalnız kodla gelir)
+                if (!acilis && !baglanti) throw new KullaniciHatasi("Doğrulama kodu en az birinde sorulmalı: uygulama açılışı ya da Pusula bağlantısı.");
+                a.IkiAcilis = acilis;
+                a.IkiBaglanti = baglanti;
                 var w = B("windowsIleBaslat");
                 if (w.HasValue) BaslangicAyarla(w.Value);
                 File.WriteAllText(Dosya, JsonConvert.SerializeObject(a, Formatting.Indented));
@@ -92,6 +103,8 @@ namespace PusulaConnect
             kamera = Kamera,
             aygitlar = Aygitlar,
             suruculer = Suruculer,
+            ikiAcilis = IkiAcilis,
+            ikiBaglanti = IkiBaglanti,
             windowsIleBaslat = WindowsIleBaslat,
         };
 

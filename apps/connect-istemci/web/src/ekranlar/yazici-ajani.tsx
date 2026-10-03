@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, CircleAlert, Copy, Loader2, Printer, RefreshCw, Trash2, Wrench, X, Zap } from "lucide-react";
 import { api } from "@/api";
+import { SABIT_VPN_ONEKI, vpnIpSabitMi } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,6 +221,15 @@ export function YaziciAjaniBolumu() {
           </ul>
         )}
 
+        {adres && d?.kurulu && !vpnIpSabitMi(adres) && (
+          <div className="flex items-start gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <CircleAlert className="mt-px size-3.5 shrink-0" />
+            <span>
+              VPN adresi <b className="font-mono">{adres}</b> sabit değil ({SABIT_VPN_ONEKI}x olmalı). Her bağlanışta değişebilir;
+              Pusula X bu bilgisayara yazdıramayabilir. Kullanıcıya sabit VPN IP'si tanımlanması için Pusula'ya haber verin.
+            </span>
+          </div>
+        )}
         {adres && d?.kurulu && (
           <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-xs">
             <span className="text-muted-foreground">Pusula X yazıcı IP adresi</span>

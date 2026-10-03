@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
+import { vpnIpSabitMi } from "@/lib/utils";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
@@ -69,7 +70,8 @@ export function AnaEkran({ durum, setDurum }: P) {
 
   const baglan = async () => {
     setVpnUyari(false);
-    if (ikiAktif) {
+    // Kod yalnız gerekiyorsa: "bağlantıda kod sor" kapalı ve açılışta kod girildiyse doğrudan bağlanır.
+    if (ikiAktif && durum.ikiAdim?.kodGerekli !== false) {
       setKodIstek("baglan");
       return;
     }
@@ -117,7 +119,14 @@ export function AnaEkran({ durum, setDurum }: P) {
                   <span className="inline-flex items-center gap-1.5 font-medium">
                     <span className={"size-2 rounded-full " + (durum.yazdirma.calisiyor ? "bg-emerald-500" : "bg-amber-500")} />
                     {durum.yazdirma.calisiyor ? "Çalışıyor" : "Çalışmıyor"}
-                    {durum.yazdirma.vpnIp && <span className="font-mono font-normal text-muted-foreground">· {durum.yazdirma.vpnIp}</span>}
+                    {durum.yazdirma.vpnIp && (
+                      <span
+                        className={"font-mono font-normal " + (vpnIpSabitMi(durum.yazdirma.vpnIp) ? "text-muted-foreground" : "text-amber-600 dark:text-amber-400")}
+                        title={vpnIpSabitMi(durum.yazdirma.vpnIp) ? undefined : "VPN adresi sabit değil — Pusula X yazdıramayabilir"}
+                      >
+                        · {durum.yazdirma.vpnIp}{vpnIpSabitMi(durum.yazdirma.vpnIp) ? "" : " (sabit değil)"}
+                      </span>
+                    )}
                   </span>
                 }
               />

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  Cable, CheckCircle2, ChevronDown, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
+  Cable, CheckCircle2, ChevronDown, LockKeyhole, Monitor, Clipboard, CreditCard, Download, FileText, HardDrive, KeyRound, Loader2, LogOut, MapPin, Maximize2, Power, Printer,
   RefreshCw, ShieldCheck, Usb, Video, Volume2,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -15,7 +15,7 @@ import { YaziciAjaniBolumu } from "./yazici-ajani";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
-  | "akilliKart" | "portlar" | "konum" | "kamera" | "aygitlar" | "suruculer";
+  | "akilliKart" | "portlar" | "konum" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti";
 
 /**
  * Uygulama ayarları — orta panelde açılır. Değişiklik anında kaydedilir (Kaydet düğmesi yok).
@@ -66,6 +66,14 @@ export function AyarlarIcerik({
         return kalan;
       });
     }
+  };
+
+  // İki adımlı doğrulama seçenekleri: en az biri açık kalır (sonuncusu kapatılamaz).
+  const ikiDeger = (ad: "ikiAcilis" | "ikiBaglanti") => yerel[ad] ?? (ad === "ikiBaglanti" ? ay?.ikiBaglanti ?? true : !!ay?.ikiAcilis);
+  const ikiAnahtar = (ad: "ikiAcilis" | "ikiBaglanti") => {
+    const acik = ikiDeger(ad);
+    const digeri = ikiDeger(ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis");
+    return <Switch checked={acik} disabled={!ay || (acik && !digeri)} onCheckedChange={(v) => void degistir(ad, v)} />;
   };
 
   const anahtar = (ad: AyarAdi) => (
@@ -120,6 +128,26 @@ export function AyarlarIcerik({
             )
           }
         />
+        {ikiAktif && (
+          <>
+            <Satir
+              ikon={<LockKeyhole />}
+              ad="Uygulama açılışında kod sor"
+              aciklama="Pusula Connect her açıldığında önce doğrulama kodu istenir."
+              kontrol={ikiAnahtar("ikiAcilis")}
+            />
+            <Satir
+              ikon={<Monitor />}
+              ad="Pusula bağlantısında kod sor"
+              aciklama={
+                (yerel.ikiBaglanti ?? ay?.ikiBaglanti ?? true)
+                  ? "Her \"Pusula'ya bağlan\"da doğrulama kodu istenir."
+                  : "Açılışta kod girildiyse bağlanırken tekrar sorulmaz."
+              }
+              kontrol={ikiAnahtar("ikiBaglanti")}
+            />
+          </>
+        )}
         <Satir
           ikon={<KeyRound />}
           ad="Kayıtlı oturum şifresi"

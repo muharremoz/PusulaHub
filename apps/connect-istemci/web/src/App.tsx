@@ -6,6 +6,7 @@ import { AnahtarYok, Bekleme } from "@/ekranlar/ortak";
 import { GirisEkrani } from "@/ekranlar/giris";
 import { AnaEkran } from "@/ekranlar/ana";
 import { KapatmaOnayi } from "@/ekranlar/kapatma-onayi";
+import { KilitEkrani } from "@/ekranlar/iki-adim";
 
 export function App() {
   const [durum, setDurum] = useState<Durum | null>(null);
@@ -53,6 +54,6 @@ function Icerik({ durum, setDurum, hata }: { durum: Durum | null; setDurum: (d: 
     case "kayit":
       return <GirisEkrani {...p} />;
     case "hazir":
-      return <AnaEkran {...p} />;
+      return durum.ikiAdim?.kilitli ? <KilitEkrani {...p} /> : <AnaEkran {...p} />;
   }
 }

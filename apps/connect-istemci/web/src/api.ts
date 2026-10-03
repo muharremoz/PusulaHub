@@ -97,13 +97,21 @@ export type Durum = {
   /** Pusula'dan şifre güncellemesi: bekliyor = 2FA açık, yeni şifre bir sonraki kodla alınacak; mesaj = kullanıcıya bilgi. */
   sifreGuncelleme?: { bekliyor: boolean; mesaj: string | null; /** şifre ilk kurulumda alındı (değişmedi) */ ilk?: boolean };
   /** Bu cihazda iki adımlı doğrulama (TOTP) açık mı. */
-  ikiAdim?: { aktif: boolean };
+  ikiAdim?: {
+    aktif: boolean;
+    /** Açılışta kod isteniyor ve bu açılışta henüz girilmedi → kilit ekranı. */
+    kilitli?: boolean;
+    /** "Pusula'ya bağlan"da kod sorulacak mı (bağlantıda kod açık, ya da açılışta alınan anahtar yok). */
+    kodGerekli?: boolean;
+  };
   /** Uygulama içi uzak masaüstü: açık mı, son oturum hatayla bittiyse mesajı. */
   oturum?: { acik: boolean; mesaj: string | null };
   /** Ayarlar sayfası (anında kaydedilir). */
   ayarlar?: {
     tamEkran: boolean; yazici: boolean; pano: boolean; ses: boolean; windowsIleBaslat: boolean;
     akilliKart: boolean; portlar: boolean; konum: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
+    /** İki adımlı doğrulama: kod uygulama açılışında / Pusula bağlantısında sorulsun (en az biri açık). */
+    ikiAcilis?: boolean; ikiBaglanti?: boolean;
   };
   /** Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — sol panel. */
   yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };

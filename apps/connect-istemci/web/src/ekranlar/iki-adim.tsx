@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Loader2, ShieldCheck, Smartphone } from "lucide-react";
+import { Loader2, LockKeyhole, ShieldCheck, Smartphone } from "lucide-react";
 import QRCode from "qrcode";
 import { api, type Durum } from "@/api";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSeparator, InputOTPSlot } from "@/components/ui/input-otp";
+import { Kabuk, cikisYap } from "./ortak";
 
 /**
  * İki adımlı doğrulama (TOTP) pencereleri. Kural: kullanıcı açar; açıkken her "Pusula'ya bağlan"da
@@ -37,18 +37,17 @@ export function KodGirisi({ deger, onDeger, onTamam, otomatikOdak }: { deger: st
   );
 }
 
-/** Açma: QR okut → oturum şifresini gir → ilk kodu gir. */
+/** Açma: QR okut → ilk kodu gir. Oturum şifresi sorulmaz (Pusula'dan ya da bu bilgisayardaki kayıttan alınır). */
 export function IkiAcPenceresi({ acik, onKapat, setDurum, kullanici }: { acik: boolean; onKapat: () => void; setDurum: (d: Durum) => void; kullanici: string }) {
   const [kurulum, setKurulum] = useState<{ gizli: string; uri: string } | null>(null);
   const [qr, setQr] = useState<string | null>(null);
-  const [sifre, setSifre] = useState("");
   const [kod, setKod] = useState("");
   const [bekle, setBekle] = useState(false);
   const [hata, setHata] = useState<string | null>(null);
 
   useEffect(() => {
     if (!acik) return;
-    setKurulum(null); setQr(null); setSifre(""); setKod(""); setHata(null);
+    setKurulum(null); setQr(null); setKod(""); setHata(null);
     void api<{ gizli: string; uri: string }>("/iki/baslat", {})
       .then(async (k) => {
         setKurulum(k);
@@ -58,10 +57,10 @@ export function IkiAcPenceresi({ acik, onKapat, setDurum, kullanici }: { acik: b
   }, [acik]);
 
   const onayla = async () => {
-    if (kod.length !== 6 || !sifre) return;
+    if (kod.length !== 6) return;
     setBekle(true); setHata(null);
     try {
-      setDurum(await api<Durum>("/iki/onayla", { kod, sifre }));
+      setDurum(await api<Durum>("/iki/onayla", { kod }));
       onKapat();
     } catch (e) {
       setHata((e as Error).message);
@@ -96,11 +95,7 @@ export function IkiAcPenceresi({ acik, onKapat, setDurum, kullanici }: { acik: b
             </div>
           </li>
           <li className="flex flex-col gap-2">
-            <span><b>2.</b> Pusula oturum şifreniz <span className="text-muted-foreground">(bu bilgisayarda kodla korunarak saklanır)</span>:</span>
-            <Input type="password" value={sifre} onChange={(e) => setSifre(e.target.value)} placeholder="Oturum şifresi" />
-          </li>
-          <li className="flex flex-col gap-2">
-            <span><b>3.</b> Uygulamada görünen 6 haneli kod:</span>
+            <span><b>2.</b> Uygulamada görünen 6 haneli kod:</span>
             <KodGirisi deger={kod} onDeger={setKod} onTamam={() => void onayla()} />
           </li>
         </ol>
@@ -109,12 +104,55 @@ export function IkiAcPenceresi({ acik, onKapat, setDurum, kullanici }: { acik: b
 
         <DialogFooter>
           <Button variant="outline" onClick={onKapat}>Vazgeç</Button>
-          <Button disabled={bekle || !kurulum || kod.length !== 6 || !sifre} onClick={() => void onayla()}>
+          <Button disabled={bekle || !kurulum || kod.length !== 6} onClick={() => void onayla()}>
             {bekle ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Aç
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Açılış kilidi: "Uygulama açılışında kod sor" açıksa, kod girilene kadar uygulama bu ekranla açılır. */
+export function KilitEkrani({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
+  const [kod, setKod] = useState("");
+  const [bekle, setBekle] = useState(false);
+  const [hata, setHata] = useState<string | null>(null);
+
+  const gonder = async () => {
+    if (kod.length !== 6 || bekle) return;
+    setBekle(true); setHata(null);
+    try {
+      setDurum(await api<Durum>("/iki/kilit", { kod }));
+    } catch (e) {
+      setHata((e as Error).message);
+      setKod("");
+    } finally {
+      setBekle(false);
+    }
+  };
+
+  return (
+    <Kabuk>
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+          <LockKeyhole className="size-5" />
+        </span>
+        <div className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold">Doğrulama kodu</h1>
+          <p className="text-sm text-muted-foreground">
+            {durum.kayit?.kullanici ? <><b className="text-foreground">{durum.kayit.kullanici}</b> · </> : null}
+            Telefonunuzdaki doğrulama uygulamasında görünen 6 haneli kodu girin.
+          </p>
+        </div>
+        <KodGirisi deger={kod} onDeger={setKod} onTamam={() => void gonder()} otomatikOdak />
+        {hata && <p className="text-sm text-destructive">{hata}</p>}
+        <Button className="w-full" disabled={bekle || kod.length !== 6} onClick={() => void gonder()}>
+          {bekle ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Devam
+        </Button>
+        <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => void cikisYap()}>Uygulamayı kapat</Button>
+      </div>
+    </Kabuk>
   );
 }
 
