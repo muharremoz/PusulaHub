@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, ArrowRight, CheckCircle2, Database, FileArchive, FileCode2, FolderOpen, FolderPlus, Image, Info, Loader2, Minimize2, MonitorUp, Plus,
-  RefreshCw, Search, Server, Unplug, X, XCircle,
+  RefreshCw, ScanSearch, Search, Server, Unplug, X, XCircle,
 } from "lucide-react";
 import { api, type Durum, type KesifRaporu, type Veritabani } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -89,6 +89,9 @@ type Onay = { baslik: string; mesaj: React.ReactNode; uygula: () => void };
 export function RaporEkrani({ durum, setDurum }: P) {
   const r = durum.kesif;
   const oturum = durum.oturum;
+  // Tarama ana ekrandan: henüz yapılmadıysa ortada "Taramayı başlat", sürerken ilerleme (ayrı ekran yok)
+  const taraniyor = durum.asama === "kesif";
+  const taramaYok = !r && !taraniyor;
   const hedef = oturum?.hedefler ?? { sql: true, depo: true, rdp: true };
   const katalog: Katalog = oturum?.programlar ?? [];
 
@@ -355,9 +358,11 @@ export function RaporEkrani({ durum, setDurum }: P) {
         <Button variant="outline" size="sm" onClick={() => setKucultme(true)} className="text-foreground">
           <Minimize2 /> Resim küçült
         </Button>
-        <Button variant="outline" size="sm" disabled={bekle} onClick={() => void yenile()}>
-          {bekle ? <Loader2 className="animate-spin" /> : <RefreshCw />} Yeniden tara
-        </Button>
+        {r && (
+          <Button variant="outline" size="sm" disabled={bekle || taraniyor} onClick={() => void yenile()}>
+            {bekle || taraniyor ? <Loader2 className="animate-spin" /> : <RefreshCw />} {taraniyor ? "Taranıyor…" : "Yeniden tara"}
+          </Button>
+        )}
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
@@ -382,7 +387,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
           </Alert>
         ))}
 
-        {r && (
+        {(taramaYok || taraniyor) && (
+          <TaramaKarti
+            durum={durum}
+            taraniyor={taraniyor}
+            bekle={bekle}
+            onTara={() => void yenile()}
+            onSql={() => void api<Durum>("/sql/giris", {}).then(setDurum).catch((e) => setHata((e as Error).message))}
+          />
+        )}
+
+        {r && !taraniyor && (
           <>
             <Bolum ikon={<Server className="size-4" />} baslik="SQL Server" renk="slate">
               {r.sql ? (
@@ -857,7 +872,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
         )}
       </main>
 
-      {r && (
+      {r && !taraniyor && (
         <footer className="fixed inset-x-0 bottom-0 border-t bg-card/95 backdrop-blur">
           <div className="mx-auto flex max-w-5xl items-center gap-3 px-6 py-3">
             <div className="min-w-0 flex-1 truncate text-sm">
@@ -1043,3 +1058,55 @@ function Bilgi({ l, v, mono }: { l: string; v: string; mono?: boolean }) {
 }
 
 const Bos = ({ children }: { children: React.ReactNode }) => <p className="px-4 py-3 text-sm text-muted-foreground">{children}</p>;
+
+/**
+ * Ana ekranın ortasındaki tarama kartı: henüz tarama yoksa SQL durumu + "Taramayı başlat";
+ * tarama sürerken aynı kartta ilerleme. (Eskiden ayrı "tarama" ekranı vardı.)
+ */
+function TaramaKarti({ durum, taraniyor, bekle, onTara, onSql }: {
+  durum: Durum; taraniyor: boolean; bekle: boolean; onTara: () => void; onSql: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-5 rounded-xl border bg-card px-6 py-10 text-center shadow-xs">
+      <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-foreground">
+        {taraniyor ? <Loader2 className="size-6 animate-spin" /> : <ScanSearch className="size-6" />}
+      </span>
+      <div className="flex max-w-md flex-col gap-1.5">
+        <h2 className="text-lg font-semibold">{taraniyor ? "Verileriniz taranıyor" : "Bu bilgisayarı tarayın"}</h2>
+        <p className="text-sm text-muted-foreground">
+          {taraniyor
+            ? durum.ilerleme ?? "Hazırlanıyor…"
+            : "Tarama veritabanlarını, resim ve program klasörlerini bulur. Birkaç dakika sürebilir; Pusula programını kullanmanız engellenmez."}
+        </p>
+      </div>
+
+      <div className="flex w-full max-w-md items-center gap-3 rounded-lg border bg-muted/40 px-4 py-3 text-left">
+        <Database className="size-5 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1 text-sm">
+          {durum.sql ? (
+            <>
+              <div className="font-medium">SQL Server bağlı</div>
+              <div className="truncate font-mono text-xs text-muted-foreground">{durum.sql.sunucu}</div>
+            </>
+          ) : (
+            <>
+              <div className="font-medium">SQL olmadan</div>
+              <div className="text-xs text-muted-foreground">Yalnız resim, program ve dosyalar taranır.</div>
+            </>
+          )}
+        </div>
+        {!taraniyor && (
+          <Button variant="ghost" size="sm" disabled={bekle} onClick={onSql}>
+            {durum.sql ? "Değiştir" : "Bağlan"}
+          </Button>
+        )}
+      </div>
+
+      {!taraniyor && (
+        <Button size="lg" className="w-full max-w-md" disabled={bekle} onClick={onTara}>
+          {bekle ? <Loader2 className="animate-spin" /> : <ScanSearch />} Taramayı başlat
+        </Button>
+      )}
+    </div>
+  );
+}
