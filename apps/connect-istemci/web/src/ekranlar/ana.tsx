@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
+import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
@@ -193,8 +194,18 @@ export function AnaEkran({ durum, setDurum }: P) {
           <iframe src={talepAdresi(kayit.firmaId)} title="Yardım talebi" className="min-h-0 w-full flex-1 border-0 bg-white" />
         </main>
       ) : (
-      <main className="flex min-w-0 flex-1 flex-col">
-      <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      {/* Arka plan: Magic UI Flickering Grid — erişim varken yeşil, yokken gri; kenarlara doğru söner */}
+      <FlickeringGrid
+        aria-hidden
+        className="pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_80%)]"
+        squareSize={4}
+        gridGap={6}
+        flickerChance={0.12}
+        maxOpacity={0.28}
+        color={k.terminal.erisim ? "#10b981" : "#64748b"}
+      />
+      <div className="relative flex min-h-0 flex-1 justify-center overflow-y-auto">
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
