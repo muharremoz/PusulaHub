@@ -345,7 +345,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
       {/* Sol panel: firma, SQL Server, Pusula'nın notu, rapor durumu ve eylemler (eskiden üst şeritteydi) */}
       <aside className="flex w-72 shrink-0 flex-col border-r bg-card">
         <div className="border-b px-5 py-2.5">
-          <ParlayanLogo yukseklik="h-16" />
+          <ParlayanLogo yukseklik="h-20" />
         </div>
 
         <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 py-5">
@@ -407,7 +407,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
           <Button variant="outline" className="justify-start" onClick={() => setKucultme(true)}>
             <Minimize2 /> Resim küçült
           </Button>
-          <div className="mt-2 truncate text-xs text-muted-foreground">{durum.makine} · sürüm {durum.surum}</div>
         </div>
       </aside>
 
