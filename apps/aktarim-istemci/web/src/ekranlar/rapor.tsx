@@ -275,33 +275,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
     } else uygula();
   };
 
-  // Toplu: filtreye uyan ve seçili olanların hepsi güncel / eski yıl. Aralarında eski yıl datası varsa "Güncel" sorulur.
-  const topluEskiYil = (eski: boolean) => {
-    const hedefler = secilebilir.filter((v) => secili.has(v.ad));
-    const uygula = () =>
-      setEskiYil((s) => {
-        const y = new Set(s);
-        for (const v of hedefler) {
-          if (eski) y.add(v.ad);
-          else y.delete(v.ad);
-        }
-        return y;
-      });
-    const eskiler = hedefler.filter(eskiYilMi);
-    if (!eski && eskiler.length > 0) {
-      setOnay({
-        baslik: "Eski yıl dataları güncel olarak aktarılsın mı?",
-        mesaj: (
-          <>
-            Seçilenlerden <b>{eskiler.length}</b> veritabanının son cari hareketi eski yılda
-            ({eskiler.slice(0, 5).map((v) => v.ad).join(", ")}{eskiler.length > 5 ? "…" : ""}). Hepsi güncel olarak işaretlenecek.
-          </>
-        ),
-        uygula,
-      });
-    } else uygula();
-  };
-  const eskiSayisi = [...eskiYil].filter((ad) => secili.has(ad)).length;
 
   const resimSayfaSayisi = Math.max(1, Math.ceil(resimler.length / KLASOR_SAYFA));
   const resimSayfaGecerli = Math.min(resimSayfa, resimSayfaSayisi);
@@ -578,21 +551,6 @@ export function RaporEkrani({ durum, setDurum }: P) {
                     onSayfa={setVtSayfa}
                     bilgi={`${(vtSayfaGecerli - 1) * VT_SAYFA + 1}–${Math.min(vtSayfaGecerli * VT_SAYFA, filtreli.length)} / ${filtreli.length} · ${secili.size} seçili`}
                   />
-                  {hedef.depo && (
-                    <div className="flex flex-wrap items-center gap-2 border-t px-4 py-2 text-xs text-muted-foreground">
-                      <span className="min-w-0 flex-1">
-                        "Eski yıl" işaretlenenler kurulmaz, Pusula'da arşivde saklanır.
-                        {eskiSayisi > 0 && <span className="ml-1 font-medium text-foreground">{eskiSayisi} eski yıl seçili.</span>}
-                      </span>
-                      <span>Seçilenleri ({filtreliSeciliSayisi}):</span>
-                      <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(false)}>
-                        Güncel yap
-                      </Button>
-                      <Button variant="outline" size="sm" className="h-7 text-xs" disabled={filtreliSeciliSayisi === 0} onClick={() => topluEskiYil(true)}>
-                        Eski yıl yap
-                      </Button>
-                    </div>
-                  )}
                   <label className="flex cursor-pointer items-start gap-3 border-t px-4 py-3 text-sm">
                     <Checkbox className="mt-0.5" checked={veritabanlariAyir} onCheckedChange={(c) => setVeritabanlariAyir(c === true)} />
                     <span>
