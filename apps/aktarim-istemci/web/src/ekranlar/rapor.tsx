@@ -9,7 +9,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -506,17 +505,17 @@ export function RaporEkrani({ durum, setDurum }: P) {
                               aria-label={v.ad + " aktarılsın"}
                             />
                           </TableCell>
-                          <TableCell className="py-1 px-3 whitespace-nowrap font-mono">
+                          <TableCell className="py-1 px-3 whitespace-nowrap">
                             {v.ad}
-                            {v.durum !== "ONLINE" && <Badge variant="outline" className="ml-1.5 h-[18px] px-1.5 text-[10px]">{v.durum}</Badge>}
+                            {v.durum !== "ONLINE" && <span className="ml-1.5 text-muted-foreground">({v.durum})</span>}
                           </TableCell>
                           <TableCell className="py-1 px-3 whitespace-nowrap">{v.sirketAdlari.join(", ") || "—"}</TableCell>
-                          <TableCell className="py-1 px-3 whitespace-nowrap font-mono tabular-nums">{v.kod ?? "—"}</TableCell>
+                          <TableCell className="py-1 px-3 whitespace-nowrap tabular-nums">{v.kod ?? "—"}</TableCell>
                           <TableCell className="py-1 px-3 whitespace-nowrap">
                             {v.prgTur === "909" ? (
-                              <span className="inline-flex rounded bg-muted px-1.5 py-px text-[11px] font-medium text-foreground">Perakende</span>
+                              <span>Perakende</span>
                             ) : v.prgTur === "011" ? (
-                              <span className="inline-flex rounded bg-muted px-1.5 py-px text-[11px] font-medium text-foreground">Toptan</span>
+                              <span>Toptan</span>
                             ) : (
                               <span className="text-muted-foreground">{v.prgTur ?? "—"}</span>
                             )}
@@ -639,7 +638,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                     aria-label={s.yol + " aktarılsın"}
                                   />
                                 </TableCell>
-                                <TableCell className="max-w-72 px-4 font-mono text-xs">
+                                <TableCell className="max-w-72 px-4">
                                   <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
                                 </TableCell>
                                 <TableCell className="max-w-56 px-4 text-muted-foreground">
@@ -756,10 +755,10 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                     aria-label={s.yol + " aktarılsın"}
                                   />
                                 </TableCell>
-                                <TableCell className="max-w-64 px-4 font-mono text-xs">
+                                <TableCell className="max-w-64 px-4">
                                   <Ipucu metin={s.yol}><div className="truncate">{s.yol}</div></Ipucu>
                                 </TableCell>
-                                <TableCell className="max-w-40 px-4 font-mono text-xs text-muted-foreground">
+                                <TableCell className="max-w-40 px-4 text-muted-foreground">
                                   <div className="truncate">{p.exeler.join(", ") || "—"}</div>
                                 </TableCell>
                                 <TableCell className="max-w-48 px-4 text-xs text-muted-foreground">
@@ -811,7 +810,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                     <Ipucu metin={d[tur]!}>
                                       <button
                                         type="button"
-                                        className="block max-w-full truncate font-mono text-xs underline-offset-2 hover:underline"
+                                        className="block max-w-full truncate underline-offset-2 hover:underline"
                                         onClick={() => void programDosyasiSec(d.id, tur).catch((e) => setHata(e.message))}
                                       >
                                         {dosyaAdi(d[tur]!)}
@@ -890,7 +889,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                 ad="Veritabanları"
                 boyut={secili.size > 0 ? mb(toplamMb) : undefined}
                 ogeler={(r.veritabanlari ?? []).filter((v) => secili.has(v.ad)).map((v) => ({
-                  anahtar: v.ad, ad: v.ad, mono: true, sag: mb(v.veriMb), alt: eskiYil.has(v.ad) ? "eski yıl" : undefined,
+                  anahtar: v.ad, ad: v.ad, sag: mb(v.veriMb), alt: eskiYil.has(v.ad) ? "eski yıl" : undefined,
                 }))}
               />
               <OzetKarti
@@ -1039,8 +1038,8 @@ function YolTablosu({
       <TableBody>
         {yollar.map((y) => (
           <TableRow key={y}>
-            <TableCell className="px-4 font-mono text-xs font-medium">{ad(y)}</TableCell>
-            <TableCell className="max-w-96 px-4 font-mono text-xs text-muted-foreground">
+            <TableCell className="px-4">{ad(y)}</TableCell>
+            <TableCell className="max-w-96 px-4 text-muted-foreground">
               <Ipucu metin={y}><div className="truncate">{klasorAdi(y) || "—"}</div></Ipucu>
             </TableCell>
             {boyutlar && (
@@ -1066,7 +1065,7 @@ function YolTablosu({
         {boyutlar && yollar.length > 1 && (
           <TableRow className="hover:bg-transparent">
             <TableCell colSpan={2} className="px-4 text-xs text-muted-foreground">{yollar.length} {adetler ? "klasör" : "dosya"}</TableCell>
-            <TableCell className="px-4 text-right text-xs font-medium tabular-nums">{boyutMetni(toplam)}</TableCell>
+            <TableCell className="px-4 text-right tabular-nums">{boyutMetni(toplam)}</TableCell>
             <TableCell />
           </TableRow>
         )}
