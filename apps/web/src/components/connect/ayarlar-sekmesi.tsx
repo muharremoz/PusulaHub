@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Field } from "@/components/shared/form"
 import { toast } from "sonner"
-import { Info, Settings } from "lucide-react"
+import { Settings } from "lucide-react"
 
 type Ayar = { vpnSunucu: string; vpnPort: string; varsayilan: boolean }
 
@@ -70,14 +70,6 @@ export function AyarlarSekmesi() {
             <Field label="Port" required>
               <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="17443" className="w-28 font-mono" inputMode="numeric" />
             </Field>
-            <div className="text-muted-foreground flex items-start gap-2 rounded-[5px] bg-sky-500/10 px-3 py-2 text-[12px] text-sky-800 dark:text-sky-300">
-              <Info className="mt-0.5 size-3.5 shrink-0" />
-              <span>
-                Müşteri bilgisayarlarındaki Connect bu adrese bağlanır. Değiştirince uygulamalar birkaç dakika içinde fark eder ve
-                kullanıcıdan FortiClient ayarını güncellemesini ister (yönetici izni). Yeni kurulum kodları da bu adresle üretilir.
-                {ayar.varsayilan && " Henüz kaydedilmedi; varsayılan değer kullanılıyor."}
-              </span>
-            </div>
             <div className="flex justify-end">
               <Button size="sm" disabled={!degisti || !gecerli || kaydediliyor} onClick={() => void kaydet()}>
                 {kaydediliyor ? "Kaydediliyor…" : "Kaydet"}
