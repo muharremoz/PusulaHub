@@ -10,11 +10,12 @@ import { MUSTERI_ILLERI, MUSTERI_ULKELERI } from "@/lib/musteri-konumlari";
  */
 
 const log = (n: number) => Math.log10(Math.max(1, n));
-/** İller: İstanbul ve Ankara öne çıkar, diğerleri küçük nokta (10 firma ≈ 0,017 · 150 ≈ 0,023) */
+// Boyutlar cobe 2 ölçeğinde (0.6'dakinin ~⅓'ü).
+/** İller: İstanbul ve Ankara öne çıkar, diğerleri küçük nokta (1 firma ≈ 0,004 · 150 ≈ 0,0075) */
 const ilBoyutu = (ad: string, firma: number) =>
-  ad === "İstanbul" ? 0.085 : ad === "Ankara" ? 0.065 : 0.012 + 0.005 * log(firma);
-/** Yurt dışı: tek tek göründükleri için biraz daha iri (1 firma ≈ 0,026 · Almanya 33 ≈ 0,041) */
-const ulkeBoyutu = (firma: number) => 0.026 + 0.01 * log(firma);
+  ad === "İstanbul" ? 0.028 : ad === "Ankara" ? 0.021 : 0.004 + 0.0016 * log(firma);
+/** Yurt dışı: tek tek göründükleri için biraz daha iri (1 firma ≈ 0,009 · Almanya 33 ≈ 0,014) */
+const ulkeBoyutu = (firma: number) => 0.009 + 0.0033 * log(firma);
 
 export function AgArkaplan({ bagli }: { bagli: boolean }) {
   // Uygulama yalnız .dark sınıfıyla koyulaşır (sistem teması değil)
@@ -25,7 +26,6 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
     return {
       width: 800,
       height: 800,
-      onRender: () => {},
       devicePixelRatio: 2,
       // Türkiye (35° D) ortada: cobe'de boylam λ için φ = π − (λ − π/2)
       phi: Math.PI - ((35 * Math.PI) / 180 - Math.PI / 2),
@@ -37,7 +37,6 @@ export function AgArkaplan({ bagli }: { bagli: boolean }) {
       baseColor: koyu ? [0.3, 0.3, 0.3] : [1, 1, 1],
       markerColor: isaret,
       glowColor: koyu ? [0.15, 0.15, 0.15] : [1, 1, 1],
-      // cobe en çok 64 işaretçi çizer (13 ülke + 51 il)
       markers: [
         ...MUSTERI_ILLERI.map((i) => ({ location: i.konum, size: ilBoyutu(i.ad, i.firma) })),
         ...MUSTERI_ULKELERI.map((u) => ({ location: u.konum, size: ulkeBoyutu(u.firma) })),

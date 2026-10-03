@@ -4,12 +4,17 @@ import { useMotionValue, useSpring } from "motion/react"
 
 import { cn } from "@/lib/utils"
 
+/*
+ * Magic UI Globe — cobe 2'ye uyarlandı (Pusula Connect).
+ * cobe 0.6'daki 64 işaretçi sınırı 2'de yok (işaretçiler instanced çiziliyor); karşılığında
+ * onRender kalktı: her kare için update() çağrılır, döngü burada (requestAnimationFrame).
+ */
+
 const MOVEMENT_DAMPING = 1400
 
 const GLOBE_CONFIG: COBEOptions = {
   width: 800,
   height: 800,
-  onRender: () => {},
   devicePixelRatio: 2,
   phi: 0,
   theta: 0.3,
@@ -49,7 +54,6 @@ export function Globe({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const phiRef = useRef(config.phi)
-  const widthRef = useRef(0)
   const pointerInteracting = useRef<number | null>(null)
   const pointerInteractionMovement = useRef(0)
 
@@ -76,42 +80,36 @@ export function Globe({
   }
 
   useEffect(() => {
-    const onResize = () => {
-      if (canvasRef.current) {
-        widthRef.current = canvasRef.current.offsetWidth
-      }
-    }
-
+    const canvas = canvasRef.current!
+    let genislik = canvas.offsetWidth
+    const onResize = () => { genislik = canvas.offsetWidth }
     window.addEventListener("resize", onResize)
-    onResize()
+
+    // width/height CSS pikseli; çizim tamponu = × devicePixelRatio (cobe 2)
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const globe = createGlobe(canvas, { ...config, devicePixelRatio: dpr, width: genislik, height: genislik })
 
     const baslangic = performance.now()
-    const globe = createGlobe(canvasRef.current!, {
-      ...config,
-      width: widthRef.current * 2,
-      height: widthRef.current * 2,
-      onRender: (state) => {
-        if (salinim != null) phiRef.current = config.phi + Math.sin((performance.now() - baslangic) / 6000) * salinim
-        else if (!pointerInteracting.current) phiRef.current += 0.005
-        state.phi = phiRef.current + rs.get()
-        if (nabiz && config.markers?.length) {
-          const t = performance.now() - baslangic
-          const canli = config.markers.map((m, i) => ({
-            ...m,
-            size: m.size * (1 + nabiz * (0.5 + 0.5 * Math.sin(t / 420 + i * 1.7))),
-          }))
-          // cobe 0.6.5 hatası: onRender'da işaretçi sayacını uzunluğun 2 katı yerine 1 katı yazıyor →
-          // yalnız ilk yarı çizilir. Aynı sayıda boş (size 0) işaretçiyle tamamla; fazlası 64'lük
-          // shader dizisine sığmaz, WebGL yok sayar.
-          state.markers = [...canli, ...canli.map(() => ({ location: [0, 0] as [number, number], size: 0 }))]
-        }
-        state.width = widthRef.current * 2
-        state.height = widthRef.current * 2
-      },
-    })
+    let kare = 0
+    const ciz = () => {
+      const t = performance.now() - baslangic
+      if (salinim != null) phiRef.current = config.phi + Math.sin(t / 6000) * salinim
+      else if (!pointerInteracting.current) phiRef.current += 0.005
+      const durum: Partial<COBEOptions> = { phi: phiRef.current + rs.get(), width: genislik, height: genislik }
+      if (nabiz && config.markers?.length) {
+        durum.markers = config.markers.map((m, i) => ({
+          ...m,
+          size: m.size * (1 + nabiz * (0.5 + 0.5 * Math.sin(t / 420 + i * 1.7))),
+        }))
+      }
+      globe.update(durum)
+      kare = requestAnimationFrame(ciz)
+    }
+    kare = requestAnimationFrame(ciz)
 
-    setTimeout(() => (canvasRef.current!.style.opacity = "1"), 0)
+    setTimeout(() => (canvas.style.opacity = "1"), 0)
     return () => {
+      cancelAnimationFrame(kare)
       globe.destroy()
       window.removeEventListener("resize", onResize)
     }

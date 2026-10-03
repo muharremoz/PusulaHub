@@ -4,9 +4,6 @@
  * Kaynak: PusulaCRM `firma_il_dagilimi` (customers.city) + CRM'in il/ülke çözücüsü
  * (`src/lib/data/il-koordinatlari.ts` → cozumleKonum). Konumu çözülemeyen firmalar (≈880) dahil değil.
  * Üretildi: 03.10.2026 — yeni bir ülke/il çıkarsa elle eklenir.
- *
- * cobe en çok 64 işaretçi çizer: 13 ülke + firma sayısına göre ilk 51 il (KKTC dahil). Dışarıda kalan
- * 31 il en çok 10 firmalı; Türkiye bu yoğunlukta zaten tümüyle yeşil görünür.
  */
 export type MusteriKonumu = { ad: string; konum: [number, number]; firma: number };
 
@@ -27,7 +24,7 @@ export const MUSTERI_ULKELERI: MusteriKonumu[] = [
   { ad: "BAE", konum: [23.42, 53.85], firma: 1 },
 ];
 
-/** Türkiye illeri (il merkezi), firma sayısına göre ilk 51 */
+/** Türkiye'nin 81 ili + KKTC (il merkezi), firma sayısına göre */
 export const MUSTERI_ILLERI: MusteriKonumu[] = [
   { ad: "İstanbul", konum: [41.008, 28.978], firma: 2159 },
   { ad: "Ankara", konum: [39.92, 32.854], firma: 592 },
@@ -80,4 +77,35 @@ export const MUSTERI_ILLERI: MusteriKonumu[] = [
   { ad: "Elazığ", konum: [38.681, 39.226], firma: 10 },
   { ad: "Eskişehir", konum: [39.776, 30.521], firma: 10 },
   { ad: "Osmaniye", konum: [37.075, 36.247], firma: 10 },
+  { ad: "Burdur", konum: [37.72, 30.291], firma: 9 },
+  { ad: "Hakkari", konum: [37.575, 43.74], firma: 9 },
+  { ad: "Kırklareli", konum: [41.735, 27.226], firma: 9 },
+  { ad: "Yozgat", konum: [39.82, 34.808], firma: 8 },
+  { ad: "Yalova", konum: [40.655, 29.277], firma: 7 },
+  { ad: "Malatya", konum: [38.355, 38.309], firma: 7 },
+  { ad: "Bilecik", konum: [40.142, 29.979], firma: 6 },
+  { ad: "Niğde", konum: [37.966, 34.679], firma: 6 },
+  { ad: "Ağrı", konum: [39.719, 43.051], firma: 6 },
+  { ad: "Zonguldak", konum: [41.456, 31.798], firma: 6 },
+  { ad: "Bolu", konum: [40.739, 31.611], firma: 5 },
+  { ad: "Amasya", konum: [40.653, 35.833], firma: 5 },
+  { ad: "Sivas", konum: [39.748, 37.018], firma: 5 },
+  { ad: "Kütahya", konum: [39.424, 29.983], firma: 5 },
+  { ad: "Karabük", konum: [41.204, 32.627], firma: 5 },
+  { ad: "Siirt", konum: [37.933, 41.94], firma: 4 },
+  { ad: "Kilis", konum: [36.718, 37.121], firma: 4 },
+  { ad: "Erzincan", konum: [39.75, 39.5], firma: 4 },
+  { ad: "Kırşehir", konum: [39.146, 34.161], firma: 4 },
+  { ad: "Bartın", konum: [41.635, 32.337], firma: 4 },
+  { ad: "Sinop", konum: [42.026, 35.153], firma: 4 },
+  { ad: "Bingöl", konum: [38.885, 40.498], firma: 3 },
+  { ad: "Çorum", konum: [40.55, 34.955], firma: 3 },
+  { ad: "Gümüşhane", konum: [40.46, 39.481], firma: 2 },
+  { ad: "Iğdır", konum: [39.92, 44.043], firma: 2 },
+  { ad: "Kars", konum: [40.598, 43.097], firma: 2 },
+  { ad: "Bayburt", konum: [40.259, 40.222], firma: 1 },
+  { ad: "Artvin", konum: [41.183, 41.819], firma: 1 },
+  { ad: "Ardahan", konum: [41.11, 42.702], firma: 1 },
+  { ad: "Nevşehir", konum: [38.625, 34.714], firma: 1 },
+  { ad: "Tunceli", konum: [39.107, 39.548], firma: 1 },
 ];
