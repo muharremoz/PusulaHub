@@ -41,6 +41,7 @@ namespace PusulaConnect
         private bool _olcuyor;
         private readonly Button _tamEkran;
         private readonly Timer _boyut;
+        private readonly BaglanmaEkrani _ekran;
         private bool _girisTamam, _kesiliyor, _bitti;
 
         private static readonly Color Cizgi = Color.FromArgb(229, 229, 229);
@@ -57,15 +58,15 @@ namespace PusulaConnect
             var olcek = DeviceDpi / 96f;
             int P(int v) => (int)Math.Round(v * olcek);
 
-            _serit = new Panel { Dock = DockStyle.Top, Height = P(44), BackColor = Color.White, Padding = new Padding(P(14), 0, P(8), 0) };
+            _serit = new Panel { Dock = DockStyle.Top, Height = P(36), BackColor = Color.White, Padding = new Padding(P(14), 0, P(8), 0) };
             _serit.Paint += (s, e) => { using (var k = new Pen(Cizgi)) e.Graphics.DrawLine(k, 0, _serit.Height - 1, _serit.Width, _serit.Height - 1); };
 
-            var logo = new PictureBox { Dock = DockStyle.Left, Width = P(104), SizeMode = PictureBoxSizeMode.Zoom, Image = Logo(), Margin = Padding.Empty };
+            var logo = new PictureBox { Dock = DockStyle.Left, Width = P(92), SizeMode = PictureBoxSizeMode.Zoom, Image = Logo(), Margin = Padding.Empty };
             _durum = new DurumGostergesi(_a.Sunucu, _a.Kullanici) { Dock = DockStyle.Fill };
             var sag = new FlowLayoutPanel
             {
                 Dock = DockStyle.Right, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
-                FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, P(7), 0, 0),
+                FlowDirection = FlowDirection.LeftToRight, Padding = new Padding(0, P(5), 0, 0),
             };
             _tamEkran = Dugme("Tam ekran", false, P);
             _tamEkran.Enabled = false;
@@ -107,6 +108,11 @@ namespace PusulaConnect
             Controls.Add(_serit);
             ((ISupportInitialize)_rdp).EndInit();
             _rdp.BringToFront();
+            // Oturum açılana kadar bileşenin üstünde bekleme ekranı (kardeş pencere, z-sırasında en üstte)
+            _ekran = new BaglanmaEkrani(Logo(), _a.Sunucu, _a.Kullanici) { Dock = DockStyle.Fill };
+            _ekran.Iptal += Kes;
+            Controls.Add(_ekran);
+            _ekran.BringToFront();
 
             // Pencere boyutu değişince oturum çözünürlüğü de değişsin (bırakınca, yarım saniye sonra)
             _olcum = new Timer { Interval = 5000 };
@@ -125,10 +131,11 @@ namespace PusulaConnect
         /// <summary>Panel forma eklendikten (tutamaç oluştuktan) sonra çağrılır.</summary>
         public void Baglan()
         {
-            _rdp.OnConnected += (s, e) => Durum("Oturum açılıyor…", Soluk);
+            _rdp.OnConnected += (s, e) => { Durum("Oturum açılıyor…", Soluk); _ekran.Adim(1); };
             _rdp.OnLoginComplete += (s, e) =>
             {
                 _girisTamam = true;
+                _ekran.Gizle();
                 _tamEkran.Enabled = true;
                 _sonW = (uint)_rdp.DesktopWidth; _sonH = (uint)_rdp.DesktopHeight;
                 BagliYaz();
@@ -138,8 +145,8 @@ namespace PusulaConnect
                 KonumBaslat();
                 _rdp.Focus();
             };
-            _rdp.OnAutoReconnecting2 += (s, e) => Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber);
-            _rdp.OnAutoReconnected += (s, e) => BagliYaz();
+            _rdp.OnAutoReconnecting2 += (s, e) => { Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber); _ekran.YenidenBaglaniyor(); };
+            _rdp.OnAutoReconnected += (s, e) => { BagliYaz(); _ekran.Gizle(); };
             _rdp.OnDisconnected += (s, e) => Kesildi(e.discReason);
 
             var w = Math.Max(800, _rdp.Width) & ~1;
@@ -371,7 +378,9 @@ namespace PusulaConnect
             var b = new Button
             {
                 Text = metin, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlatStyle = FlatStyle.Flat,
-                Font = new Font("Segoe UI", 9f), Height = p(30), Padding = new Padding(p(8), 0, p(8), 0),
+                Font = new Font("Segoe UI", 9f), Padding = new Padding(p(8), 0, p(8), 0),
+                // AutoSize yüksekliği yazıdan hesaplar; şerit 36 px olduğu için 26 px'e sabitlenir
+                MinimumSize = new Size(0, p(26)), MaximumSize = new Size(0, p(26)),
                 Margin = new Padding(p(6), 0, 0, 0), Cursor = Cursors.Hand, UseVisualStyleBackColor = false,
                 BackColor = vurgulu ? Color.FromArgb(23, 23, 23) : Color.White,
                 ForeColor = vurgulu ? Color.White : Color.FromArgb(23, 23, 23),
