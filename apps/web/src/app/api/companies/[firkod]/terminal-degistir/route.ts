@@ -38,8 +38,9 @@ async function sunucu(id: string | null | undefined): Promise<Sunucu | null> {
 const calistir = (s: Sunucu, komut: string, sure = 60) => execOnAgent(s.ip, s.port, s.apiKey, komut, sure)
 
 function json<T>(stdout: string): T {
-  const satir = stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? ""
-  return JSON.parse(satir) as T
+  const satir = (stdout.trim().split(/\r?\n/).filter(Boolean).pop() ?? "").trim()
+  // Ajan çıktısı konsol kod sayfasından geçer — Türkçe karakter bozulmasın diye komutlar JSON'u base64 basar
+  return JSON.parse(satir.startsWith("B64:") ? Buffer.from(satir.slice(4), "base64").toString("utf8") : satir) as T
 }
 
 interface KaynakOzet { var: boolean; dosya: number; bayt: number; alt: string[] | string | null; firmanoBak: string[] | string | null; masaustu: string | null }
