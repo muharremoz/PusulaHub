@@ -14,36 +14,37 @@ import { Field } from "@/components/shared/form"
 import { toast } from "sonner"
 import { Settings } from "lucide-react"
 
-type Ayar = { vpnSunucu: string; vpnPort: string; varsayilan: boolean }
+type Ayar = { vpnSunucu: string; vpnPort: string; varsayilan: boolean; sayimSqlAdres: string; sayimSqlVarsayilan: string }
 
 export function AyarlarSekmesi() {
   const [ayar, setAyar] = useState<Ayar | null>(null)
   const [sunucu, setSunucu] = useState("")
   const [port, setPort] = useState("")
+  const [sayimSql, setSayimSql] = useState("")
   const [kaydediliyor, setKaydediliyor] = useState(false)
 
   useEffect(() => {
     fetch("/api/connect/ayarlar", { cache: "no-store" })
       .then(async (r) => { const d = await r.json(); if (!r.ok) throw new Error(d?.error ?? "Ayarlar alınamadı"); return d as Ayar })
-      .then((d) => { setAyar(d); setSunucu(d.vpnSunucu); setPort(d.vpnPort) })
+      .then((d) => { setAyar(d); setSunucu(d.vpnSunucu); setPort(d.vpnPort); setSayimSql(d.sayimSqlAdres ?? "") })
       .catch((e) => toast.error(e instanceof Error ? e.message : "Ayarlar alınamadı"))
   }, [])
 
-  const degisti = !!ayar && (sunucu !== ayar.vpnSunucu || port !== ayar.vpnPort)
-  const gecerli = !!sunucu && /^\d{1,5}$/.test(port)
+  const degisti = !!ayar && (sunucu !== ayar.vpnSunucu || port !== ayar.vpnPort || sayimSql !== (ayar.sayimSqlAdres ?? ""))
+  const gecerli = !!sunucu && /^\d{1,5}$/.test(port) && (!sayimSql || /^[a-zA-Z0-9.-]+(,\d{1,5})?$/.test(sayimSql))
 
   const kaydet = async () => {
     setKaydediliyor(true)
     try {
       const r = await fetch("/api/connect/ayarlar", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ vpnSunucu: sunucu, vpnPort: port }),
+        body: JSON.stringify({ vpnSunucu: sunucu, vpnPort: port, sayimSqlAdres: sayimSql }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
-      setAyar({ vpnSunucu: d.vpnSunucu, vpnPort: d.vpnPort, varsayilan: false })
-      setSunucu(d.vpnSunucu); setPort(d.vpnPort)
-      toast.success("VPN ayarı kaydedildi", { description: "Uygulamalar birkaç dakika içinde fark edip FortiClient ayarını güncellemeyi ister." })
+      setAyar((a) => ({ vpnSunucu: d.vpnSunucu, vpnPort: d.vpnPort, varsayilan: false, sayimSqlAdres: d.sayimSqlAdres ?? "", sayimSqlVarsayilan: a?.sayimSqlVarsayilan ?? "" }))
+      setSunucu(d.vpnSunucu); setPort(d.vpnPort); setSayimSql(d.sayimSqlAdres ?? "")
+      toast.success("Connect ayarları kaydedildi", { description: "VPN değiştiyse uygulamalar birkaç dakika içinde fark edip FortiClient ayarını güncellemeyi ister." })
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Kaydedilemedi")
     } finally {
@@ -69,6 +70,13 @@ export function AyarlarSekmesi() {
             </Field>
             <Field label="Port" required>
               <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="17443" className="w-28 font-mono" inputMode="numeric" />
+            </Field>
+            <Field label="Sayım SQL adresi">
+              <Input value={sayimSql} onChange={(e) => setSayimSql(e.target.value.trim())} placeholder={ayar.sayimSqlVarsayilan} className="font-mono" />
+              <p className="text-muted-foreground mt-1 text-[12px]">
+                Pusula X sayım kopyasının (müşteri PC'si) bağlandığı SQL dış adresi, <span className="font-mono">sunucu,port</span>.
+                Boşsa CRM SQL Konsolu ile aynı dış adres + firmanın portu kullanılır.
+              </p>
             </Field>
             <div className="flex justify-end">
               <Button size="sm" disabled={!degisti || !gecerli || kaydediliyor} onClick={() => void kaydet()}>

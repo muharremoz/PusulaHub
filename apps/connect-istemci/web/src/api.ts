@@ -82,6 +82,36 @@ export type Duyuru = {
   okundu: string | null;
 };
 
+export type SayimTest = {
+  zaman: string;
+  ok: boolean;
+  sunucu: string;
+  kullanici: string;
+  sqlSurum?: string;
+  /** guvenlik: Pusula X'in giriş listesiyle aynı · sys.databases: Sirket görülemedi, login'in gördüğü veritabanları */
+  kaynak?: "guvenlik" | "sys.databases";
+  guvenlikHatasi?: string;
+  veritabanlari?: { ad: string | null; veritabani: string | null }[];
+  hata?: string;
+  sureMs: number;
+};
+
+export type SayimDurum = {
+  kurulu: boolean;
+  klasor: string;
+  kisayol: boolean;
+  /** Kurulu PusulaX.exe dosya sürümü */
+  surum: string | null;
+  paketSurum: string | null;
+  kurulum: string | null;
+  sunucu: string | null;
+  kullanici: string | null;
+  resimYolu: string | null;
+  test: SayimTest | null;
+  kuruluyor: boolean;
+  ilerleme: { adim: string; yuzde: number; mesaj: string | null; hiz: number; bitti: boolean; hata: string | null } | null;
+};
+
 export type Durum = {
   asama: "acilis" | "kayit" | "hazir";
   surum: string;
@@ -121,6 +151,8 @@ export type Durum = {
   yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
   /** Eski programların RFID yardımcısı (0.4.7+) */
   rfid?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
+  /** Pusula X sayım modu (0.6.0+) — Ayarlar > Sayım. */
+  sayim?: SayimDurum;
   /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
   duyurular?: Duyuru[];
   vpnKurulum: {

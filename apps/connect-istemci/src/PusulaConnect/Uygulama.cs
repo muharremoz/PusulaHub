@@ -303,6 +303,7 @@ namespace PusulaConnect
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
                     yazdirma = YaziciAjani.KisaDurum(),
                     rfid = RfidYardimcisi.KisaDurum(),
+                    sayim = Sayim.KisaDurum(),
                     duyurular = _duyurular,
                     guncelleme = new
                     {
@@ -526,6 +527,34 @@ namespace PusulaConnect
         /// Kayıtlı oturum şifresini ekranda göster — VPN (FortiClient) şifresi aynı ve oraya otomatik yazılamıyor.
         /// 2FA açıksa kod şart; Pusula şifreyi değiştirmiş ve bekliyorsa aynı kodla yeni şifre alınır, kasaya yazılır.
         /// </summary>
+        // ------------------------------------------------------------ sayım modu
+
+        /// <summary>Hub'dan sayım bilgisini alır (2FA açıksa kodla), paketi arka planda kurar. İlerleme Durum().sayim.</summary>
+        public async Task<object> SayimKur(string kod)
+        {
+            var j = await SayimBilgisi(kod);
+            Sayim.KurBaslat((JObject)j["bilgi"], (JObject)j["paket"], _servis.Adres, _servis.Token);
+            _ = _servis.Olay("sayim_kurulum_baslatildi", j["paket"]?.Value<string>("surum"));
+            return Durum();
+        }
+
+        /// <summary>server.xml / lic.xml'i Hub'daki güncel bilgiyle yeniden yazar (paket indirilmez).</summary>
+        public async Task<object> SayimGuncelle(string kod)
+        {
+            var j = await SayimBilgisi(kod);
+            var d = Sayim.Guncelle((JObject)j["bilgi"]);
+            _ = _servis.Olay("sayim_bilgisi_guncellendi");
+            return d;
+        }
+
+        private async Task<JObject> SayimBilgisi(string kod)
+        {
+            if (IkiAktif && string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
+            var j = await _servis.Sayim(IkiAktif ? kod.Trim() : null);
+            if (j["bilgi"] == null || j["paket"] == null) throw new KullaniciHatasi("Sayım bilgisi alınamadı.");
+            return j;
+        }
+
         public async Task<object> SifreGoster(string kod)
         {
             string sifre;

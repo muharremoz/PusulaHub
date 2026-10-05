@@ -16,6 +16,7 @@ namespace PusulaConnect
     ///   --vpn-kur       yönetici olarak FortiClient kurulumu (pencere yok) — bkz. VpnKurulumu
     ///   --yazici-izin   yönetici olarak yazıcı ajanının URL ACL + güvenlik duvarı kaydı — bkz. YaziciAjani
     ///   --rfid-izin     yönetici olarak eski programların RFID yardımcısı: URL ACL + güvenlik duvarı + yazıcı paylaşımı — bkz. RfidYardimcisi
+    ///   --sayim-klasor  yönetici olarak C:\Pusula\PusulaXSayım klasörünü oluşturur (Users değiştirme hakkı) — bkz. Sayim
     ///   --rfid-baslat   Windows açılışı: RFID yardımcısını başlatıp penceresini gizler (Connect penceresi açılmaz)
     ///   --guncellendi   kendini güncelledikten sonra yeniden açılış (eski kopyanın kapanmasını bekler)
     /// </summary>
@@ -38,6 +39,7 @@ namespace PusulaConnect
             if (args.Contains("--vpn-kur")) return VpnKurulumu.YoneticiOlarakCalistir();
             if (args.Contains("--yazici-izin") || args.Contains("--yazici-izin-sil")) return YaziciAjani.YoneticiOlarakCalistir(args);
             if (args.Contains("--rfid-izin") || args.Contains("--rfid-izin-sil")) return RfidYardimcisi.YoneticiOlarakCalistir(args);
+            if (args.Contains("--sayim-klasor")) return Sayim.YoneticiOlarakCalistir();
             if (args.Contains("--rfid-baslat")) return RfidYardimcisi.AcilistaBaslat();
 
             using (var tekil = new Mutex(false, @"Local\PusulaConnect2"))
@@ -158,6 +160,12 @@ namespace PusulaConnect
                 case "POST /rfid/kur": return RfidYardimcisi.Kur(i.Metin("yazici"), i.Sayi("port"));
                 case "POST /rfid/test": return RfidYardimcisi.Test();
                 case "POST /rfid/kaldir": return RfidYardimcisi.Kaldir();
+                case "GET /sayim/durum": return Task.FromResult(Sayim.KisaDurum());
+                case "POST /sayim/kur": return _uygulama.SayimKur(i.Metin("kod"));
+                case "POST /sayim/guncelle": return _uygulama.SayimGuncelle(i.Metin("kod"));
+                case "POST /sayim/test": return Sayim.Test();
+                case "POST /sayim/klasor": return Task.FromResult(Sayim.KlasorAc());
+                case "POST /sayim/kaldir": return Task.FromResult(Sayim.Kaldir(i.Mantik("klasor")));
                 case "POST /gunluk/ac":
                     Process.Start(new ProcessStartInfo("notepad.exe", "\"" + Gunluk.Dosya + "\"") { UseShellExecute = true });
                     return Task.FromResult<object>(new { tamam = true });

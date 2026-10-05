@@ -79,6 +79,12 @@ const SON_SURUM_DOSYASI = process.env.SON_SURUM_DOSYASI ?? join(__dirname, "iste
 const NOTLAR_DOSYASI = process.env.NOTLAR_DOSYASI ?? join(__dirname, "istemci", "notlar.txt")
 /** Exe'nin imzası (RSA-3072 / SHA-256, base64) — yayınlama betiği çevrimdışı anahtarla üretir; istemci gömülü açık anahtarla doğrular. */
 const IMZA_DOSYASI = process.env.IMZA_DOSYASI ?? join(__dirname, "istemci", "PusulaConnect.exe.sig")
+/**
+ * Pusula X sayım paketi: PusulaX klasörünün kopyası + boş RFID.xml (sayım modu). İstemci Ayarlar > Sayım'dan
+ * indirir, C:\Pusula\PusulaXSayım'a açar, server.xml/lic.xml'i Hub'dan gelen bilgiyle yazar.
+ * Yanında .sha256 (hex) ve .surum.txt (Pusula X sürümü) durur — yayınlama: scripts/connect-sayim-paketi.sh
+ */
+const SAYIM_PAKET = process.env.SAYIM_PAKET ?? join(__dirname, "istemci", "PusulaXSayim.zip")
 
 if (!SERVICE_KEY) {
   console.error("TRANSFER_SERVICE_KEY env değişkeni tanımlı değil")
@@ -361,6 +367,17 @@ async function hubSifre(k) {
   })
   const j = await r.json().catch(() => ({}))
   if (!r.ok || !j.sifre) throw Object.assign(new Error(j.error ?? `Hub HTTP ${r.status}`), { durum: r.status === 404 ? 404 : 502 })
+  return j
+}
+
+/** Sayım modu için server.xml bilgisi (SQL dış adresi, firmanın SQL login'i, resim adresi) — Hub'dan, saklanmaz. */
+async function hubSayim(k) {
+  const r = await fetch(`${HUB_URL}/api/hub/connect/sayim`, {
+    method: "POST", headers: { "X-Service-Key": SERVICE_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({ firma: k.firmaId, kullanici: k.kullanici }), signal: AbortSignal.timeout(10000),
+  })
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok || !j.sunucu) throw Object.assign(new Error(j.error ?? `Hub HTTP ${r.status}`), { durum: r.status >= 400 && r.status < 500 ? r.status : 502 })
   return j
 }
 
@@ -795,6 +812,60 @@ fastify.get("/indir", async (req, reply) => {
   reply.header("Content-Disposition", "attachment; filename=\"PusulaConnect.exe\"; filename*=UTF-8''" + encodeURIComponent("Pusula Connect.exe"))
   reply.header("Cache-Control", "no-store")
   return reply.send(createReadStream(ISTEMCI_EXE))
+})
+
+// ── Pusula X sayım modu ──
+
+/** Paketin SHA-256'sı ve sürümü; dosya değişince (boyut/zaman) yeniden hesaplanır. */
+let paketOzeti = null
+async function sayimPaketOzeti() {
+  const st = await stat(SAYIM_PAKET)
+  const anahtar = st.size + ":" + st.mtimeMs
+  if (paketOzeti?.anahtar === anahtar) return paketOzeti
+  let sha256 = null
+  try { sha256 = (await readFile(SAYIM_PAKET + ".sha256", "utf8")).trim().toLowerCase() || null } catch { /* yoksa hesapla */ }
+  if (!sha256) {
+    const h = createHash("sha256")
+    await new Promise((tamam, hata) => createReadStream(SAYIM_PAKET).on("data", (p) => h.update(p)).on("end", tamam).on("error", hata))
+    sha256 = h.digest("hex")
+  }
+  let surum = null
+  try { surum = (await readFile(SAYIM_PAKET.replace(/\.zip$/, "") + ".surum.txt", "utf8")).trim() || null } catch { /* sürüm yazılmamış */ }
+  paketOzeti = { anahtar, sha256, boyut: st.size, surum }
+  return paketOzeti
+}
+
+/**
+ * Sayım kurulumu için her şey tek yanıtta: Hub'dan server.xml bilgisi + paketin adresi/özeti.
+ * 2FA açıksa kod şart (şifre ucuyla aynı kural). SQL şifresi burada SAKLANMAZ.
+ */
+fastify.post("/api/sayim", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (c.totpAktif) {
+    if (!c.totpGizli) return reply.code(409).send({ hata: "İki adımlı doğrulama bozuk; Pusula'dan sıfırlatın." })
+    const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
+    sql.totpBasari.run(adim, c.cihazId)
+  }
+  let paket = null
+  try { const o = await sayimPaketOzeti(); paket = { url: "sayim-paket", sha256: o.sha256, boyut: o.boyut, surum: o.surum } }
+  catch { return reply.code(503).send({ hata: "Sayım paketi henüz yayınlanmadı." }) }
+  try {
+    const j = await hubSayim(c)
+    olay("sayim_bilgisi_iletildi", { cihaz: c, kaynak: "servis", ip: istemciIp(req), ayrinti: c.totpAktif ? "2FA ile" : null })
+    return { bilgi: j, paket }
+  } catch (e) {
+    return reply.code(e.durum ?? 502).send({ hata: e.durum === 409 || e.durum === 404 ? e.message : "Sayım bilgisi Pusula'dan alınamadı: " + e.message })
+  }
+})
+
+fastify.get("/sayim-paket", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  let st
+  try { st = await stat(SAYIM_PAKET) } catch { return reply.code(404).type("text/plain; charset=utf-8").send("Sayım paketi henüz yayınlanmadı.") }
+  reply.header("Content-Type", "application/zip")
+  reply.header("Content-Length", st.size)
+  reply.header("Cache-Control", "no-store")
+  return reply.send(createReadStream(SAYIM_PAKET))
 })
 
 fastify.get("/saglik", async () => ({ tamam: true, servis: "pusula-connect", minIstemci: MIN_SURUM }))

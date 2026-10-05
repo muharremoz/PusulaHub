@@ -64,6 +64,8 @@ namespace PusulaConnect
         }
         /// <summary>Hub'daki güncel şifre (Hub'dan sıfırlanınca). 2FA açıksa kod şart; yanıtta kasaAnahtari da gelir.</summary>
         public Task<JObject> Sifre(string kod) => Gonder(HttpMethod.Post, "api/sifre", new { kod });
+        /// <summary>Sayım modu: Hub'dan server.xml bilgisi + paket adresi/özeti (2FA açıksa kod şart).</summary>
+        public Task<JObject> Sayim(string kod) => Gonder(HttpMethod.Post, "api/sayim", new { kod });
         public Task<JObject> DuyuruOkundu(string id) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/okundu", new { });
         public async Task Olay(string tur, object ayrinti = null)
         {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   Cable, CheckCircle2, Clipboard, Download, FileText, HardDrive, KeyRound, Loader2, LockKeyhole, LogOut, Maximize2, Monitor, Power, Printer,
-  RefreshCw, ShieldCheck, Usb, Video, Volume2,
+  RefreshCw, ScanBarcode, ShieldCheck, Usb, Video, Volume2,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import {
@@ -12,14 +12,15 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ESKI_PROGRAMLAR, YaziciAjaniBolumu } from "./yazici-ajani";
+import { SayimBolumu } from "./sayim";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
   | "portlar" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti";
 
-type Sekme = "baglanti" | "yazdirma" | "guvenlik" | "uygulama";
+type Sekme = "baglanti" | "yazdirma" | "sayim" | "guvenlik" | "uygulama";
 const SEKME_DEPO = "connect-ayar-sekme";
-const SEKMELER: Sekme[] = ["baglanti", "yazdirma", "guvenlik", "uygulama"];
+const SEKMELER: Sekme[] = ["baglanti", "yazdirma", "sayim", "guvenlik", "uygulama"];
 
 /**
  * Uygulama ayarları — orta panelde, dört sekmede. Değişiklik anında kaydedilir (Kaydet düğmesi yok).
@@ -120,6 +121,7 @@ export function AyarlarIcerik({
         <TabsList className="w-full">
           <TabsTrigger value="baglanti" className="flex-1"><Monitor /> Bağlantı</TabsTrigger>
           <TabsTrigger value="yazdirma" className="flex-1"><Printer /> Yazdırma</TabsTrigger>
+          <TabsTrigger value="sayim" className="flex-1"><ScanBarcode /> Sayım</TabsTrigger>
           <TabsTrigger value="guvenlik" className="flex-1"><ShieldCheck /> Güvenlik</TabsTrigger>
           <TabsTrigger value="uygulama" className="flex-1"><Power /> Uygulama</TabsTrigger>
         </TabsList>
@@ -147,6 +149,10 @@ export function AyarlarIcerik({
         <TabsContent value="yazdirma" className="flex flex-col gap-4">
           <YaziciAjaniBolumu />
           <YaziciAjaniBolumu tur={ESKI_PROGRAMLAR} />
+        </TabsContent>
+
+        <TabsContent value="sayim" className="flex flex-col gap-4">
+          <SayimBolumu durum={durum} setDurum={setDurum} />
         </TabsContent>
 
         <TabsContent value="guvenlik" className="flex flex-col gap-4">
