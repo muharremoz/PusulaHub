@@ -21,6 +21,7 @@ import { networkInterfaces } from "os"
 import next from "next"
 import { startPolling } from "./src/lib/agent-poller"
 import { startFirmaSync } from "./src/lib/firma-sync"
+import { debugTemizle } from "./src/lib/firma-debug"
 
 const dev  = process.env.NODE_ENV !== "production"
 const port = 4242
@@ -73,6 +74,8 @@ app.prepare().then(() => {
     if (pollerEnabled) {
       startPolling()
       startFirmaSync()
+      // Sahipsiz debugsql.txt (sekme kapandı / konsol çöktü) — bkz. lib/firma-debug.ts
+      setInterval(() => { debugTemizle().catch(() => {}) }, 60_000)
     } else {
       console.log("  [Poller] dev modunda kapalı — açmak için .env.local'e ENABLE_POLLER=1 ekle")
     }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
@@ -565,6 +565,10 @@ export default function CompaniesPage() {
   const [debugSubfolder, setDebugSubfolder]       = useState<string>("");
   const [debugServers, setDebugServers]           = useState<{ Id: string; Name: string; IP: string }[]>([]);
   const [debugServerId, setDebugServerId]         = useState<string>("");
+  const [debugId, setDebugId]                     = useState<string | null>(null);
+  const debugOfsetRef                             = useRef(0);
+  const debugFetchingRef                          = useRef(false);
+  const debugBoxRef                               = useRef<HTMLDivElement>(null);
 
   // Yeni Kullanıcı dialog
   const [oldDataOpen, setOldDataOpen]             = useState(false);
@@ -993,7 +997,7 @@ export default function CompaniesPage() {
   async function debugOpenDialog() {
     if (!selectedFirma) return
     setDebugOpen(true)
-    setDebugContent(""); setDebugRunning(false); setDebugServers([]); setDebugServerId("")
+    setDebugContent(""); setDebugRunning(false); setDebugId(null); setDebugServers([]); setDebugServerId("")
     await loadDebugFolders()
   }
 
@@ -1008,8 +1012,10 @@ export default function CompaniesPage() {
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error ?? "Debug başlatılamadı")
-      setDebugPath(d.path ?? "")
+      debugOfsetRef.current = 0
+      setDebugId(d.id); setDebugPath(d.path ?? "")
       setDebugRunning(true); setDebugContent("")
+      if (d.shared) toast.info("Dosya zaten açık", { description: "Başka bir izleme sürüyor ya da dosya elle konmuş — aynı dosya okunuyor." })
     } catch (err) {
       setDebugError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -1018,40 +1024,62 @@ export default function CompaniesPage() {
   }
 
   async function debugStop() {
-    if (!selectedFirma || !debugSubfolder) return
+    if (!selectedFirma || !debugId) return
     setDebugBusy(true)
     try {
       await fetch(`/api/companies/${selectedFirma.firkod}/debug`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "stop", subfolder: debugSubfolder, serverId: debugServerId || undefined }),
+        body: JSON.stringify({ action: "stop", id: debugId }),
       })
     } catch {}
-    setDebugRunning(false)
+    setDebugRunning(false); setDebugId(null)
     setDebugBusy(false)
   }
 
+  /* Yalnız yeni eklenen kısım okunur (ofset). Parça sınırı aşıldıysa
+     (devami) hemen bir parça daha istenir; ekranda en fazla son 2 MB tutulur. */
   async function debugFetch() {
-    if (!selectedFirma || !debugSubfolder) return
+    if (!selectedFirma || !debugId || debugFetchingRef.current) return
+    debugFetchingRef.current = true
     try {
-      const sidQs = debugServerId ? `&serverId=${encodeURIComponent(debugServerId)}` : ""
-      const r = await fetch(`/api/companies/${selectedFirma.firkod}/debug?subfolder=${encodeURIComponent(debugSubfolder)}${sidQs}`)
-      const d = await r.json()
-      if (!r.ok) { setDebugError(d.error ?? "Okunamadı"); return }
-      setDebugContent(d.content ?? "")
-      setDebugError(null)
+      for (let i = 0; i < 8; i++) {
+        const r = await fetch(`/api/companies/${selectedFirma.firkod}/debug?id=${debugId}&ofset=${debugOfsetRef.current}`)
+        const d = await r.json()
+        if (!r.ok) { setDebugError(d.error ?? "Okunamadı"); return }
+        setDebugError(null)
+        if (d.ofset < debugOfsetRef.current) setDebugContent("")   // dosya kesildi, baştan
+        debugOfsetRef.current = d.ofset
+        if (d.icerik) setDebugContent((c) => { const n = c + d.icerik; return n.length > 2_000_000 ? n.slice(-2_000_000) : n })
+        if (d.durdu) {
+          setDebugRunning(false); setDebugId(null)
+          setDebugError(d.durdu === "boyut" ? "Dosya 20 MB'ı aştı — debug durduruldu ve dosya silindi."
+            : d.durdu === "dosya-yok" ? "debugsql.txt sunucudan kaldırılmış — debug durdu."
+            : d.durdu === "zaman-asimi" ? "Uzun süre okunmadığı için debug kapatıldı." : "Debug durduruldu.")
+          return
+        }
+        if (!d.devami) return
+      }
     } catch (err) {
       setDebugError(err instanceof Error ? err.message : String(err))
+    } finally {
+      debugFetchingRef.current = false
     }
   }
 
   useEffect(() => {
-    if (!debugOpen || !debugRunning) return
+    if (!debugOpen || !debugRunning || !debugId) return
     debugFetch()
     const t = setInterval(debugFetch, 5000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debugOpen, debugRunning, debugSubfolder, selectedFirma?.firkod])
+  }, [debugOpen, debugRunning, debugId, selectedFirma?.firkod])
+
+  // Yeni satır gelince en alta (kullanıcı yukarıdaysa dokunma)
+  useEffect(() => {
+    const el = debugBoxRef.current
+    if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight
+  }, [debugContent])
 
   /* Akıllı filtre değerlendiricisi:
      - "is:null" / "not:null" / "!null"
@@ -3389,19 +3417,18 @@ tr:nth-child(even) td{background:#fafafa}
                   )}
                 </div>
               </div>
-              <div className="flex-1 min-h-0 overflow-auto bg-zinc-950 text-zinc-100 font-mono text-[11px] leading-relaxed p-4 whitespace-pre-wrap">
-                {debugError ? (
-                  <div className="text-red-400">{debugError}</div>
-                ) : debugContent ? (
+              <div ref={debugBoxRef} className="flex-1 min-h-0 overflow-auto bg-zinc-950 text-zinc-100 font-mono text-[11px] leading-relaxed p-4 whitespace-pre-wrap">
+                {debugError && <div className="text-red-400 mb-2">{debugError}</div>}
+                {debugContent ? (
                   debugContent
-                ) : (
+                ) : debugError ? null : (
                   <div className="text-zinc-500 italic">
                     {debugRunning ? "Dosya boş — 5 sn içinde yeniden denenecek…" : "Debug durduruldu."}
                   </div>
                 )}
               </div>
               <div className="px-5 py-2 border-t border-border/50 text-[10px] text-muted-foreground">
-                5 saniyede bir otomatik yenilenir. Pencere kapatılınca debug otomatik durur ve dosya silinir.
+                5 saniyede bir yalnız yeni satırlar okunur. Pencere kapatılınca debug durur ve dosya silinir; 10 dk okunmayan debug kendiliğinden kapatılır.
               </div>
             </DialogContent>
           </Dialog>
