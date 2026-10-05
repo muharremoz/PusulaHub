@@ -80,7 +80,7 @@ namespace PusulaConnect
             if (Visible) _cark.Start(); else _cark.Stop();
         }
 
-        private float O => DeviceDpi / 96f;
+        private float O => Ekran.Carpan(this);
         private int P(float v) => (int)Math.Round(v * O);
 
         protected override void OnLayout(LayoutEventArgs e)

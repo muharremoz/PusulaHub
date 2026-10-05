@@ -55,7 +55,7 @@ namespace PusulaConnect
             Dock = DockStyle.Fill;
             BackColor = Color.FromArgb(23, 23, 23);
 
-            var olcek = DeviceDpi / 96f;
+            var olcek = Ekran.Carpan(this);
             int P(int v) => (int)Math.Round(v * olcek);
 
             _serit = new Panel { Dock = DockStyle.Top, Height = P(36), BackColor = Color.White, Padding = new Padding(P(14), 0, P(8), 0) };
@@ -138,6 +138,8 @@ namespace PusulaConnect
                 _ekran.Gizle();
                 _tamEkran.Enabled = true;
                 _sonW = (uint)_rdp.DesktopWidth; _sonH = (uint)_rdp.DesktopHeight;
+                // Var olan (bağlantısı kopmuş) oturuma dönüldüyse oturum eski ölçekte kalabiliyor: girişten sonra bir kez daha gönder
+                try { _rdp.UpdateSessionDisplaySettings(_sonW, _sonH, _sonW, _sonH, 0, Olcek(), 100); } catch { }
                 BagliYaz();
                 Olc();
                 _olcum.Start();
@@ -193,6 +195,7 @@ namespace PusulaConnect
                 var ek = (IMsRdpExtendedSettings)_rdp.GetOcx();
                 object olcek = Olcek();
                 object cihaz = 100u;
+                Gunluk.Yaz("Oturum ölçeği: " + Ekran.Dpi(this) + " DPI → %" + olcek + ", " + w + "x" + h);
                 ek.set_Property("DesktopScaleFactor", ref olcek);
                 ek.set_Property("DeviceScaleFactor", ref cihaz);
             }
@@ -368,7 +371,7 @@ namespace PusulaConnect
 
         private uint Olcek()
         {
-            var y = (int)Math.Round(DeviceDpi * 100 / 96.0);
+            var y = (int)Math.Round(Ekran.Dpi(this) * 100 / 96.0);
             foreach (var d in new[] { 100, 125, 150, 175, 200, 250, 300 }) if (y <= d + 12) return (uint)d;
             return 300;
         }
@@ -462,7 +465,7 @@ namespace PusulaConnect
         {
             var g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            var o = DeviceDpi / 96f;
+            var o = Ekran.Carpan(this);
             int P(float v) => (int)Math.Round(v * o);
             float x = P(14), orta = Height / 2f;
             var bayrak = TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;

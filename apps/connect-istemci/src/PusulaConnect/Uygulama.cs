@@ -510,7 +510,7 @@ namespace PusulaConnect
                     Aygitlar = ay.Aygitlar, Suruculer = ay.Suruculer,
                 }, OturumBitti);
                 _oturumBaslangic = DateTime.Now;
-                _ = _servis.Olay("oturum_acildi", new { sunucu = rdp, ms = t.ms, ikiAdim = iki });
+                _ = _servis.Olay("oturum_acildi", new { sunucu = rdp, ms = t.ms, ikiAdim = iki, dpi = Ekran.Dpi(null) });
                 _ = Task.Run(() => NabizGonder(true));
                 Gunluk.Yaz("Oturum açılıyor (uygulama içinde" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }

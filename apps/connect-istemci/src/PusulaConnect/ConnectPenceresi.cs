@@ -213,7 +213,7 @@ namespace PusulaConnect
             var alan = Screen.FromHandle(Handle).WorkingArea;
             if (!kenarlikli) return alan;
             int k;
-            try { var dpi = (uint)DeviceDpi; k = GetSystemMetricsForDpi(32, dpi) + GetSystemMetricsForDpi(92, dpi); } // SM_CXFRAME + SM_CXPADDEDBORDER
+            try { var dpi = (uint)Ekran.Dpi(this); k = GetSystemMetricsForDpi(32, dpi) + GetSystemMetricsForDpi(92, dpi); } // SM_CXFRAME + SM_CXPADDEDBORDER
             catch { k = GetSystemMetrics(32) + GetSystemMetrics(92); }
             alan.Inflate(k, k);
             return alan;
