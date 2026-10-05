@@ -389,9 +389,9 @@ namespace PusulaConnect
                 {
                     await c.OpenAsync();
                     sonuc["sqlSurum"] = c.ServerVersion;
-                    // Firma login'inin sahibi olduğu / görebildiği veritabanları (Pusula X giriş listesiyle aynı küme)
+                    // Firma login'inin görebildiği veritabanları; paylaşımlı 'sirket' (giriş listesi için gerekli) sayılmaz
                     var liste = new JArray();
-                    using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 order by name", c))
+                    using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 and name <> 'sirket' order by name", c))
                     using (var r = await cmd.ExecuteReaderAsync())
                         while (await r.ReadAsync()) liste.Add(new JObject { ["ad"] = r.GetString(0) });
                     sonuc["ok"] = true;
