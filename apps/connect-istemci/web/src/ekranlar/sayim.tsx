@@ -119,6 +119,18 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
           </div>
         )}
 
+        {s?.guncellemeBekliyor && !kodIcin && (
+          <div className="px-4 py-3">
+            <Alert>
+              <CircleAlert />
+              <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                <span>SQL bağlantı bilgisi Pusula'da değişti. İki adımlı doğrulama açık olduğu için kodla yenilenmesi gerekiyor.</span>
+                <Button size="sm" onClick={() => void calistir("guncelle")}>Bilgiyi yenile</Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
         {kodIcin && (
           <div className="flex flex-wrap items-end gap-2 px-4 py-3">
             <div className="flex flex-col gap-1">
@@ -158,6 +170,8 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
               <span>{s.kullanici ?? "—"}</span>
               <span className="text-muted-foreground">Resim adresi</span>
               <span className="truncate" title={s.resimYolu ?? ""}>{s.resimYolu ?? "— (veritabanındaki yol)"}</span>
+              <span className="text-muted-foreground">Son bilgi güncellemesi</span>
+              <span>{s.sonGuncelleme ? new Date(s.sonGuncelleme).toLocaleString("tr-TR") : s.kurulum ? new Date(s.kurulum).toLocaleString("tr-TR") : "—"}</span>
               <span className="text-muted-foreground">Kısayol</span>
               <span>{s.kisayol ? "Masaüstünde" : <span className="text-amber-600 dark:text-amber-400">Yok</span>}</span>
             </div>

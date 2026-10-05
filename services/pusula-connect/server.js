@@ -323,6 +323,8 @@ function kayitGorunumu(k, hub = null) {
   return {
     firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil, ikiAdim: { aktif: !!k.totpAktif },
     sifreSurumu, profilImza: ozet(JSON.stringify(profil) + "|" + (sifreSurumu ?? "")).slice(0, 16),
+    // Sayım modu: SQL bilgisi değişince istemci server.xml'i yeniler (profilImza'ya KATILMAZ — VPN ayarı yeniden yazılmasın)
+    sayimImza: hub?.sayimImza ?? null,
   }
 }
 
@@ -738,7 +740,8 @@ fastify.post("/api/nabiz", async (req, reply) => {
     ip: istemciIp(req),
     durumJson: JSON.stringify(durum).slice(0, 4000),
   })
-  const yanit = { tamam: true, duyuru: duyuruImzasi(c), profilImza: kayitGorunumu(c, await hubProfil(c)).profilImza }
+  const g = kayitGorunumu(c, await hubProfil(c))
+  const yanit = { tamam: true, duyuru: duyuruImzasi(c), profilImza: g.profilImza, sayimImza: g.sayimImza }
   // Token döndürme: güncel tokenla gelen ve süresi dolmuş cihaza yeni token. Eski token TOKEN_GECIS_DK daha geçer
   // (istemci kaydedene kadar). Eski tokenla gelen isteğe (geçiş süresinde) yeniden üretilmez — tek sefer.
   const sinir = new Date(Date.now() - TOKEN_OMRU_GUN * 86400000).toISOString().replace("T", " ").slice(0, 19)

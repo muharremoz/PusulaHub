@@ -100,12 +100,14 @@ namespace PusulaConnect
             Kimlik.ProfilYaz(k);
             // Pusula 2FA'yı sıfırladıysa eski kasa dosyası artık çözülemez — temizle (kullanıcı şifreyi yeniden girer)
             if (k["ikiAdim"]?.Value<bool?>("aktif") != true && Rdp.KasaliSifreVar) Rdp.KasaliSil();
-            lock (_kilit) { _kayit = k; _asama = "hazir"; _servisErisim = true; _profilImza = k.Value<string>("profilImza"); }
+            lock (_kilit) { _kayit = k; _asama = "hazir"; _servisErisim = true; _profilImza = k.Value<string>("profilImza"); _sayimImza = k.Value<string>("sayimImza"); }
         }
 
         // ------------------------------------------------------------ Hub'dan gelen değişiklikler (sunucu, şifre)
 
         private string _profilImza;
+        /// <summary>Hub'daki sayım (SQL) bilgisinin imzası — kayıt/nabız yanıtından; Sayim.UygulananImza'dan farklıysa server.xml yenilenir.</summary>
+        private string _sayimImza;
         private int _profilYenileniyor;
         private bool _sifreBekliyor;          // 2FA açık: yeni şifre bir sonraki bağlanmada kodla alınacak
         private string _sifreBilgi;
@@ -126,6 +128,7 @@ namespace PusulaConnect
                     Rdp.SifreSil(eskiRdp);
                 }
                 await SifreyiEsitle();
+                await SayimiEsitle();
                 await Kontrol();
             }
             catch (Exception e) { Gunluk.Yaz("Profil yenilenemedi: " + e.Message); }
@@ -529,6 +532,33 @@ namespace PusulaConnect
         /// </summary>
         // ------------------------------------------------------------ sayım modu
 
+        private int _sayimEsitleniyor;
+
+        /// <summary>
+        /// Sayım kuruluysa ve Hub'daki SQL bilgisi (login/şifre/sunucu/resim) diske yazılandan farklıysa
+        /// server.xml yeniden yazılır. 2FA açıksa kod gerektiği için bekletilir; kullanıcı Ayarlar > Sayım'dan
+        /// kodla yeniler. SifreyiEsitle ile aynı desen.
+        /// </summary>
+        private async Task SayimiEsitle()
+        {
+            if (!Sayim.Kurulu) return;
+            string hub; lock (_kilit) hub = _sayimImza;
+            if (hub == null) return;
+            if (hub == Sayim.UygulananImza) { Sayim.GuncellemeBekliyor = false; return; }
+            if (IkiAktif) { Sayim.GuncellemeBekliyor = true; return; }
+            if (Interlocked.Exchange(ref _sayimEsitleniyor, 1) == 1) return;
+            try
+            {
+                var j = await _servis.Sayim(null);
+                if (j["bilgi"] == null) return;
+                Sayim.Guncelle((JObject)j["bilgi"]);
+                Gunluk.Yaz("Sayım SQL bilgisi Pusula'dan güncellendi");
+                _ = _servis.Olay("sayim_bilgisi_guncellendi", "otomatik");
+            }
+            catch (Exception e) { Gunluk.Yaz("Sayım bilgisi güncellenemedi: " + e.Message); }
+            finally { Interlocked.Exchange(ref _sayimEsitleniyor, 0); }
+        }
+
         /// <summary>Hub'dan sayım bilgisini alır (2FA açıksa kodla), paketi arka planda kurar. İlerleme Durum().sayim.</summary>
         public async Task<object> SayimKur(string kod)
         {
@@ -715,6 +745,9 @@ namespace PusulaConnect
                 var pImza = yanit.Value<string>("profilImza");
                 string bilinenImza; lock (_kilit) bilinenImza = _profilImza;
                 if (pImza != null && pImza != bilinenImza) _ = Task.Run(ProfilYenile);
+                // Sayım modu: Hub'daki SQL bilgisi değiştiyse server.xml yenilenir (RDP/VPN ile aynı akış)
+                var sImza = yanit.Value<string>("sayimImza");
+                if (sImza != null) { lock (_kilit) _sayimImza = sImza; _ = Task.Run(SayimiEsitle); }
                 var imza = yanit["duyuru"]?.Value<string>("imza");
                 string onceki; lock (_kilit) onceki = _duyuruImza;
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));

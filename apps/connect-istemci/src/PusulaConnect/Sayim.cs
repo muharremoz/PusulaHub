@@ -40,6 +40,8 @@ namespace PusulaConnect
         private static readonly object _kilit = new object();
         private static bool _kuruluyor;
         private static JObject _ilerleme;   // { adim, yuzde, mesaj, hiz, bitti, hata }
+        /// <summary>Hub'daki SQL bilgisi değişti ama 2FA açık: yenileme kullanıcının kod girmesini bekliyor.</summary>
+        public static bool GuncellemeBekliyor;
 
         public static bool Kurulu => File.Exists(Exe) && File.Exists(Path.Combine(Klasor, "RFID.xml")) && File.Exists(Path.Combine(Klasor, "server.xml"));
 
@@ -64,10 +66,18 @@ namespace PusulaConnect
                     kullanici = d?.Value<string>("kullanici"),
                     resimYolu = d?.Value<string>("resimYolu"),
                     test = d?["test"],
+                    sonGuncelleme = d?.Value<string>("guncelleme"),
+                    guncellemeBekliyor = GuncellemeBekliyor,
                     kuruluyor = _kuruluyor,
                     ilerleme = _ilerleme,
                 };
             }
+        }
+
+        /// <summary>Diske yazılan son bilginin Hub imzası — nabızdaki imzayla karşılaştırılır.</summary>
+        public static string UygulananImza
+        {
+            get { try { return File.Exists(DurumDosyasi) ? JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)).Value<string>("imza") : null; } catch { return null; } }
         }
 
         private static string SurumOku()
@@ -163,10 +173,9 @@ namespace PusulaConnect
             {
                 d["kurulum"] = DateTime.Now.ToString("s");
                 d["paketSurum"] = paketSurum;
-                d["sunucu"] = bilgi.Value<string>("sunucu");
-                d["kullanici"] = bilgi.Value<string>("kullanici");
-                d["resimYolu"] = bilgi.Value<string>("resimYolu");
+                BilgiNotu(d, bilgi);
             });
+            GuncellemeBekliyor = false;
         }
 
         /// <summary>Yalnız server.xml / lic.xml'i yeniler (bilgi Hub'da değişince; paket indirilmez).</summary>
@@ -174,13 +183,17 @@ namespace PusulaConnect
         {
             if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
             DosyalariYaz(bilgi);
-            DurumYaz(d =>
-            {
-                d["sunucu"] = bilgi.Value<string>("sunucu");
-                d["kullanici"] = bilgi.Value<string>("kullanici");
-                d["resimYolu"] = bilgi.Value<string>("resimYolu");
-            });
+            DurumYaz(d => { d["guncelleme"] = DateTime.Now.ToString("s"); BilgiNotu(d, bilgi); });
+            GuncellemeBekliyor = false;
             return KisaDurum();
+        }
+
+        private static void BilgiNotu(JObject d, JObject bilgi)
+        {
+            d["sunucu"] = bilgi.Value<string>("sunucu");
+            d["kullanici"] = bilgi.Value<string>("kullanici");
+            d["resimYolu"] = bilgi.Value<string>("resimYolu");
+            d["imza"] = bilgi.Value<string>("imza");
         }
 
         private static bool KlasorYazilabilir()
@@ -434,7 +447,8 @@ namespace PusulaConnect
                 // o yüzden server.xml silinir (bağlantı bilgisi diskte kalmasın); yeniden açınca yeniden yazılır.
                 try { File.Delete(Path.Combine(Klasor, "server.xml")); } catch { }
             }
-            DurumYaz(d => { d["kurulum"] = null; d["test"] = null; });
+            DurumYaz(d => { d["kurulum"] = null; d["test"] = null; d["imza"] = null; });
+            GuncellemeBekliyor = false;
             Gunluk.Yaz("Sayım kaldırıldı" + (klasoruSil ? " (klasörle)" : ""));
             return KisaDurum();
         }

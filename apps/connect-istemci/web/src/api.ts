@@ -106,6 +106,10 @@ export type SayimDurum = {
   kullanici: string | null;
   resimYolu: string | null;
   test: SayimTest | null;
+  /** server.xml'in Hub bilgisiyle son yenilenme zamanı (otomatik ya da elle) */
+  sonGuncelleme: string | null;
+  /** SQL bilgisi Pusula'da değişti ama 2FA açık: kodla "Bilgiyi yenile" bekleniyor */
+  guncellemeBekliyor: boolean;
   kuruluyor: boolean;
   ilerleme: { adim: string; yuzde: number; mesaj: string | null; hiz: number; bitti: boolean; hata: string | null } | null;
 };

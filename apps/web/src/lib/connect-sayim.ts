@@ -15,6 +15,7 @@ import "server-only"
  * Şifreleme (TripleDES, Pusula anahtarı) İSTEMCİDE yapılır: test için düz metin zaten
  * istemciye iner ve anahtar her PusulaX.exe'de gömülü.
  */
+import { createHash } from "crypto"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { getFirmaErisim } from "@/lib/firma-erisim"
 import type { SupabaseLike } from "@/lib/firma-credentials"
@@ -30,6 +31,11 @@ export interface SayimBilgisi {
   resimYolu: string | null
   /** Hangi kullanıcının SQL login'i verildi (bilgi). */
   loginSahibi: string
+  /**
+   * Değerlerin özeti. Nabızla istemciye gider (profil ucu); değişince (SQL şifresi, sunucu, resim)
+   * istemci server.xml'i Hub'dan yeniden yazar — RDP/VPN profiliyle aynı mekanizma.
+   */
+  imza: string
 }
 
 export type SayimSonuc = { ok: true; bilgi: SayimBilgisi } | { ok: false; hata: string; kod: 404 | 409 | 500 }
@@ -63,16 +69,26 @@ export async function connectSayimBilgisi(firkod: string, kullanici: string): Pr
     if (host) resimYolu = `http://${host}:${sitePort}/`
   }
 
+  const sifre = erisim.sqlCredentials[sahip]
   return {
     ok: true,
     bilgi: {
       firmaAdi: ((firma.data as { name: string | null } | null)?.name ?? "").trim() || firkod,
       sunucu,
       kullanici: login,
-      sifre: erisim.sqlCredentials[sahip],
+      sifre,
       dataCode: firkod,
       resimYolu,
       loginSahibi: sahip,
+      imza: createHash("sha256").update([sunucu, login, sifre, firkod, resimYolu ?? ""].join("|")).digest("hex").slice(0, 16),
     },
   }
+}
+
+/** Yalnız imza (profil ucu için) — bilgi alınamıyorsa null; hata yutulur, profil akışı bozulmasın. */
+export async function connectSayimImzasi(firkod: string, kullanici: string): Promise<string | null> {
+  try {
+    const r = await connectSayimBilgisi(firkod, kullanici)
+    return r.ok ? r.bilgi.imza : null
+  } catch { return null }
 }
