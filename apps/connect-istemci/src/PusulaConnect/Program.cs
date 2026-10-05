@@ -160,6 +160,7 @@ namespace PusulaConnect
                 case "POST /rfid/kur": return RfidYardimcisi.Kur(i.Metin("yazici"), i.Sayi("port"));
                 case "POST /rfid/test": return RfidYardimcisi.Test();
                 case "POST /rfid/kaldir": return RfidYardimcisi.Kaldir();
+                case "POST /yedekler/yenile": return _uygulama.YedekleriYenile();
                 case "GET /sayim/durum": return Task.FromResult(Sayim.KisaDurum());
                 case "POST /sayim/kur": return _uygulama.SayimKur(i.Metin("kod"));
                 case "POST /sayim/guncelle": return _uygulama.SayimGuncelle(i.Metin("kod"));

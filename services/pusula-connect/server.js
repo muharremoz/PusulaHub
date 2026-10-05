@@ -44,6 +44,7 @@
  *   Kasa anahtarı: istemci RDP şifresini bu anahtarla (DPAPI ek entropisi) saklar; kod olmadan çözülemez.
  *     GET    /api/surum                 { son, min, sha256, boyut, imza, notlar } — kendini güncelleme (imza: exe'nin RSA imzası)
  *     GET    /indir                     uygulama exe
+ *     GET    /api/yedekler              (Bearer) firmanın veritabanları + son tam/fark yedek zamanı (Hub'dan, 5 dk önbellek)
  */
 
 import Fastify from "fastify"
@@ -815,6 +816,28 @@ fastify.get("/indir", async (req, reply) => {
   reply.header("Content-Disposition", "attachment; filename=\"PusulaConnect.exe\"; filename*=UTF-8''" + encodeURIComponent("Pusula Connect.exe"))
   reply.header("Cache-Control", "no-store")
   return reply.send(createReadStream(ISTEMCI_EXE))
+})
+
+// ── Veritabanı yedekleri (salt gösterim) ──
+// Hub hub.sql_databases'ten son yedek zamanlarını verir; firma başına 5 dk önbellek (istemci 30 dk'da bir sorar,
+// birden çok cihaz aynı firmada olabilir).
+const YEDEK_ONBELLEK_MS = 5 * 60_000
+const yedekOnbellek = new Map() // firmaId → { t, veri }
+fastify.get("/api/yedekler", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  const o = yedekOnbellek.get(c.firmaId)
+  if (o && Date.now() - o.t < YEDEK_ONBELLEK_MS) return o.veri
+  try {
+    const r = await fetch(`${HUB_URL}/api/hub/connect/yedekler?firma=${encodeURIComponent(c.firmaId)}`,
+      { headers: { "X-Service-Key": SERVICE_KEY }, signal: AbortSignal.timeout(8000) })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(j.error ?? `Hub HTTP ${r.status}`)
+    yedekOnbellek.set(c.firmaId, { t: Date.now(), veri: j })
+    return j
+  } catch (e) {
+    if (o) return o.veri   // Hub'a ulaşılamadı: eski bilgiyle devam
+    return reply.code(502).send({ hata: "Yedek bilgisi Pusula'dan alınamadı: " + e.message })
+  }
 })
 
 // ── Pusula X sayım modu ──

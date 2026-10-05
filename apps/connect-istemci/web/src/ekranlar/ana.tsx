@@ -12,6 +12,7 @@ import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
 import { vpnIpSabitMi } from "@/lib/utils";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
+import { YedekKarti } from "./yedekler";
 import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
@@ -363,6 +364,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
             alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
+          <YedekKarti durum={durum} setDurum={setDurum} />
         </div>
 
         {((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (

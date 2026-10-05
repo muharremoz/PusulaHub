@@ -114,6 +114,26 @@ export type SayimDurum = {
   ilerleme: { adim: string; yuzde: number; mesaj: string | null; hiz: number; bitti: boolean; hata: string | null } | null;
 };
 
+export type YedekSatiri = {
+  ad: string;
+  durum: string | null;
+  boyutMb: number | null;
+  /** FULL kurtarma: fark yedeği de alınır; SIMPLE'da yoktur */
+  farkVar: boolean;
+  sonTam: string | null;
+  sonFark: string | null;
+};
+
+export type YedekDurumu = {
+  /** Hub'ın yanıt zamanı — "x önce" buna göre */
+  simdi?: string;
+  liste: YedekSatiri[];
+  /** İstemcinin son başarılı çekimi */
+  zaman?: string | null;
+  hata?: string | null;
+  yenileniyor?: boolean;
+};
+
 export type Durum = {
   asama: "acilis" | "kayit" | "hazir";
   surum: string;
@@ -157,6 +177,8 @@ export type Durum = {
   sayim?: SayimDurum;
   /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
   duyurular?: Duyuru[];
+  /** Firmanın veritabanı yedekleri (ana ekran kartı, salt gösterim) — null: henüz çekilmedi */
+  yedekler?: YedekDurumu | null;
   vpnKurulum: {
     suruyor: boolean;
     durum: { adim: string; yuzde: number; mesaj: string | null; bitti: boolean; hata: string | null } | null;

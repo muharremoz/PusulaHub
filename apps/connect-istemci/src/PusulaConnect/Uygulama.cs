@@ -48,6 +48,10 @@ namespace PusulaConnect
 
         // duyurular (Hub → müşteri)
         private JArray _duyurular = new JArray();
+        /// <summary>Veritabanı yedekleri (ana ekran kartı): { simdi, liste, zaman, hata, yenileniyor }. 30 dk'da bir ve elle.</summary>
+        private JObject _yedekler;
+        private DateTime _yedekZaman = DateTime.MinValue;
+        private int _yedekTazeleniyor;
         private string _duyuruImza;
         private int _duyuruTazeleniyor;
         /// <summary>Yeni (okunmamış, daha önce bildirilmemiş) duyuru geldi: (başlık, metin, önem). Program tepside bildirim gösterir.</summary>
@@ -91,6 +95,7 @@ namespace PusulaConnect
             }
             _ = Task.Run(GuncellemeyeBak);
             _ = Task.Run(() => DuyurulariTazele());
+            _ = Task.Run(() => YedekleriTazele());
             await SifreyiEsitle();
             await SayimiEsitle();
             await Kontrol();
@@ -309,6 +314,7 @@ namespace PusulaConnect
                     rfid = RfidYardimcisi.KisaDurum(),
                     sayim = Sayim.KisaDurum(),
                     duyurular = _duyurular,
+                    yedekler = _yedekler,
                     guncelleme = new
                     {
                         mevcut = _sonSurum != null && Yerlesim.SurumKarsilastir(_sonSurum, ServisIstemci.Surum) > 0,
@@ -349,7 +355,7 @@ namespace PusulaConnect
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
             BilinenSurum = null;
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; }
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; }
             return Durum();
         }
 
@@ -752,11 +758,50 @@ namespace PusulaConnect
                 var imza = yanit["duyuru"]?.Value<string>("imza");
                 string onceki; lock (_kilit) onceki = _duyuruImza;
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));
+                // Yedek kartı 30 dk'da bir tazelenir (servis zaten 5 dk önbellekli)
+                if (DateTime.Now - _yedekZaman > TimeSpan.FromMinutes(30)) _ = Task.Run(() => YedekleriTazele());
             }
             catch (ServisHatasi e) when (e.DurumKodu == 0) { lock (_kilit) _servisErisim = false; /* ağ yok: sonra tekrar */ }
             catch (ServisHatasi e) when (e.DurumKodu == 401 || e.DurumKodu == 410) { KaydiKapat(e.Message); }
             catch { /* servis yoksa sonra tekrar */ }
             finally { Interlocked.Exchange(ref _nabizSuruyor, 0); }
+        }
+
+        // ------------------------------------------------------------ yedekler
+
+        /// <summary>Firmanın yedek bilgisini servisten çeker; hata olursa kartta "alınamadı" görünür, eski liste korunur.</summary>
+        private async Task YedekleriTazele()
+        {
+            if (_servis.Token == null) return;
+            if (Interlocked.Exchange(ref _yedekTazeleniyor, 1) == 1) return;
+            lock (_kilit) { if (_yedekler != null) _yedekler["yenileniyor"] = true; }
+            try
+            {
+                var j = await _servis.Yedekler();
+                j["zaman"] = DateTime.Now.ToString("s");
+                j["hata"] = null;
+                j["yenileniyor"] = false;
+                lock (_kilit) _yedekler = j;
+                _yedekZaman = DateTime.Now;
+            }
+            catch (Exception e)
+            {
+                lock (_kilit)
+                {
+                    _yedekler = _yedekler ?? new JObject { ["liste"] = new JArray() };
+                    _yedekler["hata"] = "Yedek bilgisi alınamadı: " + e.Message;
+                    _yedekler["yenileniyor"] = false;
+                }
+                _yedekZaman = DateTime.Now.AddMinutes(-25);   // 5 dk sonra tekrar dene
+            }
+            finally { Interlocked.Exchange(ref _yedekTazeleniyor, 0); }
+        }
+
+        /// <summary>Ana ekrandaki Yenile düğmesi.</summary>
+        public async Task<object> YedekleriYenile()
+        {
+            await YedekleriTazele();
+            return Durum();
         }
 
         // ------------------------------------------------------------ duyurular
