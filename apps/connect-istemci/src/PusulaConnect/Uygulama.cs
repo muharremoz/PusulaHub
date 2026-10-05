@@ -542,9 +542,10 @@ namespace PusulaConnect
         public async Task<object> SayimGuncelle(string kod)
         {
             var j = await SayimBilgisi(kod);
-            var d = Sayim.Guncelle((JObject)j["bilgi"]);
+            Sayim.Guncelle((JObject)j["bilgi"]);
             _ = _servis.Olay("sayim_bilgisi_guncellendi");
-            return d;
+            // Arayüz yanıtı TAM durum olarak alır (setDurum) — yalnız sayım özeti dönerse ekran boş kalır
+            return Durum();
         }
 
         private async Task<JObject> SayimBilgisi(string kod)
