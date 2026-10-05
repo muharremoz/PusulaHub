@@ -92,6 +92,7 @@ namespace PusulaConnect
             _ = Task.Run(GuncellemeyeBak);
             _ = Task.Run(() => DuyurulariTazele());
             await SifreyiEsitle();
+            await SayimiEsitle();
             await Kontrol();
         }
 
