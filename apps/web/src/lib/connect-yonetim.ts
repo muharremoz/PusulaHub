@@ -22,6 +22,22 @@ export interface ConnectCihazDurum {
   ayarlar: ConnectAyarlar | null
   /** Sunucu adı bu bilgisayarda DNS ile çözülemedi, IP ile bağlanıyor (0.4.2+) */
   dnsYok?: boolean | null
+  /** Pusula X sayım modu (0.6.0+): kurulu değilse null */
+  sayim?: ConnectSayimDurum | null
+}
+
+export interface ConnectSayimDurum {
+  kurulu: boolean
+  kuruluyor: boolean
+  /** Kurulum hata ile bittiyse mesajı */
+  hata: string | null
+  /** Kurulu PusulaX.exe sürümü */
+  surum: string | null
+  kurulum: string | null
+  kisayol: boolean
+  /** SQL bilgisi Pusula'da değişti, 2FA nedeniyle kullanıcının kodla yenilemesi bekleniyor */
+  guncellemeBekliyor: boolean
+  test: { zaman: string | null; ok: boolean; veritabani: number | null; hata: string | null } | null
 }
 
 export interface ConnectCihazSatir {

@@ -735,6 +735,7 @@ namespace PusulaConnect
                         vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         sifreKayitli = _rdpKullanici != null,
                         ayarlar = Ayarlar.Simdiki.Gorunum(),
+                        sayim = Sayim.NabizOzeti(),
                     };
                 }
                 var yanit = await _servis.Nabiz(durum);

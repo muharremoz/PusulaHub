@@ -61,12 +61,12 @@ namespace PusulaConnect
                     kisayol = File.Exists(KisayolYolu),
                     surum = Kurulu ? SurumOku() : null,
                     paketSurum = d?.Value<string>("paketSurum"),
-                    kurulum = d?.Value<string>("kurulum"),
+                    kurulum = Tarih(d?["kurulum"]),
                     sunucu = d?.Value<string>("sunucu"),
                     kullanici = d?.Value<string>("kullanici"),
                     resimYolu = d?.Value<string>("resimYolu"),
                     test = d?["test"],
-                    sonGuncelleme = d?.Value<string>("guncelleme"),
+                    sonGuncelleme = Tarih(d?["guncelleme"]),
                     guncellemeBekliyor = GuncellemeBekliyor,
                     kuruluyor = _kuruluyor,
                     ilerleme = _ilerleme,
@@ -74,11 +74,46 @@ namespace PusulaConnect
             }
         }
 
+        /// <summary>
+        /// Nabızla Hub'a giden özet (Hub /connect cihaz listesi). Şifre/sunucu adresi GİTMEZ; yalnız kurulu mu,
+        /// sürüm, son test sonucu. Kurulu değilse null — eski istemcilerle aynı görünür.
+        /// </summary>
+        public static object NabizOzeti()
+        {
+            JObject d = null;
+            try { if (File.Exists(DurumDosyasi)) d = JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)); } catch { }
+            bool kuruluyor; JObject il; lock (_kilit) { kuruluyor = _kuruluyor; il = _ilerleme; }
+            var kurulu = Kurulu;
+            if (!kurulu && !kuruluyor && il?.Value<string>("hata") == null) return null;
+            var t = d?["test"] as JObject;
+            return new
+            {
+                kurulu,
+                kuruluyor,
+                hata = !kurulu && !kuruluyor ? il?.Value<string>("hata") : null,
+                surum = kurulu ? SurumOku() : null,
+                kurulum = Tarih(d?["kurulum"]),
+                kisayol = File.Exists(KisayolYolu),
+                guncellemeBekliyor = GuncellemeBekliyor,
+                test = t == null ? null : new
+                {
+                    zaman = Tarih(t["zaman"]),
+                    ok = t.Value<bool?>("ok") == true,
+                    veritabani = (t["veritabanlari"] as JArray)?.Count,
+                    hata = t.Value<string>("hata"),
+                },
+            };
+        }
+
         /// <summary>Diske yazılan son bilginin Hub imzası — nabızdaki imzayla karşılaştırılır.</summary>
         public static string UygulananImza
         {
             get { try { return File.Exists(DurumDosyasi) ? JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)).Value<string>("imza") : null; } catch { return null; } }
         }
+
+        /// <summary>JObject.Parse tarih alanlarını DateTime'a çevirir; metne dönerken ISO (s) biçimi kalsın.</summary>
+        private static string Tarih(JToken t) =>
+            t == null || t.Type == JTokenType.Null ? null : t.Type == JTokenType.Date ? t.Value<DateTime>().ToString("s") : t.ToString();
 
         private static string SurumOku()
         {

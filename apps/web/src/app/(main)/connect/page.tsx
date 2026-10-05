@@ -449,6 +449,39 @@ function CihazMenusu({ c, onIslem, onSec }: { c: ConnectCihazSatir; onIslem: (c:
 }
 
 const DURUMLAR: CanliDurum[] = ["oturumda", "cevrimici", "cevrimdisi", "iptal"]
+
+/* ── Sayım modu (Pusula X sayım kopyası) ── */
+type SayimDurumu = "kurulu" | "sorunlu" | "kuruluyor" | "yok"
+const SAYIM_DURUMLAR: SayimDurumu[] = ["kurulu", "sorunlu", "kuruluyor", "yok"]
+const SAYIM_ETIKET: Record<SayimDurumu, string> = { kurulu: "Kurulu", sorunlu: "Sorunlu", kuruluyor: "Kuruluyor", yok: "Yok" }
+function sayimDurumu(c: ConnectCihazSatir): SayimDurumu {
+  const s = c.durum?.sayim
+  if (!s) return "yok"
+  if (s.kuruluyor) return "kuruluyor"
+  if (!s.kurulu) return s.hata ? "sorunlu" : "yok"
+  if (s.guncellemeBekliyor || (s.test && !s.test.ok) || !s.kisayol) return "sorunlu"
+  return "kurulu"
+}
+function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
+  const d = sayimDurumu(c)
+  if (d === "yok") return <span className="text-muted-foreground">—</span>
+  const ton = d === "kurulu" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+    : d === "kuruluyor" ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
+    : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{SAYIM_ETIKET[d]}</span>
+}
+function sayimAciklama(c: ConnectCihazSatir): string {
+  const s = c.durum?.sayim
+  if (!s) return "Sayım kurulu değil"
+  if (s.kuruluyor) return "Kurulum sürüyor"
+  if (!s.kurulu) return s.hata ? `Kurulum başarısız: ${s.hata}` : "Sayım kurulu değil"
+  const p: string[] = [`Pusula X ${s.surum ?? "?"}`]
+  if (!s.kisayol) p.push("masaüstü kısayolu yok")
+  if (s.guncellemeBekliyor) p.push("SQL bilgisi değişti, kodla yenilenmeyi bekliyor")
+  if (s.test) p.push(s.test.ok ? `test başarılı (${s.test.veritabani ?? 0} veritabanı)` : `test başarısız: ${s.test.hata ?? "?"}`)
+  else p.push("henüz test edilmedi")
+  return p.join(" · ")
+}
 const IKI_DURUMLAR: IkiDurum[] = ["acik", "kapali", "kilitli"]
 const IKI_ETIKET: Record<IkiDurum, string> = { acik: "Açık", kapali: "Kapalı", kilitli: "Kilitli" }
 
@@ -466,6 +499,7 @@ function CihazListesi({
   const [durum, setDurum] = useState<CanliDurum[]>([])
   const [iki, setIki] = useState<IkiDurum[]>([])
   const [surum, setSurum] = useState<string[]>([])
+  const [sayim, setSayim] = useState<SayimDurumu[]>([])
   const [sayfa, setSayfa] = useState(1)
 
   const surumler = useMemo(() => [...new Set((cihazlar ?? []).map((c) => c.surum ?? "—"))].sort((a, b) => surumKarsilastir(b, a)), [cihazlar])
@@ -477,9 +511,10 @@ function CihazListesi({
     if (durum.length && !durum.includes(canliDurum(c))) return false
     if (iki.length && !iki.includes(ikiDurum(c))) return false
     if (surum.length && !surum.includes(c.surum ?? "—")) return false
+    if (sayim.length && !sayim.includes(sayimDurumu(c))) return false
     return true
-  }), [cihazlar, firma, kullanici, makine, durum, iki, surum])
-  useEffect(() => setSayfa(1), [firma, kullanici, makine, durum, iki, surum])
+  }), [cihazlar, firma, kullanici, makine, durum, iki, surum, sayim])
+  useEffect(() => setSayfa(1), [firma, kullanici, makine, durum, iki, surum, sayim])
   const gorunen = filtreli.slice((sayfa - 1) * 25, sayfa * 25)
 
   return (
@@ -493,6 +528,7 @@ function CihazListesi({
             <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
             <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
             <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
+            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
             <th className="px-4 py-1.5 text-left font-medium">Sunucu</th>
             <th className="px-4 py-1.5 text-left font-medium">Son görülme</th>
             <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
@@ -500,11 +536,11 @@ function CihazListesi({
           <tbody>
             {!cihazlar ? (
               [0, 1, 2].map((i) => (
-                <tr key={i}><td colSpan={9} className="px-4 py-2"><Skeleton className="h-5 w-full" /></td></tr>
+                <tr key={i}><td colSpan={10} className="px-4 py-2"><Skeleton className="h-5 w-full" /></td></tr>
               ))
             ) : gorunen.length === 0 ? (
               <ListeBosSatir
-                sutunSayisi={9}
+                sutunSayisi={10}
                 toplam={cihazlar.length}
                 bosMesaj="Henüz Connect kuran yok. Firma sayfasında kullanıcı menüsünden Connect 2 Kurulum Kodu üretip müşteriye gönderin."
               />
@@ -518,6 +554,7 @@ function CihazListesi({
                 <td className="px-4 py-1.5 whitespace-nowrap">{c.makine ?? "—"}</td>
                 <td className="px-4 py-1.5 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
                 <td className="px-4 py-1.5 whitespace-nowrap"><IkiRozeti c={c} /></td>
+                <td className="px-4 py-1.5 whitespace-nowrap text-[12px]"><SayimRozeti c={c} /></td>
                 <td className="px-4 py-1.5 whitespace-nowrap text-[12px]">
                   {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
                     : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
@@ -722,6 +759,11 @@ function CihazDetay({
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS çözülemedi, IP ile</span>}
                 </Bilgi>
                 <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
+                <Bilgi ad="Sayım (Pusula X)">
+                  <SayimRozeti c={c} />
+                  {c.durum?.sayim && <span className="text-muted-foreground block text-[12px]">{sayimAciklama(c)}</span>}
+                  {c.durum?.sayim?.test?.zaman && <span className="text-muted-foreground block text-[11px]">Son test {tarihMetni(c.durum.sayim.test.zaman)}</span>}
+                </Bilgi>
                 <Bilgi ad="Dış IP"><span className="font-mono">{c.ip ?? "—"}</span></Bilgi>
                 <Bilgi ad="İlk kayıt">{tarihMetni(c.ilkGiris)}</Bilgi>
                 <Bilgi ad="Son nabız">{c.sonNabiz ? `${onceMetni(c.sonNabiz)} (${tarihMetni(c.sonNabiz)})` : "Henüz yok (eski sürüm)"}</Bilgi>
