@@ -359,10 +359,7 @@ namespace PusulaConnect
 
         // ------------------------------------------------------------ test
 
-        /// <summary>
-        /// server.xml'deki bilgiyle SQL'e bağlanır, Pusula X giriş ekranının gördüğü veritabanlarını listeler
-        /// (guvenlik tablosu, firma kodu süzgeci). guvenlik okunamazsa sys.databases'e düşer.
-        /// </summary>
+        /// <summary>server.xml'deki bilgiyle SQL'e bağlanır, firma login'inin veritabanlarını listeler.</summary>
         public static async Task<object> Test()
         {
             if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
@@ -377,6 +374,7 @@ namespace PusulaConnect
             }
             catch (Exception e) { throw new KullaniciHatasi("server.xml okunamadı: " + e.Message); }
             if (string.IsNullOrWhiteSpace(sunucu)) throw new KullaniciHatasi("server.xml'de sunucu yok.");
+            _ = dataCode;   // yalnız dosyadan okunduğu doğrulanır; liste login yetkisiyle gelir
 
             var sw = Stopwatch.StartNew();
             var sonuc = new JObject { ["zaman"] = DateTime.Now.ToString("s"), ["sunucu"] = sunucu, ["kullanici"] = kullanici };
@@ -391,31 +389,12 @@ namespace PusulaConnect
                 {
                     await c.OpenAsync();
                     sonuc["sqlSurum"] = c.ServerVersion;
+                    // Firma login'inin sahibi olduğu / görebildiği veritabanları (Pusula X giriş listesiyle aynı küme)
                     var liste = new JArray();
-                    string kaynak;
-                    try
-                    {
-                        // Pusula X frmLogin ile aynı kaynak: guvenlik (Sirket veritabanı), firma koduna göre
-                        using (var cmd = new SqlCommand("select g.srkadi, g.DataYolu from Sirket.dbo.guvenlik g where g.kod in (@kod) order by g.srkkod desc", c))
-                        {
-                            cmd.Parameters.AddWithValue("@kod", dataCode ?? "");
-                            using (var r = await cmd.ExecuteReaderAsync())
-                                while (await r.ReadAsync())
-                                    liste.Add(new JObject { ["ad"] = r.IsDBNull(0) ? null : r.GetString(0).Trim(), ["veritabani"] = r.IsDBNull(1) ? null : r.GetString(1).Trim() });
-                        }
-                        kaynak = "guvenlik";
-                    }
-                    catch (SqlException e)
-                    {
-                        // Sirket/guvenlik görülemiyor: login'in gördüğü veritabanları
-                        sonuc["guvenlikHatasi"] = e.Message;
-                        using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 order by name", c))
-                        using (var r = await cmd.ExecuteReaderAsync())
-                            while (await r.ReadAsync()) liste.Add(new JObject { ["ad"] = r.GetString(0), ["veritabani"] = r.GetString(0) });
-                        kaynak = "sys.databases";
-                    }
+                    using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 order by name", c))
+                    using (var r = await cmd.ExecuteReaderAsync())
+                        while (await r.ReadAsync()) liste.Add(new JObject { ["ad"] = r.GetString(0) });
                     sonuc["ok"] = true;
-                    sonuc["kaynak"] = kaynak;
                     sonuc["veritabanlari"] = liste;
                 }
             }

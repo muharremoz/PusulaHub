@@ -88,10 +88,8 @@ export type SayimTest = {
   sunucu: string;
   kullanici: string;
   sqlSurum?: string;
-  /** guvenlik: Pusula X'in giriş listesiyle aynı · sys.databases: Sirket görülemedi, login'in gördüğü veritabanları */
-  kaynak?: "guvenlik" | "sys.databases";
-  guvenlikHatasi?: string;
-  veritabanlari?: { ad: string | null; veritabani: string | null }[];
+  /** Firma login'inin veritabanları */
+  veritabanlari?: { ad: string }[];
   hata?: string;
   sureMs: number;
 };

@@ -5,7 +5,6 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -124,7 +123,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
           <div className="flex flex-wrap items-end gap-2 px-4 py-3">
             <div className="flex flex-col gap-1">
               <Label className="text-xs">Doğrulama kodu</Label>
-              <Input value={kod} onChange={(e) => setKod(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="000000" className="w-32 font-mono tracking-widest" autoFocus />
+              <Input value={kod} onChange={(e) => setKod(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="000000" className="w-32 tracking-widest" autoFocus />
             </div>
             <Button size="sm" disabled={kod.length !== 6 || bekle !== null} onClick={() => void calistir(kodIcin, kod)}>
               {bekle ? <Loader2 className="animate-spin" /> : null} Devam
@@ -150,15 +149,15 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
           <>
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-4 py-3 text-xs">
               <span className="text-muted-foreground">Klasör</span>
-              <span className="truncate font-mono" title={s.klasor}>{s.klasor}</span>
+              <span className="truncate" title={s.klasor}>{s.klasor}</span>
               <span className="text-muted-foreground">Pusula X</span>
-              <span className="font-mono">{s.surum ?? "—"}{s.paketSurum && s.surum && !s.surum.startsWith(s.paketSurum) ? ` (paket ${s.paketSurum})` : ""}</span>
+              <span>{s.surum ?? "—"}{s.paketSurum && s.surum && !s.surum.startsWith(s.paketSurum) ? ` (paket ${s.paketSurum})` : ""}</span>
               <span className="text-muted-foreground">SQL sunucusu</span>
-              <span className="font-mono">{s.sunucu ?? "—"}</span>
+              <span>{s.sunucu ?? "—"}</span>
               <span className="text-muted-foreground">SQL kullanıcısı</span>
-              <span className="font-mono">{s.kullanici ?? "—"}</span>
+              <span>{s.kullanici ?? "—"}</span>
               <span className="text-muted-foreground">Resim adresi</span>
-              <span className="truncate font-mono" title={s.resimYolu ?? ""}>{s.resimYolu ?? "— (veritabanındaki yol)"}</span>
+              <span className="truncate" title={s.resimYolu ?? ""}>{s.resimYolu ?? "— (veritabanındaki yol)"}</span>
               <span className="text-muted-foreground">Kısayol</span>
               <span>{s.kisayol ? "Masaüstünde" : <span className="text-amber-600 dark:text-amber-400">Yok</span>}</span>
             </div>
@@ -188,7 +187,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
                 <>
                   <div className="font-medium">Bağlandı <span className="text-xs font-normal text-muted-foreground">· {test.sureMs} ms{test.sqlSurum ? ` · SQL ${test.sqlSurum}` : ""}</span></div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    <span className="font-mono">{test.kullanici}</span> @ <span className="font-mono">{test.sunucu}</span>
+                    <span>{test.kullanici}</span> @ <span>{test.sunucu}</span>
                   </div>
                 </>
               ) : (
@@ -204,17 +203,11 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
               <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Database className="size-3.5" />
                 {test.veritabanlari?.length ?? 0} veritabanı
-                {test.kaynak === "sys.databases" && (
-                  <Badge variant="outline" className="text-[10px]" title={test.guvenlikHatasi ?? ""}>Sirket/guvenlik görülemedi — login'in gördükleri</Badge>
-                )}
               </div>
               {test.veritabanlari && test.veritabanlari.length > 0 ? (
                 <ul className="divide-y rounded-lg border text-sm">
                   {test.veritabanlari.map((v, i) => (
-                    <li key={i} className="flex items-center justify-between gap-3 px-3 py-1.5">
-                      <span className="truncate">{v.ad ?? v.veritabani}</span>
-                      {v.ad && v.veritabani && v.ad !== v.veritabani && <span className="shrink-0 font-mono text-xs text-muted-foreground">{v.veritabani}</span>}
-                    </li>
+                    <li key={i} className="px-3 py-1.5">{v.ad}</li>
                   ))}
                 </ul>
               ) : (

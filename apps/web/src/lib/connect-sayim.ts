@@ -4,9 +4,8 @@ import "server-only"
  * Pusula Connect — Sayım modu: müşteri PC'sine kurulan Pusula X (RFID.xml'li kopya) için
  * server.xml / lic.xml değerleri. Connect servisi /api/hub/connect/sayim ile sorar.
  *
- *   Name     → SQL sunucusu (dış adres). Hub firma kaydında yalnız LAN IP var; dış adres
- *              Ayarlar > Pusula Connect (hub.settings connect_sayim_sql_adres), yoksa CRM SQL
- *              Konsolu'nun kullandığı sabit (185.198.72.178) + firmanın SQL portu.
+ *   Name     → firmanın SQL sunucusunun YEREL adresi (ip,port). Müşteri PC'si VPN'den bağlanır;
+ *              dış adres kullanılmaz (kullanıcı kararı 05.10.2026).
  *   UserName → kullanıcının SQL login'i (hub.company_user_credentials.sql_login), yoksa
  *              firmanın SQL login'i olan ilk kullanıcı. 'sa' müşteri PC'sine yazılmaz.
  *   Password → o login'in SQL şifresi (sql_password; AD şifresinden AYRI).
@@ -20,9 +19,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { getFirmaErisim } from "@/lib/firma-erisim"
 import type { SupabaseLike } from "@/lib/firma-credentials"
 import { bindingPort, resolveCompanySites } from "@/lib/company-web-services"
-
-/** CRM `lib/sql-sunucu.ts` SQL_WAN_ADRES ile aynı. */
-export const SQL_DIS_ADRES = "185.198.72.178"
 
 export interface SayimBilgisi {
   firmaAdi: string
@@ -38,24 +34,15 @@ export interface SayimBilgisi {
 
 export type SayimSonuc = { ok: true; bilgi: SayimBilgisi } | { ok: false; hata: string; kod: 404 | 409 | 500 }
 
-async function sqlDisAdresAyari(): Promise<string | null> {
-  try {
-    const { data } = await getSupabaseAdmin().schema("hub").from("settings")
-      .select("value").eq("key", "connect_sayim_sql_adres").maybeSingle()
-    const v = ((data as { value: string | null } | null)?.value ?? "").trim()
-    return v || null
-  } catch { return null }
-}
-
 export async function connectSayimBilgisi(firkod: string, kullanici: string): Promise<SayimSonuc> {
   const sb = getSupabaseAdmin()
-  const [erisim, firma, disAdres, siteler] = await Promise.all([
+  const [erisim, firma, siteler] = await Promise.all([
     getFirmaErisim(firkod, sb as unknown as SupabaseLike),
     sb.schema("hub").from("companies").select("name").eq("company_id", firkod).maybeSingle(),
-    sqlDisAdresAyari(),
     resolveCompanySites(sb as unknown as Parameters<typeof resolveCompanySites>[0], firkod),
   ])
   if (!erisim) return { ok: false, hata: "Firma Hub'da bulunamadı", kod: 404 }
+  if (!erisim.sql?.ip) return { ok: false, hata: "Firmaya SQL sunucusu atanmamış (Hub → firma → Erişim)", kod: 409 }
 
   // SQL login: önce bu kullanıcı, yoksa SQL login'i olan ilk kullanıcı
   const kucuk = kullanici.toLowerCase()
@@ -64,8 +51,7 @@ export async function connectSayimBilgisi(firkod: string, kullanici: string): Pr
   if (!secilen) return { ok: false, hata: "Firmanın SQL login'i Hub'da kayıtlı değil (Erişim → SQL erişimi)", kod: 409 }
   const [sahip, login] = secilen
 
-  const port = erisim.sql?.port || 1433
-  const sunucu = disAdres ?? `${SQL_DIS_ADRES},${port}`
+  const sunucu = `${erisim.sql.ip},${erisim.sql.port || 1433}`
 
   // Resim: <firkod>_RESIM sitesi → IIS sunucusunun dış adı + site portu
   let resimYolu: string | null = null
