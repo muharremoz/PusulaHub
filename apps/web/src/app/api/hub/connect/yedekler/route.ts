@@ -20,6 +20,16 @@ interface Satir {
   last_diff_backup: string | null
 }
 
+/**
+ * Poller yedek zamanını SQL sunucusunun YEREL saatiyle (Türkiye) yazar ama değer UTC gibi saklanır;
+ * CRM'deki hubYerelSaattenAn ile aynı düzeltme: 3 saat geri → gerçek an.
+ */
+const hubYerelSaattenAn = (t: string | null): string | null => {
+  if (!t) return null
+  const ms = Date.parse(t)
+  return Number.isFinite(ms) ? new Date(ms - 3 * 3600_000).toISOString() : null
+}
+
 export async function GET(req: NextRequest) {
   if (!servisAnahtariDogru(req.headers.get("x-service-key"))) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
   const firma = (req.nextUrl.searchParams.get("firma") ?? "").trim()
@@ -33,10 +43,10 @@ export async function GET(req: NextRequest) {
       ad: d.name,
       durum: d.status,
       boyutMb: d.size_mb,
-      // SIMPLE kurtarma modelinde fark yedeği olmaz; istemci satırı buna göre çizer
-      farkVar: (d.recovery_model ?? "").toUpperCase() !== "SIMPLE",
-      sonTam: d.last_backup,
-      sonFark: d.last_diff_backup,
+      // Fark yedeği alınıyorsa (SIMPLE'da da alınabilir) ya da FULL modeldeyse satırda gösterilir
+      farkVar: !!d.last_diff_backup || (d.recovery_model ?? "").toUpperCase() === "FULL",
+      sonTam: hubYerelSaattenAn(d.last_backup),
+      sonFark: hubYerelSaattenAn(d.last_diff_backup),
     }))
     return NextResponse.json({ simdi: new Date().toISOString(), liste }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
