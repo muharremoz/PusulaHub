@@ -161,8 +161,25 @@ export interface Okunan {
   durdu: DurmaSebebi | null
 }
 
-/** Pusula dosyayı ANSI (Türkçe Windows → 1254) yazar. */
-const cozucu = new TextDecoder("windows-1254")
+/**
+ * Kodlama: Pusula X UTF-8 yazar (File.AppendText), klasik program ANSI
+ * (Türkçe Windows → 1254). Parça önce katı UTF-8 denenir, olmazsa 1254.
+ * Parça sonunda yarım kalan UTF-8 dizisi bir sonraki okumaya bırakılır.
+ */
+const utf8 = new TextDecoder("utf-8", { fatal: true })
+const ansi = new TextDecoder("windows-1254")
+
+export function parcaCoz(b: Uint8Array): { metin: string; kullanilan: number } {
+  let son = b.length
+  for (let i = 1; i <= 3 && i <= b.length; i++) {
+    const c = b[b.length - i]
+    if ((c & 0xc0) === 0x80) continue            // devam baytı — geriye bak
+    if (c >= 0xc0 && (c >= 0xf0 ? 4 : c >= 0xe0 ? 3 : 2) > i) son = b.length - i
+    break
+  }
+  try { return { metin: utf8.decode(b.subarray(0, son)), kullanilan: son } }
+  catch { return { metin: ansi.decode(b), kullanilan: b.length } }
+}
 
 export async function oku(firkod: string, id: string, ofset: number): Promise<Okunan> {
   const r = await kayitGetir(firkod, id)
@@ -190,15 +207,18 @@ export async function oku(firkod: string, id: string, ofset: number): Promise<Ok
   const boyut = Number(m[1])
   const bas = Number(m[2])
   const bayt = Buffer.from(m[3], "base64")
-  const yeniOfset = bas + bayt.length
+  const { metin, kullanilan } = parcaCoz(bayt)
+  const yeniOfset = bas + kullanilan
+  // Parça doluysa devamı var; yarım UTF-8 yüzünden geri kalınan birkaç bayt "devam" sayılmaz
+  const devami = bayt.length === OKUMA_PARCA && yeniOfset < boyut
 
   await hub().from("firma_debug").update({ last_read_at: new Date().toISOString() }).eq("id", r.id)
 
   if (boyut > BOYUT_SINIRI) {
     await durdur(firkod, r.id, "boyut").catch(() => {})
-    return { icerik: cozucu.decode(bayt), ofset: yeniOfset, boyut, devami: false, durdu: "boyut" }
+    return { icerik: metin, ofset: yeniOfset, boyut, devami: false, durdu: "boyut" }
   }
-  return { icerik: cozucu.decode(bayt), ofset: yeniOfset, boyut, devami: yeniOfset < boyut, durdu: null }
+  return { icerik: metin, ofset: yeniOfset, boyut, devami, durdu: null }
 }
 
 /* ── durdur ── */
