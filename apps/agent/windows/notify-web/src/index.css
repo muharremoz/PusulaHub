@@ -70,12 +70,3 @@
   body { @apply text-foreground select-none; }
   button:not(:disabled) { cursor: pointer; }
 }
-
-/* Geri sayım çubuğu: süre CSS değişkeniyle verilir, JS her saniye uğraşmaz. */
-@keyframes geri-sayim { from { transform: scaleX(1); } to { transform: scaleX(0); } }
-.geri-sayim { transform-origin: left; animation: geri-sayim var(--sure, 300s) linear forwards; }
-.geri-sayim-dur { animation-play-state: paused; }
-
-@media (prefers-reduced-motion: reduce) {
-  .geri-sayim { animation: none; }
-}

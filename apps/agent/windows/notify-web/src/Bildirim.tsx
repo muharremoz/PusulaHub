@@ -10,24 +10,21 @@ const ERTELEME_DK = 10;
 /** Gövde bu kadar satırı geçerse kısaltılır, "Tüm metni göster" çıkar. */
 const KISA_SATIR = 4;
 
-const TUR: Record<MesajTuru, { etiket: string; ikon: typeof Info; rozet: string; cubuk: string }> = {
+const TUR: Record<MesajTuru, { etiket: string; ikon: typeof Info; rozet: string }> = {
   info: {
     etiket: "Bilgi",
     ikon: Info,
     rozet: "bg-sky-500/12 text-sky-700 ring-sky-500/20 dark:text-sky-300",
-    cubuk: "bg-sky-500",
   },
   warning: {
     etiket: "Uyarı",
     ikon: AlertTriangle,
     rozet: "bg-amber-500/14 text-amber-700 ring-amber-500/25 dark:text-amber-300",
-    cubuk: "bg-amber-500",
   },
   urgent: {
     etiket: "Acil",
     ikon: BellRing,
     rozet: "bg-red-500/12 text-red-700 ring-red-500/25 dark:text-red-300",
-    cubuk: "bg-red-500",
   },
 };
 
@@ -102,7 +99,8 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
         style={{ boxShadow: "var(--kart-golge)" }}
         className={cn(
           "bg-card text-card-foreground relative w-[400px] overflow-hidden rounded-2xl border",
-          acil && "w-[460px]",
+          // Acil: kırmızı kenar + dış hale — bilgi/uyarıdan ilk bakışta ayrılsın
+          acil && "w-[460px] border-red-500/70 ring-4 ring-red-500/20 dark:border-red-500/60",
           cikiyor
             ? "animate-out fade-out-0 zoom-out-95 fill-mode-forwards duration-150"
             : acil
@@ -110,12 +108,11 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
               : "animate-in fade-in-0 slide-in-from-bottom-4 duration-300 ease-out",
         )}
       >
+        {/* Başlık alanı: acilde kırmızı bant */}
+        <div className={cn(acil && "border-b border-red-500/20 bg-red-600 pb-3.5 text-white dark:bg-red-700")}>
         {/* Üst satır: gönderen + saat + kapat */}
-        <div className="text-muted-foreground flex items-center gap-2 px-4 pt-3.5 text-[12px]">
-          <span className="bg-primary text-primary-foreground flex size-[18px] items-center justify-center rounded-[5px] text-[10px] font-semibold">
-            P
-          </span>
-          <span className="text-foreground/80 font-medium">{mesaj.from || "Pusula Yazılım"}</span>
+        <div className={cn("flex items-center gap-2 px-4 pt-3.5 text-[12px]", acil ? "text-white/80" : "text-muted-foreground")}>
+          <span className={cn("font-medium", acil ? "text-white" : "text-foreground/80")}>{mesaj.from || "Pusula Yazılım"}</span>
           <span>·</span>
           <span>{hatirlatma ? "hatırlatma" : saat(mesaj.sentAt)}</span>
           <span className="ml-auto flex min-w-0 items-center gap-1" title={`Sayın ${kullanici}`}>
@@ -137,22 +134,38 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
 
         {/* Başlık */}
         <div className="flex gap-3 px-4 pt-3">
-          <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl ring-1", t.rozet)}>
-            <Ikon className="size-5" />
-          </span>
+          {acil ? (
+            // Beyaz kutuda kırmızı ikon + yavaş nabız halkası
+            <span className="relative flex size-10 shrink-0">
+              <span className="absolute inset-0 animate-ping rounded-xl bg-white/40 [animation-duration:1.8s]" />
+              <span className="relative flex size-10 items-center justify-center rounded-xl bg-white text-red-600 shadow-sm">
+                <Ikon className="size-5" />
+              </span>
+            </span>
+          ) : (
+            <span className={cn("flex size-10 shrink-0 items-center justify-center rounded-xl ring-1", t.rozet)}>
+              <Ikon className="size-5" />
+            </span>
+          )}
           <div className="min-w-0 pt-0.5">
-            <span className={cn("inline-flex rounded-[5px] px-1.5 py-px text-[10.5px] font-medium ring-1", t.rozet)}>
+            <span
+              className={cn(
+                "inline-flex rounded-[5px] px-1.5 py-px text-[10.5px] font-medium ring-1",
+                acil ? "bg-white/15 tracking-wide text-white uppercase ring-white/30" : t.rozet,
+              )}
+            >
               {t.etiket}
             </span>
-            <h1 className="mt-1 text-[15px] leading-snug font-semibold text-balance">{mesaj.title}</h1>
+            <h1 className={cn("mt-1 leading-snug font-semibold text-balance", acil ? "text-[17px]" : "text-[15px]")}>{mesaj.title}</h1>
           </div>
+        </div>
         </div>
 
         {/* Gövde */}
-        <div className="px-4 pt-2.5 pl-[68px]">
+        <div className={cn("px-4 pl-[68px]", acil ? "pt-3.5" : "pt-2.5")}>
           <p
             ref={govdeRef}
-            className={cn("text-muted-foreground text-[13px] leading-relaxed whitespace-pre-line select-text")}
+            className={cn("text-[13px] leading-relaxed whitespace-pre-line select-text", acil ? "text-foreground/85" : "text-muted-foreground")}
             style={acik ? undefined : { display: "-webkit-box", WebkitLineClamp: KISA_SATIR, WebkitBoxOrient: "vertical", overflow: "hidden" }}
           >
             {/* Kısaltılmışken boş satırlar yer yemesin */}
@@ -176,21 +189,16 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
                 {ERTELEME_DK} dk sonra hatırlat
               </Button>
             )}
-            <Button size="sm" autoFocus onClick={() => bitir({ tur: "okudum" })}>
+            <Button
+              size="sm"
+              autoFocus
+              className={cn(acil && "bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500")}
+              onClick={() => bitir({ tur: "okudum" })}
+            >
               Okudum, anladım
             </Button>
           </div>
         </div>
-
-        {/* Geri sayım — fare üzerindeyken durur */}
-        {!acil && (
-          <div className="bg-muted h-[3px]">
-            <div
-              className={cn("geri-sayim h-full", t.cubuk, uzerinde && "geri-sayim-dur")}
-              style={{ ["--sure" as string]: `${OTOMATIK_KAPANMA_SN}s` }}
-            />
-          </div>
-        )}
       </div>
     </div>
   );
