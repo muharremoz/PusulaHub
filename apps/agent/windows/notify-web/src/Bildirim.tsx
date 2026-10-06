@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AlertTriangle, BellRing, Info, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ExeVerisi, MesajTuru, SayfaMesaji } from "@/kopru";
+import { exeIcinde, type ExeVerisi, type MesajTuru, type SayfaMesaji } from "@/kopru";
+import { AnketFormu } from "@/AnketFormu";
+import { eksikZorunlular, type AnketCevaplari } from "@/anket";
 
 /** Bilgi/uyarı 5 dk sonra kendiliğinden kapanır (eski popup'la aynı); acil kapanmaz. */
 const OTOMATIK_KAPANMA_SN = 300;
@@ -40,7 +42,12 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
   const { mesaj, kullanici, hatirlatma } = veri;
   const t = TUR[mesaj.type] ?? TUR.info;
   const acil = mesaj.type === "urgent";
+  const anket = mesaj.survey?.sorular?.length ? mesaj.survey : null;
   const Ikon = t.ikon;
+  /*  Exe içinde pencere kartla aynı boyda ve renk anahtarıyla şeffaf: yarı saydam piksel
+   *  (gölge, dış hale) çizilemez → kenar boşluğu ve gölge yok, acilde hale yerine kalın kenar. */
+  const exe = exeIcinde();
+  const pay = exe ? 0 : 48;
 
   const kartRef = useRef<HTMLDivElement>(null);
   const govdeRef = useRef<HTMLParagraphElement>(null);
@@ -48,6 +55,15 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
   const [uzun, setUzun] = useState(false);
   const [cikiyor, setCikiyor] = useState(false);
   const [uzerinde, setUzerinde] = useState(false);
+  const [cevaplar, setCevaplar] = useState<AnketCevaplari>({});
+  const [eksikler, setEksikler] = useState<string[]>([]);
+
+  const anketiGonder = () => {
+    if (!anket) return;
+    const e = eksikZorunlular(anket, cevaplar);
+    setEksikler(e);
+    if (e.length === 0) bitir({ tur: "okudum", cevaplar });
+  };
 
   // Gövde kısaltılmış halde taşıyor mu
   useLayoutEffect(() => {
@@ -61,13 +77,13 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
     if (!k) return;
     const bildir = () => {
       const r = k.getBoundingClientRect();
-      gonder({ tur: "boyut", genislik: Math.ceil(r.width) + 48, yukseklik: Math.ceil(r.height) + 48 });
+      gonder({ tur: "boyut", genislik: Math.ceil(r.width) + pay, yukseklik: Math.ceil(r.height) + pay });
     };
     bildir();
     const ro = new ResizeObserver(bildir);
     ro.observe(k);
     return () => ro.disconnect();
-  }, [gonder]);
+  }, [gonder, pay]);
 
   // Çıkış animasyonu bitince exe'ye haber ver
   const bitir = (m: SayfaMesaji) => {
@@ -79,7 +95,7 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
   // Otomatik kapanma — fare kartın üzerindeyken durur
   const kalanRef = useRef(OTOMATIK_KAPANMA_SN * 1000);
   useEffect(() => {
-    if (acil || uzerinde || cikiyor) return;
+    if (acil || anket || uzerinde || cikiyor) return;
     const basla = Date.now();
     const id = setTimeout(() => bitir({ tur: "kapat" }), kalanRef.current);
     return () => {
@@ -87,20 +103,22 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
       kalanRef.current -= Date.now() - basla;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acil, uzerinde, cikiyor]);
+  }, [acil, anket, uzerinde, cikiyor]);
 
   return (
     // Konumu exe verir (bilgi/uyarı sağ alt, acil ekran ortası); sayfa yalnız kartı ve gölge payını çizer.
-    <div className="p-6">
+    <div className={exe ? "" : "p-6"}>
       <div
         ref={kartRef}
         onMouseEnter={() => setUzerinde(true)}
         onMouseLeave={() => setUzerinde(false)}
-        style={{ boxShadow: "var(--kart-golge)" }}
+        style={exe ? undefined : { boxShadow: "var(--kart-golge)" }}
         className={cn(
           "bg-card text-card-foreground relative w-[400px] overflow-hidden rounded-2xl border",
+          anket && "w-[440px]",
           // Acil: kırmızı kenar + dış hale — bilgi/uyarıdan ilk bakışta ayrılsın
-          acil && "w-[460px] border-red-500/70 ring-4 ring-red-500/20 dark:border-red-500/60",
+          acil && (exe ? "w-[460px] border-2 border-red-600" : "w-[460px] border-red-500/70 ring-4 ring-red-500/20 dark:border-red-500/60"),
+          exe && "rounded-xl",
           cikiyor
             ? "animate-out fade-out-0 zoom-out-95 fill-mode-forwards duration-150"
             : acil
@@ -181,22 +199,33 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
           )}
         </div>
 
+        {/* Anket — uzun anket kart içinde kayar (pencere ekrandan taşmasın) */}
+        {anket && (
+          <div className="mt-3 max-h-[440px] overflow-y-auto border-t px-4 pt-3 pl-[68px]">
+            <AnketFormu anket={anket} cevaplar={cevaplar} onChange={(c) => { setCevaplar(c); setEksikler([]); }} eksikler={eksikler} />
+          </div>
+        )}
+
         {/* Alt satır */}
         <div className="flex items-center gap-2 px-4 pt-4 pb-4">
           <div className="ml-auto flex gap-2">
             {!acil && (
               <Button variant="outline" size="sm" onClick={() => bitir({ tur: "ertele", dakika: ERTELEME_DK })}>
-                {ERTELEME_DK} dk sonra hatırlat
+                {anket ? "Daha sonra" : `${ERTELEME_DK} dk sonra hatırlat`}
               </Button>
             )}
-            <Button
-              size="sm"
-              autoFocus
-              className={cn(acil && "bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500")}
-              onClick={() => bitir({ tur: "okudum" })}
-            >
-              Okudum, anladım
-            </Button>
+            {anket ? (
+              <Button size="sm" onClick={anketiGonder}>Gönder</Button>
+            ) : (
+              <Button
+                size="sm"
+                autoFocus
+                className={cn(acil && "bg-red-600 text-white hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-500")}
+                onClick={() => bitir({ tur: "okudum" })}
+              >
+                Okudum, anladım
+              </Button>
+            )}
           </div>
         </div>
       </div>

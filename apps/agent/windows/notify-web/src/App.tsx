@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Bildirim } from "@/Bildirim";
 import { exedenDinle, exeIcinde, exeyeGonder, type ExeVerisi, type MesajTuru, type SayfaMesaji } from "@/kopru";
 import { cn } from "@/lib/utils";
+import type { Anket } from "@/anket";
 
 export function App() {
   return exeIcinde() ? <ExeModu /> : <Onizleme />;
@@ -37,12 +38,22 @@ Yaşanacak kesinti nedeniyle özür diler, anlayışınız için teşekkür eder
 Saygılarımızla,
 Pusula Yazılım`;
 
+const ORNEK_ANKET: Anket = {
+  sorular: [
+    { id: "s1", tip: "puan", soru: "Sunucu hizmetimizi genel olarak nasıl puanlarsınız?", zorunlu: true },
+    { id: "s2", tip: "tek", soru: "Bağlantı hızından memnun musunuz?", secenekler: ["Memnunum", "Kararsızım", "Memnun değilim"], zorunlu: true },
+    { id: "s3", tip: "coklu", soru: "En çok hangi konularda sorun yaşıyorsunuz?", secenekler: ["Yavaşlık", "Bağlantı kopması", "Yazıcı", "Oturum açma"], zorunlu: false },
+    { id: "s4", tip: "metin", soru: "Eklemek istedikleriniz", zorunlu: false },
+  ],
+};
+
 const ORNEK_KISA = "Pusula programında yeni sürüm yayınlandı. Programı kapatıp yeniden açtığınızda güncelleme otomatik yüklenecektir.";
 
 function Onizleme() {
   const [tur, setTur] = useState<MesajTuru>("warning");
   const [uzun, setUzun] = useState(true);
   const [koyu, setKoyu] = useState(false);
+  const [anket, setAnket] = useState(false);
   const [tekrar, setTekrar] = useState(0);
   const [son, setSon] = useState<string>("—");
 
@@ -62,8 +73,9 @@ function Onizleme() {
     koyu,
     mesaj: {
       msgId: "onizleme",
-      title: tur === "urgent" ? "Sunucu 5 dakika içinde yeniden başlatılacak" : uzun ? "Planlı Bakım Çalışması" : "Yazılım güncellemesi",
-      body: tur === "urgent" ? "Lütfen açık kayıtlarınızı hemen kaydedip programdan çıkınız." : uzun ? ORNEK_UZUN : ORNEK_KISA,
+      title: anket ? "Memnuniyet anketi" : tur === "urgent" ? "Sunucu 5 dakika içinde yeniden başlatılacak" : uzun ? "Planlı Bakım Çalışması" : "Yazılım güncellemesi",
+      body: anket ? "Hizmetimizi geliştirebilmek için birkaç sorumuzu yanıtlar mısınız? Yaklaşık 1 dakika sürer." : tur === "urgent" ? "Lütfen açık kayıtlarınızı hemen kaydedip programdan çıkınız." : uzun ? ORNEK_UZUN : ORNEK_KISA,
+      survey: anket ? ORNEK_ANKET : null,
       type: tur,
       from: "Pusula Yazılım",
       sentAt: new Date().toISOString(),
@@ -89,6 +101,10 @@ function Onizleme() {
           <button className={secenek(!uzun)} onClick={() => { setUzun(false); setTekrar((k) => k + 1); }}>Kısa metin</button>
         </div>
         <div className="flex gap-1 rounded-lg bg-white/10 p-0.5">
+          <button className={secenek(!anket)} onClick={() => { setAnket(false); setTekrar((k) => k + 1); }}>Mesaj</button>
+          <button className={secenek(anket)} onClick={() => { setAnket(true); setTur("info"); setTekrar((k) => k + 1); }}>Anket</button>
+        </div>
+        <div className="flex gap-1 rounded-lg bg-white/10 p-0.5">
           <button className={secenek(!koyu)} onClick={() => setKoyu(false)}>Açık</button>
           <button className={secenek(koyu)} onClick={() => setKoyu(true)}>Koyu</button>
         </div>
@@ -102,7 +118,7 @@ function Onizleme() {
       <div className="absolute inset-x-0 bottom-0 h-12 bg-black/55 backdrop-blur" />
 
       <div className={cn("absolute", tur === "urgent" ? "inset-0 flex items-center justify-center" : "right-2 bottom-14")}>
-        <Bildirim key={`${tur}-${uzun}-${tekrar}`} veri={veri} gonder={gonder} />
+        <Bildirim key={`${tur}-${uzun}-${anket}-${tekrar}`} veri={veri} gonder={gonder} />
       </div>
     </div>
   );

@@ -6,11 +6,14 @@
  *   exe                   → sayfaya { tur: "mesaj", mesaj, kullanici, koyu }
  *   kart boyutu değişti   → exe'ye { tur: "boyut", genislik, yukseklik }  (pencere karta oturur)
  *   "Okudum, anladım"     → exe'ye { tur: "okudum" }      exe agent'a ACK gönderir, kapanır
+ *   anket "Gönder"        → exe'ye { tur: "okudum", cevaplar } exe cevabı ACK msgId'sine ekler (bkz. anket.ts)
  *   "10 dk sonra hatırlat"→ exe'ye { tur: "ertele", dakika } exe gizlenir, süre sonunda yeniden gösterir
  *   X ya da süre doldu    → exe'ye { tur: "kapat" }        ACK yok (bugünkü otomatik kapanma gibi)
  *
  * Mesaj alanları agent'ın PusulaNotify'a verdiği JSON'la aynı (docs/messaging-system.md).
  */
+
+import type { Anket, AnketCevaplari } from "@/anket";
 
 export type MesajTuru = "info" | "warning" | "urgent";
 
@@ -21,6 +24,8 @@ export interface Mesaj {
   type: MesajTuru;
   from: string;
   sentAt: string;
+  /** Anketse sorular — Hub'dan agent'a dokunmadan gelir */
+  survey?: Anket | null;
 }
 
 export interface ExeVerisi {
@@ -35,7 +40,7 @@ export interface ExeVerisi {
 export type SayfaMesaji =
   | { tur: "hazir" }
   | { tur: "boyut"; genislik: number; yukseklik: number }
-  | { tur: "okudum" }
+  | { tur: "okudum"; cevaplar?: AnketCevaplari }
   | { tur: "ertele"; dakika: number }
   | { tur: "kapat" };
 

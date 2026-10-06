@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    PusulaNotify (WebView2) — kullanıcı oturumuna inject edilen bildirim popup'ı.
+    Eski PusulaNotify.cs'in (WinForms, sunucuda csc ile derlenir) yerine geçer; agent'a dokunulmaz:
+    aynı ad (PusulaNotify.exe), aynı argüman (base64 JSON), aynı ACK (127.0.0.1:{agentPort}/api/ack).
+
+    Arayüz ../notify-web (React + Vite) — derlenip exe'ye gömülür; Costura ile TEK DOSYA
+    (WebView2 DLL'leri dahil). Sunucuda derlenmez, yerelde derlenip kopyalanır.
+
+    Derleme:
+      1) ../notify-web:   npm install && npm run build
+      2) bu klasörde:     dotnet build -c Release   (dist yoksa 1. adımı kendisi çalıştırır)
+  -->
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AssemblyName>PusulaNotify</AssemblyName>
+    <RootNamespace>PusulaNotify</RootNamespace>
+    <Version>2.0.0</Version>
+    <Company>Pusula Yazılım</Company>
+    <Product>Pusula Bildirim</Product>
+    <AssemblyTitle>Pusula Bildirim</AssemblyTitle>
+    <Copyright>© Pusula Yazılım</Copyright>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DebugType>embedded</DebugType>
+    <AutoGenerateBindingRedirects>false</AutoGenerateBindingRedirects>
+    <GenerateSupportedRuntime>false</GenerateSupportedRuntime>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <WebKlasoru>$(MSBuildThisFileDirectory)..\notify-web\</WebKlasoru>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Net.Http" />
+    <PackageReference Include="Costura.Fody" Version="5.7.0" PrivateAssets="all" />
+    <PackageReference Include="Fody" Version="6.8.1" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Derlenmiş web arayüzü exe'ye gömülür: kaynak adı = "web/" + göreli yol. -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(WebKlasoru)dist\**\*" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <Target Name="WebArayuzuDerle" BeforeTargets="BeforeBuild" Condition="!Exists('$(WebKlasoru)dist\index.html')">
+    <Message Importance="high" Text="Web arayüzü derleniyor (notify-web)…" />
+    <Exec Command="npm install" WorkingDirectory="$(WebKlasoru)" Condition="!Exists('$(WebKlasoru)node_modules')" />
+    <Exec Command="npm run build" WorkingDirectory="$(WebKlasoru)" />
+    <ItemGroup>
+      <EmbeddedResource Include="$(WebKlasoru)dist\**\*" LogicalName="web/%(RecursiveDir)%(Filename)%(Extension)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- WebView2'nin yerel yükleyicisi exe'ye gömülür; Program açılışta çıkarır (Connect'teki düzen). -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x64\native\WebView2Loader.dll" LogicalName="webview2/x64/WebView2Loader.dll" />
+    <EmbeddedResource Include="$(PkgMicrosoft_Web_WebView2)\runtimes\win-x86\native\WebView2Loader.dll" LogicalName="webview2/x86/WebView2Loader.dll" />
+  </ItemGroup>
+</Project>
