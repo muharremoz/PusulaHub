@@ -248,42 +248,9 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     if (!vtListe) void listeyiGetir();
   };
 
-  const acik = !!s && (s.kurulu || s.kuruluyor);
-  const il = s?.ilerleme;
-  const sonHata = il?.bitti && il.hata ? il.hata : null;
   const secimTam = !!vt && !!form;
-
-  return (
-    <>
-      <Bolum baslik="Sayım" aciklama="Bu bilgisayarda, terminale bağlanmadan">
-        {secici}
-        <div className="flex items-center gap-3 px-4 py-3">
-          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4"><ScanBarcode /></span>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">{acik ? `${t.baslik} kurulu` : "Sayım kullanılacak"}</div>
-            <div className="text-xs text-muted-foreground">
-              {t.aciklama} Sayım buradan ve ana ekranın sol panelinden başlatılır.
-            </div>
-          </div>
-          <Switch
-            checked={acik || (secimAcik && !s?.kurulu)}
-            disabled={!s || bekle !== null || s.kuruluyor}
-            onCheckedChange={anahtar}
-          />
-        </div>
-
-        {(hata || sonHata) && (
-          <div className="px-4 py-3">
-            <Alert variant="destructive">
-              <CircleAlert />
-              <AlertDescription>{hata ?? sonHata}</AlertDescription>
-            </Alert>
-          </div>
-        )}
-
-        {/* Eski program: veritabanı + program seçimi (kurulum öncesi ya da Değiştir) */}
-        {eski && secimAcik && !s?.kuruluyor && (
-          <div className="flex flex-col gap-3 px-4 py-3">
+  const secimAlani = (
+          <div className="flex flex-col gap-3">
             <div className="grid grid-cols-[1fr_160px] gap-3">
               <div className="flex flex-col gap-1">
                 <Label className="text-xs">Veritabanı</Label>
@@ -329,7 +296,42 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
               <Button size="sm" variant="ghost" onClick={() => { setSecimAcik(false); setVt(s?.secim?.veritabani ?? ""); setForm(s?.secim?.formId ?? ""); }}>Vazgeç</Button>
             </div>
           </div>
+  );
+
+  const acik = !!s && (s.kurulu || s.kuruluyor);
+  const il = s?.ilerleme;
+  const sonHata = il?.bitti && il.hata ? il.hata : null;
+
+  return (
+    <>
+      <Bolum baslik="Sayım" aciklama="Bu bilgisayarda, terminale bağlanmadan">
+        {secici}
+        <div className="flex items-center gap-3 px-4 py-3">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4"><ScanBarcode /></span>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-medium">{acik ? `${t.baslik} kurulu` : "Sayım kullanılacak"}</div>
+            <div className="text-xs text-muted-foreground">
+              {t.aciklama} Sayım buradan ve ana ekranın sol panelinden başlatılır.
+            </div>
+          </div>
+          <Switch
+            checked={acik || (secimAcik && !s?.kurulu)}
+            disabled={!s || bekle !== null || s.kuruluyor}
+            onCheckedChange={anahtar}
+          />
+        </div>
+
+        {(hata || sonHata) && (
+          <div className="px-4 py-3">
+            <Alert variant="destructive">
+              <CircleAlert />
+              <AlertDescription>{hata ?? sonHata}</AlertDescription>
+            </Alert>
+          </div>
         )}
+
+        {/* Pusula: veritabanı + program seçimi — kurulum öncesi burada; kuruluyken tablo içinde (Değiştir) */}
+        {eski && secimAcik && !s?.kurulu && !s?.kuruluyor && <div className="px-4 py-3">{secimAlani}</div>}
 
         {s?.guncellemeBekliyor && !kodIcin && (
           <div className="px-4 py-3">
@@ -396,6 +398,16 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                   </span>
                   <span className="text-muted-foreground">Program</span>
                   <span>{formAd(s.secim?.formId)}</span>
+                  {/* Değiştir: satırın altında açılır (yükseklik + saydamlık geçişi) */}
+                  <div
+                    className="col-span-2 grid transition-[grid-template-rows,opacity] duration-300 ease-out"
+                    style={{ gridTemplateRows: secimAcik ? "1fr" : "0fr", opacity: secimAcik ? 1 : 0 }}
+                    aria-hidden={!secimAcik}
+                  >
+                    <div className="overflow-hidden">
+                      <div className="my-1.5 rounded-lg border bg-muted/40 p-3">{secimAlani}</div>
+                    </div>
+                  </div>
                 </>
               )}
               {/* SQL adresi ve kullanıcı adı ekranda gösterilmez */}
