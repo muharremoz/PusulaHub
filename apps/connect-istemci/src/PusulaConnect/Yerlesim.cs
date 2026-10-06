@@ -73,10 +73,26 @@ namespace PusulaConnect
             catch (Exception e) { Gunluk.Yaz("Kısayol oluşturulamadı (" + yol + "): " + e.Message); }
         }
 
-        private static void EskiyiKenaraAl(string exe)
+        private static string EskiyiKenaraAl(string exe)
         {
             var eski = exe + ".eski" + DateTime.Now.Ticks;
             File.Move(exe, eski);   // çalışıyor olsa da yeniden adlandırılabilir
+            return eski;
+        }
+
+        /// <summary>Başlatılamayan yeni exe kenara (.engellendi), eski exe yerine.</summary>
+        private static void GeriAl(string kenardaki)
+        {
+            try
+            {
+                var engelli = KuruluExe + ".engellendi";
+                if (File.Exists(engelli)) File.Delete(engelli);
+                if (File.Exists(KuruluExe)) File.Move(KuruluExe, engelli);
+                if (kenardaki != null && File.Exists(kenardaki)) File.Move(kenardaki, KuruluExe);
+                try { File.Delete(OncekiSurumDosyasi); } catch { }
+                Gunluk.Yaz("Güncelleme geri alındı: yeni sürüm başlatılamadı, eski sürüm yerinde");
+            }
+            catch (Exception e) { Gunluk.Yaz("Güncelleme geri alınamadı: " + e.Message); }
         }
 
         public static string SurumOku(string exe)
@@ -165,18 +181,35 @@ namespace PusulaConnect
                 throw new Exception("İndirilen güncelleme Pusula imzası taşımıyor; kurulmadı. Pusula'ya haber verin.");
             }
             var onceki = KuruluExe + ".onceki";
+            string kenardaki = null;   // eski exe'nin şimdiki yeri — yeni sürüm açılamazsa geri konur
             if (File.Exists(KuruluExe))
             {
-                try { if (File.Exists(onceki)) File.Delete(onceki); File.Move(KuruluExe, onceki); }
-                catch { EskiyiKenaraAl(KuruluExe); }   // çalışan exe yeniden adlandırılabilir
+                try { if (File.Exists(onceki)) File.Delete(onceki); File.Move(KuruluExe, onceki); kenardaki = onceki; }
+                catch { kenardaki = EskiyiKenaraAl(KuruluExe); }   // çalışan exe yeniden adlandırılabilir
             }
             var yeniSurum = SurumOku(yeni);
             // Yeni sürüm açılınca "x → y güncellendi" olayını bildirebilsin
             try { File.WriteAllText(OncekiSurumDosyasi, ServisIstemci.Surum); } catch { }
             File.Move(yeni, KuruluExe);
             Gunluk.Yaz("Güncellendi → " + yeniSurum + ", yeniden başlatılıyor");
-            Process.Start(new ProcessStartInfo(KuruluExe, "--guncellendi") { UseShellExecute = true, WorkingDirectory = KuruluKlasor });
+            try
+            {
+                Process.Start(new ProcessStartInfo(KuruluExe, "--guncellendi") { UseShellExecute = true, WorkingDirectory = KuruluKlasor });
+            }
+            catch (Exception e)
+            {
+                // Windows yeni exe'yi çalıştırmadı (ör. Akıllı Uygulama Denetimi / AppLocker "Anwendungssteuerungsrichtlinie"):
+                // eski sürüm yerine geri konur — yoksa uygulama kapanınca kısayol engelli exe'yi açar, Connect hiç açılmaz.
+                GeriAl(kenardaki);
+                throw new GuncellemeEngellendi("Windows yeni sürümün çalışmasını engelledi; mevcut sürümle devam ediliyor. (" + e.Message + ")");
+            }
             kapat();
         }
+    }
+
+    /// <summary>Yeni sürüm indirildi/doğrulandı ama Windows çalıştırmadı (uygulama denetimi ilkesi).</summary>
+    internal sealed class GuncellemeEngellendi : Exception
+    {
+        public GuncellemeEngellendi(string mesaj) : base(mesaj) { }
     }
 }

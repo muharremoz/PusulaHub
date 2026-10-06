@@ -1074,6 +1074,7 @@ namespace PusulaConnect
                 catch (Exception e)
                 {
                     Gunluk.Yaz("Güncelleme hatası: " + e.Message);
+                    _ = _servis.Olay("guncelleme_hatasi", new { surum = _sonSurum, engellendi = e is GuncellemeEngellendi, mesaj = e.Message });
                     lock (_kilit) { _guncelleniyor = false; _guncellemeHatasi = "Güncelleme yapılamadı: " + e.Message; }
                 }
             });
