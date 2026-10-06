@@ -272,30 +272,17 @@ export function AnaEkran({ durum, setDurum }: P) {
       <div className="my-auto flex w-full max-w-2xl flex-col gap-4 p-6">
         <DuyuruSeritleri durum={durum} setDurum={setDurum} onTumu={() => setOrta("duyurular")} />
 
-        {sg?.mesaj && (
-          // Şifre değişti: dikkat çekmeli (amber). İlk kurulumda şifre değişmedi, yalnız alındı → sakin kart (yeşil)
-          <section
-            className={
-              sg.ilk
-                ? "flex items-start gap-3 rounded-xl border border-emerald-500/40 bg-card p-4 shadow-xs"
-                : "flex items-start gap-3 rounded-xl border-2 border-amber-500/60 bg-card p-4 shadow-md ring-4 ring-amber-500/10"
-            }
-          >
-            <span
-              className={
-                sg.ilk
-                  ? "flex size-10 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 ring-1 ring-emerald-500/20 dark:text-emerald-400"
-                  : "flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400"
-              }
-            >
+        {sg?.mesaj && !sg.ilk && (
+          // Yalnız şifre DEĞİŞTİĞİNDE (dikkat çekmeli, amber). İlk kurulumda kart yok: şifre zaten Oturum şifresi kartında.
+          <section className="flex items-start gap-3 rounded-xl border-2 border-amber-500/60 bg-card p-4 shadow-md ring-4 ring-amber-500/10">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 ring-1 ring-amber-500/30 dark:text-amber-400">
               <KeyRound className="size-5" />
             </span>
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <div>
-                <div className="text-[15px] font-semibold">{sg.ilk ? "Oturum şifreniz hazır" : "Şifreniz değişti"}</div>
+                <div className="text-[15px] font-semibold">Şifreniz değişti</div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  {sg.mesaj} <b className="text-foreground">VPN (FortiClient) şifreniz de aynıdır</b>;{" "}
-                  {sg.ilk ? "FortiClient ilk bağlanmada şifre sorduğunda bu şifreyi girin." : "FortiClient şifre sorarsa yeni şifreyi oraya girin."}
+                  {sg.mesaj} <b className="text-foreground">VPN (FortiClient) şifreniz de aynıdır</b>; FortiClient şifre sorarsa yeni şifreyi oraya girin.
                 </p>
               </div>
               <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
