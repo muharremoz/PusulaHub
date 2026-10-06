@@ -193,6 +193,13 @@ export function ServerSheet({ open, onOpenChange, onSaved, editServerId }: Serve
         return
       }
       toast.success(isEdit ? "Sunucu güncellendi" : "Sunucu eklendi", { description: name.trim() })
+      // Cloudflare DNS eşitlemesi (lib/cloudflare-dns) — yalnız bir şey olduysa bildirilir.
+      const j = await res.json().catch(() => ({}))
+      const d = j?.dns as { durum: string; ad?: string; ip?: string; eskiIp?: string; neden?: string; hata?: string } | null
+      if (d?.durum === "guncellendi") toast.success("DNS kaydı güncellendi", { description: `${d.ad}: ${d.eskiIp} → ${d.ip}` })
+      else if (d?.durum === "olusturuldu") toast.success("DNS kaydı oluşturuldu", { description: `${d.ad} → ${d.ip}` })
+      else if (d?.durum === "hata") toast.error("DNS kaydı güncellenemedi", { description: `${d.ad}: ${d.hata}` })
+      else if (d?.durum === "atlandi") toast.warning("DNS kaydına dokunulmadı", { description: d.neden })
       handleClose()
       onSaved?.()
     } catch {

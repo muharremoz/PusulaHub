@@ -137,7 +137,12 @@ export async function POST(req: Request) {
       void kumaSafeCall(`createMonitor(${name})`, () => createKumaMonitor({ name, hostname: ip, type: "ping" }))
     }
 
-    return NextResponse.json({ id }, { status: 201 })
+    // DNS adı verildiyse Cloudflare'de A kaydı açılır/eşitlenir (lib/cloudflare-dns).
+    const { cloudflareDnsEsitle } = await import("@/lib/cloudflare-dns")
+    const dnsSonuc = dns && ip ? await cloudflareDnsEsitle(dns, ip) : null
+    if (dnsSonuc && dnsSonuc.durum !== "kapali") console.log("[POST /api/servers] cloudflare", JSON.stringify(dnsSonuc))
+
+    return NextResponse.json({ id, dns: dnsSonuc }, { status: 201 })
   } catch (err) {
     console.error("[POST /api/servers]", err)
     return NextResponse.json({ error: "Sunucu eklenemedi" }, { status: 500 })

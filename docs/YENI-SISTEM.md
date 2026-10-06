@@ -43,6 +43,10 @@ Gizli (Coolify'da): **`SUPABASE_SERVICE_ROLE_KEY`** (poller/messages şart), `EN
 eski prod'daki DEĞERLE aynı olmalı), `AGENT_SECRET`, `INTERNAL_APP_KEY`, `FIRMA_API_*`, `KUMA_*`, `UPTIME_KUMA_*` vb.
 `DB_*` (eski mssql) GEREKMEZ.
 
+`CLOUDFLARE_API_TOKEN` (isteğe bağlı): sunucu kaydedilince/IP değişince DNS adının Cloudflare A kaydını
+eşitler (`lib/cloudflare-dns.ts`). İzinler: Zone Read + DNS Edit. Token'da IP kısıtı varsa Hub konteynerinin
+çıkış IP'si **`185.130.59.99`** (06.10.2026 ölçüldü) listede olmalı, yoksa her çağrı reddedilir. Yoksa özellik kapalı.
+
 ## Kullanıcı & yetki
 
 - **Kullanıcı oluşturma CRM'de.** Hub `/users` yalnız **modül/sayfa izinlerini** düzenler (`user_permissions`);

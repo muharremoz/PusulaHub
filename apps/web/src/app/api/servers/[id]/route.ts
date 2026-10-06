@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { encrypt, decrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
+import { cloudflareDnsEsitle, type DnsEsitlemeSonucu } from "@/lib/cloudflare-dns"
 
 interface SrvRow {
   id: string; name: string; ip: string; dns: string | null; domain: string | null; os: string
@@ -48,9 +49,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { name, ip, dns, domain, os, roles, apiKey, agentPort, rdpPort, username, password, sqlUsername, sqlPassword } = await req.json()
     const sb = await getSupabaseServer()
 
-    const { data: prev } = await sb.schema("hub").from("servers").select("name, ip").eq("id", id).maybeSingle()
+    const { data: prev } = await sb.schema("hub").from("servers").select("name, ip, dns").eq("id", id).maybeSingle()
     const prevName = (prev as { name: string } | null)?.name ?? null
     const prevIp   = (prev as { ip: string } | null)?.ip ?? null
+    const prevDns  = (prev as { dns: string | null } | null)?.dns ?? null
 
     const { error } = await sb.schema("hub").from("servers").update({
       name, ip, dns: dns ?? null, domain: domain ?? null, os,
@@ -69,7 +71,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const { updateKumaMonitorByName, kumaSafeCall } = await import("@/lib/kuma-client")
       void kumaSafeCall(`updateMonitor(${prevName} → ${name})`, () => updateKumaMonitorByName(prevName, { name, hostname: ip, type: "ping" }))
     }
-    return NextResponse.json({ success: true })
+
+    // IP ya da DNS adı değiştiyse Cloudflare'deki A kaydı da eşitlenir (lib/cloudflare-dns).
+    // Beklenir: sonuç ekrana bildirim olarak döner, sessiz kalmasın.
+    let dnsSonuc: DnsEsitlemeSonucu | null = null
+    if (dns && ip && (prevIp !== ip || (prevDns ?? "") !== dns)) {
+      dnsSonuc = await cloudflareDnsEsitle(dns, ip)
+      if (dnsSonuc.durum !== "kapali") console.log("[PATCH /api/servers/[id]] cloudflare", JSON.stringify(dnsSonuc))
+    }
+    return NextResponse.json({ success: true, dns: dnsSonuc })
   } catch (err) {
     console.error("[PATCH /api/servers/[id]]", err)
     return NextResponse.json({ error: "Sunucu güncellenemedi" }, { status: 500 })
