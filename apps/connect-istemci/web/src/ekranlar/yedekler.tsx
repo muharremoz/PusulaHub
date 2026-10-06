@@ -4,13 +4,23 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Veritabanı yedekleri — ana ekranda kart. Salt gösterim: müşteri yedeğinin alındığını görsün.
- * Eşikler Hub'daki yedek testiyle (lib/yedek-testi.ts) aynı: günlük tam yedek 26 saati aşınca sorun;
- * fark yedeği 15 dk'da bir alınır, 45 dk gelmediyse durmuş sayılır.
+ * Gerçek düzen (msdb, 06.10.2026): günlük tam yedek sabah (~09:45), fark yedeği gündüz ~30 dk'da bir
+ * (≈10:15–23:05), gece fark yedeği ALINMAZ. Buna göre:
+ *   - tam yedek 26 saate kadar iyi, 48'e kadar uyarı (Hub yedek testiyle aynı eşik)
+ *   - fark: son fark ile son tam yedekten YENİ olanı esas alınır (tam yedek alınınca fark zinciri yeniden başlar);
+ *     gündüz 1 saate kadar iyi, 3 saate kadar uyarı; gece (Türkiye saatiyle 23:30–10:30) beklenmez → gri.
+ * Saat Türkiye saatine göre: yedek takvimi sunucuda, müşteri başka saat diliminde olabilir (Almanya).
  */
 const TAM_IYI_SAAT = 26;
 const TAM_UYARI_SAAT = 48;
-const FARK_IYI_DK = 45;
+const FARK_IYI_DK = 60;
 const FARK_UYARI_DK = 180;
+/** Gece fark yedeği alınmayan aralık dışında mıyız (Türkiye saati)? */
+function farkAraligiMi(simdi: number): boolean {
+  const p = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit", hour12: false }).formatToParts(new Date(simdi));
+  const sa = Number(p.find((x) => x.type === "hour")?.value ?? 0) + Number(p.find((x) => x.type === "minute")?.value ?? 0) / 60;
+  return sa >= 10.5 && sa < 23.5;
+}
 
 type Renk = "iyi" | "uyari" | "hata" | "bekliyor";
 
@@ -43,7 +53,12 @@ function gecen(dk: number | null): string {
 }
 
 const tamRenk = (dk: number | null): Renk => (dk == null ? "hata" : dk <= TAM_IYI_SAAT * 60 ? "iyi" : dk <= TAM_UYARI_SAAT * 60 ? "uyari" : "hata");
-const farkRenk = (dk: number | null): Renk => (dk == null ? "uyari" : dk <= FARK_IYI_DK ? "iyi" : dk <= FARK_UYARI_DK ? "uyari" : "hata");
+/** fDk: son fark, tDk: son tam yedek (dk önce). Esas: ikisinden yeni olanı. Gece: bekleniyor (gri). */
+function farkRenk(fDk: number | null, tDk: number | null, simdi: number): Renk {
+  const esas = Math.min(fDk ?? Infinity, tDk ?? Infinity);
+  if (!farkAraligiMi(simdi)) return esas <= 14 * 60 ? "bekliyor" : "uyari";
+  return esas <= FARK_IYI_DK ? "iyi" : esas <= FARK_UYARI_DK ? "uyari" : "hata";
+}
 const enKotu = (a: Renk, b: Renk): Renk => (["hata", "uyari", "iyi", "bekliyor"] as Renk[]).find((r) => r === a || r === b) ?? "bekliyor";
 
 const saat = (iso: string | null) => (iso ? new Date(iso).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "—");
@@ -57,7 +72,7 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
   let genel: Renk = y ? (y.hata ? "uyari" : liste.length === 0 ? "uyari" : "iyi") : "bekliyor";
   for (const v of liste) {
     genel = enKotu(genel, tamRenk(dakika(v.sonTam, simdi)));
-    if (v.farkVar) genel = enKotu(genel, farkRenk(dakika(v.sonFark, simdi)));
+    if (v.farkVar) genel = enKotu(genel, farkRenk(dakika(v.sonFark, simdi), dakika(v.sonTam, simdi), simdi));
   }
 
   const yenile = () => api<Durum>("/yedekler/yenile", {}).then(setDurum).catch(() => {});
@@ -104,8 +119,11 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
                     Tam yedek {gecen(tDk)}
                   </span>
                   {v.farkVar && (
-                    <span className={RENK[farkRenk(fDk)]} title={`Son fark yedeği: ${saat(v.sonFark)}`}>
-                      Fark {gecen(fDk)}
+                    <span
+                      className={RENK[farkRenk(fDk, tDk, simdi)]}
+                      title={`Son fark yedeği: ${saat(v.sonFark)}. Fark yedekleri gündüz yaklaşık yarım saatte bir alınır, gece alınmaz.`}
+                    >
+                      {!farkAraligiMi(simdi) && tDk != null && (fDk == null || tDk < fDk) ? "Fark yedekleri gündüz başlar" : `Fark ${gecen(fDk)}`}
                     </span>
                   )}
                 </li>
