@@ -459,7 +459,7 @@ function tekSayimDurumu(s: ConnectSayimDurum | null | undefined): SayimDurumu {
   if (!s) return "yok"
   if (s.kuruluyor) return "kuruluyor"
   if (!s.kurulu) return s.hata ? "sorunlu" : "yok"
-  if (s.guncellemeBekliyor || (s.test && !s.test.ok) || !s.kisayol) return "sorunlu"
+  if (s.guncellemeBekliyor || (s.test && !s.test.ok)) return "sorunlu"
   return "kurulu"
 }
 /** Cihazın genel sayım durumu: Pusula X ve eski programdan en dikkat isteyeni */
@@ -475,11 +475,11 @@ function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const ton = d === "kurulu" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
     : d === "kuruluyor" ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
     : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-  const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Eski" : null].filter(Boolean)
+  const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Pusula" : null].filter(Boolean)
   return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{SAYIM_ETIKET[d]}{turler.length ? ` · ${turler.join(" + ")}` : ""}</span>
 }
 function sayimAciklama(c: ConnectCihazSatir): string {
-  const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Eski program", c.durum?.sayimEski)].filter((x): x is string => !!x)
+  const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Pusula", c.durum?.sayimEski)].filter((x): x is string => !!x)
   return parca.length ? parca.join("\n") : "Sayım kurulu değil"
 }
 function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): string | null {
@@ -488,7 +488,6 @@ function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): 
   if (!s.kurulu) return s.hata ? `${ad}: kurulum başarısız — ${s.hata}` : null
   const p: string[] = [`${ad} ${s.surum ?? "?"}`]
   if (s.veritabani) p.push(`${s.veritabani}${s.formId ? ` (${FORM_AD[s.formId] ?? s.formId})` : ""}`)
-  if (!s.kisayol) p.push("masaüstü kısayolu yok")
   if (s.guncellemeBekliyor) p.push("SQL bilgisi değişti, kodla yenilenmeyi bekliyor")
   if (s.test) p.push(s.test.ok ? `test başarılı (${s.test.veritabani ?? 0} veritabanı)` : `test başarısız: ${s.test.hata ?? "?"}`)
   else p.push("henüz test edilmedi")

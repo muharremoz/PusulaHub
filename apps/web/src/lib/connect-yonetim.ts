@@ -36,7 +36,8 @@ export interface ConnectSayimDurum {
   /** Kurulu PusulaX.exe sürümü */
   surum: string | null
   kurulum: string | null
-  kisayol: boolean
+  /** Eski (0.6.0) masaüstü kısayolu duruyor mu — artık oluşturulmuyor, yalnız bilgi */
+  kisayol?: boolean
   /** SQL bilgisi Pusula'da değişti, 2FA nedeniyle kullanıcının kodla yenilemesi bekleniyor */
   guncellemeBekliyor: boolean
   test: { zaman: string | null; ok: boolean; veritabani: number | null; hata: string | null } | null

@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
   Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle, ScanBarcode, Play,
 } from "lucide-react";
-import { api, type Durum } from "@/api";
+import { api, type Durum, type SayimDurum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,9 +25,26 @@ type P = { durum: Durum; setDurum: (d: Durum) => void };
 
 /** Ana ekran: bağlantının dört parçası (FortiClient, profil, sunucuya erişim, RDP şifresi) + Bağlan. */
 export function AnaEkran({ durum, setDurum }: P) {
-  // Sayım kuruluysa (Pusula X ya da eski program — aynı anda biri) sol panelde gösterilir, oradan başlatılır
+  // Sayım kuruluysa (Pusula X ya da Pusula — aynı anda biri) sol panelde gösterilir, oradan başlatılır
   const sayim = durum.sayim?.kurulu ? { tur: "pusulax" as const, s: durum.sayim } : durum.sayimEski?.kurulu ? { tur: "eski" as const, s: durum.sayimEski } : null;
   const [sayimBasliyor, setSayimBasliyor] = useState(false);
+  // SQL bağlantısı: son ölçüm 10 dk'dan eskiyse (ya da hiç yoksa) ana ekran açılınca yeniden ölçülür
+  const [sqlOlciliyor, setSqlOlciliyor] = useState(false);
+  const sayimTur = sayim?.tur ?? null;
+  const sonTest = sayim?.s.test?.zaman ?? null;
+  useEffect(() => {
+    if (!sayimTur) return;
+    if (sonTest && Date.now() - Date.parse(sonTest) < 10 * 60_000) return;
+    let iptal = false;
+    setSqlOlciliyor(true);
+    api("/sayim/test", { tur: sayimTur })
+      .then(() => api<Durum>("/durum"))
+      .then((d) => { if (!iptal) setDurum(d); })
+      .catch(() => {})
+      .finally(() => { if (!iptal) setSqlOlciliyor(false); });
+    return () => { iptal = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sayimTur]);
   const sayimiBaslat = async () => {
     if (!sayim) return;
     setSayimBasliyor(true);
@@ -182,27 +199,26 @@ export function AnaEkran({ durum, setDurum }: P) {
               />
             )}
             {sayim && (
-              <SolSatir
-                ikon={<ScanBarcode />}
-                ad="Sayım"
-                deger={
-                  <span className="flex flex-col">
-                    <span className="font-medium">{sayim.tur === "eski" ? "Eski program" : "Pusula X"}</span>
+              <div className="flex items-start gap-2.5">
+                <ScanBarcode className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                <div className="min-w-0 flex-1">
+                  <dt className="text-xs text-muted-foreground">Sayım</dt>
+                  <dd className="flex flex-col">
+                    <span className="font-medium">{sayim.tur === "eski" ? "Pusula" : "Pusula X"}</span>
                     {sayim.tur === "eski" && sayim.s.secim && (
-                      <span className="truncate text-xs font-normal text-muted-foreground" title={sayim.s.secim.veritabani}>
+                      <span className="truncate text-xs text-muted-foreground" title={sayim.s.secim.veritabani}>
                         {sayim.s.secim.ad} · {sayim.s.secim.formId === "146" ? "Toptan" : "Perakende"}
                       </span>
                     )}
-                  </span>
-                }
-              />
+                    <SqlDurumu test={sayim.s.test} olciliyor={sqlOlciliyor} />
+                  </dd>
+                  <Button variant="outline" size="sm" className="mt-2 h-7 w-full" disabled={sayimBasliyor} onClick={() => void sayimiBaslat()}>
+                    {sayimBasliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
+                  </Button>
+                </div>
+              </div>
             )}
           </dl>
-          {sayim && (
-            <Button variant="outline" size="sm" className="mt-3 w-full" disabled={sayimBasliyor} onClick={() => void sayimiBaslat()}>
-              {sayimBasliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
-            </Button>
-          )}
 
         </div>
 
@@ -721,6 +737,19 @@ function KopyalaIkon({ metin, etiket }: { metin: string; etiket: string }) {
     >
       {tamam ? <Check className="text-emerald-600 dark:text-emerald-400" /> : <Copy />}
     </button>
+  );
+}
+
+/** Sayımın SQL bağlantısı (son test): yeşil bağlı · ms / kırmızı bağlanamadı. */
+function SqlDurumu({ test, olciliyor }: { test: SayimDurum["test"]; olciliyor: boolean }) {
+  if (olciliyor && !test)
+    return <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" /> SQL kontrol ediliyor…</span>;
+  if (!test) return null;
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground" title={test.ok ? `${test.kullanici} @ ${test.sunucu}` : test.hata ?? ""}>
+      {olciliyor ? <Loader2 className="size-3 animate-spin" /> : <span className={"size-2 rounded-full " + (test.ok ? "bg-emerald-500" : "bg-red-500")} />}
+      {test.ok ? `SQL bağlı · ${test.sureMs} ms` : <span className="text-red-600 dark:text-red-400">SQL bağlanamadı</span>}
+    </span>
   );
 }
 

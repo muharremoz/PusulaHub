@@ -64,6 +64,8 @@ namespace PusulaConnect
                 if (args.Contains("--guncellendi")) _ = Task.Run(Yerlesim.IkonlariTazele);
                 _ = Task.Run(YaziciAjani.GerekirseBaslat);
                 _ = Task.Run(RfidYardimcisi.GerekirseBaslat);
+                // Sayım Connect'ten başlatılır; 0.6.0'ın bıraktığı masaüstü kısayolları kaldırılır
+                _ = Task.Run(() => { foreach (var s in Sayim.Hepsi) s.KisayolKaldir(); });
 
                 var adres = Environment.GetEnvironmentVariable("PUSULA_CONNECT_URL");
                 _uygulama = new Uygulama(new ServisIstemci(string.IsNullOrWhiteSpace(adres) ? ServisIstemci.VarsayilanAdres : adres)) { Kapat = Kapat };

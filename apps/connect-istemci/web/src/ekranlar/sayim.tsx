@@ -16,29 +16,27 @@ import { Bolum } from "./ayarlar";
 
 /**
  * Sayım — Ayarlar > Sayım. Tek kart, en başta program seçimi; aynı anda yalnız biri kurulu olur
- * (istemci de zorlar: birini kurmak diğerinin kısayolunu ve bağlantı dosyasını kaldırır, dosyalar kalır):
+ * (istemci de zorlar: birini kurmak diğerinin bağlantı dosyasını kaldırır, dosyalar kalır):
  *   Pusula X: C:\Pusula\PusulaXSayım (RFID.xml'li kopya); veritabanını kullanıcı Pusula X giriş ekranında seçer.
  *   Eski program: C:\Pusula\PusulaSayimEski (Pusula.exe); TEK veritabanıyla açılır — veritabanı ve program
  *     (FORMID: 612 Perakende / 146 Toptan) burada seçilir, Server.xml'e yazılır; sonradan değiştirilebilir.
  * Anahtar açılınca paket indirilip kurulur, bağlantı dosyası firmanın SQL bilgisiyle (Hub) yazılır, masaüstüne
- * kısayol konur. Kurulum arka planda sürer; ilerleme durum nabzından (Durum.sayim / sayimEski) gelir.
+ * masaüstü kısayolu yok — sayım Connect'ten (bu kart ve sol panel) başlatılır. Kurulum arka planda sürer; ilerleme durum nabzından (Durum.sayim / sayimEski) gelir.
  */
 type Tur = "pusulax" | "eski";
 
-const TUR: Record<Tur, { baslik: string; program: string; kisayol: string; dosya: string; aciklama: string }> = {
+const TUR: Record<Tur, { baslik: string; program: string; dosya: string; aciklama: string }> = {
   pusulax: {
     baslik: "Pusula X sayımı",
     program: "Pusula X",
-    kisayol: "Pusula Sayım",
     dosya: "server.xml",
     aciklama: "Pusula X'in sayım kopyası bu bilgisayara kurulur; veritabanı giriş ekranında seçilir.",
   },
   eski: {
-    baslik: "Eski program sayımı",
+    baslik: "Pusula sayımı",
     program: "Pusula",
-    kisayol: "Pusula Sayım (Eski)",
     dosya: "Server.xml",
-    aciklama: "Eski Pusula programının sayım kopyası; seçtiğiniz veritabanı ve programla açılır.",
+    aciklama: "Pusula programının sayım kopyası; seçtiğiniz veritabanı ve programla açılır.",
   },
 };
 
@@ -64,7 +62,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
       <Label className="text-xs">Sayım hangi programla yapılacak?</Label>
       <ToggleGroup type="single" variant="outline" value={secilen} onValueChange={(v) => v && setSecilen(v as Tur)} className="w-full">
         <ToggleGroupItem value="pusulax" className="flex-1">Pusula X</ToggleGroupItem>
-        <ToggleGroupItem value="eski" className="flex-1">Eski program</ToggleGroupItem>
+        <ToggleGroupItem value="eski" className="flex-1">Pusula</ToggleGroupItem>
       </ToggleGroup>
     </div>
   );
@@ -247,7 +245,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">{acik ? `${t.baslik} kurulu` : "Sayım kullanılacak"}</div>
             <div className="text-xs text-muted-foreground">
-              {t.aciklama} Masaüstüne <span className="font-medium">{t.kisayol}</span> kısayolu konur.
+              {t.aciklama} Sayım buradan ve ana ekranın sol panelinden başlatılır.
             </div>
           </div>
           <Switch
@@ -384,8 +382,6 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
               <span className="truncate" title={s.resimYolu ?? ""}>{s.resimYolu ?? "— (veritabanındaki yol)"}</span>
               <span className="text-muted-foreground">Son bilgi güncellemesi</span>
               <span>{s.sonGuncelleme ? new Date(s.sonGuncelleme).toLocaleString("tr-TR") : s.kurulum ? new Date(s.kurulum).toLocaleString("tr-TR") : "—"}</span>
-              <span className="text-muted-foreground">Kısayol</span>
-              <span>{s.kisayol ? "Masaüstünde" : <span className="text-amber-600 dark:text-amber-400">Yok</span>}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 px-4 py-3">
               <Button size="sm" onClick={() => void baslat()} disabled={bekle !== null}>
@@ -460,8 +456,8 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
           <AlertDialogHeader>
             <AlertDialogTitle>Sayım programı değiştirilsin mi?</AlertDialogTitle>
             <AlertDialogDescription>
-              Aynı anda tek sayım programı kullanılır. {t.baslik} kapatılır: <span className="font-medium">{t.kisayol}</span> kısayolu ve bağlantı
-              bilgisi silinir, dosyaları diskte kalır. Ardından {tur === "eski" ? "Pusula X" : "eski program"} sayımını kurabilirsiniz.
+              Aynı anda tek sayım programı kullanılır. {t.baslik} kapatılır: bağlantı bilgisi ({t.dosya}) silinir,
+              dosyaları diskte kalır. Ardından {tur === "eski" ? "Pusula X" : "Pusula"} sayımını kurabilirsiniz.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -478,7 +474,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
           <AlertDialogHeader>
             <AlertDialogTitle>{t.baslik} kapatılsın mı?</AlertDialogTitle>
             <AlertDialogDescription>
-              Masaüstündeki <span className="font-medium">{t.kisayol}</span> kısayolu kaldırılır ve bağlantı bilgisi ({t.dosya}) silinir.
+              Bağlantı bilgisi ({t.dosya}) silinir.
               Program kopyası ({s?.klasor}) diskte kalabilir — yeniden açınca indirme gerekmez — ya da tamamen silinebilir.
             </AlertDialogDescription>
           </AlertDialogHeader>

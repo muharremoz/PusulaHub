@@ -258,9 +258,8 @@ namespace PusulaConnect
             if (!EskiMi) File.WriteAllText(Path.Combine(Klasor, "RFID.xml"), "");   // boş: Pusula X yalnız varlığına bakar
             DosyalariYaz(bilgi, secim);
 
-            // 4) Kısayol
-            Ilerle("kisayol", 98, "Masaüstü kısayolu…");
-            Kisayol();
+            // 4) Kısayol yok — sayım Connect'ten başlatılır; eski sürümün bıraktığı kısayol silinir
+            KisayolKaldir();
 
             DurumYaz(d =>
             {
@@ -480,23 +479,21 @@ namespace PusulaConnect
             }
         }
 
-        // ------------------------------------------------------------ kısayol
+        // ------------------------------------------------------------ kısayol (kaldırıldı)
 
-        private void Kisayol()
+        /// <summary>
+        /// Sayım Connect'ten başlatılır; masaüstü kısayolu oluşturulmaz. 0.6.0 kısayol bırakmıştı — açılışta ve
+        /// kurulumda silinir (yalnız bizim adımızdaki kısayol, hedefi bizim exe'miz ise).
+        /// </summary>
+        public void KisayolKaldir()
         {
             try
             {
-                var tur = Type.GetTypeFromProgID("WScript.Shell");
-                var kabuk = Activator.CreateInstance(tur);
-                var k = tur.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, kabuk, new object[] { _kisayolYolu });
-                var kt = k.GetType();
-                kt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, k, new object[] { Exe });
-                kt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, k, new object[] { Klasor });
-                kt.InvokeMember("Description", BindingFlags.SetProperty, null, k, new object[] { _kisayolAdi });
-                kt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, k, new object[] { Exe + ",0" });
-                kt.InvokeMember("Save", BindingFlags.InvokeMethod, null, k, null);
+                if (!File.Exists(_kisayolYolu)) return;
+                File.Delete(_kisayolYolu);
+                Gunluk.Yaz("Eski sayım kısayolu kaldırıldı (" + Tur + "): " + _kisayolYolu);
             }
-            catch (Exception e) { Gunluk.Yaz("Sayım kısayolu oluşturulamadı (" + Tur + "): " + e.Message); }
+            catch (Exception e) { Gunluk.Yaz("Sayım kısayolu kaldırılamadı (" + Tur + "): " + e.Message); }
         }
 
         // ------------------------------------------------------------ test
