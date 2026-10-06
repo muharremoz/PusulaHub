@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Diagnostics;
 using System.Threading;
@@ -263,7 +264,8 @@ namespace PusulaConnect
                                 var tunel = P("tunel"); var vpn = P("vpn");
                                 _fortiSurum = Fortinet.KuruluSurum();
                                 _profilDogru = tunel != null && vpn != null && Fortinet.ProfilDogru(tunel, vpn) && Fortinet.SertifikaUyarisiKapali();
-                                _vpnKullaniciAdi = tunel != null && Fortinet.KullaniciAdiTanimli(tunel);
+                                if (_vpnDurum.Value<bool?>("kullaniciYazildi") == true) VpnKullaniciYaz(_kayit?.Value<string>("kullanici"));
+                                _vpnKullaniciAdi = VpnKullaniciAdiDogru(tunel);
                             }
                             catch (Exception e) { Gunluk.Yaz("Kurulum sonrası ayar okunamadı: " + e.Message); }
                         }
@@ -405,11 +407,8 @@ namespace PusulaConnect
 
         public object KayitSil()
         {
-            // Kayıtla birlikte bu cihazdaki şifre de gider (yeni kodla başka kullanıcı gelebilir)
-            var rdp = P("rdp");
-            if (rdp != null) Rdp.SifreSil(rdp);
-            Rdp.YerelSil();
-            Rdp.KasaliSil();
+            // Kayıtla birlikte bu cihazdaki şifreler ve bağlantı ayarları da gider (yeni kodla başka kullanıcı gelebilir)
+            BaglantiIzleriniSil();
             Gunluk.Yaz("Cihaz kaydı kaldırıldı (kullanıcı)");
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
@@ -435,7 +434,7 @@ namespace PusulaConnect
                 var profil = P("tunel") != null && P("vpn") != null && Fortinet.ProfilDogru(P("tunel"), P("vpn")) && Fortinet.SertifikaUyarisiKapali();
                 // 2FA açıkken kasa anahtarlı dosyada, kapalıyken yerel DPAPI dosyasında
                 var rdpKullanici = (IkiAktif ? Rdp.KasaliSifreVar : Rdp.YerelSifreVar) ? _kayit?.Value<string>("kullanici") : null;
-                var vpnKullaniciAdi = P("tunel") != null && Fortinet.KullaniciAdiTanimli(P("tunel"));
+                var vpnKullaniciAdi = VpnKullaniciAdiDogru(P("tunel"));
                 var vpnSifre = P("tunel") != null ? Fortinet.SifreKayitDurumu(P("tunel")) : "yok";
                 var t = await SunucuyuYokla();
                 lock (_kilit)
@@ -774,17 +773,68 @@ namespace PusulaConnect
         /// bu bilgisayardaki şifreler silinir, kod ekranına dönülür. Eskiden yalnız açılışta bakılıyordu; açık
         /// uygulama/oturum iptalden sonra çalışmaya devam ediyordu — artık nabızda (~1 dk) da yakalanır.
         /// </summary>
+        /// <summary>
+        /// Kayıt kalkınca (kullanıcı ya da Pusula) bu cihazdaki bağlantı izleri silinir: RDP şifreleri (ad ve IP) ve .rdp
+        /// dosyaları, FortiClient'ta kayıtlı VPN şifresi; açık VPN kesilir. FortiClient'ın sunucu/kullanıcı adı ayarı (HKLM)
+        /// yönetici istediği için burada silinmez — VPN kullanıcı işareti "-" olur, yeni kodla gelen kullanıcı eşleşmez ve
+        /// "VPN ayarı" adımı sunucuyu + kullanıcı adını yeni kayda göre yeniden yazar.
+        /// </summary>
+        private void BaglantiIzleriniSil()
+        {
+            string rdp, rdpIp, tunel;
+            lock (_kilit) { rdp = P("rdp"); rdpIp = P("rdpIp"); tunel = P("tunel"); }
+            try
+            {
+                if (rdp != null) Rdp.SifreSil(rdp);
+                if (!string.IsNullOrEmpty(rdpIp)) Rdp.SifreSil(rdpIp);
+                Rdp.YerelSil();
+                Rdp.KasaliSil();
+                foreach (var f in Directory.GetFiles(Kimlik.Klasor, "*.rdp")) { try { File.Delete(f); } catch { } }
+            }
+            catch (Exception e) { Gunluk.Yaz("RDP bilgileri silinemedi: " + e.Message); }
+            VpnKullaniciYaz("-");
+            if (tunel != null)
+            {
+                Fortinet.KullaniciKopyasiniSil(tunel);
+                // Kesme birkaç saniye sürebilir (netsh) — arayüzü bekletmesin
+                _ = Task.Run(() => { try { if (Fortinet.SslVpnBagli()) Gunluk.Yaz("Kayıt kalktı, VPN " + (Fortinet.SslVpnKes() ? "kesildi" : "KESİLEMEDİ")); } catch { } });
+            }
+            Gunluk.Yaz("Kayıt kalktı: RDP ve VPN bilgileri bu bilgisayardan silindi");
+        }
+
+        // FortiClient'a hangi Pusula kullanıcısının adı yazıldı (DATA1 şifreli, okunamaz). Kayıt kalkınca "-".
+        private static string VpnKullaniciDosyasi => Path.Combine(Kimlik.Klasor, "vpn-kullanici.txt");
+
+        private static string VpnKullaniciOku()
+        {
+            try { return File.Exists(VpnKullaniciDosyasi) ? File.ReadAllText(VpnKullaniciDosyasi).Trim() : null; } catch { return null; }
+        }
+
+        private static void VpnKullaniciYaz(string kullanici)
+        {
+            try { File.WriteAllText(VpnKullaniciDosyasi, string.IsNullOrEmpty(kullanici) ? "-" : kullanici); } catch { }
+        }
+
+        /// <summary>FortiClient'ta kullanıcı adı tanımlı VE bu kaydın kullanıcısına ait mi.</summary>
+        private bool VpnKullaniciAdiDogru(string tunel)
+        {
+            if (tunel == null || !Fortinet.KullaniciAdiTanimli(tunel)) return false;
+            string simdiki; lock (_kilit) simdiki = _kayit?.Value<string>("kullanici");
+            var yazilan = VpnKullaniciOku();
+            // İşaret yok: önceki sürümden kurulu — tanımlı ad bu kullanıcınınki sayılır ve işaretlenir
+            if (yazilan == null) { VpnKullaniciYaz(simdiki); return true; }
+            return string.Equals(yazilan, simdiki, StringComparison.OrdinalIgnoreCase);
+        }
+
         private void KaydiKapat(string mesaj)
         {
-            string rdp;
             lock (_kilit)
             {
                 if (_asama == "kayit" && _kayit == null && _servis.Token == null) return;
-                rdp = P("rdp");
             }
             Gunluk.Yaz("Cihaz kaydı Pusula tarafından kapatıldı / geçersiz: " + mesaj);
             try { if (OturumAcikMi?.Invoke() == true) OturumKes?.Invoke(); } catch (Exception e) { Gunluk.Yaz("Oturum kesilemedi: " + e.Message); }
-            try { if (rdp != null) Rdp.SifreSil(rdp); Rdp.YerelSil(); Rdp.KasaliSil(); } catch (Exception e) { Gunluk.Yaz("Şifreler silinemedi: " + e.Message); }
+            BaglantiIzleriniSil();
             Kimlik.Sil();
             BilinenSurum = null;
             lock (_kilit)

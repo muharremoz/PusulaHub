@@ -203,6 +203,16 @@ namespace PusulaConnect
             catch { return "yok"; }
         }
 
+        /// <summary>
+        /// Bu Windows kullanıcısının tünel kopyası (HKCU: kayıtlı VPN şifresi DATA2/SavePass) silinir — yönetici istemez.
+        /// Sunucu ve kullanıcı adı (HKLM) kalır; onu yönetici adımı (VPN ayarı) yeniden yazar.
+        /// </summary>
+        public static void KullaniciKopyasiniSil(string tunel)
+        {
+            try { Registry.CurrentUser.DeleteSubKeyTree(@"Software\Fortinet\FortiClient\Sslvpn\Tunnels\" + tunel, false); }
+            catch (Exception e) { Gunluk.Yaz("FortiClient kayıtlı şifresi silinemedi: " + e.Message); }
+        }
+
         public static bool KullaniciAdiTanimli(string tunel)
         {
             try

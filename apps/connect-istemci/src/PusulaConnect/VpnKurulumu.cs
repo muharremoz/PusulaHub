@@ -57,9 +57,9 @@ namespace PusulaConnect
 
         // ------------------------------------------------------------ yönetici süreci
 
-        private static void DurumYaz(string adim, int yuzde, string mesaj, bool bitti = false, string hata = null, bool vpnKesildi = false)
+        private static void DurumYaz(string adim, int yuzde, string mesaj, bool bitti = false, string hata = null, bool vpnKesildi = false, bool kullaniciYazildi = false)
         {
-            var j = new JObject { ["adim"] = adim, ["yuzde"] = yuzde, ["mesaj"] = mesaj, ["bitti"] = bitti, ["hata"] = hata, ["vpnKesildi"] = vpnKesildi, ["zaman"] = DateTime.Now.ToString("s") };
+            var j = new JObject { ["adim"] = adim, ["yuzde"] = yuzde, ["mesaj"] = mesaj, ["bitti"] = bitti, ["hata"] = hata, ["vpnKesildi"] = vpnKesildi, ["kullaniciYazildi"] = kullaniciYazildi, ["zaman"] = DateTime.Now.ToString("s") };
             var gecici = DurumDosyasi + ".tmp";
             File.WriteAllText(gecici, j.ToString(Formatting.None), Encoding.UTF8);
             if (File.Exists(DurumDosyasi)) File.Replace(gecici, DurumDosyasi, null); else File.Move(gecici, DurumDosyasi);
@@ -99,10 +99,11 @@ namespace PusulaConnect
                 DurumYaz("profil", 90, "VPN profili yazılıyor…");
                 Fortinet.ProfilYaz(tunel, vpn);
                 var kullanici = p.Value<string>("kullanici");
+                var kullaniciYazildi = false;
                 if (!string.IsNullOrWhiteSpace(kullanici))
                 {
                     DurumYaz("profil", 95, "Kullanıcı adı FortiClient'a yazılıyor…");
-                    Fortinet.KullaniciAdiYaz(tunel, vpn, kullanici);   // başarısızsa elle girilir; kurulumu durdurmaz
+                    kullaniciYazildi = Fortinet.KullaniciAdiYaz(tunel, vpn, kullanici);   // başarısızsa elle girilir; kurulumu durdurmaz
                 }
                 var kesildi = false;
                 if (degisiyor && Fortinet.SslVpnBagli())
@@ -112,7 +113,7 @@ namespace PusulaConnect
                     Gunluk.Yaz("VPN ayarı değişti, açık bağlantı " + (kesildi ? "kesildi" : "KESİLEMEDİ"));
                 }
                 Gunluk.Yaz("VPN kurulumu tamam");
-                DurumYaz("tamam", 100, kesildi ? "VPN ayarı güncellendi; yeni ayarla yeniden bağlanın" : "VPN hazır", bitti: true, vpnKesildi: kesildi);
+                DurumYaz("tamam", 100, kesildi ? "VPN ayarı güncellendi; yeni ayarla yeniden bağlanın" : "VPN hazır", bitti: true, vpnKesildi: kesildi, kullaniciYazildi: kullaniciYazildi);
                 return 0;
             }
             catch (Exception e)
