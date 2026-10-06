@@ -170,9 +170,8 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         </div>
 
-        {/* Hizmetler: sayım + yedek — kaydırılan firma bilgilerinin dışında, hep görünür; düz satırlardan ayrışan kartlar */}
-        <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 px-3 py-3">
-          <div className="px-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Hizmetler</div>
+        {/* Sayım + yedek kartları — kaydırılan firma bilgilerinin dışında, hep görünür (başlıksız) */}
+        <div className="flex shrink-0 flex-col gap-2 px-3 pb-3">
           <SayimYanKarti durum={durum} setDurum={setDurum} />
           <YedekYanKarti durum={durum} />
         </div>
