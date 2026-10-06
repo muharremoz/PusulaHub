@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "./supabase/admin"
+import { cevapTemizle, type Anket, type AnketCevaplari } from "./anket"
 
 /**
  * Mesaj sistemi veri katmanı — Supabase `hub` schema (service-role).
@@ -27,6 +28,8 @@ export interface MessageRow {
   SentAt:        string
   TotalCount:    number
   ReadCount:     number
+  /** Anketse sorular (lib/anket.ts), değilse null */
+  Survey:        Anket | null
 }
 
 export interface RecipientRow {
@@ -39,14 +42,17 @@ export interface RecipientRow {
   DeliveredAt:  string | null
   ReadAt:       string | null
   ErrorMessage: string | null
+  Answers:      AnketCevaplari | null
 }
 
 interface MsgDbRow {
   id: string; subject: string; body: string; type: MessageType; priority: MessagePriority
   recipient_type: RecipientKind; company_id: string | null; company_name: string | null
   sender_user_id: string | null; sender_name: string; sent_at: string
-  total_count: number; read_count: number
+  total_count: number; read_count: number; survey: Anket | null
 }
+
+const MSG_COLS = "id, subject, body, type, priority, recipient_type, company_id, company_name, sender_user_id, sender_name, sent_at, total_count, read_count, survey"
 
 const sb = () => getSupabaseAdmin().schema("hub")
 const toZ = (ts: string | null): string => (ts ? new Date(ts).toISOString() : "")
@@ -56,7 +62,7 @@ function toMessageRow(r: MsgDbRow): MessageRow {
     Id: r.id, Subject: r.subject, Body: r.body, Type: r.type, Priority: r.priority,
     RecipientType: r.recipient_type, CompanyId: r.company_id, CompanyName: r.company_name,
     SenderUserId: r.sender_user_id, SenderName: r.sender_name, SentAt: toZ(r.sent_at),
-    TotalCount: r.total_count, ReadCount: r.read_count,
+    TotalCount: r.total_count, ReadCount: r.read_count, Survey: r.survey ?? null,
   }
 }
 
@@ -77,6 +83,7 @@ export interface CreateMessageInput {
   senderUserId?: string | null
   senderName:    string
   totalCount:    number
+  survey?:       Anket | null
 }
 
 export async function createMessage(m: CreateMessageInput): Promise<void> {
@@ -84,7 +91,7 @@ export async function createMessage(m: CreateMessageInput): Promise<void> {
     id: m.id, subject: m.subject, body: m.body, type: m.type, priority: m.priority,
     recipient_type: m.recipientType, company_id: m.companyId ?? null, company_name: m.companyName ?? null,
     sender_user_id: m.senderUserId ?? null, sender_name: m.senderName,
-    total_count: m.totalCount, read_count: 0,
+    total_count: m.totalCount, read_count: 0, survey: m.survey ?? null,
   })
   if (error) throw error
 }
@@ -132,6 +139,7 @@ export interface PendingForServerRow {
   priority:   MessagePriority
   senderName: string
   sentAt:     string
+  survey:     Anket | null
 }
 
 /** Sunucudaki pending alıcılar + mesaj içeriği (7 gün TTL). */
@@ -145,10 +153,10 @@ export async function getPendingForServer(serverId: string): Promise<PendingForS
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()
   const msgIds = [...new Set(rlist.map(r => r.message_id))]
   const { data: msgs } = await sb().from("messages")
-    .select("id, subject, body, type, priority, sender_name, sent_at")
+    .select("id, subject, body, type, priority, sender_name, sent_at, survey")
     .in("id", msgIds).gte("sent_at", sevenDaysAgo)
   const mmap = new Map(((msgs ?? []) as {
-    id: string; subject: string; body: string; type: MessageType; priority: MessagePriority; sender_name: string; sent_at: string
+    id: string; subject: string; body: string; type: MessageType; priority: MessagePriority; sender_name: string; sent_at: string; survey: Anket | null
   }[]).map(m => [m.id, m]))
 
   return rlist
@@ -156,7 +164,7 @@ export async function getPendingForServer(serverId: string): Promise<PendingForS
     .map(r => {
       const m = mmap.get(r.message_id)!
       return { messageId: r.message_id, username: r.username, subject: m.subject, body: m.body,
-               type: m.type, priority: m.priority, senderName: m.sender_name, sentAt: toZ(m.sent_at) }
+               type: m.type, priority: m.priority, senderName: m.sender_name, sentAt: toZ(m.sent_at), survey: m.survey ?? null }
     })
     .sort((a, b) => a.sentAt.localeCompare(b.sentAt))
 }
@@ -179,8 +187,11 @@ export async function markRead(messageId: string, serverId: string, username: st
   }
 }
 
-/** ACK ama server/username bilinmiyorsa msgId üzerinden. */
-export async function markReadByMsgId(msgId: string, username: string): Promise<void> {
+/**
+ * ACK ama server/username bilinmiyorsa msgId üzerinden.
+ * cevaplar: anket cevabı (lib/anket.ts cevapAyir) — ankete göre süzülüp yazılır.
+ */
+export async function markReadByMsgId(msgId: string, username: string, cevaplar?: AnketCevaplari | null): Promise<void> {
   const { data } = await sb().from("message_recipients")
     .update({ status: "read", read_at: new Date().toISOString() })
     .eq("message_id", msgId).eq("username", username).neq("status", "read")
@@ -188,6 +199,15 @@ export async function markReadByMsgId(msgId: string, username: string): Promise<
   const n = data?.length ?? 0
   if (n > 0) {
     await getSupabaseAdmin().schema("hub").rpc("inc_message_read", { p_id: msgId, p_n: n })
+  }
+  if (cevaplar) {
+    const { data: m } = await sb().from("messages").select("survey").eq("id", msgId).maybeSingle()
+    const anket = (m as { survey: Anket | null } | null)?.survey
+    if (anket) {
+      await sb().from("message_recipients")
+        .update({ answers: cevapTemizle(anket, cevaplar) })
+        .eq("message_id", msgId).eq("username", username)
+    }
   }
 }
 
@@ -223,7 +243,7 @@ export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
   }
 
   let q = sb().from("messages")
-    .select("id, subject, body, type, priority, recipient_type, company_id, company_name, sender_user_id, sender_name, sent_at, total_count, read_count")
+    .select(MSG_COLS)
     .order("sent_at", { ascending: false })
   if (f.type)      q = q.eq("type", f.type)
   if (f.priority)  q = q.eq("priority", f.priority)
@@ -245,24 +265,26 @@ export async function listMessages(f: ListFilter = {}): Promise<MessageRow[]> {
 
 export async function getMessage(id: string): Promise<MessageRow | null> {
   const { data } = await sb().from("messages")
-    .select("id, subject, body, type, priority, recipient_type, company_id, company_name, sender_user_id, sender_name, sent_at, total_count, read_count")
+    .select(MSG_COLS)
     .eq("id", id).maybeSingle()
   return data ? toMessageRow(data as MsgDbRow) : null
 }
 
 export async function getRecipients(messageId: string): Promise<RecipientRow[]> {
   const { data } = await sb().from("message_recipients")
-    .select("id, message_id, server_id, server_name, username, status, delivered_at, read_at, error_message")
+    .select("id, message_id, server_id, server_name, username, status, delivered_at, read_at, error_message, answers")
     .eq("message_id", messageId)
     .order("status", { ascending: false }).order("server_name").order("username")
   return ((data ?? []) as {
     id: number; message_id: string; server_id: string; server_name: string | null; username: string
     status: RecipientStatus; delivered_at: string | null; read_at: string | null; error_message: string | null
+    answers: AnketCevaplari | null
   }[]).map(r => ({
     Id: r.id, MessageId: r.message_id, ServerId: r.server_id, ServerName: r.server_name,
     Username: r.username, Status: r.status,
     DeliveredAt: r.delivered_at ? toZ(r.delivered_at) : null,
     ReadAt: r.read_at ? toZ(r.read_at) : null,
     ErrorMessage: r.error_message,
+    Answers: r.answers ?? null,
   }))
 }

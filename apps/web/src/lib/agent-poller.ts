@@ -15,6 +15,7 @@
 import { getSupabaseAdmin } from "./supabase/admin"
 import { upsertAgentFromPoll, markMessageRead, markAgentOffline } from "./agent-store"
 import { markReadByMsgId, getPendingForServer, markRecipientDelivered, markServerFailed } from "./messages-db"
+import { cevapAyir } from "./anket"
 import type { AgentReport } from "./agent-types"
 import { withSqlConnection } from "./sql-external"
 import { decrypt } from "./crypto"
@@ -358,7 +359,7 @@ async function retryPendingForActiveUsers(server: ServerRow, port: number, repor
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Api-Key": server.ApiKey },
         signal: ctrl.signal,
-        body: JSON.stringify({ msgId: p.messageId, title: p.subject, body: p.body, type: p.type, from: p.senderName, sentAt: p.sentAt, targetUsernames: [p.username] }),
+        body: JSON.stringify({ msgId: p.messageId, title: p.subject, body: p.body, type: p.type, from: p.senderName, sentAt: p.sentAt, targetUsernames: [p.username], ...(p.survey ? { survey: p.survey } : {}) }),
       })
       clearTimeout(timer)
       if (res.ok) {
@@ -430,8 +431,10 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
     const pendingAcks: { msgId: string; username: string }[] = data.pendingAcks ?? []
     for (const ack of pendingAcks) {
       if (ack.msgId && ack.username) {
-        markMessageRead(ack.msgId, ack.username)
-        try { await markReadByMsgId(ack.msgId, ack.username) } catch { /* ignore */ }
+        // Anket cevabı msgId'nin sonunda gelir ("<id>~a~<base64url>") — lib/anket.ts
+        const { msgId, cevaplar } = cevapAyir(ack.msgId)
+        markMessageRead(msgId, ack.username)
+        try { await markReadByMsgId(msgId, ack.username, cevaplar) } catch { /* ignore */ }
       }
     }
 

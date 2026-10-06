@@ -9,6 +9,7 @@ import {
   type MessagePriority,
   type RecipientKind,
 } from "./messages-db"
+import type { Anket } from "./anket"
 
 /**
  * Mesaj fan-out katmanı.
@@ -30,6 +31,8 @@ export interface BroadcastInput {
   targets?:      { agentId: string; username: string }[]   // recipientType="selected" için
   senderName:    string
   senderUserId?: string | null
+  /** Anketse sorular (doğrulanmış — lib/anket.ts anketDogrula) */
+  survey?:       Anket | null
 }
 
 export interface BroadcastResult {
@@ -142,6 +145,7 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
     senderUserId:  input.senderUserId ?? null,
     senderName:    input.senderName,
     totalCount:    totalRecipients,
+    survey:        input.survey ?? null,
   })
 
   // Alıcı satırlarını yaz (pending)
@@ -211,6 +215,8 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
         // olanlar pending kalır, sonradan login olunca Poller iletir.
         targetUsernames: onlineNow,
       }
+      // Agent gövdeyi olduğu gibi popup'a verir → anket agent'a dokunmadan gider
+      if (input.survey) payload.survey = input.survey
 
       const res = await fetch(`http://${info.IP}:${info.AgentPort}/api/notify`, {
         method: "POST",

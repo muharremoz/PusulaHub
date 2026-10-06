@@ -7,6 +7,7 @@ import { listMessages, type MessageType, type MessagePriority, type RecipientKin
 const VALID_TYPES:      MessageType[]     = ["info", "warning", "urgent"]
 const VALID_PRIORITIES: MessagePriority[] = ["normal", "high", "urgent"]
 import { broadcast } from "@/lib/messages-fanout"
+import { anketDogrula, type Anket } from "@/lib/anket"
 
 /**
  * GET /api/messages
@@ -57,6 +58,7 @@ export async function GET(req: NextRequest) {
         sentAt:        r.SentAt,
         totalCount:    r.TotalCount,
         readCount:     r.ReadCount,
+        isSurvey:      !!r.Survey,
       })),
     })
   } catch (err) {
@@ -94,6 +96,14 @@ export async function POST(req: NextRequest) {
     const companyId     = body.companyId?.toString() ?? null
     const targets       = Array.isArray(body.targets) ? body.targets : []
 
+    // Anket (isteğe bağlı) — sorular doğrulanıp temizlenir
+    let survey: Anket | null = null
+    if (body.survey) {
+      const d = anketDogrula(body.survey)
+      if ("hata" in d) return NextResponse.json({ error: d.hata }, { status: 400 })
+      survey = d.anket
+    }
+
     if (!subject || !msgBody) {
       return NextResponse.json({ error: "Konu ve mesaj zorunlu" }, { status: 400 })
     }
@@ -122,6 +132,7 @@ export async function POST(req: NextRequest) {
       targets,
       senderName,
       senderUserId,
+      survey,
     })
 
     if (result.totalRecipients === 0) {

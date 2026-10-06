@@ -34,6 +34,7 @@ export async function GET(
         sentAt:        m.SentAt,
         totalCount:    m.TotalCount,
         readCount:     m.ReadCount,
+        survey:        m.Survey,
       },
       recipients: recipients.map(r => ({
         id:           r.Id,
@@ -44,6 +45,7 @@ export async function GET(
         deliveredAt:  r.DeliveredAt,
         readAt:       r.ReadAt,
         errorMessage: r.ErrorMessage,
+        answers:      r.Answers,
       })),
     })
   } catch (err) {

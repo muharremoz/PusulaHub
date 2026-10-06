@@ -23,10 +23,13 @@ import { ComboboxMulti } from "@/components/ui/combobox"
 import { firmaAra } from "@/lib/firma-arama"
 import { ListeKarti, ListeThead } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre, TarihFiltre, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
+import { AnketOlusturucu, yeniSoru } from "@/components/messages/anket-olusturucu"
+import { AnketSonuclari } from "@/components/messages/anket-sonuclari"
+import type { Anket, AnketCevaplari, AnketSorusu } from "@/lib/anket"
 import {
   Send, Plus, Search, Mail,
   Users, Building2, UserCheck, Check, CheckCheck, X,
-  Server, ChevronsUpDown, Sparkles, Bookmark, MoreVertical, Pencil, Trash2,
+  Server, ChevronsUpDown, Sparkles, Bookmark, MoreVertical, Pencil, Trash2, ClipboardList,
 } from "lucide-react"
 
 type MsgType         = "info" | "warning" | "urgent"
@@ -66,6 +69,7 @@ interface MessageItem {
   sentAt:        string
   totalCount:    number
   readCount:     number
+  isSurvey?:     boolean
 }
 
 interface RecipientItem {
@@ -77,6 +81,7 @@ interface RecipientItem {
   deliveredAt:  string | null
   readAt:       string | null
   errorMessage: string | null
+  answers?:     AnketCevaplari | null
 }
 
 interface DirectoryRecipient {
@@ -160,6 +165,7 @@ export default function MessagesPage() {
   const [lisansTarih,       setLisansTarih]       = useState<TarihFiltreDeger>({ mode: "tum" })
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null)
   const [detailRecipients,  setDetailRecipients]  = useState<RecipientItem[]>([])
+  const [detailSurvey,      setDetailSurvey]      = useState<Anket | null>(null)
 
   // Compose state
   const [recipientType,      setRecipientType]      = useState<RecipientKind>("all")
@@ -174,6 +180,9 @@ export default function MessagesPage() {
   const [companyFilter,      setCompanyFilter]      = useState<string>("all")
   const [userSearch,         setUserSearch]         = useState<string>("")
   const [sending,            setSending]            = useState(false)
+  // Anket: açıkken mesajla birlikte sorular da gider (lib/anket.ts)
+  const [anketAcik,          setAnketAcik]          = useState(false)
+  const [anketSorulari,      setAnketSorulari]      = useState<AnketSorusu[]>([])
 
   /**
    * TarihFiltre modunu server'ın beklediği from/to çiftine çevirir.
@@ -267,11 +276,11 @@ export default function MessagesPage() {
 
   // Detay yükle
   useEffect(() => {
-    if (!selectedMessageId) { setDetailRecipients([]); return }
+    if (!selectedMessageId) { setDetailRecipients([]); setDetailSurvey(null); return }
     let cancelled = false
     fetch(`/api/messages/${selectedMessageId}`)
       .then(r => r.json())
-      .then(d => { if (!cancelled) setDetailRecipients(d.recipients ?? []) })
+      .then(d => { if (!cancelled) { setDetailRecipients(d.recipients ?? []); setDetailSurvey(d.message?.survey ?? null) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [selectedMessageId])
@@ -314,6 +323,7 @@ export default function MessagesPage() {
     setRecipientType("all"); setComposeCompanies(new Set()); setCompanyPickerSearch("")
     setSelectedRecipients(new Set()); setCompanyFilter("all"); setUserSearch("")
     setComposePriority("normal"); setComposeType("info")
+    setAnketAcik(false); setAnketSorulari([])
   }
 
   /** Şablon seçimini compose formuna uygula. Kullanıcı göndermeden düzenleyebilir. */
@@ -349,6 +359,10 @@ export default function MessagesPage() {
       type:          composeType,
       priority:      composePriority,
     }
+    if (anketAcik) {
+      if (anketSorulari.length === 0) { toast.error("Ankete en az bir soru ekleyin"); return }
+      base.survey = { sorular: anketSorulari }
+    }
 
     setSending(true)
     try {
@@ -371,6 +385,7 @@ export default function MessagesPage() {
       }
 
       let totalRecipients = 0, serversOk = 0, serversTargeted = 0, failed = 0
+      let sonHata = ""
       for (const payload of requests) {
         const r = await fetch("/api/messages", {
           method:  "POST",
@@ -380,6 +395,7 @@ export default function MessagesPage() {
         const d = await r.json()
         if (!r.ok || d.ok === false) {
           failed++
+          sonHata = d.error ?? ""
           continue
         }
         totalRecipients += d.totalRecipients ?? 0
@@ -388,7 +404,7 @@ export default function MessagesPage() {
       }
 
       if (failed === requests.length) {
-        toast.error("Gönderim başarısız")
+        toast.error("Gönderim başarısız", sonHata ? { description: sonHata } : undefined)
       } else {
         toast.success(
           requests.length > 1 ? `${requests.length} firmaya mesaj gönderildi` : "Mesaj gönderildi",
@@ -755,6 +771,27 @@ export default function MessagesPage() {
                         onChange={(e) => setComposeBody(e.target.value)}
                       />
                     </div>
+
+                    {/* Anket — açıksa sorular mesajla birlikte popup'ta sorulur (yeni popup gerekir) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-foreground/80 flex items-center gap-1.5 text-[12px] font-medium">
+                          <ClipboardList className="h-3.5 w-3.5" /> Anket
+                        </Label>
+                        <Button
+                          variant={anketAcik ? "outline" : "ghost"}
+                          size="sm"
+                          className="h-7 rounded-[5px] text-[12px]"
+                          onClick={() => {
+                            if (anketAcik) { setAnketAcik(false); setAnketSorulari([]) }
+                            else { setAnketAcik(true); setAnketSorulari([yeniSoru(1)]) }
+                          }}
+                        >
+                          {anketAcik ? "Anketi kaldır" : "Anket ekle"}
+                        </Button>
+                      </div>
+                      {anketAcik && <AnketOlusturucu sorular={anketSorulari} onChange={setAnketSorulari} />}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -846,7 +883,14 @@ export default function MessagesPage() {
                           </span>
                         </td>
                         <td className="px-4 py-1.5 max-w-72">
-                          <p className="truncate font-medium">{msg.subject}</p>
+                          <p className="flex items-center gap-1.5 truncate font-medium">
+                            {msg.isSurvey && (
+                              <span className="inline-flex shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300">
+                                <ClipboardList className="h-3 w-3" /> Anket
+                              </span>
+                            )}
+                            <span className="truncate">{msg.subject}</span>
+                          </p>
                           <p className="text-muted-foreground truncate text-[11px]">{msg.body}</p>
                         </td>
                         <td className="px-4 py-1.5 whitespace-nowrap">
@@ -953,6 +997,18 @@ export default function MessagesPage() {
                 <span className="text-xs font-medium tabular-nums">{selected.readCount} / {selected.totalCount}</span>
               </div>
             </div>
+
+            {detailSurvey && (
+              <div className="pt-3 border-t border-border/40">
+                <p className="text-[11px] text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                  <ClipboardList className="h-3.5 w-3.5" /> Anket sonuçları
+                </p>
+                <AnketSonuclari
+                  anket={detailSurvey}
+                  alicilar={detailRecipients.map(r => ({ username: r.username, serverName: r.serverName, readAt: r.readAt, answers: r.answers ?? null }))}
+                />
+              </div>
+            )}
 
             <div className="pt-3 border-t border-border/40">
               <p className="text-[11px] text-muted-foreground mb-1.5">Alıcılar ({detailRecipients.length})</p>
