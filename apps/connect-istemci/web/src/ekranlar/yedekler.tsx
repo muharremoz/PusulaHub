@@ -1,4 +1,4 @@
-import { CheckCircle2, CircleAlert, DatabaseBackup, Loader2 } from "lucide-react";
+import { DatabaseBackup, Loader2 } from "lucide-react";
 import type { Durum, YedekDurumu } from "@/api";
 
 /**
@@ -21,14 +21,8 @@ function farkAraligiMi(simdi: number): boolean {
   return sa >= 10.5 && sa < 23.5;
 }
 
-type Renk = "iyi" | "uyari" | "hata" | "bekliyor";
+export type Renk = "iyi" | "uyari" | "hata" | "bekliyor";
 
-const RENK: Record<Renk, string> = {
-  iyi: "text-emerald-600 dark:text-emerald-400",
-  uyari: "text-amber-600 dark:text-amber-400",
-  hata: "text-red-600 dark:text-red-400",
-  bekliyor: "text-muted-foreground",
-};
 const KUTU: Record<Renk, string> = {
   iyi: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400",
   uyari: "bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400",
@@ -52,58 +46,93 @@ function farkRenk(fDk: number | null, tDk: number | null, simdi: number): Renk {
 const enKotu = (a: Renk, b: Renk): Renk => (["hata", "uyari", "iyi", "bekliyor"] as Renk[]).find((r) => r === a || r === b) ?? "bekliyor";
 
 
-/** genis: tek başınaysa iki sütunu kaplar; sayım kartı varsa yanına yarım genişlik. */
-export function YedekKarti({ durum, genis = true }: { durum: Durum; genis?: boolean }) {
+export type YedekOzeti = { renk: Renk; baslik: string; aciklama: string };
+
+/**
+ * Müşteriye ayrıntı (saat, veritabanı) gösterilmez — yalnız sağlıklı mı. Kısa gecikme (uyarı) sağlıklı sayılır:
+ * yedekler bizim tarafta belirli saat aralığında alınır, saatleri göstermek "gece alınmamış" izlenimi veriyordu.
+ */
+export function yedekOzeti(durum: Durum): YedekOzeti {
   const y: YedekDurumu | undefined = durum.yedekler ?? undefined;
   const simdi = y?.simdi ? Date.parse(y.simdi) : Date.now();
   const liste = y?.liste ?? [];
 
-  // Kartın genel rengi: en kötü veritabanı
+  // Genel renk: en kötü veritabanı
   let genel: Renk = y ? (y.hata ? "uyari" : liste.length === 0 ? "uyari" : "iyi") : "bekliyor";
   for (const v of liste) {
     genel = enKotu(genel, tamRenk(dakika(v.sonTam, simdi)));
     if (v.farkVar) genel = enKotu(genel, farkRenk(dakika(v.sonFark, simdi), dakika(v.sonTam, simdi), simdi));
   }
-
-
-  // Müşteriye ayrıntı (saat, veritabanı) gösterilmez — yalnız sağlıklı mı. Kısa gecikme (uyarı) sağlıklı sayılır:
-  // yedekler bizim tarafta belirli saat aralığında alınır, saatleri göstermek "gece alınmamış" izlenimi veriyordu.
   const sorunlu = genel === "hata";
-  const gorunen: Renk = !y ? "bekliyor" : y.hata || liste.length === 0 ? "uyari" : sorunlu ? "hata" : "iyi";
-  const baslikDeger = !y
+  const renk: Renk = !y ? "bekliyor" : y.hata || liste.length === 0 ? "uyari" : sorunlu ? "hata" : "iyi";
+  const baslik = !y
     ? "Kontrol ediliyor…"
     : y.hata
       ? "Bilgi alınamadı"
       : liste.length === 0
         ? "Veritabanı bulunamadı"
         : sorunlu
-          ? "Yedeklemede sorun var"
-          : "Yedekleme sağlıklı";
+          ? "Sorun var"
+          : "Sağlıklı";
   const aciklama = !y
     ? "Bir saniye…"
     : y.hata
-      ? "Yedekleme durumu şu an alınamadı; biraz sonra yeniden denenecek."
+      ? "Durum şu an alınamadı; biraz sonra yeniden denenecek."
       : liste.length === 0
         ? "Bu firmaya kayıtlı veritabanı görünmüyor; Pusula'ya bildirin."
         : sorunlu
-          ? "Veritabanı yedeklemesi beklendiği gibi çalışmıyor; Pusula'ya bildirin."
+          ? "Yedekleme beklendiği gibi çalışmıyor; Pusula'ya bildirin."
           : liste.length === 1
-            ? "Veritabanınızın yedekleri Pusula sunucusunda otomatik alınıyor."
-            : `${liste.length} veritabanınızın yedekleri Pusula sunucusunda otomatik alınıyor.`;
+            ? "Yedekler Pusula sunucusunda otomatik alınıyor."
+            : `${liste.length} veritabanının yedekleri otomatik alınıyor.`;
+  return { renk, baslik, aciklama };
+}
 
+/** Sol panel — veritabanı yedekleri. Satırlardan ayrışsın diye renkli zemin + canlı durum noktası. */
+export function YedekYanKarti({ durum }: { durum: Durum }) {
+  const o = yedekOzeti(durum);
   return (
-    <div className={"relative flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs" + (genis ? " col-span-2" : "")}>
-      <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${KUTU[gorunen]}`}><DatabaseBackup /></span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">Veritabanı yedekleri</span>
-          <span className={`[&_svg]:size-4 ${RENK[gorunen]}`}>
-            {gorunen === "iyi" ? <CheckCircle2 /> : gorunen === "bekliyor" ? <Loader2 className="animate-spin" /> : <CircleAlert />}
-          </span>
+    // Sağlıklıyken yalnız başlık (sol panel kısa kalsın, açıklama ipucunda); sorun varsa açıklama görünür
+    <YanKart renk={o.renk} ikon={<DatabaseBackup />} etiket="Veritabanı yedekleri" baslik={o.baslik} ipucu={o.aciklama}>
+      {o.renk !== "iyi" && o.renk !== "bekliyor" && <p className="text-xs leading-snug text-muted-foreground">{o.aciklama}</p>}
+    </YanKart>
+  );
+}
+
+const ZEMIN: Record<Renk, string> = {
+  iyi: "from-emerald-500/12 border-emerald-500/25",
+  uyari: "from-amber-500/12 border-amber-500/25",
+  hata: "from-red-500/12 border-red-500/30",
+  bekliyor: "from-muted border-border",
+};
+const NOKTA: Record<Renk, string> = { iyi: "bg-emerald-500", uyari: "bg-amber-500", hata: "bg-red-500", bekliyor: "bg-muted-foreground/50" };
+
+/**
+ * Sol panelin "Hizmetler" kartı (sayım, yedek): durum rengine göre hafif degrade zemin,
+ * başlığın yanında nabız atan durum noktası. Diğer sol satırlar (firma no, kullanıcı…) düz kalır.
+ */
+export function YanKart({ renk, ikon, etiket, baslik, ek, ipucu, children }: {
+  renk: Renk; ikon: React.ReactNode; etiket: string; baslik: React.ReactNode; ek?: React.ReactNode; ipucu?: string; children?: React.ReactNode;
+}) {
+  return (
+    <div title={ipucu} className={`relative overflow-hidden rounded-xl border bg-gradient-to-br via-card to-card p-3 shadow-xs ${ZEMIN[renk]}`}>
+      <div className="relative flex items-center gap-2.5">
+        <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-4 ${KUTU[renk]}`}>
+          {renk === "bekliyor" ? <Loader2 className="animate-spin" /> : ikon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{etiket}</div>
+          <div className="flex items-center gap-1.5 text-sm leading-tight font-semibold">
+            <span className="relative flex size-2 shrink-0">
+              {renk === "iyi" && <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${NOKTA[renk]}`} />}
+              <span className={`relative inline-flex size-2 rounded-full ${NOKTA[renk]}`} />
+            </span>
+            <span className="min-w-0 truncate">{baslik}</span>
+          </div>
         </div>
-        <div className="truncate text-[15px] leading-tight font-semibold">{baslikDeger}</div>
-        <div className="mt-0.5 text-xs text-muted-foreground">{aciklama}</div>
+        {ek}
       </div>
+      {children ? <div className="relative mt-2">{children}</div> : null}
     </div>
   );
 }

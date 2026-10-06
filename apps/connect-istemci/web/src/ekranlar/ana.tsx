@@ -12,8 +12,8 @@ import { RainbowButton } from "@/components/ui/rainbow-button";
 import { Ripple } from "@/components/ui/ripple";
 import { vpnIpSabitMi } from "@/lib/utils";
 import { FlickeringGrid } from "@/components/ui/flickering-grid";
-import { YedekKarti } from "./yedekler";
-import { SayimKarti } from "./sayim-karti";
+import { YedekYanKarti } from "./yedekler";
+import { SayimYanKarti } from "./sayim-karti";
 import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
@@ -168,6 +168,13 @@ export function AnaEkran({ durum, setDurum }: P) {
             )}
           </dl>
 
+        </div>
+
+        {/* Hizmetler: sayım + yedek — kaydırılan firma bilgilerinin dışında, hep görünür; düz satırlardan ayrışan kartlar */}
+        <div className="flex shrink-0 flex-col gap-2 border-t bg-muted/30 px-3 py-3">
+          <div className="px-1 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Hizmetler</div>
+          <SayimYanKarti durum={durum} setDurum={setDurum} />
+          <YedekYanKarti durum={durum} />
         </div>
 
         <div className="flex flex-col gap-1 border-t px-3 py-3">
@@ -352,8 +359,6 @@ export function AnaEkran({ durum, setDurum }: P) {
             deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
             alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
-          <SayimKarti durum={durum} setDurum={setDurum} />
-          <YedekKarti durum={durum} genis={!(durum.sayim?.kurulu || durum.sayimEski?.kurulu)} />
         </div>
 
         {((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (

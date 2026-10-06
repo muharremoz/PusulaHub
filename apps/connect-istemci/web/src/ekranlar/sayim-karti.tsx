@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { CheckCircle2, CircleAlert, Loader2, Play, ScanBarcode } from "lucide-react";
+import { Loader2, Play, ScanBarcode } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Button } from "@/components/ui/button";
+import { YanKart, type Renk } from "./yedekler";
 
 /**
- * Ana ekran (orta panel) — sayım kartı. Sayım kuruluysa (Pusula X ya da Pusula; aynı anda biri) görünür:
- * program, (Pusula'da) veritabanı · Perakende/Toptan, SQL bağlantı durumu ve "Sayımı başlat".
+ * Sol panel — sayım. Sayım kuruluysa (Pusula X ya da Pusula; aynı anda biri) görünür: program, (Pusula'da)
+ * veritabanı · Perakende/Toptan, SQL bağlantı durumu ve "Sayımı başlat".
  * SQL bağlantısı: son ölçüm 10 dk'dan eskiyse (ya da hiç yoksa) ana ekran açılınca yeniden ölçülür —
  * sürekli yoklama yok. SQL adresi/kullanıcı adı gösterilmez.
  */
-export function SayimKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
+export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
   const sayim = durum.sayim?.kurulu ? { tur: "pusulax" as const, s: durum.sayim } : durum.sayimEski?.kurulu ? { tur: "eski" as const, s: durum.sayimEski } : null;
   const [basliyor, setBasliyor] = useState(false);
   const [olciliyor, setOlciliyor] = useState(false);
@@ -46,46 +47,31 @@ export function SayimKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
   };
 
   const test = sayim.s.test;
-  const renk = !test ? "bekliyor" : test.ok ? "iyi" : "hata";
-  const KUTU = {
-    iyi: "bg-emerald-500/10 text-emerald-600 ring-emerald-500/20 dark:text-emerald-400",
-    hata: "bg-red-500/10 text-red-600 ring-red-500/20 dark:text-red-400",
-    bekliyor: "bg-muted text-muted-foreground ring-border",
-  }[renk];
+  const renk: Renk = olciliyor || !test ? "bekliyor" : test.ok ? "iyi" : "hata";
+  const secim = sayim.tur === "eski" ? sayim.s.secim : null;
 
   return (
-    <div className="relative flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
-      <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${KUTU}`}><ScanBarcode /></span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-muted-foreground">Sayım</span>
-          <span className={"[&_svg]:size-4 " + (renk === "iyi" ? "text-emerald-600 dark:text-emerald-400" : renk === "hata" ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-            {olciliyor ? <Loader2 className="animate-spin" /> : renk === "iyi" ? <CheckCircle2 /> : renk === "hata" ? <CircleAlert /> : null}
-          </span>
-        </div>
-        <div className="truncate text-[15px] leading-tight font-semibold">
-          {sayim.tur === "eski" ? "Pusula" : "Pusula X"}
-          {sayim.tur === "eski" && sayim.s.secim && (
-            <span className="text-xs font-normal text-muted-foreground" title={sayim.s.secim.veritabani}>
-              {" · "}{sayim.s.secim.ad} · {sayim.s.secim.formId === "146" ? "Toptan" : "Perakende"}
-            </span>
-          )}
-        </div>
-        <div className="mt-0.5 flex items-center gap-2">
-          <span className="min-w-0 truncate text-xs text-muted-foreground" title={test?.ok ? `Yanıt ${test.sureMs} ms` : undefined}>
-            {olciliyor
-              ? "SQL kontrol ediliyor…"
-              : !test
-                ? "SQL denetlenmedi"
-                : test.ok
-                  ? "SQL bağlı"
-                  : <span className="text-red-600 dark:text-red-400">SQL bağlanamadı</span>}
-          </span>
-          <Button size="sm" variant="outline" className="ml-auto h-6 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3" disabled={basliyor} onClick={() => void baslat()}>
-            {basliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
-          </Button>
-        </div>
+    <YanKart
+      renk={renk}
+      ikon={<ScanBarcode />}
+      etiket="Sayım"
+      baslik={sayim.tur === "eski" ? "Pusula" : "Pusula X"}
+      ek={
+        <Button size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-xs [&_svg]:size-3.5" disabled={basliyor} onClick={() => void baslat()} title="Sayım programını aç">
+          {basliyor ? <Loader2 className="animate-spin" /> : <Play />} Başlat
+        </Button>
+      }
+    >
+      <div className="truncate text-xs text-muted-foreground" title={[secim?.veritabani, test?.ok ? `SQL yanıtı ${test.sureMs} ms` : null].filter(Boolean).join(" · ") || undefined}>
+        {secim && <>{secim.ad} · {secim.formId === "146" ? "Toptan" : "Perakende"} · </>}
+        {olciliyor
+          ? "SQL kontrol ediliyor…"
+          : !test
+            ? "SQL denetlenmedi"
+            : test.ok
+              ? "SQL hazır"
+              : <span className="text-red-600 dark:text-red-400">SQL'e bağlanamadı</span>}
       </div>
-    </div>
+    </YanKart>
   );
 }
