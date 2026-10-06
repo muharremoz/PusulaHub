@@ -94,7 +94,17 @@ export type SayimTest = {
   sureMs: number;
 };
 
+/** Eski program sayımı: kullanıcının seçtiği veritabanı ve program (FORMID 612 Perakende / 146 Toptan) */
+export type SayimSecim = { veritabani: string; ad: string; formId: string };
+
+/** Eski program sayımı için firmanın veritabanları (Hub, sirket.guvenlik) */
+export type SayimVeritabani = { veritabani: string; ad: string; prgTur: string | null; program: string | null };
+
 export type SayimDurum = {
+  /** "pusulax" | "eski" */
+  tur?: string;
+  /** Yalnız eski program */
+  secim?: SayimSecim | null;
   kurulu: boolean;
   klasor: string;
   kisayol: boolean;
@@ -175,6 +185,8 @@ export type Durum = {
   rfid?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };
   /** Pusula X sayım modu (0.6.0+) — Ayarlar > Sayım. */
   sayim?: SayimDurum;
+  /** Eski program (Pusula.exe) sayımı (0.6.1+). */
+  sayimEski?: SayimDurum;
   /** Pusula'dan gelen duyurular (yeniden eskiye). okundu: UTC "YYYY-MM-DD HH:MM:SS" ya da null. */
   duyurular?: Duyuru[];
   /** Firmanın veritabanı yedekleri (ana ekran kartı, salt gösterim) — null: henüz çekilmedi */

@@ -28,7 +28,7 @@ import {
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
 import { AyarlarSekmesi } from "@/components/connect/ayarlar-sekmesi"
-import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
+import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectSayimDurum, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
 
 // ------------------------------------------------------------ yardımcılar
 
@@ -454,28 +454,40 @@ const DURUMLAR: CanliDurum[] = ["oturumda", "cevrimici", "cevrimdisi", "iptal"]
 type SayimDurumu = "kurulu" | "sorunlu" | "kuruluyor" | "yok"
 const SAYIM_DURUMLAR: SayimDurumu[] = ["kurulu", "sorunlu", "kuruluyor", "yok"]
 const SAYIM_ETIKET: Record<SayimDurumu, string> = { kurulu: "Kurulu", sorunlu: "Sorunlu", kuruluyor: "Kuruluyor", yok: "Yok" }
-function sayimDurumu(c: ConnectCihazSatir): SayimDurumu {
-  const s = c.durum?.sayim
+/** Tek sayım kurulumunun durumu */
+function tekSayimDurumu(s: ConnectSayimDurum | null | undefined): SayimDurumu {
   if (!s) return "yok"
   if (s.kuruluyor) return "kuruluyor"
   if (!s.kurulu) return s.hata ? "sorunlu" : "yok"
   if (s.guncellemeBekliyor || (s.test && !s.test.ok) || !s.kisayol) return "sorunlu"
   return "kurulu"
 }
+/** Cihazın genel sayım durumu: Pusula X ve eski programdan en dikkat isteyeni */
+const SAYIM_ONCELIK: SayimDurumu[] = ["sorunlu", "kuruluyor", "kurulu", "yok"]
+function sayimDurumu(c: ConnectCihazSatir): SayimDurumu {
+  const a = tekSayimDurumu(c.durum?.sayim), b = tekSayimDurumu(c.durum?.sayimEski)
+  return SAYIM_ONCELIK.find((d) => d === a || d === b) ?? "yok"
+}
+const FORM_AD: Record<string, string> = { "612": "Perakende", "146": "Toptan" }
 function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const d = sayimDurumu(c)
   if (d === "yok") return <span className="text-muted-foreground">—</span>
   const ton = d === "kurulu" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
     : d === "kuruluyor" ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
     : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{SAYIM_ETIKET[d]}</span>
+  const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Eski" : null].filter(Boolean)
+  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{SAYIM_ETIKET[d]}{turler.length ? ` · ${turler.join(" + ")}` : ""}</span>
 }
 function sayimAciklama(c: ConnectCihazSatir): string {
-  const s = c.durum?.sayim
-  if (!s) return "Sayım kurulu değil"
-  if (s.kuruluyor) return "Kurulum sürüyor"
-  if (!s.kurulu) return s.hata ? `Kurulum başarısız: ${s.hata}` : "Sayım kurulu değil"
-  const p: string[] = [`Pusula X ${s.surum ?? "?"}`]
+  const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Eski program", c.durum?.sayimEski)].filter((x): x is string => !!x)
+  return parca.length ? parca.join("\n") : "Sayım kurulu değil"
+}
+function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): string | null {
+  if (!s) return null
+  if (s.kuruluyor) return `${ad}: kurulum sürüyor`
+  if (!s.kurulu) return s.hata ? `${ad}: kurulum başarısız — ${s.hata}` : null
+  const p: string[] = [`${ad} ${s.surum ?? "?"}`]
+  if (s.veritabani) p.push(`${s.veritabani}${s.formId ? ` (${FORM_AD[s.formId] ?? s.formId})` : ""}`)
   if (!s.kisayol) p.push("masaüstü kısayolu yok")
   if (s.guncellemeBekliyor) p.push("SQL bilgisi değişti, kodla yenilenmeyi bekliyor")
   if (s.test) p.push(s.test.ok ? `test başarılı (${s.test.veritabani ?? 0} veritabanı)` : `test başarısız: ${s.test.hata ?? "?"}`)
@@ -761,8 +773,7 @@ function CihazDetay({
                 <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
                 <Bilgi ad="Sayım (Pusula X)">
                   <SayimRozeti c={c} />
-                  {c.durum?.sayim && <span className="text-muted-foreground block text-[12px]">{sayimAciklama(c)}</span>}
-                  {c.durum?.sayim?.test?.zaman && <span className="text-muted-foreground block text-[11px]">Son test {tarihMetni(c.durum.sayim.test.zaman)}</span>}
+                  {(c.durum?.sayim || c.durum?.sayimEski) && <span className="text-muted-foreground block text-[12px] whitespace-pre-line">{sayimAciklama(c)}</span>}
                 </Bilgi>
                 <Bilgi ad="Dış IP"><span className="font-mono">{c.ip ?? "—"}</span></Bilgi>
                 <Bilgi ad="İlk kayıt">{tarihMetni(c.ilkGiris)}</Bilgi>

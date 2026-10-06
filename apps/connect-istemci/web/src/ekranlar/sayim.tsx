@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Trash2, Zap } from "lucide-react";
-import { api, type Durum, type SayimDurum, type SayimTest } from "@/api";
+import { CheckCircle2, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Save, Trash2, Zap } from "lucide-react";
+import { api, type Durum, type SayimDurum, type SayimSecim, type SayimTest, type SayimVeritabani } from "@/api";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
@@ -9,39 +9,112 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Bolum } from "./ayarlar";
 
 /**
- * Pusula X sayım modu — Ayarlar > Sayım.
- * Anahtar açılınca Pusula X'in sayım kopyası (RFID.xml'li) C:\Pusula\PusulaXSayım'a kurulur, server.xml
- * firmanın SQL bilgisiyle (Hub) yazılır, masaüstüne "Pusula Sayım" kısayolu konur. "Bağlantıyı test et"
- * SQL'e bağlanıp Pusula X'in giriş ekranında göreceği veritabanlarını listeler.
- * Kurulum arka planda sürer; ilerleme durum nabzından (Durum.sayim) gelir.
+ * Sayım — Ayarlar > Sayım. İki kart, ikisi de aynı bileşen:
+ *   Pusula X: C:\Pusula\PusulaXSayım (RFID.xml'li kopya); veritabanını kullanıcı Pusula X giriş ekranında seçer.
+ *   Eski program: C:\Pusula\PusulaSayimEski (Pusula.exe); TEK veritabanıyla açılır — veritabanı ve program
+ *     (FORMID: 612 Perakende / 146 Toptan) burada seçilir, Server.xml'e yazılır; sonradan değiştirilebilir.
+ * Anahtar açılınca paket indirilip kurulur, bağlantı dosyası firmanın SQL bilgisiyle (Hub) yazılır, masaüstüne
+ * kısayol konur. Kurulum arka planda sürer; ilerleme durum nabzından (Durum.sayim / sayimEski) gelir.
  */
+type Tur = "pusulax" | "eski";
+
+const TUR: Record<Tur, { baslik: string; program: string; kisayol: string; dosya: string; aciklama: string }> = {
+  pusulax: {
+    baslik: "Pusula X sayımı",
+    program: "Pusula X",
+    kisayol: "Pusula Sayım",
+    dosya: "server.xml",
+    aciklama: "Pusula X'in sayım kopyası bu bilgisayara kurulur; veritabanı giriş ekranında seçilir.",
+  },
+  eski: {
+    baslik: "Eski program sayımı",
+    program: "Pusula",
+    kisayol: "Pusula Sayım (Eski)",
+    dosya: "Server.xml",
+    aciklama: "Eski Pusula programının sayım kopyası; seçtiğiniz veritabanı ve programla açılır.",
+  },
+};
+
+const FORMLAR = [
+  { id: "612", ad: "Perakende" },
+  { id: "146", ad: "Toptan" },
+];
+const formAd = (id: string | null | undefined) => FORMLAR.find((f) => f.id === id)?.ad ?? id ?? "—";
+
 export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
-  const s: SayimDurum | undefined = durum.sayim;
+  return (
+    <>
+      <SayimKarti tur="pusulax" s={durum.sayim} durum={durum} setDurum={setDurum} />
+      <SayimKarti tur="eski" s={durum.sayimEski} durum={durum} setDurum={setDurum} />
+    </>
+  );
+}
+
+function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | undefined; durum: Durum; setDurum: (d: Durum) => void }) {
+  const t = TUR[tur];
+  const eski = tur === "eski";
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [kod, setKod] = useState("");
   const [kodIcin, setKodIcin] = useState<null | "kur" | "guncelle">(null);
-  const [bekle, setBekle] = useState<null | "kur" | "guncelle" | "test" | "kaldir">(null);
+  const [bekle, setBekle] = useState<null | "kur" | "guncelle" | "test" | "kaldir" | "liste">(null);
   const [hata, setHata] = useState<string | null>(null);
   const [kaldirOnay, setKaldirOnay] = useState(false);
   const [test, setTest] = useState<SayimTest | null>(s?.test ?? null);
 
+  // Eski program: veritabanı + program seçimi
+  const [secimAcik, setSecimAcik] = useState(false);   // kurulum öncesi ya da "Değiştir" ile açılan seçim alanı
+  const [vtListe, setVtListe] = useState<SayimVeritabani[] | null>(null);
+  const [vt, setVt] = useState<string>(s?.secim?.veritabani ?? "");
+  const [form, setForm] = useState<string>(s?.secim?.formId ?? "");
+
   useEffect(() => {
     if (s?.test) setTest(s.test);
   }, [s?.test]);
+  useEffect(() => {
+    if (s?.secim) {
+      setVt(s.secim.veritabani);
+      setForm(s.secim.formId);
+    }
+  }, [s?.secim?.veritabani, s?.secim?.formId]);
 
   // Kurulum sürerken durum sık yenilensin (ana nabız 5 sn; ilerleme çubuğu akıcı olsun)
   useEffect(() => {
     if (!s?.kuruluyor) return;
-    const t = window.setInterval(() => {
+    const id = window.setInterval(() => {
       api<Durum>("/durum").then(setDurum).catch(() => {});
     }, 1000);
-    return () => window.clearInterval(t);
+    return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s?.kuruluyor]);
+
+  const listeyiGetir = async () => {
+    setBekle("liste");
+    setHata(null);
+    try {
+      const r = await api<{ liste: SayimVeritabani[] }>("/sayim/veritabanlari", {});
+      setVtListe(r.liste);
+      // Tek veritabanıysa ve seçim yoksa otomatik seç; Toptan kayıtlıysa program da ona göre önerilir
+      if (r.liste.length === 1 && !vt) {
+        setVt(r.liste[0].veritabani);
+        if (!form) setForm(r.liste[0].prgTur === "011" ? "146" : "612");
+      }
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      setBekle(null);
+    }
+  };
+
+  const secimNesnesi = (): SayimSecim | null => {
+    if (!eski) return null;
+    const v = vtListe?.find((x) => x.veritabani === vt);
+    return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, formId: form };
+  };
 
   const calistir = async (ne: "kur" | "guncelle", k?: string) => {
     if (ikiAktif && !k) {
@@ -51,9 +124,10 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
     setBekle(ne);
     setHata(null);
     try {
-      setDurum(await api<Durum>(ne === "kur" ? "/sayim/kur" : "/sayim/guncelle", { kod: k ?? null }));
+      setDurum(await api<Durum>(ne === "kur" ? "/sayim/kur" : "/sayim/guncelle", { tur, kod: k ?? null, secim: secimAcik || ne === "kur" ? secimNesnesi() : null }));
       setKodIcin(null);
       setKod("");
+      setSecimAcik(false);
     } catch (e) {
       setHata((e as Error).message);
     } finally {
@@ -65,7 +139,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
     setBekle("test");
     setHata(null);
     try {
-      setTest(await api<SayimTest>("/sayim/test", {}));
+      setTest(await api<SayimTest>("/sayim/test", { tur }));
     } catch (e) {
       setHata((e as Error).message);
     } finally {
@@ -77,7 +151,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
     setBekle("kaldir");
     setHata(null);
     try {
-      await api("/sayim/kaldir", { klasor });
+      await api("/sayim/kaldir", { tur, klasor });
       setTest(null);
       setDurum(await api<Durum>("/durum"));
     } catch (e) {
@@ -88,25 +162,34 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
     }
   };
 
+  // Anahtar: Pusula X hemen kurar; eski program önce veritabanı/program seçimini açar
+  const anahtar = (v: boolean) => {
+    if (!v) return setKaldirOnay(true);
+    if (!eski) return void calistir("kur");
+    setSecimAcik(true);
+    if (!vtListe) void listeyiGetir();
+  };
+
   const acik = !!s && (s.kurulu || s.kuruluyor);
   const il = s?.ilerleme;
   const sonHata = il?.bitti && il.hata ? il.hata : null;
+  const secimTam = !!vt && !!form;
 
   return (
     <>
-      <Bolum baslik="Pusula X sayım modu" aciklama="Bu bilgisayarda, terminale bağlanmadan">
+      <Bolum baslik={t.baslik} aciklama="Bu bilgisayarda, terminale bağlanmadan">
         <div className="flex items-center gap-3 px-4 py-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4"><ScanBarcode /></span>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-medium">Sayım kullanılacak</div>
             <div className="text-xs text-muted-foreground">
-              Pusula X'in sayım kopyası bu bilgisayara kurulur; masaüstüne <span className="font-medium">Pusula Sayım</span> kısayolu konur.
+              {t.aciklama} Masaüstüne <span className="font-medium">{t.kisayol}</span> kısayolu konur.
             </div>
           </div>
           <Switch
-            checked={acik}
+            checked={acik || (secimAcik && !s?.kurulu)}
             disabled={!s || bekle !== null || s.kuruluyor}
-            onCheckedChange={(v) => (v ? void calistir("kur") : setKaldirOnay(true))}
+            onCheckedChange={anahtar}
           />
         </div>
 
@@ -116,6 +199,56 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
               <CircleAlert />
               <AlertDescription>{hata ?? sonHata}</AlertDescription>
             </Alert>
+          </div>
+        )}
+
+        {/* Eski program: veritabanı + program seçimi (kurulum öncesi ya da Değiştir) */}
+        {eski && secimAcik && !s?.kuruluyor && (
+          <div className="flex flex-col gap-3 px-4 py-3">
+            <div className="grid grid-cols-[1fr_160px] gap-3">
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Veritabanı</Label>
+                <Select value={vt} onValueChange={setVt} disabled={!vtListe}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={bekle === "liste" ? "Yükleniyor…" : vtListe?.length === 0 ? "Veritabanı bulunamadı" : "Seçin"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(vtListe ?? []).map((v) => (
+                      <SelectItem key={v.veritabani} value={v.veritabani}>
+                        <span className="flex w-full items-center justify-between gap-3">
+                          <span>{v.ad}</span>
+                          <span className="text-xs text-muted-foreground">{v.veritabani}{v.program ? ` · ${v.program}` : ""}</span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs">Program</Label>
+                <Select value={form} onValueChange={setForm}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Seçin" /></SelectTrigger>
+                  <SelectContent>
+                    {FORMLAR.map((f) => <SelectItem key={f.id} value={f.id}>{f.ad}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {s?.kurulu ? (
+                <Button size="sm" disabled={!secimTam || bekle !== null} onClick={() => void calistir("guncelle")}>
+                  {bekle === "guncelle" ? <Loader2 className="animate-spin" /> : <Save />} Kaydet
+                </Button>
+              ) : (
+                <Button size="sm" disabled={!secimTam || bekle !== null} onClick={() => void calistir("kur")}>
+                  {bekle === "kur" ? <Loader2 className="animate-spin" /> : <ScanBarcode />} Kur
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" onClick={() => void listeyiGetir()} disabled={bekle !== null}>
+                {bekle === "liste" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Listeyi yenile
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => { setSecimAcik(false); setVt(s?.secim?.veritabani ?? ""); setForm(s?.secim?.formId ?? ""); }}>Vazgeç</Button>
+            </div>
           </div>
         )}
 
@@ -162,8 +295,23 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
             <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-4 py-3 text-xs">
               <span className="text-muted-foreground">Klasör</span>
               <span className="truncate" title={s.klasor}>{s.klasor}</span>
-              <span className="text-muted-foreground">Pusula X</span>
+              <span className="text-muted-foreground">{t.program}</span>
               <span>{s.surum ?? "—"}{s.paketSurum && s.surum && !s.surum.startsWith(s.paketSurum) ? ` (paket ${s.paketSurum})` : ""}</span>
+              {eski && (
+                <>
+                  <span className="text-muted-foreground">Veritabanı</span>
+                  <span className="flex items-center gap-2">
+                    <span className="truncate">{s.secim ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : "—"}</span>
+                    {!secimAcik && (
+                      <button className="shrink-0 text-xs font-medium text-primary hover:underline" onClick={() => { setSecimAcik(true); if (!vtListe) void listeyiGetir(); }}>
+                        Değiştir
+                      </button>
+                    )}
+                  </span>
+                  <span className="text-muted-foreground">Program</span>
+                  <span>{formAd(s.secim?.formId)}</span>
+                </>
+              )}
               <span className="text-muted-foreground">SQL sunucusu</span>
               <span>{s.sunucu ?? "—"}</span>
               <span className="text-muted-foreground">SQL kullanıcısı</span>
@@ -179,10 +327,10 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
               <Button size="sm" onClick={() => void testEt()} disabled={bekle !== null}>
                 {bekle === "test" ? <Loader2 className="animate-spin" /> : <Zap />} Bağlantıyı test et
               </Button>
-              <Button size="sm" variant="outline" onClick={() => void calistir("guncelle")} disabled={bekle !== null} title="SQL bilgisini Pusula'dan yeniden al, server.xml'i yenile">
-                {bekle === "guncelle" ? <Loader2 className="animate-spin" /> : <RefreshCw />} Bilgiyi yenile
+              <Button size="sm" variant="outline" onClick={() => void calistir("guncelle")} disabled={bekle !== null} title={`SQL bilgisini Pusula'dan yeniden al, ${t.dosya}'i yenile`}>
+                {bekle === "guncelle" && !secimAcik ? <Loader2 className="animate-spin" /> : <RefreshCw />} Bilgiyi yenile
               </Button>
-              <Button size="sm" variant="ghost" onClick={() => void api("/sayim/klasor", {}).catch((e) => setHata((e as Error).message))} title="Klasörü aç">
+              <Button size="sm" variant="ghost" onClick={() => void api("/sayim/klasor", { tur }).catch((e) => setHata((e as Error).message))} title="Klasörü aç">
                 <FolderOpen /> Klasör
               </Button>
             </div>
@@ -191,7 +339,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
       </Bolum>
 
       {s?.kurulu && test && (
-        <Bolum baslik="SQL bağlantı testi" aciklama={new Date(test.zaman).toLocaleString("tr-TR")}>
+        <Bolum baslik={`SQL bağlantı testi — ${t.program}`} aciklama={new Date(test.zaman).toLocaleString("tr-TR")}>
           <div className="flex items-start gap-3 px-4 py-3">
             <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg [&_svg]:size-4 ${test.ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-destructive/15 text-destructive"}`}>
               {test.ok ? <CheckCircle2 /> : <CircleAlert />}
@@ -216,7 +364,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
             <div className="px-4 py-3">
               <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
                 <Database className="size-3.5" />
-                {test.veritabanlari?.length ?? 0} veritabanı
+                {eski ? "Program bu veritabanıyla açılacak" : `${test.veritabanlari?.length ?? 0} veritabanı`}
               </div>
               {test.veritabanlari && test.veritabanlari.length > 0 ? (
                 <ul className="divide-y rounded-lg border text-sm">
@@ -228,7 +376,7 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
                 <Alert>
                   <CircleAlert />
                   <AlertDescription>
-                    Bağlantı kuruldu ama bu firma için veritabanı görünmüyor. Pusula X giriş ekranı da boş gelir — Pusula'ya bildirin.
+                    Bağlantı kuruldu ama bu firma için veritabanı görünmüyor. {t.program} giriş ekranı da boş gelir — Pusula'ya bildirin.
                   </AlertDescription>
                 </Alert>
               )}
@@ -240,10 +388,10 @@ export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: D
       <AlertDialog open={kaldirOnay} onOpenChange={(o) => !o && setKaldirOnay(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sayım kapatılsın mı?</AlertDialogTitle>
+            <AlertDialogTitle>{t.baslik} kapatılsın mı?</AlertDialogTitle>
             <AlertDialogDescription>
-              Masaüstündeki <span className="font-medium">Pusula Sayım</span> kısayolu kaldırılır ve bağlantı bilgisi (server.xml) silinir.
-              Pusula X kopyası ({s?.klasor}) diskte kalabilir — yeniden açınca indirme gerekmez — ya da tamamen silinebilir.
+              Masaüstündeki <span className="font-medium">{t.kisayol}</span> kısayolu kaldırılır ve bağlantı bilgisi ({t.dosya}) silinir.
+              Program kopyası ({s?.klasor}) diskte kalabilir — yeniden açınca indirme gerekmez — ya da tamamen silinebilir.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

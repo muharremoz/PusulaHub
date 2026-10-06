@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -312,7 +313,8 @@ namespace PusulaConnect
                     ayarlar = Ayarlar.Simdiki.Gorunum(),
                     yazdirma = YaziciAjani.KisaDurum(),
                     rfid = RfidYardimcisi.KisaDurum(),
-                    sayim = Sayim.KisaDurum(),
+                    sayim = Sayim.PusulaX.KisaDurum(),
+                    sayimEski = Sayim.Eski.KisaDurum(),
                     duyurular = _duyurular,
                     yedekler = _yedekler,
                     guncelleme = new
@@ -537,58 +539,73 @@ namespace PusulaConnect
         /// Kayıtlı oturum şifresini ekranda göster — VPN (FortiClient) şifresi aynı ve oraya otomatik yazılamıyor.
         /// 2FA açıksa kod şart; Pusula şifreyi değiştirmiş ve bekliyorsa aynı kodla yeni şifre alınır, kasaya yazılır.
         /// </summary>
-        // ------------------------------------------------------------ sayım modu
+        // ------------------------------------------------------------ sayım modu (Pusula X + eski program)
 
         private int _sayimEsitleniyor;
 
         /// <summary>
-        /// Sayım kuruluysa ve Hub'daki SQL bilgisi (login/şifre/sunucu/resim) diske yazılandan farklıysa
-        /// server.xml yeniden yazılır. 2FA açıksa kod gerektiği için bekletilir; kullanıcı Ayarlar > Sayım'dan
-        /// kodla yeniler. SifreyiEsitle ile aynı desen.
+        /// Kurulu sayım(lar)da Hub'daki SQL bilgisi (login/şifre/sunucu/resim) diske yazılandan farklıysa bağlantı
+        /// dosyası yeniden yazılır (eski programda kayıtlı veritabanı/FORMID korunur). 2FA açıksa kod gerektiği için
+        /// bekletilir; kullanıcı Ayarlar > Sayım'dan kodla yeniler. SifreyiEsitle ile aynı desen.
         /// </summary>
         private async Task SayimiEsitle()
         {
-            if (!Sayim.Kurulu) return;
             string hub; lock (_kilit) hub = _sayimImza;
             if (hub == null) return;
-            if (hub == Sayim.UygulananImza) { Sayim.GuncellemeBekliyor = false; return; }
-            if (IkiAktif) { Sayim.GuncellemeBekliyor = true; return; }
+            var bekleyen = Sayim.Hepsi.Where(s => s.Kurulu && s.UygulananImza != hub).ToList();
+            foreach (var s in Sayim.Hepsi.Except(bekleyen)) s.GuncellemeBekliyor = false;
+            if (bekleyen.Count == 0) return;
+            if (IkiAktif) { foreach (var s in bekleyen) s.GuncellemeBekliyor = true; return; }
             if (Interlocked.Exchange(ref _sayimEsitleniyor, 1) == 1) return;
             try
             {
-                var j = await _servis.Sayim(null);
+                var j = await _servis.Sayim(null, "pusulax");
                 if (j["bilgi"] == null) return;
-                Sayim.Guncelle((JObject)j["bilgi"]);
-                Gunluk.Yaz("Sayım SQL bilgisi Pusula'dan güncellendi");
+                foreach (var s in bekleyen)
+                {
+                    try { s.Guncelle((JObject)j["bilgi"]); Gunluk.Yaz("Sayım SQL bilgisi Pusula'dan güncellendi (" + s.Tur + ")"); }
+                    catch (Exception e) { Gunluk.Yaz("Sayım bilgisi yazılamadı (" + s.Tur + "): " + e.Message); }
+                }
                 _ = _servis.Olay("sayim_bilgisi_guncellendi", "otomatik");
             }
             catch (Exception e) { Gunluk.Yaz("Sayım bilgisi güncellenemedi: " + e.Message); }
             finally { Interlocked.Exchange(ref _sayimEsitleniyor, 0); }
         }
 
-        /// <summary>Hub'dan sayım bilgisini alır (2FA açıksa kodla), paketi arka planda kurar. İlerleme Durum().sayim.</summary>
-        public async Task<object> SayimKur(string kod)
+        /// <summary>
+        /// Hub'dan sayım bilgisini alır (2FA açıksa kodla), paketi arka planda kurar. İlerleme Durum().sayim / sayimEski.
+        /// secim: eski program için { veritabani, ad, formId }.
+        /// </summary>
+        public async Task<object> SayimKur(string tur, string kod, JObject secim)
         {
-            var j = await SayimBilgisi(kod);
-            Sayim.KurBaslat((JObject)j["bilgi"], (JObject)j["paket"], _servis.Adres, _servis.Token);
-            _ = _servis.Olay("sayim_kurulum_baslatildi", j["paket"]?.Value<string>("surum"));
+            var s = Sayim.Bul(tur);
+            var j = await SayimBilgisi(kod, s.Tur);
+            s.KurBaslat((JObject)j["bilgi"], (JObject)j["paket"], _servis.Adres, _servis.Token, secim);
+            _ = _servis.Olay("sayim_kurulum_baslatildi", s.Tur + " " + j["paket"]?.Value<string>("surum"));
             return Durum();
         }
 
-        /// <summary>server.xml / lic.xml'i Hub'daki güncel bilgiyle yeniden yazar (paket indirilmez).</summary>
-        public async Task<object> SayimGuncelle(string kod)
+        /// <summary>
+        /// Bağlantı dosyasını Hub'daki güncel bilgiyle yeniden yazar (paket indirilmez). Eski programda secim
+        /// verilirse veritabanı / FORMID değişir.
+        /// </summary>
+        public async Task<object> SayimGuncelle(string tur, string kod, JObject secim)
         {
-            var j = await SayimBilgisi(kod);
-            Sayim.Guncelle((JObject)j["bilgi"]);
-            _ = _servis.Olay("sayim_bilgisi_guncellendi");
+            var s = Sayim.Bul(tur);
+            var j = await SayimBilgisi(kod, s.Tur);
+            s.Guncelle((JObject)j["bilgi"], secim);
+            _ = _servis.Olay("sayim_bilgisi_guncellendi", s.Tur);
             // Arayüz yanıtı TAM durum olarak alır (setDurum) — yalnız sayım özeti dönerse ekran boş kalır
             return Durum();
         }
 
-        private async Task<JObject> SayimBilgisi(string kod)
+        /// <summary>Eski program sayımı: firmanın veritabanları (Hub, sirket.guvenlik). Şifre içermez, kod istemez.</summary>
+        public Task<JObject> SayimVeritabanlari() => _servis.SayimVeritabanlari();
+
+        private async Task<JObject> SayimBilgisi(string kod, string tur)
         {
             if (IkiAktif && string.IsNullOrWhiteSpace(kod)) throw new KullaniciHatasi("Doğrulama uygulamasındaki kodu girin.");
-            var j = await _servis.Sayim(IkiAktif ? kod.Trim() : null);
+            var j = await _servis.Sayim(IkiAktif ? kod.Trim() : null, tur);
             if (j["bilgi"] == null || j["paket"] == null) throw new KullaniciHatasi("Sayım bilgisi alınamadı.");
             return j;
         }
@@ -735,7 +752,8 @@ namespace PusulaConnect
                         vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         sifreKayitli = _rdpKullanici != null,
                         ayarlar = Ayarlar.Simdiki.Gorunum(),
-                        sayim = Sayim.NabizOzeti(),
+                        sayim = Sayim.PusulaX.NabizOzeti(),
+                        sayimEski = Sayim.Eski.NabizOzeti(),
                     };
                 }
                 var yanit = await _servis.Nabiz(durum);

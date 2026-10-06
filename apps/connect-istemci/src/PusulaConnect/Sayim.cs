@@ -16,55 +16,101 @@ using Newtonsoft.Json.Linq;
 namespace PusulaConnect
 {
     /// <summary>
-    /// Pusula X sayım modu: Pusula X'in bu bilgisayardaki kopyası (RFID.xml'li → giriş sonrası menü yerine
-    /// sayım ekranı açılır, PC adı lisans denetimi yapılmaz). Ayarlar > Sayım'dan kurulur:
-    ///   - paket (servis /sayim-paket, zip, SHA-256 doğrulanır) C:\Pusula\PusulaXSayım'a açılır
-    ///   - server.xml: SQL dış adresi, firmanın SQL login'i/şifresi, firma kodu, IIS resim adresi —
-    ///     bilgi Hub'dan (servis /api/sayim), Pusula X'in kendi şifrelemesiyle (TripleDES) yazılır
-    ///   - lic.xml: firma kodu/adı, PC adı, kullanıcı, sabit program kodu (sayım modunda lisans sunucusu aranmaz)
-    ///   - masaüstüne "Pusula Sayım" kısayolu
-    /// C:\Pusula yoksa oluşturmak yönetici ister → "--sayim-klasor" ile ayrı süreç (UAC bir kez), sonra
-    /// klasöre Users'a değiştirme hakkı verilir ki Pusula X kendini güncelleyebilsin (Update.exe).
+    /// Sayım modu — Pusula programının bu bilgisayardaki sayım kopyası. İki tür (Ayarlar > Sayım'da iki kart):
+    ///
+    ///   Pusula X ("pusulax"): C:\Pusula\PusulaXSayım, RFID.xml'li (giriş sonrası menü yerine sayım ekranı, PC adı
+    ///     lisans denetimi yok). server.xml: SQL sunucusu, firmanın SQL login'i/şifresi, firma kodu (giriş ekranı
+    ///     veritabanlarını guvenlik.kod ile süzer — kullanıcı veritabanını Pusula X'te seçer), resim adresi.
+    ///     lic.xml: firma kodu/adı, PC adı, kullanıcı, sabit program kodu 909.
+    ///
+    ///   Eski program ("eski"): C:\Pusula\PusulaSayimEski, Pusula.exe. TEK veritabanıyla açılır: Server.xml
+    ///     IP / USER / PASSWORD / DATA (şifreli) + USERID=1, FORMID (612 Perakende / 146 Toptan), IMGPATH, IMGURLWEB=1.
+    ///     Veritabanı ve FORMID'i kullanıcı Connect'te seçer (veritabanı listesi Hub'dan, sirket.guvenlik).
+    ///
+    /// Ortak: paket servisten (zip, SHA-256 doğrulanır) indirilir; SQL bilgisi Hub'dan gelir (servis /api/sayim),
+    /// Pusula'nın kendi şifrelemesiyle (TripleDES) yazılır; Hub'da değişince imza farkıyla kendiliğinden yenilenir.
+    /// C:\Pusula yoksa klasörü oluşturmak yönetici ister → "--sayim-klasor &lt;yol&gt;" ile ayrı süreç (UAC bir kez),
+    /// Users'a değiştirme hakkı verilir ki program kendini güncelleyebilsin.
     /// </summary>
-    internal static class Sayim
+    internal sealed class Sayim
     {
         public const string Kok = @"C:\Pusula";
-        /// <summary>Geliştirme: PUSULA_SAYIM_KLASOR ile başka klasöre kurulur (bu PC'deki gerçek kopya ezilmesin).</summary>
-        public static readonly string Klasor = Environment.GetEnvironmentVariable("PUSULA_SAYIM_KLASOR") is string k && k.Trim().Length > 0
-            ? k.Trim() : Path.Combine(Kok, "PusulaXSayım");
-        public static readonly string Exe = Path.Combine(Klasor, "PusulaX.exe");
-        private static readonly string KisayolYolu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Pusula Sayım.lnk");
-        private static string DurumDosyasi => Path.Combine(Kimlik.Klasor, "sayim.json");
-        private const string ProgramKodu = "909";
 
-        private static readonly object _kilit = new object();
-        private static bool _kuruluyor;
-        private static JObject _ilerleme;   // { adim, yuzde, mesaj, hiz, bitti, hata }
+        /// <summary>Pusula X sayımı. Geliştirme: PUSULA_SAYIM_KLASOR ile başka klasöre kurulur.</summary>
+        public static readonly Sayim PusulaX = new Sayim("pusulax", "PUSULA_SAYIM_KLASOR", "PusulaXSayım", "PusulaX.exe",
+            "Pusula Sayım", "sayim.json", "Pusula X");
+        /// <summary>Eski program (Pusula.exe) sayımı. Geliştirme: PUSULA_SAYIM_ESKI_KLASOR.</summary>
+        public static readonly Sayim Eski = new Sayim("eski", "PUSULA_SAYIM_ESKI_KLASOR", "PusulaSayimEski", "Pusula.exe",
+            "Pusula Sayım (Eski)", "sayim-eski.json", "Pusula");
+        public static readonly Sayim[] Hepsi = { PusulaX, Eski };
+
+        public static Sayim Bul(string tur) => tur == "eski" ? Eski : PusulaX;
+
+        public readonly string Tur;
+        public readonly string Klasor;
+        public readonly string Exe;
+        private readonly string _kisayolAdi;
+        private readonly string _kisayolYolu;
+        private readonly string _durumAdi;
+        private readonly string _programAdi;
+        private bool EskiMi => Tur == "eski";
+
+        private Sayim(string tur, string ortamDegiskeni, string klasorAdi, string exeAdi, string kisayolAdi, string durumAdi, string programAdi)
+        {
+            Tur = tur;
+            var k = Environment.GetEnvironmentVariable(ortamDegiskeni);
+            Klasor = !string.IsNullOrWhiteSpace(k) ? k.Trim() : Path.Combine(Kok, klasorAdi);
+            Exe = Path.Combine(Klasor, exeAdi);
+            _kisayolAdi = kisayolAdi;
+            _kisayolYolu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), kisayolAdi + ".lnk");
+            _durumAdi = durumAdi;
+            _programAdi = programAdi;
+        }
+
+        private const string ProgramKoduPusulaX = "909";
+        private const string ServerXmlPusulaX = "server.xml";
+        private const string ServerXmlEski = "Server.xml";
+
+        private string DurumDosyasi => Path.Combine(Kimlik.Klasor, _durumAdi);
+        private string ServerXml => Path.Combine(Klasor, EskiMi ? ServerXmlEski : ServerXmlPusulaX);
+
+        private readonly object _kilit = new object();
+        private bool _kuruluyor;
+        private JObject _ilerleme;   // { adim, yuzde, mesaj, hiz, bitti, hata }
         /// <summary>Hub'daki SQL bilgisi değişti ama 2FA açık: yenileme kullanıcının kod girmesini bekliyor.</summary>
-        public static bool GuncellemeBekliyor;
+        public bool GuncellemeBekliyor;
 
-        public static bool Kurulu => File.Exists(Exe) && File.Exists(Path.Combine(Klasor, "RFID.xml")) && File.Exists(Path.Combine(Klasor, "server.xml"));
+        public bool Kurulu => File.Exists(Exe) && File.Exists(ServerXml) && (EskiMi || File.Exists(Path.Combine(Klasor, "RFID.xml")));
 
         // ------------------------------------------------------------ durum
 
-        /// <summary>Durum() içine giren özet; ayrıca Ayarlar > Sayım kartı.</summary>
-        public static object KisaDurum()
+        private JObject DurumOku()
         {
-            JObject d = null;
-            try { if (File.Exists(DurumDosyasi)) d = JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)); } catch { }
+            try { return File.Exists(DurumDosyasi) ? JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)) : null; } catch { return null; }
+        }
+
+        /// <summary>Eski program: kullanıcının seçtiği veritabanı ve FORMID (yoksa null).</summary>
+        public JObject Secim => DurumOku()?["secim"] as JObject;
+
+        /// <summary>Durum() içine giren özet; ayrıca Ayarlar > Sayım kartı.</summary>
+        public object KisaDurum()
+        {
+            var d = DurumOku();
             lock (_kilit)
             {
                 return new
                 {
+                    tur = Tur,
                     kurulu = Kurulu,
                     klasor = Klasor,
-                    kisayol = File.Exists(KisayolYolu),
+                    kisayol = File.Exists(_kisayolYolu),
                     surum = Kurulu ? SurumOku() : null,
                     paketSurum = d?.Value<string>("paketSurum"),
                     kurulum = Tarih(d?["kurulum"]),
                     sunucu = d?.Value<string>("sunucu"),
                     kullanici = d?.Value<string>("kullanici"),
                     resimYolu = d?.Value<string>("resimYolu"),
+                    secim = d?["secim"],
                     test = d?["test"],
                     sonGuncelleme = Tarih(d?["guncelleme"]),
                     guncellemeBekliyor = GuncellemeBekliyor,
@@ -78,10 +124,9 @@ namespace PusulaConnect
         /// Nabızla Hub'a giden özet (Hub /connect cihaz listesi). Şifre/sunucu adresi GİTMEZ; yalnız kurulu mu,
         /// sürüm, son test sonucu. Kurulu değilse null — eski istemcilerle aynı görünür.
         /// </summary>
-        public static object NabizOzeti()
+        public object NabizOzeti()
         {
-            JObject d = null;
-            try { if (File.Exists(DurumDosyasi)) d = JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)); } catch { }
+            var d = DurumOku();
             bool kuruluyor; JObject il; lock (_kilit) { kuruluyor = _kuruluyor; il = _ilerleme; }
             var kurulu = Kurulu;
             if (!kurulu && !kuruluyor && il?.Value<string>("hata") == null) return null;
@@ -93,8 +138,11 @@ namespace PusulaConnect
                 hata = !kurulu && !kuruluyor ? il?.Value<string>("hata") : null,
                 surum = kurulu ? SurumOku() : null,
                 kurulum = Tarih(d?["kurulum"]),
-                kisayol = File.Exists(KisayolYolu),
+                kisayol = File.Exists(_kisayolYolu),
                 guncellemeBekliyor = GuncellemeBekliyor,
+                // Eski program: hangi veritabanı / program (FORMID) — veritabanı adı hassas değil
+                veritabani = EskiMi ? Secim?.Value<string>("veritabani") : null,
+                formId = EskiMi ? Secim?.Value<string>("formId") : null,
                 test = t == null ? null : new
                 {
                     zaman = Tarih(t["zaman"]),
@@ -106,44 +154,54 @@ namespace PusulaConnect
         }
 
         /// <summary>Diske yazılan son bilginin Hub imzası — nabızdaki imzayla karşılaştırılır.</summary>
-        public static string UygulananImza
-        {
-            get { try { return File.Exists(DurumDosyasi) ? JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)).Value<string>("imza") : null; } catch { return null; } }
-        }
+        public string UygulananImza => DurumOku()?.Value<string>("imza");
 
         /// <summary>JObject.Parse tarih alanlarını DateTime'a çevirir; metne dönerken ISO (s) biçimi kalsın.</summary>
         private static string Tarih(JToken t) =>
             t == null || t.Type == JTokenType.Null ? null : t.Type == JTokenType.Date ? t.Value<DateTime>().ToString("s") : t.ToString();
 
-        private static string SurumOku()
+        private string SurumOku()
         {
             try { return FileVersionInfo.GetVersionInfo(Exe).FileVersion; } catch { return null; }
         }
 
-        private static void Ilerle(string adim, int yuzde, string mesaj, double hiz = 0, bool bitti = false, string hata = null)
+        private void Ilerle(string adim, int yuzde, string mesaj, double hiz = 0, bool bitti = false, string hata = null)
         {
             lock (_kilit)
                 _ilerleme = new JObject { ["adim"] = adim, ["yuzde"] = yuzde, ["mesaj"] = mesaj, ["hiz"] = hiz, ["bitti"] = bitti, ["hata"] = hata };
         }
 
-        private static void DurumYaz(Action<JObject> degistir)
+        private void DurumYaz(Action<JObject> degistir)
         {
-            JObject d = null;
-            try { if (File.Exists(DurumDosyasi)) d = JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)); } catch { }
-            d = d ?? new JObject();
+            var d = DurumOku() ?? new JObject();
             degistir(d);
             Directory.CreateDirectory(Path.GetDirectoryName(DurumDosyasi));
             File.WriteAllText(DurumDosyasi, d.ToString(), Encoding.UTF8);
+        }
+
+        // ------------------------------------------------------------ eski program: seçim
+
+        /// <summary>612 Perakende, 146 Toptan (Pusula.exe FORMID).</summary>
+        public static readonly string[] FormIdler = { "612", "146" };
+
+        private static JObject SecimDenetle(JObject secim)
+        {
+            var vt = secim?.Value<string>("veritabani")?.Trim();
+            var form = secim?.Value<string>("formId")?.Trim();
+            if (string.IsNullOrEmpty(vt)) throw new KullaniciHatasi("Sayım yapılacak veritabanını seçin.");
+            if (!FormIdler.Contains(form)) throw new KullaniciHatasi("Programı seçin (Perakende ya da Toptan).");
+            return new JObject { ["veritabani"] = vt, ["ad"] = secim.Value<string>("ad")?.Trim() ?? vt, ["formId"] = form };
         }
 
         // ------------------------------------------------------------ kur
 
         /// <summary>
         /// Arka planda kurar; ilerleme KisaDurum().ilerleme'den izlenir. bilgi: servis /api/sayim "bilgi",
-        /// paket: "paket" (url servis adresine göreli, sha256, boyut, surum).
+        /// paket: "paket" (url servis adresine göreli, sha256, boyut, surum). secim: yalnız eski program.
         /// </summary>
-        public static void KurBaslat(JObject bilgi, JObject paket, string servisAdresi, string token)
+        public void KurBaslat(JObject bilgi, JObject paket, string servisAdresi, string token, JObject secim)
         {
+            if (EskiMi) secim = SecimDenetle(secim);
             lock (_kilit)
             {
                 if (_kuruluyor) throw new KullaniciHatasi("Sayım kurulumu zaten sürüyor.", 409);
@@ -154,34 +212,34 @@ namespace PusulaConnect
             {
                 try
                 {
-                    await Kur(bilgi, paket, servisAdresi, token);
+                    await Kur(bilgi, paket, servisAdresi, token, secim);
                     Ilerle("bitti", 100, "Sayım kuruldu.", 0, true);
-                    Gunluk.Yaz("Sayım kuruldu: " + Klasor);
+                    Gunluk.Yaz("Sayım kuruldu (" + Tur + "): " + Klasor);
                 }
                 catch (Exception e)
                 {
                     var m = e is KullaniciHatasi ? e.Message : e.GetBaseException().Message;
                     Ilerle("hata", 0, null, 0, true, m);
-                    Gunluk.Yaz("Sayım kurulamadı: " + m);
+                    Gunluk.Yaz("Sayım kurulamadı (" + Tur + "): " + m);
                 }
                 finally { lock (_kilit) _kuruluyor = false; }
             });
         }
 
-        private static async Task Kur(JObject bilgi, JObject paket, string servisAdresi, string token)
+        private async Task Kur(JObject bilgi, JObject paket, string servisAdresi, string token, JObject secim)
         {
             // 1) Klasör — C:\Pusula yoksa ya da yazılamıyorsa yönetici
             if (!KlasorYazilabilir())
             {
                 Ilerle("klasor", 2, "Klasör için yönetici izni isteniyor…");
-                var kod = await YoneticiCalistir("--sayim-klasor");
+                var kod = await YoneticiCalistir("--sayim-klasor \"" + Klasor + "\"");
                 if (kod == -1) throw new KullaniciHatasi("Yönetici izni verilmedi. " + Klasor + " klasörünü oluşturmak için izin gerekir; tekrar deneyin.");
                 if (!KlasorYazilabilir()) throw new KullaniciHatasi("Klasör oluşturulamadı: " + Klasor + " (çıkış kodu " + kod + ")");
             }
 
             // 2) Paket — zaten aynı sürüm kuruluysa indirme atlanır, yalnız dosyalar yenilenir
             var paketSurum = paket.Value<string>("surum");
-            var kuruluSurum = Kurulu ? SurumOku() : null;
+            var kuruluSurum = File.Exists(Exe) ? SurumOku() : null;
             var ayni = paketSurum != null && kuruluSurum != null && kuruluSurum.StartsWith(paketSurum, StringComparison.Ordinal);
             if (!ayni || !File.Exists(Exe))
             {
@@ -195,10 +253,10 @@ namespace PusulaConnect
                 finally { try { File.Delete(zip); } catch { } }
             }
 
-            // 3) Pusula X dosyaları
+            // 3) Program dosyaları
             Ilerle("dosyalar", 96, "Bağlantı dosyaları yazılıyor…");
-            File.WriteAllText(Path.Combine(Klasor, "RFID.xml"), "");   // boş: Pusula X yalnız varlığına bakar
-            DosyalariYaz(bilgi);
+            if (!EskiMi) File.WriteAllText(Path.Combine(Klasor, "RFID.xml"), "");   // boş: Pusula X yalnız varlığına bakar
+            DosyalariYaz(bilgi, secim);
 
             // 4) Kısayol
             Ilerle("kisayol", 98, "Masaüstü kısayolu…");
@@ -208,17 +266,27 @@ namespace PusulaConnect
             {
                 d["kurulum"] = DateTime.Now.ToString("s");
                 d["paketSurum"] = paketSurum;
+                if (secim != null) d["secim"] = secim;
                 BilgiNotu(d, bilgi);
             });
             GuncellemeBekliyor = false;
         }
 
-        /// <summary>Yalnız server.xml / lic.xml'i yeniler (bilgi Hub'da değişince; paket indirilmez).</summary>
-        public static object Guncelle(JObject bilgi)
+        /// <summary>
+        /// Bağlantı dosyalarını Hub'daki güncel bilgiyle yeniden yazar (paket indirilmez). Eski programda secim
+        /// verilirse veritabanı / FORMID değişir; verilmezse kayıtlı seçim kullanılır.
+        /// </summary>
+        public object Guncelle(JObject bilgi, JObject secim = null)
         {
             if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
-            DosyalariYaz(bilgi);
-            DurumYaz(d => { d["guncelleme"] = DateTime.Now.ToString("s"); BilgiNotu(d, bilgi); });
+            if (EskiMi) secim = SecimDenetle(secim ?? Secim);
+            DosyalariYaz(bilgi, secim);
+            DurumYaz(d =>
+            {
+                d["guncelleme"] = DateTime.Now.ToString("s");
+                if (secim != null) d["secim"] = secim;
+                BilgiNotu(d, bilgi);
+            });
             GuncellemeBekliyor = false;
             return KisaDurum();
         }
@@ -231,7 +299,7 @@ namespace PusulaConnect
             d["imza"] = bilgi.Value<string>("imza");
         }
 
-        private static bool KlasorYazilabilir()
+        private bool KlasorYazilabilir()
         {
             try
             {
@@ -244,11 +312,11 @@ namespace PusulaConnect
             catch { return false; }
         }
 
-        private static string Indir(string url, string token, string beklenenSha, long boyut)
+        private string Indir(string url, string token, string beklenenSha, long boyut)
         {
             var klasor = Path.Combine(Path.GetTempPath(), "PusulaConnect2");
             Directory.CreateDirectory(klasor);
-            var hedef = Path.Combine(klasor, "PusulaXSayim.zip");
+            var hedef = Path.Combine(klasor, "sayim-" + Tur + ".zip");
             if (File.Exists(hedef)) File.Delete(hedef);
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             var istek = (HttpWebRequest)WebRequest.Create(url);
@@ -280,7 +348,7 @@ namespace PusulaConnect
                     }
                     // İndirme 5–88 arası; açma 90+
                     var y = toplam > 0 ? 5 + (int)(alinan * 83 / toplam) : 5;
-                    if (y != son) { son = y; Ilerle("indir", y, "Pusula X indiriliyor… " + (alinan / 1048576) + " / " + (toplam / 1048576) + " MB", hiz); }
+                    if (y != son) { son = y; Ilerle("indir", y, _programAdi + " indiriliyor… " + (alinan / 1048576) + " / " + (toplam / 1048576) + " MB", hiz); }
                 }
                 sha.TransformFinalBlock(new byte[0], 0, 0);
                 var ozet = BitConverter.ToString(sha.Hash).Replace("-", "").ToLowerInvariant();
@@ -290,9 +358,10 @@ namespace PusulaConnect
             return hedef;
         }
 
-        /// <summary>Zip'i klasöre açar; var olan dosyaların üstüne yazar (lic/server/RFID zipte yok, korunur).</summary>
-        private static void Ac(string zip)
+        /// <summary>Zip'i klasöre açar; var olan dosyaların üstüne yazar (bağlantı dosyaları zipte yok, korunur).</summary>
+        private void Ac(string zip)
         {
+            var exeAdi = Path.GetFileName(Exe);
             using (var arsiv = ZipFile.OpenRead(zip))
             {
                 var tam = Path.GetFullPath(Klasor + Path.DirectorySeparatorChar);
@@ -303,17 +372,17 @@ namespace PusulaConnect
                     if (string.IsNullOrEmpty(g.Name)) { Directory.CreateDirectory(hedef); continue; }
                     Directory.CreateDirectory(Path.GetDirectoryName(hedef));
                     try { g.ExtractToFile(hedef, true); }
-                    catch (IOException) when (Path.GetFileName(hedef).Equals("PusulaX.exe", StringComparison.OrdinalIgnoreCase))
+                    catch (IOException) when (Path.GetFileName(hedef).Equals(exeAdi, StringComparison.OrdinalIgnoreCase))
                     {
-                        throw new KullaniciHatasi("Pusula Sayım açık görünüyor; kapatıp tekrar deneyin.");
+                        throw new KullaniciHatasi(_kisayolAdi + " açık görünüyor; kapatıp tekrar deneyin.");
                     }
                 }
             }
         }
 
-        // ------------------------------------------------------------ Pusula X dosyaları
+        // ------------------------------------------------------------ bağlantı dosyaları
 
-        private static void DosyalariYaz(JObject bilgi)
+        private void DosyalariYaz(JObject bilgi, JObject secim)
         {
             var sunucu = bilgi.Value<string>("sunucu");
             var kullanici = bilgi.Value<string>("kullanici");
@@ -321,15 +390,17 @@ namespace PusulaConnect
             var dataCode = bilgi.Value<string>("dataCode");
             if (string.IsNullOrWhiteSpace(sunucu) || string.IsNullOrWhiteSpace(kullanici) || string.IsNullOrWhiteSpace(dataCode))
                 throw new KullaniciHatasi("Sayım bilgisi eksik (sunucu / kullanıcı / firma kodu).");
+            var resim = bilgi.Value<string>("resimYolu");
+
+            if (EskiMi) { EskiServerXml(sunucu, kullanici, sifre, resim, secim); return; }
 
             var server = new XElement("Server",
                 new XElement("Name", PusulaSifrele(sunucu)),
                 new XElement("UserName", PusulaSifrele(kullanici)),
                 new XElement("Password", PusulaSifrele(sifre ?? "")),
                 new XElement("DataCode", PusulaSifrele(dataCode)));
-            var resim = bilgi.Value<string>("resimYolu");
             if (!string.IsNullOrWhiteSpace(resim)) server.Add(new XElement("ImgPath", resim));   // düz metin (Pusula X böyle okur)
-            XmlYaz(Path.Combine(Klasor, "server.xml"), server);
+            XmlYaz(ServerXml, "Pusula", server);
 
             // Mevcut lic.xml'in LicenceCode'u korunur
             var licYolu = Path.Combine(Klasor, "lic.xml");
@@ -337,24 +408,47 @@ namespace PusulaConnect
             try { if (File.Exists(licYolu)) licenceCode = XDocument.Load(licYolu).Root?.Element("Licence")?.Element("LicenceCode")?.Value; } catch { }
             if (string.IsNullOrEmpty(licenceCode)) licenceCode = PusulaSifrele(Guid.NewGuid().ToString("N").Substring(0, 8).ToUpperInvariant());
 
-            XmlYaz(licYolu, new XElement("Licence",
+            XmlYaz(licYolu, "Pusula", new XElement("Licence",
                 new XElement("CompanyId", PusulaSifrele(dataCode)),
                 new XElement("CompanyName", PusulaSifrele(bilgi.Value<string>("firmaAdi") ?? dataCode)),
                 new XElement("PcName", PusulaSifrele(Environment.MachineName)),
                 new XElement("LicenceName", PusulaSifrele(Kimlik.Profil()?.Value<string>("kullanici") ?? kullanici)),
                 new XElement("LicenceCode", licenceCode),
-                new XElement("ProgramCode", PusulaSifrele(ProgramKodu)),
+                new XElement("ProgramCode", PusulaSifrele(ProgramKoduPusulaX)),
                 new XElement("Language", "tr")));
         }
 
-        private static void XmlYaz(string yol, XElement tablo)
+        /// <summary>
+        /// Eski program Server.xml — örnek (elle kurulmuş kopya):
+        ///   &lt;Servers&gt;&lt;Server&gt; IP, PASSWORD, DATA, USER (şifreli), USERID 1, FORMID 612|146,
+        ///   IMGPATH http://host:port// , IMGURLWEB 1 &lt;/Server&gt;&lt;/Servers&gt;
+        /// IP: varsayılan port (1433) ise yalnız adres yazılır (örnekteki gibi), değilse "adres,port".
+        /// </summary>
+        private void EskiServerXml(string sunucu, string kullanici, string sifre, string resim, JObject secim)
         {
-            // Pusula X DataSet.ReadXml ile okur: <Pusula><Server>…</Server></Pusula>
-            var d = new XDocument(new XDeclaration("1.0", null, "yes"), new XElement("Pusula", tablo));
+            if (secim == null) throw new KullaniciHatasi("Sayım yapılacak veritabanını ve programı seçin.");
+            var ip = sunucu.EndsWith(",1433", StringComparison.Ordinal) ? sunucu.Substring(0, sunucu.Length - 5) : sunucu;
+            var server = new XElement("Server",
+                new XElement("IP", PusulaSifrele(ip)),
+                new XElement("PASSWORD", PusulaSifrele(sifre ?? "")),
+                new XElement("DATA", PusulaSifrele(secim.Value<string>("veritabani"))),
+                new XElement("USER", PusulaSifrele(kullanici)),
+                new XElement("USERID", "1"),
+                new XElement("FORMID", secim.Value<string>("formId")));
+            // Örnekte resim adresi çift bölüyle bitiyor ("http://host:port//") — program yola böyle ekliyor
+            if (!string.IsNullOrWhiteSpace(resim)) server.Add(new XElement("IMGPATH", resim.TrimEnd('/') + "//"));
+            server.Add(new XElement("IMGURLWEB", "1"));
+            XmlYaz(ServerXml, "Servers", server);
+        }
+
+        private static void XmlYaz(string yol, string kok, XElement tablo)
+        {
+            // Program DataSet.ReadXml ile okur: <Kok><Tablo>…</Tablo></Kok>
+            var d = new XDocument(new XDeclaration("1.0", null, "yes"), new XElement(kok, tablo));
             using (var w = new StreamWriter(yol, false, new UTF8Encoding(false))) d.Save(w);
         }
 
-        /// <summary>Pusula X Model/Crypto.cs ile birebir: TripleDES CBC/PKCS7, key SHA1(UTF-16 anahtar)[0..24], IV SHA1("")[0..8], metin UTF-16LE.</summary>
+        /// <summary>Pusula Model/Crypto.cs ile birebir: TripleDES CBC/PKCS7, key SHA1(UTF-16 anahtar)[0..24], IV SHA1("")[0..8], metin UTF-16LE.</summary>
         private const string PusulaAnahtar = "14PuSuLa53*";
         private static byte[] Kes(string metin, int uzunluk)
         {
@@ -388,41 +482,52 @@ namespace PusulaConnect
 
         // ------------------------------------------------------------ kısayol
 
-        private static void Kisayol()
+        private void Kisayol()
         {
             try
             {
                 var tur = Type.GetTypeFromProgID("WScript.Shell");
                 var kabuk = Activator.CreateInstance(tur);
-                var k = tur.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, kabuk, new object[] { KisayolYolu });
+                var k = tur.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, kabuk, new object[] { _kisayolYolu });
                 var kt = k.GetType();
                 kt.InvokeMember("TargetPath", BindingFlags.SetProperty, null, k, new object[] { Exe });
                 kt.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, k, new object[] { Klasor });
-                kt.InvokeMember("Description", BindingFlags.SetProperty, null, k, new object[] { "Pusula Sayım" });
+                kt.InvokeMember("Description", BindingFlags.SetProperty, null, k, new object[] { _kisayolAdi });
                 kt.InvokeMember("IconLocation", BindingFlags.SetProperty, null, k, new object[] { Exe + ",0" });
                 kt.InvokeMember("Save", BindingFlags.InvokeMethod, null, k, null);
             }
-            catch (Exception e) { Gunluk.Yaz("Sayım kısayolu oluşturulamadı: " + e.Message); }
+            catch (Exception e) { Gunluk.Yaz("Sayım kısayolu oluşturulamadı (" + Tur + "): " + e.Message); }
         }
 
         // ------------------------------------------------------------ test
 
-        /// <summary>server.xml'deki bilgiyle SQL'e bağlanır, firma login'inin veritabanlarını listeler.</summary>
-        public static async Task<object> Test()
+        /// <summary>
+        /// Bağlantı dosyasındaki bilgiyle SQL'e bağlanır. Pusula X: firma login'inin veritabanlarını listeler.
+        /// Eski program: seçili veritabanına (DATA) bağlanır — açılabiliyorsa o tek veritabanı listelenir.
+        /// </summary>
+        public async Task<object> Test()
         {
             if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
-            string sunucu, kullanici, sifre, dataCode;
+            string sunucu, kullanici, sifre, data = null;
             try
             {
-                var s = XDocument.Load(Path.Combine(Klasor, "server.xml")).Root?.Element("Server");
-                sunucu = PusulaCoz(s?.Element("Name")?.Value);
-                kullanici = PusulaCoz(s?.Element("UserName")?.Value);
-                sifre = PusulaCoz(s?.Element("Password")?.Value);
-                dataCode = PusulaCoz(s?.Element("DataCode")?.Value);
+                var s = XDocument.Load(ServerXml).Root?.Element("Server");
+                if (EskiMi)
+                {
+                    sunucu = PusulaCoz(s?.Element("IP")?.Value);
+                    kullanici = PusulaCoz(s?.Element("USER")?.Value);
+                    sifre = PusulaCoz(s?.Element("PASSWORD")?.Value);
+                    data = PusulaCoz(s?.Element("DATA")?.Value);
+                }
+                else
+                {
+                    sunucu = PusulaCoz(s?.Element("Name")?.Value);
+                    kullanici = PusulaCoz(s?.Element("UserName")?.Value);
+                    sifre = PusulaCoz(s?.Element("Password")?.Value);
+                }
             }
-            catch (Exception e) { throw new KullaniciHatasi("server.xml okunamadı: " + e.Message); }
-            if (string.IsNullOrWhiteSpace(sunucu)) throw new KullaniciHatasi("server.xml'de sunucu yok.");
-            _ = dataCode;   // yalnız dosyadan okunduğu doğrulanır; liste login yetkisiyle gelir
+            catch (Exception e) { throw new KullaniciHatasi(Path.GetFileName(ServerXml) + " okunamadı: " + e.Message); }
+            if (string.IsNullOrWhiteSpace(sunucu)) throw new KullaniciHatasi(Path.GetFileName(ServerXml) + "'de sunucu yok.");
 
             var sw = Stopwatch.StartNew();
             var sonuc = new JObject { ["zaman"] = DateTime.Now.ToString("s"), ["sunucu"] = sunucu, ["kullanici"] = kullanici };
@@ -430,18 +535,24 @@ namespace PusulaConnect
             {
                 var cs = new SqlConnectionStringBuilder
                 {
-                    DataSource = sunucu, UserID = kullanici, Password = sifre, InitialCatalog = "master",
+                    DataSource = sunucu, UserID = kullanici, Password = sifre,
+                    InitialCatalog = EskiMi && !string.IsNullOrEmpty(data) ? data : "master",
                     ConnectTimeout = 10, Encrypt = false, ApplicationName = "Pusula Connect (sayım testi)",
                 };
                 using (var c = new SqlConnection(cs.ConnectionString))
                 {
                     await c.OpenAsync();
                     sonuc["sqlSurum"] = c.ServerVersion;
-                    // Firma login'inin görebildiği veritabanları; paylaşımlı 'sirket' (giriş listesi için gerekli) sayılmaz
                     var liste = new JArray();
-                    using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 and name <> 'sirket' order by name", c))
-                    using (var r = await cmd.ExecuteReaderAsync())
-                        while (await r.ReadAsync()) liste.Add(new JObject { ["ad"] = r.GetString(0) });
+                    if (EskiMi)
+                        liste.Add(new JObject { ["ad"] = c.Database });   // açılabildi: program da bu veritabanıyla açılır
+                    else
+                    {
+                        // Firma login'inin görebildiği veritabanları; paylaşımlı 'sirket' (giriş listesi için gerekli) sayılmaz
+                        using (var cmd = new SqlCommand("select name from sys.databases where database_id > 4 and has_dbaccess(name) = 1 and name <> 'sirket' order by name", c))
+                        using (var r = await cmd.ExecuteReaderAsync())
+                            while (await r.ReadAsync()) liste.Add(new JObject { ["ad"] = r.GetString(0) });
+                    }
                     sonuc["ok"] = true;
                     sonuc["veritabanlari"] = liste;
                 }
@@ -453,12 +564,12 @@ namespace PusulaConnect
             }
             sonuc["sureMs"] = (int)sw.ElapsedMilliseconds;
             DurumYaz(d => d["test"] = sonuc);
-            Gunluk.Yaz("Sayım SQL testi: " + (sonuc.Value<bool?>("ok") == true ? "bağlandı, " + ((JArray)sonuc["veritabanlari"]).Count + " veritabanı" : "hata: " + sonuc.Value<string>("hata")));
+            Gunluk.Yaz("Sayım SQL testi (" + Tur + "): " + (sonuc.Value<bool?>("ok") == true ? "bağlandı, " + ((JArray)sonuc["veritabanlari"]).Count + " veritabanı" : "hata: " + sonuc.Value<string>("hata")));
             return sonuc;
         }
 
         /// <summary>Klasörü Gezgin'de açar (WebView içinden file:// açılmaz).</summary>
-        public static object KlasorAc()
+        public object KlasorAc()
         {
             if (!Directory.Exists(Klasor)) throw new KullaniciHatasi("Klasör yok: " + Klasor, 404);
             Process.Start(new ProcessStartInfo("explorer.exe", "\"" + Klasor + "\"") { UseShellExecute = true });
@@ -467,24 +578,23 @@ namespace PusulaConnect
 
         // ------------------------------------------------------------ kaldır
 
-        /// <summary>Kısayolu kaldırır; klasoruSil ise Pusula X kopyasını da siler.</summary>
-        public static object Kaldir(bool klasoruSil)
+        /// <summary>Kısayolu kaldırır; klasoruSil ise program kopyasını da siler.</summary>
+        public object Kaldir(bool klasoruSil)
         {
-            try { if (File.Exists(KisayolYolu)) File.Delete(KisayolYolu); } catch (Exception e) { Gunluk.Yaz("Sayım kısayolu silinemedi: " + e.Message); }
+            try { if (File.Exists(_kisayolYolu)) File.Delete(_kisayolYolu); } catch (Exception e) { Gunluk.Yaz("Sayım kısayolu silinemedi: " + e.Message); }
             if (klasoruSil && Directory.Exists(Klasor))
             {
                 try { Directory.Delete(Klasor, true); }
-                catch (Exception e) { throw new KullaniciHatasi("Klasör silinemedi (Pusula Sayım açık olabilir): " + e.GetBaseException().Message); }
+                catch (Exception e) { throw new KullaniciHatasi("Klasör silinemedi (" + _kisayolAdi + " açık olabilir): " + e.GetBaseException().Message); }
             }
             else if (!klasoruSil && Kurulu)
             {
-                // Klasör kalıyor ama sayım kapalı: RFID.xml kaldırılırsa kopya normal Pusula X gibi açılır — istenmez,
-                // o yüzden server.xml silinir (bağlantı bilgisi diskte kalmasın); yeniden açınca yeniden yazılır.
-                try { File.Delete(Path.Combine(Klasor, "server.xml")); } catch { }
+                // Klasör kalıyor ama sayım kapalı: bağlantı bilgisi diskte kalmasın; yeniden açınca yeniden yazılır.
+                try { File.Delete(ServerXml); } catch { }
             }
             DurumYaz(d => { d["kurulum"] = null; d["test"] = null; d["imza"] = null; });
             GuncellemeBekliyor = false;
-            Gunluk.Yaz("Sayım kaldırıldı" + (klasoruSil ? " (klasörle)" : ""));
+            Gunluk.Yaz("Sayım kaldırıldı (" + Tur + ")" + (klasoruSil ? " (klasörle)" : ""));
             return KisaDurum();
         }
 
@@ -502,14 +612,22 @@ namespace PusulaConnect
             }
         }
 
-        /// <summary>"--sayim-klasor": C:\Pusula\PusulaXSayım'ı oluşturur, Users'a değiştirme hakkı verir — pencere açmaz.</summary>
-        public static int YoneticiOlarakCalistir()
+        /// <summary>
+        /// "--sayim-klasor [yol]": klasörü oluşturur, Users'a değiştirme hakkı verir — pencere açmaz.
+        /// Yol yalnız C:\Pusula altında kabul edilir (yönetici süreci keyfi klasöre hak vermesin); verilmezse Pusula X klasörü.
+        /// </summary>
+        public static int YoneticiOlarakCalistir(string[] args)
         {
             try
             {
-                Directory.CreateDirectory(Klasor);
-                // Users (S-1-5-32-545) Modify: Pusula X kendini güncelleyebilsin, Connect dosyaları yazabilsin
-                var p = Process.Start(new ProcessStartInfo("icacls.exe", "\"" + Klasor + "\" /grant *S-1-5-32-545:(OI)(CI)M /T /Q")
+                var i = Array.IndexOf(args, "--sayim-klasor");
+                var yol = i >= 0 && i + 1 < args.Length && !args[i + 1].StartsWith("--") ? args[i + 1] : PusulaX.Klasor;
+                yol = Path.GetFullPath(yol);
+                var izinli = Hepsi.Any(s => string.Equals(Path.GetFullPath(s.Klasor), yol, StringComparison.OrdinalIgnoreCase));
+                if (!izinli) { Gunluk.Yaz("--sayim-klasor: izinsiz yol reddedildi: " + yol); return -4; }
+                Directory.CreateDirectory(yol);
+                // Users (S-1-5-32-545) Modify: program kendini güncelleyebilsin, Connect dosyaları yazabilsin
+                var p = Process.Start(new ProcessStartInfo("icacls.exe", "\"" + yol + "\" /grant *S-1-5-32-545:(OI)(CI)M /T /Q")
                 { UseShellExecute = false, CreateNoWindow = true });
                 p.WaitForExit(60000);
                 return p.HasExited ? p.ExitCode : -2;

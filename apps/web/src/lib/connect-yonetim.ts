@@ -24,6 +24,8 @@ export interface ConnectCihazDurum {
   dnsYok?: boolean | null
   /** Pusula X sayım modu (0.6.0+): kurulu değilse null */
   sayim?: ConnectSayimDurum | null
+  /** Eski program (Pusula.exe) sayımı (0.6.1+): kurulu değilse null */
+  sayimEski?: ConnectSayimDurum | null
 }
 
 export interface ConnectSayimDurum {
@@ -38,6 +40,9 @@ export interface ConnectSayimDurum {
   /** SQL bilgisi Pusula'da değişti, 2FA nedeniyle kullanıcının kodla yenilemesi bekleniyor */
   guncellemeBekliyor: boolean
   test: { zaman: string | null; ok: boolean; veritabani: number | null; hata: string | null } | null
+  /** Eski program: seçili veritabanı ve FORMID (612 Perakende / 146 Toptan) */
+  veritabani?: string | null
+  formId?: string | null
 }
 
 export interface ConnectCihazSatir {

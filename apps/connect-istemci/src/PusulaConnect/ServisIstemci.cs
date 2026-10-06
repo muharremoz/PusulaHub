@@ -65,7 +65,9 @@ namespace PusulaConnect
         /// <summary>Hub'daki güncel şifre (Hub'dan sıfırlanınca). 2FA açıksa kod şart; yanıtta kasaAnahtari da gelir.</summary>
         public Task<JObject> Sifre(string kod) => Gonder(HttpMethod.Post, "api/sifre", new { kod });
         /// <summary>Sayım modu: Hub'dan server.xml bilgisi + paket adresi/özeti (2FA açıksa kod şart).</summary>
-        public Task<JObject> Sayim(string kod) => Gonder(HttpMethod.Post, "api/sayim", new { kod });
+        public Task<JObject> Sayim(string kod, string tur) => Gonder(HttpMethod.Post, "api/sayim", new { kod, tur });
+        /// <summary>Eski program sayımı için firmanın veritabanları (Hub'dan, sirket.guvenlik).</summary>
+        public Task<JObject> SayimVeritabanlari() => Gonder(HttpMethod.Get, "api/sayim/veritabanlari", null);
         /// <summary>Firmanın veritabanları ve son yedek zamanları (salt gösterim).</summary>
         public Task<JObject> Yedekler() => Gonder(HttpMethod.Get, "api/yedekler", null);
         public Task<JObject> DuyuruOkundu(string id) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/okundu", new { });

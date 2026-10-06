@@ -86,6 +86,9 @@ const IMZA_DOSYASI = process.env.IMZA_DOSYASI ?? join(__dirname, "istemci", "Pus
  * Yanında .sha256 (hex) ve .surum.txt (Pusula X sürümü) durur — yayınlama: scripts/connect-sayim-paketi.sh
  */
 const SAYIM_PAKET = process.env.SAYIM_PAKET ?? join(__dirname, "istemci", "PusulaXSayim.zip")
+/** Eski program (Pusula.exe) sayım paketi — aynı düzen: .zip + .zip.sha256 + .surum.txt */
+const SAYIM_ESKI_PAKET = process.env.SAYIM_ESKI_PAKET ?? join(__dirname, "istemci", "PusulaEskiSayim.zip")
+const sayimPaketYolu = (tur) => (tur === "eski" ? SAYIM_ESKI_PAKET : SAYIM_PAKET)
 
 if (!SERVICE_KEY) {
   console.error("TRANSFER_SERVICE_KEY env değişkeni tanımlı değil")
@@ -135,7 +138,7 @@ for (const [ad, tip] of [
   ["terminalErisim", "INTEGER"],
   ["terminalMs", "INTEGER"],
   ["ip", "TEXT"],
-  ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar, dnsYok, sayim } — yalnız gösterim
+  ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar, dnsYok, sayim, sayimEski } — yalnız gösterim
   // token döndürme: nabızda TOKEN_OMRU_GUN'den eski token yenilenir; eskisi TOKEN_GECIS_DK boyunca da geçer
   ["tokenZaman", "TEXT"],
   ["eskiTokenOzet", "TEXT"],
@@ -731,7 +734,7 @@ fastify.post("/api/nabiz", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   const b = req.body ?? {}
   const t = b.terminal ?? {}
-  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null, dnsYok: b.dnsYok ?? null, sayim: b.sayim ?? null }
+  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null, dnsYok: b.dnsYok ?? null, sayim: b.sayim ?? null, sayimEski: b.sayimEski ?? null }
   sql.nabiz.run({
     id: c.cihazId,
     surum: String(req.headers["x-surum"] ?? "").slice(0, 20) || null,
@@ -842,23 +845,26 @@ fastify.get("/api/yedekler", async (req, reply) => {
 
 // ── Pusula X sayım modu ──
 
-/** Paketin SHA-256'sı ve sürümü; dosya değişince (boyut/zaman) yeniden hesaplanır. */
-let paketOzeti = null
-async function sayimPaketOzeti() {
-  const st = await stat(SAYIM_PAKET)
+/** Paketin SHA-256'sı ve sürümü; dosya değişince (boyut/zaman) yeniden hesaplanır. tur başına önbellek. */
+const paketOzetleri = new Map()
+async function sayimPaketOzeti(tur) {
+  const yol = sayimPaketYolu(tur)
+  const st = await stat(yol)
   const anahtar = st.size + ":" + st.mtimeMs
-  if (paketOzeti?.anahtar === anahtar) return paketOzeti
+  const o = paketOzetleri.get(yol)
+  if (o?.anahtar === anahtar) return o
   let sha256 = null
-  try { sha256 = (await readFile(SAYIM_PAKET + ".sha256", "utf8")).trim().toLowerCase() || null } catch { /* yoksa hesapla */ }
+  try { sha256 = (await readFile(yol + ".sha256", "utf8")).trim().toLowerCase() || null } catch { /* yoksa hesapla */ }
   if (!sha256) {
     const h = createHash("sha256")
-    await new Promise((tamam, hata) => createReadStream(SAYIM_PAKET).on("data", (p) => h.update(p)).on("end", tamam).on("error", hata))
+    await new Promise((tamam, hata) => createReadStream(yol).on("data", (p) => h.update(p)).on("end", tamam).on("error", hata))
     sha256 = h.digest("hex")
   }
   let surum = null
-  try { surum = (await readFile(SAYIM_PAKET.replace(/\.zip$/, "") + ".surum.txt", "utf8")).trim() || null } catch { /* sürüm yazılmamış */ }
-  paketOzeti = { anahtar, sha256, boyut: st.size, surum }
-  return paketOzeti
+  try { surum = (await readFile(yol.replace(/\.zip$/, "") + ".surum.txt", "utf8")).trim() || null } catch { /* sürüm yazılmamış */ }
+  const yeni = { anahtar, sha256, boyut: st.size, surum }
+  paketOzetleri.set(yol, yeni)
+  return yeni
 }
 
 /**
@@ -872,12 +878,13 @@ fastify.post("/api/sayim", async (req, reply) => {
     const adim = koduDenetle(c, req.body?.kod, coz(c.totpGizli), reply); if (adim == null) return
     sql.totpBasari.run(adim, c.cihazId)
   }
+  const tur = req.body?.tur === "eski" ? "eski" : "pusulax"
   let paket = null
-  try { const o = await sayimPaketOzeti(); paket = { url: "sayim-paket", sha256: o.sha256, boyut: o.boyut, surum: o.surum } }
+  try { const o = await sayimPaketOzeti(tur); paket = { url: tur === "eski" ? "sayim-paket?tur=eski" : "sayim-paket", sha256: o.sha256, boyut: o.boyut, surum: o.surum } }
   catch { return reply.code(503).send({ hata: "Sayım paketi henüz yayınlanmadı." }) }
   try {
     const j = await hubSayim(c)
-    olay("sayim_bilgisi_iletildi", { cihaz: c, kaynak: "servis", ip: istemciIp(req), ayrinti: c.totpAktif ? "2FA ile" : null })
+    olay("sayim_bilgisi_iletildi", { cihaz: c, kaynak: "servis", ip: istemciIp(req), ayrinti: tur + (c.totpAktif ? " · 2FA ile" : "") })
     return { bilgi: j, paket }
   } catch (e) {
     return reply.code(e.durum ?? 502).send({ hata: e.durum === 409 || e.durum === 404 ? e.message : "Sayım bilgisi Pusula'dan alınamadı: " + e.message })
@@ -886,12 +893,27 @@ fastify.post("/api/sayim", async (req, reply) => {
 
 fastify.get("/sayim-paket", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
+  const yol = sayimPaketYolu(req.query?.tur === "eski" ? "eski" : "pusulax")
   let st
-  try { st = await stat(SAYIM_PAKET) } catch { return reply.code(404).type("text/plain; charset=utf-8").send("Sayım paketi henüz yayınlanmadı.") }
+  try { st = await stat(yol) } catch { return reply.code(404).type("text/plain; charset=utf-8").send("Sayım paketi henüz yayınlanmadı.") }
   reply.header("Content-Type", "application/zip")
   reply.header("Content-Length", st.size)
   reply.header("Cache-Control", "no-store")
-  return reply.send(createReadStream(SAYIM_PAKET))
+  return reply.send(createReadStream(yol))
+})
+
+/** Eski program sayımı: firmanın veritabanları (Hub, sirket.guvenlik) — şifre içermez, kod istemez. */
+fastify.get("/api/sayim/veritabanlari", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  try {
+    const r = await fetch(`${HUB_URL}/api/hub/connect/sayim-veritabanlari?firma=${encodeURIComponent(c.firmaId)}`,
+      { headers: { "X-Service-Key": SERVICE_KEY }, signal: AbortSignal.timeout(20000) })
+    const j = await r.json().catch(() => ({}))
+    if (!r.ok) return reply.code(r.status >= 400 && r.status < 500 ? r.status : 502).send({ hata: j.error ?? `Hub HTTP ${r.status}` })
+    return j
+  } catch (e) {
+    return reply.code(502).send({ hata: "Veritabanı listesi Pusula'dan alınamadı: " + e.message })
+  }
 })
 
 fastify.get("/saglik", async () => ({ tamam: true, servis: "pusula-connect", minIstemci: MIN_SURUM }))
