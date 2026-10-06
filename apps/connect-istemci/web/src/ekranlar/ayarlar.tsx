@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Cable, CheckCircle2, Clipboard, Download, FileText, HardDrive, KeyRound, Loader2, LockKeyhole, LogOut, Maximize2, Monitor, Power, Printer,
   RefreshCw, ScanBarcode, ShieldCheck, Usb, Video, Volume2,
@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ESKI_PROGRAMLAR, YaziciAjaniBolumu } from "./yazici-ajani";
+import { YazdirmaBolumu } from "./yazdirma";
 import { SayimBolumu } from "./sayim";
 
 type AyarAdi =
@@ -118,15 +118,15 @@ export function AyarlarIcerik({
       )}
 
       <Tabs value={sekme} onValueChange={sekmeDegistir} className="gap-4">
-        <TabsList className="w-full">
-          <TabsTrigger value="baglanti" className="flex-1"><Monitor /> Bağlantı</TabsTrigger>
-          <TabsTrigger value="yazdirma" className="flex-1"><Printer /> Yazdırma</TabsTrigger>
-          <TabsTrigger value="sayim" className="flex-1"><ScanBarcode /> Sayım</TabsTrigger>
-          <TabsTrigger value="guvenlik" className="flex-1"><ShieldCheck /> Güvenlik</TabsTrigger>
-          <TabsTrigger value="uygulama" className="flex-1"><Power /> Uygulama</TabsTrigger>
-        </TabsList>
+        <KayanSekmeler sekme={sekme}>
+          <TabsTrigger value="baglanti" className={SEKME_TETIK}><Monitor /> Bağlantı</TabsTrigger>
+          <TabsTrigger value="yazdirma" className={SEKME_TETIK}><Printer /> Yazdırma</TabsTrigger>
+          <TabsTrigger value="sayim" className={SEKME_TETIK}><ScanBarcode /> Sayım</TabsTrigger>
+          <TabsTrigger value="guvenlik" className={SEKME_TETIK}><ShieldCheck /> Güvenlik</TabsTrigger>
+          <TabsTrigger value="uygulama" className={SEKME_TETIK}><Power /> Uygulama</TabsTrigger>
+        </KayanSekmeler>
 
-        <TabsContent value="baglanti" className="flex flex-col gap-4">
+        <TabsContent value="baglanti" className={SEKME_ICERIK}>
           <Bolum baslik="Oturum" aciklama="Bir sonraki bağlanışta geçerli olur.">
             <Satir ikon={<Maximize2 />} ad="Tam ekran başlat" aciklama="Oturum açılınca doğrudan tam ekrana geçilir." kontrol={anahtar("tamEkran")} />
           </Bolum>
@@ -146,16 +146,15 @@ export function AyarlarIcerik({
           </Bolum>
         </TabsContent>
 
-        <TabsContent value="yazdirma" className="flex flex-col gap-4">
-          <YaziciAjaniBolumu />
-          <YaziciAjaniBolumu tur={ESKI_PROGRAMLAR} />
+        <TabsContent value="yazdirma" className={SEKME_ICERIK}>
+          <YazdirmaBolumu durum={durum} setDurum={setDurum} />
         </TabsContent>
 
-        <TabsContent value="sayim" className="flex flex-col gap-4">
+        <TabsContent value="sayim" className={SEKME_ICERIK}>
           <SayimBolumu durum={durum} setDurum={setDurum} />
         </TabsContent>
 
-        <TabsContent value="guvenlik" className="flex flex-col gap-4">
+        <TabsContent value="guvenlik" className={SEKME_ICERIK}>
           <Bolum baslik="İki adımlı doğrulama">
             <Satir
               ikon={<ShieldCheck />}
@@ -214,7 +213,7 @@ export function AyarlarIcerik({
           </Bolum>
         </TabsContent>
 
-        <TabsContent value="uygulama" className="flex flex-col gap-4">
+        <TabsContent value="uygulama" className={SEKME_ICERIK}>
           <Bolum baslik="Başlangıç">
             <Satir ikon={<Power />} ad="Windows açılınca başlat" aciklama="Bilgisayar açılınca Pusula Connect de açılır." kontrol={anahtar("windowsIleBaslat")} />
           </Bolum>
@@ -282,6 +281,49 @@ export function AyarlarIcerik({
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+/** Sekme tetiği: etkin arka planı kayan göstergeden gelir (kendi arka planı saydam). */
+const SEKME_TETIK =
+  "relative z-10 flex-1 transition-colors duration-200 data-active:bg-transparent data-active:shadow-none dark:data-active:border-transparent dark:data-active:bg-transparent";
+/** Sekme içeriği: açılışta yumuşak giriş (Radix etkin olmayan içeriği kaldırır; her geçişte yeniden oynar). */
+const SEKME_ICERIK = "flex flex-col gap-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-300 ease-out";
+
+/**
+ * TabsList + etkin sekmenin altında kayan arka plan. Konum etkin tetiğin DOM ölçüsünden alınır
+ * (pencere boyutu değişince de yeniden ölçülür); ilk ölçümde geçiş yapılmaz, yerinde başlar.
+ */
+function KayanSekmeler({ sekme, children }: { sekme: string; children: React.ReactNode }) {
+  const liste = useRef<HTMLDivElement>(null);
+  const [kutu, setKutu] = useState<{ left: number; width: number } | null>(null);
+  const ilk = useRef(true);
+  useLayoutEffect(() => {
+    const olc = () => {
+      const el = liste.current?.querySelector<HTMLElement>('[data-slot="tabs-trigger"][data-state="active"]');
+      if (el) setKutu({ left: el.offsetLeft, width: el.offsetWidth });
+    };
+    olc();
+    window.addEventListener("resize", olc);
+    return () => window.removeEventListener("resize", olc);
+  }, [sekme]);
+  useEffect(() => {
+    if (kutu) ilk.current = false;
+  }, [kutu]);
+  return (
+    <TabsList ref={liste} className="relative w-full">
+      {kutu && (
+        <span
+          aria-hidden
+          className={
+            "absolute top-[3px] bottom-[3px] rounded-md bg-background shadow-sm dark:border dark:border-input dark:bg-input/30 " +
+            (ilk.current ? "" : "transition-[left,width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]")
+          }
+          style={{ left: kutu.left, width: kutu.width }}
+        />
+      )}
+      {children}
+    </TabsList>
   );
 }
 

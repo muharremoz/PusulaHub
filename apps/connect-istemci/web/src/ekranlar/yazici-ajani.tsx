@@ -68,12 +68,12 @@ const PUSULAX: Tur = {
 
 export const ESKI_PROGRAMLAR: Tur = {
   uc: "/rfid",
-  baslik: "Eski programlar yazdırma yardımcısı",
-  aciklama: "Eski Pusula programlarından RFID / etiket yazdırma",
+  baslik: "Pusula yazdırma yardımcısı",
+  aciklama: "Pusula programlarından RFID / etiket yazdırma",
   ad: "RFID yardımcısı",
   varsayilanPort: 5252,
-  kurulmamis: "Eski Pusula programlarının bu bilgisayardaki yazıcıya yazdırabilmesi için kurun.",
-  program: "Eski program",
+  kurulmamis: "Pusula programlarının bu bilgisayardaki yazıcıya yazdırabilmesi için kurun.",
+  program: "Pusula",
   rfid: true,
 };
 
@@ -82,7 +82,13 @@ export const ESKI_PROGRAMLAR: Tur = {
  * yazıcısına (RFID etiket) yazdırır. Eskiden elle kopyalanıp Başlangıç'a eklenirdi; artık buradan kurulur:
  * yazıcı + port seçilir → Kur (port izni ve güvenlik duvarı için bir kez yönetici izni) → Windows açılışında başlar.
  */
-export function YaziciAjaniBolumu({ tur = PUSULAX }: { tur?: Tur }) {
+export { PUSULAX };
+
+/**
+ * ust: bölümün en üstüne konan içerik (program seçimi); baslik: bölüm başlığı (verilmezse türün başlığı);
+ * onDegisti: kurulum/kaldırma sonrası — üst bileşen durumu tazeler (tek yardımcı kuralı).
+ */
+export function YaziciAjaniBolumu({ tur = PUSULAX, ust, baslik, onDegisti }: { tur?: Tur; ust?: React.ReactNode; baslik?: string; onDegisti?: () => void }) {
   const VARSAYILAN_PORT = tur.varsayilanPort;
   const [d, setD] = useState<AjanDurum | null>(null);
   const [yazici, setYazici] = useState("");
@@ -134,9 +140,11 @@ export function YaziciAjaniBolumu({ tur = PUSULAX }: { tur?: Tur }) {
       if (ne === "kaldir") {
         setD(await api<AjanDurum>(`${tur.uc}/kaldir`, {}));
         setTest(null);
+        onDegisti?.();
       } else {
         setTest(await api<TestSonuc>(ne === "kur" ? `${tur.uc}/kur` : `${tur.uc}/test`, ne === "kur" ? { yazici, port: portNo } : {}));
         setD(await api<AjanDurum>(`${tur.uc}/durum`, {}));
+        if (ne === "kur") onDegisti?.();
       }
     } catch (e) {
       setHata((e as Error).message);
@@ -159,7 +167,8 @@ export function YaziciAjaniBolumu({ tur = PUSULAX }: { tur?: Tur }) {
   );
 
   return (
-    <Bolum baslik={tur.baslik} aciklama={tur.aciklama}>
+    <Bolum baslik={baslik ?? tur.baslik} aciklama={tur.aciklama}>
+      {ust}
       <div className="flex items-center gap-3 px-4 py-3">
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4">
           <Printer />

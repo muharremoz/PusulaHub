@@ -155,12 +155,12 @@ namespace PusulaConnect
                 case "POST /duyuru/okundu": return _uygulama.DuyuruOkundu(i.Metin("id"));
                 case "POST /yazici/durum": return Task.Run(YaziciAjani.Durum);
                 case "POST /yazici/port": return YaziciAjani.PortDenetle(i.Sayi("port"));
-                case "POST /yazici/kur": return YaziciAjani.Kur(i.Metin("yazici"), i.Sayi("port"));
+                case "POST /yazici/kur": return TekYazdirmaKur(true, i.Metin("yazici"), i.Sayi("port"));
                 case "POST /yazici/test": return YaziciAjani.Test();
                 case "POST /yazici/kaldir": return YaziciAjani.Kaldir();
                 case "POST /rfid/durum": return Task.Run(RfidYardimcisi.Durum);
                 case "POST /rfid/port": return RfidYardimcisi.PortDenetle(i.Sayi("port"));
-                case "POST /rfid/kur": return RfidYardimcisi.Kur(i.Metin("yazici"), i.Sayi("port"));
+                case "POST /rfid/kur": return TekYazdirmaKur(false, i.Metin("yazici"), i.Sayi("port"));
                 case "POST /rfid/test": return RfidYardimcisi.Test();
                 case "POST /rfid/kaldir": return RfidYardimcisi.Kaldir();
                 case "POST /yedekler/yenile": return _uygulama.YedekleriYenile();
@@ -180,6 +180,17 @@ namespace PusulaConnect
                     return Task.FromResult<object>(new { tamam = true });
                 default: throw new KullaniciHatasi("Bilinmeyen istek: " + i.Yontem + " " + i.Yol, 404);
             }
+        }
+
+        /// <summary>
+        /// Aynı anda tek yazdırma yardımcısı: Pusula X ajanı (pusulaX) ya da Pusula RFID yardımcısı. Diğeri kuruluysa
+        /// önce kaldırılır (izin kaydı silinirken UAC reddedilirse kalır — zararsız).
+        /// </summary>
+        private static async Task<object> TekYazdirmaKur(bool pusulaX, string yazici, int port)
+        {
+            if (pusulaX && RfidYardimcisi.Kurulu) { await RfidYardimcisi.Kaldir(); Gunluk.Yaz("Yazdırma yardımcısı değişti: Pusula → Pusula X"); }
+            if (!pusulaX && YaziciAjani.Kurulu) { await YaziciAjani.Kaldir(); Gunluk.Yaz("Yazdırma yardımcısı değişti: Pusula X → Pusula"); }
+            return pusulaX ? await YaziciAjani.Kur(yazici, port) : await RfidYardimcisi.Kur(yazici, port);
         }
 
         private static void Kapat()

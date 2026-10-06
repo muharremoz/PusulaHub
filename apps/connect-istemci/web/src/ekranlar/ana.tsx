@@ -161,7 +161,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             {durum.yazdirma?.kurulu && (
               <SolSatir
                 ikon={<Printer />}
-                ad="Yazdırma yardımcısı"
+                ad="Yazdırma yardımcısı (Pusula X)"
                 deger={
                   <span className="inline-flex items-center gap-1.5 font-medium">
                     <span className={"size-2 rounded-full " + (durum.yazdirma.calisiyor ? "bg-emerald-500" : "bg-amber-500")} />
@@ -182,7 +182,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             {durum.rfid?.kurulu && (
               <SolSatir
                 ikon={<Printer />}
-                ad="RFID yardımcısı (eski programlar)"
+                ad="Yazdırma yardımcısı (Pusula)"
                 deger={
                   <span className="inline-flex items-center gap-1.5 font-medium">
                     <span className={"size-2 rounded-full " + (durum.rfid.calisiyor ? "bg-emerald-500" : "bg-amber-500")} />
