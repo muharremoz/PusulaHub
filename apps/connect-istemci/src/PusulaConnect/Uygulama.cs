@@ -775,7 +775,7 @@ namespace PusulaConnect
         /// </summary>
         /// <summary>
         /// Kayıt kalkınca (kullanıcı ya da Pusula) bu cihazdaki bağlantı izleri silinir: RDP şifreleri (ad ve IP) ve .rdp
-        /// dosyaları, FortiClient'ta kayıtlı VPN şifresi; açık VPN kesilir. FortiClient'ın sunucu/kullanıcı adı ayarı (HKLM)
+        /// dosyaları, FortiClient'ta kayıtlı VPN şifresi, yazdırma yardımcıları; açık VPN kesilir. FortiClient'ın sunucu/kullanıcı adı ayarı (HKLM)
         /// yönetici istediği için burada silinmez — VPN kullanıcı işareti "-" olur, yeni kodla gelen kullanıcı eşleşmez ve
         /// "VPN ayarı" adımı sunucuyu + kullanıcı adını yeni kayda göre yeniden yazar.
         /// </summary>
@@ -799,6 +799,13 @@ namespace PusulaConnect
                 // Kesme birkaç saniye sürebilir (netsh) — arayüzü bekletmesin
                 _ = Task.Run(() => { try { if (Fortinet.SslVpnBagli()) Gunluk.Yaz("Kayıt kalktı, VPN " + (Fortinet.SslVpnKes() ? "kesildi" : "KESİLEMEDİ")); } catch { } });
             }
+            // Yazdırma yardımcıları da kaldırılır (yeni kayıt başka firma olabilir). İzin kaydını (urlacl/güvenlik duvarı)
+            // silmek UAC ister; reddedilirse kural kalır — zararsız. Arayüzü bekletmesin diye arka planda.
+            _ = Task.Run(async () =>
+            {
+                try { if (YaziciAjani.Kurulu) await YaziciAjani.Kaldir(); } catch (Exception e) { Gunluk.Yaz("Kayıt kalktı, yazdırma yardımcısı (Pusula X) kaldırılamadı: " + e.Message); }
+                try { if (RfidYardimcisi.Kurulu) await RfidYardimcisi.Kaldir(); } catch (Exception e) { Gunluk.Yaz("Kayıt kalktı, yazdırma yardımcısı (Pusula) kaldırılamadı: " + e.Message); }
+            });
             Gunluk.Yaz("Kayıt kalktı: RDP ve VPN bilgileri bu bilgisayardan silindi");
         }
 
