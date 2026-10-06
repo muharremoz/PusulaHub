@@ -1,4 +1,4 @@
-import { query } from "./db"
+import { getSupabaseAdmin } from "./supabase/admin"
 import { getAllAgents } from "./agent-store"
 import {
   createMessage,
@@ -71,12 +71,12 @@ async function resolveTargets(input: BroadcastInput): Promise<Map<string, string
   let allowedServerIds: Set<string> | null = null
   if (input.recipientType === "company") {
     if (!input.companyId) return groups
-    const rows = await query<{ WindowsServerId: string | null; AdServerId: string | null }[]>`
-      SELECT WindowsServerId, AdServerId FROM Companies WHERE CompanyId = ${input.companyId}
-    `
-    if (!rows.length) return groups
+    const { data: firma } = await hub().from("companies")
+      .select("windows_server_id, ad_server_id").eq("company_id", input.companyId).maybeSingle()
+    const f = firma as { windows_server_id: string | null; ad_server_id: string | null } | null
+    if (!f) return groups
     allowedServerIds = new Set(
-      [rows[0].WindowsServerId, rows[0].AdServerId].filter((x): x is string => !!x)
+      [f.windows_server_id, f.ad_server_id].filter((x): x is string => !!x)
     )
   }
 
@@ -95,15 +95,19 @@ async function resolveTargets(input: BroadcastInput): Promise<Map<string, string
   return groups
 }
 
+/*  Eski MSSQL `Servers`/`Companies` tablolarından okuyordu; yeni sistemde
+ *  (Coolify, 2026-08) o veritabanı yok → gönderim hiç çalışmıyordu. Artık
+ *  hub şeması. Service-role: agent-poller gibi oturumsuz çağrılar da var.  */
+const hub = () => getSupabaseAdmin().schema("hub")
+
 async function getServerInfo(serverIds: string[]): Promise<Map<string, ServerInfoRow>> {
   if (serverIds.length === 0) return new Map()
+  const { data, error } = await hub().from("servers")
+    .select("id, name, ip, api_key, agent_port").in("id", serverIds)
+  if (error) throw error
   const map = new Map<string, ServerInfoRow>()
-  // Tek tek çek — id sayısı genellikle az (online agent'lar)
-  for (const id of serverIds) {
-    const rows = await query<ServerInfoRow[]>`
-      SELECT Id, Name, IP, ApiKey, AgentPort FROM Servers WHERE Id = ${id}
-    `
-    if (rows.length) map.set(id, rows[0])
+  for (const r of (data ?? []) as { id: string; name: string; ip: string; api_key: string | null; agent_port: number | null }[]) {
+    map.set(r.id, { Id: r.id, Name: r.name, IP: r.ip, ApiKey: r.api_key, AgentPort: r.agent_port })
   }
   return map
 }
@@ -116,10 +120,9 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
   // Firma adını çek (UI'da göstermek için)
   let companyName: string | null = null
   if (input.recipientType === "company" && input.companyId) {
-    const rows = await query<{ Name: string }[]>`
-      SELECT Name FROM Companies WHERE CompanyId = ${input.companyId}
-    `
-    companyName = rows[0]?.Name ?? null
+    const { data: firma } = await hub().from("companies")
+      .select("name").eq("company_id", input.companyId).maybeSingle()
+    companyName = (firma as { name: string } | null)?.name ?? null
   }
 
   // Toplam alıcı sayısı
