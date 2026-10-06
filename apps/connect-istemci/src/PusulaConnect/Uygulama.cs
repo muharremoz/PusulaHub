@@ -580,6 +580,12 @@ namespace PusulaConnect
         {
             var s = Sayim.Bul(tur);
             var j = await SayimBilgisi(kod, s.Tur);
+            // Aynı anda tek sayım: diğeri kuruluysa kapatılır (kısayol + bağlantı dosyası; dosyalar kalır, geri dönüş hızlı)
+            foreach (var diger in Sayim.Hepsi.Where(x => x != s && x.Kurulu))
+            {
+                diger.Kaldir(false);
+                Gunluk.Yaz("Sayım programı değişti: " + diger.Tur + " → " + s.Tur);
+            }
             s.KurBaslat((JObject)j["bilgi"], (JObject)j["paket"], _servis.Adres, _servis.Token, secim);
             _ = _servis.Olay("sayim_kurulum_baslatildi", s.Tur + " " + j["paket"]?.Value<string>("surum"));
             return Durum();

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { CheckCircle2, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Save, Trash2, Zap } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ArrowLeftRight, CheckCircle2, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Save, Trash2, Zap } from "lucide-react";
 import { api, type Durum, type SayimDurum, type SayimSecim, type SayimTest, type SayimVeritabani } from "@/api";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -11,10 +11,12 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Bolum } from "./ayarlar";
 
 /**
- * Sayım — Ayarlar > Sayım. İki kart, ikisi de aynı bileşen:
+ * Sayım — Ayarlar > Sayım. Tek kart, en başta program seçimi; aynı anda yalnız biri kurulu olur
+ * (istemci de zorlar: birini kurmak diğerinin kısayolunu ve bağlantı dosyasını kaldırır, dosyalar kalır):
  *   Pusula X: C:\Pusula\PusulaXSayım (RFID.xml'li kopya); veritabanını kullanıcı Pusula X giriş ekranında seçer.
  *   Eski program: C:\Pusula\PusulaSayimEski (Pusula.exe); TEK veritabanıyla açılır — veritabanı ve program
  *     (FORMID: 612 Perakende / 146 Toptan) burada seçilir, Server.xml'e yazılır; sonradan değiştirilebilir.
@@ -46,16 +48,47 @@ const FORMLAR = [
 ];
 const formAd = (id: string | null | undefined) => FORMLAR.find((f) => f.id === id)?.ad ?? id ?? "—";
 
+const kuruluMu = (s: SayimDurum | undefined) => !!s && (s.kurulu || s.kuruluyor);
+
 export function SayimBolumu({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
+  // Kurulu (ya da kurulmakta) olan program; yoksa kullanıcının seçimi
+  const aktif: Tur | null = kuruluMu(durum.sayim) ? "pusulax" : kuruluMu(durum.sayimEski) ? "eski" : null;
+  const [secilen, setSecilen] = useState<Tur>(aktif ?? "pusulax");
+  useEffect(() => {
+    if (aktif) setSecilen(aktif);
+  }, [aktif]);
+  const tur = aktif ?? secilen;
+
+  const secici = aktif ? null : (
+    <div className="flex flex-col gap-1.5 px-4 py-3">
+      <Label className="text-xs">Sayım hangi programla yapılacak?</Label>
+      <ToggleGroup type="single" variant="outline" value={secilen} onValueChange={(v) => v && setSecilen(v as Tur)} className="w-full">
+        <ToggleGroupItem value="pusulax" className="flex-1">Pusula X</ToggleGroupItem>
+        <ToggleGroupItem value="eski" className="flex-1">Eski program</ToggleGroupItem>
+      </ToggleGroup>
+    </div>
+  );
+
   return (
-    <>
-      <SayimKarti tur="pusulax" s={durum.sayim} durum={durum} setDurum={setDurum} />
-      <SayimKarti tur="eski" s={durum.sayimEski} durum={durum} setDurum={setDurum} />
-    </>
+    <SayimKarti
+      key={tur}
+      tur={tur}
+      s={tur === "eski" ? durum.sayimEski : durum.sayim}
+      durum={durum}
+      setDurum={setDurum}
+      secici={secici}
+      onProgramDegistir={() => setSecilen(tur === "eski" ? "pusulax" : "eski")}
+    />
   );
 }
 
-function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | undefined; durum: Durum; setDurum: (d: Durum) => void }) {
+function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
+  tur: Tur; s: SayimDurum | undefined; durum: Durum; setDurum: (d: Durum) => void;
+  /** Program seçimi (yalnız hiçbiri kurulu değilken) */
+  secici: ReactNode;
+  /** Kurulu program kaldırıldı, diğerine geçilecek */
+  onProgramDegistir: () => void;
+}) {
   const t = TUR[tur];
   const eski = tur === "eski";
   const ikiAktif = !!durum.ikiAdim?.aktif;
@@ -64,6 +97,7 @@ function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | und
   const [bekle, setBekle] = useState<null | "kur" | "guncelle" | "test" | "kaldir" | "liste">(null);
   const [hata, setHata] = useState<string | null>(null);
   const [kaldirOnay, setKaldirOnay] = useState(false);
+  const [degistirOnay, setDegistirOnay] = useState(false);
   const [test, setTest] = useState<SayimTest | null>(s?.test ?? null);
 
   // Eski program: veritabanı + program seçimi
@@ -162,6 +196,22 @@ function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | und
     }
   };
 
+  // Programı değiştir: bu kurulum kapatılır (dosyalar kalır), seçim diğer programa geçer
+  const programDegistir = async () => {
+    setBekle("kaldir");
+    setHata(null);
+    try {
+      await api("/sayim/kaldir", { tur, klasor: false });
+      setDurum(await api<Durum>("/durum"));
+      onProgramDegistir();
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      setBekle(null);
+      setDegistirOnay(false);
+    }
+  };
+
   // Anahtar: Pusula X hemen kurar; eski program önce veritabanı/program seçimini açar
   const anahtar = (v: boolean) => {
     if (!v) return setKaldirOnay(true);
@@ -177,11 +227,12 @@ function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | und
 
   return (
     <>
-      <Bolum baslik={t.baslik} aciklama="Bu bilgisayarda, terminale bağlanmadan">
+      <Bolum baslik="Sayım" aciklama="Bu bilgisayarda, terminale bağlanmadan">
+        {secici}
         <div className="flex items-center gap-3 px-4 py-3">
           <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground [&_svg]:size-4"><ScanBarcode /></span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">Sayım kullanılacak</div>
+            <div className="text-sm font-medium">{acik ? `${t.baslik} kurulu` : "Sayım kullanılacak"}</div>
             <div className="text-xs text-muted-foreground">
               {t.aciklama} Masaüstüne <span className="font-medium">{t.kisayol}</span> kısayolu konur.
             </div>
@@ -333,6 +384,9 @@ function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | und
               <Button size="sm" variant="ghost" onClick={() => void api("/sayim/klasor", { tur }).catch((e) => setHata((e as Error).message))} title="Klasörü aç">
                 <FolderOpen /> Klasör
               </Button>
+              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setDegistirOnay(true)} disabled={bekle !== null}>
+                <ArrowLeftRight /> Programı değiştir
+              </Button>
             </div>
           </>
         )}
@@ -384,6 +438,24 @@ function SayimKarti({ tur, s, durum, setDurum }: { tur: Tur; s: SayimDurum | und
           )}
         </Bolum>
       )}
+
+      <AlertDialog open={degistirOnay} onOpenChange={(o) => !o && setDegistirOnay(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Sayım programı değiştirilsin mi?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Aynı anda tek sayım programı kullanılır. {t.baslik} kapatılır: <span className="font-medium">{t.kisayol}</span> kısayolu ve bağlantı
+              bilgisi silinir, dosyaları diskte kalır. Ardından {tur === "eski" ? "Pusula X" : "eski program"} sayımını kurabilirsiniz.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction disabled={bekle !== null} onClick={(e) => { e.preventDefault(); void programDegistir(); }}>
+              {bekle === "kaldir" ? <Loader2 className="animate-spin" /> : <ArrowLeftRight />} Değiştir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={kaldirOnay} onOpenChange={(o) => !o && setKaldirOnay(false)}>
         <AlertDialogContent>
