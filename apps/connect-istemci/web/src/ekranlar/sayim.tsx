@@ -52,6 +52,15 @@ function gizle(metin: string | null | undefined, t: { kullanici?: string | null;
   return m;
 }
 
+/** Bilgi tablosunda değerin yanındaki küçük düğme (Değiştir) */
+function SatirDugmesi({ children, onClick, disabled }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <Button size="sm" variant="outline" className="h-6 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3" onClick={onClick} disabled={disabled}>
+      {children}
+    </Button>
+  );
+}
+
 const formAd = (id: string | null | undefined) => FORMLAR.find((f) => f.id === id)?.ad ?? id ?? "—";
 
 const kuruluMu = (s: SayimDurum | undefined) => !!s && (s.kurulu || s.kuruluyor);
@@ -362,20 +371,27 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
 
         {s?.kurulu && !s.kuruluyor && (
           <>
-            <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 px-4 py-3 text-xs">
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5 px-4 py-3 text-xs">
               <span className="text-muted-foreground">Klasör</span>
               <span className="truncate" title={s.klasor}>{s.klasor}</span>
-              <span className="text-muted-foreground">{t.program}</span>
-              <span>{s.surum ?? "—"}{s.paketSurum && s.surum && !s.surum.startsWith(s.paketSurum) ? ` (paket ${s.paketSurum})` : ""}</span>
+              <span className="self-center text-muted-foreground">Sayım programı</span>
+              <span className="flex items-center gap-2">
+                <span className="truncate">
+                  {t.program} {s.surum ?? ""}{s.paketSurum && s.surum && !s.surum.startsWith(s.paketSurum) ? ` (paket ${s.paketSurum})` : ""}
+                </span>
+                <SatirDugmesi onClick={() => setDegistirOnay(true)} disabled={bekle !== null}>
+                  <ArrowLeftRight /> Değiştir
+                </SatirDugmesi>
+              </span>
               {eski && (
                 <>
-                  <span className="text-muted-foreground">Veritabanı</span>
+                  <span className="self-center text-muted-foreground">Veritabanı</span>
                   <span className="flex items-center gap-2">
                     <span className="truncate">{s.secim ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : "—"}</span>
                     {!secimAcik && (
-                      <button className="shrink-0 text-xs font-medium text-primary hover:underline" onClick={() => { setSecimAcik(true); if (!vtListe) void listeyiGetir(); }}>
-                        Değiştir
-                      </button>
+                      <SatirDugmesi onClick={() => { setSecimAcik(true); if (!vtListe) void listeyiGetir(); }} disabled={bekle !== null}>
+                        <Database /> Değiştir
+                      </SatirDugmesi>
                     )}
                   </span>
                   <span className="text-muted-foreground">Program</span>
@@ -404,9 +420,6 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
               </Button>
               <Button size="sm" variant="ghost" onClick={() => void api("/sayim/klasor", { tur }).catch((e) => setHata((e as Error).message))} title="Klasörü aç">
                 <FolderOpen /> Klasör
-              </Button>
-              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setDegistirOnay(true)} disabled={bekle !== null}>
-                <ArrowLeftRight /> Programı değiştir
               </Button>
             </div>
           </>
