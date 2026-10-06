@@ -343,7 +343,64 @@ namespace PusulaConnect
             Gunluk.Yaz("Cihaz kaydedildi: " + k.Value<string>("kullanici") + " / " + k.Value<string>("firmaId"));
             lock (_kilit) { _kayit = k; _asama = "hazir"; _mesaj = null; }
             _ = Task.Run(Kontrol);
+            _ = Task.Run(SayimiKayittaYaz);
             return Durum();
+        }
+
+        /// <summary>
+        /// Yeni kayıt (başka firma/kullanıcı olabilir): kurulu sayımın bağlantı dosyası imzaya bakmadan bu kaydın
+        /// bilgisiyle yeniden yazılır — önceki firmanın SQL girişi diskte kalmasın. Eski programda kayıtlı
+        /// veritabanı yeni firmanın listesinde yoksa bağlantı kapatılır (kullanıcı yeniden seçer). 2FA açıksa
+        /// kod gerektiği için bağlantı kapatılır; kullanıcı Ayarlar > Sayım'dan yeniden açar.
+        /// </summary>
+        private async Task SayimiKayittaYaz()
+        {
+            var kurulu = Sayim.Hepsi.Where(s => s.Kurulu).ToList();
+            if (kurulu.Count == 0) return;
+            if (IkiAktif)
+            {
+                foreach (var s in kurulu) s.Kaldir(false);
+                Gunluk.Yaz("Yeni kayıt (2FA): sayım bağlantısı kapatıldı, Ayarlar > Sayım'dan yeniden açılacak");
+                return;
+            }
+            if (Interlocked.Exchange(ref _sayimEsitleniyor, 1) == 1) return;
+            try
+            {
+                var j = await _servis.Sayim(null, "pusulax");
+                var bilgi = j["bilgi"] as JObject;
+                if (bilgi == null) throw new InvalidOperationException("sayım bilgisi boş");
+                foreach (var s in kurulu)
+                {
+                    try
+                    {
+                        if (s.Tur == "eski" && !await SecimFirmadaMi(s.Secim))
+                        {
+                            s.Kaldir(false);
+                            Gunluk.Yaz("Yeni kayıt: sayım veritabanı bu firmaya ait değil, bağlantı kapatıldı (" + s.Tur + ")");
+                            continue;
+                        }
+                        s.Guncelle(bilgi);
+                        Gunluk.Yaz("Yeni kayıt: sayım SQL bilgisi yazıldı (" + s.Tur + ")");
+                    }
+                    catch (Exception e) { Gunluk.Yaz("Yeni kayıt: sayım bilgisi yazılamadı (" + s.Tur + "): " + e.Message); }
+                }
+                _ = _servis.Olay("sayim_bilgisi_guncellendi", "kayit");
+            }
+            catch (Exception e)
+            {
+                // Bilgi alınamadı: önceki firmanın girişi diskte kalmasın — bağlantıyı kapat (kullanıcı Ayarlar > Sayım'dan yeniden açar)
+                foreach (var s in kurulu) try { s.Kaldir(false); } catch { }
+                Gunluk.Yaz("Yeni kayıt: sayım bilgisi alınamadı, bağlantı kapatıldı: " + e.Message);
+            }
+            finally { Interlocked.Exchange(ref _sayimEsitleniyor, 0); }
+        }
+
+        private async Task<bool> SecimFirmadaMi(JObject secim)
+        {
+            var vt = secim?.Value<string>("veritabani");
+            if (string.IsNullOrEmpty(vt)) return false;
+            var liste = (await _servis.SayimVeritabanlari())["liste"] as JArray;
+            return liste != null && liste.Any(x => string.Equals(x.Value<string>("veritabani"), vt, StringComparison.OrdinalIgnoreCase));
         }
 
         public object KayitSil()

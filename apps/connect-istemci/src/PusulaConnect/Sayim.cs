@@ -292,6 +292,9 @@ namespace PusulaConnect
 
         private static void BilgiNotu(JObject d, JObject bilgi)
         {
+            // Bağlantı bilgisi değiştiyse önceki testin sonucu (başka sunucu/kullanıcının veritabanları) gösterilmesin
+            if (d.Value<string>("sunucu") != bilgi.Value<string>("sunucu") || d.Value<string>("kullanici") != bilgi.Value<string>("kullanici"))
+                d["test"] = null;
             d["sunucu"] = bilgi.Value<string>("sunucu");
             d["kullanici"] = bilgi.Value<string>("kullanici");
             d["resimYolu"] = bilgi.Value<string>("resimYolu");
