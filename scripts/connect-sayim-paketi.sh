@@ -24,10 +24,12 @@ echo "Pusula X $SURUM  ($KAYNAK)"
 
 echo "== Paketleme"
 rm -rf "$CIKTI"; mkdir -p "$CIKTI/PusulaXSayim"
-# robocopy çıkış kodu 0-7 başarı sayılır
-robocopy "$(cygpath -w "$KAYNAK")" "$(cygpath -w "$CIKTI/PusulaXSayim")" /E /XF LOG.txt lic.xml server.xml desktop.ini Thumbs.db /NFL /NDL /NJH /NJS /NP >/dev/null || [ $? -lt 8 ]
+# robocopy çıkış kodu 0-7 başarı sayılır; MSYS_NO_PATHCONV: Git Bash /E /XF bayraklarını yola çevirmesin
+MSYS_NO_PATHCONV=1 robocopy "$(cygpath -w "$KAYNAK")" "$(cygpath -w "$CIKTI/PusulaXSayim")" /E /XF LOG.txt lic.xml server.xml desktop.ini Thumbs.db /NFL /NDL /NJH /NJS /NP >/dev/null || [ $? -lt 8 ]
 : > "$CIKTI/PusulaXSayim/RFID.xml"
-(cd "$CIKTI/PusulaXSayim" && tar -a -c -f ../PusulaXSayim.zip -- *)
+# Windows tar.exe (bsdtar): .zip uzantısıyla gerçek zip yazar. Git Bash'in GNU tar'ı -a ile zip ÜRETMEZ (düz tar çıkar).
+(cd "$CIKTI/PusulaXSayim" && /c/Windows/System32/tar.exe -a -c -f ../PusulaXSayim.zip -- *)
+[ "$(head -c 2 "$CIKTI/PusulaXSayim.zip")" = "PK" ] || { echo "Paket zip değil (PK imzası yok)"; exit 1; }
 SHA="$(sha256sum "$CIKTI/PusulaXSayim.zip" | cut -c1-64)"
 printf '%s' "$SHA" > "$CIKTI/PusulaXSayim.zip.sha256"
 printf '%s' "$SURUM" > "$CIKTI/PusulaXSayim.surum.txt"
