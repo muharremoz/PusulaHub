@@ -138,7 +138,7 @@ for (const [ad, tip] of [
   ["terminalErisim", "INTEGER"],
   ["terminalMs", "INTEGER"],
   ["ip", "TEXT"],
-  ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar, dnsYok, sayim, sayimEski } — yalnız gösterim
+  ["durumJson", "TEXT"],          // { os, forti, vpnProfil, sifreKayitli, ayarlar, dnsYok, vpn, sayim, sayimEski } — yalnız gösterim
   // token döndürme: nabızda TOKEN_OMRU_GUN'den eski token yenilenir; eskisi TOKEN_GECIS_DK boyunca da geçer
   ["tokenZaman", "TEXT"],
   ["eskiTokenOzet", "TEXT"],
@@ -734,7 +734,7 @@ fastify.post("/api/nabiz", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   const b = req.body ?? {}
   const t = b.terminal ?? {}
-  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null, dnsYok: b.dnsYok ?? null, sayim: b.sayim ?? null, sayimEski: b.sayimEski ?? null }
+  const durum = { os: b.os ?? null, forti: b.forti ?? null, vpnProfil: b.vpnProfil ?? null, sifreKayitli: b.sifreKayitli ?? null, ayarlar: b.ayarlar ?? null, dnsYok: b.dnsYok ?? null, vpn: b.vpn ?? null, sayim: b.sayim ?? null, sayimEski: b.sayimEski ?? null }
   sql.nabiz.run({
     id: c.cihazId,
     surum: String(req.headers["x-surum"] ?? "").slice(0, 20) || null,

@@ -22,6 +22,8 @@ export interface ConnectCihazDurum {
   ayarlar: ConnectAyarlar | null
   /** Sunucu adı bu bilgisayarda DNS ile çözülemedi, IP ile bağlanıyor (0.4.2+) */
   dnsYok?: boolean | null
+  /** VPN tüneli açık mı + VPN IP (0.6.5+; eski istemcide yok) */
+  vpn?: { bagli: boolean; ip: string | null } | null
   /** Pusula X sayım modu (0.6.0+): kurulu değilse null */
   sayim?: ConnectSayimDurum | null
   /** Eski program (Pusula.exe) sayımı (0.6.1+): kurulu değilse null */

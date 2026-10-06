@@ -851,6 +851,9 @@ namespace PusulaConnect
             if (Interlocked.Exchange(ref _nabizSuruyor, 1) == 1) return;
             try
             {
+                // VPN tüneli açık mı (FortiClient SSL VPN bağdaştırıcısı) — "çevrimiçi ama sunucuya erişemiyor" ayrımı için.
+                // Kilit dışında: bağdaştırıcı listesi birkaç ms sürebilir.
+                var vpn = new { bagli = Fortinet.SslVpnBagli(), ip = YaziciAjani.VpnIp() };
                 object durum;
                 lock (_kilit)
                 {
@@ -862,6 +865,7 @@ namespace PusulaConnect
                         dnsYok = _dnsYok,
                         os = WindowsSurumu(),
                         forti = _fortiSurum,
+                        vpn,
                         vpnProfil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         sifreKayitli = _rdpKullanici != null,
                         ayarlar = Ayarlar.Simdiki.Gorunum(),

@@ -469,6 +469,18 @@ function sayimDurumu(c: ConnectCihazSatir): SayimDurumu {
   return SAYIM_ONCELIK.find((d) => d === a || d === b) ?? "yok"
 }
 const FORM_AD: Record<string, string> = { "612": "Perakende", "146": "Toptan" }
+/**
+ * VPN tüneli (0.6.5+ nabızla gelir). "Çevrimiçi ama sunucuya erişemiyor" durumunda sebep çoğu zaman VPN'in
+ * kapalı olması — kapalıysa sarı. Eski istemci göndermez → —.
+ */
+function VpnRozeti({ c }: { c: ConnectCihazSatir }) {
+  const v = c.durum?.vpn
+  if (v == null) return <span className="text-muted-foreground">—</span>
+  return v.bagli
+    ? <span className="text-emerald-700 dark:text-emerald-400">Açık{v.ip && <span className="text-muted-foreground"> · {v.ip}</span>}</span>
+    : <span className="text-amber-700 dark:text-amber-400">Kapalı</span>
+}
+
 function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const d = sayimDurumu(c)
   if (d === "yok") return <span className="text-muted-foreground">—</span>
@@ -540,6 +552,7 @@ function CihazListesi({
             <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
             <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
             <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
+            <th className="px-4 py-1.5 text-left font-medium">VPN</th>
             <th className="px-4 py-1.5 text-left font-medium">Sunucu</th>
             <th className="px-4 py-1.5 text-left font-medium">Son görülme</th>
             <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
@@ -566,6 +579,7 @@ function CihazListesi({
                 <td className="px-4 py-1.5 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
                 <td className="px-4 py-1.5 whitespace-nowrap"><IkiRozeti c={c} /></td>
                 <td className="px-4 py-1.5 whitespace-nowrap text-[12px]"><SayimRozeti c={c} /></td>
+                <td className="px-4 py-1.5 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
                 <td className="px-4 py-1.5 whitespace-nowrap text-[12px]">
                   {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
                     : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
@@ -764,6 +778,7 @@ function CihazDetay({
                     </span>
                   )}
                 </Bilgi>
+                <Bilgi ad="VPN bağlantısı"><VpnRozeti c={c} /></Bilgi>
                 <Bilgi ad="Sunucu">{c.rdp ?? "—"}</Bilgi>
                 <Bilgi ad="Sunucuya erişim">
                   {c.terminalErisim == null ? "—" : c.terminalErisim ? `Erişiyor${c.terminalMs != null ? ` · ${c.terminalMs} ms` : ""}` : "Erişemiyor"}
