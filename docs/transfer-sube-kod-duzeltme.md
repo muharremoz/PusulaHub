@@ -353,3 +353,21 @@ veritabanına atıf kalmadı.
 - Şube eşleşmesi, kasa numaraları (`Banko.banko_Tanim`) ve eski transfer kayıtları
   (`mrkz`) 2. bölümdeki kontrol listesiyle **kontrol edilmedi**.
 - ROLLBACK'li deneme (4. bölüm) yapılmadı.
+
+### Kayıt — 2642 MERS, transfer datası görünmüyordu (06.10.2026)
+
+**Belirti:** `2642.mers1` ile SSMS'te bağlanınca 11 `2642_MERS_*` datası listede, transfer
+datası `URNTRANSFER` yok.
+
+**Ölçülen sebep:** sihirbaz firma girişine `DENY VIEW ANY DATABASE` veriyor; bu durumda
+liste yalnız **master'da sahibi o giriş olan** dataları gösterir. MERS datalarının sahibi
+`2642.mers1`, `URNTRANSFER`'inki `sa` idi. Datanın içindeki `dbo` ise zaten `2642.mers1`'in
+SID'ine bağlıydı — yani erişim vardı (`EXECUTE AS LOGIN` ile ölçüldü: dbo, db_owner),
+yalnız listede görünmüyordu ve master/dbo SID'leri tutarsızdı.
+
+**Yapılan:** `ALTER AUTHORIZATION ON DATABASE::[URNTRANSFER] TO [2642.mers1]`. Sonrasında
+owner_sid = dbo SID (`0xFE06…0394`), giriş 12 data görüyor. Başka kullanıcı/yetki değişmedi.
+
+**Kontrol (yeni transfer datası açılınca):** transfer datasının master sahibi firmanın
+SQL girişi olmalı — `SELECT name, SUSER_SNAME(owner_sid) FROM sys.databases WHERE name = '<transfer>'`.
+`sa` ise firma kullanıcısı datayı listede göremez.
