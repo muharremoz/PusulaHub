@@ -54,33 +54,38 @@ export function SayimKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
   }[renk];
 
   return (
-    <div className="relative col-span-2 flex items-center gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
+    <div className="relative flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
       <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${KUTU}`}><ScanBarcode /></span>
       <div className="min-w-0 flex-1">
-        <div className="text-xs text-muted-foreground">Sayım</div>
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-muted-foreground">Sayım</span>
+          <span className={"[&_svg]:size-4 " + (renk === "iyi" ? "text-emerald-600 dark:text-emerald-400" : renk === "hata" ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+            {olciliyor ? <Loader2 className="animate-spin" /> : renk === "iyi" ? <CheckCircle2 /> : renk === "hata" ? <CircleAlert /> : null}
+          </span>
+        </div>
         <div className="truncate text-[15px] leading-tight font-semibold">
           {sayim.tur === "eski" ? "Pusula" : "Pusula X"}
           {sayim.tur === "eski" && sayim.s.secim && (
-            <span className="font-normal text-muted-foreground" title={sayim.s.secim.veritabani}>
+            <span className="text-xs font-normal text-muted-foreground" title={sayim.s.secim.veritabani}>
               {" · "}{sayim.s.secim.ad} · {sayim.s.secim.formId === "146" ? "Toptan" : "Perakende"}
             </span>
           )}
         </div>
-        <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-          {olciliyor ? (
-            <><Loader2 className="size-3 animate-spin" /> SQL bağlantısı kontrol ediliyor…</>
-          ) : !test ? (
-            "SQL bağlantısı henüz denetlenmedi"
-          ) : test.ok ? (
-            <><CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" /> SQL bağlı · {test.sureMs} ms</>
-          ) : (
-            <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400"><CircleAlert className="size-3.5" /> SQL bağlanamadı</span>
-          )}
+        <div className="mt-0.5 flex items-center gap-2">
+          <span className="min-w-0 truncate text-xs text-muted-foreground" title={test?.ok ? `Yanıt ${test.sureMs} ms` : undefined}>
+            {olciliyor
+              ? "SQL kontrol ediliyor…"
+              : !test
+                ? "SQL denetlenmedi"
+                : test.ok
+                  ? "SQL bağlı"
+                  : <span className="text-red-600 dark:text-red-400">SQL bağlanamadı</span>}
+          </span>
+          <Button size="sm" variant="outline" className="ml-auto h-6 shrink-0 gap-1 px-2 text-xs [&_svg]:size-3" disabled={basliyor} onClick={() => void baslat()}>
+            {basliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
+          </Button>
         </div>
       </div>
-      <Button size="sm" className="shrink-0" disabled={basliyor} onClick={() => void baslat()}>
-        {basliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
-      </Button>
     </div>
   );
 }

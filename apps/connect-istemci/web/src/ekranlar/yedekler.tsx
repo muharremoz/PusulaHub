@@ -52,7 +52,8 @@ function farkRenk(fDk: number | null, tDk: number | null, simdi: number): Renk {
 const enKotu = (a: Renk, b: Renk): Renk => (["hata", "uyari", "iyi", "bekliyor"] as Renk[]).find((r) => r === a || r === b) ?? "bekliyor";
 
 
-export function YedekKarti({ durum }: { durum: Durum }) {
+/** genis: tek başınaysa iki sütunu kaplar; sayım kartı varsa yanına yarım genişlik. */
+export function YedekKarti({ durum, genis = true }: { durum: Durum; genis?: boolean }) {
   const y: YedekDurumu | undefined = durum.yedekler ?? undefined;
   const simdi = y?.simdi ? Date.parse(y.simdi) : Date.now();
   const liste = y?.liste ?? [];
@@ -91,7 +92,7 @@ export function YedekKarti({ durum }: { durum: Durum }) {
             : `${liste.length} veritabanınızın yedekleri Pusula sunucusunda otomatik alınıyor.`;
 
   return (
-    <div className="relative col-span-2 flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
+    <div className={"relative flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs" + (genis ? " col-span-2" : "")}>
       <span className={`flex size-10 shrink-0 items-center justify-center rounded-lg ring-1 [&_svg]:size-5 ${KUTU[gorunen]}`}><DatabaseBackup /></span>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
