@@ -568,6 +568,15 @@ namespace PusulaConnect
             return sonuc;
         }
 
+        /// <summary>Sayım programını başlatır (Pusula X: PusulaX.exe, eski: Pusula.exe); çalışma klasörü program klasörü.</summary>
+        public object Baslat()
+        {
+            if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
+            Process.Start(new ProcessStartInfo(Exe) { WorkingDirectory = Klasor, UseShellExecute = true });
+            Gunluk.Yaz("Sayım programı başlatıldı (" + Tur + ")");
+            return new { tamam = true };
+        }
+
         /// <summary>Klasörü Gezgin'de açar (WebView içinden file:// açılmaz).</summary>
         public object KlasorAc()
         {

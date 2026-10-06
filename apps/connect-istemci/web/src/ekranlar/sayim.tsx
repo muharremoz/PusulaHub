@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { ArrowLeftRight, CheckCircle2, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Save, Trash2, Zap } from "lucide-react";
+import { ArrowLeftRight, CheckCircle2, Play, CircleAlert, Database, FolderOpen, Loader2, RefreshCw, ScanBarcode, Save, Trash2, Zap } from "lucide-react";
 import { api, type Durum, type SayimDurum, type SayimSecim, type SayimTest, type SayimVeritabani } from "@/api";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -94,7 +94,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [kod, setKod] = useState("");
   const [kodIcin, setKodIcin] = useState<null | "kur" | "guncelle">(null);
-  const [bekle, setBekle] = useState<null | "kur" | "guncelle" | "test" | "kaldir" | "liste">(null);
+  const [bekle, setBekle] = useState<null | "kur" | "guncelle" | "test" | "kaldir" | "liste" | "baslat">(null);
   const [hata, setHata] = useState<string | null>(null);
   const [kaldirOnay, setKaldirOnay] = useState(false);
   const [degistirOnay, setDegistirOnay] = useState(false);
@@ -193,6 +193,19 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     } finally {
       setBekle(null);
       setKaldirOnay(false);
+    }
+  };
+
+  const baslat = async () => {
+    setBekle("baslat");
+    setHata(null);
+    try {
+      await api("/sayim/baslat", { tur });
+    } catch (e) {
+      setHata((e as Error).message);
+    } finally {
+      // Program kendi penceresinde açılır; düğme kısa süre meşgul görünsün (çift tıklamada iki kopya açılmasın)
+      window.setTimeout(() => setBekle(null), 2500);
     }
   };
 
@@ -375,7 +388,10 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
               <span>{s.kisayol ? "Masaüstünde" : <span className="text-amber-600 dark:text-amber-400">Yok</span>}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2 px-4 py-3">
-              <Button size="sm" onClick={() => void testEt()} disabled={bekle !== null}>
+              <Button size="sm" onClick={() => void baslat()} disabled={bekle !== null}>
+                {bekle === "baslat" ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void testEt()} disabled={bekle !== null}>
                 {bekle === "test" ? <Loader2 className="animate-spin" /> : <Zap />} Bağlantıyı test et
               </Button>
               <Button size="sm" variant="outline" onClick={() => void calistir("guncelle")} disabled={bekle !== null} title={`SQL bilgisini Pusula'dan yeniden al, ${t.dosya}'i yenile`}>

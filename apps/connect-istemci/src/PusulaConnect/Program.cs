@@ -167,6 +167,7 @@ namespace PusulaConnect
                 case "POST /sayim/guncelle": return _uygulama.SayimGuncelle(i.Metin("tur"), i.Metin("kod"), i.Govde?["secim"] as JObject);
                 case "POST /sayim/test": return Sayim.Bul(i.Metin("tur")).Test();
                 case "POST /sayim/klasor": return Task.FromResult(Sayim.Bul(i.Metin("tur")).KlasorAc());
+                case "POST /sayim/baslat": return Task.FromResult(Sayim.Bul(i.Metin("tur")).Baslat());
                 case "POST /sayim/kaldir": return Task.FromResult(Sayim.Bul(i.Metin("tur")).Kaldir(i.Mantik("klasor")));
                 case "POST /sayim/veritabanlari": return _uygulama.SayimVeritabanlari().ContinueWith(t => (object)t.Result);
                 case "POST /gunluk/ac":
