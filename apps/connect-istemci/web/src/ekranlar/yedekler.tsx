@@ -1,6 +1,5 @@
-import { CheckCircle2, CircleAlert, DatabaseBackup, Loader2, RefreshCw } from "lucide-react";
-import { api, type Durum, type YedekDurumu } from "@/api";
-import { Button } from "@/components/ui/button";
+import { CheckCircle2, CircleAlert, DatabaseBackup, Loader2 } from "lucide-react";
+import type { Durum, YedekDurumu } from "@/api";
 
 /**
  * Veritabanı yedekleri — ana ekranda kart. Salt gösterim: müşteri yedeğinin alındığını görsün.
@@ -53,7 +52,7 @@ function farkRenk(fDk: number | null, tDk: number | null, simdi: number): Renk {
 const enKotu = (a: Renk, b: Renk): Renk => (["hata", "uyari", "iyi", "bekliyor"] as Renk[]).find((r) => r === a || r === b) ?? "bekliyor";
 
 
-export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Durum) => void }) {
+export function YedekKarti({ durum }: { durum: Durum }) {
   const y: YedekDurumu | undefined = durum.yedekler ?? undefined;
   const simdi = y?.simdi ? Date.parse(y.simdi) : Date.now();
   const liste = y?.liste ?? [];
@@ -65,7 +64,6 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
     if (v.farkVar) genel = enKotu(genel, farkRenk(dakika(v.sonFark, simdi), dakika(v.sonTam, simdi), simdi));
   }
 
-  const yenile = () => api<Durum>("/yedekler/yenile", {}).then(setDurum).catch(() => {});
 
   // Müşteriye ayrıntı (saat, veritabanı) gösterilmez — yalnız sağlıklı mı. Kısa gecikme (uyarı) sağlıklı sayılır:
   // yedekler bizim tarafta belirli saat aralığında alınır, saatleri göstermek "gece alınmamış" izlenimi veriyordu.
@@ -98,13 +96,8 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-xs text-muted-foreground">Veritabanı yedekleri</span>
-          <span className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" className="size-6 [&_svg]:size-3.5" onClick={() => void yenile()} disabled={!!y?.yenileniyor} aria-label="Yenile">
-              {y?.yenileniyor ? <Loader2 className="animate-spin" /> : <RefreshCw />}
-            </Button>
-            <span className={`[&_svg]:size-4 ${RENK[gorunen]}`}>
-              {gorunen === "iyi" ? <CheckCircle2 /> : gorunen === "bekliyor" ? <Loader2 className="animate-spin" /> : <CircleAlert />}
-            </span>
+          <span className={`[&_svg]:size-4 ${RENK[gorunen]}`}>
+            {gorunen === "iyi" ? <CheckCircle2 /> : gorunen === "bekliyor" ? <Loader2 className="animate-spin" /> : <CircleAlert />}
           </span>
         </div>
         <div className="truncate text-[15px] leading-tight font-semibold">{baslikDeger}</div>

@@ -417,7 +417,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
             alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
-          <YedekKarti durum={durum} setDurum={setDurum} />
+          <YedekKarti durum={durum} />
         </div>
 
         {((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (
