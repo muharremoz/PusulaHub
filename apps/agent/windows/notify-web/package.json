@@ -1,0 +1,32 @@
+{
+  "name": "pusula-notify-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "PusulaNotify popup arayüzü — derlenip PusulaNotify.exe'nin WebView2 penceresinde gösterilir. (pnpm workspace'e dahil DEĞİL, Connect istemcisi gibi npm ile.)",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.47.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.3.1",
+    "tailwindcss": "^4.3.3",
+    "tw-animate-css": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.7"
+  }
+}

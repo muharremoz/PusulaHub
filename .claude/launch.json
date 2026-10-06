@@ -21,6 +21,13 @@
       ],
       "port": 5055,
       "autoPort": false
+    },
+    {
+      "name": "notify-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/agent/windows/notify-web", "run", "dev", "--", "--port", "5180", "--strictPort"],
+      "port": 5180,
+      "autoPort": false
     }
   ],
   "autoVerify": false
