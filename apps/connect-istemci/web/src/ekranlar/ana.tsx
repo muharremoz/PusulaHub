@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { toast } from "sonner";
 import {
   AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
-  Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle, ScanBarcode, Play,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -24,6 +25,21 @@ type P = { durum: Durum; setDurum: (d: Durum) => void };
 
 /** Ana ekran: bağlantının dört parçası (FortiClient, profil, sunucuya erişim, RDP şifresi) + Bağlan. */
 export function AnaEkran({ durum, setDurum }: P) {
+  // Sayım kuruluysa (Pusula X ya da eski program — aynı anda biri) sol panelde gösterilir, oradan başlatılır
+  const sayim = durum.sayim?.kurulu ? { tur: "pusulax" as const, s: durum.sayim } : durum.sayimEski?.kurulu ? { tur: "eski" as const, s: durum.sayimEski } : null;
+  const [sayimBasliyor, setSayimBasliyor] = useState(false);
+  const sayimiBaslat = async () => {
+    if (!sayim) return;
+    setSayimBasliyor(true);
+    try {
+      await api("/sayim/baslat", { tur: sayim.tur });
+    } catch (e) {
+      toast.error("Sayım başlatılamadı", { description: (e as Error).message });
+    } finally {
+      // Program kendi penceresinde açılır; çift tıklamada iki kopya açılmasın
+      window.setTimeout(() => setSayimBasliyor(false), 2500);
+    }
+  };
   const k = durum.kontroller;
   const kayit = durum.kayit!;
   const vpnHazir = k.forti.kurulu && k.profil.dogru;
@@ -165,7 +181,28 @@ export function AnaEkran({ durum, setDurum }: P) {
                 }
               />
             )}
+            {sayim && (
+              <SolSatir
+                ikon={<ScanBarcode />}
+                ad="Sayım"
+                deger={
+                  <span className="flex flex-col">
+                    <span className="font-medium">{sayim.tur === "eski" ? "Eski program" : "Pusula X"}</span>
+                    {sayim.tur === "eski" && sayim.s.secim && (
+                      <span className="truncate text-xs font-normal text-muted-foreground" title={sayim.s.secim.veritabani}>
+                        {sayim.s.secim.ad} · {sayim.s.secim.formId === "146" ? "Toptan" : "Perakende"}
+                      </span>
+                    )}
+                  </span>
+                }
+              />
+            )}
           </dl>
+          {sayim && (
+            <Button variant="outline" size="sm" className="mt-3 w-full" disabled={sayimBasliyor} onClick={() => void sayimiBaslat()}>
+              {sayimBasliyor ? <Loader2 className="animate-spin" /> : <Play />} Sayımı başlat
+            </Button>
+          )}
 
         </div>
 
