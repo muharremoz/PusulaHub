@@ -44,6 +44,14 @@ const FORMLAR = [
   { id: "612", ad: "Perakende" },
   { id: "146", ad: "Toptan" },
 ];
+/** SQL hata metninde geçen kullanıcı adı ve sunucu adresi ekranda gösterilmez. */
+function gizle(metin: string | null | undefined, t: { kullanici?: string | null; sunucu?: string | null }): string {
+  let m = metin ?? "";
+  const parcalar = [t.kullanici, t.sunucu, t.sunucu?.split(",")[0]].filter((x): x is string => !!x && x.length > 2);
+  for (const p of parcalar) m = m.split(p).join("****");
+  return m;
+}
+
 const formAd = (id: string | null | undefined) => FORMLAR.find((f) => f.id === id)?.ad ?? id ?? "—";
 
 const kuruluMu = (s: SayimDurum | undefined) => !!s && (s.kurulu || s.kuruluyor);
@@ -374,10 +382,11 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                   <span>{formAd(s.secim?.formId)}</span>
                 </>
               )}
+              {/* SQL adresi ve kullanıcı adı ekranda gösterilmez */}
               <span className="text-muted-foreground">SQL sunucusu</span>
-              <span>{s.sunucu ?? "—"}</span>
+              <span>{s.sunucu ? "****" : "—"}</span>
               <span className="text-muted-foreground">SQL kullanıcısı</span>
-              <span>{s.kullanici ?? "—"}</span>
+              <span>{s.kullanici ? "****" : "—"}</span>
               <span className="text-muted-foreground">Resim adresi</span>
               <span className="truncate" title={s.resimYolu ?? ""}>{s.resimYolu ?? "— (veritabanındaki yol)"}</span>
               <span className="text-muted-foreground">Son bilgi güncellemesi</span>
@@ -414,14 +423,11 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
               {test.ok ? (
                 <>
                   <div className="font-medium">Bağlandı <span className="text-xs font-normal text-muted-foreground">· {test.sureMs} ms{test.sqlSurum ? ` · SQL ${test.sqlSurum}` : ""}</span></div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <span>{test.kullanici}</span> @ <span>{test.sunucu}</span>
-                  </div>
                 </>
               ) : (
                 <>
                   <div className="font-medium">Bağlanamadı</div>
-                  <div className="mt-1 text-xs break-words text-destructive">{test.hata}</div>
+                  <div className="mt-1 text-xs break-words text-destructive">{gizle(test.hata, test)}</div>
                 </>
               )}
             </div>

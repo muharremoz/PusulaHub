@@ -746,7 +746,7 @@ function SqlDurumu({ test, olciliyor }: { test: SayimDurum["test"]; olciliyor: b
     return <span className="flex items-center gap-1.5 text-xs text-muted-foreground"><Loader2 className="size-3 animate-spin" /> SQL kontrol ediliyor…</span>;
   if (!test) return null;
   return (
-    <span className="flex items-center gap-1.5 text-xs text-muted-foreground" title={test.ok ? `${test.kullanici} @ ${test.sunucu}` : test.hata ?? ""}>
+    <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
       {olciliyor ? <Loader2 className="size-3 animate-spin" /> : <span className={"size-2 rounded-full " + (test.ok ? "bg-emerald-500" : "bg-red-500")} />}
       {test.ok ? `SQL bağlı · ${test.sureMs} ms` : <span className="text-red-600 dark:text-red-400">SQL bağlanamadı</span>}
     </span>

@@ -89,8 +89,8 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
         : sorunlu
           ? "Veritabanı yedeklemesi beklendiği gibi çalışmıyor; Pusula'ya bildirin."
           : liste.length === 1
-            ? "Veritabanınızın yedekleri düzenli alınıyor."
-            : `${liste.length} veritabanınızın yedekleri düzenli alınıyor.`;
+            ? "Veritabanınızın yedekleri Pusula sunucusunda otomatik alınıyor."
+            : `${liste.length} veritabanınızın yedekleri Pusula sunucusunda otomatik alınıyor.`;
 
   return (
     <div className="relative col-span-2 flex items-start gap-3 overflow-hidden rounded-xl border bg-card p-4 shadow-xs">
@@ -109,11 +109,6 @@ export function YedekKarti({ durum, setDurum }: { durum: Durum; setDurum: (d: Du
         </div>
         <div className="truncate text-[15px] leading-tight font-semibold">{baslikDeger}</div>
         <div className="mt-0.5 text-xs text-muted-foreground">{aciklama}</div>
-        {y?.zaman && !y.hata && (
-          <div className="mt-1.5 text-[11px] text-muted-foreground">
-            Yedekler Pusula sunucusunda otomatik alınır.
-          </div>
-        )}
       </div>
     </div>
   );
