@@ -83,10 +83,13 @@ export async function connectProfili(firkod: string, client?: SupabaseLike):
   }
 }
 
-export async function connectKoduUret(firkod: string, firmaAdi: string, kullanici: string, olusturan: string | null): Promise<ConnectKoduSonuc> {
+/** client: oturumsuz (servis-servis, ör. CRM → /api/hub/connect/kod) çağrıda admin istemcisi verilmeli. */
+export async function connectKoduUret(
+  firkod: string, firmaAdi: string, kullanici: string, olusturan: string | null, client?: SupabaseLike,
+): Promise<ConnectKoduSonuc> {
   if (!GUVENLI_KULLANICI_ADI.test(kullanici)) return { ok: false, hata: "Geçersiz kullanıcı adı", kod: 400 }
 
-  const p = await connectProfili(firkod)
+  const p = await connectProfili(firkod, client)
   if (!p.ok) return { ok: false, hata: p.kod === 409 ? "Firmaya RDP sunucusu atanmamış — kod üretilemez" : p.hata, kod: p.kod }
 
   const r = await fetch(`${BASE}/admin/kodlar`, {
