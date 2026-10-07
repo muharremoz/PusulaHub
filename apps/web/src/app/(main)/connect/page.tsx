@@ -23,7 +23,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
-  Activity, Ban, CheckCircle2, History, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
+  Activity, Ban, CheckCircle2, CircleMinus, Globe, History, ScanBarcode, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
   RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
@@ -883,46 +883,62 @@ function CihazDetay({
                 <Bilgi ad="Oturum şifresi" ikon={<KeyRound />}>
                   {c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : <span className="text-amber-700 dark:text-amber-400">Kayıtlı değil</span>}
                 </Bilgi>
-                <Bilgi ad="Dış IP" ikon={<Link2 />}>{c.ip ?? "—"}</Bilgi>
+                <Bilgi ad="Dış IP" ikon={<Globe />}>{c.ip ?? "—"}</Bilgi>
               </DetayBolumu>
 
               <DetayBolumu baslik="Cihaz">
                 <Bilgi ad="Uygulama sürümü" ikon={<PlugZap />}><SurumRozeti surum={c.surum} son={sonSurum} /></Bilgi>
                 <Bilgi ad="Windows" ikon={<Laptop />} title={c.durum?.os ?? undefined}>{kisaWindows(c.durum?.os)}</Bilgi>
                 <Bilgi ad="FortiClient" ikon={<ShieldCheck />}>{c.durum?.forti ?? "—"}</Bilgi>
-                <Bilgi ad="Sayım" ikon={<Activity />} title={c.durum?.sayim || c.durum?.sayimEski ? sayimAciklama(c) : undefined}><SayimRozeti c={c} /></Bilgi>
+                <Bilgi ad="Sayım" ikon={<ScanBarcode />} title={c.durum?.sayim || c.durum?.sayimEski ? sayimAciklama(c) : undefined}><SayimRozeti c={c} /></Bilgi>
                 <Bilgi ad="İlk kayıt" ikon={<History />}>{tarihMetni(c.ilkGiris)}</Bilgi>
                 <Bilgi ad="Son görülme" ikon={<RefreshCw />} title={c.sonNabiz ? tarihMetni(c.sonNabiz) : undefined}>
                   {c.sonNabiz ? onceMetni(c.sonNabiz) : c.sonGorulme ? onceMetni(c.sonGorulme) : "—"}
                 </Bilgi>
               </DetayBolumu>
 
-              <section className="rounded-[8px] border p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[12px] font-semibold">İki adımlı doğrulama</span>
-                  <IkiRozeti c={c} />
-                </div>
-                <p className="text-muted-foreground text-[12px]">
-                  {c.totpAktif ? "Her bağlanışta telefondaki doğrulama kodu soruluyor." : "Kullanıcı açmamış. Uygulamada Ayarlar > Güvenlik'ten açılır."}
-                  {(c.totpHata ?? 0) > 0 && ` Son hatalı deneme sayısı: ${c.totpHata}.`}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {c.totpAktif && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "2fa-sifirla")}><ShieldOff className="size-3.5" />2FA sıfırla</Button>}
-                  {kilitli(c) && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "kilit-kaldir")}><LockOpen className="size-3.5" />Kilidi kaldır</Button>}
+              {/* Güvenlik + ayarlar da Bağlantı/Cihaz bölümleriyle aynı görünümde (07.10.2026) */}
+              <section className="rounded-[8px] border">
+                <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Güvenlik</div>
+                <div className="flex items-start gap-2.5 p-3">
+                  <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-4",
+                    c.totpAktif ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                    {c.totpAktif ? <ShieldCheck /> : <ShieldOff />}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium">İki adımlı doğrulama</span>
+                      <IkiRozeti c={c} />
+                    </div>
+                    <p className="text-muted-foreground mt-0.5 text-[12px]">
+                      {c.totpAktif ? "Her bağlanışta telefondaki doğrulama kodu soruluyor." : "Kullanıcı açmamış. Uygulamada Ayarlar > Güvenlik'ten açılır."}
+                      {(c.totpHata ?? 0) > 0 && ` Son hatalı deneme sayısı: ${c.totpHata}.`}
+                    </p>
+                    {(c.totpAktif || kilitli(c)) && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {c.totpAktif && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "2fa-sifirla")}><ShieldOff className="size-3.5" />2FA sıfırla</Button>}
+                        {kilitli(c) && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "kilit-kaldir")}><LockOpen className="size-3.5" />Kilidi kaldır</Button>}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </section>
 
-              <section className="rounded-[8px] border p-3">
-                <div className="mb-2 text-[12px] font-semibold">Uygulama ayarları</div>
+              <section className="rounded-[8px] border">
+                <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Uygulama ayarları</div>
                 {!ay ? (
-                  <p className="text-muted-foreground text-[12px]">Bu sürüm ayarlarını bildirmiyor.</p>
+                  <p className="text-muted-foreground p-3 text-[12px]">Bu sürüm ayarlarını bildirmiyor.</p>
                 ) : (
-                  <div className="flex flex-wrap gap-1.5">
+                  /* Üstü çizili rozetler yerine açık/kapalı işaretli liste */
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 p-3 sm:grid-cols-3">
                     {Object.entries(AYAR_AD).map(([k, ad]) => {
                       const v = (ay as Record<string, boolean | undefined>)[k]
                       if (v === undefined) return null
                       return (
-                        <span key={k} className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", v ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground line-through")}>
+                        <span key={k} className={cn("flex items-center gap-1.5 text-[12px]", v ? "text-foreground" : "text-muted-foreground")}>
+                          {v
+                            ? <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                            : <CircleMinus className="size-3.5 shrink-0" />}
                           {ad}
                         </span>
                       )
