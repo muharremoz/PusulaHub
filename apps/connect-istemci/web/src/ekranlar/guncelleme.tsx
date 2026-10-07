@@ -44,9 +44,9 @@ export function GuncellemePenceresi({ durum, setDurum }: { durum: Durum; setDuru
           </span>
 
           {g.suruyor ? (
-            <div className="flex w-56 flex-col gap-1.5 pr-2">
-              <div className="text-sm font-medium">
-                {(g.yuzde ?? 0) < 100 ? `Güncelleniyor… %${g.yuzde ?? 0}` : "Kuruluyor, uygulama yeniden açılacak…"}
+            <div className="flex w-72 flex-col gap-1.5 pr-2">
+              <div className="text-sm font-medium whitespace-nowrap">
+                {(g.yuzde ?? 0) < 100 ? `Güncelleniyor… %${g.yuzde ?? 0}` : "Kuruluyor, uygulama yeniden açılıyor…"}
               </div>
               <Progress value={g.yuzde ?? 0} className="h-1.5" />
             </div>
