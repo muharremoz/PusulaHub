@@ -129,6 +129,25 @@ const AYAR_AD: Record<string, string> = {
 }
 
 /** Olay ayrıntısı (JSON ya da düz metin) → okunur tek satır. */
+/**
+ * Uzak masaüstü (mstscax) kapanma nedeni — istemci "neden" olarak gönderir. "kod 1" diye görünüyordu (07.10.2026).
+ * Bilinmeyen kod olduğu gibi "kod N" kalır.
+ */
+const RDP_NEDEN: Record<number, string> = {
+  1: "kullanıcı kapattı",
+  2: "sunucuda oturum kapatıldı",
+  3: "sunucu bağlantıyı kesti",
+  264: "bağlantı zaman aşımı",
+  516: "sunucuya ulaşılamadı",
+  772: "ağ bağlantısı koptu",
+  1028: "ağ bağlantısı koptu",
+  2055: "şifre hatalı",
+  2567: "kullanıcı bulunamadı",
+  2823: "şifre süresi dolmuş",
+  3335: "hesap kilitli",
+}
+const rdpNeden = (n: number) => RDP_NEDEN[n] ?? `kod ${n}`
+
 function ayrintiMetni(o: ConnectOlay) {
   if (!o.ayrinti) return o.kaynak === "yonetici" ? "" : ""
   let j: unknown
@@ -137,7 +156,7 @@ function ayrintiMetni(o: ConnectOlay) {
   const v = j as Record<string, unknown>
   if (o.tur === "oturum_acildi") return [v.sunucu, v.ms != null ? `${v.ms} ms` : null, v.ikiAdim ? "2FA ile" : null].filter(Boolean).join(" · ")
   if (o.tur === "oturum_bitti" || o.tur === "oturum_hatasi")
-    return [v.mesaj, v.sureDk != null ? `${v.sureDk} dk sürdü` : null, v.neden != null && v.neden !== -1 ? `kod ${v.neden}` : null].filter(Boolean).join(" · ")
+    return [v.mesaj, v.sureDk != null ? `${v.sureDk} dk sürdü` : null, typeof v.neden === "number" && v.neden !== -1 ? rdpNeden(v.neden) : null].filter(Boolean).join(" · ")
   if (o.tur === "ayar_degisti")
     return Object.entries(v).map(([k, d]) => `${AYAR_AD[k] ?? k}: ${d === true ? "açık" : d === false ? "kapalı" : String(d)}`).join(", ")
   return Object.entries(v).map(([k, d]) => `${k}: ${String(d)}`).join(", ")
@@ -647,7 +666,12 @@ function CihazListesi({
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]">
                         {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
                           : !canliMi(c) ? <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${c.terminalErisim ? "Erişiyor" : "Erişemiyor"}`}>—</span>
-                          : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
+                          : c.terminalErisim ? (
+                            <span className="inline-flex items-center gap-1.5" title={c.terminalMs != null ? `Gecikme: ${c.terminalMs} ms` : undefined}>
+                              <SinyalIkonu ms={c.terminalMs} />
+                              <span className="text-emerald-700 dark:text-emerald-400">{c.terminalMs != null ? KALITE_AD[kalite(c.terminalMs)] : "Erişiyor"}</span>
+                            </span>
+                          )
                           : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
                       </td>
                       <td className="text-muted-foreground px-3 py-1 text-[12px] whitespace-nowrap" title={tarihMetni(c.sonGorulme)}>{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td>
@@ -854,6 +878,21 @@ function KodListesi({ kodlar, onIptal }: { kodlar: ConnectKod[] | null; onIptal:
   )
 }
 
+/** Gecikmeden bağlantı kalitesi — Connect uygulamasındaki eşiklerle aynı: 4 mükemmel … 1 zayıf. */
+const kalite = (ms: number) => (ms < 60 ? 4 : ms < 120 ? 3 : ms < 250 ? 2 : 1)
+const KALITE_AD = ["", "Zayıf", "Orta", "İyi", "Mükemmel"]
+function SinyalIkonu({ ms }: { ms: number | null }) {
+  const q = ms == null ? 0 : kalite(ms)
+  const renk = q >= 3 ? "bg-emerald-500" : q === 2 ? "bg-amber-500" : "bg-red-500"
+  return (
+    <span className="inline-flex items-end gap-[2px]" aria-hidden>
+      {[0, 1, 2, 3].map((i) => (
+        <span key={i} className={cn("w-[3px] rounded-[1px]", i < q ? renk : "bg-border")} style={{ height: 5 + i * 2 }} />
+      ))}
+    </span>
+  )
+}
+
 /** Oturum süresi, ekiyle: "42 dakikadır" / "3 saattir" / "3 saat 10 dakikadır" / "2 gündür". */
 function sureMetni(s: string | null): string {
   const d = zaman(s)
@@ -968,7 +1007,13 @@ function CihazDetay({
                 <Bilgi ad="Sunucuya erişim" ikon={<Activity />}>
                   {c.terminalErisim == null ? "—"
                     : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı)</span>
-                    : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
+                    : c.terminalErisim ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <SinyalIkonu ms={c.terminalMs} />
+                        <span className="text-emerald-700 dark:text-emerald-400">{c.terminalMs != null ? KALITE_AD[kalite(c.terminalMs)] : "Erişiyor"}</span>
+                        {c.terminalMs != null && <span className="text-muted-foreground">· {c.terminalMs} ms</span>}
+                      </span>
+                    )
                     : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS yok, IP ile</span>}
                 </Bilgi>
