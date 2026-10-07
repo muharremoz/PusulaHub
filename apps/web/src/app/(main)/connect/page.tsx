@@ -1028,7 +1028,7 @@ function CihazDetay({
               <CihazOlaylari olaylar={olaylar} />
 
               <section className="overflow-hidden rounded-[8px] border">
-                <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Uygulama ayarları</div>
+                <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Yönlendirme ayarları</div>
                 {!ay ? (
                   <p className="text-muted-foreground p-3 text-[12px]">Bu sürüm ayarlarını bildirmiyor.</p>
                 ) : (
