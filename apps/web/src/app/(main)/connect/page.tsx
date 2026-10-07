@@ -695,8 +695,8 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
       </div>
       <table className="w-full table-fixed text-[12px]">
         <colgroup>
-          <col className="w-[104px]" />
-          <col className="w-[118px]" />
+          <col className="w-[120px]" />
+          <col className="w-[160px]" />
           <col />
         </colgroup>
         <ListeThead>
@@ -723,7 +723,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
 
 function OlayRozeti({ tur }: { tur: string }) {
   const o = OLAY[tur] ?? { ad: tur, ton: "notr" as Ton }
-  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span>
+  return <span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])} title={o.ad}>{o.ad}</span>
 }
 
 function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | null; cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void }) {
@@ -941,7 +941,7 @@ function CihazDetay({
   return (
     // MODAL (07.10.2026, kullanıcı kararı): yan panel yerine ortada geniş pencere — solda durum, sağda son olaylar
     <Dialog open={!!c} onOpenChange={(o) => !o && onKapat()}>
-      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]">
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1240px,94vw)]">
         {c && (
           <>
             <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
@@ -955,7 +955,7 @@ function CihazDetay({
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
             <div className="flex min-w-0 flex-col gap-4">
               <DurumKarti c={c} menu={<CihazMenusu c={c} onIslem={onIslem} />} />
 
