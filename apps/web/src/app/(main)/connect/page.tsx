@@ -231,19 +231,6 @@ export default function ConnectPage() {
   }, [yukle])
   useEffect(() => { if (sekme === "kodlar" && !kodlar) void kodlariYukle() }, [sekme, kodlar, kodlariYukle])
 
-  const ozet = useMemo(() => {
-    const l = cihazlar ?? []
-    const aktif = l.filter((c) => !c.iptal)
-    return {
-      toplam: aktif.length,
-      cevrimici: aktif.filter((c) => canliDurum(c) !== "cevrimdisi").length,
-      oturumda: aktif.filter((c) => canliDurum(c) === "oturumda").length,
-      ikiAdim: aktif.filter((c) => c.totpAktif).length,
-      eski: sonSurum ? aktif.filter((c) => surumKarsilastir(c.surum, sonSurum) < 0).length : 0,
-      kilitli: aktif.filter((c) => ikiDurum(c) === "kilitli").length,
-    }
-  }, [cihazlar, sonSurum])
-
   const islemYap = async () => {
     if (!onay) return
     try {
@@ -285,15 +272,6 @@ export default function ConnectPage() {
           </div>
         )}
 
-        {/* ── özet ── */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          <Kpi ikon={<Laptop />} ad="Kayıtlı cihaz" deger={ozet.toplam} yukleniyor={!cihazlar} />
-          <Kpi ikon={<Wifi />} ad="Çevrimiçi" deger={ozet.cevrimici} ton="sky" yukleniyor={!cihazlar} />
-          <Kpi ikon={<MonitorPlay />} ad="Şu an oturumda" deger={ozet.oturumda} ton="emerald" yukleniyor={!cihazlar} />
-          <Kpi ikon={<ShieldCheck />} ad="2FA açık" deger={ozet.ikiAdim} yukleniyor={!cihazlar} />
-          <Kpi ikon={<RefreshCw />} ad={sonSurum ? `Eski sürüm (son ${sonSurum})` : "Eski sürüm"} deger={ozet.eski} ton={ozet.eski ? "amber" : undefined} yukleniyor={!cihazlar} />
-          <Kpi ikon={<ShieldOff />} ad="2FA kilitli" deger={ozet.kilitli} ton={ozet.kilitli ? "red" : undefined} yukleniyor={!cihazlar} />
-        </div>
 
         <Tabs value={sekme} onValueChange={setSekme}>
           <div className="flex items-center justify-between gap-2">
@@ -418,17 +396,6 @@ const ISLEM: Record<ConnectCihazIslemi, { baslik: string; aciklama: string; dugm
 }
 
 // ------------------------------------------------------------ parçalar
-
-function Kpi({ ikon, ad, deger, ton, yukleniyor }: { ikon: React.ReactNode; ad: string; deger: number; ton?: "sky" | "emerald" | "amber" | "red"; yukleniyor: boolean }) {
-  const renk = ton === "sky" ? "text-sky-600 dark:text-sky-400" : ton === "emerald" ? "text-emerald-600 dark:text-emerald-400"
-    : ton === "amber" ? "text-amber-600 dark:text-amber-400" : ton === "red" ? "text-red-600 dark:text-red-400" : "text-foreground"
-  return (
-    <div className="flex flex-col gap-1 rounded-[8px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
-      <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] [&_svg]:size-3.5">{ikon}{ad}</div>
-      {yukleniyor ? <Skeleton className="h-8 w-12" /> : <div className={cn("text-2xl font-bold tabular-nums", renk)}>{deger}</div>}
-    </div>
-  )
-}
 
 function DurumRozeti({ c }: { c: ConnectCihazSatir }) {
   const d = canliDurum(c)
