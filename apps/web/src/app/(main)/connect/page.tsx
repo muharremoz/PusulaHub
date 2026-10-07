@@ -88,6 +88,7 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   kayit: { ad: "Cihaz kaydedildi", ton: "iyi" },
   uygulama_acildi: { ad: "Uygulama açıldı", ton: "notr" },
   guncellendi: { ad: "Güncellendi", ton: "iyi" },
+  guncelleme_hatasi: { ad: "Güncelleme hatası", ton: "hata" },
   oturum_acildi: { ad: "Oturum açıldı", ton: "iyi" },
   oturum_bitti: { ad: "Oturum kapandı", ton: "notr" },
   oturum_hatasi: { ad: "Oturum hatayla bitti", ton: "hata" },
@@ -169,6 +170,8 @@ function ayrintiMetni(o: ConnectOlay) {
   if (o.tur === "oturum_acildi") return [v.sunucu, v.ms != null ? `${v.ms} ms` : null, v.ikiAdim ? "2FA ile" : null].filter(Boolean).join(" · ")
   if (o.tur === "oturum_bitti" || o.tur === "oturum_hatasi")
     return [v.mesaj, v.sureDk != null ? `${v.sureDk} dk sürdü` : null, typeof v.neden === "number" && v.neden !== -1 ? `kod ${v.neden}` : null].filter(Boolean).join(" · ")
+  if (o.tur === "guncelleme_hatasi")
+    return [v.surum ? `${v.surum}` : null, v.engellendi ? "Windows yeni sürümü engelledi" : typeof v.mesaj === "string" ? v.mesaj : null].filter(Boolean).join(" · ")
   if (o.tur === "ayar_degisti")
     return Object.entries(v).map(([k, d]) => `${AYAR_AD[k] ?? k}: ${d === true ? "açık" : d === false ? "kapalı" : String(d)}`).join(", ")
   return Object.entries(v).map(([k, d]) => `${k}: ${String(d)}`).join(", ")
@@ -704,57 +707,82 @@ function OlayRozeti({ tur }: { tur: string }) {
   return <span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span>
 }
 
+type OlayKaynak = "yonetici" | "istemci" | "servis"
+const KAYNAK_AD: Record<OlayKaynak, string> = { yonetici: "Pusula", istemci: "Uygulama", servis: "Servis" }
+
+/**
+ * Olay kaydı (07.10.2026): ekrana sığsın diye sabit sütun genişlikleri + kesme (tamamı ipucunda değil —
+ * yalnız kod açıklaması ipucu), kompakt satır; kaynakta IP ipucunda. Tüm sütunlarda filtre.
+ */
 function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | null; cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void }) {
+  const [tarih, setTarih] = useState<TarihFiltreDeger>({ mode: "tum" })
   const [tur, setTur] = useState<string[]>([])
+  const [kod, setKod] = useState("")
   const [firma, setFirma] = useState("")
   const [kullanici, setKullanici] = useState("")
+  const [makine, setMakine] = useState("")
+  const [ayrinti, setAyrinti] = useState("")
+  const [kaynak, setKaynak] = useState<OlayKaynak[]>([])
   const [sayfa, setSayfa] = useState(1)
   const turler = useMemo(() => [...new Set((olaylar ?? []).map((o) => o.tur))].sort((a, b) => (OLAY[a]?.ad ?? a).localeCompare(OLAY[b]?.ad ?? b, "tr")), [olaylar])
   const firmaAdi = useMemo(() => new Map((cihazlar ?? []).map((c) => [c.firmaId, c.firmaAdi])), [cihazlar])
+  const kucuk = (x: string) => x.toLocaleLowerCase("tr")
 
   const filtreli = useMemo(() => (olaylar ?? []).filter((o) => {
+    if (!tarihUygun(o.zaman, tarih)) return false
     if (tur.length && !tur.includes(o.tur)) return false
-    if (firma && !`${o.firmaId ?? ""} ${firmaAdi.get(o.firmaId ?? "") ?? ""}`.toLocaleLowerCase("tr").includes(firma.toLocaleLowerCase("tr"))) return false
-    if (kullanici && !(o.kullanici ?? "").toLocaleLowerCase("tr").includes(kullanici.toLocaleLowerCase("tr"))) return false
+    if (kod && !kucuk(o.firmaId ?? "").includes(kucuk(kod))) return false
+    if (firma && !kucuk(firmaAdi.get(o.firmaId ?? "") ?? "").includes(kucuk(firma))) return false
+    if (kullanici && !kucuk(o.kullanici ?? "").includes(kucuk(kullanici))) return false
+    if (makine && !kucuk(o.makine ?? "").includes(kucuk(makine))) return false
+    if (ayrinti && !kucuk(`${ayrintiMetni(o)} ${olayIpucu(o) ?? ""}`).includes(kucuk(ayrinti))) return false
+    if (kaynak.length && !kaynak.includes(o.kaynak as OlayKaynak)) return false
     return true
-  }), [olaylar, tur, firma, kullanici, firmaAdi])
-  useEffect(() => setSayfa(1), [tur, firma, kullanici])
+  }), [olaylar, tarih, tur, kod, firma, kullanici, makine, ayrinti, kaynak, firmaAdi])
+  useEffect(() => setSayfa(1), [tarih, tur, kod, firma, kullanici, makine, ayrinti, kaynak])
   const gorunen = filtreli.slice((sayfa - 1) * 50, sayfa * 50)
 
   return (
     <ListeKarti baslik="Olay kaydı (son 500)" ikon={<History className="size-3.5" />} toplam={olaylar?.length ?? 0} filtreli={filtreli.length}>
       <div className="overflow-x-auto">
-        <table className="w-full text-[14px] leading-[20px] font-medium">
+        <table className="w-full min-w-[1000px] table-fixed text-[13px] leading-[20px] font-medium">
+          <colgroup>
+            <col className="w-[128px]" />
+            <col className="w-[170px]" />
+            <col className="w-[64px]" />
+            <col className="w-[22%]" />
+            <col className="w-[150px]" />
+            <col className="w-[140px]" />
+            <col />
+            <col className="w-[90px]" />
+          </colgroup>
           <ListeThead>
-            <th className="px-4 py-1.5 text-left font-medium">Zaman</th>
-            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Firma" value={firma} onChange={setFirma} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
-            <th className="px-4 py-1.5 text-left font-medium">Bilgisayar</th>
-            <th className="px-4 py-1.5 text-left font-medium">Ayrıntı</th>
-            <th className="px-4 py-1.5 text-left font-medium">Kaynak</th>
+            <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Zaman" value={tarih} onChange={setTarih} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kod" value={kod} onChange={setKod} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma" value={firma} onChange={setFirma} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Ayrıntı" value={ayrinti} onChange={setAyrinti} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Kaynak" options={["istemci", "yonetici", "servis"] as OlayKaynak[]} getLabel={(k) => KAYNAK_AD[k]} selected={kaynak} onChange={setKaynak} /></th>
           </ListeThead>
           <tbody>
             {!olaylar ? (
-              [0, 1, 2].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-2"><Skeleton className="h-5 w-full" /></td></tr>)
+              [0, 1, 2].map((i) => <tr key={i}><td colSpan={8} className="px-3 py-1.5"><Skeleton className="h-5 w-full" /></td></tr>)
             ) : gorunen.length === 0 ? (
-              <ListeBosSatir sutunSayisi={7} toplam={olaylar.length} bosMesaj="Henüz olay yok. Uygulamalar açılıp bağlandıkça burada görünür." />
+              <ListeBosSatir sutunSayisi={8} toplam={olaylar.length} bosMesaj="Henüz olay yok. Uygulamalar açılıp bağlandıkça burada görünür." />
             ) : gorunen.map((o) => (
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td>
-                <td className="px-4 py-1.5"><OlayRozeti tur={o.tur} /></td>
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
-                  {o.firmaId ? <><span className="text-muted-foreground text-[12px]">{o.firmaId}</span> {firmaAdi.get(o.firmaId) ?? ""}</> : "—"}
+                <td className="px-3 py-1 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td>
+                <td className="px-3 py-1"><OlayRozeti tur={o.tur} /></td>
+                <td className="text-muted-foreground px-3 py-1 tabular-nums">{o.firmaId ?? "—"}</td>
+                <td className="truncate px-3 py-1">{o.firmaId ? firmaAdi.get(o.firmaId) ?? "" : "—"}</td>
+                <td className="truncate px-3 py-1">{o.kullanici ?? "—"}</td>
+                <td className="truncate px-3 py-1">
+                  {o.cihazId ? <button type="button" className="max-w-full truncate underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
                 </td>
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">{o.kullanici ?? "—"}</td>
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
-                  {o.cihazId ? <button type="button" className="underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
-                </td>
-                <Ipucu icerik={olayIpucu(o)}><td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
-                <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">
-                  {o.kaynak === "yonetici" ? "Pusula" : o.kaynak === "istemci" ? "Uygulama" : "Servis"}
-                  {o.ip && <span> · {o.ip}</span>}
-                </td>
+                <Ipucu icerik={olayIpucu(o)}><td className="text-muted-foreground truncate px-3 py-1 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
+                <Ipucu icerik={o.ip}><td className="text-muted-foreground truncate px-3 py-1 text-[12px]">{KAYNAK_AD[o.kaynak as OlayKaynak] ?? o.kaynak}</td></Ipucu>
               </tr>
             ))}
           </tbody>
