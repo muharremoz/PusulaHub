@@ -37,8 +37,17 @@ export const MSI_URL_ARM = ""
 /*  Kullanıcı adı üretilen .ini'ye düz metin gidiyor. Satır sonu ya da "="
  *  geçerse dosyaya başka anahtar enjekte edilebilirdi (örneğin msiurl'i
  *  değiştirip kurulum dosyasını başka yerden indirtmek). Beyaz liste ile
- *  kesiliyor — AD kullanıcı adlarında bu karakterler zaten yeterli.        */
-export const GUVENLI_KULLANICI_ADI = /^[A-Za-z0-9._-]{1,64}$/
+ *  kesiliyor.
+ *  TÜRKÇE HARFLER SERBEST (07.10.2026): "6572.altınova1" gibi AD hesapları
+ *  var; paket "Geçersiz kullanıcı adı" veriyordu. Güvenli: PusulaConnect.exe
+ *  .ini'yi UTF-8 okuyor, .rdp'yi Unicode yazıyor; satır sonu / "=" yine yasak. */
+export const GUVENLI_KULLANICI_ADI = /^[A-Za-z0-9ÇĞİÖŞÜçğıöşü._-]{1,64}$/
+
+/** Dosya adı HTTP başlığına (Content-Disposition) gidiyor — yalnız ASCII. */
+function asciiAd(s: string): string {
+  const tr: Record<string, string> = { ç: "c", ğ: "g", ı: "i", ö: "o", ş: "s", ü: "u", Ç: "C", Ğ: "G", İ: "I", Ö: "O", Ş: "S", Ü: "U" }
+  return s.replace(/[çğıöşüÇĞİÖŞÜ]/g, (c) => tr[c] ?? "_")
+}
 
 /** Exe farklı çalışma dizinlerinde aranıyor: yerel dev ile konteyner farklı. */
 async function exeYolunuBul(): Promise<string | null> {
@@ -89,7 +98,7 @@ export async function kurulumPaketiUret(
   const ini = [
     `# ${firkod} / ${kullanici} icin uretildi - Pusula`,
     `# Bu dosya PusulaConnect.exe ile AYNI klasorde durmali.`,
-    `# Icerik saf ASCII: musteri Not Defteri ile acabilir.`,
+    `# UTF-8 (kullanici adinda Turkce harf olabilir): Not Defteri ile acilir.`,
     ``,
     `firma     = ${firkod}`,
     `kullanici = ${kullanici}`,
@@ -116,5 +125,5 @@ export async function kurulumPaketiUret(
     { name: "ayarlar.ini", data: new TextEncoder().encode(ini), date: simdi },
   ])
 
-  return { ok: true, zip, dosyaAdi: `PusulaConnect-${kullanici}.zip` }
+  return { ok: true, zip, dosyaAdi: `PusulaConnect-${asciiAd(kullanici)}.zip` }
 }
