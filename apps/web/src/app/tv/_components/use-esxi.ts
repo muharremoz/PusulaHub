@@ -57,6 +57,8 @@ export interface BackupSlot {
   vmCount: number
   /** O turda yedegi alinan makinelerin adlari */
   vms: string[]
+  /** Yedegi alinmis ama turun saatinden 45 dk'dan gec baslamis makineler */
+  gec?: string[]
   status: "ok" | "partial" | "missed" | "pending"
 }
 

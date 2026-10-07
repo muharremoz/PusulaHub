@@ -638,6 +638,8 @@ export interface BackupSlot {
   vmCount: number
   /** O turda yedeği alınan makinelerin adları — kart makine bazlı çiziyor */
   vms: string[]
+  /** Bu turun yedeği alınmış ama turun saatinden SLOT_GRACE'ten geç başlamış makineler */
+  gec: string[]
   status: "ok" | "partial" | "missed" | "pending"
 }
 
@@ -751,12 +753,29 @@ export function computeBackupCycle(
   /*  Dün 00:00 ile yarın 00:00 arası — iki günlük pencere.             */
   const pencere = anlar.filter((t) => t >= bugunTR - DAY_MS && t < bugunTR + DAY_MS)
 
-  const sonTur = turlar[turlar.length - 1]
+  /*  Program anına ait yedekler: anın SLOT_GRACE öncesinden bir sonraki
+   *  anın SLOT_GRACE öncesine kadar alınan her yedek (07.10.2026).
+   *
+   *  Önce "başlangıcı anın ±45 dk'sında olan tur" aranıyordu. Gecikmeli
+   *  tur iki hata üretiyordu: 06.10 15:00 turu 16:38'de başladı → 15:00
+   *  "kısmi" (geç alınanlar sayılmadı), ve 16:38 turu 17:53'teki 18:00
+   *  turuyla 60 dk kuralıyla BİRLEŞTİ → 18:00 "hiç alınmadı" göründü,
+   *  oysa 10 makinenin hepsi 17:53–18:23'te yedeklenmişti. Geç alınan
+   *  yedek artık o tura sayılıyor ve `gec` listesinde ayrıca işaretleniyor. */
+  const tumAnlar = [...anlar, anlar[anlar.length - 1] + DAY_MS]
   const slots: BackupSlot[] = pencere.map((t) => {
-    /*  Bu program anına ait tur: başlangıcı anın ±SLOT_GRACE'i içinde.   */
-    const tur     = turlar.find((x) => Math.abs(x.bas - t) <= SLOT_GRACE_MS)
-    const vmSet   = tur?.vms ?? new Set<string>()
+    const sonraki = tumAnlar.find((x) => x > t) ?? t + DAY_MS
+    const bas = t - SLOT_GRACE_MS, bit = sonraki - SLOT_GRACE_MS
+    const ilkler  = new Map<string, number>()
+    let sonNokta  = 0
+    for (const pt of points) {
+      if (pt.t < bas || pt.t >= bit) continue
+      if (!ilkler.has(pt.vm)) ilkler.set(pt.vm, pt.t)
+      sonNokta = Math.max(sonNokta, pt.t)
+    }
+    const vmSet   = new Set(ilkler.keys())
     const vmCount = vmSet.size
+    const gec     = [...ilkler].filter(([, ilk]) => ilk > t + SLOT_GRACE_MS).map(([vm]) => vm)
 
     /*  Beklenen makine sayisi TUR BAZLI.
      *
@@ -764,7 +783,7 @@ export function computeBackupCycle(
      *  bugun eklenince DUNUN butun turlari geriye donuk "eksik" oldu —
      *  oysa o gun makine iste yoktu. Bir makine ancak ILK yedeginden
      *  sonraki turlarda bekleniyor.                                     */
-    const turSonu  = Math.max(t + SLOT_GRACE_MS, tur?.son ?? 0)
+    const turSonu  = Math.max(t + SLOT_GRACE_MS, sonNokta)
     const beklenen = inJob.filter((v) => {
       const ilk = new Date(v.times[0]).getTime()
       return isFinite(ilk) && ilk <= turSonu
@@ -772,14 +791,14 @@ export function computeBackupCycle(
     /*  Tur daha yeni başlamışsa ya da makineler hâlâ dolaşılıyorsa sonucu
      *  belli değil — "kaçırıldı"/"kısmi" deme. Son yedekten sonra
      *  TUR_ARASI kadar sessizlik olmadan eksik tur bitmiş sayılmıyor.    */
-    const suruyor = tur !== undefined && tur === sonTur && nowMs - tur.son <= TUR_ARASI_MS
+    const suruyor = vmCount > 0 && nowMs - sonNokta <= TUR_ARASI_MS
     const bitti   = nowMs > t + SLOT_GRACE_MS && !(suruyor && vmCount < beklenen)
     const status: BackupSlot["status"] =
       !bitti                    ? "pending"
       : vmCount === 0         ? "missed"
       : vmCount >= beklenen   ? "ok"
       :                         "partial"
-    return { at: new Date(t).toISOString(), vmCount, vms: [...vmSet], status }
+    return { at: new Date(t).toISOString(), vmCount, vms: [...vmSet], gec, status }
   })
 
   return {

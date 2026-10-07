@@ -377,7 +377,7 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
  *   Burada yalniz "su an hangi tur donuyor" sorusu icin kullaniliyor.  */
 const TUR_TOLERANS_MS = 45 * 60_000
 
-type TurDurumu = "var" | "yok" | "bekliyor" | "aliniyor"
+type TurDurumu = "var" | "gec" | "yok" | "bekliyor" | "aliniyor"
 
 /**
  * Tek tur kutusu.
@@ -385,15 +385,18 @@ type TurDurumu = "var" | "yok" | "bekliyor" | "aliniyor"
  * `bekliyor`: turun saati henüz gelmedi. Sonucu belli olmayan turu
  * kırmızı göstermek yanlış alarm olurdu.
  * `aliniyor` : şu an alınıyor — yanıp sönüyor.
+ * `gec`      : yedek alındı ama tur saatinden 45 dk'dan geç başladı — sarı.
  */
 function TurKutusu({ saat, durum }: { saat: string; durum: TurDurumu }) {
   const renk =
     durum === "var"        ? GREEN
+    : durum === "gec"      ? AMBER
     : durum === "yok"      ? RED
     : durum === "aliniyor" ? FLOW
     :                        TXT_DIM
   const zemin =
     durum === "var"        ? "rgba(52,211,153,0.12)"
+    : durum === "gec"      ? "rgba(251,191,36,0.14)"
     : durum === "yok"      ? "rgba(248,113,113,0.14)"
     : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
     :                        "rgba(255,255,255,0.04)"
@@ -501,7 +504,7 @@ export function BackupImageCard({
 
   const turDurumu = (b: EsxiVmBackup, x: BackupSlot): TurDurumu => {
     if (surenTur(b) === x.at)     return "aliniyor"
-    if (x.vms.includes(b.vmName)) return "var"
+    if (x.vms.includes(b.vmName)) return x.gec?.includes(b.vmName) ? "gec" : "var"
     if (x.status === "pending")   return "bekliyor"
     /*  Makine o tarihte yedek isinde degildi (ilk yedegi daha sonra).
      *  Terminal 2 ise bugun eklendi; dunu kirmizi gostermek yanlis.    */
