@@ -121,15 +121,19 @@ export function buildSetNtfsPermissions(path: string, securityGroup: string): st
  *   2) Dosyaya +sh (system + hidden) atanır
  *   3) Klasöre +s (system) atanır → Explorer desktop.ini'yi okur
  * Unicode Türkçe karakter için UTF-16 LE (ShellClassInfo resmi olarak Unicode bekler).
+ *
+ * `gorunenAd` verilirse LocalizedResourceName yazılır: Gezgin klasörü bu adla gösterir, gerçek
+ * klasör adı (yol) değişmez (07.10.2026 — Depo Resimler/Eski Datalar "<firmaNo> - <firma adı>").
  */
-export function buildWriteDesktopIni(folderPath: string, infoTip: string): string {
+export function buildWriteDesktopIni(folderPath: string, infoTip: string, gorunenAd?: string): string {
   const p  = psQuote(folderPath)
   const it = psQuote(infoTip)
+  const ad = gorunenAd ? `'LocalizedResourceName=${psQuote(gorunenAd)}' + [Environment]::NewLine + ` : ""
   return [
     `$p='${p}'`,
     `if(-not (Test-Path -LiteralPath $p)){throw ('Klasor bulunamadi: ' + $p)}`,
     `$ini = Join-Path -Path $p -ChildPath 'desktop.ini'`,
-    `$content = '[.ShellClassInfo]' + [Environment]::NewLine + 'InfoTip=${it}' + [Environment]::NewLine`,
+    `$content = '[.ShellClassInfo]' + [Environment]::NewLine + ${ad}'InfoTip=${it}' + [Environment]::NewLine`,
     // Varsa attrib kaldır (yeniden yazabilmek için)
     `if(Test-Path -LiteralPath $ini){$null = attrib -s -h -r $ini 2>$null}`,
     `[System.IO.File]::WriteAllText($ini, $content, [System.Text.Encoding]::Unicode)`,

@@ -715,12 +715,13 @@ export async function POST(req: NextRequest) {
             `Depo: NTFS yetkileri: ${depoPath} → ${payload.firmaId}_users`,
             buildSetNtfsPermissions(depoPath, `${payload.firmaId}_users`),
           )
-          // desktop.ini — klasör tooltip'i olarak firma adı görünür
+          // desktop.ini — klasör tooltip'i firma adı, Gezgin'de görünen ad "<firmaNo> - <firma adı>"
+          // (klasörün gerçek adı firma no kalır: SQL resim yolu, IIS ve kısayollar bunu kullanıyor)
           await runStep(
             depoAgent,
             "depo_tooltip",
-            `Depo: klasör açıklaması (desktop.ini): ${payload.firmaName}`,
-            buildWriteDesktopIni(depoPath, payload.firmaName),
+            `Depo: klasör açıklaması (desktop.ini): ${payload.firmaId} - ${payload.firmaName}`,
+            buildWriteDesktopIni(depoPath, payload.firmaName, `${payload.firmaId} - ${payload.firmaName}`),
           )
         } else if (pusulaServices.length > 0) {
           send("step", {

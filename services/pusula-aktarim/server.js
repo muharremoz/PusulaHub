@@ -2641,7 +2641,10 @@ async function desktopIniYaz(ip, username, password, ustKlasor, klasorAdi, infoT
 
   const temiz = (x) => String(x).replace(/["\\/;]/g, "_")
   const tmp = join(STAGING_ROOT, `desktop-${randomBytes(6).toString("hex")}.ini`)
-  const metin = "[.ShellClassInfo]\r\nInfoTip=" + String(infoTip ?? "").replace(/[\r\n]/g, " ") + "\r\n"
+  // Gezgin'de görünen ad "<firmaNo> - <firma adı>" (07.10.2026); klasörün gerçek adı firma no kalır
+  const tip = String(infoTip ?? "").replace(/[\r\n]/g, " ")
+  const gorunen = /^[0-9]+$/.test(String(klasorAdi)) && tip ? "LocalizedResourceName=" + klasorAdi + " - " + tip + "\r\n" : ""
+  const metin = "[.ShellClassInfo]\r\n" + gorunen + "InfoTip=" + tip + "\r\n"
   await writeFile(tmp, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(metin, "utf16le")]))
 
   const klasor = `"${temiz(ustKlasor)}/${temiz(klasorAdi)}"`
