@@ -92,7 +92,8 @@ export function AnaEkran({ durum, setDurum }: P) {
   // İlk denetim (FortiClient, VPN ayarı, şifre, sunucu) bitene kadar değerler henüz okunmadı — "yok" sayılmaz;
   // kartlar "Kontrol ediliyor…" gösterir, Kur/şifre bölümleri açılmaz. Denetim tüm alanları birlikte yazar.
   const denetlendi = !!k.terminal.zaman;
-  const sifreGoster = denetlendi && !k.rdpSifre.kayitli;
+  // Şifre Hub'dan alınırken elle giriş kutusu gösterilmez (kendiliğinden geliyor, 07.10.2026)
+  const sifreGoster = denetlendi && !k.rdpSifre.kayitli && !k.rdpSifre.aliniyor;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
@@ -354,9 +355,9 @@ export function AnaEkran({ durum, setDurum }: P) {
           <Kart
             ikon={<KeyRound />}
             baslik="Oturum şifresi"
-            durum={!denetlendi ? "bekliyor" : k.rdpSifre.kayitli ? "iyi" : "hata"}
-            deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : "Kayıtlı değil"}
-            alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? "Aşağıdan kaydedin" : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
+            durum={!denetlendi || (!k.rdpSifre.kayitli && k.rdpSifre.aliniyor) ? "bekliyor" : k.rdpSifre.kayitli ? "iyi" : "hata"}
+            deger={!denetlendi ? "Kontrol ediliyor…" : k.rdpSifre.kayitli ? "Kayıtlı" : k.rdpSifre.aliniyor ? "Alınıyor…" : "Kayıtlı değil"}
+            alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? (k.rdpSifre.aliniyor ? "Pusula'dan otomatik alınıyor" : "Aşağıdan kaydedin") : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
         </div>
 
@@ -400,7 +401,8 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Bolum>
         )}
 
-        {vpnHazir && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
+        {/* Kullanıcı adı FortiClient'a tanımlanmadan bağlanma adımı gösterilmez — önce "Tanımla" kartı (07.10.2026) */}
+        {vpnHazir && !!k.profil.kullaniciAdi && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
           <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
             <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
               <li>VPN uygulamasını (FortiClient) açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
@@ -509,7 +511,11 @@ export function AnaEkran({ durum, setDurum }: P) {
             >
               {bekle === "/baglan" ? <Loader2 className="animate-spin" /> : <Monitor />} Pusula'ya bağlan
             </RainbowButton>
-            {!k.rdpSifre.kayitli && <p className="-mt-2 text-center text-xs text-muted-foreground">Bağlanmak için önce oturum şifresini kaydedin.</p>}
+            {!k.rdpSifre.kayitli && (
+              <p className="-mt-2 text-center text-xs text-muted-foreground">
+                {k.rdpSifre.aliniyor ? "Oturum şifresi Pusula'dan alınıyor…" : "Bağlanmak için önce oturum şifresini kaydedin."}
+              </p>
+            )}
           </>
         )}
 

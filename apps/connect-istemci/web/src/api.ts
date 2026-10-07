@@ -158,7 +158,7 @@ export type Durum = {
     profil: { dogru: boolean; kullaniciAdi?: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" };
     /** dnsYok: sunucu adı bu bilgisayarda çözülemedi, IP ile bağlanılıyor. */
     terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null; dnsYok?: boolean };
-    rdpSifre: { kayitli: boolean; kullanici: string | null };
+    rdpSifre: { kayitli: boolean; kullanici: string | null; /** Hub'da şifre var, birkaç saniyede kendiliğinden alınacak */ aliniyor?: boolean };
   };
   /** Pusula'dan şifre güncellemesi: bekliyor = 2FA açık, yeni şifre bir sonraki kodla alınacak; mesaj = kullanıcıya bilgi. */
   sifreGuncelleme?: { bekliyor: boolean; mesaj: string | null; /** şifre ilk kurulumda alındı (değişmedi) */ ilk?: boolean };

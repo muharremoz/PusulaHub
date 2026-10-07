@@ -184,10 +184,29 @@ namespace PusulaConnect
                 BilinenSurum = j.Value<string>("sifreSurumu") ?? hub;
                 lock (_kilit) { _oturumMesaji = null; SifreBilgi(kayitli ? "Şifreniz Pusula tarafından değiştirildi; yeni şifre otomatik alındı." : "Oturum şifreniz Pusula'dan alındı; elle girmeniz gerekmez.", ilk: !kayitli); }
                 Gunluk.Yaz("RDP şifresi Pusula'dan alındı (" + (kayitli ? "değişti" : "ilk") + ")");
+                _sifreAlinamadi = false;
+                // Kart "Kayıtlı değil"de kalmasın: yerel denetimi hemen tazele (yoksa 10 sn'lik zamanlayıcıyı bekliyordu)
+                _ = Task.Run(Kontrol);
                 _ = _servis.Olay("sifre_guncellendi", kayitli ? "değişti" : "ilk");
             }
             catch (ServisHatasi e) when (e.DurumKodu == 404) { BilinenSurum = hub; /* Hub'da şifre yok: kullanıcı girer */ }
-            catch (Exception e) { Gunluk.Yaz("Şifre Pusula'dan alınamadı: " + e.Message); }
+            catch (Exception e) { _sifreAlinamadi = true; Gunluk.Yaz("Şifre Pusula'dan alınamadı: " + e.Message); }
+        }
+
+        /// <summary>
+        /// Hub'da şifre var ve henüz alınmadı (07.10.2026): arayüz bu sürede "Oturum şifresini kaydedin" kutusunu
+        /// göstermez — şifre birkaç saniye içinde kendiliğinden geliyordu, kullanıcı boşuna elle girmeye çalışıyordu.
+        /// Alınamazsa (servis hatası) ya da 2FA açıksa kutu yine çıkar.
+        /// </summary>
+        private bool _sifreAlinamadi;
+        private bool SifreHubdanBekleniyor
+        {
+            get
+            {
+                if (_sifreAlinamadi || IkiAktif) return false;
+                var hub = _kayit?.Value<string>("sifreSurumu");
+                return hub != null && hub != BilinenSurum;
+            }
         }
 
         /// <summary>ilk: şifre ilk kurulumda alındı (değişmedi) — arayüz "değişti" demez; kart VPN bağlanana kadar kalır.</summary>
@@ -294,7 +313,7 @@ namespace PusulaConnect
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
                         profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
                         terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s"), dnsYok = _dnsYok },
-                        rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici },
+                        rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici, aliniyor = _rdpKullanici == null && SifreHubdanBekleniyor },
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
                     ikiAdim = new
@@ -414,7 +433,7 @@ namespace PusulaConnect
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
             BilinenSurum = null;
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; }
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false; }
             return Durum();
         }
 
@@ -807,7 +826,13 @@ namespace PusulaConnect
                 try { if (YaziciAjani.Kurulu) await YaziciAjani.Kaldir(); } catch (Exception e) { Gunluk.Yaz("Kayıt kalktı, yazdırma yardımcısı (Pusula X) kaldırılamadı: " + e.Message); }
                 try { if (RfidYardimcisi.Kurulu) await RfidYardimcisi.Kaldir(); } catch (Exception e) { Gunluk.Yaz("Kayıt kalktı, yazdırma yardımcısı (Pusula) kaldırılamadı: " + e.Message); }
             });
-            Gunluk.Yaz("Kayıt kalktı: RDP ve VPN bilgileri bu bilgisayardan silindi");
+            // Sayım da kapatılır (07.10.2026): yeni kodla gelen firma eskisinin sayımını "aktif" görüyordu. Program
+            // klasörü kalır (yeniden açınca indirilmesin), bağlantı bilgisi (server.xml), kısayol ve durum silinir.
+            foreach (var s in Sayim.Hepsi)
+            {
+                try { if (s.Kurulu) s.Kaldir(false); } catch (Exception e) { Gunluk.Yaz("Kayıt kalktı, sayım (" + s.Tur + ") kapatılamadı: " + e.Message); }
+            }
+            Gunluk.Yaz("Kayıt kalktı: RDP, VPN ve sayım bilgileri bu bilgisayardan silindi");
         }
 
         // FortiClient'a hangi Pusula kullanıcısının adı yazıldı (DATA1 şifreli, okunamaz). Kayıt kalkınca "-".
@@ -848,7 +873,7 @@ namespace PusulaConnect
             lock (_kilit)
             {
                 _kayit = null; _asama = "kayit"; _mesaj = mesaj; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null;
-                _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false;
+                _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false;
             }
         }
 
