@@ -825,8 +825,9 @@ function CihazDetay({
                 <PlugZap className="size-[18px]" />
               </span>
               <div className="min-w-0 flex-1">
-                <DialogTitle className="text-[15px] font-semibold">{c.makine ?? "Cihaz"}</DialogTitle>
-                <DialogDescription className="text-[12px]">{c.kullanici} · {c.firmaId} {c.firmaAdi}</DialogDescription>
+                {/* Kullanıcı adı başlıkta (07.10.2026) — bilgisayar adı ve firma altta */}
+                <DialogTitle className="text-[15px] font-semibold">{c.kullanici}</DialogTitle>
+                <DialogDescription className="text-[12px]">{c.makine ?? "Bilgisayar adı yok"} · {c.firmaId} {c.firmaAdi}</DialogDescription>
               </div>
             </div>
 
