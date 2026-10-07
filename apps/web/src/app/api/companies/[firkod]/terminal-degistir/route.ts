@@ -196,7 +196,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fir
         const n = await calistir(hedef, buildSetNtfsPermissions(firmaKlasoru(firkod), `${firkod}_users`), 900)
         if (n.exitCode !== 0) { adim("ntfs", "NTFS yetkileri", "error", { error: n.stderr || n.stdout }); return bitir("Yetkiler verilemedi") }
         adim("ntfs", `NTFS yetkileri: ${firkod}_users`, "done")
-        await calistir(hedef, buildWriteDesktopIni(firmaKlasoru(firkod), firmaAdi))
+        await calistir(hedef, buildWriteDesktopIni(firmaKlasoru(firkod), firmaAdi, `${firkod} - ${firmaAdi}`))
 
         // 6) Atama — buradan sonra Connect / Aktarım / Firmalar yeni sunucuyu kullanır
         adim("atama", "Firmanın terminal sunucusu güncelleniyor", "running")

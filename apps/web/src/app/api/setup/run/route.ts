@@ -830,7 +830,7 @@ export async function POST(req: NextRequest) {
             winAgent,
             "firma_root_tooltip",
             `Firma klasörü açıklaması (desktop.ini): ${payload.firmaName}`,
-            buildWriteDesktopIni(firmaRoot, payload.firmaName),
+            buildWriteDesktopIni(firmaRoot, payload.firmaName, `${payload.firmaId} - ${payload.firmaName}`),
           )
 
           // 5d) Masaüstü MUSTERILER klasörü + kısayollar (non-critical, hata devam ettirir)
