@@ -1067,9 +1067,9 @@ function CihazDetay({
   const ay = c?.durum?.ayarlar ?? null
   const [gunlukAcik, setGunlukAcik] = useState(false)
   useEffect(() => { if (!c) setGunlukAcik(false) }, [c])
+  // MODAL (07.10.2026, kullanıcı kararı): yan panel yerine ortada geniş pencere — solda durum, sağda son olaylar
   return (
     <>
-    // MODAL (07.10.2026, kullanıcı kararı): yan panel yerine ortada geniş pencere — solda durum, sağda son olaylar
     <Dialog open={!!c} onOpenChange={(o) => !o && onKapat()}>
       <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1240px,94vw)]">
         {c && (
