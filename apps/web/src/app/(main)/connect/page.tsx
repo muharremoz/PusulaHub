@@ -509,7 +509,8 @@ function VpnRozeti({ c }: { c: ConnectCihazSatir }) {
   if (v == null) return <span className="text-muted-foreground">—</span>
   if (!canliMi(c)) return <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${v.bagli ? "Açık" : "Kapalı"}`}>—</span>
   return v.bagli
-    ? <span className="text-emerald-700 dark:text-emerald-400">Açık{v.ip && <span className="text-muted-foreground"> · {v.ip}</span>}</span>
+    // "Açık" yazılmaz: yeşil VPN IP'si yeterli (07.10.2026); IP yoksa "Açık"
+    ? <span className="text-emerald-700 dark:text-emerald-400" title="VPN açık">{v.ip || "Açık"}</span>
     : <span className="text-amber-700 dark:text-amber-400">Kapalı</span>
 }
 
