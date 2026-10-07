@@ -667,9 +667,9 @@ function CihazListesi({
                         {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
                           : !canliMi(c) ? <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${c.terminalErisim ? "Erişiyor" : "Erişemiyor"}`}>—</span>
                           : c.terminalErisim ? (
-                            <span className="inline-flex items-center gap-1.5" title={c.terminalMs != null ? `Gecikme: ${c.terminalMs} ms` : undefined}>
+                            // Yalnız ikon; gecikme üzerine gelince (07.10.2026)
+                            <span className="inline-flex items-center py-1" title={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}>
                               <SinyalIkonu ms={c.terminalMs} />
-                              <span className="text-emerald-700 dark:text-emerald-400">{c.terminalMs != null ? KALITE_AD[kalite(c.terminalMs)] : "Erişiyor"}</span>
                             </span>
                           )
                           : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
@@ -1008,10 +1008,8 @@ function CihazDetay({
                   {c.terminalErisim == null ? "—"
                     : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı)</span>
                     : c.terminalErisim ? (
-                      <span className="inline-flex items-center gap-1.5">
+                      <span className="inline-flex items-center py-1" title={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}>
                         <SinyalIkonu ms={c.terminalMs} />
-                        <span className="text-emerald-700 dark:text-emerald-400">{c.terminalMs != null ? KALITE_AD[kalite(c.terminalMs)] : "Erişiyor"}</span>
-                        {c.terminalMs != null && <span className="text-muted-foreground">· {c.terminalMs} ms</span>}
                       </span>
                     )
                     : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
