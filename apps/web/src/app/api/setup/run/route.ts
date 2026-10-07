@@ -1320,6 +1320,18 @@ export async function POST(req: NextRequest) {
                     }
                   }
 
+                  // ── SQLData klasörü görünen adı (07.10.2026) ──
+                  // D:\SQLData\{firmaId} Gezgin'de "<firmaNo> - <firma adı>" görünsün (Depo Resimler/Eski
+                  // Datalar ile aynı). Klasör adı değişmez. Kritik değil, hata kurulumu durdurmaz.
+                  if (restoredDbNames.length > 0 && sqlTarget!.agent) {
+                    await runStep(
+                      sqlTarget!.agent,
+                      "sql_data_tooltip",
+                      `SQL veri klasörü açıklaması (desktop.ini): ${payload.firmaId} - ${payload.firmaName}`,
+                      buildWriteDesktopIni(firmaDataDir(payload.firmaId), payload.firmaName, `${payload.firmaId} - ${payload.firmaName}`),
+                    )
+                  }
+
                   // ── Pusula X resim yolu ──
                   // Pusula X resim yolunu guvenlik'te değil kendi Sabitler.ImagePath'inde tutar.
                   // Yanlış/eski yol (ulaşılamayan paylaşım) programı açılışta ve içeride
