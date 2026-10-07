@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
-  Hash, Headset, Laptop, Megaphone, Network, Rocket, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Headset, Laptop, Megaphone, ListChecks, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -720,7 +720,7 @@ function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
     <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
       <div className="flex items-center gap-3 border-b bg-muted/30 px-5 py-4">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
-          {bitti ? <CheckCircle2 className="size-5" /> : <Rocket className="size-5" />}
+          {bitti ? <CheckCircle2 className="size-5" /> : <ListChecks className="size-5" />}
         </span>
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold">{bitti ? "Kurulum tamamlandı" : "İlk kurulum"}</div>
