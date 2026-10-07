@@ -795,12 +795,35 @@ function KodListesi({ kodlar, onIptal }: { kodlar: ConnectKod[] | null; onIptal:
   )
 }
 
-function Bilgi({ ad, children }: { ad: string; children: React.ReactNode }) {
+/** Detay hücresi: solda küçük ikon kutusu, sağda etiket + değer. */
+function Bilgi({ ad, ikon, title, children }: { ad: string; ikon?: React.ReactNode; title?: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="text-muted-foreground text-[11px]">{ad}</span>
-      <span className="truncate text-[13px] font-medium">{children}</span>
+    <div className="flex min-w-0 items-center gap-2.5" title={title}>
+      {ikon && (
+        <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-4">{ikon}</span>
+      )}
+      <div className="flex min-w-0 flex-col">
+        <span className="text-muted-foreground text-[11px] leading-4">{ad}</span>
+        <span className="truncate text-[13px] leading-5 font-medium">{children}</span>
+      </div>
     </div>
+  )
+}
+
+/** "Microsoft Windows 11 Home Single Language" → "Windows 11 Home" (tamamı ipucunda). */
+function kisaWindows(os: string | null | undefined): string {
+  if (!os) return "—"
+  const m = /(Windows\s+(?:Server\s+)?\S+(?:\s+(?:Home|Pro|Enterprise|Education|Standard|Datacenter))?)/i.exec(os)
+  return m ? m[1] : os
+}
+
+/** Detay bölümü: başlık + iki sütunlu hücre ızgarası. */
+function DetayBolumu({ baslik, children }: { baslik: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-[8px] border">
+      <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{baslik}</div>
+      <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-3">{children}</div>
+    </section>
   )
 }
 
@@ -839,35 +862,40 @@ function CihazDetay({
                 <span className="ml-auto"><CihazMenusu c={c} onIslem={onIslem} /></span>
               </div>
 
-              <section className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-[8px] border p-3">
-                <Bilgi ad="Uygulama sürümü"><SurumRozeti surum={c.surum} son={sonSurum} /></Bilgi>
-                <Bilgi ad="Windows">{c.durum?.os ?? "—"}</Bilgi>
-                <Bilgi ad="FortiClient">{c.durum?.forti ?? "—"}</Bilgi>
-                <Bilgi ad="VPN profili">
-                  {c.durum?.vpnProfil == null ? "—" : c.durum.vpnProfil.dogru ? (c.durum.vpnProfil.kullaniciAdi ? "Hazır · kullanıcı adı tanımlı" : "Hazır · kullanıcı adı yok") : "Eksik"}
-                  {c.durum?.vpnProfil?.sifre && (
-                    <span className={c.durum.vpnProfil.sifre === "kayitli" ? "text-muted-foreground" : "text-amber-700 dark:text-amber-400"}>
-                      {" · "}{c.durum.vpnProfil.sifre === "kayitli" ? "şifre kayıtlı" : c.durum.vpnProfil.sifre === "isaretsiz" ? "şifre kaydedilmemiş" : "şifre kutusu henüz çıkmadı"}
-                    </span>
-                  )}
-                </Bilgi>
-                <Bilgi ad="VPN bağlantısı"><VpnRozeti c={c} /></Bilgi>
-                <Bilgi ad="Sunucu">{c.rdp ?? "—"}</Bilgi>
-                <Bilgi ad="Sunucuya erişim">
+              {/* İki bölüm (07.10.2026): bağlantı zinciri ve cihaz bilgisi ayrı; hücrelerde ikon */}
+              <DetayBolumu baslik="Bağlantı">
+                <Bilgi ad="VPN bağlantısı" ikon={<Wifi />}><VpnRozeti c={c} /></Bilgi>
+                <Bilgi ad="Sunucuya erişim" ikon={<Activity />}>
                   {c.terminalErisim == null ? "—"
-                    : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı; son bilinen: {c.terminalErisim ? "Erişiyor" : "Erişemiyor"})</span>
-                    : c.terminalErisim ? `Erişiyor${c.terminalMs != null ? ` · ${c.terminalMs} ms` : ""}` : "Erişemiyor"}
-                  {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS çözülemedi, IP ile</span>}
+                    : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı)</span>
+                    : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
+                    : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
+                  {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS yok, IP ile</span>}
                 </Bilgi>
-                <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
-                <Bilgi ad="Sayım">
-                  <SayimRozeti c={c} />
-                  {(c.durum?.sayim || c.durum?.sayimEski) && <span className="text-muted-foreground block text-[12px] whitespace-pre-line">{sayimAciklama(c)}</span>}
+                <Bilgi
+                  ad="VPN profili"
+                  ikon={<ShieldCheck />}
+                  title={c.durum?.vpnProfil ? [c.durum.vpnProfil.kullaniciAdi ? "kullanıcı adı tanımlı" : "kullanıcı adı yok", c.durum.vpnProfil.sifre === "kayitli" ? "şifre kayıtlı" : "şifre kayıtlı değil"].join(" · ") : undefined}
+                >
+                  {c.durum?.vpnProfil == null ? "—" : c.durum.vpnProfil.dogru ? "Hazır" : <span className="text-amber-700 dark:text-amber-400">Eksik</span>}
                 </Bilgi>
-                <Bilgi ad="Dış IP"><span>{c.ip ?? "—"}</span></Bilgi>
-                <Bilgi ad="İlk kayıt">{tarihMetni(c.ilkGiris)}</Bilgi>
-                <Bilgi ad="Son nabız">{c.sonNabiz ? `${onceMetni(c.sonNabiz)} (${tarihMetni(c.sonNabiz)})` : "Henüz yok (eski sürüm)"}</Bilgi>
-              </section>
+                <Bilgi ad="Sunucu" ikon={<MonitorPlay />}>{c.rdp ?? "—"}</Bilgi>
+                <Bilgi ad="Oturum şifresi" ikon={<KeyRound />}>
+                  {c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : <span className="text-amber-700 dark:text-amber-400">Kayıtlı değil</span>}
+                </Bilgi>
+                <Bilgi ad="Dış IP" ikon={<Link2 />}>{c.ip ?? "—"}</Bilgi>
+              </DetayBolumu>
+
+              <DetayBolumu baslik="Cihaz">
+                <Bilgi ad="Uygulama sürümü" ikon={<PlugZap />}><SurumRozeti surum={c.surum} son={sonSurum} /></Bilgi>
+                <Bilgi ad="Windows" ikon={<Laptop />} title={c.durum?.os ?? undefined}>{kisaWindows(c.durum?.os)}</Bilgi>
+                <Bilgi ad="FortiClient" ikon={<ShieldCheck />}>{c.durum?.forti ?? "—"}</Bilgi>
+                <Bilgi ad="Sayım" ikon={<Activity />} title={c.durum?.sayim || c.durum?.sayimEski ? sayimAciklama(c) : undefined}><SayimRozeti c={c} /></Bilgi>
+                <Bilgi ad="İlk kayıt" ikon={<History />}>{tarihMetni(c.ilkGiris)}</Bilgi>
+                <Bilgi ad="Son görülme" ikon={<RefreshCw />} title={c.sonNabiz ? tarihMetni(c.sonNabiz) : undefined}>
+                  {c.sonNabiz ? onceMetni(c.sonNabiz) : c.sonGorulme ? onceMetni(c.sonGorulme) : "—"}
+                </Bilgi>
+              </DetayBolumu>
 
               <section className="rounded-[8px] border p-3">
                 <div className="mb-2 flex items-center justify-between">
