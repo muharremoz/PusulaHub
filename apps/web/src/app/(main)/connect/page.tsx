@@ -146,7 +146,16 @@ const RDP_NEDEN: Record<number, string> = {
   2823: "şifre süresi dolmuş",
   3335: "hesap kilitli",
 }
-const rdpNeden = (n: number) => RDP_NEDEN[n] ?? `kod ${n}`
+/** Ayrıntıda "kod N" kalır; açıklaması üzerine gelince (07.10.2026). */
+function olayIpucu(o: ConnectOlay): string {
+  const metin = ayrintiMetni(o)
+  if ((o.tur !== "oturum_bitti" && o.tur !== "oturum_hatasi") || !o.ayrinti) return metin
+  try {
+    const n = (JSON.parse(o.ayrinti) as { neden?: unknown }).neden
+    if (typeof n === "number" && n !== -1) return `${metin}\nKod ${n}: ${RDP_NEDEN[n] ?? "açıklaması bilinmiyor"}`
+  } catch { /* JSON değil */ }
+  return metin
+}
 
 function ayrintiMetni(o: ConnectOlay) {
   if (!o.ayrinti) return o.kaynak === "yonetici" ? "" : ""
@@ -156,7 +165,7 @@ function ayrintiMetni(o: ConnectOlay) {
   const v = j as Record<string, unknown>
   if (o.tur === "oturum_acildi") return [v.sunucu, v.ms != null ? `${v.ms} ms` : null, v.ikiAdim ? "2FA ile" : null].filter(Boolean).join(" · ")
   if (o.tur === "oturum_bitti" || o.tur === "oturum_hatasi")
-    return [v.mesaj, v.sureDk != null ? `${v.sureDk} dk sürdü` : null, typeof v.neden === "number" && v.neden !== -1 ? rdpNeden(v.neden) : null].filter(Boolean).join(" · ")
+    return [v.mesaj, v.sureDk != null ? `${v.sureDk} dk sürdü` : null, typeof v.neden === "number" && v.neden !== -1 ? `kod ${v.neden}` : null].filter(Boolean).join(" · ")
   if (o.tur === "ayar_degisti")
     return Object.entries(v).map(([k, d]) => `${AYAR_AD[k] ?? k}: ${d === true ? "açık" : d === false ? "kapalı" : String(d)}`).join(", ")
   return Object.entries(v).map(([k, d]) => `${k}: ${String(d)}`).join(", ")
@@ -702,7 +711,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
   const filtreli = useMemo(() => olaylar.filter((o) => {
     if (!tarihUygun(o.zaman, tarih)) return false
     if (tur.length && !tur.includes(o.tur)) return false
-    if (ayrinti && !ayrintiMetni(o).toLocaleLowerCase("tr").includes(ayrinti.toLocaleLowerCase("tr"))) return false
+    if (ayrinti && !olayIpucu(o).toLocaleLowerCase("tr").includes(ayrinti.toLocaleLowerCase("tr"))) return false
     return true
   }), [olaylar, tarih, tur, ayrinti])
   useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
@@ -737,7 +746,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{tarihMetni(o.zaman)}</td>
                 <td className="px-2 py-1"><OlayRozeti tur={o.tur} /></td>
-                <td className="text-muted-foreground truncate px-2 py-1" title={ayrintiMetni(o)}>{ayrintiMetni(o)}</td>
+                <td className="text-muted-foreground truncate px-2 py-1" title={olayIpucu(o)}>{ayrintiMetni(o)}</td>
               </tr>
             ))}
           </tbody>
@@ -799,7 +808,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.cihazId ? <button type="button" className="underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
                 </td>
-                <td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]" title={ayrintiMetni(o)}>{ayrintiMetni(o) || "—"}</td>
+                <td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]" title={olayIpucu(o) || undefined}>{ayrintiMetni(o) || "—"}</td>
                 <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">
                   {o.kaynak === "yonetici" ? "Pusula" : o.kaynak === "istemci" ? "Uygulama" : "Servis"}
                   {o.ip && <span> · {o.ip}</span>}
