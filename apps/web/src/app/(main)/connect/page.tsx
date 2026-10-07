@@ -257,27 +257,28 @@ export default function ConnectPage() {
               <TabsTrigger value="duyurular" className="h-8 gap-2 px-3.5 text-[13.5px]"><Megaphone className="size-4" />Duyurular</TabsTrigger>
               <TabsTrigger value="ayarlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><Settings className="size-4" />Ayarlar</TabsTrigger>
             </TabsList>
+            {/* Belirgin düğmeler (07.10.2026): sekmelerle aynı yükseklik; indir dolu, diğerleri kartlı çerçeve */}
             <div className="flex items-center gap-2">
-            <a
-              href={UYGULAMA_INDIR}
-              className="hover:bg-muted text-foreground inline-flex h-8 items-center gap-1.5 rounded-[5px] border px-2.5 text-[12px] font-medium transition-colors"
-            >
-              <Download className="size-3.5" />Uygulamayı indir
-            </a>
-            <Ipucu icerik="İndirme bağlantısını kopyala"><button
-              type="button"
-              className="hover:bg-muted text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-[5px] border transition-colors"
-              onClick={() =>
-                void navigator.clipboard.writeText(UYGULAMA_INDIR)
-                  .then(() => toast.success("İndirme bağlantısı kopyalandı", { description: UYGULAMA_INDIR }))
-                  .catch(() => toast.error("Kopyalanamadı"))
-              }
-            >
-              <Link2 className="size-3.5" />
-            </button></Ipucu>
-            <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); setYenileSayac((n) => n + 1) }}>
-              <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
-            </Button>
+              <Button asChild className="h-10 gap-2 px-4 text-[13.5px]">
+                <a href={UYGULAMA_INDIR}><Download className="size-4" />Uygulamayı indir</a>
+              </Button>
+              <Ipucu icerik="İndirme bağlantısını kopyala">
+                <Button
+                  variant="outline"
+                  className="bg-card size-10 p-0 shadow-sm"
+                  aria-label="İndirme bağlantısını kopyala"
+                  onClick={() =>
+                    void navigator.clipboard.writeText(UYGULAMA_INDIR)
+                      .then(() => toast.success("İndirme bağlantısı kopyalandı", { description: UYGULAMA_INDIR }))
+                      .catch(() => toast.error("Kopyalanamadı"))
+                  }
+                >
+                  <Link2 className="size-4" />
+                </Button>
+              </Ipucu>
+              <Button variant="outline" className="bg-card h-10 gap-2 px-4 text-[13.5px] shadow-sm" disabled={yenileniyor} onClick={() => { void yukle(); setYenileSayac((n) => n + 1) }}>
+                <RefreshCw className={cn("size-4", yenileniyor && "animate-spin")} /> Yenile
+              </Button>
             </div>
           </div>
 
