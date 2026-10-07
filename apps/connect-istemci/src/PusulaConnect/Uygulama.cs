@@ -208,11 +208,13 @@ namespace PusulaConnect
         /// Alınamazsa (servis hatası) ya da 2FA açıksa kutu yine çıkar.
         /// </summary>
         private bool _sifreAlinamadi;
+        private bool _profilBekleniyor;   // yeni kayıttan sonra Hub profili (şifre sürümü) henüz gelmedi
         private bool SifreHubdanBekleniyor
         {
             get
             {
                 if (_sifreAlinamadi || IkiAktif) return false;
+                if (_profilBekleniyor) return true;
                 var hub = _kayit?.Value<string>("sifreSurumu");
                 return hub != null && hub != BilinenSurum;
             }
@@ -378,7 +380,12 @@ namespace PusulaConnect
             _ = Task.Run(SayimiKayittaYaz);
             // Şifre, yedek ve duyurular hemen çekilir (07.10.2026): ilk nabzı beklemek şifreyi ve yedek kartını
             // yeni kayıttan sonra gecikmeli getiriyordu (kart "Kontrol ediliyor…"da kalıyordu).
-            _ = Task.Run(SifreyiEsitle);
+            // Kayıt yanıtında Hub'ın şifre sürümü YOK (servis kaydı Hub'a sormadan döndürüyor) — SifreyiEsitle tek başına
+            // "Hub'da şifre yok" sanıp çıkıyordu, şifre ancak ilk nabızdaki profil yenilemesinde geliyordu ve bu arada
+            // ilk kurulumda şifre kutusu görünüyordu. Önce profil (şifre sürümüyle) çekilir; o gelene kadar arayüz
+            // şifreyi "alınıyor" gösterir.
+            lock (_kilit) _profilBekleniyor = true;
+            _ = Task.Run(async () => { try { await ProfilYenile(); } finally { lock (_kilit) _profilBekleniyor = false; } });
             _ = Task.Run(() => YedekleriTazele());
             _ = Task.Run(() => DuyurulariTazele());
             return Durum();

@@ -147,12 +147,13 @@ export function AnaEkran({ durum, setDurum }: P) {
         ) : (
           <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
         )}
+        {/* Şifre düğmesi 2. maddenin İÇİNDE: ayrı <li> olunca numara sayılıyor, liste 1-2-4 gidiyordu */}
+        {k.rdpSifre.kayitli && k.profil.sifre !== "kayitli" && (
+          <div className="mt-2">
+            <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
+          </div>
+        )}
       </li>
-      {k.rdpSifre.kayitli && k.profil.sifre !== "kayitli" && (
-        <li className="list-none">
-          <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
-        </li>
-      )}
       {k.profil.sifre === "isaretsiz" ? (
         <li className="font-medium text-amber-700 dark:text-amber-400">
           Bağlanırken <b>Save Password</b> kutusunu işaretleyin; şifre bir daha sorulmaz.
@@ -164,7 +165,8 @@ export function AnaEkran({ durum, setDurum }: P) {
         </li>
       ) : null}
     </ol>
-    <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
+    {/* Belirgin (07.10.2026): adımın asıl eylemi — dolu düğme */}
+    <Button onClick={() => void cagir("/vpn/ac")}>
       <ShieldCheck /> VPN uygulamasını aç
     </Button>
     </>
@@ -621,7 +623,7 @@ function SifreGosterici({ gosterilen, onGoster, onGizle }: { gosterilen: string 
   const [kopyalandi, setKopyalandi] = useState(false);
   if (!gosterilen) {
     return (
-      <Button size="sm" variant="outline" className="self-start" onClick={onGoster}>
+      <Button variant="outline" className="self-start border-foreground/25 shadow-sm" onClick={onGoster}>
         <Eye /> Şifreyi göster
       </Button>
     );
