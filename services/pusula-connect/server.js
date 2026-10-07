@@ -208,6 +208,12 @@ const sql = {
                       WHERE (@firma IS NULL OR firmaId = @firma) ORDER BY olusturma DESC LIMIT 500`),
   cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
   cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum, tokenZaman) VALUES (?, ?, ?, ?, ?, datetime('now'))`),
+  // Aynı bilgisayara aynı firma+kullanıcı için yeniden kayıt (07.10.2026): eski satırlar listede birikiyordu
+  // (her yeni kodda bir satır daha). Eski token zaten o bilgisayarda yok — yeni kayıt onun yerine geçer.
+  eskiKayitlar: db.prepare(`SELECT c.id FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
+    WHERE k.firmaId = ? AND k.kullanici = ? AND lower(c.makine) = lower(?)`),
+  cihazSil: db.prepare(`DELETE FROM cihazlar WHERE id = ?`),
+  cihazOkumaSil: db.prepare(`DELETE FROM duyuru_okuma WHERE cihazId = ?`),
   tokenYenile: db.prepare(`UPDATE cihazlar SET eskiTokenOzet = tokenOzet, eskiTokenZaman = datetime('now'), tokenOzet = ?, tokenZaman = datetime('now') WHERE id = ?`),
   cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari,
                                    c.tokenZaman, (c.tokenOzet = @ozet) AS guncelToken, k.*
@@ -618,13 +624,22 @@ fastify.post("/api/kayit", async (req, reply) => {
   hatali.delete(ip)
 
   const token = randomBytes(32).toString("base64url")
+  const makine = String(b.makine ?? "").slice(0, 100)
+  let kaldirilan = 0
   const tx = db.transaction(() => {
-    sql.cihazEkle.run(randomBytes(8).toString("hex"), k.id, ozet(token), String(b.makine ?? "").slice(0, 100), surum.slice(0, 20))
+    if (makine) {
+      for (const e of sql.eskiKayitlar.all(k.firmaId, k.kullanici, makine)) {
+        sql.cihazOkumaSil.run(e.id)
+        sql.cihazSil.run(e.id)
+        kaldirilan++
+      }
+    }
+    sql.cihazEkle.run(randomBytes(8).toString("hex"), k.id, ozet(token), makine, surum.slice(0, 20))
     sql.kodDurum.run("kullanildi", k.id)   // tek kullanımlık
   })
   tx()
   req.log.info({ firma: k.firmaId, kullanici: k.kullanici, makine: b.makine, surum }, "connect kayit")
-  olay("kayit", { firmaId: k.firmaId, kullanici: k.kullanici, makine: String(b.makine ?? "").slice(0, 100), ayrinti: "sürüm " + surum, ip: istemciIp(req) })
+  olay("kayit", { firmaId: k.firmaId, kullanici: k.kullanici, makine, ayrinti: "sürüm " + surum + (kaldirilan ? ` · önceki ${kaldirilan} kayıt kaldırıldı` : ""), ip: istemciIp(req) })
   return { token, kayit: kayitGorunumu(k) }
 })
 
@@ -782,6 +797,11 @@ fastify.post("/api/olay", async (req, reply) => {
   const tur = String(req.body?.tur ?? "")
   if (!ISTEMCI_OLAYLARI.has(tur)) return reply.code(400).send({ hata: "bilinmeyen olay" })
   olay(tur, { cihaz: c, kaynak: "istemci", ayrinti: req.body?.ayrinti ?? null, ip: istemciIp(req) })
+  // Kullanıcı uygulamada "Kaydı kaldır" dedi (07.10.2026): cihaz satırı da silinir — listede ölü kayıt kalmasın.
+  // Olay kaydı (geçmiş) durur.
+  if (tur === "kayit_kaldirildi") {
+    db.transaction(() => { sql.cihazOkumaSil.run(c.id); sql.cihazSil.run(c.id) })()
+  }
   return { tamam: true }
 })
 
