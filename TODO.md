@@ -4,6 +4,17 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 
 ---
 
+## İstemci Exe'leri — Kod İmzalama (sonra bakılacak)
+
+- [ ] ⚪ **Aktarım 2, Connect ve yeni popup (notify-exe) imzasız** — Defender müşteri PC'lerinde "Örnek gönderimi"
+  istiyor, SmartScreen "tanınmayan uygulama" diyor; her sürümde hash değiştiği için itibar sıfırlanıyor.
+  Çözüm: Pusula Yazılım adına kod imzalama + derlemede otomatik imza (signtool, SHA256 + zaman damgası).
+  Seçenekler: Azure Trusted Signing (~10 $/ay, Türkiye'den kullanılabilirliği doğrulanmalı) ya da OV sertifika
+  (Sectigo/DigiCert/Certum, yıllık birkaç yüz $, donanım anahtarı/bulut HSM). Arada: her sürümü Microsoft
+  Security Intelligence "yazılım geliştirici" gönderimine yollamak. **Kullanıcı şimdilik ödeme istemedi.** (2026-10-07)
+
+---
+
 ## Terminal Sunucuları — Oturum Açma Gecikmesi
 
 - [ ] 🔴 **Terminal 1 yeni oturumda ~12–15 sn bekliyor, oturum sayısıyla doğrusal büyüyor** —
