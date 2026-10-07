@@ -29,7 +29,7 @@ import {
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
 import { AyarlarSekmesi } from "@/components/connect/ayarlar-sekmesi"
-import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectSayimDurum, ConnectKod, ConnectOlay } from "@/lib/connect-yonetim"
+import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectSayimDurum, ConnectOlay } from "@/lib/connect-yonetim"
 
 // ------------------------------------------------------------ yardımcılar
 
@@ -180,12 +180,10 @@ export default function ConnectPage() {
   const [cihazlar, setCihazlar] = useState<ConnectCihazSatir[] | null>(null)
   const [sonSurum, setSonSurum] = useState<string | null>(null)
   const [olaylar, setOlaylar] = useState<ConnectOlay[] | null>(null)
-  const [kodlar, setKodlar] = useState<ConnectKod[] | null>(null)
   const [hata, setHata] = useState<string | null>(null)
   const [sekme, setSekme] = useState("cihazlar")
   const [secili, setSecili] = useState<string | null>(null)
   const [onay, setOnay] = useState<{ c: ConnectCihazSatir; islem: ConnectCihazIslemi } | null>(null)
-  const [kodOnay, setKodOnay] = useState<ConnectKod | null>(null)
   const [yenileniyor, setYenileniyor] = useState(false)
   /** "Yenile" düğmesi: kendi verisini tutan sekmeler (duyurular) bunu izler */
   const [yenileSayac, setYenileSayac] = useState(0)
@@ -212,24 +210,12 @@ export default function ConnectPage() {
     }
   }, [])
 
-  const kodlariYukle = useCallback(async () => {
-    try {
-      const r = await fetch("/api/connect/kodlar", { cache: "no-store" })
-      const d = await r.json()
-      if (!r.ok) throw new Error(d?.error ?? "Kodlar alınamadı")
-      setKodlar(Array.isArray(d) ? d : [])
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Kodlar alınamadı")
-    }
-  }, [])
-
   // İlk yükleme + 30 sn'de bir (nabız ~60 sn; daha sık sormanın anlamı yok)
   useEffect(() => {
     void yukle()
     const t = window.setInterval(() => { if (document.visibilityState === "visible") void yukle() }, 30_000)
     return () => window.clearInterval(t)
   }, [yukle])
-  useEffect(() => { if (sekme === "kodlar" && !kodlar) void kodlariYukle() }, [sekme, kodlar, kodlariYukle])
 
   const islemYap = async () => {
     if (!onay) return
@@ -247,19 +233,6 @@ export default function ConnectPage() {
     }
   }
 
-  const kodIptal = async () => {
-    if (!kodOnay) return
-    try {
-      const r = await fetch(`/api/connect/kodlar/${kodOnay.id}`, { method: "POST" })
-      const d = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
-      toast.success("Kurulum kodu iptal edildi", { description: "Bu kodla kaydolan cihazlar da bağlanamaz." })
-      setKodOnay(null)
-      await Promise.all([kodlariYukle(), yukle()])
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "İptal edilemedi")
-    }
-  }
 
   const seciliCihaz = cihazlar?.find((c) => c.id === secili) ?? null
 
@@ -278,7 +251,6 @@ export default function ConnectPage() {
             <TabsList className="h-10 p-1">
               <TabsTrigger value="cihazlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><Laptop className="size-4" />Cihazlar</TabsTrigger>
               <TabsTrigger value="olaylar" className="h-8 gap-2 px-3.5 text-[13.5px]"><History className="size-4" />Olay kaydı</TabsTrigger>
-              <TabsTrigger value="kodlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><KeyRound className="size-4" />Kurulum kodları</TabsTrigger>
               <TabsTrigger value="duyurular" className="h-8 gap-2 px-3.5 text-[13.5px]"><Megaphone className="size-4" />Duyurular</TabsTrigger>
               <TabsTrigger value="ayarlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><Settings className="size-4" />Ayarlar</TabsTrigger>
             </TabsList>
@@ -300,7 +272,7 @@ export default function ConnectPage() {
             >
               <Link2 className="size-3.5" />
             </button></Ipucu>
-            <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle(); setYenileSayac((n) => n + 1) }}>
+            <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); setYenileSayac((n) => n + 1) }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
             </Button>
             </div>
@@ -311,9 +283,6 @@ export default function ConnectPage() {
           </TabsContent>
           <TabsContent value="olaylar" className="mt-3">
             <OlayListesi olaylar={olaylar} cihazlar={cihazlar} onCihaz={setSecili} />
-          </TabsContent>
-          <TabsContent value="kodlar" className="mt-3">
-            <KodListesi kodlar={kodlar} onIptal={setKodOnay} />
           </TabsContent>
           <TabsContent value="duyurular" className="mt-3">
             <DuyurularSekmesi cihazlar={cihazlar} yenile={yenileSayac} />
@@ -353,21 +322,6 @@ export default function ConnectPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={!!kodOnay} onOpenChange={(o) => !o && setKodOnay(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Kurulum kodu iptal edilsin mi?</AlertDialogTitle>
-            <AlertDialogDescription>
-              {kodOnay?.kullanici} ({kodOnay?.firmaAdi}) için üretilen kod iptal edilir.
-              {kodOnay?.durum === "kullanildi" && " Bu kodla kaydolan bilgisayar da artık bağlanamaz."}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-white" onClick={(e) => { e.preventDefault(); void kodIptal() }}>İptal et</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PageContainer>
   )
 }
@@ -807,70 +761,6 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
         </table>
       </div>
       <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} sayfaBoyu={50} />
-    </ListeKarti>
-  )
-}
-
-const KOD_DURUM: Record<ConnectKod["durum"], { ad: string; sinif: string }> = {
-  bekliyor: { ad: "Kullanılmadı", sinif: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
-  kullanildi: { ad: "Kullanıldı", sinif: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" },
-  iptal: { ad: "İptal", sinif: "bg-muted text-muted-foreground" },
-}
-
-function KodListesi({ kodlar, onIptal }: { kodlar: ConnectKod[] | null; onIptal: (k: ConnectKod) => void }) {
-  const [firma, setFirma] = useState("")
-  const [kullanici, setKullanici] = useState("")
-  const [sayfa, setSayfa] = useState(1)
-  const filtreli = useMemo(() => (kodlar ?? []).filter((k) => {
-    if (firma && !`${k.firmaId} ${k.firmaAdi}`.toLocaleLowerCase("tr").includes(firma.toLocaleLowerCase("tr"))) return false
-    if (kullanici && !k.kullanici.toLocaleLowerCase("tr").includes(kullanici.toLocaleLowerCase("tr"))) return false
-    return true
-  }), [kodlar, firma, kullanici])
-  useEffect(() => setSayfa(1), [firma, kullanici])
-  const gorunen = filtreli.slice((sayfa - 1) * 25, sayfa * 25)
-  const suresiDoldu = (k: ConnectKod) => k.durum === "bekliyor" && (zaman(k.bitis)?.getTime() ?? 0) < Date.now()
-
-  return (
-    <ListeKarti baslik="Kurulum kodları" ikon={<KeyRound className="size-3.5" />} toplam={kodlar?.length ?? 0} filtreli={filtreli.length}>
-      <div className="overflow-x-auto">
-        <table className="w-full text-[14px] leading-[20px] font-medium">
-          <ListeThead>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Firma" value={firma} onChange={setFirma} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
-            <th className="px-4 py-1.5 text-left font-medium">Durum</th>
-            <th className="px-4 py-1.5 text-left font-medium">Üreten</th>
-            <th className="px-4 py-1.5 text-left font-medium">Üretildi</th>
-            <th className="px-4 py-1.5 text-left font-medium">Son geçerlilik</th>
-            <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
-          </ListeThead>
-          <tbody>
-            {!kodlar ? (
-              [0, 1, 2].map((i) => <tr key={i}><td colSpan={7} className="px-4 py-2"><Skeleton className="h-5 w-full" /></td></tr>)
-            ) : gorunen.length === 0 ? (
-              <ListeBosSatir sutunSayisi={7} toplam={kodlar.length} bosMesaj="Henüz kurulum kodu üretilmedi. Firma sayfasında kullanıcı menüsünden üretilir." />
-            ) : gorunen.map((k) => (
-              <tr key={k.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap"><span className="text-muted-foreground text-[12px]">{k.firmaId}</span> {k.firmaAdi}</td>
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">{k.kullanici}</td>
-                <td className="px-4 py-1.5 whitespace-nowrap">
-                  {suresiDoldu(k)
-                    ? <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium">Süresi doldu</span>
-                    : <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", KOD_DURUM[k.durum].sinif)}>{KOD_DURUM[k.durum].ad}</span>}
-                </td>
-                <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">{k.olusturan ?? "—"}</td>
-                <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(k.olusturma)}</td>
-                <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{k.durum === "bekliyor" ? tarihMetni(k.bitis) : "—"}</td>
-                <td className="px-4 py-1.5 text-right">
-                  {k.durum !== "iptal" && (
-                    <Button variant="ghost" size="sm" className="h-7 text-[12px] text-rose-600 hover:text-rose-600" onClick={() => onIptal(k)}>İptal et</Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} />
     </ListeKarti>
   )
 }
