@@ -8,7 +8,7 @@
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { AlertTriangle, ArrowRight, CheckCircle2, Loader2, Server, XCircle } from "lucide-react"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -116,18 +116,24 @@ export function TerminalDegistirSheet({
     }
   }
 
+  // MODAL (07.10.2026, kullanıcı kararı): Connect cihaz/duyuru modallarıyla aynı kimlik — gri başlık şeridi,
+  // başlıklı bölümler, alt şeritte düğmeler. Taşıma sürerken kapanmaz.
   return (
-    <Sheet open={open} onOpenChange={(v) => { if (!calisiyor) onOpenChange(v) }}>
-      <SheetContent className="!w-[560px] !max-w-[560px]">
-        <SheetHeader>
+    <>
+    <Dialog open={open} onOpenChange={(v) => { if (!calisiyor) onOpenChange(v) }}>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(760px,94vw)]">
+        <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <Server className="size-[18px]" />
           </span>
-          <SheetTitle>Terminal sunucusunu değiştir</SheetTitle>
-          <SheetDescription>{firkod} · {firmaAdi}</SheetDescription>
-        </SheetHeader>
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="text-[15px] font-semibold">Terminal sunucusunu değiştir</DialogTitle>
+            <DialogDescription className="text-[12px]">{firkod} · {firmaAdi}</DialogDescription>
+          </div>
+        </div>
 
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <Bolum baslik="Sunucu">
           <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-2">
             <Field label="Şu anki sunucu">
               <div className="bg-muted/40 flex h-8 items-center rounded-[5px] border px-2.5 text-[13px]">{secenekler ? mevcutAd : <Skeleton className="h-4 w-24" />}</div>
@@ -146,6 +152,7 @@ export function TerminalDegistirSheet({
               />
             </Field>
           </div>
+          </Bolum>
 
           {kontrolYukleniyor && (
             <div className="flex flex-col gap-2 rounded-[5px] border p-3">
@@ -162,16 +169,15 @@ export function TerminalDegistirSheet({
                 <Ozet ad="Boyut" deger={mb(kontrol.kaynak.bayt)} />
                 <Ozet ad="Hedefte boş" deger={mb(kontrol.hedefDurum.bosBayt)} />
               </div>
-              <div className="rounded-[5px] border px-3 py-2 text-[12px]">
-                <div className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">Taşınacak</div>
-                <ul className="mt-1 flex flex-col gap-0.5">
-                  <li><span className="font-mono">C:\MUSTERI\{firkod}</span> — {kontrol.kaynak.alt.join(", ") || "alt klasör yok"}</li>
+              <Bolum baslik="Taşınacak">
+                <ul className="flex flex-col gap-0.5 text-[12px]">
+                  <li><span className="font-medium">C:\MUSTERI\{firkod}</span> — {kontrol.kaynak.alt.join(", ") || "alt klasör yok"}</li>
                   {kontrol.kaynak.firmanoBak.length > 0 && <li>firmano.bak yeni sunucuda yeniden üretilir: {kontrol.kaynak.firmanoBak.join(", ")}</li>}
                   {kontrol.kaynak.masaustu && <li>Yönetici masaüstündeki kısayol klasörü</li>}
                   <li>NTFS yetkileri ({firkod}_users), sonra firmanın sunucu ataması</li>
-                  <li className="text-muted-foreground">Eski klasör silinmez: <span className="font-mono">{firkod}.tasindi-…</span> olarak yeniden adlandırılır</li>
+                  <li className="text-muted-foreground">Eski klasör silinmez: <span className="font-medium">{firkod}.tasindi-…</span> olarak yeniden adlandırılır</li>
                 </ul>
-              </div>
+              </Bolum>
               {kontrol.engeller.map((e) => (
                 <div key={e} className="flex items-start gap-2 rounded-[5px] bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400"><XCircle className="mt-px size-3.5 shrink-0" />{e}</div>
               ))}
@@ -195,7 +201,8 @@ export function TerminalDegistirSheet({
           )}
 
           {adimlar.length > 0 && (
-            <ul className="flex flex-col gap-1.5 rounded-[5px] border p-3 text-[12px]">
+            <Bolum baslik="Adımlar">
+            <ul className="flex flex-col gap-1.5 text-[12px]">
               {adimlar.map((a) => (
                 <li key={a.stepId} className="flex items-start gap-2">
                   {a.status === "running" ? <Loader2 className="text-muted-foreground mt-px size-3.5 shrink-0 animate-spin" />
@@ -209,20 +216,22 @@ export function TerminalDegistirSheet({
                 </li>
               ))}
             </ul>
+            </Bolum>
           )}
           {hata && sonuc === "hata" && <div className="rounded-[5px] bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">{hata}</div>}
           {sonuc === "tamam" && <div className="rounded-[5px] bg-emerald-500/15 px-3 py-2 text-[12px] text-emerald-700 dark:text-emerald-400">Taşıma tamamlandı. Firma artık {kontrol?.hedef.ad} üzerinde.</div>}
         </div>
 
-        <SheetFooter className="flex-row">
-          <Button variant="outline" className="flex-1" disabled={calisiyor} onClick={() => onOpenChange(false)}>{sonuc === "tamam" ? "Kapat" : "İptal"}</Button>
+        <div className="flex justify-end gap-2 border-t bg-[var(--section-bg)] px-4 py-3">
+          <Button variant="outline" disabled={calisiyor} onClick={() => onOpenChange(false)}>{sonuc === "tamam" ? "Kapat" : "İptal"}</Button>
           {sonuc !== "tamam" && (
-            <Button className="flex-1" disabled={!baslatilabilir} onClick={() => setOnay(true)}>
+            <Button disabled={!baslatilabilir} onClick={() => setOnay(true)}>
               {calisiyor ? <><Loader2 className="size-3.5 animate-spin" /> Taşınıyor…</> : sonuc === "hata" ? "Yeniden dene" : "Taşımayı başlat"}
             </Button>
           )}
-        </SheetFooter>
-      </SheetContent>
+        </div>
+      </DialogContent>
+    </Dialog>
 
       <AlertDialog open={onay} onOpenChange={setOnay}>
         <AlertDialogContent>
@@ -239,7 +248,17 @@ export function TerminalDegistirSheet({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Sheet>
+    </>
+  )
+}
+
+/** Modal bölümü — gri büyük harfli başlık şeridi (Connect modallarıyla aynı). */
+function Bolum({ baslik, children }: { baslik: string; children: React.ReactNode }) {
+  return (
+    <section className="overflow-hidden rounded-[8px] border">
+      <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{baslik}</div>
+      <div className="p-3">{children}</div>
+    </section>
   )
 }
 
