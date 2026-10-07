@@ -659,17 +659,18 @@ function CihazListesi({
                       className={cn("cursor-pointer text-[13px] hover:bg-muted/20", i === 0 ? "border-t border-t-border" : "border-t border-t-border/40")}
                       onClick={() => onSec(c.id)}
                     >
-                      {/* Grubun ilk satırı tam renk + "#adet" rozeti; alt satırlarda firma soluk (boş kalmasın, 07.10.2026) */}
-                      <td className={cn("px-3 py-1 tabular-nums whitespace-nowrap", i === 0 ? "font-semibold" : "text-muted-foreground/60")}>{g.firmaId}</td>
-                      <td className="max-w-[260px] px-3 py-1">
-                        <span className="flex min-w-0 items-center gap-1.5">
-                          <span className={cn("truncate", i > 0 && "text-muted-foreground/60")}>{g.firmaAdi}</span>
-                          {i === 0 && (
+                      {/* Firma yalnız grubun ilk satırında — aynı firmanın diğer cihazları altında boş kalır (07.10.2026) */}
+                      <td className="px-3 py-1 align-top font-semibold tabular-nums whitespace-nowrap">{i === 0 ? g.firmaId : ""}</td>
+                      <td className="max-w-[260px] px-3 py-1 align-top">
+                        {i === 0 && (
+                          // Firma adı ipucusuz; firmadaki cihaz (kullanıcı) sayısı rozette (07.10.2026)
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate">{g.firmaAdi}</span>
                             <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[11px] leading-none font-medium tabular-nums">
-                              #{say?.toplam ?? g.satirlar.length}
+                              {say?.toplam ?? g.satirlar.length}
                             </span>
-                          )}
-                        </span>
+                          </span>
+                        )}
                       </td>
                       <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.kullanici}</td>
