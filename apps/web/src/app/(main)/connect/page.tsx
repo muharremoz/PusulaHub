@@ -10,7 +10,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti"
-import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
+import { MetinFiltre, SecimFiltre, TarihFiltre, tarihUygun, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -508,6 +508,15 @@ function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): 
 const IKI_DURUMLAR: IkiDurum[] = ["acik", "kapali", "kilitli"]
 const IKI_ETIKET: Record<IkiDurum, string> = { acik: "Açık", kapali: "Kapalı", kilitli: "Kilitli" }
 
+type VpnDurumu = "acik" | "kapali" | "yok"
+const VPN_DURUMLAR: VpnDurumu[] = ["acik", "kapali", "yok"]
+const VPN_ETIKET: Record<VpnDurumu, string> = { acik: "Açık", kapali: "Kapalı", yok: "Bilinmiyor" }
+const vpnDurumu = (c: ConnectCihazSatir): VpnDurumu => (c.durum?.vpn == null ? "yok" : c.durum.vpn.bagli ? "acik" : "kapali")
+type SunucuDurumu = "erisiyor" | "erisemiyor" | "yok"
+const SUNUCU_DURUMLAR: SunucuDurumu[] = ["erisiyor", "erisemiyor", "yok"]
+const SUNUCU_ETIKET: Record<SunucuDurumu, string> = { erisiyor: "Erişiyor", erisemiyor: "Erişemiyor", yok: "Bilinmiyor" }
+const sunucuDurumu = (c: ConnectCihazSatir): SunucuDurumu => (c.terminalErisim == null ? "yok" : c.terminalErisim ? "erisiyor" : "erisemiyor")
+
 function CihazListesi({
   cihazlar, sonSurum, onSec, onIslem,
 }: {
@@ -517,8 +526,12 @@ function CihazListesi({
   onIslem: (c: ConnectCihazSatir, i: ConnectCihazIslemi) => void
 }) {
   const [firma, setFirma] = useState("")
+  const [firmaAdi, setFirmaAdi] = useState("")
   const [kullanici, setKullanici] = useState("")
   const [makine, setMakine] = useState("")
+  const [vpn, setVpn] = useState<VpnDurumu[]>([])
+  const [sunucu, setSunucu] = useState<SunucuDurumu[]>([])
+  const [sonGorulme, setSonGorulme] = useState<TarihFiltreDeger>({ mode: "tum" })
   const [durum, setDurum] = useState<CanliDurum[]>([])
   const [iki, setIki] = useState<IkiDurum[]>([])
   const [surum, setSurum] = useState<string[]>([])
@@ -528,20 +541,24 @@ function CihazListesi({
   const surumler = useMemo(() => [...new Set((cihazlar ?? []).map((c) => c.surum ?? "—"))].sort((a, b) => surumKarsilastir(b, a)), [cihazlar])
 
   const filtreli = useMemo(() => (cihazlar ?? []).filter((c) => {
-    if (firma && !`${c.firmaId} ${c.firmaAdi}`.toLocaleLowerCase("tr").includes(firma.toLocaleLowerCase("tr"))) return false
+    if (firma && !c.firmaId.toLocaleLowerCase("tr").includes(firma.toLocaleLowerCase("tr"))) return false
+    if (firmaAdi && !c.firmaAdi.toLocaleLowerCase("tr").includes(firmaAdi.toLocaleLowerCase("tr"))) return false
     if (kullanici && !c.kullanici.toLocaleLowerCase("tr").includes(kullanici.toLocaleLowerCase("tr"))) return false
     if (makine && !(c.makine ?? "").toLocaleLowerCase("tr").includes(makine.toLocaleLowerCase("tr"))) return false
     if (durum.length && !durum.includes(canliDurum(c))) return false
     if (iki.length && !iki.includes(ikiDurum(c))) return false
     if (surum.length && !surum.includes(c.surum ?? "—")) return false
     if (sayim.length && !sayim.includes(sayimDurumu(c))) return false
+    if (vpn.length && !vpn.includes(vpnDurumu(c))) return false
+    if (sunucu.length && !sunucu.includes(sunucuDurumu(c))) return false
+    if (!tarihUygun(c.sonGorulme ?? c.ilkGiris, sonGorulme)) return false
     return true
   })
   // Firmaya göre gruplu (07.10.2026): firma koduna göre sıralanır, sayfadaki satırlar firma başlığı altında toplanır.
   // Bir firma sayfa sınırına denk gelirse başlığı sonraki sayfada tekrar çıkar.
     .sort((a, b) => a.firmaId.localeCompare(b.firmaId, "tr", { numeric: true }) || a.kullanici.localeCompare(b.kullanici, "tr", { numeric: true })),
-  [cihazlar, firma, kullanici, makine, durum, iki, surum, sayim])
-  useEffect(() => setSayfa(1), [firma, kullanici, makine, durum, iki, surum, sayim])
+  [cihazlar, firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
+  useEffect(() => setSayfa(1), [firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
   const gorunen = useMemo(() => filtreli.slice((sayfa - 1) * 50, sayfa * 50), [filtreli, sayfa])
   const gruplar = useMemo(() => {
     const m = new Map<string, { firmaId: string; firmaAdi: string; satirlar: ConnectCihazSatir[] }>()
@@ -571,16 +588,16 @@ function CihazListesi({
         <table className="w-full text-[14px] leading-[20px] font-medium">
           <ListeThead>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kod" value={firma} onChange={setFirma} /></th>
-            <th className="px-3 py-1 text-left font-medium">Firma</th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma" value={firmaAdi} onChange={setFirmaAdi} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Durum" options={DURUMLAR} getLabel={(d) => DURUM_ETIKET[d]} selected={durum} onChange={setDurum} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
-            <th className="px-3 py-1 text-left font-medium">VPN</th>
-            <th className="px-3 py-1 text-left font-medium">Sunucu</th>
-            <th className="px-3 py-1 text-left font-medium">Son görülme</th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="VPN" options={VPN_DURUMLAR} getLabel={(d) => VPN_ETIKET[d]} selected={vpn} onChange={setVpn} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sunucu" options={SUNUCU_DURUMLAR} getLabel={(d) => SUNUCU_ETIKET[d]} selected={sunucu} onChange={setSunucu} /></th>
+            <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Son görülme" value={sonGorulme} onChange={setSonGorulme} /></th>
             <th className="px-3 py-1 text-right font-medium">İşlem</th>
           </ListeThead>
           <tbody>
