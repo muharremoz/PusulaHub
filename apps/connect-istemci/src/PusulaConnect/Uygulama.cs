@@ -256,24 +256,37 @@ namespace PusulaConnect
         private int RdpPort => Profil?.Value<int?>("rdpPort") ?? 3389;
 
         // Sunucu adı DNS ile çözülemezse (modem/ISS özel adres yanıtını düşürüyor) profildeki IP'ye düşülür.
-        private bool _dnsYok;
+        // 07.10.2026: önbellek süresi dolunca ilk sorgu modemde 3 sn'yi aşabiliyor, sonraki önbellekten geliyor →
+        // tek zaman aşımında "çözülemedi" olayı 5 dk'da bir tekrarlıyordu. Artık:
+        //  - o anki yoklama/bağlantı tek başarısızlıkta da IP'ye düşer (_sonCozumHatali),
+        //  - "DNS yok" durumu art arda DNS_ESIK başarısızlıktan sonra sayılır (_dnsYok),
+        //  - dns_cozulemedi olayı uygulama açıkken en fazla bir kez gönderilir.
+        private const int DNS_ESIK = 3;
+        private bool _dnsYok, _sonCozumHatali, _dnsOlayGitti;
+        private int _dnsHataSayisi;
         /// <summary>Bağlanılacak adres: ad çözülüyorsa ad, çözülmüyorsa ve IP biliniyorsa IP.</summary>
-        private string RdpHedef { get { var ip = P("rdpIp"); lock (_kilit) return _dnsYok && !string.IsNullOrEmpty(ip) ? ip : P("rdp"); } }
+        private string RdpHedef { get { var ip = P("rdpIp"); lock (_kilit) return (_dnsYok || _sonCozumHatali) && !string.IsNullOrEmpty(ip) ? ip : P("rdp"); } }
 
-        /// <summary>Adı dener; çözülmezse IP ile yoklar. Sonuç _dnsYok'a yazılır (bir kez değişince günlüğe ve olaya düşer).</summary>
+        /// <summary>Adı dener; çözülmezse IP ile yoklar. Art arda DNS_ESIK hatada _dnsYok olur (günlüğe ve bir kez olaya düşer).</summary>
         private async Task<(bool erisim, int ms, string hata)> SunucuyuYokla()
         {
             var rdp = P("rdp");
             if (rdp == null) return (false, 0, "profil yok");
             var ip = P("rdpIp");
-            var dnsYok = !string.IsNullOrEmpty(ip) && !await Rdp.AdCozulur(rdp);
-            bool onceki; lock (_kilit) { onceki = _dnsYok; _dnsYok = dnsYok; }
-            if (dnsYok != onceki)
+            var hatali = !string.IsNullOrEmpty(ip) && !await Rdp.AdCozulur(rdp);
+            bool onceki, dnsYok, olayGonder = false;
+            lock (_kilit)
             {
-                Gunluk.Yaz(dnsYok ? "Sunucu adı çözülemedi (" + rdp + "), IP ile devam: " + ip : "Sunucu adı yeniden çözülüyor (" + rdp + ")");
-                if (dnsYok) _ = _servis.Olay("dns_cozulemedi", new { ad = rdp, ip });
+                _sonCozumHatali = hatali;
+                _dnsHataSayisi = hatali ? _dnsHataSayisi + 1 : 0;
+                onceki = _dnsYok;
+                _dnsYok = dnsYok = _dnsHataSayisi >= DNS_ESIK;
+                if (dnsYok && !onceki && !_dnsOlayGitti) { _dnsOlayGitti = true; olayGonder = true; }
             }
-            return await Rdp.Yokla(dnsYok ? ip : rdp, RdpPort);
+            if (dnsYok != onceki)
+                Gunluk.Yaz(dnsYok ? "Sunucu adı " + DNS_ESIK + " kez üst üste çözülemedi (" + rdp + "), IP ile devam: " + ip : "Sunucu adı yeniden çözülüyor (" + rdp + ")");
+            if (olayGonder) _ = _servis.Olay("dns_cozulemedi", new { ad = rdp, ip });
+            return await Rdp.Yokla(hatali ? ip : rdp, RdpPort);
         }
 
         public object Durum()
