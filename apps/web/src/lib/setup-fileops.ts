@@ -139,6 +139,25 @@ export function buildWriteDesktopIni(folderPath: string, infoTip: string): strin
   ].join("; ")
 }
 
+/* ── Pusula X: boş file.xml ─────────────────────────────────────────── */
+/**
+ * Program klasöründe PusulaX.exe varsa yanına BOŞ `file.xml` bırakır — dosyanın
+ * içeriği değil var olması yeterli (07.10.2026, kullanıcı kararı; terminallerdeki
+ * mevcut 60 Pusula X klasörüne aynı gün elle eklendi). Dosya zaten varsa
+ * DOKUNULMAZ (içi dolu olabilir). PusulaX.exe yoksa (başka program) SKIPPED.
+ */
+export function buildPusulaXFileXml(folderPath: string): string {
+  const p = psQuote(folderPath)
+  return [
+    `$p='${p}'`,
+    `$f = Join-Path -Path $p -ChildPath 'file.xml'`,
+    // Diğer adımlar gibi if/else zinciri — `return` agent'ın -Command çağrısında güvenilmez
+    `if(-not (Test-Path -LiteralPath (Join-Path -Path $p -ChildPath 'PusulaX.exe'))){Write-Output 'SKIPPED'}` +
+      ` elseif(Test-Path -LiteralPath $f){Write-Output 'OK (zaten var)'}` +
+      ` else {[System.IO.File]::WriteAllBytes($f, [byte[]]@()); Write-Output 'OK'}`,
+  ].join("; ")
+}
+
 /* ── Parametre TXT dosyasında [DATA KODU] satırı ──────────────────────── */
 /**
  * Eski uygulama ile aynı davranış:

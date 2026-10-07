@@ -31,6 +31,7 @@ import {
   buildUpdateDataKoduXml,
   buildWriteDesktopIni,
   buildWriteFirmanoBak,
+  buildPusulaXFileXml,
 } from "@/lib/setup-fileops"
 import {
   buildReplaceInFile,
@@ -800,6 +801,15 @@ export async function POST(req: NextRequest) {
               `firmano.bak yazılıyor: ${s.name}`,
               buildWriteFirmanoBak(hizmetPath, payload.firmaId),
             ))) { controller.close(); return }
+
+            // Pusula X klasörüne boş file.xml (yalnız PusulaX.exe varsa; varsa dokunulmaz).
+            // Kritik değil — hata kurulumu durdurmaz.
+            await runStep(
+              winAgent,
+              `svc_filexml_${s.id}`,
+              `file.xml (Pusula X): ${s.name}`,
+              buildPusulaXFileXml(hizmetPath),
+            )
 
             servicesInstalled++
           }
