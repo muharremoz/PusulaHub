@@ -21,6 +21,7 @@ import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@muharremoz/pusula-ui"
 import { cn } from "@/lib/utils"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { toast } from "sonner"
 import {
   Activity, Ban, CheckCircle2, CircleMinus, Globe, History, ScanBarcode, Server, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
@@ -308,9 +309,8 @@ export default function ConnectPage() {
             >
               <Download className="size-3.5" />Uygulamayı indir
             </a>
-            <button
+            <Ipucu icerik="İndirme bağlantısını kopyala"><button
               type="button"
-              title="İndirme bağlantısını kopyala"
               className="hover:bg-muted text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-[5px] border transition-colors"
               onClick={() =>
                 void navigator.clipboard.writeText(UYGULAMA_INDIR)
@@ -319,7 +319,7 @@ export default function ConnectPage() {
               }
             >
               <Link2 className="size-3.5" />
-            </button>
+            </button></Ipucu>
             <Button variant="ghost" size="sm" className="h-8 text-[12px]" disabled={yenileniyor} onClick={() => { void yukle(); if (kodlar) void kodlariYukle(); setYenileSayac((n) => n + 1) }}>
               <RefreshCw className={cn("size-3.5", yenileniyor && "animate-spin")} /> Yenile
             </Button>
@@ -448,9 +448,9 @@ function IkiRozeti({ c }: { c: ConnectCihazSatir }) {
 function SurumRozeti({ surum, son }: { surum: string | null; son: string | null }) {
   const eski = !!son && !!surum && surumKarsilastir(surum, son) < 0
   return (
-    <span className={cn("text-[12px]", eski && "rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400")} title={eski ? `Yayındaki sürüm ${son}` : undefined}>
+    <Ipucu icerik={eski ? `Yayındaki sürüm ${son}` : undefined}><span className={cn("text-[12px]", eski && "rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400")}>
       {surum ?? "—"}
-    </span>
+    </span></Ipucu>
   )
 }
 
@@ -507,10 +507,10 @@ const canliMi = (c: ConnectCihazSatir) => { const d = canliDurum(c); return d ==
 function VpnRozeti({ c }: { c: ConnectCihazSatir }) {
   const v = c.durum?.vpn
   if (v == null) return <span className="text-muted-foreground">—</span>
-  if (!canliMi(c)) return <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${v.bagli ? "Açık" : "Kapalı"}`}>—</span>
+  if (!canliMi(c)) return <Ipucu icerik={`Cihaz çevrimdışı · son bilinen: ${v.bagli ? "Açık" : "Kapalı"}`}><span className="text-muted-foreground">—</span></Ipucu>
   return v.bagli
     // "Açık" yazılmaz: yeşil VPN IP'si yeterli (07.10.2026); IP yoksa "Açık"
-    ? <span className="text-emerald-700 dark:text-emerald-400" title="VPN açık">{v.ip || "Açık"}</span>
+    ? <Ipucu icerik={"VPN açık"}><span className="text-emerald-700 dark:text-emerald-400">{v.ip || "Açık"}</span></Ipucu>
     : <span className="text-amber-700 dark:text-amber-400">Kapalı</span>
 }
 
@@ -523,7 +523,7 @@ function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "Pusula X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Pusula VB" : null].filter(Boolean)
   // Kuruluysa yalnız program adı ("Kurulu" yazmaya gerek yok); sorun/kurulum sürüyorsa önce durum (07.10.2026)
   const metin = d === "kurulu" ? turler.join(" + ") : `${SAYIM_ETIKET[d]}${turler.length ? ` · ${turler.join(" + ")}` : ""}`
-  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{metin || SAYIM_ETIKET[d]}</span>
+  return <Ipucu icerik={sayimAciklama(c)}><span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)}>{metin || SAYIM_ETIKET[d]}</span></Ipucu>
 }
 function sayimAciklama(c: ConnectCihazSatir): string {
   const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Pusula VB", c.durum?.sayimEski)].filter((x): x is string => !!x)
@@ -534,9 +534,10 @@ function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): 
   if (s.kuruluyor) return `${ad}: kurulum sürüyor`
   if (!s.kurulu) return s.hata ? `${ad}: kurulum başarısız — ${s.hata}` : null
   const p: string[] = [`${ad} ${s.surum ?? "?"}`]
-  if (s.veritabani) p.push(`${s.veritabani}${s.formId ? ` (${FORM_AD[s.formId] ?? s.formId})` : ""}`)
+  // Veritabanı adı gösterilmez (07.10.2026) — yalnız Perakende/Toptan
+  if (s.formId) p.push(FORM_AD[s.formId] ?? s.formId)
   if (s.guncellemeBekliyor) p.push("SQL bilgisi değişti, kodla yenilenmeyi bekliyor")
-  if (s.test) p.push(s.test.ok ? `test başarılı (${s.test.veritabani ?? 0} veritabanı)` : `test başarısız: ${s.test.hata ?? "?"}`)
+  if (s.test) p.push(s.test.ok ? "test başarılı" : `test başarısız: ${s.test.hata ?? "?"}`)
   else p.push("henüz test edilmedi")
   return p.join(" · ")
 }
@@ -660,10 +661,10 @@ function CihazListesi({
                       <td className="px-3 py-1 align-top font-semibold tabular-nums whitespace-nowrap">{i === 0 ? g.firmaId : ""}</td>
                       <td className="max-w-[260px] px-3 py-1 align-top">
                         {i === 0 && (
-                          <span className="block truncate" title={g.firmaAdi}>
+                          <Ipucu icerik={g.firmaAdi}><span className="block truncate">
                             {g.firmaAdi}
                             {say && say.toplam > 1 && <span className="text-muted-foreground text-[12px]"> · {say.toplam}</span>}
-                          </span>
+                          </span></Ipucu>
                         )}
                       </td>
                       <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
@@ -675,16 +676,16 @@ function CihazListesi({
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]">
                         {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
-                          : !canliMi(c) ? <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${c.terminalErisim ? "Erişiyor" : "Erişemiyor"}`}>—</span>
+                          : !canliMi(c) ? <Ipucu icerik={`Cihaz çevrimdışı · son bilinen: ${c.terminalErisim ? "Erişiyor" : "Erişemiyor"}`}><span className="text-muted-foreground">—</span></Ipucu>
                           : c.terminalErisim ? (
                             // Yalnız ikon; gecikme üzerine gelince (07.10.2026)
-                            <span className="inline-flex items-center py-1" title={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}>
+                            <Ipucu icerik={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}><span className="inline-flex items-center py-1">
                               <SinyalIkonu ms={c.terminalMs} />
-                            </span>
+                            </span></Ipucu>
                           )
                           : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
                       </td>
-                      <td className="text-muted-foreground px-3 py-1 text-[12px] whitespace-nowrap" title={tarihMetni(c.sonGorulme)}>{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td>
+                      <Ipucu icerik={tarihMetni(c.sonGorulme)}><td className="text-muted-foreground px-3 py-1 text-[12px] whitespace-nowrap">{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td></Ipucu>
                       <td className="px-3 py-0.5 text-right" onClick={(e) => e.stopPropagation()}><CihazMenusu c={c} onIslem={onIslem} onSec={onSec} /></td>
                     </tr>
                   ))}
@@ -747,7 +748,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{tarihMetni(o.zaman)}</td>
                 <td className="px-2 py-1"><OlayRozeti tur={o.tur} /></td>
-                <td className="text-muted-foreground truncate px-2 py-1" title={olayIpucu(o)}>{ayrintiMetni(o)}</td>
+                <Ipucu icerik={olayIpucu(o)}><td className="text-muted-foreground truncate px-2 py-1">{ayrintiMetni(o)}</td></Ipucu>
               </tr>
             ))}
           </tbody>
@@ -760,7 +761,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
 
 function OlayRozeti({ tur }: { tur: string }) {
   const o = OLAY[tur] ?? { ad: tur, ton: "notr" as Ton }
-  return <span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])} title={o.ad}>{o.ad}</span>
+  return <Ipucu icerik={o.ad}><span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span></Ipucu>
 }
 
 function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | null; cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void }) {
@@ -800,7 +801,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
               <ListeBosSatir sutunSayisi={7} toplam={olaylar.length} bosMesaj="Henüz olay yok. Uygulamalar açılıp bağlandıkça burada görünür." />
             ) : gorunen.map((o) => (
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums" title={tarihMetni(o.zaman)}>{tarihMetni(o.zaman)}</td>
+                <Ipucu icerik={tarihMetni(o.zaman)}><td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td></Ipucu>
                 <td className="px-4 py-1.5"><OlayRozeti tur={o.tur} /></td>
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.firmaId ? <><span className="text-muted-foreground text-[12px]">{o.firmaId}</span> {firmaAdi.get(o.firmaId) ?? ""}</> : "—"}
@@ -809,7 +810,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.cihazId ? <button type="button" className="underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
                 </td>
-                <td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]" title={olayIpucu(o) || undefined}>{ayrintiMetni(o) || "—"}</td>
+                <Ipucu icerik={olayIpucu(o) || undefined}><td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
                 <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">
                   {o.kaynak === "yonetici" ? "Pusula" : o.kaynak === "istemci" ? "Uygulama" : "Servis"}
                   {o.ip && <span> · {o.ip}</span>}
@@ -948,10 +949,24 @@ function DurumKarti({ c, menu }: { c: ConnectCihazSatir; menu: React.ReactNode }
   )
 }
 
+/**
+ * shadcn (pusula-ui) ipucu — tarayıcının yerleşik `title` balonu yerine (07.10.2026, kullanıcı kuralı).
+ * İçerik boşsa sarmaz; çocuk tek eleman olmalı (asChild).
+ */
+function Ipucu({ icerik, children }: { icerik: React.ReactNode; children: React.ReactElement }) {
+  if (icerik == null || icerik === "" || icerik === false) return children
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent className="max-w-xs text-[12px] whitespace-pre-line">{icerik}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 /** Detay hücresi: solda küçük ikon kutusu, sağda etiket + değer. */
 function Bilgi({ ad, ikon, title, children }: { ad: string; ikon?: React.ReactNode; title?: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5" title={title}>
+    <Ipucu icerik={title}><div className="flex min-w-0 items-center gap-2.5">
       {ikon && (
         <span className="bg-muted text-muted-foreground flex size-8 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-4">{ikon}</span>
       )}
@@ -959,7 +974,7 @@ function Bilgi({ ad, ikon, title, children }: { ad: string; ikon?: React.ReactNo
         <span className="text-muted-foreground text-[11px] leading-4">{ad}</span>
         <span className="truncate text-[13px] leading-5 font-medium">{children}</span>
       </div>
-    </div>
+    </div></Ipucu>
   )
 }
 
@@ -1018,9 +1033,9 @@ function CihazDetay({
                   {c.terminalErisim == null ? "—"
                     : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı)</span>
                     : c.terminalErisim ? (
-                      <span className="inline-flex items-center py-1" title={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}>
+                      <Ipucu icerik={c.terminalMs != null ? `${KALITE_AD[kalite(c.terminalMs)]} · ${c.terminalMs} ms` : "Erişiyor"}><span className="inline-flex items-center py-1">
                         <SinyalIkonu ms={c.terminalMs} />
-                      </span>
+                      </span></Ipucu>
                     )
                     : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS yok, IP ile</span>}
