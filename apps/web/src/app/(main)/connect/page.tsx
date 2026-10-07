@@ -147,15 +147,17 @@ const RDP_NEDEN: Record<number, string> = {
   2823: "şifre süresi dolmuş",
   3335: "hesap kilitli",
 }
-/** Ayrıntıda "kod N" kalır; açıklaması üzerine gelince (07.10.2026). */
-function olayIpucu(o: ConnectOlay): string {
-  const metin = ayrintiMetni(o)
-  if ((o.tur !== "oturum_bitti" && o.tur !== "oturum_hatasi") || !o.ayrinti) return metin
+/**
+ * Ayrıntıda "kod N" kalır; açıklaması üzerine gelince. Olaylarda YALNIZ kodlu satırda ipucu var (07.10.2026) —
+ * diğerlerinde ipucu aynı metni tekrarlıyordu.
+ */
+function olayIpucu(o: ConnectOlay): string | null {
+  if ((o.tur !== "oturum_bitti" && o.tur !== "oturum_hatasi") || !o.ayrinti) return null
   try {
     const n = (JSON.parse(o.ayrinti) as { neden?: unknown }).neden
-    if (typeof n === "number" && n !== -1) return `${metin}\nKod ${n}: ${RDP_NEDEN[n] ?? "açıklaması bilinmiyor"}`
+    if (typeof n === "number" && n !== -1) return `Kod ${n}: ${RDP_NEDEN[n] ?? "açıklaması bilinmiyor"}`
   } catch { /* JSON değil */ }
-  return metin
+  return null
 }
 
 function ayrintiMetni(o: ConnectOlay) {
@@ -713,7 +715,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
   const filtreli = useMemo(() => olaylar.filter((o) => {
     if (!tarihUygun(o.zaman, tarih)) return false
     if (tur.length && !tur.includes(o.tur)) return false
-    if (ayrinti && !olayIpucu(o).toLocaleLowerCase("tr").includes(ayrinti.toLocaleLowerCase("tr"))) return false
+    if (ayrinti && !`${ayrintiMetni(o)} ${olayIpucu(o) ?? ""}`.toLocaleLowerCase("tr").includes(ayrinti.toLocaleLowerCase("tr"))) return false
     return true
   }), [olaylar, tarih, tur, ayrinti])
   useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
@@ -761,7 +763,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
 
 function OlayRozeti({ tur }: { tur: string }) {
   const o = OLAY[tur] ?? { ad: tur, ton: "notr" as Ton }
-  return <Ipucu icerik={o.ad}><span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span></Ipucu>
+  return <span className={cn("inline-block max-w-full truncate rounded-[5px] px-2 py-0.5 align-middle text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span>
 }
 
 function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | null; cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void }) {
@@ -801,7 +803,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
               <ListeBosSatir sutunSayisi={7} toplam={olaylar.length} bosMesaj="Henüz olay yok. Uygulamalar açılıp bağlandıkça burada görünür." />
             ) : gorunen.map((o) => (
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
-                <Ipucu icerik={tarihMetni(o.zaman)}><td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td></Ipucu>
+                <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td>
                 <td className="px-4 py-1.5"><OlayRozeti tur={o.tur} /></td>
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.firmaId ? <><span className="text-muted-foreground text-[12px]">{o.firmaId}</span> {firmaAdi.get(o.firmaId) ?? ""}</> : "—"}
@@ -810,7 +812,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.cihazId ? <button type="button" className="underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
                 </td>
-                <Ipucu icerik={olayIpucu(o) || undefined}><td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
+                <Ipucu icerik={olayIpucu(o)}><td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
                 <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">
                   {o.kaynak === "yonetici" ? "Pusula" : o.kaynak === "istemci" ? "Uygulama" : "Servis"}
                   {o.ip && <span> · {o.ip}</span>}
