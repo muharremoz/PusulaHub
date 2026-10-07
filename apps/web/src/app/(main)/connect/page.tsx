@@ -795,6 +795,51 @@ function KodListesi({ kodlar, onIptal }: { kodlar: ConnectKod[] | null; onIptal:
   )
 }
 
+/** Oturum süresi, ekiyle: "42 dakikadır" / "3 saattir" / "3 saat 10 dakikadır" / "2 gündür". */
+function sureMetni(s: string | null): string {
+  const d = zaman(s)
+  if (!d) return ""
+  const dk = Math.max(0, Math.floor((Date.now() - d.getTime()) / 60000))
+  if (dk < 1) return "Az önce"
+  if (dk < 60) return `${dk} dakikadır`
+  if (dk < 1440) return dk % 60 ? `${Math.floor(dk / 60)} saat ${dk % 60} dakikadır` : `${Math.floor(dk / 60)} saattir`
+  return `${Math.floor(dk / 1440)} gündür`
+}
+const saatMetni = (s: string | null) => zaman(s)?.toLocaleTimeString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit" }) ?? ""
+
+/** Modalın üstündeki durum kartı (07.10.2026): renkli zemin + ikon, durum ve süresi tek bakışta. */
+function DurumKarti({ c, menu }: { c: ConnectCihazSatir; menu: React.ReactNode }) {
+  const d = canliDurum(c)
+  const ton = {
+    oturumda: { kutu: "border-emerald-500/30 bg-emerald-500/10", ikon: "bg-emerald-500 text-white", yazi: "text-emerald-800 dark:text-emerald-300" },
+    cevrimici: { kutu: "border-sky-500/30 bg-sky-500/10", ikon: "bg-sky-500 text-white", yazi: "text-sky-800 dark:text-sky-300" },
+    cevrimdisi: { kutu: "bg-muted/40", ikon: "bg-muted text-muted-foreground", yazi: "text-foreground" },
+    iptal: { kutu: "border-red-500/30 bg-red-500/10", ikon: "bg-red-500 text-white", yazi: "text-red-800 dark:text-red-300" },
+  }[d]
+  const baslik = d === "oturumda" ? "Oturumda" : d === "cevrimici" ? "Çevrimiçi" : d === "iptal" ? "Kaydı iptal edildi" : "Çevrimdışı"
+  const alt =
+    d === "oturumda"
+      ? c.oturumBaslangic ? `${sureMetni(c.oturumBaslangic)} Pusula'da · başlangıç ${saatMetni(c.oturumBaslangic)}` : "Pusula'da oturum açık"
+      : d === "cevrimici"
+        ? "Uygulama açık, oturum yok"
+        : d === "iptal"
+          ? "Bu cihaz Pusula'ya bağlanamaz; yeni kurulum kodu gerekir"
+          : `Son görülme ${onceMetni(c.sonNabiz ?? c.sonGorulme ?? c.ilkGiris)}`
+  return (
+    <div className={cn("flex items-center gap-3 rounded-[8px] border p-3", ton.kutu)}>
+      <span className={cn("relative flex size-9 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-[18px]", ton.ikon)}>
+        {d === "oturumda" ? <MonitorPlay /> : d === "cevrimici" ? <Wifi /> : d === "iptal" ? <Ban /> : <Laptop />}
+        {d === "oturumda" && <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full border-2 border-background bg-emerald-400" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className={cn("text-[14px] font-semibold", ton.yazi)}>{baslik}</div>
+        <div className="text-muted-foreground truncate text-[12px]">{alt}</div>
+      </div>
+      {menu}
+    </div>
+  )
+}
+
 /** Detay hücresi: solda küçük ikon kutusu, sağda etiket + değer. */
 function Bilgi({ ad, ikon, title, children }: { ad: string; ikon?: React.ReactNode; title?: string; children: React.ReactNode }) {
   return (
@@ -820,7 +865,7 @@ function kisaWindows(os: string | null | undefined): string {
 /** Detay bölümü: başlık + iki sütunlu hücre ızgarası. */
 function DetayBolumu({ baslik, children }: { baslik: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-[8px] border">
+    <section className="overflow-hidden rounded-[8px] border">
       <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{baslik}</div>
       <div className="grid grid-cols-2 gap-x-4 gap-y-3 p-3">{children}</div>
     </section>
@@ -856,11 +901,7 @@ function CihazDetay({
 
             <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
             <div className="flex min-w-0 flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <DurumRozeti c={c} />
-                {c.oturumAcik && c.oturumBaslangic && <span className="text-muted-foreground text-[12px]">{onceMetni(c.oturumBaslangic).replace(" önce", "")}dır oturumda</span>}
-                <span className="ml-auto"><CihazMenusu c={c} onIslem={onIslem} /></span>
-              </div>
+              <DurumKarti c={c} menu={<CihazMenusu c={c} onIslem={onIslem} />} />
 
               {/* İki bölüm (07.10.2026): bağlantı zinciri ve cihaz bilgisi ayrı; hücrelerde ikon */}
               <DetayBolumu baslik="Bağlantı">
@@ -898,7 +939,7 @@ function CihazDetay({
               </DetayBolumu>
 
               {/* Güvenlik + ayarlar da Bağlantı/Cihaz bölümleriyle aynı görünümde (07.10.2026) */}
-              <section className="rounded-[8px] border">
+              <section className="overflow-hidden rounded-[8px] border">
                 <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Güvenlik</div>
                 <div className="flex items-start gap-2.5 p-3">
                   <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-4",
@@ -924,7 +965,7 @@ function CihazDetay({
                 </div>
               </section>
 
-              <section className="rounded-[8px] border">
+              <section className="overflow-hidden rounded-[8px] border">
                 <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Uygulama ayarları</div>
                 {!ay ? (
                   <p className="text-muted-foreground p-3 text-[12px]">Bu sürüm ayarlarını bildirmiyor.</p>
@@ -948,7 +989,7 @@ function CihazDetay({
               </section>
             </div>
 
-              <section className="flex min-h-0 min-w-0 flex-col self-start rounded-[8px] border">
+              <section className="flex min-h-0 min-w-0 flex-col self-start overflow-hidden rounded-[8px] border">
                 <div className="border-b px-3 py-2 text-[12px] font-semibold">Son olaylar</div>
                 {olaylar.length === 0 ? (
                   <p className="text-muted-foreground px-3 py-4 text-center text-[12px]">Son 500 olay içinde bu cihaza ait kayıt yok.</p>
