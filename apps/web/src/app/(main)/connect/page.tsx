@@ -682,40 +682,43 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
     return true
   }), [olaylar, tarih, tur, ayrinti])
   useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
-  const BOY = 11
+  const BOY = 12
   const gorunen = filtreli.slice((sayfa - 1) * BOY, sayfa * BOY)
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[8px] border">
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[8px] border">
       <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-1.5">
         <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Son olaylar</span>
         <span className="text-muted-foreground text-[11px] tabular-nums">
           {filtreli.length === olaylar.length ? olaylar.length : `${filtreli.length} / ${olaylar.length}`}
         </span>
       </div>
-      <table className="w-full table-fixed text-[12px]">
-        <colgroup>
-          <col className="w-[120px]" />
-          <col className="w-[160px]" />
-          <col />
-        </colgroup>
-        <ListeThead>
-          <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Zaman" value={tarih} onChange={setTarih} /></th>
-          <th className="px-2 py-1 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
-          <th className="px-2 py-1 text-left font-medium"><MetinFiltre label="Ayrıntı" value={ayrinti} onChange={setAyrinti} /></th>
-        </ListeThead>
-        <tbody>
-          {gorunen.length === 0 ? (
-            <ListeBosSatir sutunSayisi={3} toplam={olaylar.length} bosMesaj="Son 500 olay içinde bu cihaza ait kayıt yok." />
-          ) : gorunen.map((o) => (
-            <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
-              <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{tarihMetni(o.zaman)}</td>
-              <td className="px-2 py-1"><OlayRozeti tur={o.tur} /></td>
-              <td className="text-muted-foreground truncate px-2 py-1" title={ayrintiMetni(o)}>{ayrintiMetni(o)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      {/* Bölüm sütun boyuna uzar; sayfalama hep altta kalsın */}
+      <div className="flex-1">
+        <table className="w-full table-fixed text-[12px]">
+          <colgroup>
+            <col className="w-[120px]" />
+            <col className="w-[160px]" />
+            <col />
+          </colgroup>
+          <ListeThead>
+            <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Zaman" value={tarih} onChange={setTarih} /></th>
+            <th className="px-2 py-1 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
+            <th className="px-2 py-1 text-left font-medium"><MetinFiltre label="Ayrıntı" value={ayrinti} onChange={setAyrinti} /></th>
+          </ListeThead>
+          <tbody>
+            {gorunen.length === 0 ? (
+              <ListeBosSatir sutunSayisi={3} toplam={olaylar.length} bosMesaj="Son 500 olay içinde bu cihaza ait kayıt yok." />
+            ) : gorunen.map((o) => (
+              <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
+                <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{tarihMetni(o.zaman)}</td>
+                <td className="px-2 py-1"><OlayRozeti tur={o.tur} /></td>
+                <td className="text-muted-foreground truncate px-2 py-1" title={ayrintiMetni(o)}>{ayrintiMetni(o)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} sayfaBoyu={BOY} />
     </section>
   )
