@@ -65,6 +65,7 @@ namespace PusulaConnect
         {
             _servis = servis;
             _ = Task.Run(GuncellemeDongusu);
+            _ = Task.Run(AcilistaGuncelle);
             var token = Kimlik.Token();
             if (token == null) { _asama = "kayit"; return; }
             _servis.Token = token;
@@ -1091,6 +1092,29 @@ namespace PusulaConnect
                 await Task.Delay(TimeSpan.FromMinutes(30));
                 if (!_guncelleniyor) await GuncellemeyeBak();
             }
+        }
+
+        /// <summary>
+        /// Açılışta yeni sürüm varsa SORMADAN güncellenir (07.10.2026, kullanıcı kararı) — önce şerit çıkıyor,
+        /// kullanıcı "Güncelle"ye basmazsa eski sürümde kalınıyordu. Yalnız açılışta, oturum açık değilken ve
+        /// bir kez denenir; hata olursa şerit hatayı gösterir, yeniden deneme kullanıcıya kalır (açılış döngüsü olmasın).
+        /// Açıkken bulunan sürümler eskisi gibi şeritle sorulur — çalışan bağlantı kesilmesin.
+        /// </summary>
+        private async Task AcilistaGuncelle()
+        {
+            try
+            {
+                // Pencere kurulsun (Kapat/OturumAcikMi bağlansın) — pencere açılmadan çıkış yapılmasın
+                await Task.Delay(TimeSpan.FromSeconds(3));
+                await GuncellemeyeBak();
+                string son;
+                lock (_kilit) son = _sonSurum;
+                if (son == null || Yerlesim.SurumKarsilastir(son, ServisIstemci.Surum) <= 0) return;
+                if (OturumAcikMi?.Invoke() == true) return;
+                Gunluk.Yaz("Açılışta otomatik güncelleme: " + ServisIstemci.Surum + " → " + son);
+                Guncelle();
+            }
+            catch (Exception e) { Gunluk.Yaz("Açılışta otomatik güncelleme başlatılamadı: " + e.Message); }
         }
 
         private async Task GuncellemeyeBak()

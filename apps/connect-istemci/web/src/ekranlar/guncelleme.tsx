@@ -6,8 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Progress } from "@/components/ui/progress";
 
 /**
- * Yeni sürüm bildirimi — pencerenin alt ortasında yüzen şerit. Uygulama açılışta ve açıkken 30 dakikada bir
- * sürüm arar; bulunca şerit çıkar: "Güncelle" → indirilir (SHA-256 doğrulanır), kurulur, uygulama yeniden
+ * Yeni sürüm bildirimi — pencerenin alt ortasında yüzen şerit. Açılışta yeni sürüm varsa SORMADAN güncellenir
+ * (0.6.7+, şerit ilerlemeyi gösterir); açıkken 30 dakikada bir sürüm aranır, bulununca şerit çıkar: "Güncelle" → indirilir (SHA-256 doğrulanır), kurulur, uygulama yeniden
  * açılır. "Yenilikler" sürüm notlarını gösterir. Kapatılırsa o sürüm için bir daha çıkmaz (daha yenisi
  * gelince yine çıkar; Ayarlar > Hakkında'dan da güncellenebilir). Oturum açıkken gösterilmez.
  */
