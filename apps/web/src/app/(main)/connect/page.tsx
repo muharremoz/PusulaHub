@@ -665,6 +665,62 @@ function CihazListesi({
   )
 }
 
+/**
+ * Cihaz modalında son olaylar (07.10.2026): tablo + sayfalama, Zaman sütununda tarih filtresi, Olay'da tür,
+ * Ayrıntı'da metin filtresi. Modal her açılışta yeniden kurulur — filtreler cihaz değişince sıfırlanır.
+ */
+function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
+  const [tarih, setTarih] = useState<TarihFiltreDeger>({ mode: "tum" })
+  const [tur, setTur] = useState<string[]>([])
+  const [ayrinti, setAyrinti] = useState("")
+  const [sayfa, setSayfa] = useState(1)
+  const turler = useMemo(() => [...new Set(olaylar.map((o) => o.tur))].sort((a, b) => (OLAY[a]?.ad ?? a).localeCompare(OLAY[b]?.ad ?? b, "tr")), [olaylar])
+  const filtreli = useMemo(() => olaylar.filter((o) => {
+    if (!tarihUygun(o.zaman, tarih)) return false
+    if (tur.length && !tur.includes(o.tur)) return false
+    if (ayrinti && !ayrintiMetni(o).toLocaleLowerCase("tr").includes(ayrinti.toLocaleLowerCase("tr"))) return false
+    return true
+  }), [olaylar, tarih, tur, ayrinti])
+  useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
+  const BOY = 15
+  const gorunen = filtreli.slice((sayfa - 1) * BOY, sayfa * BOY)
+
+  return (
+    <section className="flex min-h-0 min-w-0 flex-col self-start overflow-hidden rounded-[8px] border">
+      <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-1.5">
+        <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Son olaylar</span>
+        <span className="text-muted-foreground text-[11px] tabular-nums">
+          {filtreli.length === olaylar.length ? olaylar.length : `${filtreli.length} / ${olaylar.length}`}
+        </span>
+      </div>
+      <table className="w-full table-fixed text-[12px]">
+        <colgroup>
+          <col className="w-[104px]" />
+          <col className="w-[118px]" />
+          <col />
+        </colgroup>
+        <ListeThead>
+          <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Zaman" value={tarih} onChange={setTarih} /></th>
+          <th className="px-2 py-1 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
+          <th className="px-2 py-1 text-left font-medium"><MetinFiltre label="Ayrıntı" value={ayrinti} onChange={setAyrinti} /></th>
+        </ListeThead>
+        <tbody>
+          {gorunen.length === 0 ? (
+            <ListeBosSatir sutunSayisi={3} toplam={olaylar.length} bosMesaj="Son 500 olay içinde bu cihaza ait kayıt yok." />
+          ) : gorunen.map((o) => (
+            <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
+              <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{tarihMetni(o.zaman)}</td>
+              <td className="px-2 py-1"><OlayRozeti tur={o.tur} /></td>
+              <td className="text-muted-foreground truncate px-2 py-1" title={ayrintiMetni(o)}>{ayrintiMetni(o)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} sayfaBoyu={BOY} />
+    </section>
+  )
+}
+
 function OlayRozeti({ tur }: { tur: string }) {
   const o = OLAY[tur] ?? { ad: tur, ton: "notr" as Ton }
   return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", TON_SINIF[o.ton])}>{o.ad}</span>
@@ -989,22 +1045,7 @@ function CihazDetay({
               </section>
             </div>
 
-              <section className="flex min-h-0 min-w-0 flex-col self-start overflow-hidden rounded-[8px] border">
-                <div className="border-b px-3 py-2 text-[12px] font-semibold">Son olaylar</div>
-                {olaylar.length === 0 ? (
-                  <p className="text-muted-foreground px-3 py-4 text-center text-[12px]">Son 500 olay içinde bu cihaza ait kayıt yok.</p>
-                ) : (
-                  <ul className="divide-y">
-                    {olaylar.slice(0, 50).map((o) => (
-                      <li key={o.id} className="flex items-start gap-2 px-3 py-1.5">
-                        <span className="text-muted-foreground w-[92px] shrink-0 pt-0.5 text-[11px] tabular-nums">{tarihMetni(o.zaman)}</span>
-                        <OlayRozeti tur={o.tur} />
-                        <span className="text-muted-foreground min-w-0 flex-1 truncate pt-0.5 text-[12px]" title={ayrintiMetni(o)}>{ayrintiMetni(o)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
+              <CihazOlaylari olaylar={olaylar} />
             </div>
           </>
         )}
