@@ -682,11 +682,11 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
     return true
   }), [olaylar, tarih, tur, ayrinti])
   useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
-  const BOY = 15
+  const BOY = 10
   const gorunen = filtreli.slice((sayfa - 1) * BOY, sayfa * BOY)
 
   return (
-    <section className="flex min-h-0 min-w-0 flex-col self-start overflow-hidden rounded-[8px] border">
+    <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[8px] border">
       <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-1.5">
         <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Son olaylar</span>
         <span className="text-muted-foreground text-[11px] tabular-nums">
@@ -994,7 +994,8 @@ function CihazDetay({
                 </Bilgi>
               </DetayBolumu>
 
-              {/* Güvenlik + ayarlar da Bağlantı/Cihaz bölümleriyle aynı görünümde (07.10.2026) */}
+
+              {/* Güvenlik solda, ayarlar sağda (boy dengesi); Bağlantı/Cihaz bölümleriyle aynı görünümde (07.10.2026) */}
               <section className="overflow-hidden rounded-[8px] border">
                 <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Güvenlik</div>
                 <div className="flex items-start gap-2.5 p-3">
@@ -1020,6 +1021,11 @@ function CihazDetay({
                   </div>
                 </div>
               </section>
+            </div>
+
+            {/* Sağ sütun: olaylar + ayarlar — sol sütunla boy dengelensin, ayarlar altta kaybolmasın (07.10.2026) */}
+            <div className="flex min-w-0 flex-col gap-4">
+              <CihazOlaylari olaylar={olaylar} />
 
               <section className="overflow-hidden rounded-[8px] border">
                 <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Uygulama ayarları</div>
@@ -1044,8 +1050,6 @@ function CihazDetay({
                 )}
               </section>
             </div>
-
-              <CihazOlaylari olaylar={olaylar} />
             </div>
           </>
         )}
