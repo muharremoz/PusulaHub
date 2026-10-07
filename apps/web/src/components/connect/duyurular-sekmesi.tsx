@@ -10,7 +10,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama, ListeAksiyonButonu } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -302,103 +303,121 @@ function YeniDuyuru({
     }
   }
 
+  // MODAL (07.10.2026, kullanıcı kararı): cihaz detay modalıyla aynı kimlik — gri başlık şeridi + ikon kutusu,
+  // başlıklı bölümler (İçerik / Hedef), alt şeritte düğmeler.
   return (
-    <Sheet open={acik} onOpenChange={(o) => !o && onKapat()}>
-      <SheetContent className="!w-[520px] !max-w-[520px]">
-        <SheetHeader>
+    <Dialog open={acik} onOpenChange={(o) => !o && onKapat()}>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(980px,94vw)]">
+        <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <Megaphone className="size-[18px]" />
           </span>
-          <SheetTitle>Yeni duyuru</SheetTitle>
-          <SheetDescription>Müşterilerin Connect uygulamasında şerit ve Windows bildirimi olarak görünür.</SheetDescription>
-        </SheetHeader>
-
-        <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4">
-          <Field label="Başlık" required hint={`${baslik.length}/120`}>
-            <Input value={baslik} maxLength={120} placeholder="Ör. Bu gece 02:00–03:00 arası bakım" onChange={(e) => setBaslik(e.target.value)} />
-          </Field>
-          <Field label="Metin" required>
-            <Textarea rows={6} className="resize-none" value={metin} maxLength={4000} placeholder="Müşterinin ne yapması gerektiğini de yazın." onChange={(e) => setMetin(e.target.value)} />
-          </Field>
-          <Field label="Önem" hint={onem === "bilgi" ? "Yenilik, hatırlatma." : onem === "uyari" ? "Planlı bakım, kısa kesinti." : "Kesinti ya da hemen yapılması gereken bir şey."}>
-            <ToggleGroup type="single" value={onem} onValueChange={(v) => v && setOnem(v as ConnectDuyuruOnem)} variant="outline" size="sm" className="justify-start">
-              {ONEMLER.map((o) => (
-                <ToggleGroupItem key={o} value={o} className="h-8 gap-1.5 px-3 text-[12px]">{ONEM[o].ikon}{ONEM[o].ad}</ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-          </Field>
-          <Field label="Kime" hint={hedefTamam ? `${hedefCihaz} kayıtlı cihaz` : undefined}>
-            <ToggleGroup
-              type="single"
-              value={hedefTur}
-              onValueChange={(v) => { if (!v) return; setHedefTur(v as HedefTur); if (v === "hepsi") { setFirmaId(""); setKullanici("") } }}
-              variant="outline"
-              size="sm"
-              className="justify-start"
-            >
-              <ToggleGroupItem value="hepsi" className="h-8 px-3 text-[12px]">Tüm müşteriler</ToggleGroupItem>
-              <ToggleGroupItem value="firma" className="h-8 px-3 text-[12px]">Bir firma</ToggleGroupItem>
-              <ToggleGroupItem value="kullanici" className="h-8 px-3 text-[12px]">Bir kullanıcı</ToggleGroupItem>
-            </ToggleGroup>
-          </Field>
-          {hedefTur !== "hepsi" && (
-            <Field label="Firma" required>
-              <Combobox
-                items={firmalar}
-                getKey={(f) => f.id}
-                getLabel={(f) => `${f.id} ${f.ad}`}
-                renderItem={(f) => (
-                  <span className="flex w-full items-center gap-2">
-                    <span className="text-muted-foreground text-[12px]">{f.id}</span>
-                    <span className="truncate">{f.ad}</span>
-                    <span className="text-muted-foreground ml-auto text-[11px]">{f.cihaz} cihaz</span>
-                  </span>
-                )}
-                value={firmaId}
-                onChange={(v) => { setFirmaId(v); setKullanici("") }}
-                placeholder="Firma seçin"
-                searchPlaceholder="Firma ara…"
-                emptyText="Connect kurulu firma yok"
-                loading={!cihazlar}
-              />
-            </Field>
-          )}
-          {hedefTur === "kullanici" && (
-            <Field label="Kullanıcı" required>
-              <Combobox
-                items={kullanicilar}
-                getKey={(k) => k.ad}
-                getLabel={(k) => k.ad}
-                renderItem={(k) => (
-                  <span className="flex w-full items-center gap-2">
-                    <span className="text-[13px]">{k.ad}</span>
-                    <span className="text-muted-foreground ml-auto text-[11px]">{k.cihaz} cihaz</span>
-                  </span>
-                )}
-                value={kullanici}
-                onChange={setKullanici}
-                placeholder={firmaId ? "Kullanıcı seçin" : "Önce firma seçin"}
-                searchPlaceholder="Kullanıcı ara…"
-                emptyText="Bu firmada Connect kullanan yok"
-                disabled={!firmaId}
-              />
-            </Field>
-          )}
-          <Field label="Yayında kalma süresi" hint="Süre bitince uygulamalardan kendiliğinden kalkar.">
-            <ToggleGroup type="single" value={gun} onValueChange={(v) => v && setGun(v)} variant="outline" size="sm" className="justify-start">
-              {SURELER.map((s) => <ToggleGroupItem key={s.gun} value={s.gun} className="h-8 px-3 text-[12px]">{s.ad}</ToggleGroupItem>)}
-            </ToggleGroup>
-          </Field>
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="text-[15px] font-semibold">Yeni duyuru</DialogTitle>
+            <DialogDescription className="text-[12px]">Müşterilerin Connect uygulamasında şerit ve Windows bildirimi olarak görünür.</DialogDescription>
+          </div>
         </div>
 
-        <SheetFooter className="flex-row">
-          <Button variant="outline" className="flex-1" onClick={onKapat}>İptal</Button>
-          <Button className="flex-1" disabled={!gecerli || gonderiliyor} onClick={() => void yayinla()}>
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <ModalBolumu baslik="İçerik">
+            <Field label="Başlık" required hint={`${baslik.length}/120`}>
+              <Input value={baslik} maxLength={120} placeholder="Ör. Bu gece 02:00–03:00 arası bakım" onChange={(e) => setBaslik(e.target.value)} />
+            </Field>
+            <Field label="Metin" required>
+              <Textarea rows={10} className="resize-none" value={metin} maxLength={4000} placeholder="Müşterinin ne yapması gerektiğini de yazın." onChange={(e) => setMetin(e.target.value)} />
+            </Field>
+          </ModalBolumu>
+          <ModalBolumu baslik="Hedef ve süre">
+            <Field label="Önem" hint={onem === "bilgi" ? "Yenilik, hatırlatma." : onem === "uyari" ? "Planlı bakım, kısa kesinti." : "Kesinti ya da hemen yapılması gereken bir şey."}>
+              <ToggleGroup type="single" value={onem} onValueChange={(v) => v && setOnem(v as ConnectDuyuruOnem)} variant="outline" size="sm" className="justify-start">
+                {ONEMLER.map((o) => (
+                  <ToggleGroupItem key={o} value={o} className="h-8 gap-1.5 px-3 text-[12px]">{ONEM[o].ikon}{ONEM[o].ad}</ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Field>
+            <Field label="Kime" hint={hedefTamam ? `${hedefCihaz} kayıtlı cihaz` : undefined}>
+              <ToggleGroup
+                type="single"
+                value={hedefTur}
+                onValueChange={(v) => { if (!v) return; setHedefTur(v as HedefTur); if (v === "hepsi") { setFirmaId(""); setKullanici("") } }}
+                variant="outline"
+                size="sm"
+                className="justify-start"
+              >
+                <ToggleGroupItem value="hepsi" className="h-8 px-3 text-[12px]">Tüm müşteriler</ToggleGroupItem>
+                <ToggleGroupItem value="firma" className="h-8 px-3 text-[12px]">Bir firma</ToggleGroupItem>
+                <ToggleGroupItem value="kullanici" className="h-8 px-3 text-[12px]">Bir kullanıcı</ToggleGroupItem>
+              </ToggleGroup>
+            </Field>
+            {hedefTur !== "hepsi" && (
+              <Field label="Firma" required>
+                <Combobox
+                  items={firmalar}
+                  getKey={(f) => f.id}
+                  getLabel={(f) => `${f.id} ${f.ad}`}
+                  renderItem={(f) => (
+                    <span className="flex w-full items-center gap-2">
+                      <span className="text-muted-foreground text-[12px]">{f.id}</span>
+                      <span className="truncate">{f.ad}</span>
+                      <span className="text-muted-foreground ml-auto text-[11px]">{f.cihaz} cihaz</span>
+                    </span>
+                  )}
+                  value={firmaId}
+                  onChange={(v) => { setFirmaId(v); setKullanici("") }}
+                  placeholder="Firma seçin"
+                  searchPlaceholder="Firma ara…"
+                  emptyText="Connect kurulu firma yok"
+                  loading={!cihazlar}
+                />
+              </Field>
+            )}
+            {hedefTur === "kullanici" && (
+              <Field label="Kullanıcı" required>
+                <Combobox
+                  items={kullanicilar}
+                  getKey={(k) => k.ad}
+                  getLabel={(k) => k.ad}
+                  renderItem={(k) => (
+                    <span className="flex w-full items-center gap-2">
+                      <span className="text-[13px]">{k.ad}</span>
+                      <span className="text-muted-foreground ml-auto text-[11px]">{k.cihaz} cihaz</span>
+                    </span>
+                  )}
+                  value={kullanici}
+                  onChange={setKullanici}
+                  placeholder={firmaId ? "Kullanıcı seçin" : "Önce firma seçin"}
+                  searchPlaceholder="Kullanıcı ara…"
+                  emptyText="Bu firmada Connect kullanan yok"
+                  disabled={!firmaId}
+                />
+              </Field>
+            )}
+            <Field label="Yayında kalma süresi" hint="Süre bitince uygulamalardan kendiliğinden kalkar.">
+              <ToggleGroup type="single" value={gun} onValueChange={(v) => v && setGun(v)} variant="outline" size="sm" className="justify-start">
+                {SURELER.map((s) => <ToggleGroupItem key={s.gun} value={s.gun} className="h-8 px-3 text-[12px]">{s.ad}</ToggleGroupItem>)}
+              </ToggleGroup>
+            </Field>
+          </ModalBolumu>
+        </div>
+
+        <div className="flex justify-end gap-2 border-t bg-[var(--section-bg)] px-4 py-3">
+          <Button variant="outline" onClick={onKapat}>İptal</Button>
+          <Button disabled={!gecerli || gonderiliyor} onClick={() => void yayinla()}>
             <Megaphone className="size-4" />{gonderiliyor ? "Yayınlanıyor…" : "Yayınla"}
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** Modal bölümü — cihaz modalındaki "Bağlantı / Cihaz" bölümleriyle aynı görünüm. */
+function ModalBolumu({ baslik, children }: { baslik: string; children: React.ReactNode }) {
+  return (
+    <section className="flex flex-col overflow-hidden rounded-[8px] border">
+      <div className="border-b bg-[var(--section-bg)] px-3 py-1.5 text-[11px] font-medium tracking-wider text-muted-foreground uppercase">{baslik}</div>
+      <div className="flex flex-1 flex-col gap-3 p-3">{children}</div>
+    </section>
   )
 }
 
