@@ -195,7 +195,9 @@ export function AnaEkran({ durum, setDurum }: P) {
   // İLK KURULUM (07.10.2026, kullanıcı kararı): kurulum bir kez tamamlanana kadar orta panelde dört durum kartı +
   // dağınık bölümler yerine adım adım sihirbaz. Bitiş işaretini exe koyar (dört adım ilk kez hazır olduğunda),
   // kayıt kalkınca silinir — sonra VPN kapalı olsa da normal ekran görünür.
-  const kurulumModu = denetlendi && !durum.kurulumTamam;
+  // İlk denetim bitmeden de sihirbaz gösterilir (adımlar "kontrol ediliyor") — yoksa açılışta bir an dört
+  // "Kontrol ediliyor…" kartlı normal ekran görünüp sihirbaza atlıyordu (07.10.2026).
+  const kurulumModu = !durum.kurulumTamam;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
@@ -422,6 +424,7 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         {kurulumModu && (
           <IlkKurulum
+            denetleniyor={!denetlendi}
             adimlar={[
               { baslik: "VPN programı", aciklama: "FortiClient kurulur, Pusula bağlantısı ayarlanır", tamam: vpnHazir, icerik: vpnKurIcerik },
               { baslik: "VPN kullanıcı adı", aciklama: `FortiClient'a ${kayit.kullanici} yazılır`, tamam: !!k.profil.kullaniciAdi, icerik: vk.suruyor || vk.durum?.hata ? vpnKurIcerik : tanimlaIcerik },
@@ -714,9 +717,10 @@ type KurulumAdimi = { baslik: string; aciklama: string; tamam: boolean; icerik: 
  * yalnız onun içeriği açık, tamamlananlar yeşil onayla, sıradakiler soluk. Adımların durumu exe'nin denetiminden
  * gelir (ör. şifre Hub'dan kendiliğinden alınırsa o adım kendi kendine tamamlanır).
  */
-function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
-  const tamamlanan = adimlar.filter((a) => a.tamam).length;
-  const etkin = adimlar.findIndex((a) => !a.tamam);
+function IlkKurulum({ adimlar, denetleniyor }: { adimlar: KurulumAdimi[]; denetleniyor?: boolean }) {
+  const tamamlanan = denetleniyor ? 0 : adimlar.filter((a) => a.tamam).length;
+  // Denetim sürerken hiçbir adım açılmaz/işaretlenmez — değerler henüz okunmadı
+  const etkin = denetleniyor ? -2 : adimlar.findIndex((a) => !a.tamam);
   const bitti = etkin === -1;
   return (
     <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
@@ -727,7 +731,11 @@ function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
         <div className="min-w-0 flex-1">
           <div className="text-[15px] font-semibold">{bitti ? "Kurulum tamamlandı" : "İlk kurulum"}</div>
           <div className="text-xs text-muted-foreground">
-            {bitti ? "Pusula'ya bağlanmaya hazırsınız." : "Pusula'ya bağlanmak için adımları sırayla tamamlayın."}
+            {denetleniyor
+              ? "Bu bilgisayardaki kurulum durumu kontrol ediliyor…"
+              : bitti
+                ? "Pusula'ya bağlanmaya hazırsınız."
+                : "Pusula'ya bağlanmak için adımları sırayla tamamlayın."}
           </div>
         </div>
         <div className="flex w-28 shrink-0 flex-col items-end gap-1.5">
@@ -740,6 +748,7 @@ function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
       <ol className="flex flex-col px-5 py-4">
         {adimlar.map((a, i) => {
           const acik = i === etkin;
+          const tamam = !denetleniyor && a.tamam;
           const son = i === adimlar.length - 1;
           return (
             <li key={a.baslik} className="relative flex gap-3.5">
@@ -747,25 +756,25 @@ function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
               {!son && (
                 <span
                   aria-hidden
-                  className={"absolute top-8 bottom-0 left-[13px] w-px " + (a.tamam ? "bg-emerald-500/50" : "bg-border")}
+                  className={"absolute top-8 bottom-0 left-[13px] w-px " + (tamam ? "bg-emerald-500/50" : "bg-border")}
                 />
               )}
               <span
                 className={
                   "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
-                  (a.tamam
+                  (tamam
                     ? "bg-emerald-500 text-white"
                     : acik
                       ? "bg-primary text-primary-foreground ring-4 ring-primary/15"
                       : "border bg-card text-muted-foreground")
                 }
               >
-                {a.tamam ? <Check className="size-4" /> : i + 1}
+                {denetleniyor ? <Loader2 className="size-3.5 animate-spin" /> : tamam ? <Check className="size-4" /> : i + 1}
               </span>
               <div className={"min-w-0 flex-1 " + (son ? "" : "pb-5")}>
                 <div className="flex min-h-7 flex-col justify-center">
-                  <div className={"text-sm font-semibold " + (!a.tamam && !acik ? "text-muted-foreground" : "")}>{a.baslik}</div>
-                  <div className="text-xs text-muted-foreground">{a.tamam ? "Tamamlandı" : a.aciklama}</div>
+                  <div className={"text-sm font-semibold " + (!tamam && !acik ? "text-muted-foreground" : "")}>{a.baslik}</div>
+                  <div className="text-xs text-muted-foreground">{denetleniyor ? "Kontrol ediliyor…" : tamam ? "Tamamlandı" : a.aciklama}</div>
                 </div>
                 {acik && <div className="mt-3 rounded-lg border bg-background/60 p-4">{a.icerik}</div>}
               </div>
