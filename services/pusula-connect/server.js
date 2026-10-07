@@ -27,6 +27,11 @@
  *     POST   /admin/cihazlar/:id/etkinlestir   iptal edilen cihazı geri aç
  *     GET    /admin/cihazlar?firma=     tüm cihazlar + canlı durum (nabız) — Hub izleme merkezi
  *     GET    /admin/olaylar?firma=&cihaz=&limit=&once=   olay kaydı (yeniden eskiye)
+ *     GET    /admin/olaylar/ara?tur=&kaynak=&firma=&kullanici=&makine=&q=&bas=&bit=&limit=&offset=  → { liste, toplam, turler }
+ *     POST   /admin/cihazlar/:id/sil          ölü kaydı sil (olay geçmişi kalır)
+ *     POST   /admin/cihazlar/:id/gunluk-iste  uygulamadan günlük iste (nabız yanıtında gunlukIste)
+ *     GET    /admin/cihazlar/:id/gunluk       son yüklenen günlük { zaman, metin, istendi }
+ *     POST   /api/gunluk  { metin }           (Bearer) istenen günlüğü yükle
  *   İstemci (Bearer token):
  *     POST   /api/nabiz                 { oturum, terminal, ayarlar, ... } — ~60 sn'de bir canlı durum
  *                                        (yanıt: duyuru imzası + profilImza → istemci değişince profili tazeler)
@@ -143,6 +148,8 @@ for (const [ad, tip] of [
   ["tokenZaman", "TEXT"],
   ["eskiTokenOzet", "TEXT"],
   ["eskiTokenZaman", "TEXT"],
+  // Uzaktan günlük (07.10.2026): Hub istedi → nabız yanıtında gunlukIste → istemci /api/gunluk ile yükler
+  ["gunlukIstek", "TEXT"],
 ]) {
   try { db.exec(`ALTER TABLE cihazlar ADD COLUMN ${ad} ${tip}`) } catch { /* zaten var */ }
 }
@@ -188,6 +195,17 @@ db.exec(`
     PRIMARY KEY (duyuruId, cihazId)
   );
 `)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS gunlukler (
+    cihazId TEXT PRIMARY KEY,           -- cihaz başına son yüklenen günlük (yenisi üstüne yazılır)
+    zaman   TEXT NOT NULL DEFAULT (datetime('now')),
+    metin   TEXT NOT NULL
+  );
+`)
+// Türkçe büyük/küçük harfe duyarsız arama (SQLite LIKE yalnız ASCII'de duyarsız: "ALTINOVA" ≠ "altınova")
+// ı/i ayrımı da yok sayılır: "altinova" yazan "ALTıNOVACADDE"yi bulsun
+const trk = (v) => String(v).toLocaleLowerCase("tr").replace(/ı/g, "i")
+db.function("trk", { deterministic: true }, (v) => (v == null ? null : trk(v)))
 const DUYURU_ONEM = new Set(["bilgi", "uyari", "kritik"])
 /** Duyurunun hedefi bu cihaz mı (SQL'de aynı koşul: DUYURU_HEDEF). */
 const DUYURU_HEDEF = `(d.firmaId IS NULL OR d.firmaId = k.firmaId) AND (d.kullanici IS NULL OR d.kullanici = k.kullanici)`
@@ -214,6 +232,13 @@ const sql = {
     WHERE k.firmaId = ? AND k.kullanici = ? AND lower(c.makine) = lower(?)`),
   cihazSil: db.prepare(`DELETE FROM cihazlar WHERE id = ?`),
   cihazOkumaSil: db.prepare(`DELETE FROM duyuru_okuma WHERE cihazId = ?`),
+  gunlukIste: db.prepare(`UPDATE cihazlar SET gunlukIstek = datetime('now') WHERE id = ?`),
+  gunlukIstekVar: db.prepare(`SELECT gunlukIstek FROM cihazlar WHERE id = ?`),
+  gunlukYaz: db.prepare(`INSERT INTO gunlukler (cihazId, zaman, metin) VALUES (?, datetime('now'), ?)
+                         ON CONFLICT(cihazId) DO UPDATE SET zaman = excluded.zaman, metin = excluded.metin`),
+  gunlukIstekTemizle: db.prepare(`UPDATE cihazlar SET gunlukIstek = NULL WHERE id = ?`),
+  gunlukOku: db.prepare(`SELECT g.zaman, g.metin, c.gunlukIstek FROM cihazlar c LEFT JOIN gunlukler g ON g.cihazId = c.id WHERE c.id = ?`),
+  gunlukSil: db.prepare(`DELETE FROM gunlukler WHERE cihazId = ?`),
   tokenYenile: db.prepare(`UPDATE cihazlar SET eskiTokenOzet = tokenOzet, eskiTokenZaman = datetime('now'), tokenOzet = ?, tokenZaman = datetime('now') WHERE id = ?`),
   cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari,
                                    c.tokenZaman, (c.tokenOzet = @ozet) AS guncelToken, k.*
@@ -594,6 +619,67 @@ fastify.post("/admin/cihazlar/:id/iptal", async (req, reply) => {
   return { tamam: true }
 })
 
+// Ölü kaydı sil (07.10.2026): bilgisayar el değiştirdi/çöpe gitti — satır listeden kalkar, olay geçmişi kalır.
+// Uygulama hâlâ açıksa bir sonraki isteğinde 401 alır ve kurulum kodu ekranına döner.
+fastify.post("/admin/cihazlar/:id/sil", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const bilgi = sql.cihazBilgi.get(req.params.id)
+  if (!bilgi) return reply.code(404).send({ hata: "bulunamadi" })
+  db.transaction(() => { sql.cihazOkumaSil.run(req.params.id); sql.gunlukSil.run(req.params.id); sql.cihazSil.run(req.params.id) })()
+  olay("cihaz_silindi", { cihaz: bilgi, kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
+  return { tamam: true }
+})
+
+// Uzaktan günlük: iste → uygulama bir sonraki nabızda (~1 dk) yükler → oku
+fastify.post("/admin/cihazlar/:id/gunluk-iste", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const r = sql.gunlukIste.run(req.params.id)
+  if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  olay("gunluk_istendi", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
+  return { tamam: true }
+})
+fastify.get("/admin/cihazlar/:id/gunluk", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const g = sql.gunlukOku.get(req.params.id)
+  if (!g) return reply.code(404).send({ hata: "bulunamadi" })
+  return { zaman: g.zaman ?? null, metin: g.metin ?? null, istendi: g.gunlukIstek ?? null }
+})
+
+/**
+ * Olay arama (07.10.2026): Hub'daki olay kaydı sayfalı ve sunucu tarafı filtreli — "son 500" sınırı kalktı.
+ * ?tur=a,b &kaynak=a,b &firma= (kod ya da ad) &kullanici= &makine= &q= (ayrıntı) &bas=YYYY-MM-DD &bit=YYYY-MM-DD
+ * &limit= (≤200) &offset= → { liste, toplam }
+ */
+fastify.get("/admin/olaylar/ara", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const q = req.query ?? {}
+  const kosul = [], p = {}
+  const liste = (v) => String(v ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 50)
+  const turler = liste(q.tur)
+  if (turler.length) { kosul.push(`o.tur IN (${turler.map((_, i) => "@tur" + i).join(",")})`); turler.forEach((t, i) => (p["tur" + i] = t)) }
+  const kaynaklar = liste(q.kaynak)
+  if (kaynaklar.length) { kosul.push(`o.kaynak IN (${kaynaklar.map((_, i) => "@kay" + i).join(",")})`); kaynaklar.forEach((t, i) => (p["kay" + i] = t)) }
+  if (q.firma) {
+    kosul.push(`(o.firmaId LIKE @firma OR o.firmaId IN (SELECT firmaId FROM kodlar WHERE trk(firmaAdi) LIKE @firma))`)
+    p.firma = `%${String(q.firma)}%`
+  }
+  if (q.kullanici) { kosul.push(`trk(o.kullanici) LIKE @kullanici`); p.kullanici = `%${String(q.kullanici)}%` }
+  if (q.makine) { kosul.push(`trk(o.makine) LIKE @makine`); p.makine = `%${String(q.makine)}%` }
+  if (q.q) { kosul.push(`trk(o.ayrinti) LIKE @q`); p.q = `%${String(q.q)}%` }
+  // Tarihler yerel (TR) gün; olay zamanı UTC — +3 saat kaydırılarak karşılaştırılır
+  if (q.bas && /^\d{4}-\d{2}-\d{2}$/.test(q.bas)) { kosul.push(`date(o.zaman, '+3 hours') >= @bas`); p.bas = q.bas }
+  if (q.bit && /^\d{4}-\d{2}-\d{2}$/.test(q.bit)) { kosul.push(`date(o.zaman, '+3 hours') <= @bit`); p.bit = q.bit }
+  const where = kosul.length ? "WHERE " + kosul.join(" AND ") : ""
+  for (const k of ["firma", "kullanici", "makine", "q"]) if (p[k]) p[k] = trk(p[k])
+  const limit = Math.min(Math.max(parseInt(q.limit ?? "50", 10) || 50, 1), 200)
+  const offset = Math.max(parseInt(q.offset ?? "0", 10) || 0, 0)
+  const toplam = db.prepare(`SELECT count(*) n FROM olaylar o ${where}`).get(p).n
+  const satirlar = db.prepare(`SELECT o.id, o.zaman, o.cihazId, o.firmaId, o.kullanici, o.makine, o.tur, o.ayrinti, o.kaynak, o.ip
+    FROM olaylar o ${where} ORDER BY o.id DESC LIMIT @limit OFFSET @offset`).all({ ...p, limit, offset })
+  const turListesi = db.prepare(`SELECT DISTINCT tur FROM olaylar`).all().map((r) => r.tur)
+  return { liste: satirlar, toplam, turler: turListesi }
+})
+
 // ── İstemci ──
 const hatali = new Map()
 const engelli = (ip) => {
@@ -760,7 +846,8 @@ fastify.post("/api/nabiz", async (req, reply) => {
     durumJson: JSON.stringify(durum).slice(0, 4000),
   })
   const g = kayitGorunumu(c, await hubProfil(c))
-  const yanit = { tamam: true, duyuru: duyuruImzasi(c), profilImza: g.profilImza, sayimImza: g.sayimImza }
+  const yanit = { tamam: true, duyuru: duyuruImzasi(c), profilImza: g.profilImza, sayimImza: g.sayimImza,
+    gunlukIste: !!sql.gunlukIstekVar.get(c.cihazId)?.gunlukIstek }
   // Token döndürme: güncel tokenla gelen ve süresi dolmuş cihaza yeni token. Eski token TOKEN_GECIS_DK daha geçer
   // (istemci kaydedene kadar). Eski tokenla gelen isteğe (geçiş süresinde) yeniden üretilmez — tek sefer.
   const sinir = new Date(Date.now() - TOKEN_OMRU_GUN * 86400000).toISOString().replace("T", " ").slice(0, 19)
@@ -789,6 +876,17 @@ fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {
   return { tamam: true }
 })
 
+/** Uzaktan günlük: istemci Hub'ın isteğiyle günlüğünü yükler (son ~256 KB). İstek yoksa reddedilir. */
+fastify.post("/api/gunluk", { bodyLimit: 600 * 1024 }, async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  const istek = sql.gunlukIstekVar.get(c.cihazId)?.gunlukIstek
+  if (!istek) return reply.code(409).send({ hata: "Günlük istenmedi" })
+  const metin = String(req.body?.metin ?? "").slice(-300 * 1024)
+  db.transaction(() => { sql.gunlukYaz.run(c.cihazId, metin); sql.gunlukIstekTemizle.run(c.cihazId) })()
+  olay("gunluk_yuklendi", { cihaz: c, kaynak: "istemci", ayrinti: Math.round(metin.length / 1024) + " KB", ip: istemciIp(req) })
+  return { tamam: true }
+})
+
 /** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
 const ISTEMCI_OLAYLARI = new Set(["sayim_baslatildi", "sayim_kurulum_baslatildi", "sayim_bilgisi_guncellendi", "vpn_baglan_tetiklendi", "dns_cozulemedi", "oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "guncelleme_hatasi", "vpn_kuruldu", "vpn_kurulum_hatasi",
   "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
@@ -800,7 +898,7 @@ fastify.post("/api/olay", async (req, reply) => {
   // Kullanıcı uygulamada "Kaydı kaldır" dedi (07.10.2026): cihaz satırı da silinir — listede ölü kayıt kalmasın.
   // Olay kaydı (geçmiş) durur.
   if (tur === "kayit_kaldirildi") {
-    db.transaction(() => { sql.cihazOkumaSil.run(c.id); sql.cihazSil.run(c.id) })()
+    db.transaction(() => { sql.cihazOkumaSil.run(c.cihazId); sql.cihazSil.run(c.cihazId) })()
   }
   return { tamam: true }
 })
