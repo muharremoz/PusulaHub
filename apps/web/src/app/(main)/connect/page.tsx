@@ -659,19 +659,31 @@ function CihazListesi({
                       className={cn("cursor-pointer text-[13px] hover:bg-muted/20", i === 0 ? "border-t border-t-border" : "border-t border-t-border/40")}
                       onClick={() => onSec(c.id)}
                     >
-                      {/* Firma yalnız grubun ilk satırında — aynı firmanın diğer cihazları altında boş kalır (07.10.2026) */}
-                      <td className="px-3 py-1 align-top font-semibold tabular-nums whitespace-nowrap">{i === 0 ? g.firmaId : ""}</td>
-                      <td className="max-w-[260px] px-3 py-1 align-top">
-                        {i === 0 && (
-                          // Firma adı ipucusuz; firmadaki cihaz (kullanıcı) sayısı rozette (07.10.2026)
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate">{g.firmaAdi}</span>
-                            <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[11px] leading-none font-medium tabular-nums">
-                              {say?.toplam ?? g.satirlar.length}
+                      {/* BİRLEŞİK FİRMA HÜCRESİ (07.10.2026, kullanıcı kararı): kod + ad grubun tüm satırlarını kaplayan
+                          tek hücrede (rowSpan), dikey ortalı — tekrar da boş satır görüntüsü de yok. Tıklanınca cihaz açmaz. */}
+                      {i === 0 && (
+                        <>
+                          <td
+                            rowSpan={g.satirlar.length}
+                            className="cursor-default bg-[var(--section-bg)]/60 px-3 py-1 align-middle font-semibold tabular-nums whitespace-nowrap"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {g.firmaId}
+                          </td>
+                          <td
+                            rowSpan={g.satirlar.length}
+                            className="max-w-[260px] cursor-default border-r bg-[var(--section-bg)]/60 px-3 py-1 align-middle"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <span className="flex min-w-0 items-center gap-1.5">
+                              <span className="truncate">{g.firmaAdi}</span>
+                              <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[11px] leading-none font-medium tabular-nums">
+                                {say?.toplam ?? g.satirlar.length}
+                              </span>
                             </span>
-                          </span>
-                        )}
-                      </td>
+                          </td>
+                        </>
+                      )}
                       <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.kullanici}</td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.makine ?? "—"}</td>
