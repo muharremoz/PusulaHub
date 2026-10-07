@@ -151,6 +151,8 @@ export type Durum = {
   kayit: { firmaId: string; firmaAdi: string; kullanici: string; profil: Profil } | null;
   mesaj: string | null;
   servisErisim: boolean;
+  /** İlk kurulum bir kez tamamlandı (exe işaretler, kayıt kalkınca silinir). */
+  kurulumTamam?: boolean;
   kontroller: {
     forti: { kurulu: boolean; surum: string | null };
     /** kullaniciAdi: FortiClient bu tünel için kullanıcı adını saklıyor mu (FCConfig ile yazılır). */

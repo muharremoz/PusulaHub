@@ -17,10 +17,16 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
   const [olciliyor, setOlciliyor] = useState(false);
   const tur = sayim?.tur ?? null;
   const sonTest = sayim?.s.test?.zaman ?? null;
+  const sonTestOk = sayim?.s.test?.ok ?? null;
+  // SQL yalnız VPN üzerinden erişilir (07.10.2026): VPN yokken Başlat pasif, kart "VPN bağlantısı gerekli" der.
+  // Erişim denetlenmeden (zaman yok) kısıtlanmaz — açılışta düğme bir an pasif görünmesin.
+  const t = durum.kontroller.terminal;
+  const vpnYok = !!t.zaman && !t.erisim;
 
   useEffect(() => {
-    if (!tur) return;
-    if (sonTest && Date.now() - Date.parse(sonTest) < 10 * 60_000) return;
+    if (!tur || vpnYok) return;
+    // VPN yeni bağlandıysa ve son ölçüm başarısızsa beklemeden yeniden ölçülür
+    if (sonTest && sonTestOk !== false && Date.now() - Date.parse(sonTest) < 10 * 60_000) return;
     let iptal = false;
     setOlciliyor(true);
     api("/sayim/test", { tur })
@@ -30,7 +36,7 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
       .finally(() => { if (!iptal) setOlciliyor(false); });
     return () => { iptal = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tur]);
+  }, [tur, vpnYok]);
 
   if (!sayim) return null;
 
@@ -47,7 +53,7 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
   };
 
   const test = sayim.s.test;
-  const renk: Renk = olciliyor || !test ? "bekliyor" : test.ok ? "iyi" : "hata";
+  const renk: Renk = vpnYok ? "uyari" : olciliyor || !test ? "bekliyor" : test.ok ? "iyi" : "hata";
   const secim = sayim.tur === "eski" ? sayim.s.secim : null;
 
   return (
@@ -57,14 +63,16 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
       etiket="Sayım"
       baslik={sayim.tur === "eski" ? "Pusula" : "Pusula X"}
       ek={
-        <Button size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-xs [&_svg]:size-3.5" disabled={basliyor} onClick={() => void baslat()} title="Sayım programını aç">
+        <Button size="sm" className="h-7 shrink-0 gap-1 px-2.5 text-xs [&_svg]:size-3.5" disabled={basliyor || vpnYok} onClick={() => void baslat()} title={vpnYok ? "Sayım için önce VPN'e bağlanın" : "Sayım programını aç"}>
           {basliyor ? <Loader2 className="animate-spin" /> : <Play />} Başlat
         </Button>
       }
     >
       <div className="truncate text-xs text-muted-foreground" title={[secim?.veritabani, test?.ok ? `SQL yanıtı ${test.sureMs} ms` : null].filter(Boolean).join(" · ") || undefined}>
         {secim && <>{secim.ad} · {secim.formId === "146" ? "Toptan" : "Perakende"} · </>}
-        {olciliyor
+        {vpnYok
+          ? <span className="text-amber-700 dark:text-amber-400">VPN bağlantısı gerekli</span>
+          : olciliyor
           ? "SQL kontrol ediliyor…"
           : !test
             ? "SQL denetlenmedi"

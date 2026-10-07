@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
-  Hash, Laptop, LifeBuoy, Megaphone, Network, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Laptop, LifeBuoy, Megaphone, Network, Rocket, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -94,6 +94,106 @@ export function AnaEkran({ durum, setDurum }: P) {
   const denetlendi = !!k.terminal.zaman;
   // Şifre Hub'dan alınırken elle giriş kutusu gösterilmez (kendiliğinden geliyor, 07.10.2026)
   const sifreGoster = denetlendi && !k.rdpSifre.kayitli && !k.rdpSifre.aliniyor;
+
+
+  // Adım içerikleri — normal ekranda Bolum içinde, ilk kurulumda sihirbaz adımında aynı parça kullanılır.
+  const vpnKurIcerik = (
+    <>
+    {vk.suruyor ? (
+      <div className="flex flex-col gap-2">
+        <div className="text-sm">{vk.durum?.mesaj ?? "Hazırlanıyor… (Windows izin isterse \"Evet\" deyin)"}</div>
+        <Progress value={vk.durum?.yuzde ?? 0} />
+      </div>
+    ) : (
+      <>
+        {vk.durum?.hata && (
+          <Alert variant="destructive" className="mb-3">
+            <XCircle />
+            <AlertDescription>{vk.durum.hata}</AlertDescription>
+          </Alert>
+        )}
+        <p className="mb-3 text-sm text-muted-foreground">
+          {k.forti.kurulu
+            ? "FortiClient'taki Pusula bağlantısı eksik ya da Pusula'nın VPN sunucu bilgisi değişmiş; bağlantı ayarı yeniden yazılır. Windows yönetici izni isteyecek."
+            : "FortiClient VPN kurulur ve Pusula bağlantısı ayarlanır. Windows yönetici izni isteyecek."}
+        </p>
+        <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
+          {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {vk.durum?.hata ? "Yeniden dene" : k.forti.kurulu ? "Güncelle" : "Kur"}
+        </Button>
+      </>
+    )}
+    </>
+  );
+  const tanimlaIcerik = (
+    <>
+    <p className="mb-3 text-sm text-muted-foreground">
+      FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-medium">{kayit.kullanici}</span>)
+      yazılır; bağlanırken yalnız şifrenizi girersiniz. Windows yönetici izni isteyecek.
+    </p>
+    <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
+      {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Tanımla
+    </Button>
+    </>
+  );
+  const vpnBaglanIcerik = (
+    <>
+    <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
+      <li>VPN uygulamasını (FortiClient) açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
+      <li>
+        {k.profil.sifre === "kayitli" ? (
+          <>Kullanıcı adınız ve şifreniz FortiClient'ta kayıtlı; yalnız <b>Connect</b>'e basın.</>
+        ) : k.profil.kullaniciAdi ? (
+          <>Kullanıcı adınız hazır (<span className="font-medium">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
+        ) : (
+          <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
+        )}
+      </li>
+      {k.rdpSifre.kayitli && k.profil.sifre !== "kayitli" && (
+        <li className="list-none">
+          <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
+        </li>
+      )}
+      {k.profil.sifre === "isaretsiz" ? (
+        <li className="font-medium text-amber-700 dark:text-amber-400">
+          Bağlanırken <b>Save Password</b> kutusunu işaretleyin; şifre bir daha sorulmaz.
+        </li>
+      ) : k.profil.sifre !== "kayitli" ? (
+        <li className="text-muted-foreground">
+          İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
+          sorulmaz.
+        </li>
+      ) : null}
+    </ol>
+    <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
+      <ShieldCheck /> VPN uygulamasını aç
+    </Button>
+    </>
+  );
+  const sifreIcerik = (
+    <>
+    <p className="mb-3 text-sm text-muted-foreground">
+      <span className="font-medium">{kayit.kullanici}</span> kullanıcısının Pusula oturum şifresi. Yalnız bu bilgisayarın Windows
+      kimlik kasasında saklanır; her bağlantıda tekrar sorulmaz.
+    </p>
+    <div className="flex gap-2">
+      <Input
+        type="password"
+        value={sifre}
+        placeholder="Şifre"
+        onChange={(e) => setSifre(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && sifre && void sifreKaydet()}
+      />
+      <Button disabled={!sifre || !!bekle} onClick={() => void sifreKaydet()}>
+        {bekle === "sifre" ? <Loader2 className="animate-spin" /> : null} Kaydet
+      </Button>
+    </div>
+    </>
+  );
+
+  // İLK KURULUM (07.10.2026, kullanıcı kararı): kurulum bir kez tamamlanana kadar orta panelde dört durum kartı +
+  // dağınık bölümler yerine adım adım sihirbaz. Bitiş işaretini exe koyar (dört adım ilk kez hazır olduğunda),
+  // kayıt kalkınca silinir — sonra VPN kapalı olsa da normal ekran görünür.
+  const kurulumModu = denetlendi && !durum.kurulumTamam;
 
   return (
     <div className="flex h-svh overflow-hidden bg-muted/40">
@@ -318,6 +418,27 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
+        {kurulumModu && (
+          <IlkKurulum
+            adimlar={[
+              { baslik: "VPN programı", aciklama: "FortiClient kurulur, Pusula bağlantısı ayarlanır", tamam: vpnHazir, icerik: vpnKurIcerik },
+              { baslik: "VPN kullanıcı adı", aciklama: `FortiClient'a ${kayit.kullanici} yazılır`, tamam: !!k.profil.kullaniciAdi, icerik: vk.suruyor || vk.durum?.hata ? vpnKurIcerik : tanimlaIcerik },
+              {
+                baslik: "Oturum şifresi",
+                aciklama: k.rdpSifre.aliniyor ? "Pusula'dan otomatik alınıyor" : "Bu bilgisayarda şifreli saklanır",
+                tamam: k.rdpSifre.kayitli,
+                icerik: k.rdpSifre.aliniyor ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" /> Şifreniz Pusula'dan alınıyor; elle girmeniz gerekmez.
+                  </div>
+                ) : sifreIcerik,
+              },
+              { baslik: "VPN'e bağlanın", aciklama: "FortiClient ile Pusula'ya güvenli bağlantı", tamam: k.terminal.erisim, icerik: vpnBaglanIcerik },
+            ]}
+          />
+        )}
+
+        {!kurulumModu && (
         <div className="grid grid-cols-2 gap-3">
           <Kart
             ikon={<ShieldCheck />}
@@ -360,101 +481,30 @@ export function AnaEkran({ durum, setDurum }: P) {
             alt={!denetlendi ? "Bir saniye…" : !k.rdpSifre.kayitli ? (k.rdpSifre.aliniyor ? "Pusula'dan otomatik alınıyor" : "Aşağıdan kaydedin") : ikiAktif ? "Doğrulama koduyla korunuyor" : "Bu bilgisayarda şifreli saklanıyor"}
           />
         </div>
+        )}
 
-        {((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (
+        {!kurulumModu && ((denetlendi && !vpnHazir) || vk.suruyor || vk.durum?.hata) && (
           <Bolum baslik={vk.suruyor ? "VPN ayarı güncelleniyor" : k.forti.kurulu ? "VPN ayarını güncelleyin" : "VPN programını kur"} ikon={<ShieldCheck />}>
-            {vk.suruyor ? (
-              <div className="flex flex-col gap-2">
-                <div className="text-sm">{vk.durum?.mesaj ?? "Hazırlanıyor… (Windows izin isterse \"Evet\" deyin)"}</div>
-                <Progress value={vk.durum?.yuzde ?? 0} />
-              </div>
-            ) : (
-              <>
-                {vk.durum?.hata && (
-                  <Alert variant="destructive" className="mb-3">
-                    <XCircle />
-                    <AlertDescription>{vk.durum.hata}</AlertDescription>
-                  </Alert>
-                )}
-                <p className="mb-3 text-sm text-muted-foreground">
-                  {k.forti.kurulu
-                    ? "FortiClient'taki Pusula bağlantısı eksik ya da Pusula'nın VPN sunucu bilgisi değişmiş; bağlantı ayarı yeniden yazılır. Windows yönetici izni isteyecek."
-                    : "FortiClient VPN kurulur ve Pusula bağlantısı ayarlanır. Windows yönetici izni isteyecek."}
-                </p>
-                <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
-                  {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} {vk.durum?.hata ? "Yeniden dene" : k.forti.kurulu ? "Güncelle" : "Kur"}
-                </Button>
-              </>
-            )}
+            {vpnKurIcerik}
           </Bolum>
         )}
 
-        {denetlendi && vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
+        {!kurulumModu && denetlendi && vpnHazir && !k.profil.kullaniciAdi && !vk.suruyor && (
           <Bolum baslik="Kullanıcı adını FortiClient'a tanımlayın" ikon={<ShieldCheck />}>
-            <p className="mb-3 text-sm text-muted-foreground">
-              FortiClient'ta <b>{kayit.profil.tunel}</b> bağlantısına kullanıcı adınız (<span className="font-medium">{kayit.kullanici}</span>)
-              yazılır; bağlanırken yalnız şifrenizi girersiniz. Windows yönetici izni isteyecek.
-            </p>
-            <Button disabled={!!bekle} onClick={() => void cagir("/vpn/kur")}>
-              {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Tanımla
-            </Button>
+            {tanimlaIcerik}
           </Bolum>
         )}
 
         {/* Kullanıcı adı FortiClient'a tanımlanmadan bağlanma adımı gösterilmez — önce "Tanımla" kartı (07.10.2026) */}
-        {vpnHazir && !!k.profil.kullaniciAdi && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
+        {!kurulumModu && vpnHazir && !!k.profil.kullaniciAdi && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
           <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
-            <ol className="mb-3 flex list-decimal flex-col gap-1.5 pl-5 text-sm">
-              <li>VPN uygulamasını (FortiClient) açın; <b>{kayit.profil.tunel}</b> bağlantısı seçili gelir.</li>
-              <li>
-                {k.profil.sifre === "kayitli" ? (
-                  <>Kullanıcı adınız ve şifreniz FortiClient'ta kayıtlı; yalnız <b>Connect</b>'e basın.</>
-                ) : k.profil.kullaniciAdi ? (
-                  <>Kullanıcı adınız hazır (<span className="font-medium">{kayit.kullanici}</span>). Şifrenizi yazıp <b>Connect</b>'e basın.</>
-                ) : (
-                  <>Kullanıcı adı alanına <span className="font-semibold">{kayit.kullanici}</span> yazın, şifrenizi girip <b>Connect</b>'e basın.</>
-                )}
-              </li>
-              {k.rdpSifre.kayitli && k.profil.sifre !== "kayitli" && (
-                <li className="list-none">
-                  <SifreGosterici gosterilen={gosterilen} onGoster={() => void gosterTikla()} onGizle={() => setGosterilen(null)} />
-                </li>
-              )}
-              {k.profil.sifre === "isaretsiz" ? (
-                <li className="font-medium text-amber-700 dark:text-amber-400">
-                  Bağlanırken <b>Save Password</b> kutusunu işaretleyin; şifre bir daha sorulmaz.
-                </li>
-              ) : k.profil.sifre !== "kayitli" ? (
-                <li className="text-muted-foreground">
-                  İlk bağlantıda şifre kaydetme seçeneği çıkmaz, bu normaldir. Sonraki bağlantıda <b>Save Password</b>'ü işaretlerseniz bir daha
-                  sorulmaz.
-                </li>
-              ) : null}
-            </ol>
-            <Button size="sm" variant="outline" onClick={() => void cagir("/vpn/ac")}>
-              <ShieldCheck /> VPN uygulamasını aç
-            </Button>
+            {vpnBaglanIcerik}
           </Bolum>
         )}
 
-        {sifreGoster && (
+        {!kurulumModu && sifreGoster && (
           <Bolum baslik="Oturum şifresini kaydedin" ikon={<KeyRound />}>
-            <p className="mb-3 text-sm text-muted-foreground">
-              <span className="font-medium">{kayit.kullanici}</span> kullanıcısının Pusula oturum şifresi. Yalnız bu bilgisayarın Windows
-              kimlik kasasında saklanır; her bağlantıda tekrar sorulmaz.
-            </p>
-            <div className="flex gap-2">
-              <Input
-                type="password"
-                value={sifre}
-                placeholder="Şifre"
-                onChange={(e) => setSifre(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && sifre && void sifreKaydet()}
-              />
-              <Button disabled={!sifre || !!bekle} onClick={() => void sifreKaydet()}>
-                {bekle === "sifre" ? <Loader2 className="animate-spin" /> : null} Kaydet
-              </Button>
-            </div>
+            {sifreIcerik}
           </Bolum>
         )}
 
@@ -491,7 +541,7 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         {/* Pusula sunucusuna erişim yoksa (VPN bağlı değil) bağlanılamaz. Soluk pasif düğme yerine ne yapılacağını
             söyleyen, tam renkli ama tıklanmayan bir düğme (erişim ~10 sn'de bir denetlenir). */}
-        {!k.terminal.erisim ? (
+        {kurulumModu && !k.terminal.erisim ? null : !k.terminal.erisim ? (
           <Button
             size="lg"
             variant="outline"
@@ -650,6 +700,76 @@ function Sinyal({ ms }: { ms: number }) {
       </span>
       {q === 4 ? "Bağlantı mükemmel" : q === 3 ? "Bağlantı iyi" : q === 2 ? "Bağlantı orta" : "Bağlantı zayıf"}
     </span>
+  );
+}
+
+type KurulumAdimi = { baslik: string; aciklama: string; tamam: boolean; icerik: React.ReactNode };
+
+/**
+ * İlk kurulum sihirbazı (07.10.2026) — orta panelde dikey adım listesi. Etkin adım = tamamlanmamış ilk adım;
+ * yalnız onun içeriği açık, tamamlananlar yeşil onayla, sıradakiler soluk. Adımların durumu exe'nin denetiminden
+ * gelir (ör. şifre Hub'dan kendiliğinden alınırsa o adım kendi kendine tamamlanır).
+ */
+function IlkKurulum({ adimlar }: { adimlar: KurulumAdimi[] }) {
+  const tamamlanan = adimlar.filter((a) => a.tamam).length;
+  const etkin = adimlar.findIndex((a) => !a.tamam);
+  const bitti = etkin === -1;
+  return (
+    <section className="overflow-hidden rounded-xl border bg-card shadow-sm">
+      <div className="flex items-center gap-3 border-b bg-muted/30 px-5 py-4">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+          {bitti ? <CheckCircle2 className="size-5" /> : <Rocket className="size-5" />}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[15px] font-semibold">{bitti ? "Kurulum tamamlandı" : "İlk kurulum"}</div>
+          <div className="text-xs text-muted-foreground">
+            {bitti ? "Pusula'ya bağlanmaya hazırsınız." : "Pusula'ya bağlanmak için adımları sırayla tamamlayın."}
+          </div>
+        </div>
+        <div className="flex w-28 shrink-0 flex-col items-end gap-1.5">
+          <span className="text-xs font-medium tabular-nums text-muted-foreground">
+            {tamamlanan}/{adimlar.length} adım
+          </span>
+          <Progress value={(tamamlanan / adimlar.length) * 100} className="h-1.5" />
+        </div>
+      </div>
+      <ol className="flex flex-col px-5 py-4">
+        {adimlar.map((a, i) => {
+          const acik = i === etkin;
+          const son = i === adimlar.length - 1;
+          return (
+            <li key={a.baslik} className="relative flex gap-3.5">
+              {/* Adımları birleştiren dikey çizgi */}
+              {!son && (
+                <span
+                  aria-hidden
+                  className={"absolute top-8 bottom-0 left-[13px] w-px " + (a.tamam ? "bg-emerald-500/50" : "bg-border")}
+                />
+              )}
+              <span
+                className={
+                  "relative z-10 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold " +
+                  (a.tamam
+                    ? "bg-emerald-500 text-white"
+                    : acik
+                      ? "bg-primary text-primary-foreground ring-4 ring-primary/15"
+                      : "border bg-card text-muted-foreground")
+                }
+              >
+                {a.tamam ? <Check className="size-4" /> : i + 1}
+              </span>
+              <div className={"min-w-0 flex-1 " + (son ? "" : "pb-5")}>
+                <div className="flex min-h-7 flex-col justify-center">
+                  <div className={"text-sm font-semibold " + (!a.tamam && !acik ? "text-muted-foreground" : "")}>{a.baslik}</div>
+                  <div className="text-xs text-muted-foreground">{a.tamam ? "Tamamlandı" : a.aciklama}</div>
+                </div>
+                {acik && <div className="mt-3 rounded-lg border bg-background/60 p-4">{a.icerik}</div>}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 

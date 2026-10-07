@@ -144,6 +144,14 @@ namespace PusulaConnect
             finally { Interlocked.Exchange(ref _profilYenileniyor, 0); }
         }
 
+        /// <summary>İlk kurulum ekranı bir kez tamamlandı mı (07.10.2026) — bu kayıt için. Kayıt kalkınca silinir.</summary>
+        private static string KurulumTamamDosyasi => System.IO.Path.Combine(Kimlik.Klasor, "kurulum-tamam.txt");
+        private static bool KurulumTamam
+        {
+            get { try { return System.IO.File.Exists(KurulumTamamDosyasi); } catch { return false; } }
+            set { try { if (value) System.IO.File.WriteAllText(KurulumTamamDosyasi, DateTime.Now.ToString("s")); else System.IO.File.Delete(KurulumTamamDosyasi); } catch { } }
+        }
+
         /// <summary>Son alınan/bilinen Hub şifre sürümü — aynı şifre tekrar tekrar çekilmesin.</summary>
         private static string BilinenSurumDosyasi => System.IO.Path.Combine(Kimlik.Klasor, "sifre-surumu.txt");
         private static string BilinenSurum
@@ -308,6 +316,7 @@ namespace PusulaConnect
                     kayit = _kayit,
                     mesaj = _mesaj,
                     servisErisim = _servisErisim,
+                    kurulumTamam = KurulumTamam,
                     kontroller = new
                     {
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
@@ -433,6 +442,7 @@ namespace PusulaConnect
             try { _servis.Olay("kayit_kaldirildi").Wait(3000); } catch { }
             Kimlik.Sil();
             BilinenSurum = null;
+            KurulumTamam = false;
             lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false; }
             return Durum();
         }
@@ -461,6 +471,14 @@ namespace PusulaConnect
                 {
                     _fortiSurum = forti; _profilDogru = profil; _rdpKullanici = rdpKullanici; _vpnKullaniciAdi = vpnKullaniciAdi; _vpnSifre = vpnSifre;
                     _terminal = t; _terminalZaman = DateTime.Now;
+                }
+                // İlk kurulum bitti: dört adım da hazır olduğu ilk an işaretlenir; sonra VPN kapalı olsa da
+                // ilk kurulum ekranı değil normal ekran görünür. Kayıt kalkınca silinir.
+                if (_kayit != null && forti != null && profil && vpnKullaniciAdi && rdpKullanici != null && t.erisim && !KurulumTamam)
+                {
+                    KurulumTamam = true;
+                    Gunluk.Yaz("İlk kurulum tamamlandı");
+                    _ = _servis.Olay("ilk_kurulum_tamam", ServisIstemci.Surum);
                 }
             }
             finally
@@ -870,6 +888,7 @@ namespace PusulaConnect
             BaglantiIzleriniSil();
             Kimlik.Sil();
             BilinenSurum = null;
+            KurulumTamam = false;
             lock (_kilit)
             {
                 _kayit = null; _asama = "kayit"; _mesaj = mesaj; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null;
