@@ -10,7 +10,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama, ListeAksiyonButonu } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -435,20 +434,24 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
   }, [d])
 
   const okuyan = okuyanlar?.filter((o) => o.okundu).length ?? 0
+  // MODAL (07.10.2026): yeni duyuru ve cihaz modalıyla aynı kimlik — solda duyuru, sağda hedefteki cihazlar
   return (
-    <Sheet open={!!d} onOpenChange={(o) => !o && onKapat()}>
-      <SheetContent className="!w-[560px] !max-w-[560px]">
+    <Dialog open={!!d} onOpenChange={(o) => !o && onKapat()}>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1040px,94vw)]">
         {d && (
           <>
-            <SheetHeader>
+            <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
               <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
                 <Megaphone className="size-[18px]" />
               </span>
-              <SheetTitle>{d.baslik}</SheetTitle>
-              <SheetDescription>{hedefMetni(d)} · {tarihMetni(d.olusturma)}{d.olusturan ? ` · ${d.olusturan}` : ""}</SheetDescription>
-            </SheetHeader>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="truncate text-[15px] font-semibold">{d.baslik}</DialogTitle>
+                <DialogDescription className="text-[12px]">{hedefMetni(d)} · {tarihMetni(d.olusturma)}{d.olusturan ? ` · ${d.olusturan}` : ""}</DialogDescription>
+              </div>
+            </div>
 
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <ModalBolumu baslik="Duyuru">
               <div className="flex flex-wrap items-center gap-2">
                 <OnemRozeti onem={d.onem} />
                 <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium", YAYIN[yayinDurumu(d)].sinif)}>{YAYIN[yayinDurumu(d)].ad}</span>
@@ -462,12 +465,13 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
                 )}
               </div>
 
-              <p className="rounded-[8px] border p-3 text-[13px] whitespace-pre-line">{d.metin}</p>
+              <p className="text-[13px] whitespace-pre-line">{d.metin}</p>
+            </ModalBolumu>
 
-              <section className="flex min-h-0 flex-col rounded-[8px] border">
-                <div className="flex items-center justify-between border-b px-3 py-2">
-                  <span className="text-[12px] font-semibold">Hedefteki cihazlar</span>
-                  {okuyanlar && <span className="text-muted-foreground text-[12px] tabular-nums">{okuyan}/{okuyanlar.length} okudu</span>}
+              <section className="flex min-h-0 flex-col self-start overflow-hidden rounded-[8px] border">
+                <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-1.5">
+                  <span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">Hedefteki cihazlar</span>
+                  {okuyanlar && <span className="text-muted-foreground text-[11px] tabular-nums">{okuyan}/{okuyanlar.length} okudu</span>}
                 </div>
                 {!okuyanlar ? (
                   <div className="flex flex-col gap-2 p-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-5 w-full" />)}</div>
@@ -492,7 +496,7 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
             </div>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -97,7 +97,7 @@ export interface ConnectKod {
   cihazlar: { id: string }[]
 }
 
-export type ConnectCihazIslemi = "2fa-sifirla" | "kilit-kaldir" | "iptal" | "etkinlestir"
+export type ConnectCihazIslemi = "2fa-sifirla" | "kilit-kaldir" | "iptal" | "etkinlestir" | "sil"
 
 async function istek<T>(yol: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${BASE}${yol}`, { ...init, headers: { "X-Service-Key": KEY, "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" })
@@ -119,6 +119,27 @@ export function connectOlaylar(q: { firma?: string; cihaz?: string; limit?: numb
   if (q.once) p.set("once", String(q.once))
   return istek<ConnectOlay[]>(`/admin/olaylar?${p}`)
 }
+
+/** Olay arama — sayfalı, servis tarafında filtreli (07.10.2026). */
+export interface ConnectOlayArama {
+  tur?: string[]; kaynak?: string[]; firma?: string; kullanici?: string; makine?: string; q?: string
+  bas?: string; bit?: string; limit?: number; offset?: number
+}
+export function connectOlayAra(a: ConnectOlayArama) {
+  const p = new URLSearchParams()
+  if (a.tur?.length) p.set("tur", a.tur.join(","))
+  if (a.kaynak?.length) p.set("kaynak", a.kaynak.join(","))
+  for (const k of ["firma", "kullanici", "makine", "q", "bas", "bit"] as const) if (a[k]) p.set(k, a[k]!)
+  p.set("limit", String(a.limit ?? 50))
+  p.set("offset", String(a.offset ?? 0))
+  return istek<{ liste: ConnectOlay[]; toplam: number; turler: string[] }>(`/admin/olaylar/ara?${p}`)
+}
+
+/** Uzaktan günlük: iste (uygulama ~1 dk içinde yükler) / son yükleneni oku. */
+export const connectGunlukIste = (id: string, yapan: string | null) =>
+  istek<{ tamam: boolean }>(`/admin/cihazlar/${encodeURIComponent(id)}/gunluk-iste`, { method: "POST", body: JSON.stringify({ yapan }) })
+export const connectGunluk = (id: string) =>
+  istek<{ zaman: string | null; metin: string | null; istendi: string | null }>(`/admin/cihazlar/${encodeURIComponent(id)}/gunluk`)
 
 export const connectKodlar = (firma?: string) =>
   istek<ConnectKod[]>(`/admin/kodlar${firma ? `?firma=${encodeURIComponent(firma)}` : ""}`)

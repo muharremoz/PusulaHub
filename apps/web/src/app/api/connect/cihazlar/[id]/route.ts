@@ -4,6 +4,7 @@
  *   kilit-kaldir çok hatalı kod kilidi (10 dk) hemen kalkar
  *   iptal        bilgisayar kayboldu — cihaz bağlanamaz
  *   etkinlestir  iptal geri alınır
+ *   sil          ölü kaydı listeden siler (olay geçmişi kalır)
  * Yapan kişi servisin olay kaydına yazılır.
  */
 import { NextRequest, NextResponse } from "next/server"
@@ -11,7 +12,7 @@ import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { connectCihazIslemi, type ConnectCihazIslemi } from "@/lib/connect-yonetim"
 
-const ISLEMLER: ConnectCihazIslemi[] = ["2fa-sifirla", "kilit-kaldir", "iptal", "etkinlestir"]
+const ISLEMLER: ConnectCihazIslemi[] = ["2fa-sifirla", "kilit-kaldir", "iptal", "etkinlestir", "sil"]
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission("companies", "write")

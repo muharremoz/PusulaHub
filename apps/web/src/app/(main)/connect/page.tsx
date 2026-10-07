@@ -7,6 +7,7 @@
  * Veri: services/pusula-connect (Hub yalnız arayüz; lib/connect-yonetim.ts).
  */
 
+import Link from "next/link"
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti"
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { toast } from "sonner"
 import {
-  Activity, Ban, CheckCircle2, CircleMinus, Globe, History, ScanBarcode, Server, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
+  Activity, Ban, CheckCircle2, CircleMinus, Copy, FileText, Globe, History, ScanBarcode, Server, Trash2, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
   RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
@@ -89,6 +90,9 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   uygulama_acildi: { ad: "Uygulama açıldı", ton: "notr" },
   guncellendi: { ad: "Güncellendi", ton: "iyi" },
   guncelleme_hatasi: { ad: "Güncelleme hatası", ton: "hata" },
+  cihaz_silindi: { ad: "Cihaz kaydı silindi", ton: "uyari" },
+  gunluk_istendi: { ad: "Günlük istendi", ton: "notr" },
+  gunluk_yuklendi: { ad: "Günlük yüklendi", ton: "iyi" },
   oturum_acildi: { ad: "Oturum açıldı", ton: "iyi" },
   oturum_bitti: { ad: "Oturum kapandı", ton: "notr" },
   oturum_hatasi: { ad: "Oturum hatayla bitti", ton: "hata" },
@@ -286,7 +290,7 @@ export default function ConnectPage() {
             <CihazListesi cihazlar={cihazlar} sonSurum={sonSurum} onSec={setSecili} onIslem={(c, islem) => setOnay({ c, islem })} />
           </TabsContent>
           <TabsContent value="olaylar" className="mt-3">
-            <OlayListesi olaylar={olaylar} cihazlar={cihazlar} onCihaz={setSecili} />
+            <OlayListesi cihazlar={cihazlar} onCihaz={setSecili} yenile={yenileSayac} />
           </TabsContent>
           <TabsContent value="duyurular" className="mt-3">
             <DuyurularSekmesi cihazlar={cihazlar} yenile={yenileSayac} />
@@ -351,6 +355,11 @@ const ISLEM: Record<ConnectCihazIslemi, { baslik: string; aciklama: string; dugm
     aciklama: "İptal geri alınır; bilgisayar yeniden bağlanabilir.",
     dugme: "Yeniden aç", basari: "Cihaz yeniden açıldı", yikici: false,
   },
+  sil: {
+    baslik: "Cihaz kaydı silinsin mi?",
+    aciklama: "Kayıt listeden kalıcı olarak silinir (olay geçmişi kalır). Bilgisayarda uygulama hâlâ açıksa kurulum kodu ekranına döner; yeniden kullanmak için yeni kod gerekir.",
+    dugme: "Kaydı sil", basari: "Cihaz kaydı silindi", yikici: true,
+  },
 }
 
 // ------------------------------------------------------------ parçalar
@@ -398,6 +407,8 @@ function CihazMenusu({ c, onIslem, onSec }: { c: ConnectCihazSatir; onIslem: (c:
         ) : (
           <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" onClick={() => onIslem(c, "iptal")}><Ban className="size-3.5" />Cihazı iptal et</DropdownMenuItem>
         )}
+        {/* Ölü kayıt (bilgisayar el değiştirdi / çöpe gitti) — 07.10.2026 */}
+        <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" onClick={() => onIslem(c, "sil")}><Trash2 className="size-3.5" />Kaydı sil</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -712,41 +723,72 @@ function OlayRozeti({ tur }: { tur: string }) {
 type OlayKaynak = "yonetici" | "istemci" | "servis"
 const KAYNAK_AD: Record<OlayKaynak, string> = { yonetici: "Pusula", istemci: "Uygulama", servis: "Servis" }
 
+/** TarihFiltre değerini servis aramasının bas/bit (YYYY-MM-DD, yerel gün) aralığına çevirir. */
+function tarihAraligi(f: TarihFiltreDeger): { bas?: string; bit?: string } {
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  const bugun = new Date()
+  if (f.mode === "bugun") return { bas: ymd(bugun), bit: ymd(bugun) }
+  if (f.mode === "buhafta") { const b = new Date(bugun); b.setDate(bugun.getDate() - ((bugun.getDay() + 6) % 7)); return { bas: ymd(b), bit: ymd(bugun) } }
+  if (f.mode === "buay") return { bas: ymd(new Date(bugun.getFullYear(), bugun.getMonth(), 1)), bit: ymd(bugun) }
+  if (f.mode === "aralik") return { bas: f.from, bit: f.to }
+  return {}
+}
+
 /**
- * Olay kaydı (07.10.2026): ekrana sığsın diye sabit sütun genişlikleri + kesme (tamamı ipucunda değil —
- * yalnız kod açıklaması ipucu), kompakt satır; kaynakta IP ipucunda. Tüm sütunlarda filtre.
+ * Olay kaydı (07.10.2026): SERVİS TARAFINDA filtreli ve sayfalı — "son 500" sınırı kalktı, tüm geçmiş
+ * (180 gün) aranır. Metin filtreleri 300 ms bekleyip sorar. Sabit sütun genişlikleri, kompakt satırlar.
  */
-function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | null; cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void }) {
+function OlayListesi({ cihazlar, onCihaz, yenile }: { cihazlar: ConnectCihazSatir[] | null; onCihaz: (id: string) => void; yenile: number }) {
   const [tarih, setTarih] = useState<TarihFiltreDeger>({ mode: "tum" })
   const [tur, setTur] = useState<string[]>([])
-  const [kod, setKod] = useState("")
   const [firma, setFirma] = useState("")
   const [kullanici, setKullanici] = useState("")
   const [makine, setMakine] = useState("")
   const [ayrinti, setAyrinti] = useState("")
   const [kaynak, setKaynak] = useState<OlayKaynak[]>([])
   const [sayfa, setSayfa] = useState(1)
-  const turler = useMemo(() => [...new Set((olaylar ?? []).map((o) => o.tur))].sort((a, b) => (OLAY[a]?.ad ?? a).localeCompare(OLAY[b]?.ad ?? b, "tr")), [olaylar])
+  const [veri, setVeri] = useState<{ liste: ConnectOlay[]; toplam: number; turler: string[] } | null>(null)
+  const [yukleniyor, setYukleniyor] = useState(false)
   const firmaAdi = useMemo(() => new Map((cihazlar ?? []).map((c) => [c.firmaId, c.firmaAdi])), [cihazlar])
-  const kucuk = (x: string) => x.toLocaleLowerCase("tr")
+  const BOY = 50
 
-  const filtreli = useMemo(() => (olaylar ?? []).filter((o) => {
-    if (!tarihUygun(o.zaman, tarih)) return false
-    if (tur.length && !tur.includes(o.tur)) return false
-    if (kod && !kucuk(o.firmaId ?? "").includes(kucuk(kod))) return false
-    if (firma && !kucuk(firmaAdi.get(o.firmaId ?? "") ?? "").includes(kucuk(firma))) return false
-    if (kullanici && !kucuk(o.kullanici ?? "").includes(kucuk(kullanici))) return false
-    if (makine && !kucuk(o.makine ?? "").includes(kucuk(makine))) return false
-    if (ayrinti && !kucuk(`${ayrintiMetni(o)} ${olayIpucu(o) ?? ""}`).includes(kucuk(ayrinti))) return false
-    if (kaynak.length && !kaynak.includes(o.kaynak as OlayKaynak)) return false
-    return true
-  }), [olaylar, tarih, tur, kod, firma, kullanici, makine, ayrinti, kaynak, firmaAdi])
-  useEffect(() => setSayfa(1), [tarih, tur, kod, firma, kullanici, makine, ayrinti, kaynak])
-  const gorunen = filtreli.slice((sayfa - 1) * 50, sayfa * 50)
+  useEffect(() => setSayfa(1), [tarih, tur, firma, kullanici, makine, ayrinti, kaynak])
+  useEffect(() => {
+    let iptal = false
+    const t = window.setTimeout(async () => {
+      const p = new URLSearchParams()
+      if (tur.length) p.set("tur", tur.join(","))
+      if (kaynak.length) p.set("kaynak", kaynak.join(","))
+      if (firma.trim()) p.set("firma", firma.trim())
+      if (kullanici.trim()) p.set("kullanici", kullanici.trim())
+      if (makine.trim()) p.set("makine", makine.trim())
+      if (ayrinti.trim()) p.set("q", ayrinti.trim())
+      const a = tarihAraligi(tarih)
+      if (a.bas) p.set("bas", a.bas)
+      if (a.bit) p.set("bit", a.bit)
+      p.set("limit", String(BOY))
+      p.set("offset", String((sayfa - 1) * BOY))
+      setYukleniyor(true)
+      try {
+        const r = await fetch(`/api/connect/olaylar/ara?${p}`, { cache: "no-store" })
+        const d = await r.json()
+        if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
+        if (!iptal) setVeri(d)
+      } catch (e) {
+        if (!iptal) toast.error(e instanceof Error ? e.message : "Olaylar alınamadı")
+      } finally {
+        if (!iptal) setYukleniyor(false)
+      }
+    }, 300)
+    return () => { iptal = true; window.clearTimeout(t) }
+  }, [tarih, tur, firma, kullanici, makine, ayrinti, kaynak, sayfa, yenile])
+
+  const turler = useMemo(() => [...(veri?.turler ?? [])].sort((a, b) => (OLAY[a]?.ad ?? a).localeCompare(OLAY[b]?.ad ?? b, "tr")), [veri?.turler])
+  const gorunen = veri?.liste ?? null
 
   return (
-    <ListeKarti baslik="Olay kaydı (son 500)" ikon={<History className="size-3.5" />} toplam={olaylar?.length ?? 0} filtreli={filtreli.length}>
-      <div className="overflow-x-auto">
+    <ListeKarti baslik="Olay kaydı" ikon={<History className="size-3.5" />} toplam={veri?.toplam ?? 0} filtreli={veri?.toplam ?? 0}>
+      <div className={cn("overflow-x-auto transition-opacity", yukleniyor && veri && "opacity-60")}>
         <table className="w-full min-w-[1000px] table-fixed text-[13px] leading-[20px] font-medium">
           <colgroup>
             <col className="w-[128px]" />
@@ -761,18 +803,17 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
           <ListeThead>
             <th className="px-3 py-1 text-left font-medium"><TarihFiltre label="Zaman" value={tarih} onChange={setTarih} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Olay" options={turler} getLabel={(t) => OLAY[t]?.ad ?? t} selected={tur} onChange={setTur} /></th>
-            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kod" value={kod} onChange={setKod} /></th>
-            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma" value={firma} onChange={setFirma} /></th>
+            <th className="px-3 py-1 text-left font-medium" colSpan={2}><MetinFiltre label="Firma (kod / ad)" value={firma} onChange={setFirma} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Ayrıntı" value={ayrinti} onChange={setAyrinti} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Kaynak" options={["istemci", "yonetici", "servis"] as OlayKaynak[]} getLabel={(k) => KAYNAK_AD[k]} selected={kaynak} onChange={setKaynak} /></th>
           </ListeThead>
           <tbody>
-            {!olaylar ? (
+            {!gorunen ? (
               [0, 1, 2].map((i) => <tr key={i}><td colSpan={8} className="px-3 py-1.5"><Skeleton className="h-5 w-full" /></td></tr>)
             ) : gorunen.length === 0 ? (
-              <ListeBosSatir sutunSayisi={8} toplam={olaylar.length} bosMesaj="Henüz olay yok. Uygulamalar açılıp bağlandıkça burada görünür." />
+              <ListeBosSatir sutunSayisi={8} toplam={veri?.toplam ?? 0} bosMesaj="Bu ölçütlere uyan olay yok. Uygulamalar açılıp bağlandıkça olaylar burada görünür." />
             ) : gorunen.map((o) => (
               <tr key={o.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="px-3 py-1 text-[12px] whitespace-nowrap tabular-nums">{tarihMetni(o.zaman)}</td>
@@ -781,7 +822,9 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
                 <td className="truncate px-3 py-1">{o.firmaId ? firmaAdi.get(o.firmaId) ?? "" : "—"}</td>
                 <td className="truncate px-3 py-1">{o.kullanici ?? "—"}</td>
                 <td className="truncate px-3 py-1">
-                  {o.cihazId ? <button type="button" className="max-w-full truncate underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
+                  {o.cihazId && cihazlar?.some((c) => c.id === o.cihazId)
+                    ? <button type="button" className="max-w-full truncate underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button>
+                    : (o.makine ?? "—")}
                 </td>
                 <Ipucu icerik={olayIpucu(o)}><td className="text-muted-foreground truncate px-3 py-1 text-[12px]">{ayrintiMetni(o) || "—"}</td></Ipucu>
                 <Ipucu icerik={o.ip}><td className="text-muted-foreground truncate px-3 py-1 text-[12px]">{KAYNAK_AD[o.kaynak as OlayKaynak] ?? o.kaynak}</td></Ipucu>
@@ -790,7 +833,7 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
           </tbody>
         </table>
       </div>
-      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} sayfaBoyu={50} />
+      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={veri?.toplam ?? 0} sayfaBoyu={BOY} />
     </ListeKarti>
   )
 }
@@ -821,6 +864,117 @@ function sureMetni(s: string | null): string {
   return `${Math.floor(dk / 1440)} gündür`
 }
 const saatMetni = (s: string | null) => zaman(s)?.toLocaleTimeString("tr-TR", { timeZone: "Europe/Istanbul", hour: "2-digit", minute: "2-digit" }) ?? ""
+
+/**
+ * Uzaktan günlük (07.10.2026): "Günlüğü iste" → uygulama bir sonraki nabızda (~1 dk) dünkü+bugünkü günlüğünü
+ * yükler; pencere 5 sn'de bir yoklar (en fazla 3 dk). Uygulama 0.6.12+ olmalı ve çevrimiçi olmalı.
+ */
+function GunlukPenceresi({ cihaz: c, acik, onKapat }: { cihaz: ConnectCihazSatir; acik: boolean; onKapat: () => void }) {
+  const [g, setG] = useState<{ zaman: string | null; metin: string | null; istendi: string | null } | null>(null)
+  const [bekleniyor, setBekleniyor] = useState(false)
+  const oku = useCallback(async () => {
+    const r = await fetch(`/api/connect/cihazlar/${encodeURIComponent(c.id)}/gunluk`, { cache: "no-store" })
+    const d = await r.json()
+    if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
+    setG(d)
+    return d as { zaman: string | null; istendi: string | null }
+  }, [c.id])
+
+  useEffect(() => {
+    if (!acik) return
+    setG(null)
+    oku().then((d) => setBekleniyor(!!d.istendi)).catch((e) => toast.error(e instanceof Error ? e.message : "Günlük alınamadı"))
+  }, [acik, oku])
+
+  // İstek sürerken yokla: yüklenince (istendi temizlenir) dur
+  useEffect(() => {
+    if (!acik || !bekleniyor) return
+    const bas = Date.now()
+    const t = window.setInterval(async () => {
+      try {
+        const d = await oku()
+        if (!d.istendi) { setBekleniyor(false); toast.success("Günlük geldi") }
+        else if (Date.now() - bas > 3 * 60_000) { setBekleniyor(false); toast.error("Uygulama 3 dakikada yanıt vermedi", { description: "Çevrimdışı olabilir ya da sürümü 0.6.12'den eski." }) }
+      } catch { /* bir sonraki turda yeniden */ }
+    }, 5000)
+    return () => window.clearInterval(t)
+  }, [acik, bekleniyor, oku])
+
+  const iste = async () => {
+    try {
+      const r = await fetch(`/api/connect/cihazlar/${encodeURIComponent(c.id)}/gunluk`, { method: "POST" })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
+      setBekleniyor(true)
+      toast.success("Günlük istendi", { description: "Uygulama bir dakika içinde gönderir." })
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "İstenemedi")
+    }
+  }
+  const indir = () => {
+    if (!g?.metin) return
+    const url = URL.createObjectURL(new Blob([g.metin], { type: "text/plain;charset=utf-8" }))
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `connect-gunluk-${c.kullanici}-${(g.zaman ?? "").replace(/[: ]/g, "-")}.txt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+  const cevrimdisi = !canliMi(c)
+
+  return (
+    <Dialog open={acik} onOpenChange={(o) => !o && onKapat()}>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1000px,94vw)]">
+        <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
+          <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+            <FileText className="size-[18px]" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <DialogTitle className="text-[15px] font-semibold">Uygulama günlüğü</DialogTitle>
+            <DialogDescription className="text-[12px]">
+              {c.kullanici} · {c.makine ?? "—"}
+              {g?.zaman ? ` · son yükleme ${tarihMetni(g.zaman)}` : " · henüz yüklenmedi"}
+            </DialogDescription>
+          </div>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-4">
+          {bekleniyor && (
+            <div className="flex items-center gap-2 rounded-[8px] border border-sky-500/30 bg-sky-500/10 px-3 py-2 text-[12px] text-sky-800 dark:text-sky-300">
+              <RefreshCw className="size-3.5 animate-spin" />Günlük bekleniyor — uygulama bir sonraki nabızda (en geç ~1 dk) gönderir.
+            </div>
+          )}
+          {cevrimdisi && !bekleniyor && (
+            <div className="rounded-[8px] border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-300">
+              Cihaz şu an çevrimdışı. İstek kayda geçer; uygulama açıldığında gönderilir.
+            </div>
+          )}
+          {!g ? (
+            <Skeleton className="h-64 w-full" />
+          ) : g.metin ? (
+            <pre className="bg-muted/40 min-h-0 flex-1 overflow-auto rounded-[8px] border p-3 text-[11.5px] leading-[17px] whitespace-pre-wrap">{g.metin}</pre>
+          ) : (
+            <p className="text-muted-foreground rounded-[8px] border px-3 py-10 text-center text-[13px]">
+              Bu cihazdan henüz günlük alınmadı. "Günlüğü iste" ile isteyin.
+            </p>
+          )}
+        </div>
+        <div className="flex justify-end gap-2 border-t bg-[var(--section-bg)] px-4 py-3">
+          {g?.metin && (
+            <>
+              <Button variant="outline" onClick={() => void navigator.clipboard.writeText(g.metin!).then(() => toast.success("Kopyalandı"))}>
+                <Copy className="size-4" />Kopyala
+              </Button>
+              <Button variant="outline" onClick={indir}><Download className="size-4" />İndir</Button>
+            </>
+          )}
+          <Button disabled={bekleniyor} onClick={() => void iste()}>
+            <RefreshCw className={cn("size-4", bekleniyor && "animate-spin")} />{g?.metin ? "Yeniden iste" : "Günlüğü iste"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 /** Modalın üstündeki durum kartı (07.10.2026): renkli zemin + ikon, durum ve süresi tek bakışta. */
 function DurumKarti({ c, menu }: { c: ConnectCihazSatir; menu: React.ReactNode }) {
@@ -911,7 +1065,10 @@ function CihazDetay({
   onIslem: (c: ConnectCihazSatir, i: ConnectCihazIslemi) => void
 }) {
   const ay = c?.durum?.ayarlar ?? null
+  const [gunlukAcik, setGunlukAcik] = useState(false)
+  useEffect(() => { if (!c) setGunlukAcik(false) }, [c])
   return (
+    <>
     // MODAL (07.10.2026, kullanıcı kararı): yan panel yerine ortada geniş pencere — solda durum, sağda son olaylar
     <Dialog open={!!c} onOpenChange={(o) => !o && onKapat()}>
       <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1240px,94vw)]">
@@ -924,8 +1081,17 @@ function CihazDetay({
               <div className="min-w-0 flex-1">
                 {/* Kullanıcı adı başlıkta (07.10.2026) — bilgisayar adı ve firma altta */}
                 <DialogTitle className="text-[15px] font-semibold">{c.kullanici}</DialogTitle>
-                <DialogDescription className="text-[12px]">{c.makine ?? "Bilgisayar adı yok"} · {c.firmaId} {c.firmaAdi}</DialogDescription>
+                <DialogDescription className="text-[12px]">
+                  {c.makine ?? "Bilgisayar adı yok"} ·{" "}
+                  {/* Firma sayfasına geçiş (07.10.2026) */}
+                  <Link href={`/companies?firkod=${encodeURIComponent(c.firmaId)}`} className="hover:text-foreground underline-offset-2 hover:underline">
+                    {c.firmaId} {c.firmaAdi}
+                  </Link>
+                </DialogDescription>
               </div>
+              <Button variant="outline" size="sm" className="bg-card h-8 gap-1.5 text-[12px] shadow-sm" onClick={() => setGunlukAcik(true)}>
+                <FileText className="size-3.5" />Günlük
+              </Button>
             </div>
 
             <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]">
@@ -1032,5 +1198,7 @@ function CihazDetay({
         )}
       </DialogContent>
     </Dialog>
+    {c && <GunlukPenceresi cihaz={c} acik={gunlukAcik} onKapat={() => setGunlukAcik(false)} />}
+    </>
   )
 }
