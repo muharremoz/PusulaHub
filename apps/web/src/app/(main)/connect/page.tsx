@@ -473,9 +473,13 @@ const FORM_AD: Record<string, string> = { "612": "Perakende", "146": "Toptan" }
  * VPN tüneli (0.6.5+ nabızla gelir). "Çevrimiçi ama sunucuya erişemiyor" durumunda sebep çoğu zaman VPN'in
  * kapalı olması — kapalıysa sarı. Eski istemci göndermez → —.
  */
+/** Cihaz çevrimdışıysa (iptal dahil) VPN/sunucu bilgisi ESKİ — son nabızdan kalma, "Kapalı/Erişemiyor" yanıltıyordu (07.10.2026). */
+const canliMi = (c: ConnectCihazSatir) => { const d = canliDurum(c); return d === "oturumda" || d === "cevrimici" }
+
 function VpnRozeti({ c }: { c: ConnectCihazSatir }) {
   const v = c.durum?.vpn
   if (v == null) return <span className="text-muted-foreground">—</span>
+  if (!canliMi(c)) return <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${v.bagli ? "Açık" : "Kapalı"}`}>—</span>
   return v.bagli
     ? <span className="text-emerald-700 dark:text-emerald-400">Açık{v.ip && <span className="text-muted-foreground"> · {v.ip}</span>}</span>
     : <span className="text-amber-700 dark:text-amber-400">Kapalı</span>
@@ -513,11 +517,11 @@ const IKI_ETIKET: Record<IkiDurum, string> = { acik: "Açık", kapali: "Kapalı"
 type VpnDurumu = "acik" | "kapali" | "yok"
 const VPN_DURUMLAR: VpnDurumu[] = ["acik", "kapali", "yok"]
 const VPN_ETIKET: Record<VpnDurumu, string> = { acik: "Açık", kapali: "Kapalı", yok: "Bilinmiyor" }
-const vpnDurumu = (c: ConnectCihazSatir): VpnDurumu => (c.durum?.vpn == null ? "yok" : c.durum.vpn.bagli ? "acik" : "kapali")
+const vpnDurumu = (c: ConnectCihazSatir): VpnDurumu => (c.durum?.vpn == null || !canliMi(c) ? "yok" : c.durum.vpn.bagli ? "acik" : "kapali")
 type SunucuDurumu = "erisiyor" | "erisemiyor" | "yok"
 const SUNUCU_DURUMLAR: SunucuDurumu[] = ["erisiyor", "erisemiyor", "yok"]
 const SUNUCU_ETIKET: Record<SunucuDurumu, string> = { erisiyor: "Erişiyor", erisemiyor: "Erişemiyor", yok: "Bilinmiyor" }
-const sunucuDurumu = (c: ConnectCihazSatir): SunucuDurumu => (c.terminalErisim == null ? "yok" : c.terminalErisim ? "erisiyor" : "erisemiyor")
+const sunucuDurumu = (c: ConnectCihazSatir): SunucuDurumu => (c.terminalErisim == null || !canliMi(c) ? "yok" : c.terminalErisim ? "erisiyor" : "erisemiyor")
 
 function CihazListesi({
   cihazlar, sonSurum, onSec, onIslem,
@@ -642,6 +646,7 @@ function CihazListesi({
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]">
                         {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
+                          : !canliMi(c) ? <span className="text-muted-foreground" title={`Cihaz çevrimdışı · son bilinen: ${c.terminalErisim ? "Erişiyor" : "Erişemiyor"}`}>—</span>
                           : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
                           : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
                       </td>
@@ -848,7 +853,9 @@ function CihazDetay({
                 <Bilgi ad="VPN bağlantısı"><VpnRozeti c={c} /></Bilgi>
                 <Bilgi ad="Sunucu">{c.rdp ?? "—"}</Bilgi>
                 <Bilgi ad="Sunucuya erişim">
-                  {c.terminalErisim == null ? "—" : c.terminalErisim ? `Erişiyor${c.terminalMs != null ? ` · ${c.terminalMs} ms` : ""}` : "Erişemiyor"}
+                  {c.terminalErisim == null ? "—"
+                    : !canliMi(c) ? <span className="text-muted-foreground">— (çevrimdışı; son bilinen: {c.terminalErisim ? "Erişiyor" : "Erişemiyor"})</span>
+                    : c.terminalErisim ? `Erişiyor${c.terminalMs != null ? ` · ${c.terminalMs} ms` : ""}` : "Erişemiyor"}
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS çözülemedi, IP ile</span>}
                 </Bilgi>
                 <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
