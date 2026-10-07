@@ -724,7 +724,9 @@ async function desktopIniYaz(ip, username, password, ustKlasor, klasorAdi, infoT
   const tmp = join(STAGING_ROOT, `desktop-${randomBytes(6).toString("hex")}.ini`)
   // Gezgin'de görünen ad "<firmaNo> - <firma adı>" (07.10.2026); klasörün gerçek adı firma no kalır
   const tip = String(infoTip ?? "").replace(/[\r\n]/g, " ")
-  const gorunen = /^[0-9]+$/.test(String(klasorAdi)) && tip ? "LocalizedResourceName=" + klasorAdi + " - " + tip + "\r\n" : ""
+  // Gezgin sonu nokta/boşlukla biten ya da geçersiz karakterli adı yok sayıyor — dosya adı gibi temizlenir
+  const gorunenAd = (klasorAdi + " - " + tip).replace(/[\\/:*?"<>|]/g, "_").replace(/[. ]+$/, "")
+  const gorunen = /^[0-9]+$/.test(String(klasorAdi)) && tip ? "LocalizedResourceName=" + gorunenAd + "\r\n" : ""
   const metin = "[.ShellClassInfo]\r\n" + gorunen + "InfoTip=" + tip + "\r\n"
   await writeFile(tmp, Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(metin, "utf16le")]))
   const klasor = `"${temiz(ustKlasor)}/${temiz(klasorAdi)}"`

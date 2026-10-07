@@ -128,7 +128,10 @@ export function buildSetNtfsPermissions(path: string, securityGroup: string): st
 export function buildWriteDesktopIni(folderPath: string, infoTip: string, gorunenAd?: string): string {
   const p  = psQuote(folderPath)
   const it = psQuote(infoTip)
-  const ad = gorunenAd ? `'LocalizedResourceName=${psQuote(gorunenAd)}' + [Environment]::NewLine + ` : ""
+  // Gezgin sonu nokta/boşlukla biten ya da dosya adında geçersiz karakter içeren adı yok sayıyor
+  // ("651 - REGOLD KUYUM." görünmedi) — ad dosya adı kurallarına göre temizlenir.
+  const temizAd = (gorunenAd ?? "").replace(/[\\/:*?"<>|]/g, "_").replace(/[. ]+$/, "")
+  const ad = temizAd ? `'LocalizedResourceName=${psQuote(temizAd)}' + [Environment]::NewLine + ` : ""
   return [
     `$p='${p}'`,
     `if(-not (Test-Path -LiteralPath $p)){throw ('Klasor bulunamadi: ' + $p)}`,
