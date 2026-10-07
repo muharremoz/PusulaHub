@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { AlertTriangle, BellRing, Info, UserRound, X } from "lucide-react";
+import { AlertTriangle, BellRing, CircleCheck, Info, UserRound, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { exeIcinde, type ExeVerisi, type MesajTuru, type SayfaMesaji } from "@/kopru";
@@ -11,6 +11,8 @@ const OTOMATIK_KAPANMA_SN = 300;
 const ERTELEME_DK = 10;
 /** Gövde bu kadar satırı geçerse kısaltılır, "Tüm metni göster" çıkar. */
 const KISA_SATIR = 4;
+/** Anket gönderilince teşekkür kartı bu kadar görünür, sonra cevaplar iletilip pencere kapanır. */
+const TESEKKUR_MS = 3000;
 
 const TUR: Record<MesajTuru, { etiket: string; ikon: typeof Info; rozet: string }> = {
   info: {
@@ -57,13 +59,28 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
   const [uzerinde, setUzerinde] = useState(false);
   const [cevaplar, setCevaplar] = useState<AnketCevaplari>({});
   const [eksikler, setEksikler] = useState<string[]>([]);
+  const [tesekkur, setTesekkur] = useState(false);
 
+  // Anket gönderilince önce teşekkür kartı (07.10.2026), sonra cevaplar exe'ye gider ve pencere kapanır.
+  // Cevaplar ancak bitir() ile gittiği için "Kapat" da aynı yolu kullanır — kullanıcı beklemeden kapatsa da cevap kaybolmaz.
+  const tesekkurBitti = useRef(false);
+  const cevaplariIlet = () => {
+    if (tesekkurBitti.current) return;
+    tesekkurBitti.current = true;
+    bitir({ tur: "okudum", cevaplar });
+  };
   const anketiGonder = () => {
     if (!anket) return;
     const e = eksikZorunlular(anket, cevaplar);
     setEksikler(e);
-    if (e.length === 0) bitir({ tur: "okudum", cevaplar });
+    if (e.length === 0) setTesekkur(true);
   };
+  useEffect(() => {
+    if (!tesekkur) return;
+    const id = setTimeout(cevaplariIlet, TESEKKUR_MS);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tesekkur]);
 
   // Gövde kısaltılmış halde taşıyor mu
   useLayoutEffect(() => {
@@ -126,6 +143,18 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
               : "animate-in fade-in-0 slide-in-from-bottom-4 duration-300 ease-out",
         )}
       >
+        {tesekkur ? (
+          <div className="flex flex-col items-center px-6 pt-8 pb-6 text-center animate-in fade-in-0 zoom-in-95 duration-300">
+            <span className="flex size-12 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-600 ring-1 ring-emerald-500/25 dark:text-emerald-400">
+              <CircleCheck className="size-6" />
+            </span>
+            <h1 className="mt-3 text-[16px] font-semibold">Teşekkür ederiz</h1>
+            <p className="text-muted-foreground mt-1 text-[13px] leading-relaxed text-balance">
+              Cevaplarınız bize ulaştı. Görüşleriniz hizmetimizi geliştirmemize yardımcı olacak.
+            </p>
+            <Button variant="outline" size="sm" className="mt-5" onClick={cevaplariIlet}>Kapat</Button>
+          </div>
+        ) : (<>
         {/* Başlık alanı: acilde kırmızı bant */}
         <div className={cn(acil && "border-b border-red-500/20 bg-red-600 pb-3.5 text-white dark:bg-red-700")}>
         {/* Üst satır: gönderen + saat + kapat */}
@@ -228,6 +257,7 @@ export function Bildirim({ veri, gonder }: { veri: ExeVerisi; gonder: (m: SayfaM
             )}
           </div>
         </div>
+        </>)}
       </div>
     </div>
   );

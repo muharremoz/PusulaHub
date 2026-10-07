@@ -177,10 +177,17 @@ export async function markServerFailed(messageId: string, serverId: string, erro
 }
 
 /** ACK → kullanıcı okundu + ReadCount atomik artış. */
+/**
+ * ACK'teki kullanıcı adı Windows'tan gelir ve büyük/küçük harfi alıcı kaydından farklı olabilir
+ * ("Alusup" ↔ "alusup", 07.10.2026: deneme anketinin cevabı bu yüzden yazılmadı) → harf duyarsız eşle.
+ * ilike'ta % ve _ joker olduğu için kaçırılır.
+ */
+const adDesen = (u: string) => u.replace(/[\\%_]/g, (c) => "\\" + c)
+
 export async function markRead(messageId: string, serverId: string, username: string): Promise<void> {
   const { data } = await sb().from("message_recipients")
     .update({ status: "read", read_at: new Date().toISOString() })
-    .eq("message_id", messageId).eq("server_id", serverId).eq("username", username).neq("status", "read")
+    .eq("message_id", messageId).eq("server_id", serverId).ilike("username", adDesen(username)).neq("status", "read")
     .select("id")
   if ((data?.length ?? 0) > 0) {
     await getSupabaseAdmin().schema("hub").rpc("inc_message_read", { p_id: messageId, p_n: 1 })
@@ -194,7 +201,7 @@ export async function markRead(messageId: string, serverId: string, username: st
 export async function markReadByMsgId(msgId: string, username: string, cevaplar?: AnketCevaplari | null): Promise<void> {
   const { data } = await sb().from("message_recipients")
     .update({ status: "read", read_at: new Date().toISOString() })
-    .eq("message_id", msgId).eq("username", username).neq("status", "read")
+    .eq("message_id", msgId).ilike("username", adDesen(username)).neq("status", "read")
     .select("id")
   const n = data?.length ?? 0
   if (n > 0) {
@@ -206,7 +213,7 @@ export async function markReadByMsgId(msgId: string, username: string, cevaplar?
     if (anket) {
       await sb().from("message_recipients")
         .update({ answers: cevapTemizle(anket, cevaplar) })
-        .eq("message_id", msgId).eq("username", username)
+        .eq("message_id", msgId).ilike("username", adDesen(username))
     }
   }
 }

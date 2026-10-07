@@ -105,10 +105,13 @@ namespace PusulaNotify
         private bool _hatirlatma;
         private bool _bitti;
 
-        /*  Pencere şeffaflığı: WinForms tek renk anahtarıyla (TransparencyKey) şeffaf yapılır,
-         *  WebView2 arka planı saydam → sayfanın boş kalan yeri bu renge düşer ve görünmez.
-         *  Renk kartın kenar rengine yakın seçildi: yuvarlak köşedeki yumuşatma pikselleri
-         *  kart ile bu rengin karışımı olur, kenarla aynı tonda kaldığı için hale gibi görünmez.  */
+        /*  Yuvarlak köşe: pencere bölgesi (Region) kartın köşe yarıçapıyla kesilir.
+         *  07.10.2026: önce TransparencyKey (katmanlı pencere) kullanılıyordu — T4'te anket
+         *  görünüyor ama TIKLANMIYORDU: WebView2 içeriği katmanlı pencerenin kendi bitmap'inde
+         *  değil, ayrı birleştirilip çiziliyor; Windows tıklama testini o bitmap'e (her yeri
+         *  anahtar renk = şeffaf) göre yapıp tıklamayı alttaki pencereye geçiriyordu.
+         *  Artık pencere katmanlı DEĞİL (TransparencyKey/Opacity yok). Arka plan rengi kartın
+         *  kenar rengine yakın: bölge kenarındaki kırpıntı pikselleri göze batmaz.  */
         private static readonly Color AnahtarAcik = Color.FromArgb(229, 229, 230);
         private static readonly Color AnahtarKoyu = Color.FromArgb(46, 46, 47);
 
@@ -125,9 +128,7 @@ namespace PusulaNotify
             TopMost = true;
             ShowInTaskbar = true;
             BackColor = _koyu ? AnahtarKoyu : AnahtarAcik;
-            TransparencyKey = BackColor;
-            // Sayfa boyunu bildirene kadar ekran dışında ve görünmez bekler
-            Opacity = 0;
+            // Sayfa boyunu bildirene kadar ekran dışında bekler (Opacity kullanılmaz: katmanlı pencere yapar)
             Bounds = new Rectangle(-32000, -32000, 420, 300);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -189,7 +190,7 @@ namespace PusulaNotify
             {
                 // WebView2 yoksa/açılamazsa mesaj yine de görünsün: düz Windows kutusu
                 Program.Gunluk("WebView2 açılamadı, düz kutuya düşüldü: " + e.Message);
-                Opacity = 0;
+                Hide();
                 var sonuc = MessageBox.Show(_m.Body, _m.Title, MessageBoxButtons.OK,
                     _acil ? MessageBoxIcon.Error : _m.Type == "warning" ? MessageBoxIcon.Warning : MessageBoxIcon.Information,
                     MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
@@ -214,8 +215,8 @@ namespace PusulaNotify
                 case "okudum": _ = BitirAsync(okudu: true, cevaplar: d.TryGetValue("cevaplar", out var c) ? c : null); break;
                 case "kapat": _ = BitirAsync(okudu: false); break;
                 case "ertele":
-                    Opacity = 0;
                     Hide();
+                    _yerlesti = false;
                     _erteleme.Interval = Math.Max(1, Sayi(d, "dakika")) * 60_000;
                     _erteleme.Start();
                     break;
@@ -255,11 +256,28 @@ namespace PusulaNotify
                 ? new Point(alan.Left + (alan.Width - boyut.Width) / 2, alan.Top + (alan.Height - boyut.Height) / 2)
                 : new Point(alan.Right - boyut.Width - bosluk, alan.Bottom - boyut.Height - bosluk);
             Bounds = new Rectangle(konum, boyut);
-            if (Opacity < 1)
+            Region = KoseliBolge(boyut, (int)Math.Round(12 * olcek));   // kart: rounded-xl = 12px
+            if (!_yerlesti)
             {
-                Opacity = 1;
+                _yerlesti = true;
                 if (!Visible) Show();
                 if (_acil) Activate();
+            }
+        }
+
+        private bool _yerlesti;
+
+        private static Region KoseliBolge(Size b, int r)
+        {
+            var d = r * 2;
+            using (var yol = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                yol.AddArc(0, 0, d, d, 180, 90);
+                yol.AddArc(b.Width - d, 0, d, d, 270, 90);
+                yol.AddArc(b.Width - d, b.Height - d, d, d, 0, 90);
+                yol.AddArc(0, b.Height - d, d, d, 90, 90);
+                yol.CloseFigure();
+                return new Region(yol);
             }
         }
 
