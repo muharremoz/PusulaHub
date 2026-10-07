@@ -692,8 +692,11 @@ namespace PusulaConnect
         private async Task SayimiEsitle()
         {
             string hub; lock (_kilit) hub = _sayimImza;
-            if (hub == null) return;
-            var bekleyen = Sayim.Hepsi.Where(s => s.Kurulu && s.UygulananImza != hub).ToList();
+            // Bozuk/eski bağlantı dosyası da yeniden yazılır (07.10.2026) — Hub imzası beklenmeden
+            var bozuk = Sayim.Hepsi.Where(s => s.Kurulu && s.BaglantiSorunu != null).ToList();
+            foreach (var s in bozuk) Gunluk.Yaz("Sayım bağlantı dosyası sorunlu (" + s.Tur + "): " + s.BaglantiSorunu + " — Pusula'dan yeniden yazılacak");
+            if (hub == null && bozuk.Count == 0) return;
+            var bekleyen = Sayim.Hepsi.Where(s => s.Kurulu && ((hub != null && s.UygulananImza != hub) || bozuk.Contains(s))).ToList();
             foreach (var s in Sayim.Hepsi.Except(bekleyen)) s.GuncellemeBekliyor = false;
             if (bekleyen.Count == 0) return;
             if (IkiAktif) { foreach (var s in bekleyen) s.GuncellemeBekliyor = true; return; }
@@ -707,7 +710,7 @@ namespace PusulaConnect
                     try { s.Guncelle((JObject)j["bilgi"]); Gunluk.Yaz("Sayım SQL bilgisi Pusula'dan güncellendi (" + s.Tur + ")"); }
                     catch (Exception e) { Gunluk.Yaz("Sayım bilgisi yazılamadı (" + s.Tur + "): " + e.Message); }
                 }
-                _ = _servis.Olay("sayim_bilgisi_guncellendi", "otomatik");
+                _ = _servis.Olay("sayim_bilgisi_guncellendi", bozuk.Count > 0 ? "onarıldı: bağlantı dosyası sorunluydu" : "otomatik");
             }
             catch (Exception e) { Gunluk.Yaz("Sayım bilgisi güncellenemedi: " + e.Message); }
             finally { Interlocked.Exchange(ref _sayimEsitleniyor, 0); }
@@ -736,6 +739,14 @@ namespace PusulaConnect
         /// Bağlantı dosyasını Hub'daki güncel bilgiyle yeniden yazar (paket indirilmez). Eski programda secim
         /// verilirse veritabanı / FORMID değişir.
         /// </summary>
+        /// <summary>Sayım SQL testi — bağlantı dosyası bozuk/eskiyse önce Pusula'dan yeniden yazılır (07.10.2026).</summary>
+        public async Task<object> SayimTest(string tur)
+        {
+            var s = Sayim.Bul(tur);
+            if (s.Kurulu && s.BaglantiSorunu != null && !IkiAktif) await SayimiEsitle();
+            return await s.Test();
+        }
+
         public async Task<object> SayimGuncelle(string tur, string kod, JObject secim)
         {
             var s = Sayim.Bul(tur);

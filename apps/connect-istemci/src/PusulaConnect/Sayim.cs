@@ -149,7 +149,10 @@ namespace PusulaConnect
                     ok = t.Value<bool?>("ok") == true,
                     veritabani = (t["veritabanlari"] as JArray)?.Count,
                     hata = t.Value<string>("hata"),
+                    // Testin bağlanmaya çalıştığı adres (iç IP,port) — uzaktan teşhis için (07.10.2026)
+                    sunucu = t.Value<string>("sunucu"),
                 },
+                baglantiSorunu = kurulu ? BaglantiSorunu : null,
             };
         }
 
@@ -505,29 +508,67 @@ namespace PusulaConnect
         /// Bağlantı dosyasındaki bilgiyle SQL'e bağlanır. Pusula X: firma login'inin veritabanlarını listeler.
         /// Eski program: seçili veritabanına (DATA) bağlanır — açılabiliyorsa o tek veritabanı listelenir.
         /// </summary>
-        public async Task<object> Test()
+        /// <summary>server.xml'den bağlantı bilgisi (şifreler çözülmüş). Okunamaz/çözülemez ya da sunucu boşsa hata fırlatır.</summary>
+        private (string sunucu, string kullanici, string sifre, string data) BaglantiOku()
         {
-            if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
             string sunucu, kullanici, sifre, data = null;
             try
             {
                 var s = XDocument.Load(ServerXml).Root?.Element("Server");
+                if (s == null) throw new Exception("<Server> bölümü yok");
                 if (EskiMi)
                 {
-                    sunucu = PusulaCoz(s?.Element("IP")?.Value);
-                    kullanici = PusulaCoz(s?.Element("USER")?.Value);
-                    sifre = PusulaCoz(s?.Element("PASSWORD")?.Value);
-                    data = PusulaCoz(s?.Element("DATA")?.Value);
+                    sunucu = PusulaCoz(s.Element("IP")?.Value);
+                    kullanici = PusulaCoz(s.Element("USER")?.Value);
+                    sifre = PusulaCoz(s.Element("PASSWORD")?.Value);
+                    data = PusulaCoz(s.Element("DATA")?.Value);
                 }
                 else
                 {
-                    sunucu = PusulaCoz(s?.Element("Name")?.Value);
-                    kullanici = PusulaCoz(s?.Element("UserName")?.Value);
-                    sifre = PusulaCoz(s?.Element("Password")?.Value);
+                    sunucu = PusulaCoz(s.Element("Name")?.Value);
+                    kullanici = PusulaCoz(s.Element("UserName")?.Value);
+                    sifre = PusulaCoz(s.Element("Password")?.Value);
                 }
             }
-            catch (Exception e) { throw new KullaniciHatasi(Path.GetFileName(ServerXml) + " okunamadı: " + e.Message); }
-            if (string.IsNullOrWhiteSpace(sunucu)) throw new KullaniciHatasi(Path.GetFileName(ServerXml) + "'de sunucu yok.");
+            catch (Exception e) { throw new Exception(Path.GetFileName(ServerXml) + " okunamadı: " + e.Message); }
+            if (string.IsNullOrWhiteSpace(sunucu)) throw new Exception(Path.GetFileName(ServerXml) + "'de sunucu yok.");
+            return (sunucu, kullanici, sifre, data);
+        }
+
+        /// <summary>
+        /// Bağlantı dosyası sağlam mı (07.10.2026): okunup çözülebiliyor ve sunucu Pusula'nın son verdiğiyle aynı mı.
+        /// Sorun yoksa null, varsa kısa açıklama. Bozuk/eski dosya Connect tarafından Hub'dan yeniden yazılır
+        /// (Uygulama.SayimiEsitle) — önceden yalnız Hub'daki bilgi DEĞİŞİNCE yazılıyordu, bozuk dosya öyle kalıyordu.
+        /// </summary>
+        public string BaglantiSorunu
+        {
+            get
+            {
+                if (!Kurulu) return null;
+                try
+                {
+                    var b = BaglantiOku();
+                    var beklenen = DurumOku()?.Value<string>("sunucu");
+                    if (!string.IsNullOrEmpty(beklenen) && !string.Equals(beklenen, b.sunucu, StringComparison.OrdinalIgnoreCase))
+                        return "sunucu Pusula'dakinden farklı (" + b.sunucu + " ≠ " + beklenen + ")";
+                    return null;
+                }
+                catch (Exception e) { return e.Message; }
+            }
+        }
+
+        public async Task<object> Test()
+        {
+            if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
+            string sunucu, kullanici, sifre, data;
+            try { (sunucu, kullanici, sifre, data) = BaglantiOku(); }
+            catch (Exception e)
+            {
+                // Dosya okunamadı: sonuç da kaydedilsin — Hub'da "Sorunlu" görünsün (önceden eski sonuç kalıyordu)
+                DurumYaz(d => d["test"] = new JObject { ["zaman"] = DateTime.Now.ToString("s"), ["ok"] = false, ["hata"] = e.Message });
+                Gunluk.Yaz("Sayım SQL testi (" + Tur + "): " + e.Message);
+                throw new KullaniciHatasi(e.Message);
+            }
 
             var sw = Stopwatch.StartNew();
             var sonuc = new JObject { ["zaman"] = DateTime.Now.ToString("s"), ["sunucu"] = sunucu, ["kullanici"] = kullanici };
@@ -564,7 +605,7 @@ namespace PusulaConnect
             }
             sonuc["sureMs"] = (int)sw.ElapsedMilliseconds;
             DurumYaz(d => d["test"] = sonuc);
-            Gunluk.Yaz("Sayım SQL testi (" + Tur + "): " + (sonuc.Value<bool?>("ok") == true ? "bağlandı, " + ((JArray)sonuc["veritabanlari"]).Count + " veritabanı" : "hata: " + sonuc.Value<string>("hata")));
+            Gunluk.Yaz("Sayım SQL testi (" + Tur + ", " + sunucu + "): " + (sonuc.Value<bool?>("ok") == true ? "bağlandı, " + ((JArray)sonuc["veritabanlari"]).Count + " veritabanı" : "hata: " + sonuc.Value<string>("hata")));
             return sonuc;
         }
 

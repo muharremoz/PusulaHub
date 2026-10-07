@@ -42,7 +42,10 @@ export interface ConnectSayimDurum {
   kisayol?: boolean
   /** SQL bilgisi Pusula'da değişti, 2FA nedeniyle kullanıcının kodla yenilemesi bekleniyor */
   guncellemeBekliyor: boolean
-  test: { zaman: string | null; ok: boolean; veritabani: number | null; hata: string | null } | null
+  /** sunucu: testin bağlanmaya çalıştığı adres (0.6.11+) */
+  test: { zaman: string | null; ok: boolean; veritabani: number | null; hata: string | null; sunucu?: string | null } | null
+  /** Bağlantı dosyası (server.xml) okunamıyor ya da sunucu Pusula'dakinden farklı (0.6.11+); Connect onarmayı dener */
+  baglantiSorunu?: string | null
   /** Eski program: seçili veritabanı ve FORMID (612 Perakende / 146 Toptan) */
   veritabani?: string | null
   formId?: string | null

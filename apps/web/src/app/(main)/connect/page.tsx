@@ -414,7 +414,7 @@ function tekSayimDurumu(s: ConnectSayimDurum | null | undefined): SayimDurumu {
   if (!s) return "yok"
   if (s.kuruluyor) return "kuruluyor"
   if (!s.kurulu) return s.hata ? "sorunlu" : "yok"
-  if (s.guncellemeBekliyor || (s.test && !s.test.ok)) return "sorunlu"
+  if (s.guncellemeBekliyor || s.baglantiSorunu || (s.test && !s.test.ok)) return "sorunlu"
   return "kurulu"
 }
 /** Cihazın genel sayım durumu: Pusula X ve eski programdan en dikkat isteyeni */
@@ -464,7 +464,8 @@ function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): 
   // Veritabanı adı gösterilmez (07.10.2026) — yalnız Perakende/Toptan
   if (s.formId) p.push(FORM_AD[s.formId] ?? s.formId)
   if (s.guncellemeBekliyor) p.push("SQL bilgisi değişti, kodla yenilenmeyi bekliyor")
-  if (s.test) p.push(s.test.ok ? "test başarılı" : `test başarısız: ${s.test.hata ?? "?"}`)
+  if (s.baglantiSorunu) p.push(`bağlantı dosyası: ${s.baglantiSorunu}`)
+  if (s.test) p.push((s.test.ok ? "test başarılı" : `test başarısız: ${s.test.hata ?? "?"}`) + (s.test.sunucu ? ` (${s.test.sunucu})` : ""))
   else p.push("henüz test edilmedi")
   return p.join(" · ")
 }
