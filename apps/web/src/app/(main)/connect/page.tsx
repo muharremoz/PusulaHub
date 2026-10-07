@@ -487,11 +487,13 @@ function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const ton = d === "kurulu" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
     : d === "kuruluyor" ? "bg-sky-500/15 text-sky-700 dark:text-sky-400"
     : "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-  const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Pusula" : null].filter(Boolean)
-  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{SAYIM_ETIKET[d]}{turler.length ? ` · ${turler.join(" + ")}` : ""}</span>
+  const turler = [c.durum?.sayim && tekSayimDurumu(c.durum.sayim) !== "yok" ? "Pusula X" : null, c.durum?.sayimEski && tekSayimDurumu(c.durum.sayimEski) !== "yok" ? "Pusula VB" : null].filter(Boolean)
+  // Kuruluysa yalnız program adı ("Kurulu" yazmaya gerek yok); sorun/kurulum sürüyorsa önce durum (07.10.2026)
+  const metin = d === "kurulu" ? turler.join(" + ") : `${SAYIM_ETIKET[d]}${turler.length ? ` · ${turler.join(" + ")}` : ""}`
+  return <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)} title={sayimAciklama(c)}>{metin || SAYIM_ETIKET[d]}</span>
 }
 function sayimAciklama(c: ConnectCihazSatir): string {
-  const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Pusula", c.durum?.sayimEski)].filter((x): x is string => !!x)
+  const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Pusula VB", c.durum?.sayimEski)].filter((x): x is string => !!x)
   return parca.length ? parca.join("\n") : "Sayım kurulu değil"
 }
 function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): string | null {
@@ -850,7 +852,7 @@ function CihazDetay({
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS çözülemedi, IP ile</span>}
                 </Bilgi>
                 <Bilgi ad="Oturum şifresi">{c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : "Kayıtlı değil"}</Bilgi>
-                <Bilgi ad="Sayım (Pusula X)">
+                <Bilgi ad="Sayım">
                   <SayimRozeti c={c} />
                   {(c.durum?.sayim || c.durum?.sayimEski) && <span className="text-muted-foreground block text-[12px] whitespace-pre-line">{sayimAciklama(c)}</span>}
                 </Bilgi>
