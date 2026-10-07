@@ -349,7 +349,7 @@ function YeniDuyuru({
                 getLabel={(f) => `${f.id} ${f.ad}`}
                 renderItem={(f) => (
                   <span className="flex w-full items-center gap-2">
-                    <span className="text-muted-foreground font-mono text-[12px]">{f.id}</span>
+                    <span className="text-muted-foreground text-[12px]">{f.id}</span>
                     <span className="truncate">{f.ad}</span>
                     <span className="text-muted-foreground ml-auto text-[11px]">{f.cihaz} cihaz</span>
                   </span>
@@ -371,7 +371,7 @@ function YeniDuyuru({
                 getLabel={(k) => k.ad}
                 renderItem={(k) => (
                   <span className="flex w-full items-center gap-2">
-                    <span className="font-mono text-[13px]">{k.ad}</span>
+                    <span className="text-[13px]">{k.ad}</span>
                     <span className="text-muted-foreground ml-auto text-[11px]">{k.cihaz} cihaz</span>
                   </span>
                 )}
@@ -460,7 +460,7 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
                       <li key={o.cihazId} className="flex items-center gap-3 px-3 py-1.5 text-[13px]">
                         <span className={cn("size-2 shrink-0 rounded-full", o.okundu ? "bg-emerald-500" : "bg-muted-foreground/40")} />
                         <span className="min-w-0 flex-1 truncate">
-                          <span className="font-mono">{o.kullanici}</span>
+                          <span>{o.kullanici}</span>
                           <span className="text-muted-foreground"> · {o.makine ?? "—"}</span>
                           {!d.firmaId && <span className="text-muted-foreground"> · {o.firmaId} {o.firmaAdi}</span>}
                         </span>

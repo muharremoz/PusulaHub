@@ -65,10 +65,10 @@ export function AyarlarSekmesi() {
         ) : (
           <>
             <Field label="Sunucu adresi" required>
-              <Input value={sunucu} onChange={(e) => setSunucu(e.target.value.trim())} placeholder="vpn.pusulanet.net" className="font-mono" />
+              <Input value={sunucu} onChange={(e) => setSunucu(e.target.value.trim())} placeholder="vpn.pusulanet.net" />
             </Field>
             <Field label="Port" required>
-              <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="17443" className="w-28 font-mono" inputMode="numeric" />
+              <Input value={port} onChange={(e) => setPort(e.target.value.replace(/\D/g, ""))} placeholder="17443" className="w-28" inputMode="numeric" />
             </Field>
             <div className="flex justify-end">
               <Button size="sm" disabled={!degisti || !gecerli || kaydediliyor} onClick={() => void kaydet()}>

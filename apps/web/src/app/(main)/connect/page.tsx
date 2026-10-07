@@ -7,11 +7,11 @@
  * Veri: services/pusula-connect (Hub yalnız arayüz; lib/connect-yonetim.ts).
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti"
 import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri"
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -420,7 +420,7 @@ function IkiRozeti({ c }: { c: ConnectCihazSatir }) {
 function SurumRozeti({ surum, son }: { surum: string | null; son: string | null }) {
   const eski = !!son && !!surum && surumKarsilastir(surum, son) < 0
   return (
-    <span className={cn("font-mono text-[12px]", eski && "rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400")} title={eski ? `Yayındaki sürüm ${son}` : undefined}>
+    <span className={cn("text-[12px]", eski && "rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-amber-700 dark:text-amber-400")} title={eski ? `Yayındaki sürüm ${son}` : undefined}>
       {surum ?? "—"}
     </span>
   )
@@ -536,63 +536,105 @@ function CihazListesi({
     if (surum.length && !surum.includes(c.surum ?? "—")) return false
     if (sayim.length && !sayim.includes(sayimDurumu(c))) return false
     return true
-  }), [cihazlar, firma, kullanici, makine, durum, iki, surum, sayim])
+  })
+  // Firmaya göre gruplu (07.10.2026): firma koduna göre sıralanır, sayfadaki satırlar firma başlığı altında toplanır.
+  // Bir firma sayfa sınırına denk gelirse başlığı sonraki sayfada tekrar çıkar.
+    .sort((a, b) => a.firmaId.localeCompare(b.firmaId, "tr", { numeric: true }) || a.kullanici.localeCompare(b.kullanici, "tr", { numeric: true })),
+  [cihazlar, firma, kullanici, makine, durum, iki, surum, sayim])
   useEffect(() => setSayfa(1), [firma, kullanici, makine, durum, iki, surum, sayim])
-  const gorunen = filtreli.slice((sayfa - 1) * 25, sayfa * 25)
+  const gorunen = useMemo(() => filtreli.slice((sayfa - 1) * 50, sayfa * 50), [filtreli, sayfa])
+  const gruplar = useMemo(() => {
+    const m = new Map<string, { firmaId: string; firmaAdi: string; satirlar: ConnectCihazSatir[] }>()
+    for (const c of gorunen) {
+      const g = m.get(c.firmaId) ?? { firmaId: c.firmaId, firmaAdi: c.firmaAdi, satirlar: [] }
+      g.satirlar.push(c)
+      m.set(c.firmaId, g)
+    }
+    return [...m.values()]
+  }, [gorunen])
+  // Firma başlığındaki sayılar sayfanın değil firmanın tamamı için (filtre uygulanmış)
+  const firmaSayilari = useMemo(() => {
+    const m = new Map<string, { toplam: number; cevrimici: number }>()
+    for (const c of filtreli) {
+      const v = m.get(c.firmaId) ?? { toplam: 0, cevrimici: 0 }
+      v.toplam++
+      if (canliDurum(c) !== "cevrimdisi") v.cevrimici++
+      m.set(c.firmaId, v)
+    }
+    return m
+  }, [filtreli])
+  const SUTUN = 11
 
   return (
     <ListeKarti baslik="Cihazlar" ikon={<Laptop className="size-3.5" />} toplam={cihazlar?.length ?? 0} filtreli={filtreli.length}>
       <div className="overflow-x-auto">
         <table className="w-full text-[14px] leading-[20px] font-medium">
           <ListeThead>
-            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Durum" options={DURUMLAR} getLabel={(d) => DURUM_ETIKET[d]} selected={durum} onChange={setDurum} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Firma" value={firma} onChange={setFirma} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
-            <th className="px-4 py-1.5 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
-            <th className="px-4 py-1.5 text-left font-medium">VPN</th>
-            <th className="px-4 py-1.5 text-left font-medium">Sunucu</th>
-            <th className="px-4 py-1.5 text-left font-medium">Son görülme</th>
-            <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Durum" options={DURUMLAR} getLabel={(d) => DURUM_ETIKET[d]} selected={durum} onChange={setDurum} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma kodu" value={firma} onChange={setFirma} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
+            <th className="px-3 py-1 text-left font-medium">VPN</th>
+            <th className="px-3 py-1 text-left font-medium">Sunucu</th>
+            <th className="px-3 py-1 text-left font-medium">Son görülme</th>
+            <th className="px-3 py-1 text-right font-medium">İşlem</th>
           </ListeThead>
           <tbody>
             {!cihazlar ? (
               [0, 1, 2].map((i) => (
-                <tr key={i}><td colSpan={10} className="px-4 py-2"><Skeleton className="h-5 w-full" /></td></tr>
+                <tr key={i}><td colSpan={SUTUN} className="px-3 py-1.5"><Skeleton className="h-5 w-full" /></td></tr>
               ))
             ) : gorunen.length === 0 ? (
               <ListeBosSatir
-                sutunSayisi={10}
+                sutunSayisi={SUTUN}
                 toplam={cihazlar.length}
                 bosMesaj="Henüz Connect kuran yok. Firma sayfasında kullanıcı menüsünden Connect 2 Kurulum Kodu üretip müşteriye gönderin."
               />
-            ) : gorunen.map((c) => (
-              <tr key={c.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/20" onClick={() => onSec(c.id)}>
-                <td className="px-4 py-1.5 whitespace-nowrap"><DurumRozeti c={c} /></td>
-                <td className="px-4 py-1.5 whitespace-nowrap">
-                  <span className="text-muted-foreground font-mono text-[12px]">{c.firmaId}</span> <span className="text-[13px]">{c.firmaAdi}</span>
-                </td>
-                <td className="px-4 py-1.5 font-mono text-[13px] whitespace-nowrap">{c.kullanici}</td>
-                <td className="px-4 py-1.5 whitespace-nowrap">{c.makine ?? "—"}</td>
-                <td className="px-4 py-1.5 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
-                <td className="px-4 py-1.5 whitespace-nowrap"><IkiRozeti c={c} /></td>
-                <td className="px-4 py-1.5 whitespace-nowrap text-[12px]"><SayimRozeti c={c} /></td>
-                <td className="px-4 py-1.5 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
-                <td className="px-4 py-1.5 whitespace-nowrap text-[12px]">
-                  {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
-                    : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
-                    : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
-                </td>
-                <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap" title={tarihMetni(c.sonGorulme)}>{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td>
-                <td className="px-4 py-1.5 text-right" onClick={(e) => e.stopPropagation()}><CihazMenusu c={c} onIslem={onIslem} onSec={onSec} /></td>
-              </tr>
-            ))}
+            ) : gruplar.map((g) => {
+              const say = firmaSayilari.get(g.firmaId)
+              return (
+                <Fragment key={g.firmaId}>
+                  {/* Firma başlık satırı */}
+                  <tr className="border-b bg-[var(--section-bg)]">
+                    <td colSpan={SUTUN} className="px-3 py-1">
+                      <div className="flex items-center gap-2 text-[12px]">
+                        <span className="rounded-[5px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{g.firmaId}</span>
+                        <span className="truncate font-semibold">{g.firmaAdi}</span>
+                        <span className="text-muted-foreground">
+                          · {say?.toplam ?? g.satirlar.length} cihaz{say && say.cevrimici > 0 ? ` · ${say.cevrimici} çevrimiçi` : ""}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {g.satirlar.map((c) => (
+                    <tr key={c.id} className="cursor-pointer border-b text-[13px] last:border-0 hover:bg-muted/20" onClick={() => onSec(c.id)}>
+                      <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
+                      <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{c.firmaId}</td>
+                      <td className="px-3 py-1 whitespace-nowrap">{c.kullanici}</td>
+                      <td className="px-3 py-1 whitespace-nowrap">{c.makine ?? "—"}</td>
+                      <td className="px-3 py-1 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
+                      <td className="px-3 py-1 whitespace-nowrap"><IkiRozeti c={c} /></td>
+                      <td className="px-3 py-1 whitespace-nowrap text-[12px]"><SayimRozeti c={c} /></td>
+                      <td className="px-3 py-1 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
+                      <td className="px-3 py-1 whitespace-nowrap text-[12px]">
+                        {c.terminalErisim == null ? <span className="text-muted-foreground">—</span>
+                          : c.terminalErisim ? <span className="text-emerald-700 dark:text-emerald-400">Erişiyor{c.terminalMs != null && <span className="text-muted-foreground"> · {c.terminalMs} ms</span>}</span>
+                          : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
+                      </td>
+                      <td className="text-muted-foreground px-3 py-1 text-[12px] whitespace-nowrap" title={tarihMetni(c.sonGorulme)}>{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td>
+                      <td className="px-3 py-0.5 text-right" onClick={(e) => e.stopPropagation()}><CihazMenusu c={c} onIslem={onIslem} onSec={onSec} /></td>
+                    </tr>
+                  ))}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
-      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} />
+      <ListeSayfalama sayfa={sayfa} onSayfaChange={setSayfa} toplam={filtreli.length} sayfaBoyu={50} />
     </ListeKarti>
   )
 }
@@ -642,16 +684,16 @@ function OlayListesi({ olaylar, cihazlar, onCihaz }: { olaylar: ConnectOlay[] | 
                 <td className="px-4 py-1.5 text-[12px] whitespace-nowrap tabular-nums" title={tarihMetni(o.zaman)}>{tarihMetni(o.zaman)}</td>
                 <td className="px-4 py-1.5"><OlayRozeti tur={o.tur} /></td>
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
-                  {o.firmaId ? <><span className="text-muted-foreground font-mono text-[12px]">{o.firmaId}</span> {firmaAdi.get(o.firmaId) ?? ""}</> : "—"}
+                  {o.firmaId ? <><span className="text-muted-foreground text-[12px]">{o.firmaId}</span> {firmaAdi.get(o.firmaId) ?? ""}</> : "—"}
                 </td>
-                <td className="px-4 py-1.5 font-mono text-[13px] whitespace-nowrap">{o.kullanici ?? "—"}</td>
+                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">{o.kullanici ?? "—"}</td>
                 <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">
                   {o.cihazId ? <button type="button" className="underline-offset-2 hover:underline" onClick={() => onCihaz(o.cihazId!)}>{o.makine ?? "—"}</button> : (o.makine ?? "—")}
                 </td>
                 <td className="text-muted-foreground max-w-[420px] truncate px-4 py-1.5 text-[12px]" title={ayrintiMetni(o)}>{ayrintiMetni(o) || "—"}</td>
                 <td className="text-muted-foreground px-4 py-1.5 text-[12px] whitespace-nowrap">
                   {o.kaynak === "yonetici" ? "Pusula" : o.kaynak === "istemci" ? "Uygulama" : "Servis"}
-                  {o.ip && <span className="font-mono"> · {o.ip}</span>}
+                  {o.ip && <span> · {o.ip}</span>}
                 </td>
               </tr>
             ))}
@@ -702,8 +744,8 @@ function KodListesi({ kodlar, onIptal }: { kodlar: ConnectKod[] | null; onIptal:
               <ListeBosSatir sutunSayisi={7} toplam={kodlar.length} bosMesaj="Henüz kurulum kodu üretilmedi. Firma sayfasında kullanıcı menüsünden üretilir." />
             ) : gorunen.map((k) => (
               <tr key={k.id} className="border-b last:border-0 hover:bg-muted/20">
-                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap"><span className="text-muted-foreground font-mono text-[12px]">{k.firmaId}</span> {k.firmaAdi}</td>
-                <td className="px-4 py-1.5 font-mono text-[13px] whitespace-nowrap">{k.kullanici}</td>
+                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap"><span className="text-muted-foreground text-[12px]">{k.firmaId}</span> {k.firmaAdi}</td>
+                <td className="px-4 py-1.5 text-[13px] whitespace-nowrap">{k.kullanici}</td>
                 <td className="px-4 py-1.5 whitespace-nowrap">
                   {suresiDoldu(k)
                     ? <span className="bg-muted text-muted-foreground inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium">Süresi doldu</span>
@@ -747,19 +789,23 @@ function CihazDetay({
 }) {
   const ay = c?.durum?.ayarlar ?? null
   return (
-    <Sheet open={!!c} onOpenChange={(o) => !o && onKapat()}>
-      <SheetContent className="!w-[560px] !max-w-[560px]">
+    // MODAL (07.10.2026, kullanıcı kararı): yan panel yerine ortada geniş pencere — solda durum, sağda son olaylar
+    <Dialog open={!!c} onOpenChange={(o) => !o && onKapat()}>
+      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[960px]">
         {c && (
           <>
-            <SheetHeader>
+            <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
               <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
                 <PlugZap className="size-[18px]" />
               </span>
-              <SheetTitle>{c.makine ?? "Cihaz"}</SheetTitle>
-              <SheetDescription>{c.kullanici} · {c.firmaId} {c.firmaAdi}</SheetDescription>
-            </SheetHeader>
+              <div className="min-w-0 flex-1">
+                <DialogTitle className="text-[15px] font-semibold">{c.makine ?? "Cihaz"}</DialogTitle>
+                <DialogDescription className="text-[12px]">{c.kullanici} · {c.firmaId} {c.firmaAdi}</DialogDescription>
+              </div>
+            </div>
 
-            <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
+            <div className="flex min-w-0 flex-col gap-4">
               <div className="flex flex-wrap items-center gap-3">
                 <DurumRozeti c={c} />
                 {c.oturumAcik && c.oturumBaslangic && <span className="text-muted-foreground text-[12px]">{onceMetni(c.oturumBaslangic).replace(" önce", "")}dır oturumda</span>}
@@ -789,7 +835,7 @@ function CihazDetay({
                   <SayimRozeti c={c} />
                   {(c.durum?.sayim || c.durum?.sayimEski) && <span className="text-muted-foreground block text-[12px] whitespace-pre-line">{sayimAciklama(c)}</span>}
                 </Bilgi>
-                <Bilgi ad="Dış IP"><span className="font-mono">{c.ip ?? "—"}</span></Bilgi>
+                <Bilgi ad="Dış IP"><span>{c.ip ?? "—"}</span></Bilgi>
                 <Bilgi ad="İlk kayıt">{tarihMetni(c.ilkGiris)}</Bilgi>
                 <Bilgi ad="Son nabız">{c.sonNabiz ? `${onceMetni(c.sonNabiz)} (${tarihMetni(c.sonNabiz)})` : "Henüz yok (eski sürüm)"}</Bilgi>
               </section>
@@ -827,8 +873,9 @@ function CihazDetay({
                   </div>
                 )}
               </section>
+            </div>
 
-              <section className="flex min-h-0 flex-col rounded-[8px] border">
+              <section className="flex min-h-0 min-w-0 flex-col self-start rounded-[8px] border">
                 <div className="border-b px-3 py-2 text-[12px] font-semibold">Son olaylar</div>
                 {olaylar.length === 0 ? (
                   <p className="text-muted-foreground px-3 py-4 text-center text-[12px]">Son 500 olay içinde bu cihaza ait kayıt yok.</p>
@@ -847,7 +894,7 @@ function CihazDetay({
             </div>
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   )
 }
