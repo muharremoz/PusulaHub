@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle, ArrowLeft, Printer, Check, CheckCircle2, CircleAlert, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Monitor,
-  Hash, Laptop, LifeBuoy, Megaphone, Network, Rocket, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
+  Hash, Headset, Laptop, Megaphone, Network, Rocket, Server, Settings, ShieldCheck, UserRound, WifiOff, XCircle,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -570,17 +570,17 @@ export function AnaEkran({ durum, setDurum }: P) {
         )}
 
         {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
-        {/* Daha belirgin (07.10.2026): soluk tek satır gözden kaçıyordu — renkli zemin, açıklama, dolu düğme */}
+        {/* Daha belirgin (07.10.2026): soluk tek satır gözden kaçıyordu — opak kart, tek satır açıklama, dolu düğme */}
         <div className="mt-2 flex items-center gap-4 rounded-xl border bg-card px-5 py-4 shadow-md">
           <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
-            <LifeBuoy className="size-5" />
+            <Headset className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
             <div className="text-[15px] font-semibold">Yardım mı gerekiyor?</div>
-            <div className="text-xs text-muted-foreground">Bağlantı ya da programla ilgili sorunlarda talep açabilirsiniz.</div>
+            <div className="truncate text-xs text-muted-foreground">Sorunlarınız için destek talebi gönderebilirsiniz.</div>
           </div>
           <Button onClick={() => setOrta("talep")}>
-            <LifeBuoy /> Yardım talebi oluştur
+            <Headset /> Yardım talebi oluştur
           </Button>
         </div>
 
