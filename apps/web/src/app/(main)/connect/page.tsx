@@ -563,15 +563,16 @@ function CihazListesi({
     }
     return m
   }, [filtreli])
-  const SUTUN = 11
+  const SUTUN = 12
 
   return (
     <ListeKarti baslik="Cihazlar" ikon={<Laptop className="size-3.5" />} toplam={cihazlar?.length ?? 0} filtreli={filtreli.length}>
       <div className="overflow-x-auto">
         <table className="w-full text-[14px] leading-[20px] font-medium">
           <ListeThead>
+            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kod" value={firma} onChange={setFirma} /></th>
+            <th className="px-3 py-1 text-left font-medium">Firma</th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Durum" options={DURUMLAR} getLabel={(d) => DURUM_ETIKET[d]} selected={durum} onChange={setDurum} /></th>
-            <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma kodu" value={firma} onChange={setFirma} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
@@ -597,22 +598,23 @@ function CihazListesi({
               const say = firmaSayilari.get(g.firmaId)
               return (
                 <Fragment key={g.firmaId}>
-                  {/* Firma başlık satırı */}
-                  <tr className="border-b bg-[var(--section-bg)]">
-                    <td colSpan={SUTUN} className="px-3 py-1">
-                      <div className="flex items-center gap-2 text-[12px]">
-                        <span className="rounded-[5px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums">{g.firmaId}</span>
-                        <span className="truncate font-semibold">{g.firmaAdi}</span>
-                        <span className="text-muted-foreground">
-                          · {say?.toplam ?? g.satirlar.length} cihaz{say && say.cevrimici > 0 ? ` · ${say.cevrimici} çevrimiçi` : ""}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {g.satirlar.map((c) => (
-                    <tr key={c.id} className="cursor-pointer border-b text-[13px] last:border-0 hover:bg-muted/20" onClick={() => onSec(c.id)}>
+                  {g.satirlar.map((c, i) => (
+                    <tr
+                      key={c.id}
+                      className={cn("cursor-pointer text-[13px] hover:bg-muted/20", i === 0 ? "border-t border-t-border" : "border-t border-t-border/40")}
+                      onClick={() => onSec(c.id)}
+                    >
+                      {/* Firma yalnız grubun ilk satırında — aynı firmanın diğer cihazları altında boş kalır (07.10.2026) */}
+                      <td className="px-3 py-1 align-top font-semibold tabular-nums whitespace-nowrap">{i === 0 ? g.firmaId : ""}</td>
+                      <td className="max-w-[260px] px-3 py-1 align-top">
+                        {i === 0 && (
+                          <span className="block truncate" title={g.firmaAdi}>
+                            {g.firmaAdi}
+                            {say && say.toplam > 1 && <span className="text-muted-foreground text-[12px]"> · {say.toplam}</span>}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
-                      <td className="text-muted-foreground px-3 py-1 tabular-nums whitespace-nowrap">{c.firmaId}</td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.kullanici}</td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.makine ?? "—"}</td>
                       <td className="px-3 py-1 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
