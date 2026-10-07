@@ -53,7 +53,9 @@ export type YedekOzeti = { renk: Renk; baslik: string; aciklama: string };
  * yedekler bizim tarafta belirli saat aralığında alınır, saatleri göstermek "gece alınmamış" izlenimi veriyordu.
  */
 export function yedekOzeti(durum: Durum): YedekOzeti {
-  const y: YedekDurumu | undefined = durum.yedekler ?? undefined;
+  // Bilgi hiç gelmedi ve Pusula'ya ulaşılamıyor: "Kontrol ediliyor…"da dönüp durmasın, alınamadı desin (07.10.2026)
+  const y: YedekDurumu | undefined =
+    durum.yedekler ?? (durum.servisErisim ? undefined : ({ liste: [], hata: "Pusula'ya ulaşılamadı" } as YedekDurumu));
   const simdi = y?.simdi ? Date.parse(y.simdi) : Date.now();
   const liste = y?.liste ?? [];
 

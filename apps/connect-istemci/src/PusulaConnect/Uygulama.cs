@@ -376,6 +376,11 @@ namespace PusulaConnect
             lock (_kilit) { _kayit = k; _asama = "hazir"; _mesaj = null; }
             _ = Task.Run(Kontrol);
             _ = Task.Run(SayimiKayittaYaz);
+            // Şifre, yedek ve duyurular hemen çekilir (07.10.2026): ilk nabzı beklemek şifreyi ve yedek kartını
+            // yeni kayıttan sonra gecikmeli getiriyordu (kart "Kontrol ediliyor…"da kalıyordu).
+            _ = Task.Run(SifreyiEsitle);
+            _ = Task.Run(() => YedekleriTazele());
+            _ = Task.Run(() => DuyurulariTazele());
             return Durum();
         }
 
@@ -444,6 +449,9 @@ namespace PusulaConnect
             Kimlik.Sil();
             BilinenSurum = null;
             KurulumTamam = false;
+            // Yeni kayıtta yedek bilgisi hemen istensin (30 dk'lık bekleme önceki kayıttan kalmasın)
+            lock (_kilit) _yedekler = null;
+            _yedekZaman = DateTime.MinValue;
             lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false; }
             return Durum();
         }
@@ -921,6 +929,9 @@ namespace PusulaConnect
             Kimlik.Sil();
             BilinenSurum = null;
             KurulumTamam = false;
+            // Yeni kayıtta yedek bilgisi hemen istensin (30 dk'lık bekleme önceki kayıttan kalmasın)
+            lock (_kilit) _yedekler = null;
+            _yedekZaman = DateTime.MinValue;
             lock (_kilit)
             {
                 _kayit = null; _asama = "kayit"; _mesaj = mesaj; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null;
