@@ -275,12 +275,12 @@ export default function ConnectPage() {
 
         <Tabs value={sekme} onValueChange={setSekme}>
           <div className="flex items-center justify-between gap-2">
-            <TabsList className="h-8">
-              <TabsTrigger value="cihazlar" className="h-7 gap-1.5 text-[12px]"><Laptop className="size-3.5" />Cihazlar</TabsTrigger>
-              <TabsTrigger value="olaylar" className="h-7 gap-1.5 text-[12px]"><History className="size-3.5" />Olay kaydı</TabsTrigger>
-              <TabsTrigger value="kodlar" className="h-7 gap-1.5 text-[12px]"><KeyRound className="size-3.5" />Kurulum kodları</TabsTrigger>
-              <TabsTrigger value="duyurular" className="h-7 gap-1.5 text-[12px]"><Megaphone className="size-3.5" />Duyurular</TabsTrigger>
-              <TabsTrigger value="ayarlar" className="h-7 gap-1.5 text-[12px]"><Settings className="size-3.5" />Ayarlar</TabsTrigger>
+            <TabsList className="h-10 p-1">
+              <TabsTrigger value="cihazlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><Laptop className="size-4" />Cihazlar</TabsTrigger>
+              <TabsTrigger value="olaylar" className="h-8 gap-2 px-3.5 text-[13.5px]"><History className="size-4" />Olay kaydı</TabsTrigger>
+              <TabsTrigger value="kodlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><KeyRound className="size-4" />Kurulum kodları</TabsTrigger>
+              <TabsTrigger value="duyurular" className="h-8 gap-2 px-3.5 text-[13.5px]"><Megaphone className="size-4" />Duyurular</TabsTrigger>
+              <TabsTrigger value="ayarlar" className="h-8 gap-2 px-3.5 text-[13.5px]"><Settings className="size-4" />Ayarlar</TabsTrigger>
             </TabsList>
             <div className="flex items-center gap-2">
             <a
