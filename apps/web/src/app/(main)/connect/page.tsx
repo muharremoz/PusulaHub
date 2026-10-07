@@ -682,7 +682,7 @@ function CihazOlaylari({ olaylar }: { olaylar: ConnectOlay[] }) {
     return true
   }), [olaylar, tarih, tur, ayrinti])
   useEffect(() => setSayfa(1), [tarih, tur, ayrinti])
-  const BOY = 12
+  const BOY = 11
   const gorunen = filtreli.slice((sayfa - 1) * BOY, sayfa * BOY)
 
   return (
