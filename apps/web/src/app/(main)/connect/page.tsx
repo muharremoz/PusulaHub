@@ -663,10 +663,13 @@ function CihazListesi({
                       <td className="px-3 py-1 align-top font-semibold tabular-nums whitespace-nowrap">{i === 0 ? g.firmaId : ""}</td>
                       <td className="max-w-[260px] px-3 py-1 align-top">
                         {i === 0 && (
-                          <Ipucu icerik={g.firmaAdi}><span className="block truncate">
-                            {g.firmaAdi}
-                            {say && say.toplam > 1 && <span className="text-muted-foreground text-[12px]"> · {say.toplam}</span>}
-                          </span></Ipucu>
+                          // Firma adı ipucusuz; firmadaki cihaz (kullanıcı) sayısı rozette (07.10.2026)
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate">{g.firmaAdi}</span>
+                            <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[11px] leading-none font-medium tabular-nums">
+                              {say?.toplam ?? g.satirlar.length}
+                            </span>
+                          </span>
                         )}
                       </td>
                       <td className="px-3 py-1 whitespace-nowrap"><DurumRozeti c={c} /></td>
