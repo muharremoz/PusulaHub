@@ -1194,6 +1194,13 @@ namespace PusulaConnect
         /// bir kez denenir; hata olursa şerit hatayı gösterir, yeniden deneme kullanıcıya kalır (açılış döngüsü olmasın).
         /// Açıkken bulunan sürümler eskisi gibi şeritle sorulur — çalışan bağlantı kesilmesin.
         /// </summary>
+        private static string EngellenenSurumDosyasi => Path.Combine(Kimlik.Klasor, "engellenen-surum.txt");
+        private static string EngellenenSurum
+        {
+            get { try { return File.Exists(EngellenenSurumDosyasi) ? File.ReadAllText(EngellenenSurumDosyasi).Trim() : null; } catch { return null; } }
+            set { try { File.WriteAllText(EngellenenSurumDosyasi, value ?? ""); } catch { } }
+        }
+
         private async Task AcilistaGuncelle()
         {
             try
@@ -1205,6 +1212,9 @@ namespace PusulaConnect
                 lock (_kilit) son = _sonSurum;
                 if (son == null || Yerlesim.SurumKarsilastir(son, ServisIstemci.Surum) <= 0) return;
                 if (OturumAcikMi?.Invoke() == true) return;
+                // Windows bu sürümü bir kez engellediyse (Akıllı Uygulama Denetimi vb.) her açılışta yeniden denenmez —
+                // şerit "Tekrar dene" ile sorar; daha yeni bir sürüm gelince otomatik deneme yeniden başlar (07.10.2026).
+                if (EngellenenSurum == son) { Gunluk.Yaz("Açılışta güncelleme atlandı: " + son + " daha önce Windows tarafından engellendi"); return; }
                 Gunluk.Yaz("Açılışta otomatik güncelleme: " + ServisIstemci.Surum + " → " + son);
                 Guncelle();
             }
@@ -1254,6 +1264,7 @@ namespace PusulaConnect
                 {
                     Gunluk.Yaz("Güncelleme hatası: " + e.Message);
                     _ = _servis.Olay("guncelleme_hatasi", new { surum = _sonSurum, engellendi = e is GuncellemeEngellendi, mesaj = e.Message });
+                    if (e is GuncellemeEngellendi) EngellenenSurum = _sonSurum;
                     lock (_kilit) { _guncelleniyor = false; _guncellemeHatasi = "Güncelleme yapılamadı: " + e.Message; }
                 }
             });
