@@ -23,7 +23,7 @@ import {
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import {
-  Activity, Ban, CheckCircle2, CircleMinus, Globe, History, ScanBarcode, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
+  Activity, Ban, CheckCircle2, CircleMinus, Globe, History, ScanBarcode, Server, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
   RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
@@ -879,7 +879,7 @@ function CihazDetay({
                 >
                   {c.durum?.vpnProfil == null ? "—" : c.durum.vpnProfil.dogru ? "Hazır" : <span className="text-amber-700 dark:text-amber-400">Eksik</span>}
                 </Bilgi>
-                <Bilgi ad="Sunucu" ikon={<MonitorPlay />}>{c.rdp ?? "—"}</Bilgi>
+                <Bilgi ad="Sunucu" ikon={<Server />}>{c.rdp ?? "—"}</Bilgi>
                 <Bilgi ad="Oturum şifresi" ikon={<KeyRound />}>
                   {c.durum?.sifreKayitli == null ? "—" : c.durum.sifreKayitli ? "Kayıtlı" : <span className="text-amber-700 dark:text-amber-400">Kayıtlı değil</span>}
                 </Bilgi>
