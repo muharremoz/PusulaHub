@@ -62,7 +62,7 @@ export function StepSummary({
   const selectedDemos = demoDatabases.filter((d) => selectedDemoDbIds.includes(d.id))
 
   const hasPusula = selectedServices.some((s) => s.type === "pusula-program")
-  const firmaNameSafe = (company?.firma ?? firmaId).replace(/[\\/:*?"<>|]/g, "_").trim() || firmaId
+  const firmaNameSafe = (company?.firma ? `${firmaId} - ${company.firma}` : firmaId).replace(/[\\/:*?"<>|]/g, "_").trim() || firmaId
 
   // SQL aktif mi? — selectedSqlServerId set ise yeterli (sqlServer object henüz
   // yüklenmemiş olabilir). Buna bağlı olarak işlemler ve SQL section gösterilir.

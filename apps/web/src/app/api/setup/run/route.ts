@@ -834,7 +834,8 @@ export async function POST(req: NextRequest) {
 
           // 5d) Masaüstü MUSTERILER klasörü + kısayollar (non-critical, hata devam ettirir)
           // Sadece Administrator masaüstüne — Public\Desktop tüm kullanıcılara yansırdı.
-          const safeFirmaName    = sanitizeWindowsName(payload.firmaName) || payload.firmaId
+          // Klasör adı "<firmaNo> - <firma adı>" (07.10.2026) — masaüstünde firma numarasıyla sıralı/aranır
+          const safeFirmaName    = sanitizeWindowsName(`${payload.firmaId} - ${payload.firmaName}`) || payload.firmaId
           const mustelierSubdir  = `C:\\Users\\Administrator\\Desktop\\MUSTERILER\\${safeFirmaName}`
 
           await runStep(
