@@ -570,15 +570,17 @@ export function AnaEkran({ durum, setDurum }: P) {
         )}
 
         {/* Destek: talep sistemi varsayılan tarayıcıda açılır (pencere dış adresleri tarayıcıya yönlendirir). */}
-        <div className="mt-2 flex items-center gap-3 rounded-lg border bg-card px-4 py-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-            <LifeBuoy className="size-[18px]" />
+        {/* Daha belirgin (07.10.2026): soluk tek satır gözden kaçıyordu — renkli zemin, açıklama, dolu düğme */}
+        <div className="mt-2 flex items-center gap-4 rounded-xl border bg-card px-5 py-4 shadow-md">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-sm">
+            <LifeBuoy className="size-5" />
           </span>
           <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium">Yardım mı gerekiyor?</div>
+            <div className="text-[15px] font-semibold">Yardım mı gerekiyor?</div>
+            <div className="text-xs text-muted-foreground">Bağlantı ya da programla ilgili sorunlarda talep açabilirsiniz.</div>
           </div>
-          <Button variant="outline" onClick={() => setOrta("talep")}>
-            <LifeBuoy /> Yardım talebi
+          <Button onClick={() => setOrta("talep")}>
+            <LifeBuoy /> Yardım talebi oluştur
           </Button>
         </div>
 

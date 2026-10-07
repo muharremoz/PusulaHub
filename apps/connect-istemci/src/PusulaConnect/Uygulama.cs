@@ -66,6 +66,7 @@ namespace PusulaConnect
             _servis = servis;
             _ = Task.Run(GuncellemeDongusu);
             _ = Task.Run(AcilistaGuncelle);
+            _ = Task.Run(VpnIzle);
             var token = Kimlik.Token();
             if (token == null) { _asama = "kayit"; return; }
             _servis.Token = token;
@@ -487,6 +488,37 @@ namespace PusulaConnect
                 if (Interlocked.Exchange(ref _kontrolTekrar, 0) == 1) _ = Task.Run(Kontrol);
             }
             await NabizGonder(false);
+        }
+
+        /// <summary>
+        /// VPN bağlanınca/kopunca beklemeden denetle (07.10.2026). Erişim denetimi 10 sn'de bir çalışıyordu: VPN bir
+        /// denetimden hemen sonra bağlanırsa "Erişiliyor" 10–15 sn gecikiyordu. FortiClient bağdaştırıcısının durumu
+        /// 1,5 sn'de bir okunur (yerel, ucuz); değişince denetim hemen çalışır. Bağlanınca yönlendirme/DNS birkaç
+        /// saniye oturmayabilir — erişim gelene kadar kısa aralıklarla birkaç kez daha denenir.
+        /// </summary>
+        private async Task VpnIzle()
+        {
+            var onceki = Fortinet.SslVpnBagli();
+            for (;;)
+            {
+                await Task.Delay(1500);
+                bool bagli;
+                try { bagli = Fortinet.SslVpnBagli(); } catch { continue; }
+                if (bagli == onceki) continue;
+                onceki = bagli;
+                bool kayitli; lock (_kilit) kayitli = _kayit != null;
+                if (!kayitli) continue;
+                Gunluk.Yaz("VPN " + (bagli ? "bağlandı" : "koptu") + " — erişim hemen denetleniyor");
+                await Kontrol();
+                if (!bagli) continue;
+                foreach (var bekle in new[] { 1000, 2000, 3000, 4000 })
+                {
+                    bool erisim; lock (_kilit) erisim = _terminal.erisim;
+                    if (erisim) break;
+                    await Task.Delay(bekle);
+                    await Kontrol();
+                }
+            }
         }
 
         public async Task<object> KontrolEt()

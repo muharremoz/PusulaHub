@@ -29,11 +29,13 @@ export function App() {
 
   // VPN kurulumu / güncelleme sürerken sık, yoksa seyrek (terminal kontrolü exe'de 10 sn'de bir).
   const suruyor = durum?.asama === "acilis" || !!durum?.vpnKurulum.suruyor || !!durum?.guncelleme.suruyor;
+  const erisimYok = durum?.asama === "hazir" && !durum.kontroller.terminal.erisim;
   useEffect(() => {
     if (!anahtarVar()) return;
-    const id = window.setInterval(() => void tazele(), suruyor ? 800 : 3000);
+    // Sunucuya erişim yokken (VPN bekleniyor) daha sık: exe VPN bağlanınca hemen denetliyor, ekran da geç kalmasın
+    const id = window.setInterval(() => void tazele(), suruyor ? 800 : erisimYok ? 1500 : 3000);
     return () => window.clearInterval(id);
-  }, [suruyor, tazele]);
+  }, [suruyor, erisimYok, tazele]);
 
   return (
     <TooltipProvider delayDuration={200}>
