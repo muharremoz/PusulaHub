@@ -10,7 +10,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react"
 import { PageContainer } from "@/components/layout/page-container"
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti"
-import { MetinFiltre, SecimFiltre, TarihFiltre, tarihUygun, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
+import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -565,6 +565,7 @@ function CihazListesi({
 }) {
   const [firma, setFirma] = useState("")
   const [firmaAdi, setFirmaAdi] = useState("")
+  const [adet, setAdet] = useState<SayiAralikDeger>({})
   const [kullanici, setKullanici] = useState("")
   const [makine, setMakine] = useState("")
   const [vpn, setVpn] = useState<VpnDurumu[]>([])
@@ -578,7 +579,16 @@ function CihazListesi({
 
   const surumler = useMemo(() => [...new Set((cihazlar ?? []).map((c) => c.surum ?? "—"))].sort((a, b) => surumKarsilastir(b, a)), [cihazlar])
 
+  const firmaAdetleri = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const c of cihazlar ?? []) m.set(c.firmaId, (m.get(c.firmaId) ?? 0) + 1)
+    return m
+  }, [cihazlar])
+
   const filtreli = useMemo(() => (cihazlar ?? []).filter((c) => {
+    const n = firmaAdetleri.get(c.firmaId) ?? 0
+    if (adet.min != null && n < adet.min) return false
+    if (adet.max != null && n > adet.max) return false
     if (firma && !c.firmaId.toLocaleLowerCase("tr").includes(firma.toLocaleLowerCase("tr"))) return false
     if (firmaAdi && !c.firmaAdi.toLocaleLowerCase("tr").includes(firmaAdi.toLocaleLowerCase("tr"))) return false
     if (kullanici && !c.kullanici.toLocaleLowerCase("tr").includes(kullanici.toLocaleLowerCase("tr"))) return false
@@ -595,8 +605,8 @@ function CihazListesi({
   // Firmaya göre gruplu (07.10.2026): firma koduna göre sıralanır, sayfadaki satırlar firma başlığı altında toplanır.
   // Bir firma sayfa sınırına denk gelirse başlığı sonraki sayfada tekrar çıkar.
     .sort((a, b) => a.firmaId.localeCompare(b.firmaId, "tr", { numeric: true }) || a.kullanici.localeCompare(b.kullanici, "tr", { numeric: true })),
-  [cihazlar, firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
-  useEffect(() => setSayfa(1), [firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
+  [cihazlar, firmaAdetleri, adet, firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
+  useEffect(() => setSayfa(1), [adet, firma, firmaAdi, kullanici, makine, durum, iki, surum, sayim, vpn, sunucu, sonGorulme])
   const gorunen = useMemo(() => filtreli.slice((sayfa - 1) * 50, sayfa * 50), [filtreli, sayfa])
   const gruplar = useMemo(() => {
     const m = new Map<string, { firmaId: string; firmaAdi: string; satirlar: ConnectCihazSatir[] }>()
@@ -607,18 +617,7 @@ function CihazListesi({
     }
     return [...m.values()]
   }, [gorunen])
-  // Firma başlığındaki sayılar sayfanın değil firmanın tamamı için (filtre uygulanmış)
-  const firmaSayilari = useMemo(() => {
-    const m = new Map<string, { toplam: number; cevrimici: number }>()
-    for (const c of filtreli) {
-      const v = m.get(c.firmaId) ?? { toplam: 0, cevrimici: 0 }
-      v.toplam++
-      if (canliDurum(c) !== "cevrimdisi") v.cevrimici++
-      m.set(c.firmaId, v)
-    }
-    return m
-  }, [filtreli])
-  const SUTUN = 12
+  const SUTUN = 13
 
   return (
     <ListeKarti baslik="Cihazlar" ikon={<Laptop className="size-3.5" />} toplam={cihazlar?.length ?? 0} filtreli={filtreli.length}>
@@ -627,6 +626,7 @@ function CihazListesi({
           <ListeThead>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kod" value={firma} onChange={setFirma} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Firma" value={firmaAdi} onChange={setFirmaAdi} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SayiAralikFiltre label="Kullanıcı" value={adet} onChange={setAdet} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Durum" options={DURUMLAR} getLabel={(d) => DURUM_ETIKET[d]} selected={durum} onChange={setDurum} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
@@ -650,7 +650,6 @@ function CihazListesi({
                 bosMesaj="Henüz Connect kuran yok. Firma sayfasında kullanıcı menüsünden Connect 2 Kurulum Kodu üretip müşteriye gönderin."
               />
             ) : gruplar.map((g) => {
-              const say = firmaSayilari.get(g.firmaId)
               return (
                 <Fragment key={g.firmaId}>
                   {g.satirlar.map((c, i) => (
@@ -672,15 +671,18 @@ function CihazListesi({
                           </td>
                           <td
                             rowSpan={g.satirlar.length}
-                            className="max-w-[260px] cursor-default border-r bg-[var(--section-bg)]/60 px-3 py-1 align-middle"
+                            className="max-w-[260px] cursor-default bg-[var(--section-bg)]/60 px-3 py-1 align-middle"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <span className="flex min-w-0 items-center gap-1.5">
-                              <span className="truncate">{g.firmaAdi}</span>
-                              <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[11px] leading-none font-medium tabular-nums">
-                                {say?.toplam ?? g.satirlar.length}
-                              </span>
-                            </span>
+                            <span className="block truncate">{g.firmaAdi}</span>
+                          </td>
+                          {/* Firmanın Connect kullanıcı (cihaz) sayısı — ayrı sütun (07.10.2026) */}
+                          <td
+                            rowSpan={g.satirlar.length}
+                            className="cursor-default border-r bg-[var(--section-bg)]/60 px-3 py-1 text-center align-middle tabular-nums"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {firmaAdetleri.get(g.firmaId) ?? g.satirlar.length}
                           </td>
                         </>
                       )}
