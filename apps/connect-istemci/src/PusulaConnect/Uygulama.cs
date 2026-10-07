@@ -208,6 +208,7 @@ namespace PusulaConnect
         /// Alınamazsa (servis hatası) ya da 2FA açıksa kutu yine çıkar.
         /// </summary>
         private bool _sifreAlinamadi;
+        private int _gunlukGonderiliyor;
         private bool _profilBekleniyor;   // yeni kayıttan sonra Hub profili (şifre sürümü) henüz gelmedi
         private bool SifreHubdanBekleniyor
         {
@@ -1004,6 +1005,16 @@ namespace PusulaConnect
                 // Sayım modu: Hub'daki SQL bilgisi değiştiyse server.xml yenilenir (RDP/VPN ile aynı akış)
                 var sImza = yanit.Value<string>("sayimImza");
                 if (sImza != null) { lock (_kilit) _sayimImza = sImza; _ = Task.Run(SayimiEsitle); }
+                // Uzaktan günlük: Pusula istediyse günlüğü yükle (bir kez; istek yükleyince serviste temizlenir)
+                if (yanit.Value<bool?>("gunlukIste") == true && Interlocked.Exchange(ref _gunlukGonderiliyor, 1) == 0)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try { await _servis.GunlukYukle(Gunluk.Metin()); Gunluk.Yaz("Günlük Pusula'ya gönderildi (destek isteği)"); }
+                        catch (Exception e) { Gunluk.Yaz("Günlük gönderilemedi: " + e.Message); }
+                        finally { Interlocked.Exchange(ref _gunlukGonderiliyor, 0); }
+                    });
+                }
                 var imza = yanit["duyuru"]?.Value<string>("imza");
                 string onceki; lock (_kilit) onceki = _duyuruImza;
                 if (imza != null && imza != onceki) _ = Task.Run(() => DuyurulariTazele(imza));

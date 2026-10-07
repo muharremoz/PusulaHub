@@ -55,6 +55,8 @@ namespace PusulaConnect
 
         // Hub izleme merkezi: canlı durum (~60 sn) ve olay kaydı. Hata yutulur — izleme asıl işi bozmasın.
         public Task<JObject> Nabiz(object durum) => Gonder(HttpMethod.Post, "api/nabiz", durum);
+        /// <summary>Pusula'nın istediği günlüğü yükler (nabız yanıtında gunlukIste).</summary>
+        public Task<JObject> GunlukYukle(string metin) => Gonder(HttpMethod.Post, "api/gunluk", new { metin });
 
         // Duyurular (Hub → müşteri). Nabız yanıtındaki imza değişince liste yeniden çekilir.
         public async Task<JArray> Duyurular()

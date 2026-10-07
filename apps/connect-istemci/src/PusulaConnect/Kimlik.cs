@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json.Linq;
@@ -91,6 +92,24 @@ namespace PusulaConnect
         }
 
         /// <summary>Önceki günün dosyasını tarihli ada taşır; 2 günden eski günlükleri (eski biçimdekiler dahil) siler.</summary>
+        /// <summary>Uzaktan günlük (07.10.2026): dünkü + bugünkü günlük, sondan en fazla ~256 KB.</summary>
+        public static string Metin()
+        {
+            var sb = new StringBuilder();
+            lock (Kilit)
+            {
+                try
+                {
+                    var dunku = Directory.GetFiles(Kimlik.Klasor, "gunluk-*.txt").OrderBy(f => f).LastOrDefault();
+                    if (dunku != null) sb.Append("===== ").Append(Path.GetFileName(dunku)).AppendLine(" =====").Append(File.ReadAllText(dunku, Encoding.UTF8));
+                    if (File.Exists(Dosya)) sb.AppendLine("===== gunluk.txt (bugün) =====").Append(File.ReadAllText(Dosya, Encoding.UTF8));
+                }
+                catch (Exception e) { sb.AppendLine("Günlük okunamadı: " + e.Message); }
+            }
+            var m = sb.ToString();
+            return m.Length > 256 * 1024 ? "…(baştan kesildi)\n" + m.Substring(m.Length - 256 * 1024) : m;
+        }
+
         private static void Dondur(DateTime bugun)
         {
             try
