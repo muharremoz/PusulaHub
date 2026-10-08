@@ -572,7 +572,29 @@ namespace PusulaConnect
         public object VpnAc()
         {
             var exe = Fortinet.ExeYolu() ?? throw new KullaniciHatasi("FortiClient kurulu değil.");
-            Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true });
+            /*  08.10.2026: bazı müşterilerde Connect'ten açınca FortiClient "Cannot read properties of null
+             *  (reading 'TraceLog')" ile çöküyordu, Başlat menüsünden elle açınca açılıyordu. Fark: exe doğrudan
+             *  başlatılınca çalışma klasörü Connect'inki (açılışta System32) oluyordu. Artık elle açmanın aynısı:
+             *  önce Başlat menüsü kısayolu, yoksa exe kendi klasöründe çalışma klasörüyle.                      */
+            string kisayol = null;
+            try
+            {
+                kisayol = Directory.EnumerateFiles(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu), "Programs"), "*.lnk", SearchOption.AllDirectories)
+                    .FirstOrDefault(f => Path.GetFileNameWithoutExtension(f).IndexOf("FortiClient", StringComparison.OrdinalIgnoreCase) >= 0
+                                      && Path.GetFileNameWithoutExtension(f).IndexOf("uninstall", StringComparison.OrdinalIgnoreCase) < 0);
+            }
+            catch { }
+            try
+            {
+                if (kisayol != null) Process.Start(new ProcessStartInfo(kisayol) { UseShellExecute = true });
+                else Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
+            }
+            catch
+            {
+                kisayol = null;
+                Process.Start(new ProcessStartInfo(exe) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(exe) });
+            }
+            Gunluk.Yaz("FortiClient açıldı: " + (kisayol ?? exe + " (çalışma klasörü kendi klasörü)"));
             return Durum();
         }
 
