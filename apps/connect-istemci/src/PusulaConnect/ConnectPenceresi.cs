@@ -57,7 +57,23 @@ namespace PusulaConnect
             try
             {
                 YukleyiciyiHazirla();
-                return !string.IsNullOrEmpty(CoreWebView2Environment.GetAvailableBrowserVersionString());
+                var surum = CoreWebView2Environment.GetAvailableBrowserVersionString();
+                if (string.IsNullOrEmpty(surum)) return false;
+                // 09.10.2026: kaldırılmış/yarım kurulumdan kalan kayıt "kurulu" diyordu ama dosya yoktu → pencere
+                // 0x80070002 ile açılmıyordu, kurulum da atlanıyordu. Sürümün çalıştırılabilir dosyası diskte aranır.
+                var surumNo = surum.Split(' ')[0];
+                foreach (var kok in new[]
+                {
+                    Environment.GetEnvironmentVariable("ProgramFiles(x86)"),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                })
+                {
+                    if (string.IsNullOrEmpty(kok)) continue;
+                    if (File.Exists(Path.Combine(kok, "Microsoft", "EdgeWebView", "Application", surumNo, "msedgewebview2.exe"))) return true;
+                }
+                Gunluk.Yaz("WebView2 kaydı var (" + surum + ") ama dosyası bulunamadı — kurulu sayılmadı");
+                return false;
             }
             catch
             {

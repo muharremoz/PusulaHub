@@ -25,7 +25,7 @@
     <AssemblyName>PusulaConnect</AssemblyName>
     <RootNamespace>PusulaConnect</RootNamespace>
     <!-- Servisteki MIN_ISTEMCI_SURUM ile karşılaştırılır (eskiyse 426); kendini güncelleme istemci/surum.txt ile. -->
-    <Version>0.6.16</Version>
+    <Version>0.6.17</Version>
     <Company>Pusula Yazılım</Company>
     <Product>Pusula Connect</Product>
     <AssemblyTitle>Pusula Connect</AssemblyTitle>
