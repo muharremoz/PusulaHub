@@ -2553,7 +2553,10 @@ static class Program
                 return;
             }
             bool trayCreated;
-            var trayMutex = new Mutex(true, "Global\\PusulaAgentTray_Mutex", out trayCreated);
+            Mutex trayMutex;
+            // Baska kullanicinin olusturdugu Global mutex'e erisim yetkisi yok -> eskiden cokuyordu (2026-10-09)
+            try { trayMutex = new Mutex(true, "Global\\PusulaAgentTray_Mutex", out trayCreated); }
+            catch (UnauthorizedAccessException) { return; }
             if (!trayCreated) return; // zaten acik
             Application.Run(new TrayMonitor(trayCfg));
             GC.KeepAlive(trayMutex);
