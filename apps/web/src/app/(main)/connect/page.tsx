@@ -102,6 +102,7 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   kayit_kaldirildi: { ad: "Kullanıcı kaydı kaldırdı", ton: "uyari" },
   ayar_degisti: { ad: "Ayar değişti", ton: "notr" },
   vpn_kuruldu: { ad: "VPN kuruldu", ton: "iyi" },
+  ilk_kurulum_tamam: { ad: "İlk kurulum tamamlandı", ton: "iyi" },
   vpn_kurulum_hatasi: { ad: "VPN kurulamadı", ton: "hata" },
   "2fa_acildi": { ad: "2FA açıldı", ton: "iyi" },
   "2fa_kapatildi": { ad: "2FA kapatıldı", ton: "uyari" },

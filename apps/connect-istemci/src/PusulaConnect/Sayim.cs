@@ -535,6 +535,13 @@ namespace PusulaConnect
             return (sunucu, kullanici, sifre, data);
         }
 
+        /// <summary>"adres,1433" → "adres" (varsayılan SQL portu); boşluklar kırpılır.</summary>
+        private static string PortsuzAdres(string s)
+        {
+            s = (s ?? "").Trim();
+            return s.EndsWith(",1433", StringComparison.Ordinal) ? s.Substring(0, s.Length - 5) : s;
+        }
+
         /// <summary>
         /// Bağlantı dosyası sağlam mı (07.10.2026): okunup çözülebiliyor ve sunucu Pusula'nın son verdiğiyle aynı mı.
         /// Sorun yoksa null, varsa kısa açıklama. Bozuk/eski dosya Connect tarafından Hub'dan yeniden yazılır
@@ -549,7 +556,9 @@ namespace PusulaConnect
                 {
                     var b = BaglantiOku();
                     var beklenen = DurumOku()?.Value<string>("sunucu");
-                    if (!string.IsNullOrEmpty(beklenen) && !string.Equals(beklenen, b.sunucu, StringComparison.OrdinalIgnoreCase))
+                    // Varsayılan port (1433) yazılmaz (eski programın Server.xml'i "adres" tutar) — karşılaştırmada yok sayılır.
+                    // 09.10.2026: "10.15.2.2 ≠ 10.15.2.2,1433" yüzünden dosya dakikada bir yeniden yazılıyordu.
+                    if (!string.IsNullOrEmpty(beklenen) && !string.Equals(PortsuzAdres(beklenen), PortsuzAdres(b.sunucu), StringComparison.OrdinalIgnoreCase))
                         return "sunucu Pusula'dakinden farklı (" + b.sunucu + " ≠ " + beklenen + ")";
                     return null;
                 }
