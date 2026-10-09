@@ -24,6 +24,9 @@ namespace PusulaConnect
         private readonly string _adres;
         private readonly Action _kapat;
         private readonly WebView2 _web;
+        /// <summary>Pencere açılış sorunları Hub'a olay olarak gider (Program bağlar): (tür, ayrıntı).</summary>
+        public static Action<string, object> OlayGonder;
+
         /// <summary>Program (tepsi/nabız/çıkış) kapatıyorsa onay sorulmaz.</summary>
         public bool SormadanKapat { get; set; }
 
@@ -62,12 +65,57 @@ namespace PusulaConnect
             }
         }
 
+        /// <summary>
+        /// WebView2 ortamını kurar. 09.10.2026: bazı müşterilerde "dosya bulunamadı (0x80070002)" — çalışma zamanı kayıtlı
+        /// ama dosyaları yok (arka planda güncelleniyor ya da bozuk). Önce 5 sn bekleyip bir kez daha denenir (güncelleme
+        /// anı), yine olmazsa Microsoft'un kurulum programıyla onarılıp son kez denenir; olmazsa tarayıcıya düşülür.
+        /// </summary>
+        private async Task OrtamiKur()
+        {
+            Exception ilk = null;
+            for (var deneme = 1; deneme <= 3; deneme++)
+            {
+                try
+                {
+                    var ortam = await CoreWebView2Environment.CreateAsync(null, Path.Combine(VeriKlasoru, "WebView2"));
+                    await _web.EnsureCoreWebView2Async(ortam);
+                    if (deneme > 1)
+                    {
+                        Gunluk.Yaz("Uygulama penceresi " + deneme + ". denemede açıldı");
+                        OlayGonder?.Invoke("pencere_acildi_tekrar", new { deneme, hata = ilk?.Message });
+                    }
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    ilk = ilk ?? ex;
+                    Gunluk.Yaz("Uygulama penceresi açılamadı (" + deneme + ". deneme): " + ex.Message);
+                    if (deneme == 1) await Task.Delay(5000);
+                    else if (deneme == 2)
+                    {
+                        Gunluk.Yaz("WebView2 onarılıyor");
+                        var tamam = WebViewKurulum.Kur(CalismaZamaniVar);
+                        Gunluk.Yaz("WebView2 onarım sonucu: " + (tamam ? "kurulu" : "kurulamadı"));
+                    }
+                    else
+                    {
+                        OlayGonder?.Invoke("pencere_acilamadi", new { hata = ex.Message, surum = CalismaZamaniSurumu() });
+                        throw;
+                    }
+                }
+            }
+        }
+
+        private static string CalismaZamaniSurumu()
+        {
+            try { return CoreWebView2Environment.GetAvailableBrowserVersionString(); } catch { return null; }
+        }
+
         private async Task Baslat()
         {
             try
             {
-                var ortam = await CoreWebView2Environment.CreateAsync(null, Path.Combine(VeriKlasoru, "WebView2"));
-                await _web.EnsureCoreWebView2Async(ortam);
+                await OrtamiKur();
                 var a = _web.CoreWebView2.Settings;
                 // F5 ile sayfa yenilenmesin (süren iş ekranı kaybolmasın).
                 a.AreBrowserAcceleratorKeysEnabled = false;

@@ -95,6 +95,7 @@ namespace PusulaConnect
                     if (p != null && !p.IsDisposed && p.IsHandleCreated) p.BeginInvoke((Action)goster); else goster();
                 };
                 _tepsi.BalloonTipClicked += (s, e) => Goster(tamAdres);
+                ConnectPenceresi.OlayGonder = (tur, ayrinti) => _uygulama.OlayGonder(tur, ayrinti);
                 // WebView2 yoksa (eski Windows 10/Server) önce kurulmaya çalışılır — yoksa arayüz tarayıcıya düşerdi
                 if (ConnectPenceresi.CalismaZamaniVar() || WebViewYoksaKur())
                 {

@@ -17,6 +17,9 @@ namespace PusulaConnect
     internal sealed class Uygulama
     {
         private readonly ServisIstemci _servis;
+
+        /// <summary>Uygulama dışından (pencere) olay gönderimi — sonucu beklenmez.</summary>
+        public void OlayGonder(string tur, object ayrinti) { _ = _servis.Olay(tur, ayrinti); }
         private readonly object _kilit = new object();
         private string _asama = "acilis";
         private JObject _kayit;              // { firmaId, firmaAdi, kullanici, profil }
