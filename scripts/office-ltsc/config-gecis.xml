@@ -1,0 +1,23 @@
+<Configuration>
+  <!-- T2/T3: perakende Home & Business 2024 (Current Channel) -> Office LTSC Pro Plus 2024 (kurumsal), T1/T4 ile ayni.
+       Neden: Current Channel her profile ~650 MB bilesen indiriyor (SolutionPackages) ve terminalde perakende lisans kullanilamaz. -->
+  <Remove>
+    <Product ID="HomeBusiness2024Retail">
+      <Language ID="tr-tr" />
+      <Language ID="en-us" />
+    </Product>
+  </Remove>
+  <Add OfficeClientEdition="64" Channel="PerpetualVL2024">
+    <Product ID="ProPlus2024Volume">
+      <Language ID="tr-tr" />
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="OneDrive" />
+    </Product>
+  </Add>
+  <Property Name="SharedComputerLicensing" Value="0" />
+  <Property Name="FORCEAPPSHUTDOWN" Value="TRUE" />
+  <Property Name="AUTOACTIVATE" Value="0" />
+  <Updates Enabled="TRUE" Channel="PerpetualVL2024" />
+  <Display Level="None" AcceptEULA="TRUE" />
+  <Logging Level="Standard" Path="C:\Kurulum\Office2024\log" />
+</Configuration>
