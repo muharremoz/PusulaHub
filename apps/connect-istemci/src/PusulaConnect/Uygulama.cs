@@ -1285,7 +1285,9 @@ namespace PusulaConnect
             if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Bir şifre belirleyin.");
             await _servis.UygSifreAc(sifre);
             UygSifreDurumYaz(true);
-            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = DateTime.Now; }
+            // Açılış kilidi bu açılış için açık sayılır ama bağlantı doğrulaması SAYILMAZ: kullanıcı açar açmaz
+            // "Pusula'ya bağlan"da şifrenin sorulduğunu görsün (0.7.0'da 2 dk sorulmuyordu, "çalışmadı" sanıldı).
+            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = default; }
             Gunluk.Yaz("Uygulama şifresi açıldı");
             return Durum();
         }
@@ -1304,7 +1306,7 @@ namespace PusulaConnect
             if (string.IsNullOrEmpty(eski)) throw new KullaniciHatasi("Mevcut şifrenizi girin.");
             if (string.IsNullOrEmpty(yeni)) throw new KullaniciHatasi("Yeni şifreyi girin.");
             await _servis.UygSifreDegistir(eski, yeni);
-            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = DateTime.Now; }
+            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = default; }
             Gunluk.Yaz("Uygulama şifresi değiştirildi");
             return Durum();
         }
