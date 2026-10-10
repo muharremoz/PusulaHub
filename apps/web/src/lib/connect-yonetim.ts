@@ -11,6 +11,8 @@ const KEY = connectServisAnahtari()
 export interface ConnectAyarlar {
   tamEkran?: boolean; yazici?: boolean; pano?: boolean; ses?: boolean; windowsIleBaslat?: boolean
   akilliKart?: boolean; portlar?: boolean; konum?: boolean; kamera?: boolean; aygitlar?: boolean; suruculer?: boolean
+  /** 2FA / uygulama şifresi ne zaman sorulsun (açılış / bağlantı) */
+  ikiAcilis?: boolean; ikiBaglanti?: boolean; sifreAcilis?: boolean; sifreBaglanti?: boolean
 }
 
 export interface ConnectCihazDurum {
@@ -62,6 +64,10 @@ export interface ConnectCihazSatir {
   totpAktif: boolean
   totpHata: number
   totpKilit: string | null
+  /** Uygulama şifresi (istemci 0.7.0+): kullanıcının kendi şifresi; serviste yalnız özeti */
+  sifreAktif?: boolean
+  sifreHata?: number
+  sifreKilit?: string | null
   sonNabiz: string | null
   oturumAcik: boolean
   oturumBaslangic: string | null
@@ -97,7 +103,7 @@ export interface ConnectKod {
   cihazlar: { id: string }[]
 }
 
-export type ConnectCihazIslemi = "2fa-sifirla" | "kilit-kaldir" | "iptal" | "etkinlestir" | "sil"
+export type ConnectCihazIslemi = "2fa-sifirla" | "sifre-sifirla" | "kilit-kaldir" | "iptal" | "etkinlestir" | "sil"
 
 async function istek<T>(yol: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`${BASE}${yol}`, { ...init, headers: { "X-Service-Key": KEY, "Content-Type": "application/json", ...(init?.headers ?? {}) }, cache: "no-store" })

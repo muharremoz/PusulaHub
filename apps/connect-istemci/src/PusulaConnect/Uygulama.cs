@@ -246,6 +246,34 @@ namespace PusulaConnect
         }
 
         private bool IkiAktif { get { lock (_kilit) return _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true; } }
+
+        // ── Uygulama şifresi (10.10.2026): kullanıcının kendi şifresi, serviste özeti tutulur (Hub'dan sıfırlanabilir).
+        // 2FA'dan bağımsız bir kapı: açılışta (kilit ekranı) ve/veya her bağlanmada sorulur. Oturum şifresinin saklanışını
+        // değiştirmez. _uygKilitAcik: bu açılışta doğru şifre girildi. _uygSifreZaman: son doğrulama anı — "bağlantıda sor"
+        // açıkken Baglan bunu kısa süre içinde ister (arayüz şifre penceresinden hemen sonra bağlanır).
+        private bool _uygKilitAcik;
+        private DateTime _uygSifreZaman;
+        private static readonly TimeSpan UygSifreGecerlilik = TimeSpan.FromMinutes(2);
+        private bool UygSifreAktif { get { lock (_kilit) return _kayit?["uygulamaSifresi"]?.Value<bool?>("aktif") == true; } }
+        /// <summary>Bağlanmak için uygulama şifresi gerekiyor mu (ayara göre: her bağlanmada ya da açılışta hiç girilmediyse).</summary>
+        private bool UygSifreGerekli
+        {
+            get
+            {
+                if (!UygSifreAktif) return false;
+                lock (_kilit)
+                    return Ayarlar.Simdiki.SifreBaglanti ? DateTime.Now - _uygSifreZaman > UygSifreGecerlilik : !_uygKilitAcik;
+            }
+        }
+        private void UygSifreDurumYaz(bool aktif)
+        {
+            lock (_kilit)
+            {
+                if (_kayit == null) return;
+                _kayit["uygulamaSifresi"] = new JObject { ["aktif"] = aktif };
+                Kimlik.ProfilYaz(_kayit);
+            }
+        }
         private void IkiDurumYaz(bool aktif)
         {
             lock (_kilit)
@@ -351,6 +379,14 @@ namespace PusulaConnect
                         // Açılışta kod: doğrulanana kadar arayüz kilit ekranı gösterir
                         kilitli = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true && Ayarlar.Simdiki.IkiAcilis && !_kilitAcik,
                         kodGerekli = _kayit?["ikiAdim"]?.Value<bool?>("aktif") == true && (Ayarlar.Simdiki.IkiBaglanti || _kasaAnahtari == null || _sifreBekliyor),
+                    },
+                    uygulamaSifresi = new
+                    {
+                        aktif = _kayit?["uygulamaSifresi"]?.Value<bool?>("aktif") == true,
+                        // Açılışta şifre: girilene kadar arayüz kilit ekranı gösterir (2FA kilidinden önce)
+                        kilitli = _kayit?["uygulamaSifresi"]?.Value<bool?>("aktif") == true && Ayarlar.Simdiki.SifreAcilis && !_uygKilitAcik,
+                        gerekli = _kayit?["uygulamaSifresi"]?.Value<bool?>("aktif") == true
+                            && (Ayarlar.Simdiki.SifreBaglanti ? DateTime.Now - _uygSifreZaman > UygSifreGecerlilik : !_uygKilitAcik),
                     },
                     // Pusula'dan şifre güncellemesi: bekleyen (2FA) sürekli, bilgi mesajı 3 dk görünür
                     sifreGuncelleme = new
@@ -476,7 +512,7 @@ namespace PusulaConnect
             // Yeni kayıtta yedek bilgisi hemen istensin (30 dk'lık bekleme önceki kayıttan kalmasın)
             lock (_kilit) _yedekler = null;
             _yedekZaman = DateTime.MinValue;
-            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false; }
+            lock (_kilit) { _kayit = null; _asama = "kayit"; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null; _yedekler = null; _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false; _uygKilitAcik = false; _uygSifreZaman = default; }
             return Durum();
         }
 
@@ -644,6 +680,7 @@ namespace PusulaConnect
         public async Task<object> Baglan(string kod = null)
         {
             if (OturumAcikMi?.Invoke() == true) throw new KullaniciHatasi("Oturum zaten açık.");
+            if (UygSifreGerekli) throw new KullaniciHatasi("Önce uygulama şifrenizi girin.");
             var rdp = P("rdp") ?? throw new KullaniciHatasi("Profil yok.");
             var t = await SunucuyuYokla();
             var hedef = RdpHedef;
@@ -703,12 +740,15 @@ namespace PusulaConnect
                     Aygitlar = ay.Aygitlar, Suruculer = ay.Suruculer,
                 }, OturumBitti);
                 _oturumBaslangic = DateTime.Now;
+                // "Bağlantıda şifre sor" açıksa bir sonraki bağlanmada yeniden sorulur
+                lock (_kilit) _uygSifreZaman = default;
                 _ = _servis.Olay("oturum_acildi", new { sunucu = rdp, ms = t.ms, ikiAdim = iki, dpi = Ekran.Dpi(null) });
                 _ = Task.Run(() => NabizGonder(true));
                 Gunluk.Yaz("Oturum açılıyor (uygulama içinde" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
             else
             {
+                lock (_kilit) _uygSifreZaman = default;
                 Rdp.Baglan(ad, hedef, RdpPort, P("domain"), kullanici, sifre);
                 Gunluk.Yaz("RDP başlatıldı (mstsc" + (iki ? ", 2FA doğrulandı" : "") + ") → " + rdp + " (" + t.ms + " ms)");
             }
@@ -993,6 +1033,7 @@ namespace PusulaConnect
             {
                 _kayit = null; _asama = "kayit"; _mesaj = mesaj; _servis.Token = null; _duyurular = new JArray(); _duyuruImza = null;
                 _profilImza = null; _sifreBekliyor = false; _sifreBilgi = null; _kasaAnahtari = null; _kilitAcik = false; _sifreAlinamadi = false;
+                _uygKilitAcik = false; _uygSifreZaman = default;
             }
         }
 
@@ -1233,6 +1274,48 @@ namespace PusulaConnect
             lock (_kilit) { _kasaAnahtari = null; _kilitAcik = false; }
             Gunluk.Yaz("İki adımlı doğrulama kapatıldı");
             await Kontrol();
+            return Durum();
+        }
+
+        // ------------------------------------------------------------ uygulama şifresi
+
+        /// <summary>Kullanıcı kendi şifresini belirler; servis özetini saklar. Açan kişi zaten içeride: bu açılış için kilit açık sayılır.</summary>
+        public async Task<object> UygSifreAc(string sifre)
+        {
+            if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Bir şifre belirleyin.");
+            await _servis.UygSifreAc(sifre);
+            UygSifreDurumYaz(true);
+            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = DateTime.Now; }
+            Gunluk.Yaz("Uygulama şifresi açıldı");
+            return Durum();
+        }
+
+        /// <summary>Açılış kilidi ya da bağlanma öncesi: servis doğrular (5 hatada 10 dk kilit), bu açılış için kapı açılır.</summary>
+        public async Task<object> UygSifreDogrula(string sifre)
+        {
+            if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Uygulama şifrenizi girin.");
+            await _servis.UygSifreDogrula(sifre);
+            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = DateTime.Now; }
+            return Durum();
+        }
+
+        public async Task<object> UygSifreDegistir(string eski, string yeni)
+        {
+            if (string.IsNullOrEmpty(eski)) throw new KullaniciHatasi("Mevcut şifrenizi girin.");
+            if (string.IsNullOrEmpty(yeni)) throw new KullaniciHatasi("Yeni şifreyi girin.");
+            await _servis.UygSifreDegistir(eski, yeni);
+            lock (_kilit) { _uygKilitAcik = true; _uygSifreZaman = DateTime.Now; }
+            Gunluk.Yaz("Uygulama şifresi değiştirildi");
+            return Durum();
+        }
+
+        public async Task<object> UygSifreKapat(string sifre)
+        {
+            if (string.IsNullOrEmpty(sifre)) throw new KullaniciHatasi("Uygulama şifrenizi girin.");
+            await _servis.UygSifreKapat(sifre);
+            UygSifreDurumYaz(false);
+            lock (_kilit) { _uygKilitAcik = false; _uygSifreZaman = default; }
+            Gunluk.Yaz("Uygulama şifresi kapatıldı");
             return Durum();
         }
 

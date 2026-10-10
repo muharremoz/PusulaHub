@@ -51,6 +51,12 @@ namespace PusulaConnect
         public Task<JObject> IkiOnayla(string kod) => Gonder(HttpMethod.Post, "api/2fa/onayla", new { kod });
         public Task<JObject> IkiDogrula(string kod) => Gonder(HttpMethod.Post, "api/2fa/dogrula", new { kod });
         public Task<JObject> IkiKapat(string kod) => Gonder(HttpMethod.Post, "api/2fa/kapat", new { kod });
+
+        // Uygulama şifresi (bkz. services/pusula-connect: /api/uygulama-sifresi/*). Şifre yerelde saklanmaz, yalnız serviste özeti durur.
+        public Task<JObject> UygSifreAc(string sifre) => Gonder(HttpMethod.Post, "api/uygulama-sifresi/ac", new { sifre });
+        public Task<JObject> UygSifreDogrula(string sifre) => Gonder(HttpMethod.Post, "api/uygulama-sifresi/dogrula", new { sifre });
+        public Task<JObject> UygSifreDegistir(string eski, string yeni) => Gonder(HttpMethod.Post, "api/uygulama-sifresi/degistir", new { eski, yeni });
+        public Task<JObject> UygSifreKapat(string sifre) => Gonder(HttpMethod.Post, "api/uygulama-sifresi/kapat", new { sifre });
         public string IndirmeAdresi => Adres + "indir";
 
         // Hub izleme merkezi: canlı durum (~60 sn) ve olay kaydı. Hata yutulur — izleme asıl işi bozmasın.

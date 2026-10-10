@@ -1,7 +1,8 @@
 /**
  * POST /api/connect/cihazlar/[id]  { islem }
  *   2fa-sifirla  telefon kayboldu — 2FA kapanır, kullanıcı şifresini yeniden girer
- *   kilit-kaldir çok hatalı kod kilidi (10 dk) hemen kalkar
+ *   sifre-sifirla kullanıcı uygulama şifresini unuttu — şifre kalkar, isterse yeniden belirler
+ *   kilit-kaldir çok hatalı kod/şifre kilidi (10 dk) hemen kalkar
  *   iptal        bilgisayar kayboldu — cihaz bağlanamaz
  *   etkinlestir  iptal geri alınır
  *   sil          ölü kaydı listeden siler (olay geçmişi kalır)
@@ -12,7 +13,7 @@ import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { connectCihazIslemi, type ConnectCihazIslemi } from "@/lib/connect-yonetim"
 
-const ISLEMLER: ConnectCihazIslemi[] = ["2fa-sifirla", "kilit-kaldir", "iptal", "etkinlestir", "sil"]
+const ISLEMLER: ConnectCihazIslemi[] = ["2fa-sifirla", "sifre-sifirla", "kilit-kaldir", "iptal", "etkinlestir", "sil"]
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission("companies", "write")

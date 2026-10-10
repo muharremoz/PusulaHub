@@ -16,7 +16,7 @@ import { SayimBolumu } from "./sayim";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
-  | "portlar" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti";
+  | "portlar" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti" | "sifreAcilis" | "sifreBaglanti";
 
 type Sekme = "baglanti" | "yazdirma" | "sayim" | "guvenlik" | "uygulama";
 const SEKME_DEPO = "connect-ayar-sekme";
@@ -27,13 +27,18 @@ const SEKMELER: Sekme[] = ["baglanti", "yazdirma", "sayim", "guvenlik", "uygulam
  * Bağlantı ayarları bir sonraki "Pusula'ya bağlan"da geçerli olur. Son açık sekme bu bilgisayarda hatırlanır.
  */
 export function AyarlarIcerik({
-  durum, setDurum, ikiAktif, onIkiAc, onIkiKapat,
+  durum, setDurum, ikiAktif, onIkiAc, onIkiKapat, uygSifreAktif, onUygAc, onUygDegistir, onUygKapat,
 }: {
   durum: Durum;
   setDurum: (d: Durum) => void;
   ikiAktif: boolean;
   onIkiAc: () => void;
   onIkiKapat: () => void;
+  /** Uygulama şifresi (0.7.0) */
+  uygSifreAktif: boolean;
+  onUygAc: () => void;
+  onUygDegistir: () => void;
+  onUygKapat: () => void;
 }) {
   const ay = durum.ayarlar;
   const [bekle, setBekle] = useState<string | null>(null);
@@ -92,18 +97,19 @@ export function AyarlarIcerik({
   };
   const degistir = (ad: AyarAdi, deger: boolean) => degistirCok({ [ad]: deger });
 
-  // İki adımlı doğrulama seçenekleri: en az biri açık kalır — biri kapatılınca diğeri kapalıysa kendiliğinden açılır.
-  const ikiDeger = (ad: "ikiAcilis" | "ikiBaglanti") => yerel[ad] ?? (ad === "ikiBaglanti" ? ay?.ikiBaglanti ?? true : !!ay?.ikiAcilis);
-  const ikiAnahtar = (ad: "ikiAcilis" | "ikiBaglanti") => {
-    const digerAd = ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis";
-    return (
-      <Switch
-        checked={ikiDeger(ad)}
-        disabled={!ay}
-        onCheckedChange={(v) => void degistirCok(!v && !ikiDeger(digerAd) ? { [ad]: false, [digerAd]: true } : { [ad]: v })}
-      />
-    );
-  };
+  // İki adımlı doğrulama / uygulama şifresi seçenekleri: çiftin en az biri açık kalır — biri kapatılınca diğeri
+  // kapalıysa kendiliğinden açılır. "...Baglanti" varsayılan açık, "...Acilis" varsayılan kapalı.
+  type Cift = "ikiAcilis" | "ikiBaglanti" | "sifreAcilis" | "sifreBaglanti";
+  const ciftDeger = (ad: Cift) => yerel[ad] ?? (ad.endsWith("Baglanti") ? ay?.[ad] ?? true : !!ay?.[ad]);
+  const ciftAnahtar = (ad: Cift, digerAd: Cift) => (
+    <Switch
+      checked={ciftDeger(ad)}
+      disabled={!ay}
+      onCheckedChange={(v) => void degistirCok(!v && !ciftDeger(digerAd) ? { [ad]: false, [digerAd]: true } : { [ad]: v })}
+    />
+  );
+  const ikiAnahtar = (ad: "ikiAcilis" | "ikiBaglanti") => ciftAnahtar(ad, ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis");
+  const sifreAnahtar = (ad: "sifreAcilis" | "sifreBaglanti") => ciftAnahtar(ad, ad === "sifreAcilis" ? "sifreBaglanti" : "sifreAcilis");
 
   const anahtar = (ad: AyarAdi) => (
     <Switch checked={yerel[ad] ?? !!ay?.[ad]} disabled={!ay} onCheckedChange={(v) => void degistir(ad, v)} />
@@ -155,6 +161,43 @@ export function AyarlarIcerik({
         </TabsContent>
 
         <TabsContent value="guvenlik" className={SEKME_ICERIK}>
+          <Bolum baslik="Uygulama şifresi">
+            <Satir
+              ikon={<KeyRound />}
+              ad="Uygulama şifresi"
+              aciklama={uygSifreAktif ? "Açık — Pusula Connect'e özel, sizin belirlediğiniz şifre sorulur." : "Pusula Connect'e özel bir şifre belirleyin; açılışta ya da bağlanırken sorulsun."}
+              kontrol={
+                uygSifreAktif ? (
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={onUygDegistir}>Değiştir</Button>
+                    <Button size="sm" variant="outline" onClick={onUygKapat}>Kapat</Button>
+                  </div>
+                ) : (
+                  <Button size="sm" onClick={onUygAc}>Aç</Button>
+                )
+              }
+            />
+            {uygSifreAktif && (
+              <>
+                <Satir
+                  ikon={<LockKeyhole />}
+                  ad="Uygulama açılışında şifre sor"
+                  aciklama="Pusula Connect her açıldığında önce uygulama şifresi istenir."
+                  kontrol={sifreAnahtar("sifreAcilis")}
+                />
+                <Satir
+                  ikon={<Monitor />}
+                  ad="Pusula bağlantısında şifre sor"
+                  aciklama={
+                    ciftDeger("sifreBaglanti")
+                      ? "Her \"Pusula'ya bağlan\"da uygulama şifresi istenir."
+                      : "Açılışta şifre girildiyse bağlanırken tekrar sorulmaz."
+                  }
+                  kontrol={sifreAnahtar("sifreBaglanti")}
+                />
+              </>
+            )}
+          </Bolum>
           <Bolum baslik="İki adımlı doğrulama">
             <Satir
               ikon={<ShieldCheck />}

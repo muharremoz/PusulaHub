@@ -23,6 +23,11 @@
  *     POST   /api/2fa/dogrula { kod }   her bağlanmada → { kasaAnahtari } (RDP şifresi bununla çözülür)
  *     POST   /api/2fa/kapat   { kod }   → { kasaAnahtari } (istemci şifreyi kasaya geri yazar), kapanır
  *     POST   /admin/cihazlar/:id/2fa-sifirla   Pusula sıfırlar (telefon kayboldu)
+ *     POST   /api/uygulama-sifresi/ac       { sifre }        kullanıcının kendi uygulama şifresi (scrypt özeti saklanır)
+ *     POST   /api/uygulama-sifresi/dogrula  { sifre }        açılışta / bağlanırken; 5 hatada 10 dk kilit
+ *     POST   /api/uygulama-sifresi/degistir { eski, yeni }
+ *     POST   /api/uygulama-sifresi/kapat    { sifre }
+ *     POST   /admin/cihazlar/:id/sifre-sifirla   Pusula sıfırlar (kullanıcı unuttu)
  *     POST   /admin/cihazlar/:id/kilit-kaldir  çok hatalı kod kilidini kaldır
  *     POST   /admin/cihazlar/:id/etkinlestir   iptal edilen cihazı geri aç
  *     GET    /admin/cihazlar?firma=     tüm cihazlar + canlı durum (nabız) — Hub izleme merkezi
@@ -58,7 +63,7 @@ import { fileURLToPath } from "url"
 import { dirname, join } from "path"
 import { stat, readFile } from "fs/promises"
 import { createReadStream } from "fs"
-import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv, timingSafeEqual } from "crypto"
+import { randomBytes, createHash, createHmac, createCipheriv, createDecipheriv, timingSafeEqual, scryptSync } from "crypto"
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -136,6 +141,12 @@ for (const [ad, tip] of [
   ["totpHata", "INTEGER NOT NULL DEFAULT 0"],
   ["totpKilit", "TEXT"],          // bu ana kadar kod denenemez
   ["kasaAnahtari", "TEXT"],       // şifreli; RDP şifresini çözen anahtar
+  // Uygulama şifresi (10.10.2026): kullanıcının kendi belirlediği şifre; açılışta ve/veya bağlanırken sorulur.
+  // scrypt özeti (tuz.özet, hex). 2FA'dan bağımsız; Hub'dan sıfırlanabilir (/admin/cihazlar/:id/sifre-sifirla).
+  ["sifreOzet", "TEXT"],
+  ["sifreAktif", "INTEGER NOT NULL DEFAULT 0"],
+  ["sifreHata", "INTEGER NOT NULL DEFAULT 0"],
+  ["sifreKilit", "TEXT"],         // bu ana kadar şifre denenemez
   // canlı durum (istemcinin nabzı)
   ["sonNabiz", "TEXT"],
   ["oturumAcik", "INTEGER NOT NULL DEFAULT 0"],
@@ -224,7 +235,7 @@ const sql = {
   kodDurum: db.prepare(`UPDATE kodlar SET durum = ? WHERE id = ?`),
   kodlar: db.prepare(`SELECT id, firmaId, firmaAdi, kullanici, durum, olusturan, olusturma, bitis FROM kodlar
                       WHERE (@firma IS NULL OR firmaId = @firma) ORDER BY olusturma DESC LIMIT 500`),
-  cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
+  cihazlarByKod: db.prepare(`SELECT id, makine, surum, ilkGiris, sonGorulme, iptal, totpAktif, sifreAktif FROM cihazlar WHERE kodId = ? ORDER BY ilkGiris`),
   cihazEkle: db.prepare(`INSERT INTO cihazlar (id, kodId, tokenOzet, makine, surum, tokenZaman) VALUES (?, ?, ?, ?, ?, datetime('now'))`),
   // Aynı bilgisayara aynı firma+kullanıcı için yeniden kayıt (07.10.2026): eski satırlar listede birikiyordu
   // (her yeni kodda bir satır daha). Eski token zaten o bilgisayarda yok — yeni kayıt onun yerine geçer.
@@ -241,6 +252,7 @@ const sql = {
   gunlukSil: db.prepare(`DELETE FROM gunlukler WHERE cihazId = ?`),
   tokenYenile: db.prepare(`UPDATE cihazlar SET eskiTokenOzet = tokenOzet, eskiTokenZaman = datetime('now'), tokenOzet = ?, tokenZaman = datetime('now') WHERE id = ?`),
   cihazByToken: db.prepare(`SELECT c.id AS cihazId, c.makine, c.oturumAcik, c.iptal, c.totpGizli, c.totpAktif, c.totpSonAdim, c.totpHata, c.totpKilit, c.kasaAnahtari,
+                                   c.sifreOzet, c.sifreAktif, c.sifreHata, c.sifreKilit,
                                    c.tokenZaman, (c.tokenOzet = @ozet) AS guncelToken, k.*
                             FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
                             WHERE c.tokenOzet = @ozet OR (c.eskiTokenOzet = @ozet AND c.eskiTokenZaman > @esik)`),
@@ -253,14 +265,19 @@ const sql = {
   cihazIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE id = ?`),
   kodCihazlariIptal: db.prepare(`UPDATE cihazlar SET iptal = 1 WHERE kodId = ?`),
   cihazEtkin: db.prepare(`UPDATE cihazlar SET iptal = 0 WHERE id = ?`),
-  kilitKaldir: db.prepare(`UPDATE cihazlar SET totpHata = 0, totpKilit = NULL WHERE id = ?`),
+  kilitKaldir: db.prepare(`UPDATE cihazlar SET totpHata = 0, totpKilit = NULL, sifreHata = 0, sifreKilit = NULL WHERE id = ?`),
+  // Uygulama şifresi
+  sifreAyarla: db.prepare(`UPDATE cihazlar SET sifreOzet = ?, sifreAktif = 1, sifreHata = 0, sifreKilit = NULL WHERE id = ?`),
+  sifreBasari: db.prepare(`UPDATE cihazlar SET sifreHata = 0, sifreKilit = NULL WHERE id = ?`),
+  sifreHata: db.prepare(`UPDATE cihazlar SET sifreHata = ?, sifreKilit = ? WHERE id = ?`),
+  sifreSifirla: db.prepare(`UPDATE cihazlar SET sifreOzet = NULL, sifreAktif = 0, sifreHata = 0, sifreKilit = NULL WHERE id = ?`),
   nabiz: db.prepare(`UPDATE cihazlar SET sonNabiz = datetime('now'), sonGorulme = datetime('now'), surum = @surum,
                       oturumAcik = @oturumAcik,
                       oturumBaslangic = CASE WHEN @oturumAcik = 1 THEN COALESCE(oturumBaslangic, datetime('now')) ELSE NULL END,
                       terminalErisim = @terminalErisim, terminalMs = @terminalMs, ip = @ip, durumJson = @durumJson
                     WHERE id = @id`),
   tumCihazlar: db.prepare(`SELECT c.id, c.kodId, c.makine, c.surum, c.ilkGiris, c.sonGorulme, c.iptal, c.totpAktif, c.totpHata, c.totpKilit,
-                             c.sonNabiz, c.oturumAcik, c.oturumBaslangic, c.terminalErisim, c.terminalMs, c.ip, c.durumJson,
+                             c.sifreAktif, c.sifreHata, c.sifreKilit, c.sonNabiz, c.oturumAcik, c.oturumBaslangic, c.terminalErisim, c.terminalMs, c.ip, c.durumJson,
                              k.firmaId, k.firmaAdi, k.kullanici, k.durum AS kodDurum, k.olusturan, k.profil
                            FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
                            WHERE (@firma IS NULL OR k.firmaId = @firma)
@@ -357,6 +374,7 @@ function kayitGorunumu(k, hub = null) {
   const sifreSurumu = hub?.sifreSurumu ?? null
   return {
     firmaId: k.firmaId, firmaAdi: k.firmaAdi, kullanici: k.kullanici, profil, ikiAdim: { aktif: !!k.totpAktif },
+    uygulamaSifresi: { aktif: !!k.sifreAktif },
     sifreSurumu, profilImza: ozet(JSON.stringify(profil) + "|" + (sifreSurumu ?? "")).slice(0, 16),
     // Sayım modu: SQL bilgisi değişince istemci server.xml'i yeniler (profilImza'ya KATILMAZ — VPN ayarı yeniden yazılmasın)
     sayimImza: hub?.sayimImza ?? null,
@@ -476,6 +494,28 @@ function totpDogrula(gizliB32, kod, sonAdim) {
 }
 const TOTP_HATA_SINIRI = 5
 const TOTP_KILIT_DK = 10
+
+// ── Uygulama şifresi (kullanıcının kendi şifresi; scrypt) ──
+const SIFRE_EN_AZ = 4, SIFRE_EN_COK = 64
+const SIFRE_HATA_SINIRI = 5
+const SIFRE_KILIT_DK = 10
+function sifreOzetle(sifre) {
+  const tuz = randomBytes(16)
+  return tuz.toString("hex") + "." + scryptSync(sifre, tuz, 32).toString("hex")
+}
+function sifreEslesir(sifre, kayit) {
+  const [tuz, ozet] = String(kayit ?? "").split(".")
+  if (!tuz || !ozet) return false
+  const a = scryptSync(sifre, Buffer.from(tuz, "hex"), 32), b = Buffer.from(ozet, "hex")
+  return a.length === b.length && timingSafeEqual(a, b)
+}
+/** Yeni şifre kuralı; uygun değilse hata metni döner. */
+function sifreKurali(s) {
+  if (typeof s !== "string" || s.length < SIFRE_EN_AZ) return `Şifre en az ${SIFRE_EN_AZ} karakter olmalı.`
+  if (s.length > SIFRE_EN_COK) return `Şifre en çok ${SIFRE_EN_COK} karakter olabilir.`
+  if (s.trim() !== s) return "Şifre boşlukla başlayamaz ya da bitemez."
+  return null
+}
 /** Token döndürme: çalınan bir tokenın ömrü en çok bu kadar (+ geçiş süresi). */
 const TOKEN_OMRU_GUN = 7
 const TOKEN_GECIS_DK = 15
@@ -538,6 +578,16 @@ fastify.post("/admin/cihazlar/:id/2fa-sifirla", async (req, reply) => {
   return { tamam: true }
 })
 
+/** Kullanıcı uygulama şifresini unuttu: şifre kalkar, istemci bir sonraki profil tazelemesinde (≤1 dk) kilidi açar. */
+fastify.post("/admin/cihazlar/:id/sifre-sifirla", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const r = sql.sifreSifirla.run(req.params.id)
+  if (!r.changes) return reply.code(404).send({ hata: "bulunamadi" })
+  req.log.info({ cihaz: req.params.id }, "uygulama sifresi sifirlandi (yonetici)")
+  olay("uygulama_sifresi_sifirlandi", { cihaz: sql.cihazBilgi.get(req.params.id), kaynak: "yonetici", ayrinti: req.body?.yapan ?? null })
+  return { tamam: true }
+})
+
 fastify.post("/admin/cihazlar/:id/kilit-kaldir", async (req, reply) => {
   if (!yonetici(req, reply)) return
   const r = sql.kilitKaldir.run(req.params.id)
@@ -561,7 +611,7 @@ fastify.get("/admin/cihazlar", async (req, reply) => {
     let p = {}, d = null
     try { p = JSON.parse(profil) } catch { /* bozuk */ }
     try { d = durumJson ? JSON.parse(durumJson) : null } catch { /* bozuk */ }
-    return { ...c, iptal: !!c.iptal, totpAktif: !!c.totpAktif, oturumAcik: !!c.oturumAcik, terminalErisim: c.terminalErisim == null ? null : !!c.terminalErisim,
+    return { ...c, iptal: !!c.iptal, totpAktif: !!c.totpAktif, sifreAktif: !!c.sifreAktif, oturumAcik: !!c.oturumAcik, terminalErisim: c.terminalErisim == null ? null : !!c.terminalErisim,
       rdp: p.rdp ?? null, tunel: p.tunel ?? null, durum: d }
   })
 })
@@ -799,6 +849,64 @@ fastify.post("/api/2fa/kapat", async (req, reply) => {
   req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "2fa kapatildi")
   olay("2fa_kapatildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
   return { kasaAnahtari: kasa }
+})
+
+// ── Uygulama şifresi ──
+/** Şifre denetimi: kilit, karşılaştırma, hata sayacı. Başarıda true; değilse yanıtı yazar, false döner. */
+function sifreyiDenetle(c, sifre, reply) {
+  if (!c.sifreAktif || !c.sifreOzet) { reply.code(409).send({ hata: "Uygulama şifresi kapalı." }); return false }
+  if (c.sifreKilit && c.sifreKilit > simdiUtc()) {
+    reply.code(429).send({ hata: "Çok fazla hatalı şifre. Birkaç dakika sonra tekrar deneyin." })
+    return false
+  }
+  if (!sifreEslesir(String(sifre ?? ""), c.sifreOzet)) {
+    const hata = (c.sifreHata ?? 0) + 1
+    const kilit = hata >= SIFRE_HATA_SINIRI
+      ? new Date(Date.now() + SIFRE_KILIT_DK * 60000).toISOString().replace("T", " ").slice(0, 19)
+      : null
+    sql.sifreHata.run(kilit ? 0 : hata, kilit, c.cihazId)
+    olay(kilit ? "uygulama_sifresi_kilitlendi" : "uygulama_sifresi_hatali", { cihaz: c, kaynak: "istemci", ayrinti: kilit ? `${SIFRE_HATA_SINIRI} hatalı şifre, ${SIFRE_KILIT_DK} dk kilit` : `${hata}. hatalı deneme` })
+    reply.code(400).send({ hata: kilit ? `Çok fazla hatalı şifre. ${SIFRE_KILIT_DK} dakika sonra tekrar deneyin.` : "Şifre hatalı." })
+    return false
+  }
+  sql.sifreBasari.run(c.cihazId)
+  return true
+}
+
+fastify.post("/api/uygulama-sifresi/ac", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (c.sifreAktif) return reply.code(409).send({ hata: "Uygulama şifresi zaten açık." })
+  const sifre = req.body?.sifre
+  const kural = sifreKurali(sifre); if (kural) return reply.code(400).send({ hata: kural })
+  sql.sifreAyarla.run(sifreOzetle(sifre), c.cihazId)
+  req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "uygulama sifresi acildi")
+  olay("uygulama_sifresi_acildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
+  return { tamam: true }
+})
+
+fastify.post("/api/uygulama-sifresi/dogrula", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (!sifreyiDenetle(c, req.body?.sifre, reply)) return
+  return { tamam: true }
+})
+
+fastify.post("/api/uygulama-sifresi/degistir", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (!sifreyiDenetle(c, req.body?.eski, reply)) return
+  const yeni = req.body?.yeni
+  const kural = sifreKurali(yeni); if (kural) return reply.code(400).send({ hata: kural })
+  sql.sifreAyarla.run(sifreOzetle(yeni), c.cihazId)
+  olay("uygulama_sifresi_degistirildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
+  return { tamam: true }
+})
+
+fastify.post("/api/uygulama-sifresi/kapat", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  if (!sifreyiDenetle(c, req.body?.sifre, reply)) return
+  sql.sifreSifirla.run(c.cihazId)
+  req.log.info({ firma: c.firmaId, kullanici: c.kullanici }, "uygulama sifresi kapatildi")
+  olay("uygulama_sifresi_kapatildi", { cihaz: c, kaynak: "istemci", ip: istemciIp(req) })
+  return { tamam: true }
 })
 
 fastify.get("/api/profil", async (req, reply) => {

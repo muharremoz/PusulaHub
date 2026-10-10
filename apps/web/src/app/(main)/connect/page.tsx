@@ -80,7 +80,10 @@ type IkiDurum = "acik" | "kapali" | "kilitli"
 const ikiDurum = (c: ConnectCihazSatir): IkiDurum =>
   c.totpKilit && (zaman(c.totpKilit)?.getTime() ?? 0) > Date.now() ? "kilitli" : c.totpAktif ? "acik" : "kapali"
 
-const kilitli = (c: ConnectCihazSatir) => ikiDurum(c) === "kilitli" || (c.totpHata ?? 0) > 0
+const kilitli = (c: ConnectCihazSatir) => ikiDurum(c) === "kilitli" || (c.totpHata ?? 0) > 0 || sifreKilitli(c) || (c.sifreHata ?? 0) > 0
+
+/** Uygulama şifresi: çok hatalı deneme kilidi sürüyor mu */
+const sifreKilitli = (c: ConnectCihazSatir) => !!c.sifreKilit && (zaman(c.sifreKilit)?.getTime() ?? 0) > Date.now()
 
 // ------------------------------------------------------------ olaylar
 
@@ -111,7 +114,13 @@ const OLAY: Record<string, { ad: string; ton: Ton }> = {
   "2fa_hatali_kod": { ad: "Hatalı 2FA kodu", ton: "uyari" },
   "2fa_kilitlendi": { ad: "2FA kilitlendi", ton: "hata" },
   "2fa_sifirlandi": { ad: "2FA sıfırlandı (Pusula)", ton: "uyari" },
-  "2fa_kilit_kaldirildi": { ad: "2FA kilidi kaldırıldı", ton: "notr" },
+  "2fa_kilit_kaldirildi": { ad: "Deneme kilidi kaldırıldı", ton: "notr" },
+  uygulama_sifresi_acildi: { ad: "Uygulama şifresi açıldı", ton: "iyi" },
+  uygulama_sifresi_degistirildi: { ad: "Uygulama şifresi değiştirildi", ton: "notr" },
+  uygulama_sifresi_kapatildi: { ad: "Uygulama şifresi kapatıldı", ton: "uyari" },
+  uygulama_sifresi_hatali: { ad: "Hatalı uygulama şifresi", ton: "uyari" },
+  uygulama_sifresi_kilitlendi: { ad: "Uygulama şifresi kilitlendi", ton: "hata" },
+  uygulama_sifresi_sifirlandi: { ad: "Uygulama şifresi sıfırlandı (Pusula)", ton: "uyari" },
   cihaz_iptal: { ad: "Cihaz iptal edildi", ton: "hata" },
   cihaz_etkinlestirildi: { ad: "Cihaz yeniden açıldı", ton: "iyi" },
   kod_olusturuldu: { ad: "Kurulum kodu üretildi", ton: "notr" },
@@ -343,9 +352,14 @@ const ISLEM: Record<ConnectCihazIslemi, { baslik: string; aciklama: string; dugm
     aciklama: "Doğrulama kodu artık sorulmaz; kullanıcı oturum şifresini yeniden girer ve isterse 2FA'yı yeni telefonla açar.",
     dugme: "2FA sıfırla", basari: "2FA sıfırlandı", yikici: true,
   },
+  "sifre-sifirla": {
+    baslik: "Uygulama şifresi sıfırlansın mı?",
+    aciklama: "Kullanıcının Connect için belirlediği şifre kalkar; uygulama bir dakika içinde kilidi açar. Kullanıcı isterse Ayarlar > Güvenlik'ten yeni şifre belirler.",
+    dugme: "Şifreyi sıfırla", basari: "Uygulama şifresi sıfırlandı", yikici: true,
+  },
   "kilit-kaldir": {
-    baslik: "2FA kilidi kaldırılsın mı?",
-    aciklama: "Çok hatalı kod nedeniyle konan bekleme kalkar, kullanıcı hemen tekrar deneyebilir.",
+    baslik: "Deneme kilidi kaldırılsın mı?",
+    aciklama: "Çok hatalı kod ya da şifre nedeniyle konan bekleme kalkar, kullanıcı hemen tekrar deneyebilir.",
     dugme: "Kilidi kaldır", basari: "Kilit kaldırıldı", yikici: false,
   },
   iptal: {
@@ -404,7 +418,8 @@ function CihazMenusu({ c, onIslem, onSec }: { c: ConnectCihazSatir; onIslem: (c:
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
         {onSec && <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onSec(c.id)}><Activity className="size-3.5" />Ayrıntı ve olaylar</DropdownMenuItem>}
         {c.totpAktif && <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onIslem(c, "2fa-sifirla")}><ShieldOff className="size-3.5" />2FA sıfırla</DropdownMenuItem>}
-        {kilitli(c) && <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onIslem(c, "kilit-kaldir")}><LockOpen className="size-3.5" />2FA kilidini kaldır</DropdownMenuItem>}
+        {c.sifreAktif && <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onIslem(c, "sifre-sifirla")}><KeyRound className="size-3.5" />Uygulama şifresini sıfırla</DropdownMenuItem>}
+        {kilitli(c) && <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onIslem(c, "kilit-kaldir")}><LockOpen className="size-3.5" />Deneme kilidini kaldır</DropdownMenuItem>}
         {c.iptal ? (
           <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onIslem(c, "etkinlestir")}><CheckCircle2 className="size-3.5" />Yeniden aç</DropdownMenuItem>
         ) : (
@@ -1162,6 +1177,34 @@ function CihazDetay({
                       <div className="mt-2 flex flex-wrap gap-2">
                         {c.totpAktif && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "2fa-sifirla")}><ShieldOff className="size-3.5" />2FA sıfırla</Button>}
                         {kilitli(c) && <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "kilit-kaldir")}><LockOpen className="size-3.5" />Kilidi kaldır</Button>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Uygulama şifresi (istemci 0.7.0+): kullanıcının kendi şifresi; unutursa buradan sıfırlanır */}
+                <div className="flex items-start gap-2.5 border-t p-3">
+                  <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-[5px] [&_svg]:size-4",
+                    c.sifreAktif ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                    <KeyRound />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[13px] font-medium">Uygulama şifresi</span>
+                      {sifreKilitli(c)
+                        ? <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Kilitli</span>
+                        : c.sifreAktif
+                          ? <span className="inline-flex items-center gap-1 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"><KeyRound className="size-3" />Açık</span>
+                          : <span className="text-muted-foreground text-[12px]">Kapalı</span>}
+                    </div>
+                    <p className="text-muted-foreground mt-0.5 text-[12px]">
+                      {c.sifreAktif
+                        ? `Kullanıcının belirlediği şifre ${c.durum?.ayarlar?.sifreAcilis && c.durum.ayarlar.sifreBaglanti ? "açılışta ve her bağlanışta" : c.durum?.ayarlar?.sifreAcilis ? "uygulama açılışında" : "her bağlanışta"} soruluyor.`
+                        : "Kullanıcı belirlememiş. Uygulamada Ayarlar > Güvenlik'ten açılır (0.7.0+)."}
+                      {(c.sifreHata ?? 0) > 0 && ` Son hatalı deneme sayısı: ${c.sifreHata}.`}
+                    </p>
+                    {c.sifreAktif && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" className="h-7 text-[12px]" onClick={() => onIslem(c, "sifre-sifirla")}><KeyRound className="size-3.5" />Şifreyi sıfırla</Button>
                       </div>
                     )}
                   </div>

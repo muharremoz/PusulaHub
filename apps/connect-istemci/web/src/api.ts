@@ -172,6 +172,14 @@ export type Durum = {
     /** "Pusula'ya bağlan"da kod sorulacak mı (bağlantıda kod açık, ya da açılışta alınan anahtar yok). */
     kodGerekli?: boolean;
   };
+  /** Kullanıcının kendi uygulama şifresi (0.7.0+): serviste özeti tutulur, Pusula'dan sıfırlanabilir. */
+  uygulamaSifresi?: {
+    aktif: boolean;
+    /** Açılışta şifre isteniyor ve bu açılışta henüz girilmedi → kilit ekranı (2FA kilidinden önce). */
+    kilitli?: boolean;
+    /** "Pusula'ya bağlan"dan önce şifre sorulacak mı. */
+    gerekli?: boolean;
+  };
   /** Uygulama içi uzak masaüstü: açık mı, son oturum hatayla bittiyse mesajı. */
   oturum?: { acik: boolean; mesaj: string | null };
   /** Ayarlar sayfası (anında kaydedilir). */
@@ -180,6 +188,8 @@ export type Durum = {
     portlar: boolean; kamera: boolean; aygitlar: boolean; suruculer: boolean;
     /** İki adımlı doğrulama: kod uygulama açılışında / Pusula bağlantısında sorulsun (en az biri açık). */
     ikiAcilis?: boolean; ikiBaglanti?: boolean;
+    /** Uygulama şifresi: açılışta / Pusula bağlantısında sorulsun (en az biri açık). */
+    sifreAcilis?: boolean; sifreBaglanti?: boolean;
   };
   /** Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — sol panel. */
   yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };

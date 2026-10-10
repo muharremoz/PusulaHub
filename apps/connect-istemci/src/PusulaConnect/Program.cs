@@ -149,6 +149,10 @@ namespace PusulaConnect
                 case "POST /iki/onayla": return _uygulama.IkiOnayla(i.Metin("kod"), i.Metin("sifre"));
                 case "POST /iki/kilit": return _uygulama.IkiKilitAc(i.Metin("kod"));
                 case "POST /iki/kapat": return _uygulama.IkiKapat(i.Metin("kod"));
+                case "POST /uyg-sifre/ac": return _uygulama.UygSifreAc(i.Metin("sifre"));
+                case "POST /uyg-sifre/dogrula": return _uygulama.UygSifreDogrula(i.Metin("sifre"));
+                case "POST /uyg-sifre/degistir": return _uygulama.UygSifreDegistir(i.Metin("eski"), i.Metin("yeni"));
+                case "POST /uyg-sifre/kapat": return _uygulama.UygSifreKapat(i.Metin("sifre"));
                 case "POST /guncelle": return Task.FromResult(_uygulama.Guncelle());
                 case "POST /guncelleme/denetle": return _uygulama.GuncellemeDenetle();
                 case "POST /ayarlar": return Task.FromResult(_uygulama.AyarKaydet(i.Govde));

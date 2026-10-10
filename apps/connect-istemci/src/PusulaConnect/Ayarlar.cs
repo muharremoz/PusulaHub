@@ -34,6 +34,11 @@ namespace PusulaConnect
         /// <summary>İki adımlı doğrulama açıkken: her "Pusula'ya bağlan"da kod sorulsun. İkisinden biri hep açık kalır.</summary>
         public bool IkiBaglanti { get; set; } = true;
 
+        /// <summary>Uygulama şifresi açıkken: uygulama açılışında şifre sorulsun (kilit ekranı).</summary>
+        public bool SifreAcilis { get; set; }
+        /// <summary>Uygulama şifresi açıkken: her "Pusula'ya bağlan"da şifre sorulsun. İkisinden biri hep açık kalır.</summary>
+        public bool SifreBaglanti { get; set; } = true;
+
         [JsonIgnore]
         public bool WindowsIleBaslat => BaslangicKaydi() != null;
 
@@ -79,6 +84,11 @@ namespace PusulaConnect
                 if (!acilis && !baglanti) throw new KullaniciHatasi("Doğrulama kodu en az birinde sorulmalı: uygulama açılışı ya da Pusula bağlantısı.");
                 a.IkiAcilis = acilis;
                 a.IkiBaglanti = baglanti;
+                var sAcilis = B("sifreAcilis") ?? a.SifreAcilis;
+                var sBaglanti = B("sifreBaglanti") ?? a.SifreBaglanti;
+                if (!sAcilis && !sBaglanti) throw new KullaniciHatasi("Uygulama şifresi en az birinde sorulmalı: uygulama açılışı ya da Pusula bağlantısı.");
+                a.SifreAcilis = sAcilis;
+                a.SifreBaglanti = sBaglanti;
                 var w = B("windowsIleBaslat");
                 if (w.HasValue) BaslangicAyarla(w.Value);
                 File.WriteAllText(Dosya, JsonConvert.SerializeObject(a, Formatting.Indented));
@@ -98,6 +108,8 @@ namespace PusulaConnect
             suruculer = Suruculer,
             ikiAcilis = IkiAcilis,
             ikiBaglanti = IkiBaglanti,
+            sifreAcilis = SifreAcilis,
+            sifreBaglanti = SifreBaglanti,
             windowsIleBaslat = WindowsIleBaslat,
         };
 

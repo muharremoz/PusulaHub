@@ -18,6 +18,7 @@ import { AyarlarIcerik } from "./ayarlar";
 import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
+import { SifreAcPenceresi, SifreDegistirPenceresi, SifrePenceresi } from "./uygulama-sifresi";
 import uygulamaIkonu from "@/assets/uygulama-ikon.png";
 import { OrtaBaslik, ParlayanLogo, talepAdresi } from "./ortak";
 
@@ -39,6 +40,11 @@ export function AnaEkran({ durum, setDurum }: P) {
   const ikiAktif = !!durum.ikiAdim?.aktif;
   const [ikiAc, setIkiAc] = useState(false);
   const [kodIstek, setKodIstek] = useState<null | "baglan" | "kapat" | "sifre" | "goster">(null);
+  // Uygulama şifresi: açma / değiştirme pencereleri + şifre sorma (bağlan / kapat)
+  const uygSifreAktif = !!durum.uygulamaSifresi?.aktif;
+  const [uygAc, setUygAc] = useState(false);
+  const [uygDegistir, setUygDegistir] = useState(false);
+  const [uygIstek, setUygIstek] = useState<null | "baglan" | "kapat">(null);
   // VPN şifresi = oturum şifresi; FortiClient'a otomatik yazılamadığı için ekranda gösterilir (60 sn)
   const [gosterilen, setGosterilen] = useState<string | null>(null);
   const sifreyiGoster = async (kod?: string) => {
@@ -67,10 +73,16 @@ export function AnaEkran({ durum, setDurum }: P) {
     }
   };
 
-  const baglan = async () => {
+  // Bağlanma sırası: uygulama şifresi (gerekiyorsa) → 2FA kodu (gerekiyorsa) → bağlan.
+  // d: şifre penceresinden hemen sonra gelen güncel durum (uygulamaSifresi.gerekli artık false).
+  const baglan = async (d: Durum = durum) => {
     setVpnUyari(false);
+    if (uygSifreAktif && d.uygulamaSifresi?.gerekli !== false) {
+      setUygIstek("baglan");
+      return;
+    }
     // Kod yalnız gerekiyorsa: "bağlantıda kod sor" kapalı ve açılışta kod girildiyse doğrudan bağlanır.
-    if (ikiAktif && durum.ikiAdim?.kodGerekli !== false) {
+    if (ikiAktif && d.ikiAdim?.kodGerekli !== false) {
       setKodIstek("baglan");
       return;
     }
@@ -345,6 +357,10 @@ export function AnaEkran({ durum, setDurum }: P) {
               ikiAktif={ikiAktif}
               onIkiAc={() => setIkiAc(true)}
               onIkiKapat={() => setKodIstek("kapat")}
+              uygSifreAktif={uygSifreAktif}
+              onUygAc={() => setUygAc(true)}
+              onUygDegistir={() => setUygDegistir(true)}
+              onUygKapat={() => setUygIstek("kapat")}
             />
           </div>
         </main>
@@ -595,6 +611,22 @@ export function AnaEkran({ durum, setDurum }: P) {
       )}
 
       <GuncellemePenceresi durum={durum} setDurum={setDurum} />
+      <SifreAcPenceresi acik={uygAc} onKapat={() => setUygAc(false)} setDurum={setDurum} />
+      <SifreDegistirPenceresi acik={uygDegistir} onKapat={() => setUygDegistir(false)} setDurum={setDurum} />
+      <SifrePenceresi
+        acik={uygIstek !== null}
+        onKapat={() => setUygIstek(null)}
+        baslik={uygIstek === "kapat" ? "Uygulama şifresini kapat" : "Uygulama şifresi"}
+        aciklama={uygIstek === "kapat" ? "Kapatmak için mevcut uygulama şifrenizi girin." : "Pusula'ya bağlanmak için uygulama şifrenizi girin."}
+        dugme={uygIstek === "kapat" ? "Kapat" : "Devam"}
+        onOnay={async (sifre) => {
+          if (uygIstek === "kapat") { setDurum(await api<Durum>("/uyg-sifre/kapat", { sifre })); return; }
+          const d = await api<Durum>("/uyg-sifre/dogrula", { sifre });
+          setDurum(d);
+          // Şifre doğru: pencere kapanır, akış 2FA koduna ya da doğrudan bağlanmaya devam eder
+          window.setTimeout(() => void baglan(d), 0);
+        }}
+      />
       <IkiAcPenceresi acik={ikiAc} onKapat={() => setIkiAc(false)} setDurum={setDurum} kullanici={kayit.kullanici} />
       <KodPenceresi
         acik={kodIstek !== null}
