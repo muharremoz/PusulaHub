@@ -398,6 +398,30 @@ function IkiRozeti({ c }: { c: ConnectCihazSatir }) {
   return <span className="text-muted-foreground text-[12px]">Kapalı</span>
 }
 
+/** Liste sütunu "Güvenlik": açık olan her koruma ayrı rozet (2FA, Şifre); deneme kilidi kırmızı; hiçbiri yoksa "Yok". */
+function GuvenlikRozetleri({ c }: { c: ConnectCihazSatir }) {
+  const rozetler: React.ReactNode[] = []
+  const acik = "inline-flex items-center gap-1 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400"
+  const kilit = "inline-flex items-center gap-1 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400"
+  if (c.totpAktif || ikiDurum(c) === "kilitli") rozetler.push(<span key="2fa" className={ikiDurum(c) === "kilitli" ? kilit : acik}><ShieldCheck className="size-3" />2FA</span>)
+  if (c.sifreAktif || sifreKilitli(c)) rozetler.push(<span key="sifre" className={sifreKilitli(c) ? kilit : acik}><KeyRound className="size-3" />Şifre</span>)
+  if (!rozetler.length) return <span className="text-muted-foreground text-[12px]">Yok</span>
+  return <span className="inline-flex flex-wrap gap-1">{rozetler}</span>
+}
+
+type GuvenlikDurum = "2fa" | "sifre" | "yok" | "kilitli"
+const GUVENLIK_DURUMLAR: GuvenlikDurum[] = ["2fa", "sifre", "yok", "kilitli"]
+const GUVENLIK_ETIKET: Record<GuvenlikDurum, string> = { "2fa": "2FA açık", sifre: "Şifre açık", yok: "Koruma yok", kilitli: "Kilitli" }
+/** Cihazın güvenlik durumları (birden çok olabilir) */
+function guvenlikDurumlari(c: ConnectCihazSatir): GuvenlikDurum[] {
+  const d: GuvenlikDurum[] = []
+  if (c.totpAktif) d.push("2fa")
+  if (c.sifreAktif) d.push("sifre")
+  if (!c.totpAktif && !c.sifreAktif) d.push("yok")
+  if (ikiDurum(c) === "kilitli" || sifreKilitli(c)) d.push("kilitli")
+  return d
+}
+
 function SurumRozeti({ surum, son }: { surum: string | null; son: string | null }) {
   const eski = !!son && !!surum && surumKarsilastir(surum, son) < 0
   return (
@@ -498,8 +522,6 @@ function tekSayimAciklama(ad: string, s: ConnectSayimDurum | null | undefined): 
   else p.push("henüz test edilmedi")
   return p.join(" · ")
 }
-const IKI_DURUMLAR: IkiDurum[] = ["acik", "kapali", "kilitli"]
-const IKI_ETIKET: Record<IkiDurum, string> = { acik: "Açık", kapali: "Kapalı", kilitli: "Kilitli" }
 
 type VpnDurumu = "acik" | "kapali" | "yok"
 const VPN_DURUMLAR: VpnDurumu[] = ["acik", "kapali", "yok"]
@@ -527,7 +549,7 @@ function CihazListesi({
   const [sunucu, setSunucu] = useState<SunucuDurumu[]>([])
   const [sonGorulme, setSonGorulme] = useState<TarihFiltreDeger>({ mode: "tum" })
   const [durum, setDurum] = useState<CanliDurum[]>([])
-  const [iki, setIki] = useState<IkiDurum[]>([])
+  const [iki, setIki] = useState<GuvenlikDurum[]>([])
   const [surum, setSurum] = useState<string[]>([])
   const [sayim, setSayim] = useState<SayimDurumu[]>([])
   const [sayfa, setSayfa] = useState(1)
@@ -549,7 +571,7 @@ function CihazListesi({
     if (kullanici && !c.kullanici.toLocaleLowerCase("tr").includes(kullanici.toLocaleLowerCase("tr"))) return false
     if (makine && !(c.makine ?? "").toLocaleLowerCase("tr").includes(makine.toLocaleLowerCase("tr"))) return false
     if (durum.length && !durum.includes(canliDurum(c))) return false
-    if (iki.length && !iki.includes(ikiDurum(c))) return false
+    if (iki.length && !guvenlikDurumlari(c).some((d) => iki.includes(d))) return false
     if (surum.length && !surum.includes(c.surum ?? "—")) return false
     if (sayim.length && !sayim.includes(sayimDurumu(c))) return false
     if (vpn.length && !vpn.includes(vpnDurumu(c))) return false
@@ -586,7 +608,7 @@ function CihazListesi({
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kullanici} onChange={setKullanici} /></th>
             <th className="px-3 py-1 text-left font-medium"><MetinFiltre label="Bilgisayar" value={makine} onChange={setMakine} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sürüm" options={surumler} getLabel={(s) => s} selected={surum} onChange={setSurum} /></th>
-            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="2FA" options={IKI_DURUMLAR} getLabel={(d) => IKI_ETIKET[d]} selected={iki} onChange={setIki} /></th>
+            <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Güvenlik" options={GUVENLIK_DURUMLAR} getLabel={(d) => GUVENLIK_ETIKET[d]} selected={iki} onChange={setIki} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sayım" options={SAYIM_DURUMLAR} getLabel={(d) => SAYIM_ETIKET[d]} selected={sayim} onChange={setSayim} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="VPN" options={VPN_DURUMLAR} getLabel={(d) => VPN_ETIKET[d]} selected={vpn} onChange={setVpn} /></th>
             <th className="px-3 py-1 text-left font-medium"><SecimFiltre label="Sunucu" options={SUNUCU_DURUMLAR} getLabel={(d) => SUNUCU_ETIKET[d]} selected={sunucu} onChange={setSunucu} /></th>
@@ -645,7 +667,7 @@ function CihazListesi({
                       <td className="px-3 py-1 whitespace-nowrap">{c.kullanici}</td>
                       <td className="px-3 py-1 whitespace-nowrap">{c.makine ?? "—"}</td>
                       <td className="px-3 py-1 whitespace-nowrap"><SurumRozeti surum={c.surum} son={sonSurum} /></td>
-                      <td className="px-3 py-1 whitespace-nowrap"><IkiRozeti c={c} /></td>
+                      <td className="px-3 py-1 whitespace-nowrap"><GuvenlikRozetleri c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]"><SayimRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]"><VpnRozeti c={c} /></td>
                       <td className="px-3 py-1 whitespace-nowrap text-[12px]">
