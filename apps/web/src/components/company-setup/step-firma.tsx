@@ -348,22 +348,22 @@ export function StepFirma({
             // Önerilen: çevrimiçi sunucular içinde en boş olanı
             const onerilen = rdpServers.filter((s) => s.isOnline).sort((a, b) => yogunluk(a) - yogunluk(b))[0]?.id
             return (
-          <div className="rounded-[8px] bg-[var(--section-bg)] p-1.5">
-            <div className="flex items-center justify-between px-1.5 pb-1.5 pt-0.5">
+          <div>
+            <div className="flex items-center justify-between pb-2">
               <p className="flex items-center gap-1.5 text-[12px] font-medium">
                 <MonitorSmartphone className="size-3.5 text-muted-foreground" />
                 Bağlantı Sunucusu
               </p>
               {!rdpServersLoading && rdpServers.length > 0 && (
                 <span className="text-[11px] text-muted-foreground">
-                  {selectedWindowsServerId ? "Seçildi" : "Kullanıcıların bağlanacağı terminali seçin"}
+                  {(() => { const s = rdpServers.find((x) => x.id === selectedWindowsServerId); return s ? <span className="font-medium text-emerald-700 dark:text-emerald-400">Seçili: {s.name}</span> : "Kullanıcıların bağlanacağı terminali seçin" })()}
                 </span>
               )}
             </div>
 
             {/* Yükleniyor */}
             {rdpServersLoading && (
-              <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="space-y-2.5 rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
                     <Skeleton className="h-3.5 w-24 rounded-[5px]" />
@@ -396,7 +396,7 @@ export function StepFirma({
 
             {/* Sunucu kartları */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length > 0 && (
-              <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 {rdpServers.map((srv) => {
                   const secili = selectedWindowsServerId === srv.id
                   const kapali = !srv.isOnline
@@ -411,8 +411,10 @@ export function StepFirma({
                       onClick={() => onSelectWindowsServer(srv.id)}
                       aria-pressed={secili}
                       className={cn(
-                        "relative rounded-[5px] bg-card p-3 text-left ring-1 transition-all",
-                        secili ? "ring-2 ring-primary" : "ring-transparent hover:ring-border",
+                        "relative rounded-[8px] border-2 p-3 text-left transition-all",
+                        secili
+                          ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15"
+                          : "border-border bg-card hover:border-foreground/30",
                         kapali && "cursor-not-allowed opacity-50",
                       )}
                       style={{ boxShadow: "var(--card-shadow)" }}
@@ -435,9 +437,9 @@ export function StepFirma({
                         </div>
                         <span className={cn(
                           "flex size-4 shrink-0 items-center justify-center rounded-full border",
-                          secili ? "border-primary bg-primary" : "border-border",
+                          secili ? "border-emerald-500 bg-emerald-500" : "border-border",
                         )}>
-                          {secili && <Check className="size-2.5 text-primary-foreground" strokeWidth={3} />}
+                          {secili && <Check className="size-2.5 text-white" strokeWidth={3} />}
                         </span>
                       </div>
 
