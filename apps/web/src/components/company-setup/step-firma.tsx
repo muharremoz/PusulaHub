@@ -78,11 +78,7 @@ export function StepFirma({
   const licenseFull = userLimit > 0 && existingUserCount >= userLimit
   const [search, setSearch] = useState("")
   const [aramaAcik, setAramaAcik] = useState(false)
-  useEffect(() => { setAramaAcik(false) }, [selectedCompany?.firkod])
-  // Adıma her girişte temiz başla: başka adımdan geri dönülünce eski seçim gösterilmez
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (selectedCompany) onClearCompany() }, [])
-  const lisansKalanGun = selectedCompany?.lisansBitis
+  useEffect(() => { setAramaAcik(false) }, [selectedCompany?.firkod])  const lisansKalanGun = selectedCompany?.lisansBitis
     ? Math.ceil((new Date(selectedCompany.lisansBitis).getTime() - Date.now()) / 864e5)
     : Infinity
 

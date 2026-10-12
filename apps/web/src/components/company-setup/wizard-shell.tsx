@@ -432,6 +432,12 @@ export function WizardShell() {
 
   const go = (to: number) => {
     setDir(to > step ? "right" : "left")
+    // Firma adımına başka adımdan dönülünce temiz başla — aynı render'da temizlenir,
+    // adım bileşeninde (mount sonrası) yapılınca eski seçim bir an görünüp kayboluyordu
+    if (to === 1 && step !== 1) {
+      setSelectedCompany(null)
+      setApiExistingUsers([]); setExistingUsersKey(null)
+    }
     setStep(to)
   }
 
