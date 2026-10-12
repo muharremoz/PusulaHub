@@ -280,6 +280,7 @@ Eski sunucuda gizli olan GUMMER25 (38455) ve REMS24 (9099) artık kendi grubunda
 | `Banko.banko_Tanim` (37 kasa; 3848 ve 3378'e dokunulmadı) | 10 şube datası | her datada `dbo.Banko_yedek_20260930` |
 | `AASTOKtransfer` `URNTRANSFER` (2642 MERS!) → `URNOZLEM` | `4022_OZLEMKOLN25` | `dbo.tetik_yedek_20260930` |
 | **2026-10-06:** tanım tablolarında `ozel` 3844→4022, 3845→40222, 3846→40223, 3847→40224 (Firmalar 428, TAyar 28, TGrup 209, TOzelTipler 717, TMalzeme 663 satır). **3848 (toptan) kullanıcı kararıyla dokunulmadı** | `URNOZLEM` | `URNOZLEM.dbo.<tablo>_yedek_20261006` |
+| **2026-10-12:** `AASTOKtransfer` `URNTRANSFER` → `URNOZLEM` — 30.09'da yalnız KOLN25 düzeltilmişti, **güncel KOLN datası gözden kaçmış**. Keşif: 16 datada 13'er tetik tarandı, yalnız bu tetik yanlış hedefteydi; URNTRANSFER'e 4022'den kaçak kayıt düşmemiş (`mrkz` yalnız MERS şubeleri). Kullanıcı SSMS'ten ALTER TRIGGER çalıştırdı; prjMenu rapor sorguları (ASYNC_NETWORK_IO, 2 oturum) tablonun şema kilidini 12 dk tutunca 2738/2252 sonlandırıldı, ALTER 15:17'de geçti. Sonuç KOLN25'teki sürümle birebir aynı (22179), 108 sütun doğrulandı. Eski tanımın tablo yedeği ALINMADI (SSMS'ten yapıldı); eski metin = yeni metinde `URNOZLEM`→`URNTRANSFER` | `4022_OZLEMKOLN` | — |
 
 KOLN25 tetiği `try/catch`'siz, `AAStok` her güncellemede çalışıyordu ve
 `4022.ozlem1`'in URNTRANSFER'da hesabı yok → o datada stok kartı güncellemesi hata
