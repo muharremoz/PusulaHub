@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
-import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, Copy, Users as UsersIcon } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, Copy, Users as UsersIcon, ShieldCheck, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field } from "@/components/shared/form"
@@ -234,8 +234,8 @@ export function StepUsers({
               </div>
 
               {/* Alanlar */}
-              <div className="grid grid-cols-3 gap-3 p-4">
-                <Field label="Kullanıcı Adı" required hint={hata ? <span className="text-red-600 dark:text-red-400">{hata}</span> : undefined}>
+              <div className="grid grid-cols-6 gap-3 p-4">
+                <Field className="col-span-2" label="Kullanıcı Adı" required hint={hata ? <span className="text-red-600 dark:text-red-400">{hata}</span> : undefined}>
                   <div className={cn(
                     "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
                     hata ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
@@ -261,11 +261,11 @@ export function StepUsers({
                   </div>
                 </Field>
 
-                <Field label="Ad Soyad">
+                <Field className="col-span-2" label="Ad Soyad">
                   <Input value={user.displayName} onChange={(e) => onUpdateDisplayName(user.id, e.target.value)} placeholder="MEHMET SENER" />
                 </Field>
 
-                <Field label="Şifre" required>
+                <Field className="col-span-2" label="Şifre" required>
                   <div className={cn(
                     "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
                     str && !str.adOk ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
@@ -277,6 +277,13 @@ export function StepUsers({
                       placeholder="••••••••"
                       className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground"
                     />
+                    {str && (
+                      <span title={str.adOk ? "AD şifre kuralına uygun" : "AD şifre kuralına uymuyor"} className="flex shrink-0 items-center px-1">
+                        {str.adOk
+                          ? <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                          : <ShieldAlert className="size-3.5 text-red-600 dark:text-red-400" />}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => onTogglePassword(user.id)}
@@ -296,46 +303,16 @@ export function StepUsers({
                   </div>
                 </Field>
 
-                <Field label="E-posta">
+                <Field className="col-span-3" label="E-posta">
                   <Input type="email" value={user.email} onChange={(e) => onUpdateEmail(user.id, e.target.value)} placeholder="kullanici@sirket.com" />
                 </Field>
 
-                <Field label="Telefon">
+                <Field className="col-span-3" label="Telefon">
                   <Input type="tel" value={user.phone} onChange={(e) => onUpdatePhone(user.id, e.target.value)} placeholder="05xx xxx xx xx" />
                 </Field>
 
-                {/* Şifre gücü — şifre sütununun altında */}
-                <div className="flex flex-col justify-end gap-1.5">
-                  {str ? (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
-                          <div className={cn("h-full rounded-full transition-all duration-300", str.color)} style={{ width: `${str.pct}%` }} />
-                        </div>
-                        <span className={cn("shrink-0 text-[11px] font-medium", str.text)}>{str.label}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        {[
-                          { ok: str.hasUpper,   label: "A-Z" },
-                          { ok: str.hasLower,   label: "a-z" },
-                          { ok: str.hasDigit,   label: "0-9" },
-                          { ok: str.hasSpecial, label: "!@#" },
-                          { ok: str.lengthOk,   label: "7+" },
-                        ].map(({ ok, label }) => (
-                          <span key={label} className={cn(
-                            "inline-flex rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium",
-                            ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground",
-                          )}>{label}</span>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <p className="text-[11px] text-muted-foreground">Şifre boş — oluştur düğmesini kullanın</p>
-                  )}
-                </div>
-
                 {str && !str.adOk && (
-                  <p className="col-span-3 flex items-center gap-1.5 rounded-[5px] bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700 dark:text-red-400">
+                  <p className="col-span-6 flex items-center gap-1.5 rounded-[5px] bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700 dark:text-red-400">
                     <AlertTriangle className="size-3.5 shrink-0" />
                     AD karmaşıklık kuralı: en az 7 karakter; büyük/küçük harf, rakam, özel karakterden en az 3&apos;ü ({str.categories}/3)
                   </p>
