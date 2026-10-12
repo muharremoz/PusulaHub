@@ -1,11 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
 import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, Copy, Users as UsersIcon, ShieldCheck, ShieldAlert } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Field } from "@/components/shared/form"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -178,166 +176,182 @@ export function StepUsers({
         </div>
       )}
 
-      {/* Kullanıcı kartları */}
-      <div className="space-y-3">
-        {users.map((user, idx) => {
-          const str = user.password ? getStrength(user.password) : null
-          const hata = adHatasi(user.username)
-          const basHarf = (user.displayName || user.username).trim().split(/\s+/).slice(0, 2).map((k) => k[0]).join("").toUpperCase()
-          return (
-            <div key={user.id} className="rounded-[8px] border bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
-              {/* Kart başlığı: baş harfler + ad + tam kullanıcı adı | kopyala, sil */}
-              <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">
-                    {basHarf || idx + 1}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold">{user.displayName || `Kullanıcı ${idx + 1}`}</p>
-                    <p className="truncate text-[12px] text-muted-foreground">
-                      {user.username.trim() ? `${firmaId}.${user.username.trim()}` : "Kullanıcı adı girilmedi"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {user.username.trim() && !limitReached && (
-                    <div className="flex items-center overflow-hidden rounded-[5px] border">
-                      <input
-                        type="number"
-                        min={1}
-                        max={Number.isFinite(kalanHak) ? kalanHak : undefined}
-                        value={kopyaAdet[user.id] ?? "1"}
-                        onChange={(e) => setKopyaAdet((k) => ({ ...k, [user.id]: e.target.value }))}
-                        onKeyDown={(e) => { if (e.key === "Enter") kopyala(user.id) }}
-                        aria-label="Kopya sayısı"
-                        className="h-7 w-10 bg-background px-1.5 text-center text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      />
-                      <button
-                        onClick={() => kopyala(user.id)}
-                        className="flex h-7 items-center gap-1 border-l px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                      >
-                        <Copy className="size-3" />
-                        Kopyala
-                      </button>
-                    </div>
-                  )}
-                  {users.length > 1 && (
-                    <button
-                      onClick={() => onRemove(user.id)}
-                      title="Kullanıcıyı kaldır"
-                      className="flex size-7 items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  )}
-                </div>
-              </div>
+      {/* Kullanıcılar — tek tablo, her kullanıcı bir satır (liste standardı: dış panel + kart) */}
+      <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
+        <div className="overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="border-b text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <th className="w-10 px-3 py-2 text-left font-medium">#</th>
+                  <th className="px-2 py-2 text-left font-medium">Kullanıcı Adı <span className="text-primary">*</span></th>
+                  <th className="px-2 py-2 text-left font-medium">Ad Soyad</th>
+                  <th className="px-2 py-2 text-left font-medium">Şifre <span className="text-primary">*</span></th>
+                  <th className="px-2 py-2 text-left font-medium">E-posta</th>
+                  <th className="px-2 py-2 text-left font-medium">Telefon</th>
+                  <th className="px-3 py-2 text-right font-medium">İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((user, idx) => {
+                  const str = user.password ? getStrength(user.password) : null
+                  const hata = adHatasi(user.username)
+                  const sifreHata = !!str && !str.adOk
+                  // Satır içi alan: kenarlık yalnız üzerine gelince/odakta belirir, tablo sakin kalır
+                  const alan = "h-8 rounded-[5px] border border-transparent bg-transparent transition-colors hover:border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50"
+                  return (
+                    <Fragment key={user.id}>
+                      <tr className={cn("group border-b last:border-b-0", (hata || sifreHata) && "border-b-0")}>
+                        <td className="px-3 py-1.5 align-middle">
+                          <span className="flex size-6 items-center justify-center rounded-full bg-muted text-[11px] font-semibold tabular-nums text-muted-foreground">{idx + 1}</span>
+                        </td>
 
-              {/* Alanlar */}
-              <div className="grid grid-cols-6 gap-3 p-4">
-                <Field className="col-span-2" label="Kullanıcı Adı" required hint={hata ? <span className="text-red-600 dark:text-red-400">{hata}</span> : undefined}>
-                  <div className={cn(
-                    "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
-                    hata ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
-                  )}>
-                    {firmaId && (
-                      <span className="flex h-full shrink-0 items-center border-r bg-muted px-2 text-[12px] text-muted-foreground">{firmaId}.</span>
-                    )}
-                    <input
-                      type="text"
-                      value={user.username}
-                      onChange={(e) => onUpdateUsername(user.id, e.target.value)}
-                      placeholder="mehmetsener1"
-                      className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground"
-                    />
-                    {firmaId && user.username && (
-                      <span className={cn(
-                        "shrink-0 px-2 text-[11px] tabular-nums",
-                        user.username.trim().length > onekSonrasiMax(firmaId) ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
-                      )}>
-                        {user.username.trim().length}/{onekSonrasiMax(firmaId)}
-                      </span>
-                    )}
-                  </div>
-                </Field>
+                        {/* Kullanıcı adı — önek + karakter sayacı */}
+                        <td className="min-w-[200px] px-2 py-1.5">
+                          <div className={cn("flex items-center overflow-hidden", alan, hata && "border-red-500/60 hover:border-red-500/60")}>
+                            {firmaId && <span className="shrink-0 pl-2.5 text-muted-foreground">{firmaId}.</span>}
+                            <input
+                              type="text"
+                              value={user.username}
+                              onChange={(e) => onUpdateUsername(user.id, e.target.value)}
+                              placeholder="mehmetsener1"
+                              className="min-w-0 flex-1 bg-transparent pl-0.5 pr-2 font-medium outline-none placeholder:font-normal placeholder:text-muted-foreground/60"
+                            />
+                            {firmaId && user.username && (
+                              <span className={cn(
+                                "shrink-0 pr-2 text-[11px] tabular-nums",
+                                user.username.trim().length > onekSonrasiMax(firmaId) ? "text-red-600 dark:text-red-400" : "text-muted-foreground/70",
+                              )}>
+                                {user.username.trim().length}/{onekSonrasiMax(firmaId)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
 
-                <Field className="col-span-2" label="Ad Soyad">
-                  <Input value={user.displayName} onChange={(e) => onUpdateDisplayName(user.id, e.target.value)} placeholder="MEHMET SENER" />
-                </Field>
+                        <td className="min-w-[170px] px-2 py-1.5">
+                          <div className={alan}>
+                            <input
+                              value={user.displayName}
+                              onChange={(e) => onUpdateDisplayName(user.id, e.target.value)}
+                              placeholder="MEHMET SENER"
+                              className="h-full w-full bg-transparent px-2.5 outline-none placeholder:text-muted-foreground/60"
+                            />
+                          </div>
+                        </td>
 
-                <Field className="col-span-2" label="Şifre" required>
-                  <div className={cn(
-                    "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
-                    str && !str.adOk ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
-                  )}>
-                    <input
-                      type={user.showPassword ? "text" : "password"}
-                      value={user.password}
-                      onChange={(e) => onUpdatePassword(user.id, e.target.value)}
-                      placeholder="••••••••"
-                      className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground"
-                    />
-                    {str && (
-                      <span title={str.adOk ? "AD şifre kuralına uygun" : "AD şifre kuralına uymuyor"} className="flex shrink-0 items-center px-1">
-                        {str.adOk
-                          ? <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                          : <ShieldAlert className="size-3.5 text-red-600 dark:text-red-400" />}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onTogglePassword(user.id)}
-                      title={user.showPassword ? "Gizle" : "Göster"}
-                      className="flex h-full shrink-0 items-center px-2 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      {user.showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onGeneratePassword(user.id)}
-                      title="Yeni şifre oluştur"
-                      className="flex h-full shrink-0 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                    >
-                      <RefreshCw className="size-3.5" />
-                    </button>
-                  </div>
-                </Field>
+                        {/* Şifre — kalkan + göster + yeni üret aynı kutuda */}
+                        <td className="min-w-[200px] px-2 py-1.5">
+                          <div className={cn("flex items-center", alan, sifreHata && "border-red-500/60 hover:border-red-500/60")}>
+                            <input
+                              type={user.showPassword ? "text" : "password"}
+                              value={user.password}
+                              onChange={(e) => onUpdatePassword(user.id, e.target.value)}
+                              placeholder="••••••••"
+                              className="min-w-0 flex-1 bg-transparent px-2.5 outline-none placeholder:text-muted-foreground/60"
+                            />
+                            {str && (
+                              <span title={str.adOk ? "AD şifre kuralına uygun" : "AD şifre kuralına uymuyor"} className="flex shrink-0 px-0.5">
+                                {str.adOk
+                                  ? <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                                  : <ShieldAlert className="size-3.5 text-red-600 dark:text-red-400" />}
+                              </span>
+                            )}
+                            <button type="button" onClick={() => onTogglePassword(user.id)} title={user.showPassword ? "Gizle" : "Göster"}
+                              className="flex h-full shrink-0 items-center px-1.5 text-muted-foreground hover:text-foreground">
+                              {user.showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                            </button>
+                            <button type="button" onClick={() => onGeneratePassword(user.id)} title="Yeni şifre oluştur"
+                              className="flex h-full shrink-0 items-center pl-1 pr-2 text-muted-foreground hover:text-foreground">
+                              <RefreshCw className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
 
-                <Field className="col-span-3" label="E-posta">
-                  <Input type="email" value={user.email} onChange={(e) => onUpdateEmail(user.id, e.target.value)} placeholder="kullanici@sirket.com" />
-                </Field>
+                        <td className="min-w-[180px] px-2 py-1.5">
+                          <div className={alan}>
+                            <input type="email" value={user.email} onChange={(e) => onUpdateEmail(user.id, e.target.value)} placeholder="kullanici@sirket.com"
+                              className="h-full w-full bg-transparent px-2.5 outline-none placeholder:text-muted-foreground/60" />
+                          </div>
+                        </td>
 
-                <Field className="col-span-3" label="Telefon">
-                  <Input type="tel" value={user.phone} onChange={(e) => onUpdatePhone(user.id, e.target.value)} placeholder="05xx xxx xx xx" />
-                </Field>
+                        <td className="min-w-[130px] px-2 py-1.5">
+                          <div className={alan}>
+                            <input type="tel" value={user.phone} onChange={(e) => onUpdatePhone(user.id, e.target.value)} placeholder="05xx xxx xx xx"
+                              className="h-full w-full bg-transparent px-2.5 tabular-nums outline-none placeholder:text-muted-foreground/60" />
+                          </div>
+                        </td>
 
-                {str && !str.adOk && (
-                  <p className="col-span-6 flex items-center gap-1.5 rounded-[5px] bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700 dark:text-red-400">
-                    <AlertTriangle className="size-3.5 shrink-0" />
-                    AD karmaşıklık kuralı: en az 7 karakter; büyük/küçük harf, rakam, özel karakterden en az 3&apos;ü ({str.categories}/3)
-                  </p>
-                )}
-              </div>
-            </div>
-          )
-        })}
+                        {/* İşlem: kopya sayısı + kopyala, sil */}
+                        <td className="px-3 py-1.5">
+                          <div className="flex items-center justify-end gap-1">
+                            {user.username.trim() && !limitReached && (
+                              <div className="flex items-center overflow-hidden rounded-[5px] border">
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={Number.isFinite(kalanHak) ? kalanHak : undefined}
+                                  value={kopyaAdet[user.id] ?? "1"}
+                                  onChange={(e) => setKopyaAdet((k) => ({ ...k, [user.id]: e.target.value }))}
+                                  onKeyDown={(e) => { if (e.key === "Enter") kopyala(user.id) }}
+                                  aria-label="Kopya sayısı"
+                                  className="h-7 w-8 bg-background text-center text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                                />
+                                <button onClick={() => kopyala(user.id)} title="Bu kullanıcıyı çoğalt (numara artar)"
+                                  className="flex h-7 items-center gap-1 border-l px-2 text-[12px] text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+                                  <Copy className="size-3" /> Kopyala
+                                </button>
+                              </div>
+                            )}
+                            <button
+                              onClick={() => onRemove(user.id)}
+                              disabled={users.length <= 1}
+                              title="Kullanıcıyı kaldır"
+                              className="flex size-7 items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600 disabled:pointer-events-none disabled:opacity-30"
+                            >
+                              <Trash2 className="size-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Satır altı uyarı — yalnız hata varsa */}
+                      {(hata || sifreHata) && (
+                        <tr className="border-b last:border-b-0">
+                          <td />
+                          <td colSpan={6} className="px-2 pb-2">
+                            <p className="flex items-center gap-1.5 text-[11px] text-red-600 dark:text-red-400">
+                              <AlertTriangle className="size-3 shrink-0" />
+                              {hata ?? `AD şifre kuralı: en az 7 karakter; büyük/küçük harf, rakam, özel karakterden en az 3'ü (${str?.categories}/3)`}
+                            </p>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Tablo altı: ekle / hak doldu */}
+          <div className="border-t">
+            {limitReached ? (
+              <p className="py-2.5 text-center text-[12px] text-muted-foreground">
+                Kullanıcı hakkı doldu ({userLimit}). Daha fazla kullanıcı için lisans artırılmalı.
+              </p>
+            ) : (
+              <button
+                onClick={onAdd}
+                className="flex w-full items-center justify-center gap-1.5 py-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted/30 hover:text-foreground"
+              >
+                <Plus className="size-3.5" />
+                Kullanıcı Ekle
+                {Number.isFinite(kalanHak) && <span className="font-normal">· {kalanHak} hak kaldı</span>}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* Kullanıcı ekle / hak doldu */}
-      {limitReached ? (
-        <p className="rounded-[8px] border border-dashed py-2.5 text-center text-[12px] text-muted-foreground">
-          Kullanıcı hakkı doldu ({userLimit}). Daha fazla kullanıcı için lisans artırılmalı.
-        </p>
-      ) : (
-        <button
-          onClick={onAdd}
-          className="flex w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed py-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-muted/30 hover:text-foreground"
-        >
-          <Plus className="size-3.5" />
-          Kullanıcı Ekle
-          {Number.isFinite(kalanHak) && <span className="font-normal">· {kalanHak} hak kaldı</span>}
-        </button>
-      )}
 
     </div>
   )
