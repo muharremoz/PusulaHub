@@ -115,18 +115,28 @@ export function RaporEkrani({ durum, setDurum }: P) {
   }, [raporZamani]);
   const [resimler, setResimler] = useState<ResimSecimi[]>(() => (r ? resimVarsayilan(r) : []));
   // Elle eklenen resim klasörleri (SQL'siz aktarım ya da şirket tanımında olmayan klasör)
-  const [ekResimKlasorleri, setEkResimKlasorleri] = useState<KesifRaporu["resimKlasorleri"]>([]);
+  // olculuyor: satır seçimden hemen sonra eklenir; exe alt klasörleri sayarken (büyük klasörde 45 sn'ye kadar) boş ekran kalmasın.
+  const [ekResimKlasorleri, setEkResimKlasorleri] = useState<(KesifRaporu["resimKlasorleri"][number] & { olculuyor?: boolean })[]>([]);
   const resimKlasorleri = useMemo(() => [...(r?.resimKlasorleri ?? []), ...ekResimKlasorleri], [r, ekResimKlasorleri]);
   const resimKlasoruEkle = async () => {
     const [{ yol } = { yol: "" }] = await dosyaSor({ baslik: "Resim klasörü", aciklama: "Resimlerin bulunduğu klasörü açın veya işaretleyin.", mod: "klasor" });
     if (!yol || resimKlasorleri.some((x) => x.yol.toLowerCase() === yol.toLowerCase())) return;
-    const k = await api<KesifRaporu["resimKlasorleri"][number]>("/resim/klasor", { yol });
-    setEkResimKlasorleri((l) => [...l, k]);
     const parca = yol.split(/[\\/]/).filter(Boolean);
     const son = parca[parca.length - 1] ?? "";
     const ad = /^resim(ler)?$/i.test(son) && parca.length > 1 ? parca[parca.length - 2] : son;
+    setEkResimKlasorleri((l) => [...l, { yol, var: true, dosyaSayisi: 0, boyutMb: 0, eksik: false, buyukDosya: 0, buyukMb: 0, kullananlar: [], olculuyor: true }]);
     // İlk resim klasörü ana klasöre (Resimler\{firma}), sonrakiler kendi adıyla
-    setResimler((l) => [...l, { yol: k.yol, secili: k.var && k.dosyaSayisi > 0, altKlasor: l.length === 0 ? "" : ad }]);
+    setResimler((l) => [...l, { yol, secili: false, altKlasor: l.length === 0 ? "" : ad }]);
+    try {
+      const k = await api<KesifRaporu["resimKlasorleri"][number]>("/resim/klasor", { yol });
+      // Satır seçilen yolla eklendi; exe'nin döndürdüğü yol (sondaki \ kırpılmış) aynı satıra yazılır.
+      setEkResimKlasorleri((l) => l.map((x) => (x.yol === yol ? { ...k, yol } : x)));
+      setResimler((l) => l.map((x) => (x.yol === yol ? { ...x, secili: k.var && k.dosyaSayisi > 0 } : x)));
+    } catch (e) {
+      setEkResimKlasorleri((l) => l.filter((x) => x.yol !== yol));
+      setResimler((l) => l.filter((x) => x.yol !== yol));
+      throw e;
+    }
   };
   const [programlar, setProgramlar] = useState<ProgramSecimi[]>(() => (r ? programVarsayilan(r, katalog) : []));
   const [programDosyalari, setProgramDosyalari] = useState<ProgramDosyasi[]>([]);
@@ -659,7 +669,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                 <TableCell className="pl-4">
                                   <Checkbox
                                     checked={s.secili}
-                                    disabled={!k.var || k.dosyaSayisi === 0}
+                                    disabled={!k.var || k.dosyaSayisi === 0 || ("olculuyor" in k && !!k.olculuyor)}
                                     onCheckedChange={(c) => setResimler((l) => l.map((x, j) => (j === i ? { ...x, secili: c === true } : x)))}
                                     aria-label={s.yol + " aktarılsın"}
                                   />
@@ -683,9 +693,18 @@ export function RaporEkrani({ durum, setDurum }: P) {
                                   </Ipucu>
                                 </TableCell>
                                 <TableCell className="px-4 text-right tabular-nums">
-                                  {k.var ? `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}` : <span className="text-destructive">Bulunamadı</span>}
+                                  {"olculuyor" in k && k.olculuyor ? (
+                                    <span className="inline-flex items-center gap-1.5 text-muted-foreground">
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                      Sayılıyor…
+                                    </span>
+                                  ) : k.var ? (
+                                    `${k.dosyaSayisi.toLocaleString("tr")}${k.eksik ? "+" : ""}`
+                                  ) : (
+                                    <span className="text-destructive">Bulunamadı</span>
+                                  )}
                                 </TableCell>
-                                <TableCell className="px-4 text-right tabular-nums">{k.var ? mb(k.boyutMb) : "—"}</TableCell>
+                                <TableCell className="px-4 text-right tabular-nums">{"olculuyor" in k && k.olculuyor ? "—" : k.var ? mb(k.boyutMb) : "—"}</TableCell>
                                 <TableCell className="px-4 text-right tabular-nums">
                                   {k.buyukDosya ? (
                                     <Ipucu metin={`${k.buyukDosya.toLocaleString("tr")} dosya 500 KB'tan büyük, toplam ${mb(k.buyukMb ?? 0)}`}>
