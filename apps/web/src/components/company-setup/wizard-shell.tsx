@@ -28,6 +28,7 @@ const Confetti     = dynamic(() => import("@/components/magicui/confetti").then(
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
+import { adSoyadTuret, kopyaKullaniciAdlari } from "@/lib/kullanici-ad-soyad"
 import { yedekAlVarsayilan } from "@/lib/yedek-varsayilan"
 import {
   parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode,
@@ -48,7 +49,7 @@ const STEPS = [
 let _uid = 2
 const generatePassword = () => generateSafePassword(12)
 function mkUser(): WizardUser {
-  return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }
+  return { id: _uid++, username: "", displayName: "", email: "", phone: "", password: generatePassword(), showPassword: false }
 }
 let _parsUid = 1
 function mkParsUser(): ParsWizardUser {
@@ -435,6 +436,29 @@ export function WizardShell() {
   }
 
   const addUser = useCallback(() => setUsers((u) => [...u, mkUser()]), [])
+  // İlk satırın şifresi — rastgele değer SSR'da üretilirse hidrasyon uyuşmaz, bu yüzden mount'ta
+  useEffect(() => {
+    setUsers((u) => u.map((x) => (x.password ? x : { ...x, password: generatePassword() })))
+  }, [])
+  /** Kullanıcı adı değişince Ad Soyad da güncellenir — elle değiştirilmediyse */
+  const updateUsername = useCallback((id: number, v: string) =>
+    setUsers((u) => u.map((x) => {
+      if (x.id !== id) return x
+      const otomatik = !x.displayName || x.displayName === adSoyadTuret(x.username)
+      return { ...x, username: v, displayName: otomatik ? adSoyadTuret(v) : x.displayName }
+    })), [])
+  /** Kullanıcıyı `adet` kez çoğaltır: ad numarası artar, şifre her kopyada yeni */
+  const copyUser = useCallback((id: number, adet: number, dolu: Set<string>) =>
+    setUsers((u) => {
+      const kaynak = u.find((x) => x.id === id)
+      if (!kaynak || adet < 1) return u
+      const tumDolu = new Set([...dolu, ...u.map((x) => x.username.trim().toLowerCase())])
+      const kopyalar = kopyaKullaniciAdlari(kaynak.username, adet, tumDolu).map((ad) => ({
+        ...mkUser(), username: ad, displayName: kaynak.displayName, email: kaynak.email, phone: kaynak.phone,
+      }))
+      const i = u.findIndex((x) => x.id === id)
+      return [...u.slice(0, i + 1), ...kopyalar, ...u.slice(i + 1)]
+    }), [])
   const removeUser = useCallback((id: number) => setUsers((u) => u.filter((x) => x.id !== id)), [])
   const updateUser = useCallback(<K extends keyof WizardUser>(id: number, k: K, v: WizardUser[K]) =>
     setUsers((u) => u.map((x) => x.id === id ? { ...x, [k]: v } : x)), [])
@@ -541,7 +565,7 @@ export function WizardShell() {
   const reset = () => {
     setStep(0); setSelectedServerId(null); setSelectedCompany(null)
     setSelectedWindowsServerId(null); setSelectedIisServerId(null); setSelectedDepoServerId(null); setSelectedSqlServerId(null)
-    setUsers([{ id: 1, username: "", displayName: "", email: "", phone: "", password: "", showPassword: false }])
+    setUsers([mkUser()])
     setSelectedServiceIds([]); setSelectedDemoDbIds([]); setSetupDone(false)
     setBackupFiles([])
     // demoDatabases tekrar fetch edilsin diye boşalt — step 4'e girince useEffect yeniden doldurur
@@ -659,8 +683,8 @@ export function WizardShell() {
                   existingUsers={apiExistingUsers}
                   existingUsersLoading={existingUsersLoading}
                   existingUsersError={existingUsersError}
-                  onAdd={addUser} onRemove={removeUser}
-                  onUpdateUsername={(id, v) => updateUser(id, "username", v)}
+                  onAdd={addUser} onRemove={removeUser} onCopy={copyUser}
+                  onUpdateUsername={updateUsername}
                   onUpdateDisplayName={(id, v) => updateUser(id, "displayName", v)}
                   onUpdateEmail={(id, v) => updateUser(id, "email", v)}
                   onUpdatePhone={(id, v) => updateUser(id, "phone", v)}

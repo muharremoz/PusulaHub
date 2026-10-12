@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
-import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical, Copy } from "lucide-react"
+import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner } from "./ad-provision-runner"
@@ -19,6 +20,8 @@ interface Props {
   existingUsersError?: string | null
   onAdd: () => void
   onRemove: (id: number) => void
+  /** `adet` kopya; `dolu` = kullanılmış kullanıcı adları (önek hariç, küçük harf) */
+  onCopy: (id: number, adet: number, dolu: Set<string>) => void
   onUpdateUsername: (id: number, val: string) => void
   onUpdateDisplayName: (id: number, val: string) => void
   onUpdateEmail: (id: number, val: string) => void
@@ -58,7 +61,7 @@ export function meetsAdComplexity(p: string) {
 export function StepUsers({
   users, firmaId, firmaName, serverId, userLimit, existingUsers,
   existingUsersLoading, existingUsersError,
-  onAdd, onRemove,
+  onAdd, onRemove, onCopy,
   onUpdateUsername, onUpdateDisplayName, onUpdateEmail, onUpdatePhone,
   onUpdatePassword, onTogglePassword, onGeneratePassword,
 }: Props) {
@@ -68,6 +71,22 @@ export function StepUsers({
   const [testKey, setTestKey]           = useState(0)
   const activeExisting = existingUsers.filter((u) => !u.isDisabled).length
   const limitReached = userLimit > 0 && activeExisting + users.length >= userLimit
+  /** Kalan kullanıcı hakkı — limit yoksa sınırsız */
+  const kalanHak = userLimit > 0 ? Math.max(0, userLimit - activeExisting - users.length) : Infinity
+  const [kopyaAdet, setKopyaAdet] = useState<Record<number, string>>({})
+
+  const kopyala = (id: number) => {
+    const istenen = Math.max(1, Number.parseInt(kopyaAdet[id] ?? "1", 10) || 1)
+    const adet = Math.min(istenen, kalanHak)
+    if (adet < 1) { toast.error("Kullanıcı hakkı dolu", { description: `${userLimit} kullanıcı hakkının tamamı kullanılıyor.` }); return }
+    const onek = `${firmaId}.`.toLowerCase()
+    const dolu = new Set(existingUsers.map((u) => {
+      const ad = u.username.trim().toLowerCase()
+      return ad.startsWith(onek) ? ad.slice(onek.length) : ad
+    }))
+    onCopy(id, adet, dolu)
+    if (adet < istenen) toast.warning(`${adet} kopya eklendi`, { description: `Kullanıcı hakkı ${userLimit}; ${istenen} kopyanın hepsine yer yok.` })
+  }
 
   const adHatasi = (username: string) =>
     username.trim() ? adKullaniciAdiHatasi(`${firmaId}.${username.trim()}`) : null
@@ -171,14 +190,37 @@ export function StepUsers({
                 <span className="text-[11px] font-semibold text-foreground">
                   Kullanıcı {idx + 1}
                 </span>
-                {users.length > 1 && (
-                  <button
-                    onClick={() => onRemove(user.id)}
-                    className="text-muted-foreground hover:text-red-500 transition-colors"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                )}
+                <div className="flex items-center gap-2">
+                  {user.username.trim() && !limitReached && (
+                    <div className="flex items-center rounded-[5px] border border-border overflow-hidden">
+                      <input
+                        type="number"
+                        min={1}
+                        max={Number.isFinite(kalanHak) ? kalanHak : undefined}
+                        value={kopyaAdet[user.id] ?? "1"}
+                        onChange={(e) => setKopyaAdet((k) => ({ ...k, [user.id]: e.target.value }))}
+                        onKeyDown={(e) => { if (e.key === "Enter") kopyala(user.id) }}
+                        aria-label="Kopya sayısı"
+                        className="w-10 px-1.5 py-1 text-[11px] text-center tabular-nums bg-background outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <button
+                        onClick={() => kopyala(user.id)}
+                        className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground border-l border-border hover:bg-muted/40 hover:text-foreground transition-colors"
+                      >
+                        <Copy className="size-3" />
+                        Kopyala
+                      </button>
+                    </div>
+                  )}
+                  {users.length > 1 && (
+                    <button
+                      onClick={() => onRemove(user.id)}
+                      className="text-muted-foreground hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Alanlar */}
