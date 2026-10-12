@@ -83,12 +83,27 @@ export function StepFirma({
     ? Math.ceil((new Date(selectedCompany.lisansBitis).getTime() - Date.now()) / 864e5)
     : Infinity
 
-  const filtered = search.trim()
-    ? companies.filter((c) => {
-        const q = search.toLowerCase()
-        return c.firkod.toLowerCase().includes(q) || c.firma.toLowerCase().includes(q)
-      })
-    : []
+  /*  En uygun eşleşme üstte: kod tam > kod başı > ad başı > ad içinde kelime başı
+   *  > kod içinde > ad içinde. Eşitlikte kısa kod, sonra ad sırası.             */
+  const filtered = (() => {
+    const q = search.trim().toLocaleLowerCase("tr-TR")
+    if (!q) return []
+    const puan = (c: Company) => {
+      const kod = c.firkod.toLocaleLowerCase("tr-TR"), ad = c.firma.toLocaleLowerCase("tr-TR")
+      if (kod === q) return 0
+      if (kod.startsWith(q)) return 1
+      if (ad.startsWith(q)) return 2
+      if (ad.split(/[\s.\-/]+/).some((k) => k.startsWith(q))) return 3
+      if (kod.includes(q)) return 4
+      if (ad.includes(q)) return 5
+      return -1
+    }
+    return companies
+      .map((c) => ({ c, p: puan(c) }))
+      .filter((x) => x.p >= 0)
+      .sort((a, b) => a.p - b.p || a.c.firkod.length - b.c.firkod.length || a.c.firma.localeCompare(b.c.firma, "tr"))
+      .map((x) => x.c)
+  })()
 
   /*  Arama kutusu + yenile + sonuçlar — hem boş ekranda hem "Farklı Firma Seç"te
    *  aynı bileşen; ikisi aynı anda görünmediği için `search` durumu ortak.   */
