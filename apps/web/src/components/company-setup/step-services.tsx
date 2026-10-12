@@ -4,16 +4,9 @@ import { useState, useEffect } from "react"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
 import type { DepoServerItem } from "@/app/api/setup/depo-servers/route"
-import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive, Smartphone } from "lucide-react"
+import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive, Smartphone, Layers, Image as ImageIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import { StepServicesPars } from "./step-services-pars"
 import type { ComponentProps } from "react"
@@ -138,377 +131,257 @@ export function StepServices({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
 
-      {/* Özet satırı */}
-      <div className="flex items-center justify-between">
-        <span className="text-[11px] text-muted-foreground">
-          {selectedIds.length > 0
-            ? <><span className="font-semibold text-foreground">{selectedIds.length}</span> hizmet seçildi</>
-            : "Firmaya atanacak hizmetleri seçin"}
+      {/* Üst şerit: seçim özeti */}
+      <div className="flex items-center gap-3 rounded-[8px] bg-[var(--section-bg)] px-3 py-2.5">
+        <span className="bg-primary/10 text-primary ring-primary/20 flex size-8 shrink-0 items-center justify-center rounded-[5px] ring-1">
+          <Layers className="size-4" />
         </span>
-        {selectedIds.length > 0 && (
-          <span className="text-[10px] text-muted-foreground">
-            {categories.map((cat) => {
-              const n = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
-              return n > 0 ? `${cat}: ${n}` : null
-            }).filter(Boolean).join(" · ")}
-          </span>
-        )}
+        <div className="min-w-0">
+          <p className="text-[13px] font-semibold">
+            {selectedIds.length > 0 ? `${selectedIds.length} hizmet seçildi` : "Firmaya atanacak hizmetleri seçin"}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {selectedIds.length > 0
+              ? categories.map((cat) => {
+                  const n = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
+                  return n > 0 ? `${cat}: ${n}` : null
+                }).filter(Boolean).join(" · ")
+              : `${services.length} hizmet, ${categories.length} kategori`}
+          </p>
+        </div>
       </div>
 
-      {/* Kategori sekmeleri */}
-      <div className="flex items-center gap-1 border-b border-border/50 pb-0">
-        {categories.map((cat) => {
-          const count = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
-          const isActive = activeTab === cat
+      {/* Kategori seçici + tümünü seç */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="inline-flex rounded-[8px] bg-muted p-1">
+          {categories.map((cat) => {
+            const count = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
+            const isActive = activeTab === cat
+            return (
+              <button
+                key={cat}
+                onClick={() => setActiveTab(cat)}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-[5px] px-3 py-1.5 text-[12px] font-medium transition-colors",
+                  isActive ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {cat}
+                {count > 0 && (
+                  <span className="flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">{count}</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => activeTab && onToggleAll(activeTab, !allSelected)}
+          disabled={!activeTab || catItems.length === 0}
+        >
+          {allSelected ? "Tümünü Kaldır" : `Tümünü Seç (${catItems.length})`}
+        </Button>
+      </div>
+
+      {/* Hizmet kartları */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        {catItems.map((service) => {
+          const secili = selectedIds.includes(service.id)
+          const tur = turBilgisi(service.type)
+          const TurIkon = tur.ikon
           return (
             <button
-              key={cat}
-              onClick={() => setActiveTab(cat)}
+              key={service.id}
+              type="button"
+              onClick={() => onToggle(service.id)}
+              aria-pressed={secili}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 -mb-px transition-colors",
-                isActive
-                  ? "border-foreground text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
+                "flex items-center gap-3 rounded-[8px] border-2 p-3 text-left transition-all",
+                secili
+                  ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15"
+                  : "border-border bg-card hover:border-foreground/30",
               )}
+              style={{ boxShadow: "var(--card-shadow)" }}
             >
-              {cat}
-              {count > 0 && (
-                <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold">
-                  {count}
-                </span>
-              )}
+              <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-[5px]", tur.renk)}>
+                <TurIkon className="size-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13px] font-semibold">{service.name}</p>
+                <p className="truncate text-[11px] text-muted-foreground" title={getSourcePath(service)}>
+                  {tur.ad} · {getSourcePath(service)}
+                </p>
+              </div>
+              <span className={cn(
+                "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                secili ? "border-emerald-500 bg-emerald-500" : "border-border",
+              )}>
+                {secili && <Check className="size-2.5 text-white" strokeWidth={3} />}
+              </span>
             </button>
           )
         })}
       </div>
 
-      {/* Hizmet listesi */}
-      <div className="rounded-[5px] border border-border/50 overflow-hidden">
-        {/* Liste başlık satırı */}
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
-          <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-            {activeTab} — {catItems.length} hizmet
-          </span>
-          <button
-            onClick={() => activeTab && onToggleAll(activeTab, !allSelected)}
-            disabled={!activeTab}
-            className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-          >
-            {allSelected ? "Tümünü Kaldır" : "Tümünü Seç"}
-          </button>
-        </div>
-
-        {/* Satırlar */}
-        <div className="divide-y divide-border/40">
-          {catItems.map((service) => {
-            const isSelected = selectedIds.includes(service.id)
-            return (
-              <button
-                key={service.id}
-                onClick={() => onToggle(service.id)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors",
-                  isSelected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"
-                )}
-              >
-                {/* Checkbox */}
-                <span className={cn(
-                  "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 transition-all",
-                  isSelected ? "bg-foreground border-foreground" : "border-border"
-                )}>
-                  {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                </span>
-
-                {/* Tip ikonu */}
-                <span
-                  className={cn(
-                    "shrink-0",
-                    isSelected ? "text-foreground" : "text-muted-foreground/70"
-                  )}
-                  title={service.type === "iis-site" ? "IIS Sitesi" : service.type === "iis-resim" ? "Resim Paylaşımı" : service.type === "pars" ? "Pars (Mobil)" : "Pusula Programı"}
-                >
-                  {isIisType(service.type)
-                    ? <Globe className="size-3" />
-                    : service.type === "pars"
-                      ? <Smartphone className="size-3" />
-                      : <Server className="size-3" />}
-                </span>
-
-                {/* İsim */}
-                <span className={cn(
-                  "text-[11px] font-medium flex-1",
-                  isSelected ? "text-foreground" : "text-muted-foreground"
-                )}>
-                  {service.name}
-                </span>
-
-                {/* Klasör yolu */}
-                <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[240px]">
-                  {getSourcePath(service)}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
       {/* Pars — kullanıcılar + rapor seçimi (Pars hizmeti seçildiyse) */}
       {pars && <StepServicesPars {...pars} />}
 
-      {/* IIS Sunucusu seçimi — hizmet listesinin altında (aktif tab IIS kategorisindeyse veya iis-site seçildiyse) */}
+      {/* IIS sunucusu — aktif sekme IIS hizmeti içeriyorsa ya da IIS hizmeti seçiliyse */}
       {showIisPicker && (
-        <div>
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
-            IIS Sunucusu
-          </p>
+        <SunucuSecici
+          baslik="IIS Sunucusu"
+          ikon={<Globe className="size-3.5 text-muted-foreground" />}
+          aciklama="Web sitesi ve resim paylaşımının kurulacağı sunucu"
+          sunucular={iisServers.map((s) => {
+            const max = s.totalRamGB > 0 ? s.totalRamGB * 4 : 0
+            return { ...s, alt: `${s.userCount} site`, yogunluk: max > 0 ? Math.min(100, Math.round((s.userCount / max) * 100)) : null }
+          })}
+          yukleniyor={iisServersLoading}
+          hata={iisServersError}
+          seciliId={selectedIisServerId}
+          onSec={onSelectIisServer}
+          bos={{ ikon: <ServerOff className="size-6 text-muted-foreground" />, baslik: "IIS sunucusu tanımlı değil", metin: "IIS tabanlı hizmetlerin kurulacağı bir sunucuyu sisteme IIS rolüyle eklemelisin." }}
+        />
+      )}
 
-          {/* Yükleniyor */}
-          {iisServersLoading && (
-            <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-3">
-                  <Skeleton className="h-3 w-32 rounded-[5px]" />
-                  <Skeleton className="h-3 w-24 rounded-[5px]" />
-                  <Skeleton className="h-3 w-28 rounded-[5px]" />
-                  <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
-                </div>
-              ))}
+      {/* Depo sunucusu — Pusula programı (resim klasörü) ya da Resim (paylaşım) için */}
+      {(hasPusulaSelected || hasResimSelected) && (
+        <SunucuSecici
+          baslik="Depo Sunucusu"
+          ikon={<HardDrive className="size-3.5 text-muted-foreground" />}
+          aciklama="D:\Resimler\<firmaId> klasörü ve NTFS yetkisi bu sunucuda açılır"
+          sunucular={depoServers.map((s) => ({ ...s, alt: s.type, yogunluk: null }))}
+          yukleniyor={depoServersLoading}
+          hata={depoServersError}
+          seciliId={selectedDepoServerId}
+          onSec={onSelectDepoServer}
+          bos={{ ikon: <HardDrive className="size-6 text-muted-foreground" />, baslik: "Depo sunucusu tanımlı değil", metin: "Pusula programlarının resim klasörünün açılacağı bir sunucuyu sisteme Depo rolüyle eklemelisin." }}
+        />
+      )}
+    </div>
+  )
+}
+
+/** Hizmet türüne göre ikon, renk ve kısa ad */
+function turBilgisi(t: string): { ikon: typeof Server; renk: string; ad: string } {
+  if (t === "iis-site")  return { ikon: Globe,      renk: "bg-sky-500/15 text-sky-700 dark:text-sky-400",           ad: "IIS sitesi" }
+  if (t === "iis-resim") return { ikon: ImageIcon,  renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400",  ad: "Resim paylaşımı" }
+  if (t === "pars")      return { ikon: Smartphone, renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400",     ad: "Pars (mobil)" }
+  return { ikon: Server, renk: "bg-primary/10 text-primary", ad: "Program" }
+}
+
+interface SeciciSunucu { id: string; name: string; ip: string; dns: string; isOnline: boolean; alt: string; yogunluk: number | null }
+
+/** Sunucu seçimi — bağlantı sunucusu kartlarıyla aynı görünüm (ayrık kart, seçili yeşil) */
+function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, seciliId, onSec, bos }: {
+  baslik: string
+  ikon: React.ReactNode
+  aciklama: string
+  sunucular: SeciciSunucu[]
+  yukleniyor?: boolean
+  hata?: string | null
+  seciliId: string | null
+  onSec: (id: string) => void
+  bos: { ikon: React.ReactNode; baslik: string; metin: string }
+}) {
+  const secili = sunucular.find((s) => s.id === seciliId)
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 pb-2">
+        <p className="flex items-center gap-1.5 text-[12px] font-medium">{ikon}{baslik}</p>
+        <span className="truncate text-[11px] text-muted-foreground">
+          {secili ? <span className="font-medium text-emerald-700 dark:text-emerald-400">Seçili: {secili.name}</span> : aciklama}
+        </span>
+      </div>
+
+      {yukleniyor && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div key={i} className="space-y-2.5 rounded-[8px] border-2 p-3">
+              <Skeleton className="h-3.5 w-24 rounded-[5px]" />
+              <Skeleton className="h-3 w-32 rounded-[5px]" />
             </div>
-          )}
-
-          {/* Hata */}
-          {!iisServersLoading && iisServersError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
-              <AlertTriangle className="size-3.5 shrink-0" />
-              {iisServersError}
-            </div>
-          )}
-
-          {/* Boş */}
-          {!iisServersLoading && !iisServersError && iisServers.length === 0 && (
-            <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
-              <ServerOff className="size-6 text-muted-foreground" />
-              <p className="text-[12px] font-medium">IIS sunucusu tanımlı değil</p>
-              <p className="text-[10px] text-muted-foreground max-w-xs">
-                IIS tabanlı hizmetlerin kurulacağı bir sunucuyu sisteme
-                IIS rolüyle eklemelisin.
-              </p>
-              <a
-                href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-              >
-                Sunucu Ekle
-              </a>
-            </div>
-          )}
-
-          {/* Tablo */}
-          {!iisServersLoading && !iisServersError && iisServers.length > 0 && (
-            <>
-              <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Tip</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8 text-center">Site</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Yoğunluk</TableHead>
-                      <TableHead className="h-8 w-8" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {iisServers.map((srv) => {
-                      const isSelected = selectedIisServerId === srv.id
-                      const isDisabled = !srv.isOnline
-                      const maxSites = srv.totalRamGB > 0 ? srv.totalRamGB * 4 : 0
-                      const densityPct = maxSites > 0
-                        ? Math.min(100, Math.round((srv.userCount / maxSites) * 100))
-                        : 0
-                      const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
-                      const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
-                      return (
-                        <TableRow
-                          key={srv.id}
-                          onClick={() => !isDisabled && onSelectIisServer(srv.id)}
-                          className={cn(
-                            "border-b border-border/40 transition-colors",
-                            isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
-                            isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                          )}
-                        >
-                          <TableCell className="py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[11px] font-medium">{srv.name}</p>
-                              {srv.isOnline ? (
-                                <span className="relative flex size-1.5 shrink-0">
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                  <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                                </span>
-                              ) : (
-                                <WifiOff className="size-3 text-red-400 shrink-0" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                            {srv.ip}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5 truncate max-w-[160px]">
-                            {srv.dns || "—"}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground py-2.5">
-                            {srv.type}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground tabular-nums text-center py-2.5">
-                            {srv.userCount}
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                                <div className={cn("h-full rounded-full", barColor)} style={{ width: `${densityPct}%` }} />
-                              </div>
-                              <span className={cn("text-[10px] tabular-nums w-7 text-right shrink-0", dColor)}>%{densityPct}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <div className={cn(
-                              "size-4 rounded-full border flex items-center justify-center",
-                              isSelected ? "bg-foreground border-foreground" : "border-border"
-                            )}>
-                              {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <p className="text-[10px] text-muted-foreground px-1 mt-2">
-                {iisServers.length} sunucu listeleniyor
-              </p>
-            </>
-          )}
+          ))}
         </div>
       )}
 
-      {/* Depo Sunucusu — Pusula programı (resim klasörü) veya Resim (yayınlanan paylaşım) için gerekli */}
-      {(hasPusulaSelected || hasResimSelected) && (
-        <div>
-          <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
-            Depo Sunucusu
-            <span className="ml-2 text-muted-foreground/70 normal-case tracking-normal">
-              — D:\Resimler\&lt;firmaId&gt; klasörü ve NTFS yetkisi bu sunucuda açılır
-            </span>
-          </p>
+      {!yukleniyor && hata && (
+        <div className="flex items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {hata}
+        </div>
+      )}
 
-          {depoServersLoading && (
-            <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-3 px-3 py-3">
-                  <Skeleton className="h-3 w-32 rounded-[5px]" />
-                  <Skeleton className="h-3 w-24 rounded-[5px]" />
-                  <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
-                </div>
-              ))}
-            </div>
-          )}
+      {!yukleniyor && !hata && sunucular.length === 0 && (
+        <div className="flex flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed px-4 py-8 text-center">
+          {bos.ikon}
+          <p className="text-[13px] font-medium">{bos.baslik}</p>
+          <p className="max-w-xs text-[12px] text-muted-foreground">{bos.metin}</p>
+          <Button asChild size="sm" className="mt-1"><a href="/servers">Sunucu Ekle</a></Button>
+        </div>
+      )}
 
-          {!depoServersLoading && depoServersError && (
-            <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
-              <AlertTriangle className="size-3.5 shrink-0" />
-              {depoServersError}
-            </div>
-          )}
-
-          {!depoServersLoading && !depoServersError && depoServers.length === 0 && (
-            <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
-              <HardDrive className="size-6 text-muted-foreground" />
-              <p className="text-[12px] font-medium">Depo sunucusu tanımlı değil</p>
-              <p className="text-[10px] text-muted-foreground max-w-xs">
-                Pusula programlarının resim klasörünün açılacağı bir sunucuyu
-                sisteme <span className="font-semibold">Depo</span> rolüyle eklemelisin.
-              </p>
-              <a
-                href="/servers"
-                className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
+      {!yukleniyor && !hata && sunucular.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {sunucular.map((srv) => {
+            const sec = seciliId === srv.id
+            const kapali = !srv.isOnline
+            const pct = srv.yogunluk
+            return (
+              <button
+                key={srv.id}
+                type="button"
+                disabled={kapali}
+                onClick={() => onSec(srv.id)}
+                aria-pressed={sec}
+                className={cn(
+                  "rounded-[8px] border-2 p-3 text-left transition-all",
+                  sec ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15" : "border-border bg-card hover:border-foreground/30",
+                  kapali && "cursor-not-allowed opacity-50",
+                )}
+                style={{ boxShadow: "var(--card-shadow)" }}
               >
-                Sunucu Ekle
-              </a>
-            </div>
-          )}
-
-          {!depoServersLoading && !depoServersError && depoServers.length > 0 && (
-            <>
-              <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
-                      <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Tip</TableHead>
-                      <TableHead className="h-8 w-8" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {depoServers.map((srv) => {
-                      const isSelected = selectedDepoServerId === srv.id
-                      const isDisabled = !srv.isOnline
-                      return (
-                        <TableRow
-                          key={srv.id}
-                          onClick={() => !isDisabled && onSelectDepoServer(srv.id)}
-                          className={cn(
-                            "border-b border-border/40 transition-colors",
-                            isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
-                            isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                          )}
-                        >
-                          <TableCell className="py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-[11px] font-medium">{srv.name}</p>
-                              {srv.isOnline ? (
-                                <span className="relative flex size-1.5 shrink-0">
-                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                                  <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                                </span>
-                              ) : (
-                                <WifiOff className="size-3 text-red-400 shrink-0" />
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                            {srv.ip}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5 truncate max-w-[160px]">
-                            {srv.dns || "—"}
-                          </TableCell>
-                          <TableCell className="text-[11px] text-muted-foreground py-2.5">
-                            {srv.type}
-                          </TableCell>
-                          <TableCell className="py-2.5">
-                            <div className={cn(
-                              "size-4 rounded-full border flex items-center justify-center",
-                              isSelected ? "bg-foreground border-foreground" : "border-border"
-                            )}>
-                              {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-              <p className="text-[10px] text-muted-foreground px-1 mt-2">
-                {depoServers.length} sunucu listeleniyor
-              </p>
-            </>
-          )}
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {srv.isOnline ? (
+                        <span className="relative flex size-1.5 shrink-0">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                          <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                        </span>
+                      ) : (
+                        <WifiOff className="size-3 shrink-0 text-red-500" />
+                      )}
+                      <p className="truncate text-[13px] font-semibold">{srv.name}</p>
+                    </div>
+                    <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{srv.dns || srv.ip}</p>
+                  </div>
+                  <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", sec ? "border-emerald-500 bg-emerald-500" : "border-border")}>
+                    {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                  </span>
+                </div>
+                {pct !== null && (
+                  <>
+                    <div className="mt-3 flex items-end justify-between">
+                      <span className="text-[12px] text-muted-foreground">{srv.alt}</span>
+                      <span className={cn("text-[11px] font-medium tabular-nums",
+                        pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>%{pct}</span>
+                    </div>
+                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                      <div className={cn("h-full rounded-full", pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${pct}%` }} />
+                    </div>
+                  </>
+                )}
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? srv.ip : srv.alt}</span>
+                  {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
+                </div>
+              </button>
+            )
+          })}
         </div>
       )}
     </div>
