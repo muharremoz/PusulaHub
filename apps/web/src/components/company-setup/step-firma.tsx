@@ -102,10 +102,6 @@ export function StepFirma({
               <Building2 className="size-5" />
             </span>
             <h2 className="mt-3 text-[15px] font-semibold">Kurulacak firmayı seçin</h2>
-            <p className="mt-1 text-[12px] text-muted-foreground">
-              Firma adının bir kısmını ya da firma kodunu yazın.
-              {!companiesLoading && companies.length > 0 && <> {companies.length.toLocaleString("tr-TR")} firma arasında aranır.</>}
-            </p>
 
             <div className="mt-5 flex w-full items-center gap-2">
               <div className="relative flex-1">
@@ -117,21 +113,33 @@ export function StepFirma({
                   onChange={(e) => setSearch(e.target.value)}
                   disabled={companiesLoading}
                   autoFocus
-                  className="h-10 w-full rounded-[5px] border bg-card pl-9 pr-9 text-[13px] outline-none transition-colors focus:border-foreground/40 disabled:opacity-50"
+                  className="h-10 w-full rounded-[5px] border bg-card pl-9 pr-28 text-[13px] outline-none transition-colors focus:border-foreground/40 disabled:opacity-50"
                   style={{ boxShadow: "var(--card-shadow)" }}
                 />
-                {companiesLoading ? (
-                  <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                ) : search && (
-                  <button
-                    type="button"
-                    onClick={() => setSearch("")}
-                    aria-label="Aramayı temizle"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                )}
+                {/* Sağ uç: yükleniyor / eşleşen sayısı + temizle / toplam firma rozeti */}
+                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+                  {companiesLoading ? (
+                    <Loader2 className="mr-1 size-4 animate-spin text-muted-foreground" />
+                  ) : search ? (
+                    <>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {filtered.length.toLocaleString("tr-TR")} / {companies.length.toLocaleString("tr-TR")}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setSearch("")}
+                        aria-label="Aramayı temizle"
+                        className="rounded-[5px] p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </>
+                  ) : companies.length > 0 && (
+                    <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                      {companies.length.toLocaleString("tr-TR")} firma
+                    </span>
+                  )}
+                </div>
               </div>
               {onRefreshCompanies && (
                 <button
