@@ -13,6 +13,13 @@
       "autoPort": false
     },
     {
+      "name": "aktarim-istemci-web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "apps/aktarim-istemci/web", "run", "dev", "--", "--port", "5173", "--strictPort"],
+      "port": 5173,
+      "autoPort": false
+    },
+    {
       "name": "aktarim-dev",
       "runtimeExecutable": "node",
       "runtimeArgs": [

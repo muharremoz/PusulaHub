@@ -201,7 +201,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                 <TableHead className="h-8 px-2">Öğe</TableHead>
                 <TableHead className="h-8 w-24 px-2">Tür</TableHead>
                 <TableHead className="h-8 w-20 px-2 text-right">Boyut</TableHead>
-                <TableHead className="h-8 w-36 pr-3 pl-2">Durum</TableHead>
+                <TableHead className="h-8 w-48 pr-3 pl-2">Durum</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -228,7 +228,10 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                         {suren && ` · %${o.yuzde}`}
                       </div>
                       {o.durum === "yukleniyor" && o.boyut > 0 && (
-                        <div className="truncate text-[11px] tabular-nums text-muted-foreground">
+                        <div
+                          className="truncate text-[11px] tabular-nums text-muted-foreground"
+                          title={`${bayt(o.gonderilen)} / ${bayt(o.boyut)}${o.hiz ? ` · ${hizMetni(o.hiz)}` : ""}${o.kalanSn != null ? ` · kalan ~${sureMetni(o.kalanSn)}` : ""}`}
+                        >
                           {bayt(o.gonderilen)} / {bayt(o.boyut)}{o.hiz ? ` · ${hizMetni(o.hiz)}` : ""}{o.kalanSn != null ? ` · ~${sureMetni(o.kalanSn)}` : ""}
                         </div>
                       )}

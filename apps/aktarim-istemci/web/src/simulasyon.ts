@@ -98,6 +98,9 @@ export function simulasyonDurumu(gercek: Durum | null): Durum {
       g.durum = "yukleniyor";
       g.yuzde = Math.round((t / y) * 100);
       g.gonderilen = Math.round((g.boyut * g.yuzde) / 100);
+      // Canlı hız/kalan süre (0.3.2): sabit hız → kalan = kalan bayt / hız
+      g.hiz = g.boyut / y;
+      g.kalanSn = Math.max(0, Math.ceil(y - t));
       t = 0;
       break;
     }
