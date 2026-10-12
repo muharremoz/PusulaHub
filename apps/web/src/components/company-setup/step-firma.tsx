@@ -86,11 +86,11 @@ export function StepFirma({
     : []
 
   return (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", !selectedCompany && "flex flex-1 flex-col")}>
 
       {/* Firma seçilmeden: ortalanmış arama paneli — yalnız arama + yenile */}
       {!selectedCompany && (
-        <div className="relative overflow-hidden rounded-[8px] bg-[var(--section-bg)] px-6 py-10">
+        <div className="relative flex flex-1 flex-col justify-center overflow-hidden rounded-[8px] bg-[var(--section-bg)] px-6 py-10">
           {/* Arka plan: ince nokta deseni + ortadan yayılan yumuşak ışık (token renkleriyle, koyu temada da) */}
           <div
             aria-hidden

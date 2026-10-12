@@ -637,8 +637,8 @@ export function WizardShell() {
         {/* ── Sağ içerik + footer ── */}
         <div className="flex flex-col flex-1 min-w-0">
           {/* Step content */}
-          <div className="flex-1 overflow-y-auto p-5">
-            <BlurFade stepKey={step} direction={dir}>
+          <div className="flex flex-1 flex-col overflow-y-auto p-5">
+            <BlurFade stepKey={step} direction={dir} className="flex flex-1 flex-col">
               {step === 0 && (
                 <StepServer
                   servers={apiAdServers}
