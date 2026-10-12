@@ -2694,17 +2694,13 @@ tr:nth-child(even) td{background:#fafafa}
                         {db.YedekAl === null ? (
                           <span className="text-[10px] text-muted-foreground" title="guvenlik tablosunda kaydı yok">—</span>
                         ) : (
-                          <label className="flex items-center gap-1.5 cursor-pointer">
-                            <Switch
-                              checked={db.YedekAl}
-                              disabled={yedekAlKaydediliyor !== null}
-                              onCheckedChange={(v) => (v ? yedekAlDegistir(db, true) : setYedekKapatOnay(db))}
-                              className="scale-75 origin-left"
-                            />
-                            <span className={`text-[10px] ${db.YedekAl ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                              {yedekAlKaydediliyor === db.Id ? "…" : db.YedekAl ? "Evet" : "Hayır"}
-                            </span>
-                          </label>
+                          <Switch
+                            checked={db.YedekAl}
+                            disabled={yedekAlKaydediliyor !== null}
+                            onCheckedChange={(v) => (v ? yedekAlDegistir(db, true) : setYedekKapatOnay(db))}
+                            className={`scale-75 origin-left ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}`}
+                            aria-label="Yedek alınacak"
+                          />
                         )}
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
