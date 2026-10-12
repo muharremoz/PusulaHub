@@ -49,7 +49,15 @@ export async function GET(
       sb.schema("hub").from("company_pars_users").select("id, service_id, username, tipi, created_at").eq("company_id", firkod).order("created_at"),
     ])
     const wsById = new Map(((ws ?? []) as { id: number; name: string; category: string | null; type: string; config: string | null }[]).map((s) => [s.id, s]))
-    const iisByName = new Map(((iis ?? []) as { name: string; server: string; status: string; app_pool: string }[]).map((i) => [i.name, i]))
+    type IisRow = { name: string; server: string; status: string; app_pool: string }
+    const iisByName = new Map(((iis ?? []) as IisRow[]).map((i) => [i.name, i]))
+    // Poller iis_sites.firma'yı site adındaki önekten türetir; öneksiz siteler (ör. 1949 → "Pusula_API") firma
+    // süzgecine düşmez. Atamadaki site adıyla ikinci arama (resolveCompanySites ile aynı yaklaşım, 12.10.2026).
+    const eksik = ((wpa ?? []) as { site_name: string | null }[]).map((a) => a.site_name?.trim()).filter((n): n is string => !!n && !iisByName.has(n))
+    if (eksik.length > 0) {
+      const { data: ek } = await sb.schema("hub").from("iis_sites").select("name, server, status, app_pool").in("name", eksik)
+      for (const i of (ek ?? []) as IisRow[]) iisByName.set(i.name, i)
+    }
 
     const services: CompanyServiceDto[] = ((wpa ?? []) as { id: number; service_id: number; port: number | null; site_name: string | null; assigned_at: string | null }[])
       .map((a) => {
