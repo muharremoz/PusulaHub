@@ -168,6 +168,25 @@ yetki yalnız `EXECUTE ON dbo.SetRateList` + `SELECT ON dbo.Rate` (yazma doğrul
 aynı anda güncellendi. `RateList` eşleşmesi: Harem 37–39/41 (eksikler başka Harem paketlerinde
 gelir, birikir), Ozan 38/44, AltınKaynak 33/36 — KurPanel'in son gönderimiyle aynı.
 
+### Güncelleme süreleri (`.env`, 12.10.2026)
+
+| Kaynak | Ayar | Değer |
+|---|---|---|
+| Harem (datshop) | Socket.IO | canlı (fiyat değiştikçe) |
+| Ozan | `OZANKUR_POLL_INTERVAL_MS` | 300 000 (5 dk) |
+| AltınKaynak | `ALTINKAYNAK_POLL_INTERVAL_MS` | 300 000 (5 dk) |
+| Pusula | `PUSULA_POLL_INTERVAL_MS` | 60 000 (1 dk) |
+| TCMB | `TCMB_POLL_INTERVAL_MS` | 1 800 000 (30 dk) |
+| **SQL'e yazma** | `RATE_SQL_INTERVAL_MS` | 60 000 (1 dk) |
+| Bayat sınırı | `RATE_SQL_STALE_MS` (tanımsız → varsayılan) | 300 000 (5 dk) |
+
+SQL'deki gecikme: Harem ≤ 1 dk; Ozan ve AltınKaynak ≤ ~6 dk (kaynak 5 dk'da bir okunuyor).
+KurPanel bu iki kaynağı dakikada bir okuyordu.
+
+⚠ Bayat sınırı (5 dk) Ozan/AltınKaynak okuma aralığıyla (5 dk) aynı → bazı turlarda bu iki
+kaynak sınırı birkaç saniye aşıp **o tur atlanabilir** (zararsız: `Rate`'teki satır kalır, yalnız
+o dakika yeniden yazılmaz). Öneri: `RATE_SQL_STALE_MS=900000` (15 dk). Henüz uygulanmadı.
+
 ### İzleme
 
 - `curl -s localhost:8080/health` (10.15.2.6) → `services.sqlWriter`:
