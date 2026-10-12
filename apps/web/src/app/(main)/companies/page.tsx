@@ -2632,7 +2632,7 @@ tr:nth-child(even) td{background:#fafafa}
                   </button>
                 </div>
                 <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
+                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase pl-[22px]">Veritabanı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Boyut</span>
@@ -2640,14 +2640,14 @@ tr:nth-child(even) td{background:#fafafa}
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Owner</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tam Yedek</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Diff Yedek</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase" title="guvenlik.YedekAl — SpareBackup ve Backup Master kapsamı">Yedek Alınacak</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase whitespace-nowrap">Yedek Alınacak</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-2.5 items-center">
+                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-2.5 items-center">
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px] w-2/3" />
                           <Skeleton className="h-3 rounded-[5px]" />
@@ -2671,7 +2671,7 @@ tr:nth-child(even) td{background:#fafafa}
                         db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
                       ].filter(Boolean).join("\n")
                       return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
                         <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="text-[13px] font-medium truncate">{db.Name}</span>
@@ -2692,13 +2692,13 @@ tr:nth-child(even) td{background:#fafafa}
                           title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş:      ${db.LastDiffBackup ?? "—"}` : ""}
                         >{db.LastDiffBackup ?? "—"}</span>
                         {db.YedekAl === null ? (
-                          <span className="text-[10px] text-muted-foreground" title="guvenlik tablosunda kaydı yok">—</span>
+                          <span className="text-[10px] text-muted-foreground">—</span>
                         ) : (
                           <Switch
                             checked={db.YedekAl}
                             disabled={yedekAlKaydediliyor !== null}
                             onCheckedChange={(v) => (v ? yedekAlDegistir(db, true) : setYedekKapatOnay(db))}
-                            className={`scale-75 origin-left ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}`}
+                            className={`scale-75 origin-left data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500 dark:data-[state=unchecked]:bg-red-500 ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}`}
                             aria-label="Yedek alınacak"
                           />
                         )}
