@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
 import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -77,6 +77,8 @@ export function StepFirma({
   const userLimit = licenseSeats
   const licenseFull = userLimit > 0 && existingUserCount >= userLimit
   const [search, setSearch] = useState("")
+  const [aramaAcik, setAramaAcik] = useState(false)
+  useEffect(() => { setAramaAcik(false) }, [selectedCompany?.firkod])
   const lisansKalanGun = selectedCompany?.lisansBitis
     ? Math.ceil((new Date(selectedCompany.lisansBitis).getTime() - Date.now()) / 864e5)
     : Infinity
@@ -87,6 +89,113 @@ export function StepFirma({
         return c.firkod.toLowerCase().includes(q) || c.firma.toLowerCase().includes(q)
       })
     : []
+
+  /*  Arama kutusu + yenile + sonuçlar — hem boş ekranda hem "Farklı Firma Seç"te
+   *  aynı bileşen; ikisi aynı anda görünmediği için `search` durumu ortak.   */
+  const aramaAlani = (
+    <>
+      <div className="flex w-full items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Firma adı veya kodu…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            disabled={companiesLoading}
+            autoFocus
+            className="h-10 w-full rounded-[5px] border bg-card pl-9 pr-28 text-[13px] outline-none transition-colors focus:border-foreground/40 disabled:opacity-50"
+            style={{ boxShadow: "var(--card-shadow)" }}
+          />
+          {/* Sağ uç: yükleniyor / eşleşen sayısı + temizle / toplam firma rozeti */}
+          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+            {companiesLoading ? (
+              <Loader2 className="mr-1 size-4 animate-spin text-muted-foreground" />
+            ) : search ? (
+              <>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {filtered.length.toLocaleString("tr-TR")} / {companies.length.toLocaleString("tr-TR")}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Aramayı temizle"
+                  className="rounded-[5px] p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </>
+            ) : companies.length > 0 && (
+              <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                {companies.length.toLocaleString("tr-TR")} firma
+              </span>
+            )}
+          </div>
+        </div>
+        {onRefreshCompanies && (
+          <button
+            type="button"
+            onClick={onRefreshCompanies}
+            disabled={companiesLoading || companiesRefreshing}
+            title="Firma listesini yenile (güncel lisans/kullanıcı bilgisi)"
+            className="flex h-10 shrink-0 items-center gap-1.5 rounded-[5px] border bg-card px-3.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            style={{ boxShadow: "var(--card-shadow)" }}
+          >
+            <RefreshCw className={cn("size-3.5", companiesRefreshing && "animate-spin")} />
+            {companiesRefreshing ? "Yenileniyor…" : "Yenile"}
+          </button>
+        )}
+      </div>
+
+      {/* Yükleniyor */}
+      {companiesLoading && (
+        <div className="mt-2 w-full overflow-hidden rounded-[5px] bg-card divide-y" style={{ boxShadow: "var(--card-shadow)" }}>
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+              <Skeleton className="h-3 w-10 rounded-[5px]" />
+              <Skeleton className="h-3 flex-1 rounded-[5px]" />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Hata */}
+      {!companiesLoading && companiesError && (
+        <div className="mt-2 flex w-full items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-left text-[12px] text-red-700 dark:text-red-400">
+          <AlertTriangle className="size-3.5 shrink-0" />
+          {companiesError}
+        </div>
+      )}
+
+      {/* Arama sonuçları */}
+      {!companiesLoading && search.trim() && (
+        <div className="mt-2 w-full max-h-72 overflow-y-auto rounded-[5px] bg-card text-left divide-y" style={{ boxShadow: "var(--card-shadow)" }}>
+          {filtered.length === 0 && (
+            <div className="py-6 text-center text-[12px] text-muted-foreground">“{search.trim()}” ile eşleşen firma yok</div>
+          )}
+          {filtered.slice(0, 50).map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { onSelectCompany(c); setSearch("") }}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="w-12 shrink-0 text-[12px] tabular-nums text-muted-foreground">{c.firkod}</span>
+                <span className="truncate text-[13px] font-medium">{c.firma}</span>
+                {c.windowsServerId && (
+                  <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Kurulu</span>
+                )}
+              </div>
+              <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{c.userCount ?? 0} kullanıcı</span>
+            </button>
+          ))}
+          {filtered.length > 50 && (
+            <div className="px-3 py-2 text-center text-[11px] text-muted-foreground">İlk 50 sonuç gösteriliyor — aramayı daraltın</div>
+          )}
+        </div>
+      )}
+    </>
+  )
 
   return (
     <div className="flex flex-1 flex-col gap-4">
@@ -106,106 +215,7 @@ export function StepFirma({
             </span>
             <h2 className="mt-3 text-[15px] font-semibold">Kurulacak firmayı seçin</h2>
 
-            <div className="mt-5 flex w-full items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  type="text"
-                  placeholder="Firma adı veya kodu…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  disabled={companiesLoading}
-                  autoFocus
-                  className="h-10 w-full rounded-[5px] border bg-card pl-9 pr-28 text-[13px] outline-none transition-colors focus:border-foreground/40 disabled:opacity-50"
-                  style={{ boxShadow: "var(--card-shadow)" }}
-                />
-                {/* Sağ uç: yükleniyor / eşleşen sayısı + temizle / toplam firma rozeti */}
-                <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-                  {companiesLoading ? (
-                    <Loader2 className="mr-1 size-4 animate-spin text-muted-foreground" />
-                  ) : search ? (
-                    <>
-                      <span className="text-[11px] tabular-nums text-muted-foreground">
-                        {filtered.length.toLocaleString("tr-TR")} / {companies.length.toLocaleString("tr-TR")}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setSearch("")}
-                        aria-label="Aramayı temizle"
-                        className="rounded-[5px] p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                      >
-                        <X className="size-3.5" />
-                      </button>
-                    </>
-                  ) : companies.length > 0 && (
-                    <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-                      {companies.length.toLocaleString("tr-TR")} firma
-                    </span>
-                  )}
-                </div>
-              </div>
-              {onRefreshCompanies && (
-                <button
-                  type="button"
-                  onClick={onRefreshCompanies}
-                  disabled={companiesLoading || companiesRefreshing}
-                  title="Firma listesini yenile (güncel lisans/kullanıcı bilgisi)"
-                  className="flex h-10 shrink-0 items-center gap-1.5 rounded-[5px] border bg-card px-3.5 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
-                  style={{ boxShadow: "var(--card-shadow)" }}
-                >
-                  <RefreshCw className={cn("size-3.5", companiesRefreshing && "animate-spin")} />
-                  {companiesRefreshing ? "Yenileniyor…" : "Yenile"}
-                </button>
-              )}
-            </div>
-
-            {/* Yükleniyor */}
-            {companiesLoading && (
-              <div className="mt-2 w-full overflow-hidden rounded-[5px] bg-card divide-y" style={{ boxShadow: "var(--card-shadow)" }}>
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2.5">
-                    <Skeleton className="h-3 w-10 rounded-[5px]" />
-                    <Skeleton className="h-3 flex-1 rounded-[5px]" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Hata */}
-            {!companiesLoading && companiesError && (
-              <div className="mt-2 flex w-full items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-left text-[12px] text-red-700 dark:text-red-400">
-                <AlertTriangle className="size-3.5 shrink-0" />
-                {companiesError}
-              </div>
-            )}
-
-            {/* Arama sonuçları */}
-            {!companiesLoading && search.trim() && (
-              <div className="mt-2 w-full max-h-72 overflow-y-auto rounded-[5px] bg-card text-left divide-y" style={{ boxShadow: "var(--card-shadow)" }}>
-                {filtered.length === 0 && (
-                  <div className="py-6 text-center text-[12px] text-muted-foreground">“{search.trim()}” ile eşleşen firma yok</div>
-                )}
-                {filtered.slice(0, 50).map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => { onSelectCompany(c); setSearch("") }}
-                    className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-muted/40"
-                  >
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="w-12 shrink-0 text-[12px] tabular-nums text-muted-foreground">{c.firkod}</span>
-                      <span className="truncate text-[13px] font-medium">{c.firma}</span>
-                      {c.windowsServerId && (
-                        <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Kurulu</span>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-[12px] tabular-nums text-muted-foreground">{c.userCount ?? 0} kullanıcı</span>
-                  </button>
-                ))}
-                {filtered.length > 50 && (
-                  <div className="px-3 py-2 text-center text-[11px] text-muted-foreground">İlk 50 sonuç gösteriliyor — aramayı daraltın</div>
-                )}
-              </div>
-            )}
+            <div className="mt-5 w-full">{aramaAlani}</div>
           </div>
         </div>
       )}
@@ -232,9 +242,11 @@ export function StepFirma({
                   <span className="flex shrink-0 items-center gap-1.5"><Phone className="size-3" />{selectedCompany.phone || "—"}</span>
                 </div>
               </div>
-              <Button variant="outline" size="sm" onClick={onClearCompany} className="shrink-0 gap-1.5">
-                <X className="size-3.5" /> Firma Değiştir
-              </Button>
+              {!(licenseSeats === 0 || licenseFull) && (
+                <Button variant="outline" size="sm" onClick={onClearCompany} className="shrink-0 gap-1.5">
+                  <X className="size-3.5" /> Firma Değiştir
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-1.5 pt-1.5">
@@ -292,13 +304,16 @@ export function StepFirma({
               <h3 className="mt-3 text-[15px] font-semibold">
                 {licenseSeats === 0 ? "Kullanıcı hakkı bulunmuyor" : "Lisans dolu — kullanıcı eklenemez"}
               </h3>
-              <p className="mt-1 max-w-md text-[12px] text-muted-foreground">
-                {licenseSeats === 0
-                  ? "Firmanın aktif kullanıcı hakkı 0 görünüyor. Pusula'da lisans güncellendiyse listeyi yenileyin; değilse önce lisansın güncellenmesi gerekir."
-                  : `Kullanıcı hakkı ${userLimit} ve Active Directory'de zaten ${existingUserCount} kullanıcı var. Devam etmek için lisans artırılmalı ya da bir kullanıcı silinmeli.`}
-              </p>
+              {licenseFull && licenseSeats > 0 && (
+                <p className="mt-1 max-w-md text-[12px] text-muted-foreground">
+                  Kullanıcı hakkı {userLimit} ve Active Directory&apos;de zaten {existingUserCount} kullanıcı var. Devam etmek için lisans artırılmalı ya da bir kullanıcı silinmeli.
+                </p>
+              )}
+              {aramaAcik ? (
+                <div className="mt-4 w-full max-w-xl text-left">{aramaAlani}</div>
+              ) : (
               <div className="mt-4 flex gap-2">
-                <Button variant="outline" size="sm" onClick={onClearCompany}>Farklı Firma Seç</Button>
+                <Button variant="outline" size="sm" onClick={() => { setSearch(""); setAramaAcik(true) }}>Farklı Firma Seç</Button>
                 {licenseSeats === 0 && onRefreshCompanies && (
                   <Button size="sm" onClick={onRefreshCompanies} disabled={companiesRefreshing} className="gap-1.5">
                     <RefreshCw className={cn("size-3.5", companiesRefreshing && "animate-spin")} />
@@ -312,6 +327,7 @@ export function StepFirma({
                   </Button>
                 )}
               </div>
+              )}
             </div>
           )}
 
