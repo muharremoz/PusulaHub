@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
-import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2, MonitorSmartphone } from "lucide-react"
+import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2, MonitorSmartphone, Star } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 
@@ -396,10 +396,11 @@ export function StepFirma({
 
             {/* Sunucu kartları */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length > 0 && (
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 pt-2 lg:grid-cols-4">
                 {rdpServers.map((srv) => {
                   const secili = selectedWindowsServerId === srv.id
                   const kapali = !srv.isOnline
+                  const oneri = !kapali && srv.id === onerilen && rdpServers.length > 1
                   const pct = yogunluk(srv)
                   const bar = pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500"
                   const yazi = pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
@@ -414,11 +415,19 @@ export function StepFirma({
                         "relative rounded-[8px] border-2 p-3 text-left transition-all",
                         secili
                           ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15"
-                          : "border-border bg-card hover:border-foreground/30",
+                          : oneri
+                            ? "border-dashed border-emerald-500/70 bg-card hover:border-emerald-500"
+                            : "border-border bg-card hover:border-foreground/30",
                         kapali && "cursor-not-allowed opacity-50",
                       )}
                       style={{ boxShadow: "var(--card-shadow)" }}
                     >
+                      {/* Önerilen: üst kenara oturan dolu rozet — seçili olmasa da gözden kaçmasın */}
+                      {oneri && (
+                        <span className="absolute -top-2.5 left-3 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                          <Star className="size-3 fill-current" /> Önerilen · en boş
+                        </span>
+                      )}
                       {/* Başlık: ad + durum, sağda seçim işareti */}
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
@@ -459,8 +468,6 @@ export function StepFirma({
                         <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? srv.ip : srv.type}</span>
                         {kapali ? (
                           <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>
-                        ) : srv.id === onerilen && rdpServers.length > 1 ? (
-                          <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Önerilen</span>
                         ) : null}
                       </div>
                     </button>
