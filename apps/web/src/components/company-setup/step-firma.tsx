@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
-import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw } from "lucide-react"
+import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2, CheckCircle2, Hourglass } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 
@@ -85,6 +85,14 @@ export function StepFirma({
       })
     : []
 
+  // Boş ekran özeti: kurulu = terminal atanmış; bekleyen = kurulmamış + hakkı var + lisansı geçerli.
+  // Firma kodları sırayla verildiği için büyük kod = yeni müşteri.
+  const kurulu = companies.filter((c) => !!c.windowsServerId).length
+  const bekleyenler = companies
+    .filter((c) => !c.windowsServerId && (c.licenseCount ?? 0) > 0 && !isExpired(c.lisansBitis))
+    .sort((a, b) => (Number.parseInt(b.firkod, 10) || 0) - (Number.parseInt(a.firkod, 10) || 0))
+  const BEKLEYEN_GOSTER = 8
+
   return (
     <div className="space-y-4">
 
@@ -98,7 +106,8 @@ export function StepFirma({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             disabled={companiesLoading}
-            className="w-full pl-8 pr-8 py-1.5 text-[11px] rounded-[5px] border border-border/60 bg-background outline-none focus:border-foreground/30 transition-colors disabled:opacity-50"
+            autoFocus
+            className="w-full h-9 pl-8 pr-8 text-[13px] rounded-[5px] border border-border/60 bg-background outline-none focus:border-foreground/30 transition-colors disabled:opacity-50"
           />
           {companiesLoading && (
             <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground animate-spin" />
@@ -110,7 +119,7 @@ export function StepFirma({
             onClick={onRefreshCompanies}
             disabled={companiesLoading || companiesRefreshing}
             title="Firma listesini yenile (güncel lisans/kullanıcı bilgisi)"
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[5px] border border-border/60 bg-background text-[11px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors disabled:opacity-50 shrink-0"
+            className="flex items-center gap-1.5 h-9 px-3 rounded-[5px] border border-border/60 bg-background text-[12px] text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors disabled:opacity-50 shrink-0"
           >
             <RefreshCw className={`size-3.5 ${companiesRefreshing ? "animate-spin" : ""}`} />
             Yenile
@@ -150,13 +159,89 @@ export function StepFirma({
               onClick={() => { onSelectCompany(c); setSearch("") }}
               className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-muted/70 transition-colors"
             >
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono text-muted-foreground w-10 shrink-0">{c.firkod}</span>
-                <span className="text-[11px] font-medium">{c.firma}</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[12px] tabular-nums text-muted-foreground w-12 shrink-0">{c.firkod}</span>
+                <span className="text-[13px] font-medium truncate">{c.firma}</span>
+                {c.windowsServerId && (
+                  <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Kurulu</span>
+                )}
               </div>
-              <span className="text-[10px] text-muted-foreground tabular-nums">{c.userCount ?? 0} kullanıcı</span>
+              <span className="text-[12px] text-muted-foreground tabular-nums shrink-0">{c.userCount ?? 0} kullanıcı</span>
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Boş ekran — arama yokken özet + kurulum bekleyen en yeni firmalar */}
+      {!companiesLoading && !companiesError && !search.trim() && !selectedCompany && companies.length > 0 && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              { baslik: "Toplam firma", deger: companies.length, alt: "Pusula'da kayıtlı", ikon: <Building2 className="size-3.5" /> },
+              { baslik: "Kurulu", deger: kurulu, alt: "Terminal sunucusu atanmış", ikon: <CheckCircle2 className="size-3.5" /> },
+              { baslik: "Kurulum bekleyen", deger: bekleyenler.length, alt: "Lisansı geçerli, kurulmamış", ikon: <Hourglass className="size-3.5" /> },
+            ].map((k) => (
+              <div key={k.baslik} className="rounded-[8px] p-1.5 pb-0 bg-[var(--section-bg)]">
+                <div className="rounded-[5px] bg-card px-3 py-2.5" style={{ boxShadow: "var(--card-shadow)" }}>
+                  <div className="flex items-center justify-between text-muted-foreground">
+                    <p className="text-[10px] font-medium uppercase tracking-wider">{k.baslik}</p>
+                    {k.ikon}
+                  </div>
+                  <p className="mt-1 text-2xl font-bold tabular-nums">{k.deger.toLocaleString("tr-TR")}</p>
+                </div>
+                <p className="px-1.5 py-1.5 text-[11px] text-muted-foreground">{k.alt}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
+            <div className="flex items-center justify-between px-2 pb-2">
+              <p className="flex items-center gap-1.5 text-[12px] font-medium">
+                <Hourglass className="size-3.5 text-muted-foreground" />
+                Kurulum bekleyen firmalar
+              </p>
+              <span className="text-[11px] text-muted-foreground">En yeni müşteri üstte</span>
+            </div>
+            <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+              {bekleyenler.length === 0 ? (
+                <div className="flex flex-col items-center gap-1 py-8 text-center">
+                  <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-400" />
+                  <p className="text-[13px] font-medium">Kurulum bekleyen firma yok</p>
+                  <p className="text-[12px] text-muted-foreground">Başka bir firma için yukarıdan arama yapın.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className="h-8 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Kod</TableHead>
+                      <TableHead className="h-8 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Firma</TableHead>
+                      <TableHead className="h-8 text-[10px] font-medium uppercase tracking-wider text-muted-foreground text-right">Kullanıcı Hakkı</TableHead>
+                      <TableHead className="h-8 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Lisans Bitiş</TableHead>
+                      <TableHead className="h-8 w-16" />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bekleyenler.slice(0, BEKLEYEN_GOSTER).map((c) => (
+                      <TableRow key={c.id} className="cursor-pointer hover:bg-muted/20" onClick={() => onSelectCompany(c)}>
+                        <TableCell className="py-1.5 text-[12px] tabular-nums text-muted-foreground">{c.firkod}</TableCell>
+                        <TableCell className="py-1.5 text-[13px] font-medium max-w-[320px] truncate">{c.firma}</TableCell>
+                        <TableCell className="py-1.5 text-[13px] tabular-nums text-right">{c.licenseCount}</TableCell>
+                        <TableCell className="py-1.5 text-[12px] tabular-nums text-muted-foreground">{formatDate(c.lisansBitis)}</TableCell>
+                        <TableCell className="py-1.5 text-right">
+                          <span className="text-[12px] font-medium text-foreground/70">Seç →</span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+            {bekleyenler.length > BEKLEYEN_GOSTER && (
+              <p className="px-2 pt-2 text-[11px] text-muted-foreground">
+                {bekleyenler.length - BEKLEYEN_GOSTER} firma daha bekliyor — adı ya da koduyla arayın.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -204,7 +289,7 @@ export function StepFirma({
             </div>
 
             {/* Kullanıcı Hakkı */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: licenseSeats === 0 ? "#FEF3C7" : "#eef3ff" }}>
+            <div className={cn("rounded-[8px] p-1.5 pb-0", licenseSeats === 0 ? "bg-amber-500/15" : "bg-[var(--section-bg)]")}>
               <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Kullanıcı Hakkı</p>
@@ -220,7 +305,7 @@ export function StepFirma({
             </div>
 
             {/* Lisans Bitiş */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: isExpired(selectedCompany.lisansBitis) ? "#FEF2F2" : "#eef3ff" }}>
+            <div className={cn("rounded-[8px] p-1.5 pb-0", isExpired(selectedCompany.lisansBitis) ? "bg-red-500/15" : "bg-[var(--section-bg)]")}>
               <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                 <div className="flex items-center justify-between mb-1.5">
                   <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Lisans Bitiş</p>

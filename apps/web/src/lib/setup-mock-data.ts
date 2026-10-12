@@ -39,6 +39,8 @@ export interface Company {
   licenseCount?: number
   lastLogin?: string
   lisansBitis?: string
+  /** Atanmış terminal (RDP) sunucusu — null ise firma henüz kurulmamış */
+  windowsServerId?: string | null
   city?: string
   country?: string
 }
