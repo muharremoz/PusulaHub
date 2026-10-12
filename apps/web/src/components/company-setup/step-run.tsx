@@ -9,7 +9,7 @@ import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { CompanyServiceDto } from "@/app/api/companies/[firkod]/services/route"
 import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, X, KeyRound, Eye, EyeOff, AlertTriangle, Database, ListChecks } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Icon } from "@/components/shared/icon"
+import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { AdProvisionRunner, ProvisionStep } from "./ad-provision-runner"
 import { meetsAdComplexity } from "./step-users"
@@ -134,6 +134,10 @@ export function StepRun({
   /*  SQL Backup Master eklemesi kritik olmayan bir adim: basarisiz olsa
    *  da kurulum devam ediyor. Sonucu modalda gostermek icin izleniyor.  */
   const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "hata">("yok")
+  /*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor — guvenlik kaydı yazılan
+   *  DB otomatik yedeğe girer. Kayıt yazılamayan DB'yi ayrıca göstermek için. */
+  const [guvenlikDurum, setGuvenlikDurum] = useState<Record<string, "tamam" | "hata">>({})
+  const [dnsKopyalandi, setDnsKopyalandi] = useState(false)
   /*  Pars yazma adımı da kritik degil; sonucu mesajda ve modalda dogru
    *  gostermek icin izleniyor — basarisizsa kullanici bilgileri mesaja
    *  girmez, "eklenemedi" uyarisi gosterilir.                          */
@@ -215,22 +219,28 @@ export function StepRun({
     })
   })()
 
-  // Restore edilen hedef DB adları — addFirmaPrefix uygulanmış halleri.
-  const restoredDbNames = (() => {
-    if (!sqlServerId) return [] as string[]
+  // Restore edilen hedef DB'ler — addFirmaPrefix uygulanmış adlar + yedek tercihi.
+  const restoredDbs = (() => {
+    if (!sqlServerId) return [] as { ad: string; yedekAl: boolean }[]
     const prefix = addFirmaPrefix && firmaId ? `${firmaId}_` : ""
     if (sqlMode === 0) {
       return (backupFiles ?? [])
         .filter((f) => f.selected && f.databaseName?.trim())
-        .map((f) => `${prefix}${f.databaseName.trim()}`)
+        .map((f) => ({ ad: `${prefix}${f.databaseName.trim()}`, yedekAl: f.yedekAl !== false }))
     }
-    // Mod 1: demo DB → dataName
+    // Mod 1: demo DB → dataName (demo güncel data, yedeğe girer — backend ile aynı)
     const ids = new Set(selectedDemoDbIds ?? [])
     return (demoDatabases ?? [])
       .filter((d) => ids.has(d.id))
-      .map((d) => `${prefix}${(d.dataName ?? d.name).trim()}`)
-      .filter((s) => s.length > prefix.length)
+      .map((d) => ({ ad: `${prefix}${(d.dataName ?? d.name).trim()}`, yedekAl: true }))
+      .filter((d) => d.ad.length > prefix.length)
   })()
+  const restoredDbNames = restoredDbs.map((d) => d.ad)
+  /*  Yedeği istenip guvenlik kaydı yazılmayan DB → Spare Backup görmez
+   *  (adım hata verdi ya da "Şirket veritabanına ekle" kapalıydı).        */
+  const guvenlikHatali = restoredDbs.filter((d) => d.yedekAl && guvenlikDurum[d.ad] !== "tamam").map((d) => d.ad)
+  const yedekSorunu = restoredDbs.length > 0 && (guvenlikHatali.length > 0 || sbmDurum === "hata")
+  const elleSayisi = 1 + (pars && parsDurum === "hata" ? 1 : 0) + (yedekSorunu ? 1 : 0)
 
   const customerMessage = (() => {
     const lines: string[] = [
@@ -371,9 +381,15 @@ export function StepRun({
         onError={() => setHasError(true)}
         onStepError={handleStepError}
         onStep={(st) => {
-          if (st.stepId === "sbm_add") {
+          // sbm_add: eski "listeye ekle" adımı; bm_esitle: guvenlik ile eşitleme (sonra gelir, son sözü o söyler)
+          if (st.stepId === "sbm_add" || st.stepId === "bm_esitle") {
             if (st.status === "done")  setSbmDurum("tamam")
             if (st.status === "error") setSbmDurum("hata")
+          }
+          if (st.stepId.startsWith("sql_guvenlik_") && !st.stepId.startsWith("sql_guvenlik_skip")) {
+            const db = st.stepId.slice("sql_guvenlik_".length)
+            if (st.status === "done")  setGuvenlikDurum((g) => ({ ...g, [db]: "tamam" }))
+            if (st.status === "error") setGuvenlikDurum((g) => ({ ...g, [db]: "hata" }))
           }
           if (st.stepId === "pars_yaz") {
             if (st.status === "done")  setParsDurum("tamam")
@@ -448,106 +464,137 @@ export function StepRun({
         Bu yüzden kurulum biter bitmez kendiliğinden açılıyor.
       */}
       <Dialog open={showManual} onOpenChange={setShowManual}>
-        <DialogContent className="rounded-[8px] max-w-md p-0 gap-0">
-          <DialogHeader className="px-5 py-4 border-b border-border/50">
-            <DialogTitle className="text-[13px] font-semibold flex items-center gap-2">
-              <Icon name="badge-alert" size={16} />
-              Elle Yapılacak Adımlar
-            </DialogTitle>
-            <DialogDescription className="text-[11px]">
-              <span className="font-mono font-semibold">{firmaId}</span> kurulumu tamamlandı.
-              Sihirbazın yapamadığı adımlar aşağıda.
-            </DialogDescription>
+        <DialogContent className="rounded-[10px] max-w-[480px] p-0 gap-0 overflow-hidden">
+          <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] p-4 text-left">
+            <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 ring-emerald-500/25 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+              <Check className="size-[18px]" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-[15px] font-semibold">{firmaId} kurulumu tamamlandı</DialogTitle>
+              <DialogDescription className="text-[12px]">
+                {elleSayisi > 0
+                  ? `${elleSayisi} adım elle yapılmalı, gerisi otomatik.`
+                  : "Elle yapılacak adım kalmadı."}
+              </DialogDescription>
+            </div>
           </DialogHeader>
 
-          <div className="px-5 py-4 space-y-2.5">
-            {/* 1) Guvenlik duvari kurali */}
-            <div className="rounded-[5px] border border-orange-500/25 bg-orange-500/10 px-3 py-2.5">
-              {/*  <p> DEGIL: Icon bileseni <div> render ediyor ve <div> bir
-                   <p> icinde gecersiz — hydration hatasi veriyordu.        */}
-              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-orange-700 dark:text-orange-400">
-                <Icon name="shield-check" size={14} />
-                Firewall kuralı
+          <div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto p-4">
+            {/* ── Elle yapılacaklar ── */}
+            <section className="space-y-2">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Elle yapılacak</p>
+
+              {/* Güvenlik duvarı kuralı — sihirbazın erişemediği sistem */}
+              <div className="rounded-[5px] border bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-amber-500/15 text-amber-700 dark:text-amber-400">
+                    <Shield className="size-3.5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-medium">Firewall kuralı</p>
+                    <p className="mt-0.5 text-[12px] text-muted-foreground">
+                      Firma kuralında RDP sunucusu olarak{" "}
+                      <span className="font-medium text-foreground">{serverName || serverId}</span> seçilmeli.
+                    </p>
+                    {serverDns && (
+                      <button
+                        onClick={async () => {
+                          if (await copyToClipboard(serverDns)) {
+                            setDnsKopyalandi(true)
+                            setTimeout(() => setDnsKopyalandi(false), 1500)
+                          }
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 rounded-[5px] bg-muted px-2 py-1 text-[12px] text-foreground hover:bg-muted/70 transition-colors"
+                      >
+                        {serverDns}
+                        {dnsKopyalandi
+                          ? <CheckCheck className="size-3 text-emerald-600 dark:text-emerald-400" />
+                          : <Copy className="size-3 text-muted-foreground" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                Firma kuralında RDP sunucusu olarak{" "}
-                <span className="font-semibold text-foreground">{serverName || serverId}</span> seçilmeli.
-              </p>
-              {serverDns && (
-                <p className="mt-1.5 font-mono text-[10px] text-muted-foreground">{serverDns}</p>
+
+              {/* Pars yazılamadıysa: kullanıcı mesaja girmez, elle eklenmeli */}
+              {pars && parsDurum === "hata" && (
+                <div className="rounded-[5px] border bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-red-500/15 text-red-700 dark:text-red-400">
+                      <AlertTriangle className="size-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium">Pars kullanıcıları eklenemedi</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        Ayar.mdb&apos;ye yazma adımı hata verdi. Pusula Görev üzerinden elle eklenmeli:
+                      </p>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {pars.users.map((u) => (
+                          <span key={u.id} className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">
+                            {u.username}{u.admin ? " · admin" : ""}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
-            </div>
 
-            {/* Pars yazilamadiysa: kullanici mesaja girmez, elle eklenmeli */}
-            {pars && parsDurum === "hata" && (
-              <div className="rounded-[5px] border border-red-500/25 bg-red-500/10 px-3 py-2.5">
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-red-700 dark:text-red-400">
-                  <AlertTriangle className="size-3.5" />
-                  Pars kullanıcıları eklenemedi
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  Ayar.mdb&apos;ye yazma adımı hata verdi (adım listesinde ayrıntı var). Kullanıcılar Pusula Görev üzerinden elle eklenmeli:
-                </p>
-                <ul className="mt-1.5 space-y-1">
-                  {pars.users.map((u) => (
-                    <li key={u.id} className="rounded-[5px] bg-background/60 px-2 py-1 font-mono text-[10px] text-foreground">
-                      {u.username} · {u.admin ? "admin" : "kullanıcı"}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+              {/* Otomatik yedek adımı başarısızsa buraya düşer — sessizce "tamam" denmez */}
+              {yedekSorunu && (
+                <div className="rounded-[5px] border bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+                  <div className="flex items-start gap-2.5">
+                    <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-[5px] bg-red-500/15 text-red-700 dark:text-red-400">
+                      <Database className="size-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-medium">Yedek kapsamı kontrol edilmeli</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {guvenlikHatali.length > 0
+                          ? `${guvenlikHatali.join(", ")} için güvenlik kaydı yazılamadı; Spare Backup bu veritabanını görmez.`
+                          : "Backup Master listesi eşitlenemedi."}{" "}
+                        Firma detayı → Veritabanları&apos;ndan kontrol edin.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
 
-            {/* 2) Yedek gorevleri — SQL kurulmadiysa hic gosterilmiyor */}
-            {restoredDbNames.length > 0 && (
-              <div className="rounded-[5px] border border-sky-500/25 bg-sky-500/10 px-3 py-2.5">
-                <p className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 dark:text-sky-400">
-                  <Database className="size-3.5" />
-                  Yedek görevleri
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground">{sqlServer?.name ?? "SQL sunucusu"}</span>{" "}
-                  üzerinde aşağıdaki veritabanları için:
-                </p>
-
-                {/*  Iki yedek yazilimi ayri ayri: SQL Backup Master'a sihirbaz
-                     kendisi ekliyor (kritik olmayan adim), Spare Backup elle
-                     kaliyor. Otomatik olan basarisizsa elle listeye donuyor —
-                     sessizce "tamam" demiyoruz.                             */}
-                <ul className="mt-1.5 space-y-1">
-                  <li className="text-[11px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">Spare Backup</span> — elle eklenmeli
-                  </li>
-                  <li className="text-[11px] text-muted-foreground">
-                    <span className="font-semibold text-foreground">SQL Backup Master</span>{" "}
-                    {sbmDurum === "tamam"
-                      ? <span className="font-medium text-emerald-700 dark:text-emerald-400">— otomatik eklendi</span>
-                      : sbmDurum === "hata"
-                        ? <span className="font-medium text-red-600 dark:text-red-400">— eklenemedi, elle eklenmeli</span>
-                        : <span>— elle eklenmeli</span>}
-                  </li>
-                </ul>
-                <ul className="mt-2 space-y-1">
-                  {restoredDbNames.map((db) => (
-                    <li
-                      key={db}
-                      className="rounded-[5px] bg-background/60 px-2 py-1 font-mono text-[10px] text-foreground"
-                    >
-                      {db}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+            {/* ── Yedekleme — SQL kurulmadıysa hiç gösterilmiyor ── */}
+            {restoredDbs.length > 0 && (
+              <section className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Yedekleme</p>
+                  <span className="text-[11px] text-muted-foreground">{sqlServer?.name ?? "SQL sunucusu"}</span>
+                </div>
+                <div className="overflow-hidden rounded-[5px] border bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-2">
+                    {/*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor; Backup Master
+                         listesini sihirbaz eşitliyor. İkisi de otomatik.          */}
+                    <YedekDurum ad="Spare Backup" durum={guvenlikHatali.length > 0 ? "hata" : "tamam"} />
+                    <YedekDurum ad="SQL Backup Master" durum={sbmDurum} />
+                  </div>
+                  <ul className="divide-y">
+                    {restoredDbs.map((db) => (
+                      <li key={db.ad} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <Database className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="truncate text-[13px] font-medium">{db.ad}</span>
+                        </span>
+                        {db.yedekAl
+                          ? <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Yedek alınacak</span>
+                          : <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">Yedek yok</span>}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </section>
             )}
           </div>
 
-          <div className="flex items-center justify-end px-5 py-3 border-t border-border/50 bg-muted/20">
-            <button
-              onClick={() => setShowManual(false)}
-              className="text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-            >
-              Anladım
-            </button>
+          <div className="flex items-center justify-end border-t p-4">
+            <Button onClick={() => setShowManual(false)} className="min-w-28">Anladım</Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -739,5 +786,20 @@ export function StepRun({
         </Modal>
       )}
     </div>
+  )
+}
+
+/** Yedek yazılımının bu kurulumdaki durumu — tek satır, nokta + ad + sonuç */
+function YedekDurum({ ad, durum }: { ad: string; durum: "yok" | "tamam" | "hata" }) {
+  const [renk, metin] =
+    durum === "tamam" ? ["bg-emerald-500", "otomatik eklendi"]
+    : durum === "hata" ? ["bg-red-500", "eklenemedi"]
+    : ["bg-muted-foreground/40", "çalışmadı"]
+  return (
+    <span className="inline-flex items-center gap-1.5 text-[12px]">
+      <span className={cn("size-1.5 rounded-full", renk)} />
+      <span className="font-medium">{ad}</span>
+      <span className={durum === "hata" ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}>{metin}</span>
+    </span>
   )
 }
