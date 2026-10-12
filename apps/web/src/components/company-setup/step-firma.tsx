@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
 import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2 } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Separator } from "@/components/ui/separator"
+import { Button } from "@/components/ui/button"
 
 export interface RdpServerItem {
   id:         string
@@ -77,6 +77,9 @@ export function StepFirma({
   const userLimit = licenseSeats
   const licenseFull = userLimit > 0 && existingUserCount >= userLimit
   const [search, setSearch] = useState("")
+  const lisansKalanGun = selectedCompany?.lisansBitis
+    ? Math.ceil((new Date(selectedCompany.lisansBitis).getTime() - Date.now()) / 864e5)
+    : Infinity
 
   const filtered = search.trim()
     ? companies.filter((c) => {
@@ -86,7 +89,7 @@ export function StepFirma({
     : []
 
   return (
-    <div className={cn("space-y-4", !selectedCompany && "flex flex-1 flex-col")}>
+    <div className="flex flex-1 flex-col gap-4">
 
       {/* Firma seçilmeden: ortalanmış arama paneli — yalnız arama + yenile */}
       {!selectedCompany && (
@@ -209,127 +212,105 @@ export function StepFirma({
 
       {/* Seçili firma + Windows sunucu */}
       {selectedCompany && (
-        <div className="space-y-3">
-          {/* Seçili firma başlık */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="size-4 rounded-full bg-foreground flex items-center justify-center shrink-0">
-                <Check className="size-2.5 text-background" strokeWidth={3} />
+        <div className="flex flex-1 flex-col gap-4">
+          {/* Firma kartı: kimlik + iletişim + iki gösterge */}
+          <div className="rounded-[8px] bg-[var(--section-bg)] p-1.5">
+            <div className="flex items-center gap-3 rounded-[5px] bg-card px-3 py-2.5" style={{ boxShadow: "var(--card-shadow)" }}>
+              <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+                <Building2 className="size-[18px]" />
               </span>
-              <span className="text-[12px] font-semibold">{selectedCompany.firma}</span>
-              <span className="text-[11px] text-muted-foreground font-mono">{selectedCompany.firkod}</span>
-            </div>
-            <button onClick={onClearCompany} className="text-muted-foreground hover:text-foreground transition-colors">
-              <X className="size-3.5" />
-            </button>
-          </div>
-
-          {/* Stats kartları */}
-          <div className="grid grid-cols-4 gap-2">
-            {/* E-posta */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "var(--section-bg)" }}>
-              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide">E-posta</p>
-                  <Mail className="size-3 text-muted-foreground" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="truncate text-[15px] font-semibold">{selectedCompany.firma}</p>
+                  <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{selectedCompany.firkod}</span>
+                  {selectedCompany.windowsServerId && (
+                    <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Kurulu</span>
+                  )}
                 </div>
-                <p className="text-[13px] font-medium truncate">{selectedCompany.email || "—"}</p>
+                <div className="mt-0.5 flex min-w-0 items-center gap-4 text-[12px] text-muted-foreground">
+                  <span className="flex min-w-0 items-center gap-1.5"><Mail className="size-3 shrink-0" /><span className="truncate">{selectedCompany.email || "—"}</span></span>
+                  <span className="flex shrink-0 items-center gap-1.5"><Phone className="size-3" />{selectedCompany.phone || "—"}</span>
+                </div>
               </div>
-              <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">İletişim adresi</p>
+              <Button variant="outline" size="sm" onClick={onClearCompany} className="shrink-0 gap-1.5">
+                <X className="size-3.5" /> Firma Değiştir
+              </Button>
             </div>
 
-            {/* Telefon */}
-            <div className="rounded-[8px] p-1.5 pb-0" style={{ backgroundColor: "var(--section-bg)" }}>
-              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Telefon</p>
-                  <Phone className="size-3 text-muted-foreground" />
+            <div className="grid grid-cols-2 gap-1.5 pt-1.5">
+              {/* Kullanıcı hakkı */}
+              <div className="rounded-[5px] bg-card px-3 py-2.5" style={{ boxShadow: "var(--card-shadow)" }}>
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <Users className="size-3" /> Kullanıcı Hakkı
+                  </p>
+                  <Durum ton={licenseSeats === 0 ? "uyari" : licenseFull ? "hata" : "iyi"}>
+                    {licenseSeats === 0 ? "Güncellenmeli" : licenseFull ? "Dolu" : `${userLimit - existingUserCount} boş`}
+                  </Durum>
                 </div>
-                <p className="text-[13px] font-medium truncate">{selectedCompany.phone || "—"}</p>
-              </div>
-              <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">İletişim numarası</p>
-            </div>
-
-            {/* Kullanıcı Hakkı */}
-            <div className={cn("rounded-[8px] p-1.5 pb-0", licenseSeats === 0 ? "bg-amber-500/15" : "bg-[var(--section-bg)]")}>
-              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Kullanıcı Hakkı</p>
-                  <Users className="size-3 text-muted-foreground" />
-                </div>
-                <p className={cn("text-[13px] font-bold tracking-tight", licenseSeats === 0 && "text-amber-500")}>
-                  {licenseSeats}
+                <p className="mt-1 text-2xl font-bold tabular-nums">
+                  {licenseSeats > 0 ? <>{existingUserCount}<span className="text-[15px] font-medium text-muted-foreground"> / {licenseSeats}</span></> : 0}
                 </p>
+                {licenseSeats > 0 && (
+                  <div className="mt-2 h-1 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={cn("h-full rounded-full", licenseFull ? "bg-red-500" : existingUserCount / licenseSeats > 0.8 ? "bg-amber-500" : "bg-emerald-500")}
+                      style={{ width: `${Math.min(100, Math.round((existingUserCount / licenseSeats) * 100))}%` }}
+                    />
+                  </div>
+                )}
               </div>
-              <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">
-                {licenseSeats === 0 ? "Lisans güncellenmeli" : "Aktif kullanıcı limiti"}
-              </p>
-            </div>
 
-            {/* Lisans Bitiş */}
-            <div className={cn("rounded-[8px] p-1.5 pb-0", isExpired(selectedCompany.lisansBitis) ? "bg-red-500/15" : "bg-[var(--section-bg)]")}>
-              <div className="rounded-[5px] px-3 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <p className="text-[10px] font-medium text-muted-foreground tracking-wide">Lisans Bitiş</p>
-                  <CalendarClock className="size-3 text-muted-foreground" />
+              {/* Lisans bitiş */}
+              <div className="rounded-[5px] bg-card px-3 py-2.5" style={{ boxShadow: "var(--card-shadow)" }}>
+                <div className="flex items-center justify-between">
+                  <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <CalendarClock className="size-3" /> Lisans Bitiş
+                  </p>
+                  {selectedCompany.lisansBitis && (
+                    <Durum ton={lisansKalanGun < 0 ? "hata" : lisansKalanGun <= 30 ? "uyari" : "iyi"}>
+                      {lisansKalanGun < 0 ? "Süresi dolmuş" : `${lisansKalanGun} gün kaldı`}
+                    </Durum>
+                  )}
                 </div>
-                <p className={cn("text-[13px] font-bold tracking-tight", isExpired(selectedCompany.lisansBitis) ? "text-red-500" : "")}>
+                <p className={cn("mt-1 text-2xl font-bold tabular-nums", lisansKalanGun < 0 && "text-red-600 dark:text-red-400")}>
                   {formatDate(selectedCompany.lisansBitis)}
                 </p>
               </div>
-              <p className="text-[10px] text-muted-foreground px-1.5 py-1.5">
-                {isExpired(selectedCompany.lisansBitis) ? "Lisans süresi dolmuş" : "Lisans geçerlilik tarihi"}
-              </p>
             </div>
           </div>
 
-          <Separator />
-
-          {/* Kullanıcı hakkı 0 — sunucu seçimi engellendi */}
-          {licenseSeats === 0 && (
-            <div className="rounded-[5px] border border-amber-500/25 bg-amber-500/15 overflow-hidden">
-              <div className="flex items-start gap-3 px-4 py-4">
-                <div className="size-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0 mt-0.5">
-                  <Ban className="size-4 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[12px] font-semibold text-amber-800">Kullanıcı hakkı bulunmuyor</p>
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-relaxed">
-                    Bu firmanın aktif kullanıcı hakkı <span className="font-semibold">0</span> olarak görünüyor.
-                    Devam edebilmek için önce firma lisansının güncellenmesi gerekmektedir.
-                    Farklı bir firma seçmek için yukarıdaki <span className="font-medium">✕</span> butonunu kullanın.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Lisans dolu uyarısı — sistemdeki mevcut kullanıcı sayısı lisansa ulaşmış */}
-          {licenseSeats > 0 && licenseFull && (
-            <div className="rounded-[5px] border border-red-500/25 bg-red-500/15 overflow-hidden">
-              <div className="flex items-start gap-3 px-4 py-4">
-                <div className="size-8 rounded-full bg-red-100 flex items-center justify-center shrink-0 mt-0.5">
-                  <Ban className="size-4 text-red-600 dark:text-red-400" />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <p className="text-[12px] font-semibold text-red-800">Lisans dolu — kullanıcı eklenemez</p>
-                  <p className="text-[11px] text-red-700 dark:text-red-400 leading-relaxed">
-                    Firmanın kullanıcı hakkı <span className="font-semibold">{userLimit}</span> ve
-                    Active Directory&apos;de zaten <span className="font-semibold">{existingUserCount}</span> kullanıcı kayıtlı.
-                    Devam edebilmek için lisansın artırılması veya mevcut bir kullanıcının silinmesi gerekmektedir.
-                  </p>
-                  {onRefreshExistingUsers && (
-                    <button
-                      type="button"
-                      onClick={onRefreshExistingUsers}
-                      disabled={existingUsersLoading}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[5px] border border-red-300 bg-card hover:bg-red-100 transition-colors text-[10px] font-medium text-red-700 dark:text-red-400 disabled:opacity-50"
-                    >
-                      <RefreshCw className={cn("size-3", existingUsersLoading && "animate-spin")} />
-                      AD&apos;den yenile
-                    </button>
-                  )}
-                </div>
+          {/* Engel: hak yok ya da dolu — sunucu seçimi yerine alanı dolduran yönlendirme */}
+          {(licenseSeats === 0 || licenseFull) && (
+            <div className="flex flex-1 flex-col items-center justify-center rounded-[8px] border border-dashed px-6 py-10 text-center">
+              <span className={cn(
+                "flex size-11 items-center justify-center rounded-full",
+                licenseSeats === 0 ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-red-500/15 text-red-700 dark:text-red-400",
+              )}>
+                <Ban className="size-5" />
+              </span>
+              <h3 className="mt-3 text-[15px] font-semibold">
+                {licenseSeats === 0 ? "Kullanıcı hakkı bulunmuyor" : "Lisans dolu — kullanıcı eklenemez"}
+              </h3>
+              <p className="mt-1 max-w-md text-[12px] text-muted-foreground">
+                {licenseSeats === 0
+                  ? "Firmanın aktif kullanıcı hakkı 0 görünüyor. Pusula'da lisans güncellendiyse listeyi yenileyin; değilse önce lisansın güncellenmesi gerekir."
+                  : `Kullanıcı hakkı ${userLimit} ve Active Directory'de zaten ${existingUserCount} kullanıcı var. Devam etmek için lisans artırılmalı ya da bir kullanıcı silinmeli.`}
+              </p>
+              <div className="mt-4 flex gap-2">
+                <Button variant="outline" size="sm" onClick={onClearCompany}>Farklı Firma Seç</Button>
+                {licenseSeats === 0 && onRefreshCompanies && (
+                  <Button size="sm" onClick={onRefreshCompanies} disabled={companiesRefreshing} className="gap-1.5">
+                    <RefreshCw className={cn("size-3.5", companiesRefreshing && "animate-spin")} />
+                    {companiesRefreshing ? "Yenileniyor…" : "Lisansı Yenile"}
+                  </Button>
+                )}
+                {licenseFull && licenseSeats > 0 && onRefreshExistingUsers && (
+                  <Button size="sm" onClick={onRefreshExistingUsers} disabled={existingUsersLoading} className="gap-1.5">
+                    <RefreshCw className={cn("size-3.5", existingUsersLoading && "animate-spin")} />
+                    AD&apos;den Yenile
+                  </Button>
+                )}
               </div>
             </div>
           )}
@@ -473,5 +454,17 @@ export function StepFirma({
         </div>
       )}
     </div>
+  )
+}
+
+/** Gösterge kartı sağ üst durum rozeti */
+function Durum({ ton, children }: { ton: "iyi" | "uyari" | "hata"; children: React.ReactNode }) {
+  return (
+    <span className={cn(
+      "inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
+      ton === "iyi" && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+      ton === "uyari" && "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+      ton === "hata" && "bg-red-500/15 text-red-700 dark:text-red-400",
+    )}>{children}</span>
   )
 }
