@@ -2,7 +2,10 @@
 
 import { useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
-import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical, Copy } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical, Copy, Users as UsersIcon } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Field } from "@/components/shared/form"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -50,7 +53,7 @@ function getStrength(p: string) {
     { label: "İyi",    color: "bg-blue-500",    text: "text-blue-500",    pct: 75 },
     { label: "Güçlü",  color: "bg-emerald-500", text: "text-emerald-500", pct: 100 },
   ]
-  return { ...levels[score], hasUpper, hasLower, hasDigit, hasSpecial, lengthOk, adOk, categories }
+  return { ...levels[Math.min(score, levels.length - 1)], hasUpper, hasLower, hasDigit, hasSpecial, lengthOk, adOk, categories }
 }
 
 /** AD şifre kuralını karşılıyor mu? */
@@ -99,40 +102,56 @@ export function StepUsers({
     setTestRunning(true)
   }
 
+  const kullanilan = activeExisting + users.length
+  const hakPct = userLimit > 0 ? Math.min(100, Math.round((kullanilan / userLimit) * 100)) : 0
+
   return (
     <div className="space-y-4">
 
-      {/* Üst bilgi satırı */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {userLimit > 0 && (
-            <span className={cn(
-              "text-[10px] font-medium px-2 py-0.5 rounded-[5px]",
-              limitReached ? "bg-red-100 text-red-600 dark:text-red-400" : "bg-muted text-muted-foreground"
-            )}>
-              {activeExisting + users.length} / {userLimit} kullanıcı hakkı
-            </span>
-          )}
+      {/* Üst şerit: kullanıcı hakkı göstergesi + mevcut kullanıcılar */}
+      <div className="flex items-center justify-between gap-4 rounded-[8px] bg-[var(--section-bg)] px-3 py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="bg-primary/10 text-primary ring-primary/20 flex size-8 shrink-0 items-center justify-center rounded-[5px] ring-1">
+            <UsersIcon className="size-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-[13px] font-semibold">
+              {users.length} yeni kullanıcı
+              {activeExisting > 0 && <span className="font-normal text-muted-foreground"> · {activeExisting} mevcut</span>}
+            </p>
+            {userLimit > 0 ? (
+              <div className="mt-1 flex items-center gap-2">
+                <div className="h-1 w-32 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn("h-full rounded-full", limitReached ? "bg-red-500" : hakPct > 80 ? "bg-amber-500" : "bg-emerald-500")}
+                    style={{ width: `${hakPct}%` }}
+                  />
+                </div>
+                <span className={cn("text-[11px] tabular-nums", limitReached ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                  {kullanilan} / {userLimit} kullanıcı hakkı{limitReached ? " · dolu" : ""}
+                </span>
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">Kullanıcı hakkı sınırı yok</p>
+            )}
+          </div>
         </div>
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setShowExisting(!showExisting)}
           disabled={existingUsersLoading}
-          className="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground disabled:opacity-50"
+          className="shrink-0 gap-1.5"
         >
-          {existingUsersLoading ? (
-            <>
-              <Loader2 className="size-3 animate-spin" />
-              Yükleniyor
-            </>
-          ) : (
-            <>Mevcut Kullanıcılar ({existingUsers.length})</>
-          )}
-        </button>
+          {existingUsersLoading
+            ? <><Loader2 className="size-3.5 animate-spin" /> Yükleniyor</>
+            : <>Mevcut Kullanıcılar ({existingUsers.length})</>}
+        </Button>
       </div>
 
       {/* Mevcut kullanıcılar — hata */}
       {existingUsersError && (
-        <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
+        <div className="flex items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
           <AlertTriangle className="size-3.5 shrink-0" />
           {existingUsersError}
         </div>
@@ -140,38 +159,32 @@ export function StepUsers({
 
       {/* Mevcut kullanıcılar listesi */}
       {showExisting && (
-        <div className="rounded-[5px] border border-border/50 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
-            <span className="text-[11px] font-medium">AD'de Kayıtlı Kullanıcılar</span>
-            <button onClick={() => setShowExisting(false)} className="text-muted-foreground hover:text-foreground transition-colors">
+        <div className="overflow-hidden rounded-[8px] border bg-card">
+          <div className="flex items-center justify-between border-b bg-muted/20 px-3 py-2">
+            <span className="text-[12px] font-medium">AD&apos;de kayıtlı kullanıcılar</span>
+            <button onClick={() => setShowExisting(false)} className="text-muted-foreground transition-colors hover:text-foreground">
               <X className="size-3.5" />
             </button>
           </div>
-          <div className="divide-y divide-border/40 max-h-48 overflow-y-auto">
+          <div className="max-h-48 divide-y overflow-y-auto">
             {existingUsersLoading ? (
               Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[1fr_1fr_80px] gap-3 items-center px-3 py-2">
+                <div key={i} className="grid grid-cols-[1fr_1fr_80px] items-center gap-3 px-3 py-2">
                   <Skeleton className="h-3 w-24 rounded-[5px]" />
                   <Skeleton className="h-3 w-32 rounded-[5px]" />
-                  <Skeleton className="h-3 w-14 rounded-[5px] ml-auto" />
+                  <Skeleton className="ml-auto h-3 w-14 rounded-[5px]" />
                 </div>
               ))
             ) : existingUsers.length === 0 ? (
-              <p className="px-3 py-4 text-center text-[11px] text-muted-foreground">
-                Bu firma için AD&apos;de henüz kullanıcı yok.
-              </p>
+              <p className="px-3 py-4 text-center text-[12px] text-muted-foreground">Bu firma için AD&apos;de henüz kullanıcı yok.</p>
             ) : existingUsers.map((u) => (
-              <div key={u.username} className={cn(
-                "grid grid-cols-[1fr_1fr_80px] gap-3 items-center px-3 py-2",
-                u.isDisabled && "opacity-40"
-              )}>
-                <span className="text-[11px] font-mono font-medium">{u.username}</span>
-                <span className="text-[11px] text-muted-foreground truncate">{u.displayName}</span>
-                <span className="text-[10px] text-muted-foreground text-right">
+              <div key={u.username} className={cn("grid grid-cols-[1fr_1fr_80px] items-center gap-3 px-3 py-1.5", u.isDisabled && "opacity-40")}>
+                <span className="text-[13px] font-medium">{u.username}</span>
+                <span className="truncate text-[12px] text-muted-foreground">{u.displayName}</span>
+                <span className="text-right text-[11px] text-muted-foreground">
                   {u.isDisabled
-                    ? <span className="text-red-500">Pasif</span>
-                    : u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("tr-TR") : "—"
-                  }
+                    ? <span className="text-red-600 dark:text-red-400">Pasif</span>
+                    : u.lastLogin ? new Date(u.lastLogin).toLocaleDateString("tr-TR") : "—"}
                 </span>
               </div>
             ))}
@@ -179,20 +192,30 @@ export function StepUsers({
         </div>
       )}
 
-      {/* Kullanıcı satırları */}
-      <div className="rounded-[5px] border border-border overflow-hidden divide-y divide-border">
+      {/* Kullanıcı kartları */}
+      <div className="space-y-3">
         {users.map((user, idx) => {
           const str = user.password ? getStrength(user.password) : null
+          const hata = adHatasi(user.username)
+          const basHarf = (user.displayName || user.username).trim().split(/\s+/).slice(0, 2).map((k) => k[0]).join("").toUpperCase()
           return (
-            <div key={user.id} className="px-4 py-4 space-y-3">
-              {/* Satır başlığı */}
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-foreground">
-                  Kullanıcı {idx + 1}
-                </span>
-                <div className="flex items-center gap-2">
+            <div key={user.id} className="rounded-[8px] border bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+              {/* Kart başlığı: baş harfler + ad + tam kullanıcı adı | kopyala, sil */}
+              <div className="flex items-center justify-between gap-3 border-b px-4 py-2.5">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-[12px] font-semibold text-muted-foreground">
+                    {basHarf || idx + 1}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold">{user.displayName || `Kullanıcı ${idx + 1}`}</p>
+                    <p className="truncate text-[12px] text-muted-foreground">
+                      {user.username.trim() ? `${firmaId}.${user.username.trim()}` : "Kullanıcı adı girilmedi"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
                   {user.username.trim() && !limitReached && (
-                    <div className="flex items-center rounded-[5px] border border-border overflow-hidden">
+                    <div className="flex items-center overflow-hidden rounded-[5px] border">
                       <input
                         type="number"
                         min={1}
@@ -201,11 +224,11 @@ export function StepUsers({
                         onChange={(e) => setKopyaAdet((k) => ({ ...k, [user.id]: e.target.value }))}
                         onKeyDown={(e) => { if (e.key === "Enter") kopyala(user.id) }}
                         aria-label="Kopya sayısı"
-                        className="w-10 px-1.5 py-1 text-[11px] text-center tabular-nums bg-background outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        className="h-7 w-10 bg-background px-1.5 text-center text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       />
                       <button
                         onClick={() => kopyala(user.id)}
-                        className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground border-l border-border hover:bg-muted/40 hover:text-foreground transition-colors"
+                        className="flex h-7 items-center gap-1 border-l px-2 text-[12px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
                       >
                         <Copy className="size-3" />
                         Kopyala
@@ -215,7 +238,8 @@ export function StepUsers({
                   {users.length > 1 && (
                     <button
                       onClick={() => onRemove(user.id)}
-                      className="text-muted-foreground hover:text-red-500 transition-colors"
+                      title="Kullanıcıyı kaldır"
+                      className="flex size-7 items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600"
                     >
                       <Trash2 className="size-3.5" />
                     </button>
@@ -224,177 +248,143 @@ export function StepUsers({
               </div>
 
               {/* Alanlar */}
-              <div className="grid grid-cols-[1fr_1fr_1fr_36px] gap-3 items-end">
-                {/* Kullanıcı adı */}
-                <div>
-                  <p className="text-[11px] font-medium text-foreground mb-1.5">Kullanıcı Adı</p>
+              <div className="grid grid-cols-3 gap-3 p-4">
+                <Field label="Kullanıcı Adı" required hint={hata ? <span className="text-red-600 dark:text-red-400">{hata}</span> : undefined}>
                   <div className={cn(
-                    "flex items-center rounded-[5px] border-2 bg-background overflow-hidden transition-colors",
-                    adHatasi(user.username) ? "border-red-500/60" : "border-border focus-within:border-foreground/60",
+                    "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
+                    hata ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
                   )}>
                     {firmaId && (
-                      <span className="text-[11px] text-muted-foreground bg-muted px-2.5 py-2 border-r-2 border-border shrink-0 font-mono">
-                        {firmaId}.
-                      </span>
+                      <span className="flex h-full shrink-0 items-center border-r bg-muted px-2 text-[12px] text-muted-foreground">{firmaId}.</span>
                     )}
                     <input
                       type="text"
                       value={user.username}
                       onChange={(e) => onUpdateUsername(user.id, e.target.value)}
-                      placeholder="kullanici"
-                      className="flex-1 px-2.5 py-2 text-xs bg-transparent outline-none min-w-0"
+                      placeholder="mehmetsener1"
+                      className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground"
                     />
                     {firmaId && user.username && (
                       <span className={cn(
-                        "px-2 text-[10px] tabular-nums shrink-0",
+                        "shrink-0 px-2 text-[11px] tabular-nums",
                         user.username.trim().length > onekSonrasiMax(firmaId) ? "text-red-600 dark:text-red-400" : "text-muted-foreground",
                       )}>
                         {user.username.trim().length}/{onekSonrasiMax(firmaId)}
                       </span>
                     )}
                   </div>
-                  {adHatasi(user.username) && (
-                    <p className="mt-1 text-[11px] text-red-600 dark:text-red-400">{adHatasi(user.username)}</p>
-                  )}
-                </div>
+                </Field>
 
-                {/* Ad Soyad */}
-                <div>
-                  <p className="text-[11px] font-medium text-foreground mb-1.5">Ad Soyad</p>
-                  <input
-                    type="text"
-                    value={user.displayName}
-                    onChange={(e) => onUpdateDisplayName(user.id, e.target.value)}
-                    placeholder="Adı Soyadı"
-                    className="w-full px-2.5 py-2 text-xs rounded-[5px] border-2 border-border bg-background outline-none focus:border-foreground/60 transition-colors"
-                  />
-                </div>
+                <Field label="Ad Soyad">
+                  <Input value={user.displayName} onChange={(e) => onUpdateDisplayName(user.id, e.target.value)} placeholder="MEHMET SENER" />
+                </Field>
 
-                {/* Şifre */}
-                <div>
-                  <p className="text-[11px] font-medium text-foreground mb-1.5">Şifre</p>
+                <Field label="Şifre" required>
                   <div className={cn(
-                    "flex items-center rounded-[5px] border-2 bg-background focus-within:border-foreground/60 transition-colors",
-                    user.password && !meetsAdComplexity(user.password)
-                      ? "border-red-400 focus-within:border-red-500"
-                      : "border-border"
+                    "flex h-8 items-center overflow-hidden rounded-[5px] border bg-transparent transition-colors dark:bg-input/30",
+                    str && !str.adOk ? "border-red-500/60" : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50",
                   )}>
                     <input
                       type={user.showPassword ? "text" : "password"}
                       value={user.password}
                       onChange={(e) => onUpdatePassword(user.id, e.target.value)}
                       placeholder="••••••••"
-                      className="flex-1 px-2.5 py-2 text-xs bg-transparent outline-none min-w-0"
+                      className="min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none placeholder:text-muted-foreground"
                     />
                     <button
+                      type="button"
                       onClick={() => onTogglePassword(user.id)}
-                      className="px-2 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      title={user.showPassword ? "Gizle" : "Göster"}
+                      className="flex h-full shrink-0 items-center px-2 text-muted-foreground transition-colors hover:text-foreground"
                     >
                       {user.showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => onGeneratePassword(user.id)}
+                      title="Yeni şifre oluştur"
+                      className="flex h-full shrink-0 items-center border-l px-2 text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                    >
+                      <RefreshCw className="size-3.5" />
+                    </button>
                   </div>
-                </div>
+                </Field>
 
-                {/* Şifre oluştur */}
-                <button
-                  onClick={() => onGeneratePassword(user.id)}
-                  title="Şifre oluştur"
-                  className="h-[34px] flex items-center justify-center rounded-[5px] border-2 border-border hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <RefreshCw className="size-3.5" />
-                </button>
-              </div>
+                <Field label="E-posta">
+                  <Input type="email" value={user.email} onChange={(e) => onUpdateEmail(user.id, e.target.value)} placeholder="kullanici@sirket.com" />
+                </Field>
 
-              {/* E-posta ve Telefon */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-[11px] font-medium text-foreground mb-1.5">E-posta</p>
-                  <input
-                    type="email"
-                    value={user.email}
-                    onChange={(e) => onUpdateEmail(user.id, e.target.value)}
-                    placeholder="kullanici@sirket.com"
-                    className="w-full px-2.5 py-2 text-xs rounded-[5px] border-2 border-border bg-background outline-none focus:border-foreground/60 transition-colors"
-                  />
-                </div>
-                <div>
-                  <p className="text-[11px] font-medium text-foreground mb-1.5">Telefon</p>
-                  <input
-                    type="tel"
-                    value={user.phone}
-                    onChange={(e) => onUpdatePhone(user.id, e.target.value)}
-                    placeholder="05xx xxx xx xx"
-                    className="w-full px-2.5 py-2 text-xs rounded-[5px] border-2 border-border bg-background outline-none focus:border-foreground/60 transition-colors"
-                  />
-                </div>
-              </div>
+                <Field label="Telefon">
+                  <Input type="tel" value={user.phone} onChange={(e) => onUpdatePhone(user.id, e.target.value)} placeholder="05xx xxx xx xx" />
+                </Field>
 
-              {/* Şifre güç barı */}
-              {str && (
-                <div className="space-y-1.5 pt-0.5">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1 h-0.5 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all duration-300", str.color)}
-                        style={{ width: `${str.pct}%` }}
-                      />
-                    </div>
-                    <span className={cn("text-[10px] font-medium shrink-0", str.text)}>{str.label}</span>
-                    <div className="flex gap-1">
-                      {[
-                        { ok: str.hasUpper,   label: "A-Z" },
-                        { ok: str.hasLower,   label: "a-z" },
-                        { ok: str.hasDigit,   label: "0-9" },
-                        { ok: str.hasSpecial, label: "!@#" },
-                        { ok: str.lengthOk,   label: "7+" },
-                      ].map(({ ok, label }) => (
-                        <span key={label} className={cn(
-                          "text-[9px] px-1 py-0.5 rounded-[5px]",
-                          ok ? "bg-emerald-100 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
-                        )}>
-                          {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  {/* AD uyarısı */}
-                  {!str.adOk && (
-                    <p className="text-[10px] text-red-500 flex items-center gap-1">
-                      <span>⚠</span>
-                      AD karmaşıklık kuralı: en az 7 karakter, büyük/küçük harf + rakam veya özel karakter ({str.categories}/3 kategori)
-                    </p>
+                {/* Şifre gücü — şifre sütununun altında */}
+                <div className="flex flex-col justify-end gap-1.5">
+                  {str ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div className={cn("h-full rounded-full transition-all duration-300", str.color)} style={{ width: `${str.pct}%` }} />
+                        </div>
+                        <span className={cn("shrink-0 text-[11px] font-medium", str.text)}>{str.label}</span>
+                      </div>
+                      <div className="flex gap-1">
+                        {[
+                          { ok: str.hasUpper,   label: "A-Z" },
+                          { ok: str.hasLower,   label: "a-z" },
+                          { ok: str.hasDigit,   label: "0-9" },
+                          { ok: str.hasSpecial, label: "!@#" },
+                          { ok: str.lengthOk,   label: "7+" },
+                        ].map(({ ok, label }) => (
+                          <span key={label} className={cn(
+                            "inline-flex rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium",
+                            ok ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground",
+                          )}>{label}</span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">Şifre boş — oluştur düğmesini kullanın</p>
                   )}
                 </div>
-              )}
+
+                {str && !str.adOk && (
+                  <p className="col-span-3 flex items-center gap-1.5 rounded-[5px] bg-red-500/10 px-2.5 py-1.5 text-[11px] text-red-700 dark:text-red-400">
+                    <AlertTriangle className="size-3.5 shrink-0" />
+                    AD karmaşıklık kuralı: en az 7 karakter; büyük/küçük harf, rakam, özel karakterden en az 3&apos;ü ({str.categories}/3)
+                  </p>
+                )}
+              </div>
             </div>
           )
         })}
       </div>
 
-      {/* Kullanıcı ekle */}
-      {!limitReached && (
+      {/* Kullanıcı ekle / hak doldu */}
+      {limitReached ? (
+        <p className="rounded-[8px] border border-dashed py-2.5 text-center text-[12px] text-muted-foreground">
+          Kullanıcı hakkı doldu ({userLimit}). Daha fazla kullanıcı için lisans artırılmalı.
+        </p>
+      ) : (
         <button
           onClick={onAdd}
-          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border border-dashed border-border text-[11px] text-muted-foreground hover:border-foreground/40 hover:text-foreground hover:bg-muted/30 transition-colors"
+          className="flex w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed py-2.5 text-[12px] font-medium text-muted-foreground transition-colors hover:border-foreground/40 hover:bg-muted/30 hover:text-foreground"
         >
           <Plus className="size-3.5" />
           Kullanıcı Ekle
+          {Number.isFinite(kalanHak) && <span className="font-normal">· {kalanHak} hak kaldı</span>}
         </button>
       )}
 
       {/* Test paneli */}
       {testRunning && (
-        <div className="rounded-[5px] border border-blue-500/25 bg-blue-50/30 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-blue-500/25/60 bg-blue-500/15">
-            <div className="flex items-center gap-2">
+        <div className="overflow-hidden rounded-[8px] border bg-card">
+          <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-2">
+            <p className="flex items-center gap-2 text-[12px] font-semibold">
               <FlaskConical className="size-3.5 text-blue-700 dark:text-blue-400" />
-              <p className="text-[11px] font-semibold text-blue-800">Test: AD Kullanıcı Oluşturma</p>
-            </div>
-            <button
-              onClick={() => setTestRunning(false)}
-              className="text-blue-700 dark:text-blue-400 hover:text-blue-900 transition-colors"
-              title="Kapat"
-            >
+              Test: AD kullanıcı oluşturma
+            </p>
+            <button onClick={() => setTestRunning(false)} title="Kapat" className="text-muted-foreground transition-colors hover:text-foreground">
               <X className="size-3.5" />
             </button>
           </div>
@@ -420,21 +410,28 @@ export function StepUsers({
 
       {/* Test butonu */}
       {!testRunning && (
-        <button
-          onClick={startTest}
-          disabled={!canTest}
-          title={
-            !allUsersValid
-              ? "Kullanıcı adı ve şifre girilmelidir"
-              : !serverId || !firmaId
-              ? "Sunucu veya firma seçili değil"
-              : "Bu kullanıcıları AD'ye ekle (test)"
-          }
-          className="w-full flex items-center justify-center gap-1.5 py-2 rounded-[5px] border border-blue-500/25 bg-blue-500/15 text-[11px] text-blue-700 dark:text-blue-400 hover:bg-blue-100 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <FlaskConical className="size-3.5" />
-          Test Et — Bu adıma kadar olanı AD'ye uygula
-        </button>
+        <div className="flex items-center justify-between gap-3 rounded-[8px] bg-blue-500/10 px-3 py-2.5">
+          <p className="flex items-center gap-2 text-[12px] text-blue-800 dark:text-blue-300">
+            <FlaskConical className="size-3.5 shrink-0" />
+            Kurulumu beklemeden bu kullanıcıları AD&apos;ye ekleyip deneyebilirsiniz.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={startTest}
+            disabled={!canTest}
+            title={
+              !allUsersValid
+                ? "Kullanıcı adı ve şifre girilmelidir"
+                : !serverId || !firmaId
+                ? "Sunucu veya firma seçili değil"
+                : "Bu kullanıcıları AD'ye ekle (test)"
+            }
+            className="shrink-0"
+          >
+            Test Et
+          </Button>
+        </div>
       )}
     </div>
   )
