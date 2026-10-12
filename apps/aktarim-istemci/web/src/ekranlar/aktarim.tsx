@@ -136,8 +136,8 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           )}
           {!a.bitti && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Uygulamayı kapatırsanız aktarım duraklar; yeniden açtığınızda kaldığı yerden devam eder. SQL Server çalışmaya devam edebilir,
-              programı kullanmanız engellenmez.
+              Aktarım bitene kadar Pusula programını <b className="text-foreground">kullanmayın</b>: yedek alındıktan sonra girilen kayıtlar yeni
+              sunucuya gelmez. Uygulamayı kapatırsanız aktarım duraklar; yeniden açtığınızda kaldığı yerden devam eder.
             </p>
           )}
         </section>
