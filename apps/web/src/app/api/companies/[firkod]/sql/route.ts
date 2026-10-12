@@ -5,7 +5,7 @@ import { decrypt } from "@/lib/crypto"
 import { pollSingleAgent } from "@/lib/agent-poller"
 import { requirePermission } from "@/lib/require-permission"
 
-interface GuvenlikRow { srkadi: string; DataYolu: string; PrgTur: string }
+interface GuvenlikRow { srkadi: string; DataYolu: string; PrgTur: string; YedekAl: boolean | null }
 
 interface DbRow {
   id: string; name: string; server: string; size_mb: number; status: string; firma_no: string | null
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ firk
 
     if (refresh && sqlServerId) { try { await pollSingleAgent(sqlServerId, true) } catch {} }
 
-    const dbFilter: { names: string[]; prgMap: Map<string, string> } = { names: [], prgMap: new Map() }
+    const dbFilter: { names: string[]; prgMap: Map<string, string>; yedekMap: Map<string, boolean> } = { names: [], prgMap: new Map(), yedekMap: new Map() }
 
     // Firma'nın SQL sunucusundan guvenlik tablosu (harici SQL — DEĞİŞMEZ)
     if (sqlServerId) {
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ firk
             { server: s.ip, port: 1433, user: s.sql_username, password, database: "sirket", requestTimeout: 8000 },
             async (pool) => {
               const result = await pool.request().input("firmaId", firmaIdInt)
-                .query<GuvenlikRow>("SELECT srkadi, DataYolu, PrgTur FROM guvenlik WHERE PusulaFirmaId = @firmaId")
+                .query<GuvenlikRow>("SELECT srkadi, DataYolu, PrgTur, YedekAl FROM guvenlik WHERE PusulaFirmaId = @firmaId")
               return result.recordset as GuvenlikRow[]
             },
           )
@@ -52,6 +52,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ firk
             if (!dbName) continue
             dbFilter.names.push(dbName)
             dbFilter.prgMap.set(dbName.toLowerCase(), g.PrgTur?.trim() ?? "")
+            // Aynı ada birden çok satır olabilir — biri bile 1 ise yedekleniyor demektir
+            dbFilter.yedekMap.set(dbName.toLowerCase(), (dbFilter.yedekMap.get(dbName.toLowerCase()) ?? false) || g.YedekAl === true)
           }
         } catch (err) {
           console.log("[sql route] guvenlik sorgusu başarısız:", err instanceof Error ? err.message : err)
@@ -79,6 +81,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ firk
       Tables: d.tables, RecoveryModel: d.recovery_model, Owner: d.owner,
       DataFilePath: d.data_file_path, LogFilePath: d.log_file_path,
       ProgramCode: dbFilter.prgMap.get(d.name.toLowerCase()) ?? null,
+      // null → guvenlik'te satırı yok (yedek kapsamı buradan yönetilemez)
+      YedekAl: dbFilter.yedekMap.get(d.name.toLowerCase()) ?? null,
     }))
 
     return NextResponse.json(enriched)

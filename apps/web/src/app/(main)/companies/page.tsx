@@ -20,7 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
-import {  } from "@muharremoz/pusula-ui";
+import { Switch } from "@muharremoz/pusula-ui";
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
 import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -91,6 +91,8 @@ interface TabSQLDatabase {
   DataFilePath:  string | null
   LogFilePath:   string | null
   ProgramCode:   string | null
+  /** guvenlik.YedekAl — null: guvenlik'te satırı yok */
+  YedekAl:       boolean | null
 }
 
 interface TabCompanyService {
@@ -537,6 +539,8 @@ export default function CompaniesPage() {
     (WebUserTestResult & { siteName: string; username: string }) | null
   >(null);
   const [sqlRefreshing, setSqlRefreshing] = useState(false);
+  const [yedekAlKaydediliyor, setYedekAlKaydediliyor] = useState<string | null>(null);
+  const [yedekKapatOnay, setYedekKapatOnay] = useState<TabSQLDatabase | null>(null);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
@@ -1372,6 +1376,29 @@ tr:nth-child(even) td{background:#fafafa}
     const match = apiCompanies.find((c) => c.firkod === urlFirkod)
     if (match) setSelectedFirma((prev) => (prev?.firkod === urlFirkod ? prev : match))
   }, [urlFirkod, apiCompanies, canViewCompanyDetail, router])
+
+  /** guvenlik.YedekAl'ı değiştirir — SpareBackup + Backup Master kapsamı */
+  async function yedekAlDegistir(db: TabSQLDatabase, yedekAl: boolean) {
+    if (!selectedFirma || yedekAlKaydediliyor) return
+    setYedekAlKaydediliyor(db.Id)
+    try {
+      const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql/yedek-al`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dbName: db.Name, yedekAl }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) { toast.error(data.error ?? "Yedek ayarı kaydedilemedi"); return }
+      setTabSQL((prev) => prev.map((d) => (d.Id === db.Id ? { ...d, YedekAl: yedekAl } : d)))
+      const bm = data.backupMaster as { ok: boolean; ozet: string } | undefined
+      if (bm && !bm.ok) toast.warning(`${db.Name}: yedek ${yedekAl ? "açıldı" : "kapatıldı"}`, { description: bm.ozet })
+      else toast.success(`${db.Name}: yedek ${yedekAl ? "açıldı" : "kapatıldı"}`, { description: bm?.ozet })
+    } catch {
+      toast.error("Yedek ayarı kaydedilemedi")
+    } finally {
+      setYedekAlKaydediliyor(null)
+    }
+  }
 
   async function sqlBackup(db: TabSQLDatabase) {
     if (!selectedFirma) return
@@ -2605,7 +2632,7 @@ tr:nth-child(even) td{background:#fafafa}
                   </button>
                 </div>
                 <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
+                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase pl-[22px]">Veritabanı</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Boyut</span>
@@ -2613,13 +2640,14 @@ tr:nth-child(even) td{background:#fafafa}
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Owner</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tam Yedek</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Diff Yedek</span>
+                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase" title="guvenlik.YedekAl — SpareBackup ve Backup Master kapsamı">Yedek Alınacak</span>
                     <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
                     <span />
                   </div>
                   <div className="divide-y divide-border/40">
                     {tabLoading ? (
                       Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-2.5 items-center">
+                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-2.5 items-center">
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px] w-2/3" />
                           <Skeleton className="h-3 rounded-[5px]" />
@@ -2627,6 +2655,7 @@ tr:nth-child(even) td{background:#fafafa}
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px]" />
                           <Skeleton className="h-3 rounded-[5px]" />
+                          <Skeleton className="h-3 rounded-[5px] w-12" />
                           <Skeleton className="h-3 rounded-[5px] w-12" />
                           <span />
                         </div>
@@ -2642,7 +2671,7 @@ tr:nth-child(even) td{background:#fafafa}
                         db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
                       ].filter(Boolean).join("\n")
                       return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
+                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_90px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
                         <div className="flex items-center gap-2 min-w-0">
                           <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                           <span className="text-[13px] font-medium truncate">{db.Name}</span>
@@ -2662,6 +2691,21 @@ tr:nth-child(even) td{background:#fafafa}
                           className="text-[10px] tabular-nums text-muted-foreground cursor-help"
                           title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş:      ${db.LastDiffBackup ?? "—"}` : ""}
                         >{db.LastDiffBackup ?? "—"}</span>
+                        {db.YedekAl === null ? (
+                          <span className="text-[10px] text-muted-foreground" title="guvenlik tablosunda kaydı yok">—</span>
+                        ) : (
+                          <label className="flex items-center gap-1.5 cursor-pointer">
+                            <Switch
+                              checked={db.YedekAl}
+                              disabled={yedekAlKaydediliyor !== null}
+                              onCheckedChange={(v) => (v ? yedekAlDegistir(db, true) : setYedekKapatOnay(db))}
+                              className="scale-75 origin-left"
+                            />
+                            <span className={`text-[10px] ${db.YedekAl ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
+                              {yedekAlKaydediliyor === db.Id ? "…" : db.YedekAl ? "Evet" : "Hayır"}
+                            </span>
+                          </label>
+                        )}
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
                           <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
@@ -2687,6 +2731,24 @@ tr:nth-child(even) td{background:#fafafa}
                     )})}
                   </div>
                 </div>
+                <AlertDialog open={!!yedekKapatOnay} onOpenChange={(o) => { if (!o) setYedekKapatOnay(null) }}>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Yedek kapatılsın mı?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        <span className="font-medium text-foreground">{yedekKapatOnay?.Name}</span> veritabanı
+                        SpareBackup ve Backup Master yedeklerinden çıkarılacak. Bu veritabanının bundan sonra yedeği alınmaz.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Vazgeç</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-white hover:bg-destructive/90"
+                        onClick={() => { if (yedekKapatOnay) yedekAlDegistir(yedekKapatOnay, false); setYedekKapatOnay(null) }}
+                      >Yedeği Kapat</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </TabsContent>
 
               {/* ── Erişim ─────────────────────────────────────────────────
