@@ -20,7 +20,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
-import { Switch } from "@muharremoz/pusula-ui";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
 import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -2694,13 +2694,22 @@ tr:nth-child(even) td{background:#fafafa}
                         {db.YedekAl === null ? (
                           <span className="text-[10px] text-muted-foreground">—</span>
                         ) : (
-                          <Switch
-                            checked={db.YedekAl}
+                          <ToggleGroup
+                            type="single"
+                            variant="outline"
+                            size="sm"
+                            value={db.YedekAl ? "evet" : "hayir"}
                             disabled={yedekAlKaydediliyor !== null}
-                            onCheckedChange={(v) => (v ? yedekAlDegistir(db, true) : setYedekKapatOnay(db))}
-                            className={`scale-75 origin-left data-[state=checked]:bg-emerald-500 data-[state=unchecked]:bg-red-500 dark:data-[state=unchecked]:bg-red-500 ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}`}
+                            onValueChange={(v) => {
+                              if (v === "evet" && !db.YedekAl) yedekAlDegistir(db, true)
+                              else if (v === "hayir" && db.YedekAl) setYedekKapatOnay(db)
+                            }}
+                            className={yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}
                             aria-label="Yedek alınacak"
-                          />
+                          >
+                            <ToggleGroupItem value="evet" className="h-6 px-2 text-[10px] data-[state=on]:bg-emerald-500/15 data-[state=on]:text-emerald-700 dark:data-[state=on]:text-emerald-400">Evet</ToggleGroupItem>
+                            <ToggleGroupItem value="hayir" className="h-6 px-2 text-[10px] data-[state=on]:bg-red-500/15 data-[state=on]:text-red-700 dark:data-[state=on]:text-red-400">Hayır</ToggleGroupItem>
+                          </ToggleGroup>
                         )}
                         <div className="flex items-center gap-1.5">
                           <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
