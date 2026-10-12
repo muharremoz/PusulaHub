@@ -180,7 +180,17 @@ export function StepUsers({
       <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
         <div className="overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
           <div className="overflow-x-auto">
-            <table className="w-full text-[13px]">
+            <table className="w-full table-fixed text-[13px]">
+              {/* Sabit sütun genişlikleri — tablo kartın içine sığar, yatay kaydırma olmaz */}
+              <colgroup>
+                <col className="w-10" />
+                <col className="w-[22%]" />
+                <col className="w-[17%]" />
+                <col className="w-[20%]" />
+                <col className="w-[19%]" />
+                <col className="w-[13%]" />
+                <col className="w-[104px]" />
+              </colgroup>
               <thead>
                 <tr className="border-b text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                   <th className="w-10 px-3 py-2 text-left font-medium">#</th>
@@ -189,7 +199,7 @@ export function StepUsers({
                   <th className="px-2 py-2 text-left font-medium">Şifre <span className="text-primary">*</span></th>
                   <th className="px-2 py-2 text-left font-medium">E-posta</th>
                   <th className="px-2 py-2 text-left font-medium">Telefon</th>
-                  <th className="px-3 py-2 text-right font-medium">İşlem</th>
+                  <th className="px-3 py-2 text-right font-medium" />
                 </tr>
               </thead>
               <tbody>
@@ -207,7 +217,7 @@ export function StepUsers({
                         </td>
 
                         {/* Kullanıcı adı — önek + karakter sayacı */}
-                        <td className="min-w-[200px] px-2 py-1.5">
+                        <td className="px-2 py-1.5">
                           <div className={cn("flex items-center overflow-hidden", alan, hata && "border-red-500/60 hover:border-red-500/60")}>
                             {firmaId && <span className="shrink-0 pl-2.5 text-muted-foreground">{firmaId}.</span>}
                             <input
@@ -228,7 +238,7 @@ export function StepUsers({
                           </div>
                         </td>
 
-                        <td className="min-w-[170px] px-2 py-1.5">
+                        <td className="px-2 py-1.5">
                           <div className={alan}>
                             <input
                               value={user.displayName}
@@ -240,7 +250,7 @@ export function StepUsers({
                         </td>
 
                         {/* Şifre — kalkan + göster + yeni üret aynı kutuda */}
-                        <td className="min-w-[200px] px-2 py-1.5">
+                        <td className="px-2 py-1.5">
                           <div className={cn("flex items-center", alan, sifreHata && "border-red-500/60 hover:border-red-500/60")}>
                             <input
                               type={user.showPassword ? "text" : "password"}
@@ -267,14 +277,14 @@ export function StepUsers({
                           </div>
                         </td>
 
-                        <td className="min-w-[180px] px-2 py-1.5">
+                        <td className="px-2 py-1.5">
                           <div className={alan}>
                             <input type="email" value={user.email} onChange={(e) => onUpdateEmail(user.id, e.target.value)} placeholder="kullanici@sirket.com"
                               className="h-full w-full bg-transparent px-2.5 outline-none placeholder:text-muted-foreground/60" />
                           </div>
                         </td>
 
-                        <td className="min-w-[130px] px-2 py-1.5">
+                        <td className="px-2 py-1.5">
                           <div className={alan}>
                             <input type="tel" value={user.phone} onChange={(e) => onUpdatePhone(user.id, e.target.value)} placeholder="05xx xxx xx xx"
                               className="h-full w-full bg-transparent px-2.5 tabular-nums outline-none placeholder:text-muted-foreground/60" />
@@ -282,8 +292,8 @@ export function StepUsers({
                         </td>
 
                         {/* İşlem: kopya sayısı + kopyala, sil */}
-                        <td className="px-3 py-1.5">
-                          <div className="flex items-center justify-end gap-1">
+                        <td className="py-1.5 pl-1 pr-2">
+                          <div className="flex items-center justify-end gap-0.5">
                             {user.username.trim() && !limitReached && (
                               <div className="flex items-center overflow-hidden rounded-[5px] border">
                                 <input
@@ -297,8 +307,8 @@ export function StepUsers({
                                   className="h-7 w-8 bg-background text-center text-[12px] tabular-nums outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                                 />
                                 <button onClick={() => kopyala(user.id)} title="Bu kullanıcıyı çoğalt (numara artar)"
-                                  className="flex h-7 items-center gap-1 border-l px-2 text-[12px] text-muted-foreground hover:bg-muted/40 hover:text-foreground">
-                                  <Copy className="size-3" /> Kopyala
+                                  className="flex h-7 items-center border-l px-1.5 text-muted-foreground hover:bg-muted/40 hover:text-foreground">
+                                  <Copy className="size-3.5" />
                                 </button>
                               </div>
                             )}
