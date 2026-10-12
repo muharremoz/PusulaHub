@@ -683,8 +683,6 @@ export function WizardShell() {
               {step === 2 && (
                 <StepUsers
                   users={users} firmaId={firmaId}
-                  firmaName={selectedCompany?.firma ?? ""}
-                  serverId={selectedServerId ?? ""}
                   userLimit={selectedCompany?.licenseCount ?? selectedCompany?.userCount ?? 0}
                   existingUsers={apiExistingUsers}
                   existingUsersLoading={existingUsersLoading}

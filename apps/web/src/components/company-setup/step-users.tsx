@@ -2,21 +2,18 @@
 
 import { useState } from "react"
 import { WizardUser, ExistingAdUser } from "@/lib/setup-mock-data"
-import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, FlaskConical, Copy, Users as UsersIcon } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, RefreshCw, X, AlertTriangle, Loader2, Copy, Users as UsersIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Field } from "@/components/shared/form"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
-import { AdProvisionRunner } from "./ad-provision-runner"
 import { adKullaniciAdiHatasi, onekSonrasiMax } from "@/lib/ad-kullanici-adi"
 
 interface Props {
   users: WizardUser[]
   firmaId: string
-  firmaName: string
-  serverId: string
   userLimit: number
   existingUsers: ExistingAdUser[]
   existingUsersLoading?: boolean
@@ -62,16 +59,13 @@ export function meetsAdComplexity(p: string) {
 }
 
 export function StepUsers({
-  users, firmaId, firmaName, serverId, userLimit, existingUsers,
+  users, firmaId, userLimit, existingUsers,
   existingUsersLoading, existingUsersError,
   onAdd, onRemove, onCopy,
   onUpdateUsername, onUpdateDisplayName, onUpdateEmail, onUpdatePhone,
   onUpdatePassword, onTogglePassword, onGeneratePassword,
 }: Props) {
   const [showExisting, setShowExisting] = useState(false)
-  const [testRunning, setTestRunning]   = useState(false)
-  // Test'i her açışta runner'ı remount etmek için artan key
-  const [testKey, setTestKey]           = useState(0)
   const activeExisting = existingUsers.filter((u) => !u.isDisabled).length
   const limitReached = userLimit > 0 && activeExisting + users.length >= userLimit
   /** Kalan kullanıcı hakkı — limit yoksa sınırsız */
@@ -93,14 +87,6 @@ export function StepUsers({
 
   const adHatasi = (username: string) =>
     username.trim() ? adKullaniciAdiHatasi(`${firmaId}.${username.trim()}`) : null
-  const allUsersValid = users.length > 0 &&
-    users.every((u) => u.username.trim() && !adHatasi(u.username) && u.password.trim() && meetsAdComplexity(u.password))
-  const canTest = allUsersValid && !!serverId && !!firmaId
-
-  const startTest = () => {
-    setTestKey((k) => k + 1)
-    setTestRunning(true)
-  }
 
   const kullanilan = activeExisting + users.length
   const hakPct = userLimit > 0 ? Math.min(100, Math.round((kullanilan / userLimit) * 100)) : 0
@@ -376,63 +362,6 @@ export function StepUsers({
         </button>
       )}
 
-      {/* Test paneli */}
-      {testRunning && (
-        <div className="overflow-hidden rounded-[8px] border bg-card">
-          <div className="flex items-center justify-between border-b bg-[var(--section-bg)] px-3 py-2">
-            <p className="flex items-center gap-2 text-[12px] font-semibold">
-              <FlaskConical className="size-3.5 text-blue-700 dark:text-blue-400" />
-              Test: AD kullanıcı oluşturma
-            </p>
-            <button onClick={() => setTestRunning(false)} title="Kapat" className="text-muted-foreground transition-colors hover:text-foreground">
-              <X className="size-3.5" />
-            </button>
-          </div>
-          <div className="p-3">
-            <AdProvisionRunner
-              key={testKey}
-              payload={{
-                serverId,
-                firmaId,
-                firmaName,
-                users: users.map((u) => ({
-                  username:    u.username,
-                  displayName: u.displayName,
-                  email:       u.email,
-                  phone:       u.phone,
-                  password:    u.password,
-                })),
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Test butonu */}
-      {!testRunning && (
-        <div className="flex items-center justify-between gap-3 rounded-[8px] bg-blue-500/10 px-3 py-2.5">
-          <p className="flex items-center gap-2 text-[12px] text-blue-800 dark:text-blue-300">
-            <FlaskConical className="size-3.5 shrink-0" />
-            Kurulumu beklemeden bu kullanıcıları AD&apos;ye ekleyip deneyebilirsiniz.
-          </p>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={startTest}
-            disabled={!canTest}
-            title={
-              !allUsersValid
-                ? "Kullanıcı adı ve şifre girilmelidir"
-                : !serverId || !firmaId
-                ? "Sunucu veya firma seçili değil"
-                : "Bu kullanıcıları AD'ye ekle (test)"
-            }
-            className="shrink-0"
-          >
-            Test Et
-          </Button>
-        </div>
-      )}
     </div>
   )
 }
