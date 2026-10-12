@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Company } from "@/lib/setup-mock-data"
-import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2 } from "lucide-react"
+import { Check, Search, AlertTriangle, X, Loader2, Ban, Mail, Phone, Users, CalendarClock, ServerOff, WifiOff, RefreshCw, Building2, MonitorSmartphone } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 
@@ -17,14 +17,6 @@ export interface RdpServerItem {
   totalRamGB: number
   isOnline:   boolean
 }
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
 function formatDate(iso?: string) {
@@ -347,20 +339,36 @@ export function StepFirma({
           )}
 
           {/* Bağlantı sunucusu (RDP) seçimi — sadece kullanıcı hakkı > 0 ve lisans doluysa gizle */}
-          {licenseSeats > 0 && !licenseFull && <div>
-            <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">
-              Bağlantı Sunucusu
-            </p>
+          {licenseSeats > 0 && !licenseFull && (() => {
+            // Yoğunluk: totalRamGB * 2 ≈ en fazla oturum. RAM bilinmiyorsa 0.
+            const yogunluk = (srv: RdpServerItem) => {
+              const max = srv.totalRamGB > 0 ? srv.totalRamGB * 2 : 0
+              return max > 0 ? Math.min(100, Math.round((srv.userCount / max) * 100)) : 0
+            }
+            // Önerilen: çevrimiçi sunucular içinde en boş olanı
+            const onerilen = rdpServers.filter((s) => s.isOnline).sort((a, b) => yogunluk(a) - yogunluk(b))[0]?.id
+            return (
+          <div className="rounded-[8px] bg-[var(--section-bg)] p-1.5">
+            <div className="flex items-center justify-between px-1.5 pb-1.5 pt-0.5">
+              <p className="flex items-center gap-1.5 text-[12px] font-medium">
+                <MonitorSmartphone className="size-3.5 text-muted-foreground" />
+                Bağlantı Sunucusu
+              </p>
+              {!rdpServersLoading && rdpServers.length > 0 && (
+                <span className="text-[11px] text-muted-foreground">
+                  {selectedWindowsServerId ? "Seçildi" : "Kullanıcıların bağlanacağı terminali seçin"}
+                </span>
+              )}
+            </div>
 
             {/* Yükleniyor */}
             {rdpServersLoading && (
-              <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
-                {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-3">
+              <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="space-y-2.5 rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+                    <Skeleton className="h-3.5 w-24 rounded-[5px]" />
                     <Skeleton className="h-3 w-32 rounded-[5px]" />
-                    <Skeleton className="h-3 w-24 rounded-[5px]" />
-                    <Skeleton className="h-3 w-28 rounded-[5px]" />
-                    <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
+                    <Skeleton className="h-1 w-full rounded-full" />
                   </div>
                 ))}
               </div>
@@ -368,7 +376,7 @@ export function StepFirma({
 
             {/* Hata */}
             {!rdpServersLoading && rdpServersError && (
-              <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
+              <div className="flex items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 {rdpServersError}
               </div>
@@ -376,112 +384,91 @@ export function StepFirma({
 
             {/* Boş */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length === 0 && (
-              <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-[5px] bg-card px-4 py-8 text-center" style={{ boxShadow: "var(--card-shadow)" }}>
                 <ServerOff className="size-6 text-muted-foreground" />
-                <p className="text-[12px] font-medium">RDP sunucusu tanımlı değil</p>
-                <p className="text-[10px] text-muted-foreground max-w-xs">
-                  Kullanıcıların bağlanacağı bir Terminal Server&apos;ı sisteme
-                  RDP rolüyle eklemelisin.
+                <p className="text-[13px] font-medium">RDP sunucusu tanımlı değil</p>
+                <p className="max-w-xs text-[12px] text-muted-foreground">
+                  Kullanıcıların bağlanacağı bir Terminal Server&apos;ı sisteme RDP rolüyle eklemelisin.
                 </p>
-                <a
-                  href="/servers"
-                  className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-                >
-                  Sunucu Ekle
-                </a>
+                <Button asChild size="sm" className="mt-1"><a href="/servers">Sunucu Ekle</a></Button>
               </div>
             )}
 
-            {/* Tablo */}
+            {/* Sunucu kartları */}
             {!rdpServersLoading && !rdpServersError && rdpServers.length > 0 && (
-            <>
-            <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">DNS</TableHead>
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Tip</TableHead>
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8 text-center">Kullanıcı</TableHead>
-                    <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Yoğunluk</TableHead>
-                    <TableHead className="h-8 w-8" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rdpServers.map((srv) => {
-                    const isSelected = selectedWindowsServerId === srv.id
-                    const isDisabled = !srv.isOnline
-                    // Density: totalRamGB * 2 ≈ max oturum. totalRamGB 0 ise 0 göster.
-                    const maxUsers = srv.totalRamGB > 0 ? srv.totalRamGB * 2 : 0
-                    const densityPct = maxUsers > 0
-                      ? Math.min(100, Math.round((srv.userCount / maxUsers) * 100))
-                      : 0
-                    const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
-                    const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
-                    return (
-                      <TableRow
-                        key={srv.id}
-                        onClick={() => !isDisabled && onSelectWindowsServer(srv.id)}
-                        className={cn(
-                          "border-b border-border/40 transition-colors",
-                          isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
-                          isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                        )}
-                      >
-                        <TableCell className="py-2.5">
+              <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4">
+                {rdpServers.map((srv) => {
+                  const secili = selectedWindowsServerId === srv.id
+                  const kapali = !srv.isOnline
+                  const pct = yogunluk(srv)
+                  const bar = pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500"
+                  const yazi = pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                  return (
+                    <button
+                      key={srv.id}
+                      type="button"
+                      disabled={kapali}
+                      onClick={() => onSelectWindowsServer(srv.id)}
+                      aria-pressed={secili}
+                      className={cn(
+                        "relative rounded-[5px] bg-card p-3 text-left ring-1 transition-all",
+                        secili ? "ring-2 ring-primary" : "ring-transparent hover:ring-border",
+                        kapali && "cursor-not-allowed opacity-50",
+                      )}
+                      style={{ boxShadow: "var(--card-shadow)" }}
+                    >
+                      {/* Başlık: ad + durum, sağda seçim işareti */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-[11px] font-medium">{srv.name}</p>
                             {srv.isOnline ? (
                               <span className="relative flex size-1.5 shrink-0">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                                 <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
                               </span>
                             ) : (
-                              <WifiOff className="size-3 text-red-400 shrink-0" />
+                              <WifiOff className="size-3 shrink-0 text-red-500" />
                             )}
+                            <p className="truncate text-[13px] font-semibold">{srv.name}</p>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                          {srv.ip}
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5 truncate max-w-[160px]">
-                          {srv.dns || "—"}
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground py-2.5">
-                          {srv.type}
-                        </TableCell>
-                        <TableCell className="text-[11px] text-muted-foreground tabular-nums text-center py-2.5">
-                          {srv.userCount}
-                        </TableCell>
-                        <TableCell className="py-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                              <div className={cn("h-full rounded-full", barColor)} style={{ width: `${densityPct}%` }} />
-                            </div>
-                            <span className={cn("text-[10px] tabular-nums w-7 text-right shrink-0", dColor)}>%{densityPct}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="py-2.5">
-                          <div className={cn(
-                            "size-4 rounded-full border flex items-center justify-center",
-                            isSelected ? "bg-foreground border-foreground" : "border-border"
-                          )}>
-                            {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-            </div>
-            <p className="text-[10px] text-muted-foreground px-1 mt-2">
-              {rdpServers.length} sunucu listeleniyor
-            </p>
-            </>
+                          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{srv.dns || srv.ip}</p>
+                        </div>
+                        <span className={cn(
+                          "flex size-4 shrink-0 items-center justify-center rounded-full border",
+                          secili ? "border-primary bg-primary" : "border-border",
+                        )}>
+                          {secili && <Check className="size-2.5 text-primary-foreground" strokeWidth={3} />}
+                        </span>
+                      </div>
+
+                      {/* Oturum + yoğunluk */}
+                      <div className="mt-3 flex items-end justify-between">
+                        <p className="text-[12px] text-muted-foreground">
+                          <span className="text-[15px] font-semibold tabular-nums text-foreground">{srv.userCount}</span> oturum
+                        </p>
+                        <span className={cn("text-[11px] font-medium tabular-nums", yazi)}>%{pct}</span>
+                      </div>
+                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                        <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
+                      </div>
+
+                      {/* Alt: IP + rozet */}
+                      <div className="mt-2.5 flex items-center justify-between gap-2">
+                        <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? srv.ip : srv.type}</span>
+                        {kapali ? (
+                          <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>
+                        ) : srv.id === onerilen && rdpServers.length > 1 ? (
+                          <span className="inline-flex shrink-0 rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Önerilen</span>
+                        ) : null}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
             )}
-          </div>}
+          </div>
+            )
+          })()}
         </div>
       )}
     </div>
