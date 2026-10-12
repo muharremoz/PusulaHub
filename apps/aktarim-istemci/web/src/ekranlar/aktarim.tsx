@@ -34,6 +34,11 @@ const ADIM: Record<IsOgesi["durum"], string> = {
 };
 
 const bayt = (b: number) => mb(b / 1048576);
+const hizMetni = (bps: number) => (bps >= 1048576 ? `${(bps / 1048576).toLocaleString("tr", { maximumFractionDigits: 1 })} MB/sn` : `${Math.round(bps / 1024)} KB/sn`);
+const sureMetni = (sn: number) => (sn < 60 ? `${sn} sn` : sn < 3600 ? `${Math.round(sn / 60)} dk` : `${Math.floor(sn / 3600)} sa ${Math.round((sn % 3600) / 60)} dk`);
+
+/** Öğenin ağırlığı: dosya boyutu biliniyorsa o (yedek/paket üretilince kesinleşir), yoksa taramadaki veri boyutu. */
+const agirlik = (o: IsOgesi) => Math.max(1, o.boyut > 0 ? o.boyut / 1048576 : o.veriMb);
 
 /** Öğenin tek parça ilerlemesi (0–1): aşama değişince çubuk başa dönmesin. */
 function ogeIlerlemesi(o: IsOgesi): number {
@@ -51,13 +56,17 @@ export function AktarimEkrani({ durum, setDurum }: P) {
   const tamam = a.ogeler.filter((o) => o.durum === "tamam").length;
   const hatali = a.ogeler.filter((o) => o.durum === "hata").length;
   // Genel ilerleme: her öğe eşit ağırlık değil, veri boyutuna göre.
-  const toplam = a.ogeler.reduce((t, o) => t + Math.max(1, o.veriMb), 0);
-  const ilerleme = a.ogeler.reduce((t, o) => t + Math.max(1, o.veriMb) * ogeIlerlemesi(o), 0);
+  const toplam = a.ogeler.reduce((t, o) => t + agirlik(o), 0);
+  const ilerleme = a.ogeler.reduce((t, o) => t + agirlik(o) * ogeIlerlemesi(o), 0);
   // Genel yüzde geri gitmez: paketlerin boyutu paketleme bitince belli olur, toplam büyüyünce yüzde düşüyordu.
+  // Bitmeden %100 de göstermez (12.10.2026): eski yıl datasının boyutu bilinmeden ağırlığı 1 MB sayılıyordu,
+  // ilk öğe bitince %100'e kilitleniyor, ikinci öğe %4'teyken "100%" yazıyordu.
   const enYuksek = useRef(0);
-  const hesap = Math.round((ilerleme / toplam) * 100);
+  const hesap = Math.min(a.bitti ? 100 : 99, Math.round((ilerleme / toplam) * 100));
   if (hesap > enYuksek.current || a.bitti) enYuksek.current = a.bitti ? 100 : hesap;
   const genel = enYuksek.current;
+  // Şu an üzerinde çalışılan öğe — başlığın altında canlı özet (ne yapılıyor, kaç MB gitti, hız, kalan)
+  const suren = a.suruyor ? a.ogeler.find((o) => o.durum !== "bekliyor" && o.durum !== "tamam" && o.durum !== "hata") : undefined;
 
   // Her şey bittiğinde (yükleme + yerleştirme + seçildiyse ayırma) bir kez "Aktarım tamamlandı" penceresi
   const hepsiBitti =
@@ -127,17 +136,43 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             <div className="text-2xl font-bold tabular-nums">{genel}%</div>
           </div>
           <Progress value={genel} />
+          {suren && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-2 text-xs tabular-nums">
+              <span className="font-medium">{suren.ad}</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-muted-foreground">{ADIM[suren.durum].toLowerCase()}</span>
+              {suren.durum === "yukleniyor" && suren.boyut > 0 && (
+                <>
+                  <span className="text-muted-foreground">·</span>
+                  <span>{bayt(suren.gonderilen)} / {bayt(suren.boyut)}</span>
+                  {!!suren.hiz && (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span>{hizMetni(suren.hiz)}</span>
+                    </>
+                  )}
+                  {suren.kalanSn != null && (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">kalan ~{sureMetni(suren.kalanSn)}</span>
+                    </>
+                  )}
+                </>
+              )}
+              {suren.durum !== "yukleniyor" && suren.durum !== "hazirlaniyor" && <span className="text-muted-foreground">%{suren.yuzde}</span>}
+            </div>
+          )}
           {a.bitti && !a.yeniAktarimOlur && (
             <p className="mt-3 text-xs text-muted-foreground">
               {a.veritabanlariAyir
-                ? "Pusula dosyaları sunuculara taşıyınca veritabanları ayrılacak; sonra yeni aktarım başlatabilirsiniz."
+                ? "Pusula verileri yerleştirince veritabanları ayrılacak; sonra yeni aktarım başlatabilirsiniz."
                 : "Pusula'ya bildiriliyor…"}
             </p>
           )}
           {!a.bitti && (
             <p className="mt-3 text-xs text-muted-foreground">
-              Aktarım bitene kadar Pusula programını <b className="text-foreground">kullanmayın</b>: yedek alındıktan sonra girilen kayıtlar yeni
-              sunucuya gelmez. Uygulamayı kapatırsanız aktarım duraklar; yeniden açtığınızda kaldığı yerden devam eder.
+              Aktarım bitene kadar Pusula programını <b className="text-foreground">kullanmayın</b>: yedek alındıktan sonra girilen kayıtlar
+              Pusula'ya gelmez. Uygulamayı kapatırsanız aktarım duraklar; yeniden açtığınızda kaldığı yerden devam eder.
             </p>
           )}
         </section>
@@ -192,6 +227,11 @@ export function AktarimEkrani({ durum, setDurum }: P) {
                         {ADIM[o.durum]}
                         {suren && ` · %${o.yuzde}`}
                       </div>
+                      {o.durum === "yukleniyor" && o.boyut > 0 && (
+                        <div className="truncate text-[11px] tabular-nums text-muted-foreground">
+                          {bayt(o.gonderilen)} / {bayt(o.boyut)}{o.hiz ? ` · ${hizMetni(o.hiz)}` : ""}{o.kalanSn != null ? ` · ~${sureMetni(o.kalanSn)}` : ""}
+                        </div>
+                      )}
                       {suren && <Progress value={Math.round(ogeIlerlemesi(o) * 100)} className="mt-1 h-1.5" />}
                     </TableCell>
                   </TableRow>
@@ -211,7 +251,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
             </span>
             <DialogTitle className="text-xl">Aktarım tamamlandı</DialogTitle>
             <DialogDescription>
-              Verileriniz Pusula sunucularına yerleştirildi{a.veritabanlariAyir ? " ve veritabanları bu bilgisayardan ayrıldı" : ""}.
+              Verileriniz Pusula'ya yerleştirildi{a.veritabanlariAyir ? " ve veritabanları bu bilgisayardan ayrıldı" : ""}.
               Bu pencereyi ve uygulamayı kapatabilirsiniz.
             </DialogDescription>
           </DialogHeader>
@@ -236,7 +276,7 @@ export function AktarimEkrani({ durum, setDurum }: P) {
           <AlertDialogHeader>
             <AlertDialogTitle>Yeni aktarım başlatılsın mı?</AlertDialogTitle>
             <AlertDialogDescription>
-              Bu aktarımın yüklemesi tamamlandı; Pusula sunuculara taşımayı kendisi bitirir. Yeni aktarım için Pusula'dan aldığınız
+              Bu aktarımın yüklemesi tamamlandı; yerleştirmeyi Pusula kendisi bitirir. Yeni aktarım için Pusula'dan aldığınız
               yeni aktarım kodunu gireceksiniz.
             </AlertDialogDescription>
           </AlertDialogHeader>

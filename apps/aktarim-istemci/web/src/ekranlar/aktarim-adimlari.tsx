@@ -11,12 +11,13 @@ import { cn } from "@/lib/utils";
 type AdimDurumu = "bekliyor" | "suruyor" | "tamam" | "hata" | "duraklatildi";
 type Adim = { ad: string; aciklama?: React.ReactNode; durum: AdimDurumu; detay?: React.ReactNode };
 
+// Müşteri ekranı: sunucu adları (SQL, Depo, terminal) kullanılmaz — "Pusula'ya yerleştiriliyor" yeter (12.10.2026).
 const SUNUCU_ADIMLARI = [
-  { tur: "veritabani", ad: "Veritabanları SQL sunucusuna yerleştiriliyor" },
-  { tur: "eski", ad: "Eski yıl dataları arşive (Depo) alınıyor" },
-  { tur: "resim", ad: "Resimler Depo sunucusuna yerleştiriliyor" },
-  { tur: "program", ad: "Program dosyaları terminal sunucusuna yerleştiriliyor" },
-  { tur: "ek", ad: "Ek dosyalar terminal sunucusuna yerleştiriliyor" },
+  { tur: "veritabani", ad: "Veritabanları Pusula'ya yerleştiriliyor" },
+  { tur: "eski", ad: "Eski yıl dataları arşive alınıyor" },
+  { tur: "resim", ad: "Resimler Pusula'ya yerleştiriliyor" },
+  { tur: "program", ad: "Program dosyaları Pusula'ya yerleştiriliyor" },
+  { tur: "ek", ad: "Ek dosyalar Pusula'ya yerleştiriliyor" },
 ] as const;
 
 export function AktarimAdimlari({ d }: { d: Durum }) {
@@ -68,7 +69,7 @@ export function AktarimAdimlari({ d }: { d: Durum }) {
     const y = d.ayirma;
     const sunucuBitti = s?.durum === "tamamlandi";
     adimlar.push({
-      ad: "Veritabanları bu SQL Server'dan ayrılıyor (detach)",
+      ad: "Veritabanları bu bilgisayardan ayrılıyor",
       durum: !y ? (sunucuBitti ? "suruyor" : "bekliyor") : y.durum === "suruyor" ? "suruyor" : y.hatalar.length ? "hata" : "tamam",
       aciklama: !y
         ? s?.durum === "hata"
@@ -82,7 +83,7 @@ export function AktarimAdimlari({ d }: { d: Durum }) {
           {y.dogrulama.map((v) => (
             <li key={v.ad} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs">
               <span className="font-mono font-medium">{v.ad}</span>
-              <Isaret iyi={v.listedenCikti} metin={v.listedenCikti ? "SQL Server'dan ayrıldı" : "hâlâ bağlı"} />
+              <Isaret iyi={v.listedenCikti} metin={v.listedenCikti ? "bu bilgisayardan ayrıldı" : "hâlâ bağlı"} />
               {v.dosyalarKontrolEdildi && <Isaret iyi={v.dosyalarYerinde} metin={v.dosyalarYerinde ? `${v.dosyalar.length} dosya diskte duruyor` : "dosya eksik"} />}
             </li>
           ))}
@@ -99,7 +100,7 @@ export function AktarimAdimlari({ d }: { d: Durum }) {
   const bitti = s?.durum === "tamamlandi" && ayirmaTamam;
   adimlar.push({
     ad: "Aktarım tamamlandı",
-    aciklama: bitti ? "Verileriniz Pusula sunucularında; bu pencereyi kapatabilirsiniz." : undefined,
+    aciklama: bitti ? "Verileriniz Pusula'da; bu pencereyi kapatabilirsiniz." : undefined,
     durum: bitti ? "tamam" : "bekliyor",
   });
 

@@ -31,6 +31,9 @@ namespace PusulaAktarim
         public int Yuzde;              // o anki adımın yüzdesi
         public long Boyut;
         public long Gonderilen;
+        /// <summary>Yükleme hızı (bayt/sn, üstel ortalama) ve tahmini kalan süre — yalnız ekran için, yükleme sürerken dolu.</summary>
+        public double Hiz;
+        public int? KalanSn;
         public string Sha256;
         public string Hata;
         public double VeriMb;

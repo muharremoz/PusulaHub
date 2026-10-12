@@ -88,8 +88,10 @@ namespace PusulaAktarim
             }
 
             // 3) Yükleme — sunucu hangi parçaları aldığını söyler.
-            o.Durum = "yukleniyor";
+            o.Durum = "yukleniyor"; o.Hiz = 0; o.KalanSn = null;
             Kaydet();
+            // Hız: ~1 sn'lik örneklerin üstel ortalaması (anlık dalgalanma ekranda zıplamasın); kalan = kalan bayt / hız.
+            var olcumZamani = DateTime.UtcNow; long olcumBayt = -1;
             for (var tur = 0; ; tur++)
             {
                 var meta = o.Meta ?? new System.Collections.Generic.Dictionary<string, object>();
@@ -101,6 +103,7 @@ namespace PusulaAktarim
                 var parcaSayisi = d.Value<int>("parcaSayisi");
                 var alinan = new System.Collections.Generic.HashSet<int>(d["alinan"].Select(x => (int)x));
                 o.Gonderilen = Math.Min(o.Boyut, (long)alinan.Count * parcaBoyutu);
+                olcumZamani = DateTime.UtcNow; olcumBayt = o.Gonderilen;
                 Kaydet();
 
                 var tampon = new byte[parcaBoyutu];
@@ -125,6 +128,14 @@ namespace PusulaAktarim
                         }, iptal).ConfigureAwait(false);
                         o.Gonderilen += n;
                         o.Yuzde = (int)(o.Gonderilen * 100 / Math.Max(1, o.Boyut));
+                        var gecen = (DateTime.UtcNow - olcumZamani).TotalSeconds;
+                        if (olcumBayt >= 0 && gecen >= 1)
+                        {
+                            var anlik = (o.Gonderilen - olcumBayt) / gecen;
+                            o.Hiz = o.Hiz <= 0 ? anlik : o.Hiz * 0.7 + anlik * 0.3;
+                            o.KalanSn = o.Hiz > 0 ? (int)Math.Ceiling((o.Boyut - o.Gonderilen) / o.Hiz) : (int?)null;
+                            olcumZamani = DateTime.UtcNow; olcumBayt = o.Gonderilen;
+                        }
                         if (no % 8 == 0) Kaydet(); else _degisti();
                     }
                 }
@@ -143,7 +154,7 @@ namespace PusulaAktarim
 
             // 4) Bitti — bizim ürettiğimiz dosya (yedek/paket) silinir; müşterinin kendi dosyasına dokunulmaz.
             if (o.Tip == "vt" || o.Tip == "paket") { try { File.Delete(o.YerelYol); } catch { } }
-            o.Durum = "tamam"; o.Yuzde = 100; o.Gonderilen = o.Boyut;
+            o.Durum = "tamam"; o.Yuzde = 100; o.Gonderilen = o.Boyut; o.Hiz = 0; o.KalanSn = null;
             Kaydet();
         }
 

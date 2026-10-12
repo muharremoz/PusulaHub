@@ -103,6 +103,9 @@ export type IsOgesi = {
   gonderilen: number;
   hata: string | null;
   veriMb: number;
+  /** Yükleme hızı (bayt/sn) ve tahmini kalan süre (sn) — yalnız yükleme sürerken (0.3.2+) */
+  hiz?: number;
+  kalanSn?: number | null;
   /** Sunucudaki hedef tür: veritabani | eski | resim | program | ek (paketlerde resim/ek) */
   hedef?: string;
 };

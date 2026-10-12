@@ -112,7 +112,7 @@ namespace PusulaAktarim
                         // Paketlerin dosya listesi (on binlerce yol) ekrana gitmez.
                         ogeler = _is.Ogeler.Select(o => new
                         {
-                            o.Tip, o.Tur, o.Ad, o.Durum, o.Yuzde, o.Boyut, o.Gonderilen, o.Hata, o.VeriMb,
+                            o.Tip, o.Tur, o.Ad, o.Durum, o.Yuzde, o.Boyut, o.Gonderilen, o.Hata, o.VeriMb, o.Hiz, o.KalanSn,
                             Hedef = o.Tip == "paket" && o.Meta != null && o.Meta.TryGetValue("hedefTur", out var ht) ? Convert.ToString(ht) : o.Tur,
                         }).ToList(),
                         sikistir = _is.Sikistir,

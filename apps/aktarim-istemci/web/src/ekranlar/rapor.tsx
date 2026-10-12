@@ -860,7 +860,7 @@ export function RaporEkrani({ durum, setDurum }: P) {
                       </Table>
                     )}
                     <p className="border-t px-4 py-2 text-xs text-muted-foreground">
-                      Dosyalar terminal sunucusunda <span className="font-mono">{`MUSTERI\\${oturum?.firmaId ?? ""}\\Aktarim\\<program>`}</span> klasörüne gider;
+                      Dosyalar Pusula'da <span className="font-mono">{`MUSTERI\\${oturum?.firmaId ?? ""}\\Aktarim\\<program>`}</span> klasörüne gider;
                       parametre dosyasındaki DATA KODU Pusula tarafında güncellenir.
                     </p>
                   </Bolum>
