@@ -30,8 +30,12 @@ import { withSqlConnection } from "@/lib/sql-external"
 const XML = "C:/ProgramData/Key Metric Software/SQL Backup Master/Jobs.xml"
 const LOG_KLASOR = "C:/ProgramData/Key Metric Software/SQL Backup Master/logs"
 const SERVIS = "SQL Backup Master"
-/** guvenlik'ten türetilemeyen, listede kalması şart olan veritabanları */
-export const BM_ISTISNA = ["Sirket"]
+/**
+ * guvenlik'ten türetilemeyen, listede kalması şart olan veritabanları.
+ * PUSLICANCE: kur/lisans veritabanı (kur-api SetRateList buraya yazar); 12.10.2026'da
+ * PUSLIC bu adla yeniden yüklendi, guvenlik'te satırı yok.
+ */
+export const BM_ISTISNA = ["Sirket", "PUSLICANCE"]
 
 export interface BackupMasterSqlHedef {
   ip:        string
