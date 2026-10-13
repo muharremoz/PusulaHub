@@ -150,6 +150,10 @@ namespace PusulaConnect
             _rdp.OnAutoReconnecting2 += (s, e) => { Durum("Bağlantı koptu, yeniden bağlanıyor…", Amber); _ekran.YenidenBaglaniyor(); };
             _rdp.OnAutoReconnected += (s, e) => { BagliYaz(); _ekran.Gizle(); };
             _rdp.OnDisconnected += (s, e) => Kesildi(e.discReason);
+            // Tam ekranda bileşenin boyutu (Resize) değişmez; oturum pencere çözünürlüğünde kalıyor, ekranın altı boş
+            // görünüyordu. Girişte ekranın, çıkışta pencerenin boyutu oturuma ayrıca gönderilir.
+            _rdp.OnEnterFullScreenMode += (s, e) => BeginInvoke((Action)TamEkranCozunurlugu);
+            _rdp.OnLeaveFullScreenMode += (s, e) => { _boyut.Stop(); _boyut.Start(); };
 
             var w = Math.Max(800, _rdp.Width) & ~1;
             var h = Math.Max(600, _rdp.Height) & ~1;
@@ -367,6 +371,23 @@ namespace PusulaConnect
                 _rdp.UpdateSessionDisplaySettings(w, h, w, h, 0, Olcek(), 100);
             }
             catch { }
+        }
+
+        /// <summary>Tam ekran: oturum, pencerenin bulunduğu ekranın tam boyutuna (piksel; süreç PerMonitorV2) getirilir.</summary>
+        private void TamEkranCozunurlugu()
+        {
+            if (!_girisTamam || _bitti) return;
+            try
+            {
+                var b = Screen.FromControl(this).Bounds;
+                var w = (uint)(Math.Max(800, b.Width) & ~1);
+                var h = (uint)(Math.Max(600, b.Height) & ~1);
+                if (w == _sonW && h == _sonH) return;
+                _sonW = w; _sonH = h;
+                Gunluk.Yaz("Tam ekran çözünürlüğü: " + w + "x" + h);
+                _rdp.UpdateSessionDisplaySettings(w, h, w, h, 0, Olcek(), 100);
+            }
+            catch (Exception e) { Gunluk.Yaz("Tam ekran çözünürlüğü ayarlanamadı: " + e.Message); }
         }
 
         private uint Olcek()
