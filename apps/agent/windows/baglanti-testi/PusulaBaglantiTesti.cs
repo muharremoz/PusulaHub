@@ -32,7 +32,7 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Pusula Bağlantı Testi")]
 [assembly: AssemblyProduct("PusulaHub")]
-[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.2.1.0")]
 
 namespace PusulaBaglantiTesti
 {
@@ -434,7 +434,7 @@ class Sonuc
         sb.Append("\"baglantiDurum\":" + J(DurumYazi(BaglantiDurum)) + ",");
         sb.Append("\"hukum\":" + J(Hukum) + ",");
         sb.Append("\"oneri\":" + J(Oneri) + ",");
-        sb.Append("\"surum\":\"1.2.0\",");
+        sb.Append("\"surum\":\"1.2.1\",");
         sb.Append("\"agAlgilamaKapali\":" + (VarsayilanDegerler ? "true" : "false") + ",");
         sb.Append("\"tasima\":" + J(UdpKullaniliyor ? "UDP" : "TCP") + ",");
         sb.Append("\"udp\":{\"rttMs\":" + S(RttUdp) + ",\"bazRttMs\":" + S(BazUdpRtt) + ",\"bantKbps\":" + S(BantUdp) + ",\"paketSn\":" + S(UdpPaket) + ",\"udpGonderBps\":" + S(UdpGonder) + ",\"tcpGonderBps\":" + S(TcpGonder) + "},");
@@ -886,7 +886,7 @@ class AnaForm : Form
             if (!string.IsNullOrEmpty(_istemci)) BilgiCiz(g, fe, fd, ref y, "BAĞLANAN CİHAZ", _istemci);
         }
 
-        using (var f = Tema.F(8.5f, false)) Yaz(g, "v1.2.0", f, Tema.Soluk, 24, H - 34);
+        using (var f = Tema.F(8.5f, false)) Yaz(g, "v1.2.1", f, Tema.Soluk, 24, H - 34);
     }
 
     void BilgiCiz(Graphics g, Font fe, Font fd, ref float y, string etiket, string deger)
@@ -1040,38 +1040,10 @@ class AnaForm : Form
         BolumCiz(g, x, y, kw, kh, 1, "Sunucu", "Pusula sunucusunun o anki durumu", Sonuc.SunucuDurum, Sonuc.SunucuSatirlar);
         BolumCiz(g, x + kw + bosluk, y, kw, kh, 2, "Sizin Bağlantınız", "İnternet / ağ bağlantınız", Sonuc.BaglantiDurum, Sonuc.BaglantiSatirlar);
 
-        // Hüküm kutusu
-        Durum hd = sunucuIyi
-            ? (Sonuc.BaglantiDurum == Durum.Zayif || Sonuc.BaglantiDurum == Durum.Orta || Sonuc.IstemciDurum != Durum.Iyi ? Durum.Orta : Durum.Iyi)
-            : Durum.Zayif;
-        Color hr = Tema.Renk(hd);
-        float hy = y + kh + bosluk, hh = H - Alt - 24 - hy;
-        var kutu = new RectangleF(x, hy, w, hh);
-        using (var p = Tema.Yuvarlak(kutu, 10))
-        {
-            using (var b = new SolidBrush(Color.FromArgb(22, hr))) g.FillPath(b, p);
-            using (var pen = new Pen(Color.FromArgb(110, hr))) g.DrawPath(pen, p);
-        }
-        var daire = new RectangleF(x + 22, hy + 22, 30, 30);
-        using (var b = new SolidBrush(hr)) g.FillEllipse(b, daire);
-        using (var f = new Font("Segoe UI", 11f, FontStyle.Bold))
-            TR.DrawText(g, hd == Durum.Iyi ? "✓" : "!", f, Rectangle.Round(daire), Color.White,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
-        using (var f = Tema.F(8f, true)) Yaz(g, "SONUÇ", f, hr, x + 66, hy + 18);
-        float metinY = hy + 38;
-        using (var f = Tema.F(10.5f, true))
-        {
-            var sz = g.MeasureString(Sonuc.Hukum, f, (int)w - 90);
-            TR.DrawText(g, Sonuc.Hukum, f, new Rectangle((int)x + 66, (int)metinY, (int)w - 90, (int)sz.Height + 4), Tema.Yazi,
-                TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
-            metinY += sz.Height + 10;
-        }
-        if (!string.IsNullOrEmpty(Sonuc.Oneri))
-            using (var f = Tema.F(9f, false))
-                TR.DrawText(g, Sonuc.Oneri, f, new Rectangle((int)x + 66, (int)metinY, (int)w - 90, (int)(hy + hh - metinY - 8)), Tema.Yazi2,
-                    TextFormatFlags.WordBreak | TextFormatFlags.NoPadding);
+        // Hüküm/öneri (SONUÇ) kutusu ekranda gösterilmez (13.10.2026, kullanıcı isteği);
+        // metin raporda ve "Sonucu Kopyala" çıktısında durur.
         if (Olcum.KayitHatasi != null)
-            using (var f = Tema.F(8f, false)) Yaz(g, "Not: rapor dosyası yazılamadı (" + Olcum.KayitHatasi + ")", f, Tema.Hata, x + 66, hy + hh - 22);
+            using (var f = Tema.F(8f, false)) Yaz(g, "Not: rapor dosyası yazılamadı (" + Olcum.KayitHatasi + ")", f, Tema.Hata, x, y + kh + bosluk);
     }
 }
 
