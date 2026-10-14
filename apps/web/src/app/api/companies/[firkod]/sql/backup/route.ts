@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
+import { requirePermission } from "@/lib/require-permission"
 
 /**
  * POST /api/companies/[firkod]/sql/backup
  * Body: { server: string, dbName: string, backupDir?: string }
  *
  * Verilen DB'yi SQL sunucusunun default backup dizinine (veya backupDir verilmişse
- * ona) `{dbName}_{yyyyMMdd_HHmmss}.bak` olarak BACKUP DATABASE komutu ile yedekler.
+ * ona) `{dbName}_{yyyyMMdd_HHmmss}.bak` olarak BACKUP DATABASE … COPY_ONLY ile yedekler.
+ * COPY_ONLY olmazsa bu yedek yeni diferansiyel taban olur; SpareBackup'ın sonraki
+ * diferansiyelleri elde olmayan bu dosyaya bağlanır ve geri yükleme zinciri kopar.
  */
 export async function POST(
   req: NextRequest,
@@ -39,11 +42,12 @@ export async function POST(
         }
         const fullPath = `${backupDir}\\${fileName}`
 
+        // COPY_ONLY şart: elle yedek SpareBackup'ın diferansiyel tabanını değiştirmesin (yedek zinciri)
         // Identifier'ı inline escape et
         const ident = body.dbName!.replace(/]/g, "]]")
         await pool.request()
           .input("disk", fullPath)
-          .query(`BACKUP DATABASE [${ident}] TO DISK = @disk WITH INIT, COMPRESSION, STATS = 10`)
+          .query(`BACKUP DATABASE [${ident}] TO DISK = @disk WITH COPY_ONLY, INIT, COMPRESSION, CHECKSUM, STATS = 10`)
 
         return { fullPath }
       },

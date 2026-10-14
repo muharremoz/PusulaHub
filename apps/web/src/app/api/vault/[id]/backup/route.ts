@@ -64,11 +64,12 @@ export async function POST(
         }
         const fullPath = `${backupDir}\\${fileName}`
 
+        // COPY_ONLY şart: elle yedek SpareBackup'ın diferansiyel tabanını değiştirmesin (yedek zinciri)
         // ] karakterini identifier escape'i
         const ident = body.dbName!.replace(/]/g, "]]")
         await pool.request()
           .input("disk", fullPath)
-          .query(`BACKUP DATABASE [${ident}] TO DISK = @disk WITH INIT, COMPRESSION, STATS = 10`)
+          .query(`BACKUP DATABASE [${ident}] TO DISK = @disk WITH COPY_ONLY, INIT, COMPRESSION, CHECKSUM, STATS = 10`)
 
         return { fullPath }
       },
