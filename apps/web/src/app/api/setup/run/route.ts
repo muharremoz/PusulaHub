@@ -14,6 +14,7 @@ import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
+import { BILKAR_KULLANICI, BILKAR_MASAUSTU, bilkarFirmasiMi } from "@/lib/bilkar"
 import {
   buildEnsureFirmalarOu,
   buildEnsureFirmaOu,
@@ -32,6 +33,7 @@ import {
   buildWriteDesktopIni,
   buildWriteFirmanoBak,
   buildPusulaXFileXml,
+  buildCopyDesktopFolderToUser,
 } from "@/lib/setup-fileops"
 import {
   buildReplaceInFile,
@@ -617,6 +619,9 @@ export async function POST(req: NextRequest) {
       try {
         // ── 1-4) AD adımları → AD agent (yalnız Pars akışında atlanır) ──
         let createdCount = 0
+        // Bilkar (alt bayi) müşterisi mi — CRM temsilci/ek temsilci. Bilkar
+        // kullanıcısı firma grubuna ve masaüstüne eklenir (aşağıda).
+        const bilkar = !parsOnly && (await bilkarFirmasiMi(payload.firmaId).catch(() => false))
         if (adAgent && !parsOnly) {
         // 1) Firmalar root OU
         if (!(await runStep(
@@ -695,6 +700,17 @@ export async function POST(req: NextRequest) {
           }
 
           createdCount++
+        }
+
+        // Bilkar müşterisi → Bilkar kullanıcısı firma grubuna (C:\MUSTERI\<firma>
+        // NTFS yetkisi gruptan gelir). Kritik değil, hata kurulumu durdurmaz.
+        if (bilkar) {
+          await runStep(
+            adAgent,
+            "bilkar_member",
+            `Bilkar: ${BILKAR_KULLANICI} → ${payload.firmaId}_users`,
+            buildAddGroupMember(payload.firmaId, BILKAR_KULLANICI),
+          )
         }
         } // adAgent && !parsOnly
 
@@ -884,6 +900,18 @@ export async function POST(req: NextRequest) {
               "shortcut_resim",
               `Kısayol: Resimler → Depo (${depoAgent.ip})`,
               buildCreateShortcut(resimlerLnk, resimlerTarget),
+            )
+          }
+
+          // Bilkar müşterisi → aynı klasör Bilkar kullanıcısının masaüstüne de
+          // (onun MUSTERILER'inde yalnız kendi müşterileri olur). Kullanıcı bu
+          // sunucuda hiç oturum açmadıysa profil yok → SKIPPED, elle kopyalanır.
+          if (bilkar) {
+            await runStep(
+              winAgent,
+              "bilkar_desktop",
+              `Bilkar masaüstü: MUSTERILER\\${safeFirmaName}`,
+              buildCopyDesktopFolderToUser(mustelierSubdir, BILKAR_MASAUSTU),
             )
           }
         }

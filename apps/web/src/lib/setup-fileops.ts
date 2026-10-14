@@ -146,6 +146,33 @@ export function buildWriteDesktopIni(folderPath: string, infoTip: string, gorune
   ].join("; ")
 }
 
+/* ── Masaüstü firma klasörünü başka kullanıcının masaüstüne kopyala ─── */
+/**
+ * Yönetici masaüstündeki `MUSTERILER\<firma>` klasörünü (kısayollar +
+ * desktop.ini) kullanıcının masaüstündeki `MUSTERILER` altına kopyalar.
+ * Klasörün System özniteliği de taşınır, yoksa Gezgin desktop.ini'yi okumaz.
+ *
+ * Kullanıcı profili ilk oturum açılışında oluşur: masaüstü yoksa hiçbir şey
+ * yapmaz, `SKIPPED` yazar (C:\Users\<ad> elle açılırsa Windows profili
+ * <ad>.DOMAIN adıyla oluşturur — o yüzden önceden açılmaz).
+ */
+export function buildCopyDesktopFolderToUser(sourceDir: string, userDesktop: string): string {
+  const s = psQuote(sourceDir)
+  const d = psQuote(userDesktop)
+  return [
+    `$src='${s}'`,
+    `$dsk='${d}'`,
+    `if(-not (Test-Path -LiteralPath $dsk)){Write-Output 'SKIPPED: kullanici bu sunucuda henuz oturum acmamis'} else {` +
+      `if(-not (Test-Path -LiteralPath $src)){throw ('Kaynak klasor yok: ' + $src)}; ` +
+      `$hedef = Join-Path -Path (Join-Path -Path $dsk -ChildPath 'MUSTERILER') -ChildPath (Split-Path -Path $src -Leaf); ` +
+      `New-Item -Path $hedef -ItemType Directory -Force | Out-Null; ` +
+      `Get-ChildItem -LiteralPath $src -Force | Copy-Item -Destination $hedef -Recurse -Force; ` +
+      `(Get-Item -LiteralPath $hedef -Force).Attributes = (Get-Item -LiteralPath $src -Force).Attributes; ` +
+      `Write-Output 'COPIED'` +
+    `}`,
+  ].join("; ")
+}
+
 /* ── Pusula X: boş file.xml ─────────────────────────────────────────── */
 /**
  * Program klasöründe PusulaX.exe varsa yanına BOŞ `file.xml` bırakır — dosyanın
