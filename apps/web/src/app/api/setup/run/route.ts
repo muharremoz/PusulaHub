@@ -43,6 +43,8 @@ import {
   buildListIisUsedPorts,
   buildGetIisSitePort,
   buildCreateIisResimSite,
+  buildListIisSiteNames,
+  benzersizSiteAdi,
 } from "@/lib/setup-iisops"
 import {
   buildCreateShortcut,
@@ -934,6 +936,21 @@ export async function POST(req: NextRequest) {
           // 6a.5) Canlı IIS port envanteri — bkz. scanLivePorts
           const liveUsedPorts = await scanLivePorts(iisAgent)
 
+          // 6a.6) Kullanılan site adları — aynı hizmet firmaya ikinci kez
+          // kurulursa site ve klasör _2, _3 ekiyle ayrı açılır. Canlı IIS +
+          // firmanın port kayıtları (Türkçe adlar konsoldan bozuk gelebilir).
+          const kullanilanSiteler = new Set<string>()
+          {
+            const r = await execOnAgent(iisAgent.ip, iisAgent.port, iisAgent.apiKey, buildListIisSiteNames(), 60)
+            const m = (r.stdout ?? "").match(/SITES:(.*)/)
+            if (m) for (const ad of m[1].split("|")) if (ad.trim()) kullanilanSiteler.add(ad.trim().toLowerCase())
+            const { data: atamalar } = await (await getSupabaseServer()).schema("hub").from("wizard_port_assignments")
+              .select("site_name").eq("company_id", payload.firmaId)
+            for (const a of (atamalar ?? []) as { site_name: string | null }[]) {
+              if (a.site_name?.trim()) kullanilanSiteler.add(a.site_name.trim().toLowerCase())
+            }
+          }
+
           for (const s of iisServices) {
             const cfg = s.config as IisSiteConfig | null
             if (!cfg) {
@@ -947,17 +964,22 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            // IIS hedef yolu: C:\Pusula\Service\<firmaKod>\<serviceName>
-            const destPath = `${iisFirmaRoot}\\${sanitizeWindowsName(s.name)}`
             // siteNamePattern opsiyonel — yoksa "{firmaKod}_<servis adı>".
             // Firma kodu BAŞTA: IIS site listesi ada göre sıralandığı için aynı
             // firmanın siteleri yan yana geliyor (4646_RESIM, 4646_Pusula MOBIL…).
-            const siteName = expandPattern(
+            const tabanSiteAdi = expandPattern(
               cfg.siteNamePattern && cfg.siteNamePattern.trim()
                 ? cfg.siteNamePattern
                 : `{firmaKod}_${s.name}`,
               payload.firmaId,
             )
+            // Ad doluysa _2, _3… — klasör de aynı eki alır, yoksa ikinci kurulum
+            // ilkinin klasörünü ezip aynı siteye binding ekliyordu.
+            const siteName = benzersizSiteAdi(tabanSiteAdi, kullanilanSiteler)
+            kullanilanSiteler.add(siteName.toLowerCase())
+            const ek = siteName.slice(tabanSiteAdi.length)
+            // IIS hedef yolu: C:\Pusula\Service\<firmaKod>\<serviceName>[_n]
+            const destPath = `${iisFirmaRoot}\\${sanitizeWindowsName(s.name)}${ek}`
 
             // i) Hedef klasör
             if (!(await runStep(

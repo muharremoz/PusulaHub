@@ -201,6 +201,31 @@ export function buildPatchUsersXml(opts: {
   ].join("; ")
 }
 
+/* ── IIS'teki site adlarını listele ─────────────────────────────────── */
+/**
+ * Aynı firmaya aynı hizmet ikinci kez kurulunca site adı çakışmasın diye
+ * (4819'a iki Kivi: tek siteye iki binding eklenmişti, 14.10.2026).
+ * Çıktı: `SITES:ad1|ad2|...`
+ */
+export function buildListIisSiteNames(): string {
+  return [
+    `Import-Module WebAdministration -ErrorAction Stop`,
+    `Write-Output ('SITES:' + ((Get-Website | ForEach-Object { $_.Name }) -join '|'))`,
+  ].join("; ")
+}
+
+/**
+ * Kullanılmamış site adı: önce `taban`, doluysa `taban_2`, `taban_3`…
+ * Karşılaştırma büyük/küçük harf duyarsız (IIS de öyle).
+ */
+export function benzersizSiteAdi(taban: string, kullanilan: ReadonlySet<string>): string {
+  if (!kullanilan.has(taban.toLowerCase())) return taban
+  for (let i = 2; ; i++) {
+    const aday = `${taban}_${i}`
+    if (!kullanilan.has(aday.toLowerCase())) return aday
+  }
+}
+
 /* ── IIS'te kullanılan portları listele ──────────────────────────────── */
 /**
  * Sunucudaki TÜM IIS sitelerinin binding'lerinden port numaralarını toplar.
