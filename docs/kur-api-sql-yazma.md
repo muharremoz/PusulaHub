@@ -216,3 +216,20 @@ o dakika yeniden yazılmaz). Öneri: `RATE_SQL_STALE_MS=900000` (15 dk). Henüz 
 ## 5. Kayıt
 
 - 12.10.2026: keşif, doküman, kararlar; aynı gün onayla uygulandı, 20:14'ten beri canlı.
+
+## 6. FTP'ye pusula.txt (14.10.2026, canlı)
+
+KurPanel'in FTP gönderimi kur-api'ye taşındı: Harem (datshop) kurları dakikada bir
+`ftp.pusulayazilim.net` → `/Kurlar/pusula.txt` (web: `https://www.pusulayazilim.net/kurlar/pusula.txt`).
+Dosya 12.10 20:19'dan beri güncellenmiyordu (KurPanel durunca); kur-api'nin kendi `pusula` kaynağı da bu dosyayı okur.
+
+- `src/services/rateFtpWriterService.js` (**yeni**) — biçim KurPanel `lib/harem-format.ts` ile birebir:
+  `{ meta: { time, time_formatted, fiyat_yayini, fiyat_guncelleme }, data: { kod: { code, alis, satis, tarih } } }`,
+  kod çevirisi `GUMTRY→GUMUSTRY`, `GUMUSD→GUMUSUSD`, `XAUUSD→ONS`, tarih `dd-MM-yyyy HH:mm:ss` TR saati, ASCII `\uXXXX`.
+  Harem 5 dk'dır veri göndermediyse yüklenmez (bayat kur yazılmaz). `basic-ftp@5`.
+- Kurlar `data/rate-ftp-kurlar.json`'da saklanır: bazı kodlar (`DS_*`, `OMRUSD`…) günde birkaç yüz kez
+  gelir, yeniden başlatmada dosyadan düşmesin diye. Eski dosyada 254 kod vardı; yeni dosya bu seyrek kodlar geldikçe tamamlanır.
+- Bağlantı: `env.js` `rateFtp`, `bootstrap.js`, `datshopSource.js` (`ingestHarem`), `/health` → `services.ftpWriter`.
+- `.env`: `RATE_FTP_ENABLED/HOST/USER/PASSWORD/PATH/INTERVAL_MS` (şifre yalnız sunucuda).
+- Yedek: `/root/kurapi-ftp-yedek-20261014-1802` (değişen dosyalar + `.env` + FTP'deki önceki `pusula.txt`).
+- Kapatma: `RATE_FTP_ENABLED=false` + `pm2 restart kur-api --update-env`.
