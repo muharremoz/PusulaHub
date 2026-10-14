@@ -30,6 +30,23 @@ export interface ConnectCihazDurum {
   sayim?: ConnectSayimDurum | null
   /** Eski program (Pusula.exe) sayımı (0.6.1+): kurulu değilse null */
   sayimEski?: ConnectSayimDurum | null
+  /** Yazdırma yardımcısı (0.7.4+): kurulu değilse null; eski istemcide alan yok (undefined) */
+  yazdirma?: ConnectYazdirmaDurum | null
+}
+
+export interface ConnectYazdirmaDurum {
+  /** pusulax: PusulaXPrintAgent · pusula: eski programların RFID yardımcısı (RFIDSERVER) */
+  tur: "pusulax" | "pusula"
+  calisiyor: boolean
+  port: number
+  /** Ayarlı yazıcı (Pusula: paylaşım adından bulunan yazıcı) */
+  yazici: string | null
+  /** Ayarlı yazıcı bu bilgisayarda bulundu mu */
+  yaziciVar: boolean
+  /** Yalnız Pusula: paylaşım adı */
+  paylasim?: string | null
+  /** Windows açılışında başlıyor mu */
+  baslangic: boolean
 }
 
 export interface ConnectSayimDurum {

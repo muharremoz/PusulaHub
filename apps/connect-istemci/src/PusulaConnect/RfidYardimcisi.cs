@@ -82,6 +82,26 @@ namespace PusulaConnect
             return _kisa;
         }
 
+        private static string _nabizYazici, _nabizPaylasim;
+        private static DateTime _nabizYaziciZaman;
+
+        /// <summary>Nabız için (Hub /connect): kurulu değilse null. Paylaşılan yazıcı adı WMI ister → 10 dk önbellekli.</summary>
+        public static object NabizOzeti()
+        {
+            if (!Kurulu) return null;
+            var (hedef, port) = AyarOku(AyarDosyasi);
+            var paylasim = PaylasimAdi(hedef);
+            if (paylasim != _nabizPaylasim || DateTime.Now - _nabizYaziciZaman > TimeSpan.FromMinutes(10))
+            {
+                _nabizYazici = PaylasimYazicisi(paylasim);
+                _nabizPaylasim = paylasim;
+                _nabizYaziciZaman = DateTime.Now;
+            }
+            var calisiyor = false;
+            foreach (var p in Process.GetProcessesByName(SurecAdi)) { calisiyor = true; p.Dispose(); }
+            return new { tur = "pusula", calisiyor, port = port ?? VarsayilanPort, yazici = _nabizYazici, paylasim, yaziciVar = _nabizYazici != null, baslangic = BaslangicKayitli() };
+        }
+
         // ------------------------------------------------------------ port
 
         public static async Task<object> PortDenetle(int port)

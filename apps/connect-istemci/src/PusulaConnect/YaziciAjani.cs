@@ -77,6 +77,16 @@ namespace PusulaConnect
             return _kisa;
         }
 
+        /// <summary>Nabız için (Hub /connect): kurulu değilse null. Süreç yolu okunmaz, ağ denemesi yapılmaz.</summary>
+        public static object NabizOzeti()
+        {
+            if (!Kurulu) return null;
+            var (yazici, port) = AyarOku(AyarDosyasi);
+            var calisiyor = false;
+            foreach (var p in Process.GetProcessesByName(SurecAdi)) { calisiyor = true; p.Dispose(); }
+            return new { tur = "pusulax", calisiyor, port = port ?? VarsayilanPort, yazici, yaziciVar = YaziciBul(yazici) != null, baslangic = BaslangicKayitli() };
+        }
+
         public static string[] Yazicilar()
         {
             try { return PrinterSettings.InstalledPrinters.Cast<string>().OrderBy(p => p, StringComparer.CurrentCultureIgnoreCase).ToArray(); }

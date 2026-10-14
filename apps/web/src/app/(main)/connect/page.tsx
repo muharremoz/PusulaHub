@@ -26,7 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { toast } from "sonner"
 import {
   Activity, Ban, CheckCircle2, CircleMinus, Copy, FileText, Globe, History, ScanBarcode, Server, Trash2, KeyRound, Laptop, LockOpen, Megaphone, MonitorPlay, MoreVertical, PlugZap,
-  RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2,
+  RefreshCw, Settings, ShieldCheck, ShieldOff, TriangleAlert, Wifi, Download, Link2, Printer,
 } from "lucide-react"
 import { DuyurularSekmesi } from "@/components/connect/duyurular-sekmesi"
 import { AyarlarSekmesi } from "@/components/connect/ayarlar-sekmesi"
@@ -505,6 +505,36 @@ function SayimRozeti({ c }: { c: ConnectCihazSatir }) {
   const metin = d === "kurulu" ? turler.join(" + ") : `${SAYIM_ETIKET[d]}${turler.length ? ` · ${turler.join(" + ")}` : ""}`
   return <Ipucu icerik={sayimAciklama(c)}><span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)}>{metin || SAYIM_ETIKET[d]}</span></Ipucu>
 }
+/* ── Yazdırma yardımcısı (0.7.4+ nabızla gelir; tek biri kurulu olur) ── */
+const YAZDIRMA_AD = { pusulax: "Pusula X", pusula: "Pusula VB" } as const
+function YazdirmaRozeti({ c }: { c: ConnectCihazSatir }) {
+  const y = c.durum?.yazdirma
+  // undefined: istemci bu bilgiyi göndermiyor (eski sürüm); null: kurulu değil
+  if (y === undefined) return <span className="text-muted-foreground">—</span>
+  if (y === null) return <span className="text-muted-foreground">Kurulu değil</span>
+  const ad = YAZDIRMA_AD[y.tur] ?? y.tur
+  if (!canliMi(c)) return <Ipucu icerik={`Cihaz çevrimdışı · son bilinen: ${yazdirmaAciklama(c)}`}><span className="text-muted-foreground">{ad}</span></Ipucu>
+  const sorun = !y.calisiyor ? "Çalışmıyor" : !y.yaziciVar ? "Yazıcı yok" : null
+  const ton = sorun ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+  return (
+    <Ipucu icerik={yazdirmaAciklama(c)}>
+      <span className={cn("inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium whitespace-nowrap", ton)}>{sorun ? `${sorun} · ${ad}` : ad}</span>
+    </Ipucu>
+  )
+}
+function yazdirmaAciklama(c: ConnectCihazSatir): string | undefined {
+  const y = c.durum?.yazdirma
+  if (y === undefined) return "Uygulama sürümü bu bilgiyi göndermiyor (0.7.4+)"
+  if (y === null) return "Yazdırma yardımcısı kurulu değil"
+  return [
+    `${YAZDIRMA_AD[y.tur] ?? y.tur} yardımcısı · port ${y.port}`,
+    y.calisiyor ? "Çalışıyor" : "Çalışmıyor",
+    y.yazici ? `Yazıcı: ${y.yazici}${y.yaziciVar ? "" : " (bulunamadı)"}` : y.paylasim ? `Paylaşım ${y.paylasim}: yazıcı bulunamadı` : "Yazıcı seçilmemiş",
+    y.paylasim && y.yazici ? `Paylaşım: ${y.paylasim}` : null,
+    y.baslangic ? "Windows ile başlıyor" : "Windows ile başlamıyor",
+  ].filter(Boolean).join("\n")
+}
+
 function sayimAciklama(c: ConnectCihazSatir): string {
   const parca = [tekSayimAciklama("Pusula X", c.durum?.sayim), tekSayimAciklama("Pusula VB", c.durum?.sayimEski)].filter((x): x is string => !!x)
   return parca.length ? parca.join("\n") : "Sayım kurulu değil"
@@ -1171,6 +1201,7 @@ function CihazDetay({
                 <Bilgi ad="Windows" ikon={<Laptop />} title={c.durum?.os ?? undefined}>{kisaWindows(c.durum?.os)}</Bilgi>
                 <Bilgi ad="FortiClient" ikon={<ShieldCheck />}>{c.durum?.forti ?? "—"}</Bilgi>
                 <Bilgi ad="Sayım" ikon={<ScanBarcode />} title={c.durum?.sayim || c.durum?.sayimEski ? sayimAciklama(c) : undefined}><SayimRozeti c={c} /></Bilgi>
+                <Bilgi ad="Yazdırma yardımcısı" ikon={<Printer />} title={yazdirmaAciklama(c)}><YazdirmaRozeti c={c} /></Bilgi>
                 <Bilgi ad="İlk kayıt" ikon={<History />}>{tarihMetni(c.ilkGiris)}</Bilgi>
                 <Bilgi ad="Son görülme" ikon={<RefreshCw />} title={c.sonNabiz ? tarihMetni(c.sonNabiz) : undefined}>
                   {c.sonNabiz ? onceMetni(c.sonNabiz) : c.sonGorulme ? onceMetni(c.sonGorulme) : "—"}

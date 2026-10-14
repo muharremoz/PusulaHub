@@ -1047,6 +1047,9 @@ namespace PusulaConnect
                 // VPN tüneli açık mı (FortiClient SSL VPN bağdaştırıcısı) — "çevrimiçi ama sunucuya erişemiyor" ayrımı için.
                 // Kilit dışında: bağdaştırıcı listesi birkaç ms sürebilir.
                 var vpn = new { bagli = Fortinet.SslVpnBagli(), ip = YaziciAjani.VpnIp() };
+                // Yazdırma yardımcısı (tek biri kurulu olur): Pusula X ajanı ya da eski programların RFID yardımcısı
+                object yazdirma = null;
+                try { yazdirma = YaziciAjani.NabizOzeti() ?? RfidYardimcisi.NabizOzeti(); } catch { }
                 object durum;
                 lock (_kilit)
                 {
@@ -1064,6 +1067,7 @@ namespace PusulaConnect
                         ayarlar = Ayarlar.Simdiki.Gorunum(),
                         sayim = Sayim.PusulaX.NabizOzeti(),
                         sayimEski = Sayim.Eski.NabizOzeti(),
+                        yazdirma,
                     };
                 }
                 var yanit = await _servis.Nabiz(durum);
