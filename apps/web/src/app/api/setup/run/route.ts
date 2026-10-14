@@ -919,7 +919,7 @@ export async function POST(req: NextRequest) {
         // ── 6) IIS siteleri → IIS agent ─────────────────────────────
         // Users.xml patch'i SQL restore'dan sonra çalışır — bu yüzden
         // burada her başarılı IIS hizmetinin destPath'ini topluyoruz.
-        const installedIisServices: Array<{ id: number; name: string; destPath: string }> = []
+        const installedIisServices: Array<{ id: number; name: string; destPath: string; keepUsers: boolean }> = []
 
         if (iisServices.length > 0 && iisAgent) {
           // 6a) Firma root klasörü — C:\Pusula\Service\<firmaKod>
@@ -1050,7 +1050,7 @@ export async function POST(req: NextRequest) {
             ))) { controller.close(); return }
 
             // Users.xml patch'i için listeye ekle — SQL restore sonrası işlenecek
-            installedIisServices.push({ id: s.id, name: s.name, destPath })
+            installedIisServices.push({ id: s.id, name: s.name, destPath, keepUsers: cfg.usersXmlKeepUsers === true })
 
             servicesInstalled++
           }
@@ -1489,6 +1489,7 @@ export async function POST(req: NextRequest) {
                           configPath: `${svc.destPath}\\Config\\Users.xml`,
                           users:      xmlUsers,
                           dbNames:    restoredDbNames,
+                          keepUsers:  svc.keepUsers,
                         }),
                       )
                     }

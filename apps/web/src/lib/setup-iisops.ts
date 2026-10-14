@@ -132,8 +132,27 @@ export function buildPatchUsersXml(opts: {
   configPath: string
   users:      Array<{ username: string; password: string }>
   dbNames:    string[]
+  /** true → <User> satırları korunur, yalnız her birinin ve <DB>'nin DB listesi yazılır (Kivi) */
+  keepUsers?: boolean
 }): string {
   const f = psQuote(opts.configPath)
+  if (opts.keepUsers && opts.dbNames.length > 0) {
+    const dbs = opts.dbNames.map((d) => `'${psQuote(d)}'`).join(", ")
+    return [
+      `$f='${f}'`,
+      `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIP_NO_FILE'; return}`,
+      `$dbs = @(${dbs})`,
+      `[xml]$doc = Get-Content -LiteralPath $f -Raw -Encoding UTF8`,
+      `$root = $doc.SelectSingleNode('/Users')`,
+      `if($null -eq $root){ throw 'Users.xml: Users kok dugumu yok' }`,
+      // Her <User>'ın <Data> sarmalı ve <DB> listesi yeniden kurulur; kullanıcı adı/şifre aynen kalır
+      `$kaplar = @($root.SelectNodes('User/Data')) + @($root.SelectNodes('DB'))`,
+      `foreach($k in $kaplar){ foreach($n in @($k.ChildNodes)){ [void]$k.RemoveChild($n) }; foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$k.AppendChild($di) } }`,
+      `if($null -eq $root.SelectSingleNode('DB')){ $dbEl = $doc.CreateElement('DB'); foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$dbEl.AppendChild($di) }; [void]$root.AppendChild($dbEl) }`,
+      `$doc.Save($f)`,
+      `Write-Output ('UPDATED (kullanicilar korundu) users=' + @($root.SelectNodes('User')).Count + ' dbs=' + $dbs.Count)`,
+    ].join("; ")
+  }
   if (opts.users.length === 0 || opts.dbNames.length === 0) {
     return [
       `$f='${f}'`,

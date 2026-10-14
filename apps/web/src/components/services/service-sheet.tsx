@@ -86,6 +86,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
   const [iConfigFileName,   setIConfigFileName]   = useState("")
   const [iSiteNamePattern,  setISiteNamePattern]  = useState("")
   const [iPortRangeId,      setIPortRangeId]      = useState<string>("")
+  const [iUsersXmlKeepUsers, setIUsersXmlKeepUsers] = useState(false)
 
   /* ── iis-resim config (port aralığı iPortRangeId ile ortak) ── */
   const [rSubFolder,        setRSubFolder]        = useState("")
@@ -125,6 +126,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
         setIConfigFileName(editing.config.configFileName ?? "")
         setISiteNamePattern(editing.config.siteNamePattern ?? "")
         setIPortRangeId(String(editing.config.portRangeId ?? ""))
+        setIUsersXmlKeepUsers("usersXmlKeepUsers" in editing.config && editing.config.usersXmlKeepUsers === true)
       } else if (editing.type === "iis-resim" && editing.config && "subFolder" in editing.config) {
         setIPortRangeId(String(editing.config.portRangeId ?? ""))
         setRSubFolder(editing.config.subFolder ?? "")
@@ -244,6 +246,7 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
           configFileName:   iConfigFileName.trim() || null,
           siteNamePattern:  iSiteNamePattern.trim() || null,
           portRangeId:      Number(iPortRangeId),
+          usersXmlKeepUsers: iUsersXmlKeepUsers,
         }
 
       const payload = {
@@ -513,6 +516,16 @@ export function ServiceSheet({ open, onOpenChange, editing = null, onSaved }: Se
                       className="rounded-[5px] text-[13px] h-8 font-mono"
                     />
                   </Field>
+
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-medium">Users.xml kullanıcılarını koru</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        Açıksa sihirbaz Users.xml&apos;e firma kullanıcılarını yazmaz, yalnız DB adlarını günceller (ör. Kivi).
+                      </p>
+                    </div>
+                    <Switch checked={iUsersXmlKeepUsers} onCheckedChange={setIUsersXmlKeepUsers} />
+                  </div>
                 </Section>
 
                 <Section title="Port Havuzu">

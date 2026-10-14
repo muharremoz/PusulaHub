@@ -34,6 +34,12 @@ export interface IisSiteConfig {
   configFileName:   string | null   // Hedefte güncellenecek dosya (örn appsettings.json)
   siteNamePattern:  string | null   // IIS site adı pattern (örn RFID_{firmaKod}); null → pattern yok
   portRangeId:      number          // WizardPortRanges.Id
+  /**
+   * true → sihirbaz Users.xml'deki <User> satırlarına dokunmaz, yalnız DB
+   * adlarını firmanınkilerle değiştirir. Kivi'de kullanıcı (KIVI) firma
+   * kullanıcısı değil entegrasyonun kendi girişi (14.10.2026).
+   */
+  usersXmlKeepUsers?: boolean
   // Hedef yol sabittir: C:\Pusula\Service\<name>_<firmaKod>
 }
 
@@ -151,6 +157,7 @@ export function validateConfig(type: ServiceType, raw: unknown, mevcut?: Service
         configFileName: typeof c.configFileName === "string" && c.configFileName.trim() ? c.configFileName.trim() : null,
         siteNamePattern: siteNamePattern || null,
         portRangeId,
+        ...(c.usersXmlKeepUsers === true ? { usersXmlKeepUsers: true } : {}),
       },
     }
   }
