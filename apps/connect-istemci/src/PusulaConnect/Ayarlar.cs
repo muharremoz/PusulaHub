@@ -39,6 +39,17 @@ namespace PusulaConnect
         /// <summary>Uygulama şifresi açıkken: her "Pusula'ya bağlan"da şifre sorulsun. İkisinden biri hep açık kalır.</summary>
         public bool SifreBaglanti { get; set; } = true;
 
+        /// <summary>
+        /// Uygulamayı gizle (0.7.3): kısayol/tepsi simgesi yok, Windows ile pencere göstermeden başlar,
+        /// pencere <see cref="GizliTus"/> ile açılır. Bkz. <see cref="GizliMod"/>.
+        /// </summary>
+        public bool Gizli { get; set; }
+        public string GizliTus { get; set; } = GizliMod.VarsayilanTus;
+
+        /// <summary>Gizli mod açılınca/kapanınca Program'ın görünürlüğü uygulaması (tepsi, kısayollar).</summary>
+        [JsonIgnore]
+        public static Action<bool> GizliDegisti;
+
         [JsonIgnore]
         public bool WindowsIleBaslat => BaslangicKaydi() != null;
 
@@ -66,10 +77,25 @@ namespace PusulaConnect
         public static void Degistir(JObject d)
         {
             if (d == null) return;
+            bool? B(string ad) => d[ad]?.Type == JTokenType.Boolean ? d.Value<bool>(ad) : (bool?)null;
+            // Gizli mod tuşu kilidin DIŞINDA kaydedilir: TusAyarla UI iş parçacığına geçer, UI da Simdiki'yi okuyabilir.
+            var gizli = B("gizli");
+            var tus = d["gizliTus"]?.Type == JTokenType.String ? d.Value<string>("gizliTus").Trim() : null;
+            var w = B("windowsIleBaslat");
+            var yeniGizli = gizli ?? Simdiki.Gizli;
+            var yeniTus = string.IsNullOrEmpty(tus) ? Simdiki.GizliTus ?? GizliMod.VarsayilanTus : tus;
+            if (yeniGizli && w == false)
+                throw new KullaniciHatasi("Uygulama gizliyken Windows açılışında başlatma kapatılamaz: kısayol tuşu yalnız uygulama çalışırken dinlenir.");
+            if (gizli.HasValue || tus != null)
+            {
+                if (!GizliMod.Coz(yeniTus, out _, out _, out var tusHata)) throw new KullaniciHatasi(tusHata);
+                // Tuş kaydedilemiyorsa gizli mod açılmaz: kullanıcı uygulamaya geri dönemezdi
+                if (yeniGizli) { var h = GizliMod.TusAyarla(yeniTus); if (h != null) throw new KullaniciHatasi(h); }
+                else GizliMod.TusAyarla(null);
+            }
             lock (Kilit)
             {
                 var a = Simdiki;
-                bool? B(string ad) => d[ad]?.Type == JTokenType.Boolean ? d.Value<bool>(ad) : (bool?)null;
                 a.TamEkran = B("tamEkran") ?? a.TamEkran;
                 a.Yazici = B("yazici") ?? a.Yazici;
                 a.Pano = B("pano") ?? a.Pano;
@@ -89,11 +115,15 @@ namespace PusulaConnect
                 if (!sAcilis && !sBaglanti) throw new KullaniciHatasi("Uygulama şifresi en az birinde sorulmalı: uygulama açılışı ya da Pusula bağlantısı.");
                 a.SifreAcilis = sAcilis;
                 a.SifreBaglanti = sBaglanti;
-                var w = B("windowsIleBaslat");
-                if (w.HasValue) BaslangicAyarla(w.Value);
+                if (yeniGizli && (gizli == true || w == true)) BaslangicAyarla(true, true);
+                else if (gizli == false) { if (BaslangicKaydi() != null) BaslangicAyarla(true, false); }
+                else if (w.HasValue) BaslangicAyarla(w.Value, yeniGizli);
+                a.Gizli = yeniGizli;
+                a.GizliTus = yeniTus;
                 File.WriteAllText(Dosya, JsonConvert.SerializeObject(a, Formatting.Indented));
             }
             Gunluk.Yaz("Ayarlar değişti: " + d.ToString(Formatting.None));
+            if (d["gizli"] != null) GizliDegisti?.Invoke(Simdiki.Gizli);
         }
 
         public object Gorunum() => new
@@ -111,6 +141,8 @@ namespace PusulaConnect
             sifreAcilis = SifreAcilis,
             sifreBaglanti = SifreBaglanti,
             windowsIleBaslat = WindowsIleBaslat,
+            gizli = Gizli,
+            gizliTus = GizliTus ?? GizliMod.VarsayilanTus,
         };
 
         private static string BaslangicKaydi()
@@ -119,11 +151,12 @@ namespace PusulaConnect
             catch { return null; }
         }
 
-        private static void BaslangicAyarla(bool ac)
+        /// <summary>Gizliyken Windows açılışı --arkaplan ile: pencere gösterilmez, yalnız kısayol tuşu dinlenir.</summary>
+        private static void BaslangicAyarla(bool ac, bool arkaplan = false)
         {
             using (var k = Registry.CurrentUser.CreateSubKey(RunAnahtari))
             {
-                if (ac) k.SetValue(RunAdi, "\"" + Application.ExecutablePath + "\"");
+                if (ac) k.SetValue(RunAdi, "\"" + Application.ExecutablePath + "\"" + (arkaplan ? " --arkaplan" : ""));
                 else if (k.GetValue(RunAdi) != null) k.DeleteValue(RunAdi);
             }
         }

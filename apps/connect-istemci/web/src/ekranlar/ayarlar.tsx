@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  Cable, CheckCircle2, Clipboard, Download, FileText, HardDrive, KeyRound, Loader2, LockKeyhole, LogOut, Maximize2, Monitor, Power, Printer,
+  Cable, CheckCircle2, Clipboard, Download, EyeOff, FileText, HardDrive, Keyboard, KeyRound, Loader2, LockKeyhole, LogOut, Maximize2, Monitor, Power, Printer,
   RefreshCw, ScanBarcode, ShieldCheck, Usb, Video, Volume2,
 } from "lucide-react";
 import { api, type Durum } from "@/api";
@@ -13,10 +13,11 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { YazdirmaBolumu } from "./yazdirma";
 import { SayimBolumu } from "./sayim";
+import { cikisYap } from "./ortak";
 
 type AyarAdi =
   | "tamEkran" | "yazici" | "pano" | "ses" | "windowsIleBaslat"
-  | "portlar" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti" | "sifreAcilis" | "sifreBaglanti";
+  | "portlar" | "kamera" | "aygitlar" | "suruculer" | "ikiAcilis" | "ikiBaglanti" | "sifreAcilis" | "sifreBaglanti" | "gizli";
 
 type Sekme = "baglanti" | "yazdirma" | "sayim" | "guvenlik" | "uygulama";
 const SEKME_DEPO = "connect-ayar-sekme";
@@ -43,7 +44,7 @@ export function AyarlarIcerik({
   const ay = durum.ayarlar;
   const [bekle, setBekle] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
-  const [onay, setOnay] = useState<null | "sifre" | "cihaz">(null);
+  const [onay, setOnay] = useState<null | "sifre" | "cihaz" | "gizli">(null);
   const [denetlendi, setDenetlendi] = useState(false);
   const [sekme, setSekme] = useState<Sekme>(() => {
     try {
@@ -110,6 +111,10 @@ export function AyarlarIcerik({
   );
   const ikiAnahtar = (ad: "ikiAcilis" | "ikiBaglanti") => ciftAnahtar(ad, ad === "ikiAcilis" ? "ikiBaglanti" : "ikiAcilis");
   const sifreAnahtar = (ad: "sifreAcilis" | "sifreBaglanti") => ciftAnahtar(ad, ad === "sifreAcilis" ? "sifreBaglanti" : "sifreAcilis");
+
+  // Uygulamayı gizle (0.7.3)
+  const gizli = yerel.gizli ?? !!ay?.gizli;
+  const gizliTus = ay?.gizliTus ?? "Ctrl+Alt+P";
 
   const anahtar = (ad: AyarAdi) => (
     <Switch checked={yerel[ad] ?? !!ay?.[ad]} disabled={!ay} onCheckedChange={(v) => void degistir(ad, v)} />
@@ -232,6 +237,24 @@ export function AyarlarIcerik({
               </>
             )}
           </Bolum>
+          <Bolum baslik="Gizlilik">
+            <Satir
+              ikon={<EyeOff />}
+              ad="Uygulamayı gizle"
+              aciklama={
+                gizli
+                  ? `Masaüstü kısayolu ve saat yanındaki simge yok; uygulama ${tusYazi(gizliTus)} ile açılır.`
+                  : "Masaüstü kısayolu ve saat yanındaki simge kaldırılır; uygulama yalnız kısayol tuşuyla açılır."
+              }
+              kontrol={<Switch checked={gizli} disabled={!ay} onCheckedChange={(v) => (v ? setOnay("gizli") : void degistir("gizli", false))} />}
+            />
+            <Satir
+              ikon={<Keyboard />}
+              ad="Açma kısayolu"
+              aciklama="İki değiştirici (ör. Ctrl+Alt) ya da Win ile birlikte bir harf, rakam veya F tuşu."
+              kontrol={<TusSecici deger={gizliTus} disabled={!ay || bekle === "tus"} onSec={(t) => void cagir("/ayarlar", { gizliTus: t }, "tus")} />}
+            />
+          </Bolum>
           <Bolum baslik="Bu cihaz">
             <Satir
               ikon={<KeyRound />}
@@ -258,7 +281,26 @@ export function AyarlarIcerik({
 
         <TabsContent value="uygulama" className={SEKME_ICERIK}>
           <Bolum baslik="Başlangıç">
-            <Satir ikon={<Power />} ad="Windows açılınca başlat" aciklama="Bilgisayar açılınca Pusula Connect de açılır." kontrol={anahtar("windowsIleBaslat")} />
+            <Satir
+              ikon={<Power />}
+              ad="Windows açılınca başlat"
+              aciklama={gizli ? "Uygulama gizliyken hep açık: kısayol tuşu yalnız uygulama çalışırken dinlenir." : "Bilgisayar açılınca Pusula Connect de açılır."}
+              kontrol={
+                <Switch
+                  checked={gizli || (yerel.windowsIleBaslat ?? !!ay?.windowsIleBaslat)}
+                  disabled={!ay || gizli}
+                  onCheckedChange={(v) => void degistir("windowsIleBaslat", v)}
+                />
+              }
+            />
+            {gizli && (
+              <Satir
+                ikon={<LogOut />}
+                ad="Uygulamadan çık"
+                aciklama={`Gizliyken pencereyi kapatmak uygulamayı yalnız gizler. Tamamen çıkarsanız ${tusYazi(gizliTus)} bir sonraki Windows açılışına kadar çalışmaz.`}
+                kontrol={<Button size="sm" variant="outline" onClick={() => void cikisYap()}>Çık</Button>}
+              />
+            )}
           </Bolum>
           <Bolum baslik="Hakkında">
             <Satir
@@ -305,21 +347,29 @@ export function AyarlarIcerik({
       <AlertDialog open={onay !== null} onOpenChange={(o) => !o && setOnay(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{onay === "cihaz" ? "Bu cihazın kaydı kaldırılsın mı?" : "Kayıtlı şifre silinsin mi?"}</AlertDialogTitle>
+            <AlertDialogTitle>
+              {onay === "gizli" ? "Uygulama gizlensin mi?" : onay === "cihaz" ? "Bu cihazın kaydı kaldırılsın mı?" : "Kayıtlı şifre silinsin mi?"}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              {onay === "cihaz"
+              {onay === "gizli"
+                ? `Masaüstü ve Başlat menüsündeki kısayol ile saat yanındaki simge kaldırılır. Pusula Connect Windows açılışında arka planda başlar, pencereyi kapatınca gizlenir. Açmak için ${tusYazi(gizliTus)} tuşlarına basın — bu kısayolu not edin.`
+                : onay === "cihaz"
                 ? "Pusula Connect bu bilgisayarda yeniden kurulum kodu ister. Kayıtlı şifre de silinir. Yeni kodu Pusula'dan alabilirsiniz."
                 : "Bir sonraki bağlanışta oturum şifrenizi yeniden girmeniz gerekir."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-white hover:bg-destructive/90"
-              onClick={() => void (onay === "cihaz" ? cagir("/kayit/sil") : cagir("/rdp/sifre/sil"))}
-            >
-              {onay === "cihaz" ? "Kaydı kaldır" : "Şifreyi sil"}
-            </AlertDialogAction>
+            {onay === "gizli" ? (
+              <AlertDialogAction onClick={() => void degistir("gizli", true)}>Gizle</AlertDialogAction>
+            ) : (
+              <AlertDialogAction
+                className="bg-destructive text-white hover:bg-destructive/90"
+                onClick={() => void (onay === "cihaz" ? cagir("/kayit/sil") : cagir("/rdp/sifre/sil"))}
+              >
+                {onay === "cihaz" ? "Kaydı kaldır" : "Şifreyi sil"}
+              </AlertDialogAction>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -392,6 +442,59 @@ function Satir({ ikon, ad, aciklama, kontrol }: { ikon: React.ReactNode; ad: str
         <div className="text-xs text-muted-foreground">{aciklama}</div>
       </div>
       <div className="shrink-0">{kontrol}</div>
+    </div>
+  );
+}
+
+/** "Ctrl+Alt+P" → "Ctrl + Alt + P" */
+const tusYazi = (t: string) => t.split("+").join(" + ");
+
+/**
+ * Kısayol seçici: "Değiştir"e basılınca bir sonraki tuş kombinasyonu okunur (Esc vazgeçer). Değiştirici tuşların
+ * kendisi beklenir; son tuş harf, rakam ya da F1–F24 olmalı (uygulama tarafı da aynı kuralı denetler).
+ */
+function TusSecici({ deger, disabled, onSec }: { deger: string; disabled?: boolean; onSec: (t: string) => void }) {
+  const [dinle, setDinle] = useState(false);
+  const [uyari, setUyari] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dinle) return;
+    const bas = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setDinle(false);
+        setUyari(null);
+        return;
+      }
+      if (["Control", "Alt", "Shift", "Meta", "AltGraph"].includes(e.key)) return;
+      const m = /^Key([A-Z])$/.exec(e.code) ?? /^Digit([0-9])$/.exec(e.code) ?? /^(F[0-9]{1,2})$/.exec(e.code);
+      if (!m) return setUyari("Harf, rakam ya da F tuşu seçin.");
+      if (!e.metaKey && [e.ctrlKey, e.altKey, e.shiftKey].filter(Boolean).length < 2) return setUyari("İki değiştiriciyle (ör. Ctrl+Alt) ya da Win ile basın.");
+      const t = [e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Win", m[1]].filter(Boolean).join("+");
+      setDinle(false);
+      setUyari(null);
+      onSec(t);
+    };
+    window.addEventListener("keydown", bas, true);
+    return () => window.removeEventListener("keydown", bas, true);
+  }, [dinle, onSec]);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <div className="flex items-center gap-2">
+        <kbd className="rounded-md border bg-muted px-2 py-1 text-xs font-medium">{dinle ? "Tuşlara basın…" : tusYazi(deger)}</kbd>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={disabled}
+          onClick={() => {
+            setUyari(null);
+            setDinle((d) => !d);
+          }}
+        >
+          {dinle ? "Vazgeç" : "Değiştir"}
+        </Button>
+      </div>
+      {uyari && <span className="text-xs text-red-600 dark:text-red-400">{uyari}</span>}
     </div>
   );
 }

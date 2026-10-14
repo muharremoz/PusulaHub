@@ -190,6 +190,8 @@ export type Durum = {
     ikiAcilis?: boolean; ikiBaglanti?: boolean;
     /** Uygulama şifresi: açılışta / Pusula bağlantısında sorulsun (en az biri açık). */
     sifreAcilis?: boolean; sifreBaglanti?: boolean;
+    /** Uygulamayı gizle (0.7.3): kısayol/tepsi simgesi yok, gizliTus ile açılır. */
+    gizli?: boolean; gizliTus?: string;
   };
   /** Pusula X yazdırma yardımcısı (PusulaXPrintAgent) — sol panel. */
   yazdirma?: { kurulu: boolean; calisiyor: boolean; port: number | null; vpnIp: string | null };

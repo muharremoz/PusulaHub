@@ -27,6 +27,10 @@ namespace PusulaConnect
         private static Uygulama _uygulama;
         private static NotifyIcon _tepsi;
         private static int _kapaniyor;
+        /// <summary>Gizli mod bu açılışta etkin mi (ayar açık VE kısayol tuşu kaydedildi).</summary>
+        private static volatile bool _gizli;
+        /// <summary>Pencere ✕: gizli modda kapatmak yerine gizler.</summary>
+        internal static bool GizliEtkin => _gizli;
         private static ConnectPenceresi _pencere;
         private const string GosterOlayi = @"Local\PusulaConnect2-goster";
         private const string Baslik = "Pusula Connect";
@@ -59,7 +63,18 @@ namespace PusulaConnect
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 Gunluk.Yaz("Açıldı: sürüm " + ServisIstemci.Surum + ", " + Application.ExecutablePath);
-                Yerlesim.Yerles();
+                // Gizli mod: kısayol tuşu UI iş parçacığına bağlı görünmez pencerede dinlenir. Tuş kaydedilemezse
+                // (başka program almış) gizlenmez — tepsi ve pencere görünür, kullanıcı uygulamaya ulaşabilsin.
+                var ui = new Control();
+                ui.CreateControl();
+                GizliMod.Kur(ui);
+                if (Ayarlar.Simdiki.Gizli)
+                {
+                    var h = GizliMod.TusAyarla(Ayarlar.Simdiki.GizliTus ?? GizliMod.VarsayilanTus);
+                    _gizli = h == null;
+                    if (h != null) Gunluk.Yaz("Gizli mod bu açılışta uygulanmadı: " + h);
+                }
+                Yerlesim.Yerles(_gizli);
                 // Güncellemeden sonra ilk açılış: kısayollardaki eski ikon önbelleğini tazele
                 if (args.Contains("--guncellendi")) _ = Task.Run(Yerlesim.IkonlariTazele);
                 _ = Task.Run(YaziciAjani.GerekirseBaslat);
@@ -100,8 +115,23 @@ namespace PusulaConnect
                 if (ConnectPenceresi.CalismaZamaniVar() || WebViewYoksaKur())
                 {
                     _pencere = new ConnectPenceresi(tamAdres, Kapat);
-                    _pencere.Show();
+                    // Gizliyken Windows açılışında pencere gösterilmez (yalnız tutamaç: BeginInvoke çalışsın);
+                    // ilk kısayol tuşunda gösterilir, WebView o an yüklenir.
+                    if (_gizli && args.Contains("--arkaplan")) { var tutamac = _pencere.Handle; Gunluk.Yaz("Arka planda başladı (gizli mod)"); }
+                    else _pencere.Show();
                     var pencere = _pencere;
+                    GizliMod.Basildi = () => { if (!pencere.IsDisposed) pencere.OneGetir(); };
+                    Ayarlar.GizliDegisti = g =>
+                    {
+                        if (pencere.IsDisposed) return;
+                        pencere.BeginInvoke((Action)(() =>
+                        {
+                            _gizli = g;
+                            _tepsi.Visible = !g;
+                            Yerlesim.Kisayollar(!g);
+                            Gunluk.Yaz(g ? "Gizli mod açıldı" : "Gizli mod kapandı");
+                        }));
+                    };
                     _uygulama.OturumAc = (a, bitti) => pencere.OturumAc(a, bitti);
                     _uygulama.OturumAcikMi = () => !pencere.IsDisposed && pencere.OturumAcik;
                     _uygulama.OturumKes = () => pencere.OturumKes();
@@ -114,7 +144,8 @@ namespace PusulaConnect
                 kontrol.Tick += (s, e) =>
                 {
                     _ = Task.Run(_uygulama.Kontrol);
-                    if (_pencere == null || _pencere.IsDisposed || !_pencere.Visible)
+                    // Gizli modda pencere kapalıyken de çalışmaya devam eder (kısayol tuşu dinlenir)
+                    if (!_gizli && (_pencere == null || _pencere.IsDisposed || !_pencere.Visible))
                     {
                         var sinir = _sonNabiz == DateTime.MinValue ? _baslangic + TimeSpan.FromMinutes(5) : _sonNabiz + NabizSiniri;
                         if (DateTime.Now > sinir) Kapat();
@@ -222,7 +253,7 @@ namespace PusulaConnect
                 Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application,
                 Text = Baslik,
                 ContextMenuStrip = menu,
-                Visible = true,
+                Visible = !_gizli,
             };
             _tepsi.DoubleClick += (s, e) => Goster(adres);
         }

@@ -320,6 +320,13 @@ namespace PusulaConnect
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            // Gizli mod: ✕ uygulamayı kapatmaz, pencereyi gizler (oturum açıksa arkada sürer); kısayol tuşuyla geri gelir.
+            if (Program.GizliEtkin && !SormadanKapat && (e.CloseReason == CloseReason.UserClosing || e.CloseReason == CloseReason.None))
+            {
+                e.Cancel = true;
+                Hide();
+                return;
+            }
             if (_oturum != null && !SormadanKapat && e.CloseReason == CloseReason.UserClosing)
             {
                 // Oturum açıkken arayüz gizli; onay Windows kutusuyla sorulur.

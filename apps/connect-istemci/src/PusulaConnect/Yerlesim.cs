@@ -32,7 +32,21 @@ namespace PusulaConnect
             catch (Exception e) { Gunluk.Yaz("İkon önbelleği tazelenemedi: " + e.Message); }
         }
 
-        public static void Yerles()
+        private static string MasaustuKisayolu => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Pusula Connect.lnk");
+        private static string BaslatKisayolu => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Pusula Connect.lnk");
+
+        /// <summary>Masaüstü + Başlat menüsü kısayolu: oluştur/onar ya da (gizli mod) kaldır.</summary>
+        public static void Kisayollar(bool olsun)
+        {
+            foreach (var yol in new[] { MasaustuKisayolu, BaslatKisayolu })
+            {
+                if (olsun) { Kisayol(yol); continue; }
+                try { if (File.Exists(yol)) { File.Delete(yol); Gunluk.Yaz("Kısayol kaldırıldı (gizli mod): " + yol); } }
+                catch (Exception e) { Gunluk.Yaz("Kısayol kaldırılamadı (" + yol + "): " + e.Message); }
+            }
+        }
+
+        public static void Yerles(bool gizli = false)
         {
             try
             {
@@ -48,8 +62,7 @@ namespace PusulaConnect
                         Gunluk.Yaz("Kendini yerleştirdi: " + KuruluExe);
                     }
                 }
-                Kisayol(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Pusula Connect.lnk"));
-                Kisayol(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Pusula Connect.lnk"));
+                Kisayollar(!gizli);
                 foreach (var eski in Directory.GetFiles(KuruluKlasor, "*.eski*")) { try { File.Delete(eski); } catch { } }
             }
             catch (Exception e) { Gunluk.Yaz("Yerleşme hatası: " + e.Message); }
