@@ -753,32 +753,106 @@ fastify.get("/indir", async (req, reply) => {
   return reply.send(createReadStream(ISTEMCI_EXE))
 })
 
-/** Müşteriye veri teslimi (ayrılan firma) — süreli indirme bağlantısı.
+/** Müşteriye veri teslimi (ayrılan firma) — süreli indirme sayfası + dosya.
  *  Yayınlamak: TESLIM_DIZIN/<anahtar>/ altına dosyayı ve bilgi.json'u koy:
- *    { "dosya": "4308_..._teslim.zip", "sonTarih": "2026-10-21T23:59:59+03:00", "firma": "4308" }
- *  Anahtar 32 küçük hex (randomBytes(16)) — tahmin edilemez; süresi geçince 410 döner.
+ *    { "dosya": "4308_..._teslim.zip", "sonTarih": "2026-10-21T23:59:59+03:00", "firma": "4308",
+ *      "firmaAdi": "VAN SAFİR KUYUMCULUK", "icerik": ["Veritabanı yedekleri …", …] }
+ *  Anahtar 32 küçük hex (randomBytes(16)) — tahmin edilemez; süresi geçince 410.
+ *  Sayfa: /teslim/<anahtar>   Dosya: /teslim/<anahtar>/indir
  *  Bağlantı: https://aktarim.pusulanet.net/v2/teslim/<anahtar> */
 const TESLIM_DIZIN = process.env.TESLIM_DIZIN ?? join(__dirname, "teslim")
-fastify.get("/teslim/:anahtar", async (req, reply) => {
-  const anahtar = String(req.params.anahtar ?? "")
-  const yok = () => reply.code(404).type("text/plain; charset=utf-8").send("Bağlantı bulunamadı.")
-  if (!/^[a-f0-9]{32}$/.test(anahtar)) return yok()
+
+async function teslimBul(anahtar) {
+  if (!/^[a-f0-9]{32}$/.test(anahtar)) return { durum: "yok" }
   let bilgi
-  try { bilgi = JSON.parse(await readFile(join(TESLIM_DIZIN, anahtar, "bilgi.json"), "utf8")) } catch { return yok() }
-  if (!bilgi?.dosya || !(Date.now() <= Date.parse(bilgi.sonTarih))) {
-    return reply.code(410).type("text/plain; charset=utf-8").send("Bağlantının süresi doldu. Lütfen Pusula ile iletişime geçin.")
-  }
+  try { bilgi = JSON.parse(await readFile(join(TESLIM_DIZIN, anahtar, "bilgi.json"), "utf8")) } catch { return { durum: "yok" } }
+  if (!bilgi?.dosya) return { durum: "yok" }
+  if (!(Date.now() <= Date.parse(bilgi.sonTarih))) return { durum: "doldu", bilgi }
   const ad = basename(String(bilgi.dosya))
   const yol = join(TESLIM_DIZIN, anahtar, ad)
-  let st
-  try { st = await stat(yol) } catch { return yok() }
-  req.log.info({ teslim: anahtar.slice(0, 6), firma: bilgi.firma, ip: req.headers["x-real-ip"] ?? req.ip }, "teslim indirme")
+  try { return { durum: "hazir", bilgi, ad, yol, st: await stat(yol) } } catch { return { durum: "yok" } }
+}
+
+const html = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])
+const boyutYaz = (b) => b >= 1073741824 ? (b / 1073741824).toLocaleString("tr-TR", { maximumFractionDigits: 2 }) + " GB"
+  : (b / 1048576).toLocaleString("tr-TR", { maximumFractionDigits: 0 }) + " MB"
+const tarihYaz = (t) => new Date(t).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/Istanbul" })
+
+function teslimSayfa({ baslik, govde }) {
+  return `<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>${html(baslik)} · Pusula</title>
+<style>
+:root{--bg:#f7f7f8;--kart:#fff;--yazi:#171717;--soluk:#6b6b70;--cizgi:#e7e7ea;--btn:#171717;--btny:#fff;--yesil:#047857;--yesilz:rgba(16,185,129,.12);--golge:0 1px 2px rgba(0,0,0,.05),0 8px 24px -12px rgba(0,0,0,.12)}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1113;--kart:#17191c;--yazi:#f5f5f5;--soluk:#a1a1aa;--cizgi:#26282c;--btn:#f5f5f5;--btny:#111;--yesil:#34d399;--yesilz:rgba(52,211,153,.12);--golge:0 0 0 1px rgba(255,255,255,.04),0 8px 24px -12px rgba(0,0,0,.6)}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--yazi);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.kart{width:100%;max-width:520px;background:var(--kart);border:1px solid var(--cizgi);border-radius:12px;box-shadow:var(--golge);overflow:hidden}
+.ust{padding:28px 28px 20px;text-align:center}
+.marka{font-weight:700;letter-spacing:.14em;font-size:12px;color:var(--soluk)}
+.rozet{width:48px;height:48px;border-radius:50%;margin:18px auto 12px;display:flex;align-items:center;justify-content:center;background:var(--yesilz);color:var(--yesil)}
+h1{font-size:20px;margin:0 0 4px}.alt{color:var(--soluk);margin:0;font-size:14px}
+.bilgi{margin:0 28px;border:1px solid var(--cizgi);border-radius:8px}
+.satir{display:flex;justify-content:space-between;gap:12px;padding:10px 14px;border-top:1px solid var(--cizgi);font-size:14px}
+.satir:first-child{border-top:0}.satir span:first-child{color:var(--soluk)}.satir span:last-child{text-align:right;font-weight:500;word-break:break-all}
+ul{margin:14px 28px 0;padding:0;list-style:none}li{position:relative;padding:3px 0 3px 22px;font-size:14px}
+li:before{content:"";position:absolute;left:4px;top:11px;width:8px;height:8px;border-radius:50%;background:var(--yesil)}
+.dugme{display:block;margin:22px 28px 8px;padding:12px 16px;text-align:center;border-radius:8px;background:var(--btn);color:var(--btny);font-weight:600;text-decoration:none}
+.dugme:hover{opacity:.9}.kucuk{margin:0 28px;text-align:center;color:var(--soluk);font-size:12.5px}
+.tesekkur{margin-top:24px;padding:22px 28px 26px;border-top:1px solid var(--cizgi);background:linear-gradient(180deg,var(--yesilz),transparent 70%)}
+.tesekkur h2{font-size:15px;margin:0 0 6px}.tesekkur p{margin:0 0 8px;font-size:14px;color:var(--soluk)}.imza{color:var(--yazi)!important;font-weight:600;margin-top:12px!important}
+</style></head><body><main class="kart">${govde}</main></body></html>`
+}
+
+const ikonTamam = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
+
+fastify.get("/teslim/:anahtar", async (req, reply) => {
+  const t = await teslimBul(String(req.params.anahtar ?? ""))
+  reply.header("Cache-Control", "no-store").header("X-Robots-Tag", "noindex").type("text/html; charset=utf-8")
+  if (t.durum === "yok") {
+    return reply.code(404).send(teslimSayfa({ baslik: "Bağlantı bulunamadı",
+      govde: `<div class="ust"><div class="marka">PUSULA</div><h1 style="margin-top:18px">Bağlantı bulunamadı</h1><p class="alt">Bağlantıyı eksiksiz kopyaladığınızdan emin olun ya da Pusula ile iletişime geçin.</p></div>` }))
+  }
+  if (t.durum === "doldu") {
+    return reply.code(410).send(teslimSayfa({ baslik: "Bağlantının süresi doldu",
+      govde: `<div class="ust"><div class="marka">PUSULA</div><h1 style="margin-top:18px">Bağlantının süresi doldu</h1><p class="alt">Bu bağlantı ${html(tarihYaz(t.bilgi.sonTarih))} tarihine kadar geçerliydi. Verilerinize yeniden ihtiyacınız olursa Pusula ile iletişime geçin.</p></div>` }))
+  }
+  const { bilgi, ad, st } = t
+  const icerik = Array.isArray(bilgi.icerik) && bilgi.icerik.length ? bilgi.icerik : ["Veritabanı yedekleri", "Ürün resimleri", "Kurulum notları (BENIOKU.txt)"]
+  return reply.send(teslimSayfa({ baslik: "Verileriniz hazır", govde: `
+    <div class="ust">
+      <div class="marka">PUSULA</div>
+      <div class="rozet">${ikonTamam}</div>
+      <h1>Verileriniz hazır</h1>
+      <p class="alt">${html(bilgi.firmaAdi ?? "")}${bilgi.firma ? ` · ${html(bilgi.firma)}` : ""}</p>
+    </div>
+    <div class="bilgi">
+      <div class="satir"><span>Dosya</span><span>${html(ad)}</span></div>
+      <div class="satir"><span>Boyut</span><span>${html(boyutYaz(st.size))}</span></div>
+      <div class="satir"><span>Son indirme tarihi</span><span>${html(tarihYaz(bilgi.sonTarih))}</span></div>
+    </div>
+    <ul>${icerik.map((x) => `<li>${html(x)}</li>`).join("")}</ul>
+    <a class="dugme" href="${html(String(req.params.anahtar))}/indir" download>İndir · ${html(boyutYaz(st.size))}</a>
+    <p class="kucuk">Dosya büyük olduğu için indirme bağlantı hızınıza göre birkaç dakika sürebilir.</p>
+    <section class="tesekkur">
+      <h2>Teşekkür ederiz</h2>
+      <p>Bugüne kadar Pusula'yı tercih ettiğiniz ve bize güvendiğiniz için içtenlikle teşekkür ederiz. Sizinle birlikte çalışmak bizim için her zaman değerliydi.</p>
+      <p>Yeni döneminizde başarılar diler, ihtiyaç duyduğunuzda kapımızın her zaman açık olduğunu hatırlatırız.</p>
+      <p class="imza">Pusula ekibi</p>
+    </section>` }))
+})
+
+fastify.get("/teslim/:anahtar/indir", async (req, reply) => {
+  const anahtar = String(req.params.anahtar ?? "")
+  const t = await teslimBul(anahtar)
+  if (t.durum !== "hazir") return reply.redirect(`../${anahtar}`)
+  req.log.info({ teslim: anahtar.slice(0, 6), firma: t.bilgi.firma, ip: req.headers["x-real-ip"] ?? req.ip }, "teslim indirme")
   reply.header("Content-Type", "application/zip")
-  reply.header("Content-Length", st.size)
-  reply.header("Content-Disposition", `attachment; filename="${ad.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(ad)}`)
+  reply.header("Content-Length", t.st.size)
+  reply.header("Content-Disposition", `attachment; filename="${t.ad.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(t.ad)}`)
   reply.header("Cache-Control", "no-store")
   reply.header("X-Robots-Tag", "noindex")
-  return reply.send(createReadStream(yol))
+  return reply.send(createReadStream(t.yol))
 })
 
 fastify.get("/saglik", async () => ({ tamam: true, surum: "aktarim2", minIstemci: MIN_SURUM }))
