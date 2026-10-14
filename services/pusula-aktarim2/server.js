@@ -32,7 +32,7 @@
 import Fastify from "fastify"
 import Database from "better-sqlite3"
 import { fileURLToPath } from "url"
-import { dirname, join, normalize } from "path"
+import { basename, dirname, join, normalize } from "path"
 import { mkdir, open, rm, stat, readdir, readFile, writeFile, rename } from "fs/promises"
 import { createReadStream } from "fs"
 import { randomBytes, createHash, timingSafeEqual } from "crypto"
@@ -751,6 +751,34 @@ fastify.get("/indir", async (req, reply) => {
   reply.header("Content-Disposition", "attachment; filename=\"PusulaAktarim.exe\"; filename*=UTF-8''" + encodeURIComponent("Pusula Aktarım.exe"))
   reply.header("Cache-Control", "no-store")
   return reply.send(createReadStream(ISTEMCI_EXE))
+})
+
+/** Müşteriye veri teslimi (ayrılan firma) — süreli indirme bağlantısı.
+ *  Yayınlamak: TESLIM_DIZIN/<anahtar>/ altına dosyayı ve bilgi.json'u koy:
+ *    { "dosya": "4308_..._teslim.zip", "sonTarih": "2026-10-21T23:59:59+03:00", "firma": "4308" }
+ *  Anahtar 32 küçük hex (randomBytes(16)) — tahmin edilemez; süresi geçince 410 döner.
+ *  Bağlantı: https://aktarim.pusulanet.net/v2/teslim/<anahtar> */
+const TESLIM_DIZIN = process.env.TESLIM_DIZIN ?? join(__dirname, "teslim")
+fastify.get("/teslim/:anahtar", async (req, reply) => {
+  const anahtar = String(req.params.anahtar ?? "")
+  const yok = () => reply.code(404).type("text/plain; charset=utf-8").send("Bağlantı bulunamadı.")
+  if (!/^[a-f0-9]{32}$/.test(anahtar)) return yok()
+  let bilgi
+  try { bilgi = JSON.parse(await readFile(join(TESLIM_DIZIN, anahtar, "bilgi.json"), "utf8")) } catch { return yok() }
+  if (!bilgi?.dosya || !(Date.now() <= Date.parse(bilgi.sonTarih))) {
+    return reply.code(410).type("text/plain; charset=utf-8").send("Bağlantının süresi doldu. Lütfen Pusula ile iletişime geçin.")
+  }
+  const ad = basename(String(bilgi.dosya))
+  const yol = join(TESLIM_DIZIN, anahtar, ad)
+  let st
+  try { st = await stat(yol) } catch { return yok() }
+  req.log.info({ teslim: anahtar.slice(0, 6), firma: bilgi.firma, ip: req.headers["x-real-ip"] ?? req.ip }, "teslim indirme")
+  reply.header("Content-Type", "application/zip")
+  reply.header("Content-Length", st.size)
+  reply.header("Content-Disposition", `attachment; filename="${ad.replace(/[^\x20-\x7e]|"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(ad)}`)
+  reply.header("Cache-Control", "no-store")
+  reply.header("X-Robots-Tag", "noindex")
+  return reply.send(createReadStream(yol))
 })
 
 fastify.get("/saglik", async () => ({ tamam: true, surum: "aktarim2", minIstemci: MIN_SURUM }))
