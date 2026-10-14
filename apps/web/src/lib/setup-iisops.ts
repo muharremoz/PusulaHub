@@ -201,6 +201,116 @@ export function buildPatchUsersXml(opts: {
   ].join("; ")
 }
 
+/* ── Hizmet ekleme — SQL ayarlarını firmanın mevcut hizmetinden al ─────
+ *
+ * Mevcut bir firmaya yalnız IIS hizmeti eklenince (SQL restore yok, yeni
+ * kullanıcı yok) Web.config ve Users.xml şablondaki (C:\Demo\<hizmet>)
+ * değerlerle kalıyordu — 4819'a eklenen iki Kivi eski SQL'i (10.10.40.65)
+ * ve 6677'nin DB adını gösteriyordu (14.10.2026). Bu komut firmanın
+ * C:\Pusula\Service\<firma>\ altındaki başka bir hizmetinden okuyup yeni
+ * hizmete yazar; değerler sunucudan çıkmaz (şifre çıktıya yazılmaz).
+ *
+ *  - Web.config: kaynaktaki ilk bağlantı dizesinin Data Source / User Id /
+ *    Password değerleri, hedefteki tüm bağlantı dizelerine. Regex yok
+ *    (agent komutunda ^ karakter yiyor, ters bölü çiftleniyor) — dize ;
+ *    ile bölünüp anahtar karşılaştırılır. Initial Catalog'a dokunulmaz.
+ *  - Users.xml: kaynağın <DB> listesi. keepUsers → hedefin <User>'ları
+ *    kalır, yalnız DB listeleri yazılır; değilse kaynağın <User> ve <DB>
+ *    düğümleri olduğu gibi kopyalanır.
+ *
+ * Kaynak seçimi: önce Pusula MOBIL, sonra diğer klasörler. Değerleri şablon
+ * klasörüyle aynı olan hizmet (o da yamalanmamış) kaynak sayılmaz.
+ * Çıktı: `WEB:<kaynak> sql=<ip> user=<id>` / `WEB:NONE`, `XML:<kaynak> dbs=..` /
+ * `XML:NONE` / `XML:NO_FILE`.
+ */
+export function buildCopyIisConfigFromSibling(opts: {
+  firmaRoot:  string
+  destPath:   string
+  /** Bu kurulumda açılan diğer hizmet klasörleri — kaynak olamaz */
+  exclude:    string[]
+  /** Hizmetin şablon klasörü (C:\Demo\<hizmet>) — değerleri şablonla aynı olan hizmet kaynak sayılmaz */
+  sablonPath: string
+  webConfig:  boolean
+  usersXml:   boolean
+  keepUsers:  boolean
+}): string {
+  const ex = [opts.destPath, ...opts.exclude].map((p) => `'${psQuote(p.toLowerCase())}'`).join(", ")
+  // Anahtar adı boşluksuz küçük harf ("Data Source" → datasource). Regex
+  // kullanılmaz: ters bölü agent JSON'unda çiftleniyor, \s bozulur.
+  // ToLowerInvariant şart: tr-TR'de "UserId".ToLower() → "userıd".
+  const anahtar = `$p.Substring(0,$i).Replace(' ','').Replace([string][char]9,'').ToLowerInvariant()`
+  const keyFn =
+    // Bağlantı dizesinden anahtar oku: $cs, $anahtarlar → değer veya $null
+    `function CsAl($cs, $anahtarlar){ foreach($p in $cs.Split(';')){ $i = $p.IndexOf('='); if($i -gt 0){ $k = ${anahtar}; if($anahtarlar -contains $k){ return $p.Substring($i+1).Trim() } } }; return $null }`
+  const setFn =
+    `function CsYaz($cs, $anahtarlar, $deger){ $parca = $cs.Split(';'); for($j=0; $j -lt $parca.Length; $j++){ $p = $parca[$j]; $i = $p.IndexOf('='); if($i -gt 0){ $k = ${anahtar}; if($anahtarlar -contains $k){ $parca[$j] = $p.Substring(0,$i) + '=' + $deger } } }; return ($parca -join ';') }`
+  const lines: string[] = [
+    `$root='${psQuote(opts.firmaRoot)}'`,
+    `$dest='${psQuote(opts.destPath)}'`,
+    `$haric=@(${ex})`,
+    `$sablon='${psQuote(opts.sablonPath)}'`,
+    `$kDs=@('datasource','server','address','addr','networkaddress')`,
+    `$kUid=@('userid','uid','user','username')`,
+    `$kPw=@('password','pwd')`,
+    keyFn,
+    setFn,
+    `function IlkCs($yol){ if(-not (Test-Path -LiteralPath $yol)){ return $null }; [xml]$d = Get-Content -LiteralPath $yol -Raw -Encoding UTF8; foreach($a in @($d.SelectNodes('//connectionStrings/add'))){ $cs = $a.GetAttribute('connectionString'); if($cs -and (CsAl $cs $kDs)){ return $cs } }; return $null }`,
+    `function DbListe($yol){ if(-not (Test-Path -LiteralPath $yol)){ return @() }; [xml]$d = Get-Content -LiteralPath $yol -Raw -Encoding UTF8; return @($d.SelectNodes('/Users/DB/Data') | ForEach-Object { $_.InnerText.Trim() } | Where-Object { $_ }) }`,
+    // Aday klasörler: Pusula MOBIL önce
+    `$adaylar = @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $haric -notcontains $_.FullName.ToLowerInvariant() } | Sort-Object @{Expression={ if($_.Name -eq 'Pusula MOBIL'){0}else{1} }}, Name)`,
+  ]
+
+  if (opts.webConfig) {
+    lines.push(
+      `$hedefCfg = Join-Path $dest 'Web.config'`,
+      `$hedefCs = IlkCs $hedefCfg`,
+      `$webSonuc = 'WEB:NONE'`,
+      `if($null -eq $hedefCs){ $webSonuc = 'WEB:NO_FILE' } else {` +
+        `$scs = IlkCs (Join-Path $sablon 'Web.config'); if($null -eq $scs){ $scs = $hedefCs }; $sablonDs = CsAl $scs $kDs; $sablonUid = CsAl $scs $kUid; ` +
+        `foreach($a in $adaylar){ ` +
+          `$kcs = IlkCs (Join-Path $a.FullName 'Web.config'); if($null -eq $kcs){ continue }; ` +
+          `$ds = CsAl $kcs $kDs; $uid = CsAl $kcs $kUid; $pw = CsAl $kcs $kPw; ` +
+          `if(-not $ds -or -not $uid -or -not $pw){ continue }; ` +
+          `if($ds -eq $sablonDs -and $uid -eq $sablonUid){ continue }; ` +
+          `[xml]$doc = Get-Content -LiteralPath $hedefCfg -Raw -Encoding UTF8; ` +
+          `foreach($add in @($doc.SelectNodes('//connectionStrings/add'))){ $cs = $add.GetAttribute('connectionString'); if($cs -and (CsAl $cs $kDs)){ $cs = CsYaz $cs $kDs $ds; $cs = CsYaz $cs $kUid $uid; $cs = CsYaz $cs $kPw $pw; $add.SetAttribute('connectionString', $cs) } }; ` +
+          `$doc.Save($hedefCfg); ` +
+          `$webSonuc = 'WEB:' + $a.Name + ' sql=' + $ds + ' user=' + $uid; break ` +
+        `}` +
+      `}`,
+      `Write-Output $webSonuc`,
+    )
+  }
+
+  if (opts.usersXml) {
+    lines.push(
+      `$hedefXml = Join-Path $dest 'Config/Users.xml'`,
+      `$xmlSonuc = 'XML:NONE'`,
+      `if(-not (Test-Path -LiteralPath $hedefXml)){ $xmlSonuc = 'XML:NO_FILE' } else {` +
+        `$sx = Join-Path $sablon 'Config/Users.xml'; if(-not (Test-Path -LiteralPath $sx)){ $sx = $hedefXml }; $sablonDb = (DbListe $sx) -join '|'; ` +
+        `foreach($a in $adaylar){ ` +
+          `$kx = Join-Path $a.FullName 'Config/Users.xml'; $dbs = @(DbListe $kx); ` +
+          `if($dbs.Count -eq 0 -or ($dbs -join '|') -eq $sablonDb){ continue }; ` +
+          `[xml]$doc = Get-Content -LiteralPath $hedefXml -Raw -Encoding UTF8; ` +
+          `$r = $doc.SelectSingleNode('/Users'); if($null -eq $r){ continue }; ` +
+          (opts.keepUsers
+            ? `$kaplar = @($r.SelectNodes('User/Data')) + @($r.SelectNodes('DB')); ` +
+              `foreach($k in $kaplar){ foreach($n in @($k.ChildNodes)){ [void]$k.RemoveChild($n) }; foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$k.AppendChild($di) } }; ` +
+              `if($null -eq $r.SelectSingleNode('DB')){ $dbEl = $doc.CreateElement('DB'); foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$dbEl.AppendChild($di) }; [void]$r.AppendChild($dbEl) }; `
+            : `[xml]$kdoc = Get-Content -LiteralPath $kx -Raw -Encoding UTF8; ` +
+              `foreach($n in @($r.SelectNodes('User')) + @($r.SelectNodes('DB'))){ [void]$r.RemoveChild($n) }; ` +
+              `foreach($n in @($kdoc.SelectNodes('/Users/User')) + @($kdoc.SelectNodes('/Users/DB'))){ [void]$r.AppendChild($doc.ImportNode($n, $true)) }; `) +
+          `$doc.Save($hedefXml); ` +
+          `$xmlSonuc = 'XML:' + $a.Name + ' users=' + @($r.SelectNodes('User')).Count + ' dbs=' + ($dbs -join ','); break ` +
+        `}` +
+      `}`,
+      `Write-Output $xmlSonuc`,
+    )
+  }
+
+  return lines.join("; ")
+}
+
 /* ── IIS'teki site adlarını listele ─────────────────────────────────── */
 /**
  * Aynı firmaya aynı hizmet ikinci kez kurulunca site adı çakışmasın diye

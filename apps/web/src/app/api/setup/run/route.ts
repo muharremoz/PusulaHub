@@ -40,6 +40,7 @@ import {
   buildCreateIisSite,
   buildPatchWebConfig,
   buildPatchUsersXml,
+  buildCopyIisConfigFromSibling,
   buildListIisUsedPorts,
   buildGetIisSitePort,
   buildCreateIisResimSite,
@@ -921,7 +922,15 @@ export async function POST(req: NextRequest) {
         // ── 6) IIS siteleri → IIS agent ─────────────────────────────
         // Users.xml patch'i SQL restore'dan sonra çalışır — bu yüzden
         // burada her başarılı IIS hizmetinin destPath'ini topluyoruz.
-        const installedIisServices: Array<{ id: number; name: string; destPath: string; keepUsers: boolean }> = []
+        const installedIisServices: Array<{
+          id: number; name: string; destPath: string; keepUsers: boolean
+          /** Şablon klasörü (cfg.sourceFolderPath) */
+          sablonPath: string
+          /** Web.config bağlantı dizesi sihirbazın SQL kullanıcısıyla yazıldı */
+          webSql: boolean
+          /** Users.xml SQL restore sonrası yazıldı */
+          usersXml: boolean
+        }> = []
 
         if (iisServices.length > 0 && iisAgent) {
           // 6a) Firma root klasörü — C:\Pusula\Service\<firmaKod>
@@ -1040,10 +1049,10 @@ export async function POST(req: NextRequest) {
             //       ve httpRuntime/@maxRequestLength = 51200.
             //       SQL parametreleri varsa connection string güncellenir;
             //       maxRequestLength her zaman uygulanır. Dosya yoksa SKIP.
+            const firstUser    = payload.users[0]
+            const hasSqlForCfg = !!sqlTarget && !!firstUser?.username && !!firstUser?.password
             {
               const webCfgPath = `${destPath}\\Web.config`
-              const firstUser  = payload.users[0]
-              const hasSqlForCfg = !!sqlTarget && !!firstUser?.username && !!firstUser?.password
               if (!(await runStep(
                 iisAgent,
                 `iis_webcfg_${s.id}`,
@@ -1072,7 +1081,11 @@ export async function POST(req: NextRequest) {
             ))) { controller.close(); return }
 
             // Users.xml patch'i için listeye ekle — SQL restore sonrası işlenecek
-            installedIisServices.push({ id: s.id, name: s.name, destPath, keepUsers: cfg.usersXmlKeepUsers === true })
+            installedIisServices.push({
+              id: s.id, name: s.name, destPath, keepUsers: cfg.usersXmlKeepUsers === true,
+              sablonPath: cfg.sourceFolderPath,
+              webSql: hasSqlForCfg, usersXml: false,
+            })
 
             servicesInstalled++
           }
@@ -1503,7 +1516,7 @@ export async function POST(req: NextRequest) {
                       }))
 
                     for (const svc of installedIisServices) {
-                      await runStep(
+                      const ok = await runStep(
                         iisAgent,
                         `iis_usersxml_${svc.id}`,
                         `Users.xml güncelleniyor: ${svc.name}`,
@@ -1514,6 +1527,8 @@ export async function POST(req: NextRequest) {
                           keepUsers:  svc.keepUsers,
                         }),
                       )
+                      // Şifreli kullanıcı yoksa komut SKIP_EMPTY döner — yazılmış sayılmaz
+                      svc.usersXml = ok && (svc.keepUsers || xmlUsers.length > 0)
                     }
                   }
 
@@ -1649,6 +1664,50 @@ export async function POST(req: NextRequest) {
                 }
               }
             }
+          }
+        }
+
+        // ── 7c) Hizmet ekleme — SQL ayarlarını mevcut hizmetten al ─────
+        // Mevcut firmaya yalnız IIS hizmeti eklenince (restore yok / yeni
+        // kullanıcı yok) Web.config ve Users.xml şablon değerleriyle kalıyordu
+        // (4819 Kivi, 14.10.2026). Firmanın Mobil'deki başka bir hizmetinden
+        // (önce Pusula MOBIL) okunup yazılır. Kritik değil: kaynak yoksa adım
+        // kırmızı kalır, elle düzeltilir.
+        if (iisAgent) {
+          const kurulanYollar = installedIisServices.map((s) => s.destPath)
+          for (const svc of installedIisServices) {
+            if (svc.webSql && svc.usersXml) continue
+            const stepId = `iis_kaynak_${svc.id}`
+            const label  = `SQL ayarları mevcut hizmetten alınıyor: ${svc.name}`
+            send("step", { stepId, label, status: "running" })
+            const r = await execOnAgent(iisAgent.ip, iisAgent.port, iisAgent.apiKey, buildCopyIisConfigFromSibling({
+              firmaRoot: `C:\\Pusula\\Service\\${payload.firmaId}`,
+              destPath:  svc.destPath,
+              exclude:   kurulanYollar.filter((p) => p !== svc.destPath),
+              sablonPath: svc.sablonPath,
+              webConfig: !svc.webSql,
+              usersXml:  !svc.usersXml,
+              keepUsers: svc.keepUsers,
+            }), 60)
+            const out    = (r.stdout ?? "").trim()
+            const stderr = (r.stderr ?? "").trim()
+            if (r.exitCode !== 0 || stderr) {
+              send("step", { stepId, label, status: "error", error: stderr || out || `exit ${r.exitCode}` })
+              continue
+            }
+            // WEB:NONE / XML:NONE → firmada değerleri alınabilecek hizmet yok
+            const eksik: string[] = []
+            if (/WEB:NONE/.test(out)) eksik.push("Web.config bağlantı dizesi")
+            if (/XML:NONE/.test(out)) eksik.push("Users.xml DB listesi")
+            if (eksik.length) {
+              send("step", {
+                stepId, label, status: "error",
+                error: `Kaynak hizmet bulunamadı — ${eksik.join(" ve ")} şablon değerinde kaldı, elle düzeltin ` +
+                  `(${svc.destPath}). Çıktı: ${out}`,
+              })
+              continue
+            }
+            send("step", { stepId, label, status: "done", output: out })
           }
         }
 
