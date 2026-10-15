@@ -48,6 +48,7 @@ echo  [1/5] PusulaAgent.exe derleniyor...
   /r:System.Management.dll ^
   /r:System.ServiceProcess.dll ^
   /r:System.DirectoryServices.dll ^
+  /r:System.Xml.dll ^
   PusulaAgent.cs
 
 if %errorlevel% neq 0 (

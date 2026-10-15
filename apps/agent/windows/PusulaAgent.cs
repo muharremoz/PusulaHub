@@ -5,7 +5,7 @@
    Derleme: csc /target:winexe /out:PusulaAgent.exe
             /r:System.Core.dll,System.Windows.Forms.dll,
                System.Drawing.dll,System.Management.dll,
-               System.ServiceProcess.dll
+               System.ServiceProcess.dll,System.Xml.dll
             PusulaAgent.cs
 ================================================================ */
 
@@ -30,6 +30,7 @@ using System.Threading;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.DirectoryServices;
+using System.Xml;
 
 namespace PusulaAgent
 {
@@ -400,14 +401,154 @@ static class Metrics
         _heavyLastCollected = DateTime.MinValue;
     }
 
+    // inetsrv dizini — 32-bit process 64-bit OS'ta System32'yi SysWOW64'e
+    // yonlendirir ve orada inetsrv yoktur; Sysnative ile gercek dizine ulasilir.
+    private static string InetsrvDir()
+    {
+        string win = Environment.GetEnvironmentVariable("windir");
+        if (string.IsNullOrEmpty(win)) win = "C:\\Windows";
+        string p = Path.Combine(win, "System32\\inetsrv");
+        if (Directory.Exists(p)) return p;
+        p = Path.Combine(win, "Sysnative\\inetsrv");
+        if (Directory.Exists(p)) return p;
+        return "";
+    }
+
+    private static string ExpandPath(string p)
+    {
+        if (string.IsNullOrEmpty(p)) return "";
+        try { return Environment.ExpandEnvironmentVariables(p).Trim(); }
+        catch { return p.Trim(); }
+    }
+
+    // 1) applicationHost.config — site > application[path=/] > virtualDirectory[path=/]
+    private static void FillPhysPathFromConfig(Dictionary<string, string> physPaths,
+                                               Dictionary<string, string> appPools)
+    {
+        try
+        {
+            string dir = InetsrvDir();
+            if (dir.Length == 0) return;
+            string cfg = Path.Combine(dir, "config\\applicationHost.config");
+            if (!File.Exists(cfg)) return;
+
+            var doc = new XmlDocument();
+            doc.XmlResolver = null;
+            doc.Load(cfg);
+
+            XmlNodeList siteNodes = doc.SelectNodes("/configuration/system.applicationHost/sites/site");
+            if (siteNodes == null) return;
+
+            foreach (XmlNode site in siteNodes)
+            {
+                if (site.Attributes == null || site.Attributes["name"] == null) continue;
+                string sn = site.Attributes["name"].Value;
+                if (sn.Length == 0) continue;
+
+                XmlNode rootApp = site.SelectSingleNode("application[@path='/']");
+                if (rootApp == null) rootApp = site.SelectSingleNode("application");
+                if (rootApp == null) continue;
+
+                if (!appPools.ContainsKey(sn) || appPools[sn].Length == 0)
+                {
+                    if (rootApp.Attributes != null && rootApp.Attributes["applicationPool"] != null)
+                        appPools[sn] = rootApp.Attributes["applicationPool"].Value;
+                }
+
+                XmlNode vdir = rootApp.SelectSingleNode("virtualDirectory[@path='/']");
+                if (vdir == null) vdir = rootApp.SelectSingleNode("virtualDirectory");
+                if (vdir == null || vdir.Attributes == null) continue;
+                if (vdir.Attributes["physicalPath"] == null) continue;
+
+                string ph = ExpandPath(vdir.Attributes["physicalPath"].Value);
+                if (ph.Length > 0) physPaths[sn] = ph;
+            }
+        }
+        catch { }
+    }
+
+    // 2) WMI — root\WebAdministration VirtualDirectory. Site'in kok dizini
+    // ApplicationPath="/" + Path="/" satiridir (eski kodda "AppPath" diye
+    // olmayan bir property okundugu icin filtre hep bosa dusuyordu).
+    private static void FillPhysPathFromWmi(Dictionary<string, string> physPaths)
+    {
+        try
+        {
+            using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM VirtualDirectory"))
+            {
+                foreach (ManagementObject mo in mos.Get())
+                {
+                    string sn = "";
+                    try { sn = (mo["SiteName"] ?? "").ToString(); } catch { }
+                    if (sn.Length == 0) continue;
+                    if (physPaths.ContainsKey(sn) && physPaths[sn].Length > 0) continue;
+
+                    string appPath = "";
+                    try { appPath = (mo["ApplicationPath"] ?? "").ToString(); } catch { }
+                    string path = "";
+                    try { path = (mo["Path"] ?? "").ToString(); } catch { }
+                    if (appPath.Length > 0 && appPath != "/") continue;
+                    if (path.Length > 0 && path != "/") continue;
+
+                    string ph = "";
+                    try { ph = ExpandPath((mo["PhysicalPath"] ?? "").ToString()); } catch { }
+                    if (ph.Length > 0) physPaths[sn] = ph;
+                }
+            }
+        }
+        catch { }
+    }
+
+    // 3) appcmd list vdir  →  VDIR "778_MOBIL/" (physicalPath:C:\Pusula\Service\778\MOBIL)
+    private static void FillPhysPathFromAppcmd(Dictionary<string, string> physPaths)
+    {
+        try
+        {
+            string dir = InetsrvDir();
+            if (dir.Length == 0) return;
+            string exe = Path.Combine(dir, "appcmd.exe");
+            if (!File.Exists(exe)) return;
+
+            var psi = new ProcessStartInfo(exe, "list vdir");
+            psi.UseShellExecute        = false;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError  = true;
+            psi.CreateNoWindow         = true;
+
+            string outp = "";
+            using (Process p = Process.Start(psi))
+            {
+                outp = p.StandardOutput.ReadToEnd();
+                p.WaitForExit(10000);
+            }
+
+            foreach (Match m in Regex.Matches(outp, "VDIR\\s+\"([^\"]+)\"\\s+\\(physicalPath:(.*?)\\)\\s*$",
+                                              RegexOptions.Multiline))
+            {
+                string vdirName = m.Groups[1].Value;   // "778_MOBIL/"  (kok) veya "778_MOBIL/alt"
+                string ph       = ExpandPath(m.Groups[2].Value);
+                int slash = vdirName.IndexOf('/');
+                if (slash < 0) continue;
+                if (vdirName.Length > slash + 1) continue;   // sadece kok vdir
+                string sn = vdirName.Substring(0, slash);
+                if (sn.Length == 0 || ph.Length == 0) continue;
+                if (physPaths.ContainsKey(sn) && physPaths[sn].Length > 0) continue;
+                physPaths[sn] = ph;
+            }
+        }
+        catch { }
+    }
+
     private static Dictionary<string, object> CollectIis()
     {
         var sites = new List<Dictionary<string, object>>();
         var pools = new List<Dictionary<string, object>>();
 
         // AppPool adı: root application (Path="/") üzerinden site adına göre eşleştir
-        var siteAppPool  = new Dictionary<string, string>();
-        var sitePhysPath = new Dictionary<string, string>();
+        // IIS site adlari case-insensitive — WMI / config / appcmd farkli buyuk-kucuk
+        // harf dondurebiliyor, eslesmenin kacmamasi icin OrdinalIgnoreCase.
+        var siteAppPool  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sitePhysPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -425,22 +566,14 @@ static class Metrics
         }
         catch { }
 
-        try
-        {
-            using (var mos = new ManagementObjectSearcher("root\\WebAdministration", "SELECT * FROM VirtualDirectory"))
-            {
-                foreach (ManagementObject mo in mos.Get())
-                {
-                    string appPath = (mo["AppPath"] ?? "").ToString();
-                    string path    = (mo["Path"] ?? "").ToString();
-                    if (appPath != "/" || path != "/") continue;
-                    string sn = (mo["SiteName"] ?? "").ToString();
-                    string ph = (mo["PhysicalPath"] ?? "").ToString();
-                    if (sn.Length > 0) sitePhysPath[sn] = ph;
-                }
-            }
-        }
-        catch { }
+        // PhysicalPath — 3 kaynak, oncelik sirasiyla. Bir kaynak doldurduysa
+        // sonrakiler sadece EKSIK kalan siteleri tamamlar.
+        //   1) applicationHost.config (en guvenilir, WMI provider gerektirmez)
+        //   2) WMI VirtualDirectory  (dogru property adi: ApplicationPath)
+        //   3) appcmd list vdir      (son care)
+        FillPhysPathFromConfig(sitePhysPath, siteAppPool);
+        FillPhysPathFromWmi(sitePhysPath);
+        FillPhysPathFromAppcmd(sitePhysPath);
 
         // AppPool listesi
         try
