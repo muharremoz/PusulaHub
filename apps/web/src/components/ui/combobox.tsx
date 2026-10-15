@@ -118,6 +118,9 @@ export interface ComboboxProps<T> {
   contentClassName?: string;
   /** Verilirse liste tablo gibi çizilir: başlık satırı + hizalı sütunlar (`renderItem` yerine). */
   columns?: readonly ComboboxSutun<T>[];
+  /** Arama kutusunun altında, listenin üstünde gösterilen alan (ör. kategori filtresi).
+   *  Filtrelemeyi çağıran yapar — `items`'ı kendisi daraltır. */
+  header?: React.ReactNode;
 }
 
 export function Combobox<T>({
@@ -142,6 +145,7 @@ export function Combobox<T>({
   align = "start",
   contentClassName,
   columns,
+  header,
 }: ComboboxProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [icQuery, setIcQuery] = React.useState("");
@@ -207,6 +211,7 @@ export function Combobox<T>({
             value={query}
             onValueChange={setQuery}
           />
+          {header && <div className="border-b p-1.5">{header}</div>}
           {columns && !loading && gosterilecek.length > 0 && <SutunBasligi sutunlar={columns} sagBosluk="ml-2 w-3.5" />}
           <CommandList
             className={cn(maxListHeight, "overflow-y-auto")}

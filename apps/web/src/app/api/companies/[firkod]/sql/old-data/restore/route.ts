@@ -54,6 +54,8 @@ interface FileReq {
   kind?:        "bak" | "mdf"
   /** kind="mdf" ise eşlik eden log dosyasının adı; yoksa log yeniden üretilir. */
   ldfFileName?: string
+  /** Bu veritabanı yedeklensin mi (guvenlik.YedekAl + SQL Backup Master). Yoksa gövdedeki yedekAl. */
+  yedekAl?:     boolean
 }
 
 interface AgentInfo { ip: string; port: number; apiKey: string }
@@ -317,11 +319,11 @@ export async function POST(
                   await withSqlConnection(
                     sirketCfg,
                     async (sirketPool) => {
-                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl })
+                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl: f.yedekAl ?? yedekAl })
                     },
                   )
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklendi: ${targetDb}`, "done")
-                  if (yedekAl) eklenecek.push(targetDb)
+                  if (f.yedekAl ?? yedekAl) eklenecek.push(targetDb)
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
@@ -336,7 +338,7 @@ export async function POST(
              * Üçüncü parti ürünün veri dosyasını düzenliyoruz (bkz.
              * lib/sql-backup-master.ts) ve bu yol kırılgan.
              *
-             * `yedekAl` kapalıysa buraya hiç girilmiyor: `guvenlik.YedekAl`
+             * Dosyanın `yedekAl`ı kapalıysa listeye girmiyor: `guvenlik.YedekAl`
              * de 0 yazıldı, iki taraf tutarlı kalıyor.
              */
             if (eklenecek.length > 0) {

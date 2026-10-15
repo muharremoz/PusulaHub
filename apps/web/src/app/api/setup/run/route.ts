@@ -41,6 +41,8 @@ import {
   buildPatchWebConfig,
   buildPatchUsersXml,
   buildCopyIisConfigFromSibling,
+  buildSetApiKullanici,
+  apiKimlikHatasi,
   buildListIisUsedPorts,
   buildGetIisSitePort,
   buildCreateIisResimSite,
@@ -91,6 +93,8 @@ interface RunService {
   name:   string
   type:   ServiceType
   config: ServiceConfig | null
+  /** API hizmeti (iis-site) için elle girilen uygulama kullanıcısı → Users.xml'de tek kullanıcı */
+  appUser?: { username: string; password: string }
 }
 
 /** Pattern içindeki {firmaKod} / {port} placeholder'larını değiştirir. */
@@ -345,6 +349,9 @@ export async function POST(req: NextRequest) {
 
   // Hizmetleri tipine göre ayır
   const services       = payload.services ?? []
+  /** Yeni Hizmet penceresi (mevcut firmaya hizmet ekleme) — kullanıcı listesi hep boş gelir.
+   *  Bu akışta API hizmetlerinin Users.xml kullanıcıları yalnız pencerede girilenlerdir (7d). */
+  const hizmetEkleme   = (payload.users ?? []).length === 0
   const pusulaServices = services.filter((s) => s.type === "pusula-program")
   const iisServices    = services.filter((s) => s.type === "iis-site")
   const resimServices  = services.filter((s) => s.type === "iis-resim")
@@ -934,6 +941,8 @@ export async function POST(req: NextRequest) {
           webSql: boolean
           /** Users.xml SQL restore sonrası yazıldı */
           usersXml: boolean
+          /** Elle girilen uygulama kullanıcısı — 7d'de Users.xml'e yazılır */
+          appUser?: { username: string; password: string }
         }> = []
 
         if (iisServices.length > 0 && iisAgent) {
@@ -1089,6 +1098,10 @@ export async function POST(req: NextRequest) {
               id: s.id, name: s.name, destPath, keepUsers: cfg.usersXmlKeepUsers === true,
               sablonPath: cfg.sourceFolderPath,
               webSql: hasSqlForCfg, usersXml: false,
+              appUser: s.type === "iis-site" && s.appUser?.username?.trim() && s.appUser.password
+                && !apiKimlikHatasi(s.appUser.username, s.appUser.password)
+                ? { username: s.appUser.username.trim(), password: s.appUser.password }
+                : undefined,
             })
 
             servicesInstalled++
@@ -1691,7 +1704,9 @@ export async function POST(req: NextRequest) {
               sablonPath: svc.sablonPath,
               webConfig: !svc.webSql,
               usersXml:  !svc.usersXml,
-              keepUsers: svc.keepUsers,
+              // Hizmet ekleme: kullanıcılar 7d'de silinip pencerede girilenle yazılır —
+              // burada yalnız DB listesi önemli, Kivi'nin şablon kullanıcısını korumaya gerek yok
+              keepUsers: hizmetEkleme ? false : svc.keepUsers,
             }), 60)
             const out    = (r.stdout ?? "").trim()
             const stderr = (r.stderr ?? "").trim()
@@ -1708,6 +1723,43 @@ export async function POST(req: NextRequest) {
                 stepId, label, status: "error",
                 error: `Kaynak hizmet bulunamadı — ${eksik.join(" ve ")} şablon değerinde kaldı, elle düzeltin ` +
                   `(${svc.destPath}). Çıktı: ${out}`,
+              })
+              continue
+            }
+            send("step", { stepId, label, status: "done", output: out })
+          }
+        }
+
+        // ── 7d) Yeni Hizmet penceresi — Users.xml kullanıcıları ─────────
+        // Mevcut firmaya eklenen API hizmetinde Users.xml yalnız pencerede
+        // girilen kullanıcıyı içerir; girilmediyse kullanıcısız kalır. Şablon
+        // ve kardeş hizmetten gelen kullanıcılar (Kivi'ninki dahil) silinir.
+        // DB listesi 7c'de yazılan <DB>'den alınır, bu yüzden en sonda. Kritik değil.
+        // Kullanıcı Users.xml'e, Users.xml'i olmayan hizmette (SarrafPro) Web.config
+        // appSettings User/Pass'e yazılır. Girildiği hâlde ikisi de yoksa adım kırmızı.
+        if (iisAgent) {
+          for (const svc of installedIisServices) {
+            if (!hizmetEkleme && !svc.appUser) continue
+            const stepId = `iis_appuser_${svc.id}`
+            const label  = svc.appUser
+              ? `Uygulama kullanıcısı yazılıyor: ${svc.name} (${svc.appUser.username})`
+              : `Şablon kullanıcıları temizleniyor: ${svc.name}`
+            send("step", { stepId, label, status: "running" })
+            const r = await execOnAgent(iisAgent.ip, iisAgent.port, iisAgent.apiKey, buildSetApiKullanici({
+              hizmetYolu: svc.destPath,
+              user:       svc.appUser,
+            }), 60)
+            const out    = (r.stdout ?? "").trim()
+            const stderr = (r.stderr ?? "").trim()
+            if (r.exitCode !== 0 || stderr) {
+              send("step", { stepId, label, status: "error", error: stderr || out || `exit ${r.exitCode}` })
+              continue
+            }
+            if (svc.appUser && !/XML:UPDATED/.test(out) && !/WEB:UPDATED/.test(out)) {
+              send("step", {
+                stepId, label, status: "error",
+                error: `Kullanıcının yazılacağı yer bulunamadı — ne Config\\Users.xml ne Web.config ` +
+                  `appSettings User/Pass var, elle ekleyin (${svc.destPath}). Çıktı: ${out}`,
               })
               continue
             }

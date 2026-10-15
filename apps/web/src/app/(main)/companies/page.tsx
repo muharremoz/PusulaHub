@@ -35,7 +35,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
 const GirisSirasiSheet = dynamic(() => import("@/components/companies/giris-sirasi-sheet").then((m) => m.GirisSirasiSheet), { ssr: false });
-const OldDataRestoreSheet = dynamic(() => import("@/components/companies/old-data-restore-sheet").then((m) => m.OldDataRestoreSheet), { ssr: false });
+const OldDataRestoreDialog = dynamic(() => import("@/components/companies/old-data-restore-dialog").then((m) => m.OldDataRestoreDialog), { ssr: false });
 
 interface FirmaCompany {
   id: string
@@ -139,11 +139,14 @@ import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
+import { hizmetGorunum, HizmetIkonu } from "@/components/companies/hizmet-gorunum";
+import { Combobox } from "@/components/ui/combobox";
 import { ConnectCihazlarDialog } from "@/components/companies/connect-cihazlar-dialog";
 import { TerminalDegistirSheet } from "@/components/companies/terminal-degistir-sheet";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
+import { apiKimlikAlanHatalari, apiKimlikHatasi, apiSifreUret } from "@/lib/setup-iisops";
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
@@ -615,33 +618,6 @@ export default function CompaniesPage() {
   const [deleteBusy, setDeleteBusy]         = useState(false);
   const [deleteError, setDeleteError]       = useState<string | null>(null);
 
-  /**
-   * Kullanıcıya özel kurulum paketi (.zip) indirir — içinde kurulum
-   * programı ve o kullanıcının ayarları var. Müşteriye tek dosya olarak
-   * gönderilip çift tıklanması yeterli.
-   */
-  async function kurulumIndir(username: string) {
-    if (!selectedFirma) return
-    const bekle = toast.loading(`${username} için paket hazırlanıyor…`)
-    try {
-      const r = await fetch(
-        `/api/companies/${selectedFirma.firkod}/kurulum?kullanici=${encodeURIComponent(username)}`,
-      )
-      if (!r.ok) {
-        // Hata gövdesi JSON; okunamazsa durum koduyla yetin.
-        const d = await r.json().catch(() => null)
-        throw new Error(d?.error ?? `Paket üretilemedi (HTTP ${r.status})`)
-      }
-      triggerDownload(await r.blob(), `PusulaConnect-${username}.zip`)
-      toast.success("Kurulum paketi indirildi", {
-        id: bekle,
-        description: "ZIP'i açıp PusulaConnect.exe'yi çalıştırın; ayarlar.ini yanında kalmalı.",
-      })
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Paket üretilemedi", { id: bekle })
-    }
-  }
-
   async function openPwReset(usr: TabUser) {
     setPwResetUser(usr); setPwResetValue(""); setPwResetShow(false); setPwResetError(null)
     setPwResetDone(false); setPwResetMsgCopied(false)
@@ -770,7 +746,6 @@ export default function CompaniesPage() {
   const [newSvcCatalog, setNewSvcCatalog]             = useState<WizardServiceDto[]>([]);
   const [newSvcLoading, setNewSvcLoading]             = useState(false);
   const [newSvcSelectedIds, setNewSvcSelectedIds]     = useState<number[]>([]);
-  const [newSvcActiveCat, setNewSvcActiveCat]         = useState<string>("");
   const [newSvcAdServerId, setNewSvcAdServerId]       = useState<string>("");
   const [newSvcWindowsServerId, setNewSvcWindowsServerId] = useState<string>("");
   const [newSvcWindowsLocked, setNewSvcWindowsLocked] = useState(false);
@@ -796,6 +771,10 @@ export default function CompaniesPage() {
   /** Pars yönetim paneli (kullanıcı/şifre, raporlar, veritabanı) */
   const [parsYonetim, setParsYonetim] = useState<{ serviceId: number | null; sekme: string } | null>(null);
   const [newSvcMsgCopied, setNewSvcMsgCopied]         = useState(false);
+  /** API hizmeti (iis-site) id → elle girilen Users.xml kullanıcısı; boş = kardeş hizmetten kopyala */
+  const [newSvcApiKimlik, setNewSvcApiKimlik]         = useState<Record<number, { username: string; password: string }>>({});
+  /** Hizmet ekle kutusunun kategori filtresi; "" = tümü */
+  const [newSvcFiltre, setNewSvcFiltre]               = useState("");
   let _parsRowId = 1
   const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false })
 
@@ -856,7 +835,7 @@ export default function CompaniesPage() {
     if (!selectedFirma) return
     setNewSvcOpen(true)
     setNewSvcStarted(false); setNewSvcDone(false); setNewSvcError(null)
-    setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId("")
+    setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId(""); setNewSvcApiKimlik({}); setNewSvcFiltre("")
     setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
     setNewSvcParsUsers([mkParsRow()]); setNewSvcParsReportIds([]); setNewSvcParsError(null)
     setNewSvcParsKatalog(null); setNewSvcParsKatalogFor(null)
@@ -875,14 +854,8 @@ export default function CompaniesPage() {
       ])
       const catalog: WizardServiceDto[] = Array.isArray(svcR) ? svcR : []
       setNewSvcCatalog(catalog)
-      const cats = [...new Set(catalog.map((s) => s.category))]
       const parsSvc = catalog.find((s) => s.type === "pars")
-      if (onlyPars && parsSvc) {
-        setNewSvcSelectedIds([parsSvc.id])
-        setNewSvcActiveCat(parsSvc.category)
-      } else {
-        setNewSvcActiveCat(cats[0] ?? "")
-      }
+      if (onlyPars && parsSvc) setNewSvcSelectedIds([parsSvc.id])
       setNewSvcIisServers(Array.isArray(iisR) ? iisR : [])
       setNewSvcDepoServers(Array.isArray(depoR) ? depoR : [])
       const rdpServers = optR.rdpServers ?? []
@@ -921,6 +894,12 @@ export default function CompaniesPage() {
   const newSvcParsValid = !newSvcParsService
     || (newSvcParsUsersValid && !!newSvcParsKatalog && !newSvcParsError && newSvcParsReportIds.length > 0 && newSvcParsDatalar.length > 0)
 
+  // Elle girilen API kullanıcılarından biri hatalıysa (yarım / yasak karakter) Oluştur kapalı
+  const newSvcApiKimlikHatali = newSvcSelected.some((s) => {
+    const k = s.type === "iis-site" ? newSvcApiKimlik[s.id] : undefined
+    return !!k && apiKimlikHatasi(k.username, k.password) !== null
+  })
+
   // Yalnız Pars: AD'ye dokunulmaz, AD sunucusu istenmez
   const newSvcParsOnly = newSvcSelected.length > 0 && newSvcSelected.every((s) => s.type === "pars")
   const newSvcValid =
@@ -929,7 +908,47 @@ export default function CompaniesPage() {
     (!newSvcHasPusula || (!!newSvcWindowsServerId && !!newSvcDepoServerId)) &&
     (!(newSvcHasIis || newSvcHasResim) || !!newSvcIisServerId) &&
     (!newSvcHasResim || !!newSvcDepoServerId) &&
-    newSvcParsValid
+    newSvcParsValid &&
+    !newSvcApiKimlikHatali
+
+  // Yeni Hizmet "Kurulum sunucuları" kartındaki tek satır: ikon + ad/açıklama solda,
+  // seçim sağda. Seçim yapılınca ikon kutusu yeşile döner (eksik olan bir bakışta görünür).
+  const newSvcSunucuSec = (
+    label: string,
+    aciklama: string,
+    Ikon: React.ComponentType<{ className?: string }>,
+    value: string,
+    onChange: (v: string) => void,
+    list: { id: string; name: string; ip: string; isOnline?: boolean }[],
+    opts?: { disabled?: boolean; not?: string },
+  ) => (
+    <div className="flex items-center gap-3 px-3 py-2.5">
+      <span className={`flex size-8 shrink-0 items-center justify-center rounded-[5px] transition-colors duration-200 ${
+        value ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"
+      }`}>
+        {value ? <Check className="size-4" strokeWidth={2.5} /> : <Ikon className="size-4" />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5 text-[13px] font-medium leading-[18px]">
+          {label}
+          {opts?.not && <span className="text-muted-foreground text-[11px] font-normal">· {opts.not}</span>}
+        </div>
+        <div className="text-muted-foreground truncate text-[11px] leading-[16px]">{aciklama}</div>
+      </div>
+      <Select value={value} onValueChange={onChange} disabled={opts?.disabled}>
+        <SelectTrigger className="h-8 w-[220px] shrink-0 rounded-[5px] text-[12px]">
+          <SelectValue placeholder={list.length ? "Sunucu seçin…" : "Sunucu yok"} />
+        </SelectTrigger>
+        <SelectContent>
+          {list.map((s) => (
+            <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={s.isOnline === false}>
+              {s.name} <span className="text-muted-foreground ml-1">{s.ip}</span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
 
   const loadNewSvcParsKatalog = (serviceId: number, taze = false) => {
     setNewSvcParsLoading(true); setNewSvcParsError(null)
@@ -2428,12 +2447,6 @@ tr:nth-child(even) td{background:#fafafa}
                           <DropdownMenuContent align="end" className="w-52 text-[11px]">
                             <DropdownMenuItem
                               className="text-[11px] gap-2"
-                              onClick={() => kurulumIndir(usr.username)}
-                            >
-                              <Download className="h-3.5 w-3.5" /> Kurulum Paketi İndir
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2"
                               onClick={() => setConnectKoduKullanici(usr.username)}
                             >
                               <KeyRound className="h-3.5 w-3.5" /> Connect 2 Kurulum Kodu
@@ -3148,9 +3161,9 @@ tr:nth-child(even) td{background:#fafafa}
             />
           )}
 
-          {/* Yeni Veritabanı Ekle — Eski Datalar restore sheet */}
+          {/* Yeni Veritabanı Ekle — Eski Datalar restore penceresi */}
           {selectedFirma && (
-            <OldDataRestoreSheet
+            <OldDataRestoreDialog
               open={oldDataOpen}
               onOpenChange={setOldDataOpen}
               firkod={selectedFirma.firkod}
@@ -3860,73 +3873,202 @@ tr:nth-child(even) td{background:#fafafa}
 
           {/* Yeni Hizmet Ekle Dialog */}
           <Dialog open={newSvcOpen} onOpenChange={(o) => { if (!newSvcStarted) setNewSvcOpen(o) }}>
-            <DialogContent className="sm:max-w-[640px] p-0 gap-0">
-              <DialogHeader className="px-5 py-4 border-b border-border/50">
-                <DialogTitle className="text-sm flex items-center gap-2">
-                  <Plus className="h-4 w-4" /> Yeni Hizmet — <span className="font-mono">{selectedFirma?.firkod}</span>
-                </DialogTitle>
+            {/* Ortaya değil üste sabit: kategori değişince yükseklik değişiyor; ortalı pencere
+                yeniden ortalanıp sekme çubuğunu dikeyde kaydırınca vurgu yukarıdan geliyordu. */}
+            <DialogContent className="top-[8vh] translate-y-0 sm:max-w-[760px] p-0 gap-0">
+              <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] px-5 py-4">
+                <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+                  <Plus className="size-[18px]" />
+                </span>
+                <div className="min-w-0">
+                  <DialogTitle className="text-[15px] font-semibold">
+                    Yeni Hizmet <span className="text-muted-foreground font-medium">— {selectedFirma?.firkod}</span>
+                  </DialogTitle>
+                  <p className="text-muted-foreground text-[12px]">
+                    {newSvcStarted ? "Hizmetler kuruluyor…" : "Firmaya eklenecek hizmetleri seçin."}
+                  </p>
+                </div>
               </DialogHeader>
-              <ScrollArea className="max-h-[72vh]">
+              <ScrollArea className="max-h-[68vh]">
                 <div className="px-5 py-4 space-y-3">
                   {!newSvcStarted ? (
                     <>
                       {newSvcLoading ? (
-                        <div className="space-y-2">
-                          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-8 w-full rounded-[5px]" />)}
+                        <div className="space-y-3">
+                          <Skeleton className="h-8 w-full rounded-[5px]" />
+                          <Skeleton className="h-[104px] w-full rounded-[5px]" />
                         </div>
                       ) : newSvcCatalog.length === 0 ? (
-                        <p className="text-[11px] text-muted-foreground text-center py-6">Kayıtlı hizmet bulunamadı.</p>
+                        <div className="flex flex-col items-center gap-2 py-8 text-center">
+                          <p className="text-muted-foreground text-[12px]">Henüz tanımlı hizmet yok.</p>
+                          <Button asChild size="sm" variant="outline" className="h-7 text-[11px]">
+                            <a href="/services"><Plus className="size-3.5" />Hizmet tanımla</a>
+                          </Button>
+                        </div>
                       ) : (
                         <>
-                          {/* Kategori sekmeleri */}
-                          <div className="flex items-center gap-1 border-b border-border/50">
-                            {[...new Set(newSvcCatalog.map((s) => s.category))].map((cat) => {
-                              const count = newSvcCatalog.filter((s) => s.category === cat && newSvcSelectedIds.includes(s.id)).length
-                              const isActive = newSvcActiveCat === cat
+                          {/* Hizmet ekle — seçilen hizmet aşağıya bir satır olarak eklenir; listede
+                              yalnız henüz eklenmemiş hizmetler görünür. Açılır listedeki filtre kategoriye daraltır. */}
+                          <Combobox
+                            items={newSvcCatalog.filter((s) => !newSvcSelectedIds.includes(s.id) && (!newSvcFiltre || s.category === newSvcFiltre))}
+                            header={
+                              <ToggleGroup
+                                type="single"
+                                value={newSvcFiltre || "tumu"}
+                                onValueChange={(v) => v && setNewSvcFiltre(v === "tumu" ? "" : v)}
+                                variant="outline"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <ToggleGroupItem value="tumu" className="h-7 flex-1 px-2 text-[12px]">Tümü</ToggleGroupItem>
+                                {[...new Set(newSvcCatalog.map((s) => s.category))].map((cat) => (
+                                  <ToggleGroupItem key={cat} value={cat} className="h-7 flex-1 px-2 text-[12px]">
+                                    {cat === "Mobil" ? "Pars" : cat}
+                                  </ToggleGroupItem>
+                                ))}
+                              </ToggleGroup>
+                            }
+                            getKey={(s) => String(s.id)}
+                            getLabel={(s) => `${s.name} ${s.category}`}
+                            value=""
+                            onChange={(key) => { const id = Number(key); if (id) setNewSvcSelectedIds((p) => p.includes(id) ? p : [...p, id]) }}
+                            placeholder={newSvcSelectedIds.length ? "Başka hizmet ekle…" : "Hizmet ekle…"}
+                            searchPlaceholder="Hizmet ara…"
+                            emptyText="Eklenecek hizmet kalmadı"
+                            maxListHeight="max-h-72"
+                            renderItem={(s) => {
+                              const { ikon, renk } = hizmetGorunum(s.name, s.type)
                               return (
-                                <button
-                                  key={cat}
-                                  onClick={() => setNewSvcActiveCat(cat)}
-                                  className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-medium border-b-2 -mb-px transition-colors ${isActive ? "border-foreground text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
-                                >
-                                  {cat}
-                                  {count > 0 && (
-                                    <span className="size-4 rounded-full bg-primary text-primary-foreground text-[9px] flex items-center justify-center font-bold">{count}</span>
-                                  )}
-                                </button>
+                                <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                                  <span className={`flex size-6 shrink-0 items-center justify-center rounded-[5px] ${renk.yumusak}`}>
+                                    <HizmetIkonu ikon={ikon} className="size-3.5" />
+                                  </span>
+                                  <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                                  <span className="text-muted-foreground shrink-0 text-[11px]">{s.category === "Mobil" ? "Pars" : s.category}</span>
+                                </span>
                               )
-                            })}
-                          </div>
+                            }}
+                          />
 
-                          {/* Hizmet listesi */}
-                          <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                            <div className="px-3 py-2 bg-muted/20 border-b border-border">
-                              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-                                {newSvcActiveCat} — {newSvcCatalog.filter((s) => s.category === newSvcActiveCat).length} hizmet
-                              </span>
+                          {/* Eklenen hizmetler — her biri bir satır; API hizmetinde (Resim hariç) kullanıcı/şifre */}
+                          {newSvcSelected.length === 0 ? (
+                            <div className="text-muted-foreground flex flex-col items-center gap-1 rounded-[5px] border border-dashed py-8 text-center">
+                              <Plus className="size-4" />
+                              <p className="text-[12px]">Yukarıdan hizmet seçerek ekleyin.</p>
                             </div>
-                            <div className="divide-y divide-border/40 max-h-[240px] overflow-y-auto">
-                              {newSvcCatalog.filter((s) => s.category === newSvcActiveCat).map((svc) => {
-                                const isSelected = newSvcSelectedIds.includes(svc.id)
+                          ) : (
+                            <div className="bg-card divide-y rounded-[5px] border">
+                              {newSvcSelected.map((svc) => {
+                                const { ikon, renk } = hizmetGorunum(svc.name, svc.type)
+                                const apiKullanicili = svc.type === "iis-site"
+                                const k = newSvcApiKimlik[svc.id] ?? { username: "", password: "" }
+                                const hata = apiKimlikAlanHatalari(k.username, k.password)
+                                const yaz = (patch: Partial<{ username: string; password: string }>) =>
+                                  setNewSvcApiKimlik((p) => ({ ...p, [svc.id]: { ...(p[svc.id] ?? { username: "", password: "" }), ...patch } }))
+                                const kirmizi = "border-rose-500 focus-visible:border-rose-500 focus-visible:ring-rose-500/20"
                                 return (
-                                  <button
-                                    key={svc.id}
-                                    onClick={() => setNewSvcSelectedIds((p) => p.includes(svc.id) ? p.filter((x) => x !== svc.id) : [...p, svc.id])}
-                                    className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${isSelected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"}`}
-                                  >
-                                    <span className={`size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0 ${isSelected ? "bg-foreground border-foreground" : "border-border"}`}>
-                                      {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
+                                  <div key={svc.id} className="animate-in fade-in slide-in-from-top-1 flex items-center gap-3 px-3 py-2.5 duration-300">
+                                    <span className={`flex size-8 shrink-0 items-center justify-center rounded-[5px] ${renk.yumusak}`}>
+                                      <HizmetIkonu ikon={ikon} />
                                     </span>
-                                    {svc.type === "iis-site" || svc.type === "iis-resim" ? <Globe className="h-3 w-3 text-muted-foreground shrink-0" /> : <Server className="h-3 w-3 text-muted-foreground shrink-0" />}
-                                    <span className={`text-[11px] font-medium flex-1 ${isSelected ? "text-foreground" : "text-muted-foreground"}`}>{svc.name}</span>
-                                    <span className="text-[10px] text-muted-foreground font-mono truncate max-w-[200px]">
-                                      {svc.config && "sourceFolderPath" in svc.config ? svc.config.sourceFolderPath : svc.config && "dbPath" in svc.config ? svc.config.dbPath : "—"}
-                                    </span>
-                                  </button>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="truncate text-[13px] font-medium leading-[18px]">{svc.name}</div>
+                                      <div className="text-muted-foreground truncate text-[11px] leading-[16px]">{svc.category === "Mobil" ? "Pars" : svc.category}</div>
+                                    </div>
+                                    {apiKullanicili && (
+                                      <>
+                                        <Input
+                                          value={k.username}
+                                          onChange={(e) => yaz({ username: e.target.value })}
+                                          placeholder="Kullanıcı adı"
+                                          autoComplete="off"
+                                          aria-label={`${svc.name} kullanıcı adı`}
+                                          aria-invalid={hata.kullanici || undefined}
+                                          className={`h-8 w-[170px] shrink-0 rounded-[5px] text-[12px] ${hata.kullanici ? kirmizi : ""}`}
+                                        />
+                                        <div className="relative w-[150px] shrink-0">
+                                          <Input
+                                            value={k.password}
+                                            onChange={(e) => yaz({ password: e.target.value.replace(/[^0-9]/g, "").slice(0, 6) })}
+                                            placeholder="Şifre (6 rakam)"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            autoComplete="off"
+                                            aria-label={`${svc.name} şifre`}
+                                            aria-invalid={hata.sifre || undefined}
+                                            className={`h-8 rounded-[5px] pr-8 text-[12px] tabular-nums ${hata.sifre ? kirmizi : ""}`}
+                                          />
+                                          <UiTooltip>
+                                            <TooltipTrigger asChild>
+                                              <button
+                                                type="button"
+                                                onClick={() => yaz({ password: apiSifreUret() })}
+                                                aria-label="Şifre üret"
+                                                className="text-muted-foreground hover:text-foreground absolute top-1/2 right-1 flex size-6 -translate-y-1/2 items-center justify-center rounded-[5px] transition-colors"
+                                              >
+                                                <RefreshCw className="size-3.5" />
+                                              </button>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Şifre üret</TooltipContent>
+                                          </UiTooltip>
+                                        </div>
+                                      </>
+                                    )}
+                                    <UiTooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          type="button"
+                                          size="icon"
+                                          variant="ghost"
+                                          onClick={() => {
+                                            setNewSvcSelectedIds((p) => p.filter((x) => x !== svc.id))
+                                            setNewSvcApiKimlik((p) => { const n = { ...p }; delete n[svc.id]; return n })
+                                          }}
+                                          aria-label={`${svc.name} kaldır`}
+                                          className="text-muted-foreground size-8 shrink-0 rounded-[5px] hover:text-rose-600"
+                                        >
+                                          <X className="size-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Kaldır</TooltipContent>
+                                    </UiTooltip>
+                                  </div>
                                 )
                               })}
                             </div>
-                          </div>
+                          )}
+
+                          {/* Kurulum sunucuları — tüm seçili hizmetlerde ortak (kurulum türe göre
+                              tek IIS / tek Windows / tek Depo kullanır). Alanlar gerektiğinde açılır. */}
+                          {(() => {
+                            const alanlar: Array<{ key: string; acik: boolean; el: React.ReactNode }> = [
+                              { key: "iis",  acik: newSvcHasIis || newSvcHasResim,
+                                el: newSvcSunucuSec("IIS Sunucusu", "API hizmetlerinin siteleri burada açılır", Globe, newSvcIisServerId, setNewSvcIisServerId, newSvcIisServers) },
+                              { key: "win",  acik: newSvcHasPusula,
+                                el: newSvcSunucuSec("Windows / RDP", "Program klasörü ve kısayollar", Laptop, newSvcWindowsServerId, setNewSvcWindowsServerId, newSvcWindowsList, { disabled: newSvcWindowsLocked, not: newSvcWindowsLocked ? "firma kaydından" : undefined }) },
+                              { key: "depo", acik: newSvcHasPusula || newSvcHasResim,
+                                el: newSvcSunucuSec("Depo", newSvcHasResim ? "Resim klasörü ve Resimler paylaşımı" : "Resim klasörü", HardDrive, newSvcDepoServerId, setNewSvcDepoServerId, newSvcDepoServers) },
+                            ]
+                            const acik = alanlar.filter((a) => a.acik)
+                            const herhangi = acik.length > 0
+                            return (
+                              <div
+                                inert={!herhangi}
+                                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${herhangi ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
+                              >
+                                <div className="overflow-hidden">
+                                  <div className="text-muted-foreground mb-1.5 text-[10px] font-medium tracking-wider uppercase">Kurulum sunucuları</div>
+                                  <div className="bg-card divide-y rounded-[5px] border">
+                                    {acik.map((a) => (
+                                      <div key={a.key} className="animate-in fade-in slide-in-from-top-1 duration-300">
+                                        {a.el}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })()}
 
                           {/* Pars: kullanıcılar + raporlar + bağlanacak DB'ler */}
                           {newSvcParsService && (
@@ -3979,83 +4121,6 @@ tr:nth-child(even) td{background:#fafafa}
                             </>
                           )}
 
-                          {/* Pusula: Windows + Depo sunucusu */}
-                          {newSvcHasPusula && (
-                            <div className="grid grid-cols-2 gap-3">
-                              <div className="space-y-1.5">
-                                <Label className="text-[11px] flex items-center gap-1">
-                                  Windows/RDP Sunucusu {newSvcWindowsLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}
-                                </Label>
-                                <Select value={newSvcWindowsServerId} onValueChange={setNewSvcWindowsServerId} disabled={newSvcWindowsLocked}>
-                                  <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                                    <SelectValue placeholder={newSvcWindowsList.length ? "Seçin…" : "Sunucu yok"} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {newSvcWindowsList.map((s) => (
-                                      <SelectItem key={s.id} value={s.id} className="text-[13px]">
-                                        {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                              <div className="space-y-1.5">
-                                <Label className="text-foreground/80 text-[12px] font-medium">Depo Sunucusu</Label>
-                                <Select value={newSvcDepoServerId} onValueChange={setNewSvcDepoServerId}>
-                                  <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                                    <SelectValue placeholder={newSvcDepoServers.length ? "Seçin…" : "Sunucu yok"} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {newSvcDepoServers.map((s) => (
-                                      <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
-                                        {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                          )}
-
-                          {/* IIS sunucusu */}
-                          {/* Resim tek başına seçildiyse Depo sunucusu (Pusula bloğu yoksa) */}
-                          {newSvcHasResim && !newSvcHasPusula && (
-                            <div className="space-y-1.5">
-                              <Label className="text-foreground/80 text-[12px] font-medium">Depo Sunucusu</Label>
-                              <Select value={newSvcDepoServerId} onValueChange={setNewSvcDepoServerId}>
-                                <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                                  <SelectValue placeholder={newSvcDepoServers.length ? "Seçin…" : "Sunucu yok"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {newSvcDepoServers.map((s) => (
-                                    <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
-                                      {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-[10px] text-muted-foreground">Resim klasörü bu sunucudaki Resimler paylaşımından yayınlanır.</p>
-                            </div>
-                          )}
-
-                          {(newSvcHasIis || newSvcHasResim) && (
-                            <div className="space-y-1.5">
-                              <Label className="text-foreground/80 text-[12px] font-medium">IIS Sunucusu</Label>
-                              <Select value={newSvcIisServerId} onValueChange={setNewSvcIisServerId}>
-                                <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                                  <SelectValue placeholder={newSvcIisServers.length ? "Seçin…" : "Sunucu yok"} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {newSvcIisServers.map((s) => (
-                                    <SelectItem key={s.id} value={s.id} className="text-[13px]" disabled={!s.isOnline}>
-                                      {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-
                           {!newSvcAdServerId && !newSvcParsOnly && (
                             <p className="text-[10px] text-amber-600 dark:text-amber-400">Uyarı: Bu firma için AD sunucusu tanımlı değil — hizmet kurulumu OU/grup adımları için AD ister.</p>
                           )}
@@ -4074,12 +4139,17 @@ tr:nth-child(even) td{background:#fafafa}
                           firmaId:          selectedFirma.firkod,
                           firmaName:        selectedFirma.firma,
                           users:            [],
-                          services:         newSvcSelected.map<AdProvisionService>((s) => ({
-                            id:     s.id,
-                            name:   s.name,
-                            type:   s.type,
-                            config: s.config,
-                          })),
+                          services:         newSvcSelected.map<AdProvisionService>((s) => {
+                            const k = s.type === "iis-site" ? newSvcApiKimlik[s.id] : undefined
+                            return {
+                              id:     s.id,
+                              name:   s.name,
+                              type:   s.type,
+                              config: s.config,
+                              // Boş bırakılırsa gönderilmez → kullanıcılar kardeş hizmetten kopyalanır
+                              appUser: k && k.username.trim() && k.password ? { username: k.username.trim(), password: k.password } : undefined,
+                            }
+                          }),
                           skipDepo:         !newSvcHasPusula,
                           pars: newSvcParsService ? {
                             serviceId:        newSvcParsService.id,
@@ -4135,16 +4205,19 @@ tr:nth-child(even) td{background:#fafafa}
                   })()}
                 </div>
               </ScrollArea>
-              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+              <div className="flex items-center gap-2 border-t px-5 py-3">
                 {!newSvcStarted ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setNewSvcOpen(false)} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
-                    <Button size="sm" disabled={!newSvcValid} onClick={() => { setNewSvcError(null); setNewSvcStarted(true) }} className="rounded-[5px] h-7 text-[11px] gap-1.5">
-                      <Plus className="h-3.5 w-3.5" /> Oluştur
+                    <span className="text-muted-foreground mr-auto text-[12px] tabular-nums">
+                      {newSvcSelectedIds.length > 0 ? `${newSvcSelectedIds.length} hizmet seçildi` : "Hizmet seçilmedi"}
+                    </span>
+                    <Button size="sm" variant="outline" onClick={() => setNewSvcOpen(false)} className="h-8 rounded-[5px] text-[12px]">Vazgeç</Button>
+                    <Button size="sm" disabled={!newSvcValid} onClick={() => { setNewSvcError(null); setNewSvcStarted(true) }} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                      <Plus className="size-3.5" /> Oluştur
                     </Button>
                   </>
                 ) : (
-                  <Button size="sm" disabled={!newSvcDone && !newSvcError} onClick={() => { setNewSvcOpen(false); setNewSvcStarted(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+                  <Button size="sm" disabled={!newSvcDone && !newSvcError} onClick={() => { setNewSvcOpen(false); setNewSvcStarted(false) }} className="ml-auto h-8 rounded-[5px] text-[12px]">Kapat</Button>
                 )}
               </div>
             </DialogContent>
