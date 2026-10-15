@@ -14,7 +14,7 @@ import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
-import { BILKAR_KULLANICI, BILKAR_MASAUSTU, bilkarFirmasiMi } from "@/lib/bilkar"
+import { BILKAR_KULLANICILARI, bilkarFirmasiMi, bilkarMasaustu } from "@/lib/bilkar"
 import {
   buildEnsureFirmalarOu,
   buildEnsureFirmaOu,
@@ -705,15 +705,17 @@ export async function POST(req: NextRequest) {
           createdCount++
         }
 
-        // Bilkar müşterisi → Bilkar kullanıcısı firma grubuna (C:\MUSTERI\<firma>
+        // Bilkar müşterisi → Bilkar kullanıcıları firma grubuna (C:\MUSTERI\<firma>
         // NTFS yetkisi gruptan gelir). Kritik değil, hata kurulumu durdurmaz.
         if (bilkar) {
-          await runStep(
-            adAgent,
-            "bilkar_member",
-            `Bilkar: ${BILKAR_KULLANICI} → ${payload.firmaId}_users`,
-            buildAddGroupMember(payload.firmaId, BILKAR_KULLANICI),
-          )
+          for (const kullanici of BILKAR_KULLANICILARI) {
+            await runStep(
+              adAgent,
+              `bilkar_member_${kullanici}`,
+              `Bilkar: ${kullanici} → ${payload.firmaId}_users`,
+              buildAddGroupMember(payload.firmaId, kullanici),
+            )
+          }
         }
         } // adAgent && !parsOnly
 
@@ -906,16 +908,18 @@ export async function POST(req: NextRequest) {
             )
           }
 
-          // Bilkar müşterisi → aynı klasör Bilkar kullanıcısının masaüstüne de
-          // (onun MUSTERILER'inde yalnız kendi müşterileri olur). Kullanıcı bu
+          // Bilkar müşterisi → aynı klasör Bilkar kullanıcılarının masaüstüne de
+          // (onların MUSTERILER'inde yalnız kendi müşterileri olur). Kullanıcı bu
           // sunucuda hiç oturum açmadıysa profil yok → SKIPPED, elle kopyalanır.
           if (bilkar) {
-            await runStep(
-              winAgent,
-              "bilkar_desktop",
-              `Bilkar masaüstü: MUSTERILER\\${safeFirmaName}`,
-              buildCopyDesktopFolderToUser(mustelierSubdir, BILKAR_MASAUSTU),
-            )
+            for (const kullanici of BILKAR_KULLANICILARI) {
+              await runStep(
+                winAgent,
+                `bilkar_desktop_${kullanici}`,
+                `Bilkar masaüstü (${kullanici}): MUSTERILER\\${safeFirmaName}`,
+                buildCopyDesktopFolderToUser(mustelierSubdir, bilkarMasaustu(kullanici)),
+              )
+            }
           }
         }
 
