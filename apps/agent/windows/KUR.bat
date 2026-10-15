@@ -108,6 +108,14 @@ sc start PusulaAgent
 timeout /t 3 /nobreak >nul
 sc query PusulaAgent | findstr STATE
 
+:: config.json apiKey icerir: miras Users okumasini kaldir, yalniz SYSTEM + Administrators (2026-10-15).
+:: Servis de her baslangicta ayni kisitlamayi yapar; bu satir dosya zaten varsa hemen uygular.
+if exist "%~dp0config.json" (
+    icacls "%~dp0config.json" /remove:g *S-1-5-32-545 *S-1-5-11 *S-1-1-0 >nul 2>&1
+    icacls "%~dp0config.json" /inheritance:r /grant:r *S-1-5-18:F *S-1-5-32-544:F >nul
+    if errorlevel 1 ( echo  UYARI: config.json izni kisitlanamadi. ) else ( echo  config.json izni kisitlandi - yalniz SYSTEM ve Administrators. )
+)
+
 echo.
 :: Cok kullanicili terminalde (Thinstuff / RDS) tray KURULMAZ: her musteri girisinde acilip Global mutex
 :: yetki hatasiyla cokuyordu (2026-10-09, gunde ~100 cokme/terminal). Yalniz tek yoneticili sunucularda.

@@ -21,6 +21,7 @@ using System.Management;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using System.ServiceProcess;
 using System.Text;
@@ -118,6 +119,28 @@ class AgentConfig
             "{{\n  \"port\": {0},\n  \"apiKey\": \"{1}\",\n  \"autoStart\": {2}\n}}",
             Port, ApiKey, AutoStart ? "true" : "false");
         File.WriteAllText(_path, json, Encoding.UTF8);
+        IzinKisitla(_path);
+    }
+
+    // config.json apiKey icerir: klasorden miras gelen Users okumasi kalirsa terminaldeki her
+    // kullanici anahtari alip /api/exec ile SYSTEM komutu calistirabilir (2026-10-15).
+    // Mirasi kapat, yalniz SYSTEM + Administrators tam yetki. Mevcut dosyada da ACL'yi ezer.
+    public static void IzinKisitla(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            var fs = new FileSecurity();
+            fs.SetAccessRuleProtection(true, false);
+            fs.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                FileSystemRights.FullControl, AccessControlType.Allow));
+            fs.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+                FileSystemRights.FullControl, AccessControlType.Allow));
+            File.SetAccessControl(path, fs);
+        }
+        catch { }
     }
 
     public static string GenerateApiKey()
@@ -2535,6 +2558,8 @@ static class Program
                 svcConfig = new AgentConfig { Port = 8585, ApiKey = AgentConfig.GenerateApiKey() };
                 svcConfig.Save(appDir);
             }
+            // Eski kurulumlarda dosya miras izniyle kalmis olabilir: her servis baslangicinda kisitla
+            AgentConfig.IzinKisitla(Path.Combine(appDir, "config.json"));
             Metrics.Init();
             ServiceBase.Run(new AgentService(svcConfig));
             return;
@@ -2546,6 +2571,9 @@ static class Program
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             var trayCfg = AgentConfig.Load(appDir);
+            // config.json yalniz SYSTEM/Administrators okur; yukseltilmemis tray okuyamazsa varsayilan portla ac
+            if (trayCfg == null && File.Exists(Path.Combine(appDir, "config.json")))
+                trayCfg = new AgentConfig();
             if (trayCfg == null)
             {
                 MessageBox.Show("config.json bulunamadi. Once servisi kurun (KUR.bat).",
