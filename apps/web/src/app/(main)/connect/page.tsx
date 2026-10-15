@@ -37,6 +37,10 @@ import type { ConnectCihazIslemi, ConnectCihazSatir, ConnectSayimDurum, ConnectO
 /** Müşteriye gönderilecek uygulama: servisteki güncel (imzalı) exe — yeni sürüm yayınlanınca bu adres de günceller */
 const UYGULAMA_INDIR = "https://aktarim.pusulanet.net/connect/indir"
 
+/** pusula-ui TabsContent içeriği her girişte 0,5 sn blur + opacity ile getiriyor;
+ *  Connect sayfası açılırken ve sekme değişirken animasyonsuz gelsin (kullanıcı isteği). */
+const ANIMASYONSUZ = { initial: false, exit: undefined, transition: { duration: 0 } } as const
+
 /** Servis zamanları SQLite datetime('now') = UTC "YYYY-MM-DD HH:MM:SS". */
 const zaman = (s: string | null) => (s ? new Date(s.replace(" ", "T") + "Z") : null)
 const tarihMetni = (s: string | null) =>
@@ -298,16 +302,16 @@ export default function ConnectPage() {
             </div>
           </div>
 
-          <TabsContent value="cihazlar" className="mt-3">
+          <TabsContent value="cihazlar" className="mt-3" {...ANIMASYONSUZ}>
             <CihazListesi cihazlar={cihazlar} sonSurum={sonSurum} onSec={setSecili} onIslem={(c, islem) => setOnay({ c, islem })} />
           </TabsContent>
-          <TabsContent value="olaylar" className="mt-3">
+          <TabsContent value="olaylar" className="mt-3" {...ANIMASYONSUZ}>
             <OlayListesi cihazlar={cihazlar} onCihaz={setSecili} yenile={yenileSayac} />
           </TabsContent>
-          <TabsContent value="duyurular" className="mt-3">
+          <TabsContent value="duyurular" className="mt-3" {...ANIMASYONSUZ}>
             <DuyurularSekmesi cihazlar={cihazlar} yenile={yenileSayac} />
           </TabsContent>
-          <TabsContent value="ayarlar" className="mt-3">
+          <TabsContent value="ayarlar" className="mt-3" {...ANIMASYONSUZ}>
             <AyarlarSekmesi />
           </TabsContent>
         </Tabs>

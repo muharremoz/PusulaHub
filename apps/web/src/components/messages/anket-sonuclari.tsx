@@ -6,7 +6,9 @@
  */
 
 import type { Anket, AnketCevaplari, AnketSorusu } from "@/lib/anket"
+import { useState } from "react"
 import { Star } from "lucide-react"
+import { ComboboxMulti } from "@/components/ui/combobox"
 
 export interface AnketAlicisi {
   username: string
@@ -82,15 +84,46 @@ function cevapMetni(s: AnketSorusu, v: AnketCevaplari[string] | undefined) {
   return String(v)
 }
 
+const kisiAnahtari = (a: AnketAlicisi) => `${a.serverName ?? ""}::${a.username}`
+
 export function AnketSonuclari({ anket, alicilar }: { anket: Anket; alicilar: AnketAlicisi[] }) {
-  const cevaplayan = alicilar.filter((a) => a.answers && Object.keys(a.answers).length)
+  const cevaplayanTumu = alicilar.filter((a) => a.answers && Object.keys(a.answers).length)
+  // Kullanıcı filtresi — boşsa tüm cevaplayanlar; seçiliyse özet + tablo yalnız onlara göre
+  const [seciliKisiler, setSeciliKisiler] = useState<string[]>([])
+  const cevaplayan = seciliKisiler.length
+    ? cevaplayanTumu.filter((a) => seciliKisiler.includes(kisiAnahtari(a)))
+    : cevaplayanTumu
   const cevaplar = cevaplayan.map((a) => a.answers!)
 
   return (
     <div className="space-y-3">
-      <p className="text-muted-foreground text-[12px]">
-        <span className="text-foreground font-medium tabular-nums">{cevaplayan.length}</span> / {alicilar.length} kişi cevapladı
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-muted-foreground text-[12px]">
+          <span className="text-foreground font-medium tabular-nums">{cevaplayanTumu.length}</span> / {alicilar.length} kişi cevapladı
+          {seciliKisiler.length > 0 && <> · <span className="text-foreground font-medium tabular-nums">{cevaplayan.length}</span> kişi gösteriliyor</>}
+        </p>
+        {cevaplayanTumu.length > 1 && (
+          <ComboboxMulti
+            className="h-7 w-60 text-[12px]"
+            items={cevaplayanTumu}
+            getKey={kisiAnahtari}
+            getLabel={(a) => `${a.username} ${a.serverName ?? ""}`}
+            values={seciliKisiler}
+            onValuesChange={setSeciliKisiler}
+            placeholder="Tüm cevaplayanlar"
+            searchPlaceholder="Kullanıcı ara…"
+            emptyText="Kullanıcı yok"
+            renderSummary={(v) => `${v.length} kullanıcı seçili`}
+            align="end"
+            renderItem={(a) => (
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-mono">{a.username}</span>
+                <span className="text-muted-foreground shrink-0 text-[11px]">{a.serverName ?? "—"}</span>
+              </span>
+            )}
+          />
+        )}
+      </div>
       {anket.sorular.map((s) => <SoruOzeti key={s.id} s={s} cevaplar={cevaplar} />)}
 
       {cevaplayan.length > 0 && (
@@ -105,7 +138,7 @@ export function AnketSonuclari({ anket, alicilar }: { anket: Anket; alicilar: An
             <tbody>
               {cevaplayan.map((a) => (
                 <tr key={`${a.serverName}-${a.username}`} className="hover:bg-muted/20 border-b last:border-0">
-                  <td className="px-3 py-1.5 font-medium whitespace-nowrap">{a.username}</td>
+                  <td className="px-3 py-1.5 font-mono font-medium whitespace-nowrap">{a.username}</td>
                   {anket.sorular.map((s) => <td key={s.id} className="max-w-56 truncate px-3 py-1.5" title={cevapMetni(s, a.answers![s.id])}>{cevapMetni(s, a.answers![s.id])}</td>)}
                 </tr>
               ))}

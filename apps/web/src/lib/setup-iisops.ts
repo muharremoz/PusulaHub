@@ -201,6 +201,102 @@ export function buildPatchUsersXml(opts: {
   ].join("; ")
 }
 
+/* ── API hizmeti — Yeni Hizmet penceresinin Users.xml kullanıcısı ───────
+ *
+ * Mevcut firmaya Yeni Hizmet penceresinden eklenen API hizmetinin Users.xml'i
+ * yalnız pencerede girilen kullanıcıyı içerir (15.10.2026 kullanıcı kararı):
+ * şablondan (C:\Demo) ya da kardeş hizmetten gelen <User>'ların HEPSİ silinir
+ * — Kivi'nin entegrasyon kullanıcısı dahil. Kullanıcı girilmediyse dosya
+ * kullanıcısız kalır. DB listesi dosyadaki <DB>'den alınır (kardeş hizmetten
+ * kopyalama bu adımdan önce yazar). Şifre çıktıya yazılmaz.
+ *
+ * Users.xml'i olmayan hizmetler (SarrafPro) kullanıcıyı Web.config'te
+ * `<appSettings><add key='User'/><add key='Pass'/>` olarak tutar — dosyada bu
+ * anahtarlar varsa kullanıcı oraya yazılır. Hizmet ikisini de taşıyorsa ikisi
+ * de yazılır. Kullanıcı girilmediyse appSettings'e dokunulmaz (şablonda boş).
+ * Çıktı: `XML:UPDATED users=<0|1> dbs=<n>` / `XML:NO_FILE`, ve `WEB:UPDATED` /
+ * `WEB:NO_KEYS` / `WEB:NO_FILE` / `WEB:SKIP` (kullanıcı yok).
+ */
+export function buildSetApiKullanici(opts: {
+  /** Hizmet klasörü (C:\Pusula\Service\<firma>\<hizmet>) */
+  hizmetYolu: string
+  /** Yoksa Users.xml kullanıcıları silinir, appSettings'e dokunulmaz */
+  user?:      { username: string; password: string }
+}): string {
+  const lines = [
+    `$yol='${psQuote(opts.hizmetYolu)}'`,
+    `$f = Join-Path $yol 'Config/Users.xml'`,
+    `$w = Join-Path $yol 'Web.config'`,
+  ]
+  if (opts.user) lines.push(`$kul='${psQuote(opts.user.username)}'`, `$sif='${psQuote(opts.user.password)}'`)
+
+  // Users.xml — tüm <User>'lar silinir, kullanıcı varsa tek o eklenir
+  lines.push(
+    `if(-not (Test-Path -LiteralPath $f)){ Write-Output 'XML:NO_FILE' } else {` +
+      `[xml]$doc = Get-Content -LiteralPath $f -Raw -Encoding UTF8; ` +
+      `$root = $doc.SelectSingleNode('/Users'); ` +
+      `if($null -eq $root){ $root = $doc.AppendChild($doc.CreateElement('Users')) }; ` +
+      `$dbs = @($root.SelectNodes('DB/Data') | ForEach-Object { $_.InnerText.Trim() } | Where-Object { $_ }); ` +
+      `foreach($n in @($root.SelectNodes('User'))){ [void]$root.RemoveChild($n) }; ` +
+      (opts.user
+        ? `$userEl = $doc.CreateElement('User'); ` +
+          `$un = $doc.CreateElement('Username'); $un.InnerText = $kul; [void]$userEl.AppendChild($un); ` +
+          `$pw = $doc.CreateElement('Password'); $pw.InnerText = $sif; [void]$userEl.AppendChild($pw); ` +
+          `$dWrap = $doc.CreateElement('Data'); foreach($db in $dbs){ $di = $doc.CreateElement('Data'); $di.InnerText = $db; [void]$dWrap.AppendChild($di) }; [void]$userEl.AppendChild($dWrap); ` +
+          // <User>'lar <DB>'den önce durur (dosyanın bilinen düzeni)
+          `$dbNode = $root.SelectSingleNode('DB'); ` +
+          `if($dbNode){ [void]$root.InsertBefore($userEl, $dbNode) } else { [void]$root.AppendChild($userEl) }; `
+        : ``) +
+      `$doc.Save($f); ` +
+      `Write-Output ('XML:UPDATED users=' + @($root.SelectNodes('User')).Count + ' dbs=' + $dbs.Count) ` +
+    `}`,
+  )
+
+  // Web.config appSettings User/Pass (SarrafPro) — XPath'teki tırnak PS'te '' ile
+  lines.push(
+    opts.user
+      ? `if(-not (Test-Path -LiteralPath $w)){ Write-Output 'WEB:NO_FILE' } else {` +
+          `[xml]$wdoc = Get-Content -LiteralPath $w -Raw -Encoding UTF8; ` +
+          `$uN = $wdoc.SelectSingleNode('//appSettings/add[@key=''User'']'); ` +
+          `$pN = $wdoc.SelectSingleNode('//appSettings/add[@key=''Pass'']'); ` +
+          `if($null -eq $uN -or $null -eq $pN){ Write-Output 'WEB:NO_KEYS' } else { ` +
+            `$uN.SetAttribute('value', $kul); $pN.SetAttribute('value', $sif); $wdoc.Save($w); Write-Output 'WEB:UPDATED' ` +
+          `} ` +
+        `}`
+      : `Write-Output 'WEB:SKIP'`,
+  )
+  return lines.join("; ")
+}
+
+/**
+ * Elle girilen API kullanıcısının alan hataları. İkisi de boş = girilmedi (hata
+ * yok). Kullanıcı adı: boşluksuz; `"` ve `^` agent komutunu bozar (CLAUDE.md).
+ * Şifre: tam 6 rakam (kullanıcı kararı).
+ */
+export function apiKimlikAlanHatalari(username: string, password: string): { kullanici: boolean; sifre: boolean } {
+  const u = username.trim()
+  if (!u && !password) return { kullanici: false, sifre: false }
+  return {
+    kullanici: !u || /[\s"^]/.test(u),
+    sifre:     !/^[0-9]{6}$/.test(password),
+  }
+}
+
+/** Sunucu tarafı denetim — geçerliyse null. */
+export function apiKimlikHatasi(username: string, password: string): string | null {
+  const h = apiKimlikAlanHatalari(username, password)
+  if (h.kullanici) return "Kullanıcı adı geçersiz"
+  if (h.sifre) return "Şifre 6 rakam olmalı"
+  return null
+}
+
+/** 6 rakamlı şifre üretir (kriptografik rastgele). */
+export function apiSifreUret(): string {
+  const b = new Uint32Array(6)
+  crypto.getRandomValues(b)
+  return Array.from(b, (x) => String(x % 10)).join("")
+}
+
 /* ── Hizmet ekleme — SQL ayarlarını firmanın mevcut hizmetinden al ─────
  *
  * Mevcut bir firmaya yalnız IIS hizmeti eklenince (SQL restore yok, yeni

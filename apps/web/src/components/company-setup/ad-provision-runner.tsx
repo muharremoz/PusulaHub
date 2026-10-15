@@ -33,6 +33,8 @@ export interface AdProvisionService {
   name:   string
   type:   ServiceType
   config: ServiceConfig | null
+  /** API hizmeti için elle girilen uygulama kullanıcısı (Users.xml'de tek kullanıcı) */
+  appUser?: { username: string; password: string }
 }
 
 export interface AdProvisionBackupFile {
