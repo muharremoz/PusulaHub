@@ -5,7 +5,8 @@
  *   agent'a dokunmadan popup'a ulaşır. (Eski WinForms popup anketi göstermez: yalnız
  *   yeni WebView2 popup'ı — apps/agent/windows/notify-exe.)
  * DÖNÜŞ: agent'ın tek kanalı /api/ack, yalnız msgId + username taşır. Cevap msgId'ye
- *   eklenir:  "<msgId>~a~<base64url(JSON cevaplar)>". Poller ayırır (cevapAyir).
+ *   eklenir:  "<msgId>~a~<base64url(JSON cevaplar)>". Poller ayırır (ackAyir).
+ *   Pencere X ile / süre dolunca kapatıldıysa: "<msgId>~k" (okundu SAYILMAZ, 15.10.2026).
  *   Popup tarafı: apps/agent/windows/notify-web/src/anket.ts — biçim AYNI kalmalı.
  */
 
@@ -28,6 +29,8 @@ export interface Anket {
 export type AnketCevaplari = Record<string, string | string[] | number>
 
 export const CEVAP_AYRACI = "~a~"
+/** ACK msgId sonu: pencere okunmadan kapatıldı (X ya da otomatik kapanma). */
+export const KAPATMA_EKI = "~k"
 export const METIN_SINIRI = 500
 export const SORU_SINIRI = 10
 export const SECENEK_SINIRI = 8
@@ -65,6 +68,13 @@ export function cevapAyir(ackMsgId: string): { msgId: string; cevaplar: AnketCev
   } catch {
     return { msgId, cevaplar: null }
   }
+}
+
+/** ACK msgId'sini çözer: kapatma eki ("~k") varsa kapatti=true, yoksa cevapAyir. */
+export function ackAyir(ackMsgId: string): { msgId: string; cevaplar: AnketCevaplari | null; kapatti: boolean } {
+  if (ackMsgId.endsWith(KAPATMA_EKI) && !ackMsgId.includes(CEVAP_AYRACI))
+    return { msgId: ackMsgId.slice(0, -KAPATMA_EKI.length), cevaplar: null, kapatti: true }
+  return { ...cevapAyir(ackMsgId), kapatti: false }
 }
 
 /** Gelen cevapları ankete göre süzer (bilinmeyen soru/seçenek atılır, metin kısaltılır). */

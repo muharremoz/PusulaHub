@@ -3,7 +3,8 @@ import { getAllAgents } from "./agent-store"
 import {
   createMessage,
   addRecipient,
-  markRecipientDelivered,
+  claimRecipients,
+  markRecipientsFailed,
   markServerFailed,
   type MessageType,
   type MessagePriority,
@@ -201,6 +202,18 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
       return
     }
 
+    // Göndermeden önce sahiplen (pending → delivered). Alıcı satırları yazılırken poller retry'ı
+    // bazılarını çoktan göndermiş olabilir → onlar listeden düşer, ikinci pencere açılmaz (15.10.2026).
+    let gonderilecek: string[]
+    try { gonderilecek = await claimRecipients(input.msgId, serverId, onlineNow) }
+    catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      await markServerFailed(input.msgId, serverId, msg)
+      errors.push({ serverId, error: msg })
+      return
+    }
+    if (gonderilecek.length === 0) { serversOk++; return }
+
     try {
       const ctrl  = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 12000)
@@ -213,7 +226,7 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
         sentAt,
         // Agent'a SADECE şu an aktif olan target user'ları gönder; offline
         // olanlar pending kalır, sonradan login olunca Poller iletir.
-        targetUsernames: onlineNow,
+        targetUsernames: gonderilecek,
       }
       // Agent gövdeyi olduğu gibi popup'a verir → anket agent'a dokunmadan gider
       if (input.survey) payload.survey = input.survey
@@ -230,18 +243,15 @@ export async function broadcast(input: BroadcastInput): Promise<BroadcastResult>
       clearTimeout(timer)
       if (!res.ok) {
         const e = `Agent HTTP ${res.status}`
-        await markServerFailed(input.msgId, serverId, e)
+        await markRecipientsFailed(input.msgId, serverId, gonderilecek, e)
         errors.push({ serverId, error: e })
         return
       }
-      // Agent yanıtı OK — inject edilenler için (=onlineNow) delivered işaretle
-      await Promise.all(onlineNow.map(u =>
-        markRecipientDelivered(input.msgId, serverId, u)
-      ))
+      // Agent yanıtı OK — gönderilenler zaten sahiplenilirken delivered yazıldı
       serversOk++
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
-      await markServerFailed(input.msgId, serverId, msg)
+      await markRecipientsFailed(input.msgId, serverId, gonderilecek, msg)
       errors.push({ serverId, error: msg })
     }
   }))

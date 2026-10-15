@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { findServerBy } from "@/lib/hub-servers"
 import { requirePermission } from "@/lib/require-permission"
 import { listMessages, getRecipients } from "@/lib/messages-db"
-import { markReadByMsgId } from "@/lib/messages-db"
+import { ackIsle } from "@/lib/messages-db"
 
 /**
  * GET /api/servers/[id]/messages
@@ -41,8 +41,10 @@ export async function GET(
         const data = await resp.json()
         const acks: { msgId: string; username: string }[] = data.pendingAcks ?? []
         for (const a of acks) {
+          // Poller'la aynı işleyici: anket cevabı ("~a~") ve kapatma ("~k") ekleri ayrıştırılır.
+          // (Önceden ham msgId ile işleniyordu → bu sayfa açıkken gelen anket cevapları kayboluyordu.)
           if (a.msgId && a.username) {
-            await markReadByMsgId(a.msgId, a.username)
+            try { await ackIsle(a) } catch { /* ignore */ }
           }
         }
       }

@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "./supabase/admin"
-import { cevapTemizle, type Anket, type AnketCevaplari } from "./anket"
+import { ackAyir, cevapTemizle, type Anket, type AnketCevaplari } from "./anket"
 
 /**
  * Mesaj sistemi veri katmanı — Supabase `hub` schema (service-role).
@@ -12,7 +12,8 @@ import { cevapTemizle, type Anket, type AnketCevaplari } from "./anket"
 export type MessageType     = "info" | "warning" | "urgent"
 export type MessagePriority = "normal" | "high" | "urgent"
 export type RecipientKind   = "all" | "company" | "selected"
-export type RecipientStatus = "pending" | "delivered" | "read" | "failed"
+/** closed: pencere okunmadan kapatıldı (X / otomatik kapanma) — okundu SAYILMAZ (15.10.2026) */
+export type RecipientStatus = "pending" | "delivered" | "read" | "closed" | "failed"
 
 export interface MessageRow {
   Id:            string
@@ -41,6 +42,7 @@ export interface RecipientRow {
   Status:       RecipientStatus
   DeliveredAt:  string | null
   ReadAt:       string | null
+  ClosedAt:     string | null
   ErrorMessage: string | null
   Answers:      AnketCevaplari | null
 }
@@ -128,6 +130,40 @@ export async function markRecipientDelivered(messageId: string, serverId: string
   await sb().from("message_recipients")
     .update({ status: "delivered", delivered_at: new Date().toISOString() })
     .eq("message_id", messageId).eq("server_id", serverId).eq("username", username).eq("status", "pending")
+}
+
+/**
+ * Göndermeden ÖNCE alıcıları sahiplen: pending → delivered, atomik (UPDATE … WHERE status='pending').
+ * Yalnız sahiplenilen kullanıcılar döner; agent'a yalnız onlar gönderilir.
+ *
+ * Neden: 15.10.2026 T1, 80 kişilik anket — fan-out alıcıları pending yazıp agent'a gönderirken
+ * poller'ın 10 sn'lik retry'ı aynı pending satırları da görüp ayrıca gönderdi; retry turları da
+ * üst üste bindi → aynı mesaj için kullanıcıya 2-3 pencere. Önce-gönder-sonra-işaretle yerine
+ * önce-sahiplen-sonra-gönder: aynı satırı iki gönderen alamaz.
+ */
+export async function claimRecipients(messageId: string, serverId: string, usernames: string[]): Promise<string[]> {
+  if (!usernames.length) return []
+  const { data, error } = await sb().from("message_recipients")
+    .update({ status: "delivered", delivered_at: new Date().toISOString() })
+    .eq("message_id", messageId).eq("server_id", serverId).in("username", usernames).eq("status", "pending")
+    .select("username")
+  if (error) throw error
+  return ((data ?? []) as { username: string }[]).map(r => r.username)
+}
+
+/** Sahiplenilip gönderilemeyen alıcıyı yeniden pending yap (poller sonra dener). */
+export async function releaseRecipient(messageId: string, serverId: string, username: string): Promise<void> {
+  await sb().from("message_recipients")
+    .update({ status: "pending", delivered_at: null })
+    .eq("message_id", messageId).eq("server_id", serverId).eq("username", username).eq("status", "delivered")
+}
+
+/** Sahiplenilmiş alıcılar için gönderim hatası → failed. */
+export async function markRecipientsFailed(messageId: string, serverId: string, usernames: string[], error: string): Promise<void> {
+  if (!usernames.length) return
+  await sb().from("message_recipients")
+    .update({ status: "failed", error_message: error.slice(0, 500) })
+    .eq("message_id", messageId).eq("server_id", serverId).in("username", usernames).eq("status", "delivered")
 }
 
 export interface PendingForServerRow {
@@ -218,6 +254,28 @@ export async function markReadByMsgId(msgId: string, username: string, cevaplar?
   }
 }
 
+/**
+ * Pencere okunmadan kapatıldı ("<msgId>~k"): status closed + closed_at. read_count ARTMAZ.
+ * Okunmuş / zaten kapatılmış satıra dokunmaz.
+ */
+export async function markClosedByMsgId(msgId: string, username: string): Promise<void> {
+  await sb().from("message_recipients")
+    .update({ status: "closed", closed_at: new Date().toISOString() })
+    .eq("message_id", msgId).ilike("username", adDesen(username)).in("status", ["pending", "delivered"])
+}
+
+/**
+ * Agent'ın pendingAcks listesindeki tek ACK'yi işler (poller + /api/servers/[id]/messages ortak).
+ * msgId biçimleri lib/anket.ts ackAyir: düz (okudu) · "~a~<cevap>" (anket) · "~k" (kapattı).
+ * Dönüş: okundu sayıldıysa gerçek msgId (agent-store in-memory log'u için), değilse null.
+ */
+export async function ackIsle(ack: { msgId: string; username: string }): Promise<string | null> {
+  const { msgId, cevaplar, kapatti } = ackAyir(ack.msgId)
+  if (kapatti) { await markClosedByMsgId(msgId, ack.username); return null }
+  await markReadByMsgId(msgId, ack.username, cevaplar)
+  return msgId
+}
+
 /* ── Read ─────────────────────────────────────────────── */
 
 export interface ListFilter {
@@ -279,18 +337,19 @@ export async function getMessage(id: string): Promise<MessageRow | null> {
 
 export async function getRecipients(messageId: string): Promise<RecipientRow[]> {
   const { data } = await sb().from("message_recipients")
-    .select("id, message_id, server_id, server_name, username, status, delivered_at, read_at, error_message, answers")
+    .select("id, message_id, server_id, server_name, username, status, delivered_at, read_at, closed_at, error_message, answers")
     .eq("message_id", messageId)
     .order("status", { ascending: false }).order("server_name").order("username")
   return ((data ?? []) as {
     id: number; message_id: string; server_id: string; server_name: string | null; username: string
-    status: RecipientStatus; delivered_at: string | null; read_at: string | null; error_message: string | null
+    status: RecipientStatus; delivered_at: string | null; read_at: string | null; closed_at: string | null; error_message: string | null
     answers: AnketCevaplari | null
   }[]).map(r => ({
     Id: r.id, MessageId: r.message_id, ServerId: r.server_id, ServerName: r.server_name,
     Username: r.username, Status: r.status,
     DeliveredAt: r.delivered_at ? toZ(r.delivered_at) : null,
     ReadAt: r.read_at ? toZ(r.read_at) : null,
+    ClosedAt: r.closed_at ? toZ(r.closed_at) : null,
     ErrorMessage: r.error_message,
     Answers: r.answers ?? null,
   }))

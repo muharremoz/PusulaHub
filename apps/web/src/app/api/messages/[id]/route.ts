@@ -44,6 +44,7 @@ export async function GET(
         status:       r.Status,
         deliveredAt:  r.DeliveredAt,
         readAt:       r.ReadAt,
+        closedAt:     r.ClosedAt,
         errorMessage: r.ErrorMessage,
         answers:      r.Answers,
       })),

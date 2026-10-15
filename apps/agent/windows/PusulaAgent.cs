@@ -1891,8 +1891,11 @@ class ApiServer
         // Yoksa (eski davranis) tum aktif WTS oturumlarina gonder.
         List<string> targetUsers = ExtractStringArray(body, "targetUsernames");
 
+        // Ayni msgId ayni oturuma ikinci kez gelirse pencere acilmaz (SessionInjector tekillestirme)
+        string msgId = ExtractJson(body, "msgId");
+
         int injected = 0;
-        try { injected = SessionInjector.Inject(notifyExe, base64, targetUsers); }
+        try { injected = SessionInjector.Inject(notifyExe, base64, targetUsers, msgId); }
         catch (Exception ex)
         {
             Respond(ctx, 500, "{\"error\":\"" + ex.Message.Replace("\"","'") + "\"}");
@@ -2502,12 +2505,54 @@ static class SessionInjector
 
     public static int Inject(string exePath, string base64Data)
     {
-        return Inject(exePath, base64Data, null);
+        return Inject(exePath, base64Data, null, null);
+    }
+
+    public static int Inject(string exePath, string base64Data, List<string> targetUsernames)
+    {
+        return Inject(exePath, base64Data, targetUsernames, null);
+    }
+
+    /*  Tekillestirme (15.10.2026): T1'de 80 kisilik ankette Hub ayni mesaji ayni kullaniciya
+        2-3 kez /api/notify ile gonderdi (fan-out + poller retry yarisi) ve her biri ayri
+        PusulaNotify penceresi acti. Hub tarafi duzeltildi; bu ikinci savunma hatti:
+        ayni msgId + oturum + kullanici icin 12 saat icinde ikinci pencere acilmaz.
+        Bos msgId (elle deneme) tekillestirilmez. Agent yeniden baslarsa liste sifirlanir.  */
+    static readonly Dictionary<string, DateTime> _gosterilen = new Dictionary<string, DateTime>();
+    static readonly object _gosterilenLock = new object();
+    static readonly TimeSpan TekilSure = TimeSpan.FromHours(12);
+
+    // true: daha once gosterildi (atla). false: ilk kez — kaydedilir.
+    static bool DahaOnceGosterildi(string msgId, int sessionId, string user)
+    {
+        if (string.IsNullOrEmpty(msgId)) return false;
+        string anahtar = msgId + "|" + sessionId + "|" + user;
+        DateTime simdi = DateTime.UtcNow;
+        lock (_gosterilenLock)
+        {
+            if (_gosterilen.Count > 2000)
+            {
+                var eski = new List<string>();
+                foreach (var kv in _gosterilen)
+                    if (simdi - kv.Value > TekilSure) eski.Add(kv.Key);
+                foreach (string k in eski) _gosterilen.Remove(k);
+            }
+            DateTime t;
+            if (_gosterilen.TryGetValue(anahtar, out t) && simdi - t < TekilSure) return true;
+            _gosterilen[anahtar] = simdi;
+            return false;
+        }
+    }
+
+    static void GosterimiGeriAl(string msgId, int sessionId, string user)
+    {
+        if (string.IsNullOrEmpty(msgId)) return;
+        lock (_gosterilenLock) { _gosterilen.Remove(msgId + "|" + sessionId + "|" + user); }
     }
 
     // targetUsernames null ya da boşsa TÜM aktif oturumlara; doluysa yalnız eşleşenlere inject eder.
     // Karşılaştırma: "DOMAIN\user" ve "user" formları eşdeğer, büyük-küçük duyarsız.
-    public static int Inject(string exePath, string base64Data, List<string> targetUsernames)
+    public static int Inject(string exePath, string base64Data, List<string> targetUsernames, string msgId)
     {
         List<string> allowed = null;
         if (targetUsernames != null && targetUsernames.Count > 0)
@@ -2535,15 +2580,22 @@ static class SessionInjector
                 if (info.State != 0) continue; // WTSActive only
 
                 // Username filtresi varsa önce kontrol et
+                string sessionUser = NormalizeUser(GetSessionUserName(info.SessionID));
                 if (allowed != null)
                 {
-                    string sessionUser = NormalizeUser(GetSessionUserName(info.SessionID));
                     if (string.IsNullOrEmpty(sessionUser)) continue;
                     if (!allowed.Contains(sessionUser)) continue;
                 }
 
+                // Bu oturumda bu mesajin penceresi zaten acildiysa tekrar acma; sayima dahil (Hub "iletildi" bilsin)
+                if (DahaOnceGosterildi(msgId, info.SessionID, sessionUser)) { count++; continue; }
+
                 IntPtr hToken;
-                if (!WTSQueryUserToken((uint)info.SessionID, out hToken)) continue;
+                if (!WTSQueryUserToken((uint)info.SessionID, out hToken))
+                {
+                    GosterimiGeriAl(msgId, info.SessionID, sessionUser);
+                    continue;
+                }
                 try
                 {
                     IntPtr envBlock;
@@ -2563,6 +2615,7 @@ static class SessionInjector
                         if (pi.hThread != IntPtr.Zero) CloseHandle(pi.hThread);
                         count++;
                     }
+                    else GosterimiGeriAl(msgId, info.SessionID, sessionUser);
                 }
                 finally { CloseHandle(hToken); }
             }

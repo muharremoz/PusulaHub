@@ -8,7 +8,7 @@
  *   "Okudum, anladım"     → exe'ye { tur: "okudum" }      exe agent'a ACK gönderir, kapanır
  *   anket "Gönder"        → exe'ye { tur: "okudum", cevaplar } exe cevabı ACK msgId'sine ekler (bkz. anket.ts)
  *   "10 dk sonra hatırlat"→ exe'ye { tur: "ertele", dakika } exe gizlenir, süre sonunda yeniden gösterir
- *   X ya da süre doldu    → exe'ye { tur: "kapat" }        ACK yok (bugünkü otomatik kapanma gibi)
+ *   X ya da süre doldu    → exe'ye { tur: "kapat" }        exe ACK'yı "<msgId>~k" gönderir → Hub "Kapattı" (okundu sayılmaz)
  *
  * Mesaj alanları agent'ın PusulaNotify'a verdiği JSON'la aynı (docs/messaging-system.md).
  */

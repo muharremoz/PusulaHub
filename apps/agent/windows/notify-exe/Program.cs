@@ -287,22 +287,25 @@ namespace PusulaNotify
             _bitti = true;
             Hide();
             if (okudu) await OkuduAsync(cevaplar);
+            else await OkuduAsync(kapatti: true);
             Close();
         }
 
         /// <summary>Eski PusulaNotify ile aynı: localhost'taki agent'a ACK (GPO dışarı çıkışı engellese de çalışır).</summary>
-        private async Task OkuduAsync(object cevaplar = null)
+        private async Task OkuduAsync(object cevaplar = null, bool kapatti = false)
         {
             /*  Anket cevabı: agent ACK'ta yalnız msgId + username taşır → cevap msgId'ye eklenir:
-             *  "<msgId>~a~<base64url(JSON)>". Hub poller ayırır (apps/web/src/lib/anket.ts cevapAyir).  */
+             *  "<msgId>~a~<base64url(JSON)>". Hub poller ayırır (apps/web/src/lib/anket.ts ackAyir).
+             *  X / süre dolunca kapatma: "<msgId>~k" — Hub "Kapattı" yazar, okundu SAYMAZ (15.10.2026).  */
             var ackId = _m.MsgId;
-            if (cevaplar != null)
+            if (kapatti) ackId += "~k";
+            else if (cevaplar != null)
             {
                 var b64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(new JavaScriptSerializer().Serialize(cevaplar)))
                     .TrimEnd('=').Replace('+', '-').Replace('/', '_');
                 ackId += "~a~" + b64;
             }
-            if (_deneme) { if (cevaplar != null) Program.Gunluk("deneme ACK (gönderilmedi): " + ackId); return; }
+            if (_deneme) { if (cevaplar != null || kapatti) Program.Gunluk("deneme ACK (gönderilmedi): " + ackId); return; }
             if (string.IsNullOrEmpty(_m.MsgId)) return;
             try
             {

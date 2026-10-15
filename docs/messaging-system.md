@@ -24,6 +24,25 @@ Hub Poller → markMessageRead()
 Tab-messages yenile → okundu bilgisi görünür
 ```
 
+### ACK msgId ekleri ve tekilleştirme (15.10.2026)
+
+Agent ACK'ta yalnız `msgId + username` taşır; ek bilgi msgId'nin sonuna eklenir,
+Hub `lib/anket.ts` `ackAyir` ile ayırır (`lib/messages-db.ts` `ackIsle` — poller ve
+`/api/servers/[id]/messages` aynı işleyiciyi kullanır):
+
+| ACK msgId | Anlamı | Hub |
+|---|---|---|
+| `<id>` | "Okudum" | `status=read`, `read_count` +1 |
+| `<id>~a~<base64url JSON>` | Anket cevabı | `read` + `answers` |
+| `<id>~k` | X ile / süre dolunca kapattı (yeni WebView2 popup) | `status=closed`, `closed_at` — okundu SAYILMAZ |
+
+"Daha sonra" (ertele) ACK göndermez; popup gizlenip süre sonunda yeniden açılır.
+
+**Yinelenen pencere önlemi:** Hub alıcıyı göndermeden ÖNCE atomik sahiplenir
+(`claimRecipients`: pending → delivered); fan-out ile poller retry'ı aynı satırı ikinci
+kez gönderemez, retry turları sunucu başına tek. Agent da aynı `msgId + oturum + kullanıcı`
+için 12 saat içinde ikinci `PusulaNotify` başlatmaz (`SessionInjector.DahaOnceGosterildi`).
+
 ---
 
 ## Bileşenler

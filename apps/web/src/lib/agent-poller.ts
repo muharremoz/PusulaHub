@@ -14,8 +14,7 @@
 
 import { getSupabaseAdmin } from "./supabase/admin"
 import { upsertAgentFromPoll, markMessageRead, markAgentOffline } from "./agent-store"
-import { markReadByMsgId, getPendingForServer, markRecipientDelivered, markServerFailed } from "./messages-db"
-import { cevapAyir } from "./anket"
+import { ackIsle, getPendingForServer, claimRecipients, releaseRecipient, markServerFailed } from "./messages-db"
 import type { AgentReport } from "./agent-types"
 import { withSqlConnection } from "./sql-external"
 import { decrypt } from "./crypto"
@@ -340,9 +339,23 @@ async function persistSqlDatabases(serverName: string, report: AgentReport): Pro
   }
 }
 
-/* ── Pending mesajları Active session'daki kullanıcıya ilet (DEĞİŞMEZ mantık) ── */
+/* ── Pending mesajları Active session'daki kullanıcıya ilet ──
+ * Yinelenen pencere önlemi (15.10.2026): retry poll'u beklemeden (void) başlıyor ve 80 alıcıda
+ * 10 sn'lik poll aralığını aşıyordu → bir sonraki tur aynı pending satırları tekrar gönderiyordu.
+ * Artık (1) sunucu başına tek retry turu, (2) her alıcı göndermeden önce atomik sahipleniliyor
+ * (fan-out ile de yarışmaz), gönderilemezse pending'e geri bırakılıyor.                        */
+const _retrySuruyor = new Set<string>()
+
 async function retryPendingForActiveUsers(server: ServerRow, port: number, report: AgentReport): Promise<void> {
   if (isReadOnly()) return  // lokalde gerçek kullanıcılara popup gönderilmesin
+  if (!server.ApiKey) return
+  if (_retrySuruyor.has(server.Id)) return
+  _retrySuruyor.add(server.Id)
+  try { await retryPending(server, port, report) }
+  finally { _retrySuruyor.delete(server.Id) }
+}
+
+async function retryPending(server: ServerRow, port: number, report: AgentReport): Promise<void> {
   if (!server.ApiKey) return
   const activeUsers = new Set((report.sessions ?? []).filter(s => s.username && s.state === "Active").map(s => s.username.toLowerCase()))
   if (activeUsers.size === 0) return
@@ -352,6 +365,10 @@ async function retryPendingForActiveUsers(server: ServerRow, port: number, repor
   if (eligible.length === 0) return
 
   for (const p of eligible) {
+    // Sahiplenemediysek başka bir gönderen (fan-out / önceki tur) almış — atla
+    const alinan = await claimRecipients(p.messageId, server.Id, [p.username]).catch(() => [] as string[])
+    if (alinan.length === 0) continue
+    let gitti = false
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 12_000)
@@ -363,12 +380,17 @@ async function retryPendingForActiveUsers(server: ServerRow, port: number, repor
       })
       clearTimeout(timer)
       if (res.ok) {
-        await markRecipientDelivered(p.messageId, server.Id, p.username)
+        gitti = true
         console.log(`[Poller] retry → ${server.Name}/${p.username} delivered (msg ${p.messageId.slice(0, 8)})`)
       } else {
         console.log(`[Poller] retry HTTP ${res.status} (${server.Name}/${p.username})`)
       }
-    } catch (err) { void err }
+    } catch (err) {
+      /*  Zaman aşımında agent pencereyi açmış olabilir; yine de pending'e bırakılır (eski davranış) —
+       *  agent tarafı aynı msgId+oturum için ikinci pencereyi zaten açmaz (PusulaAgent.cs).        */
+      void err
+    }
+    if (!gitti) await releaseRecipient(p.messageId, server.Id, p.username).catch(() => {})
   }
 }
 
@@ -431,10 +453,11 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
     const pendingAcks: { msgId: string; username: string }[] = data.pendingAcks ?? []
     for (const ack of pendingAcks) {
       if (ack.msgId && ack.username) {
-        // Anket cevabı msgId'nin sonunda gelir ("<id>~a~<base64url>") — lib/anket.ts
-        const { msgId, cevaplar } = cevapAyir(ack.msgId)
-        markMessageRead(msgId, ack.username)
-        try { await markReadByMsgId(msgId, ack.username, cevaplar) } catch { /* ignore */ }
+        // msgId eki: "~a~<cevap>" anket, "~k" okunmadan kapattı — lib/anket.ts ackAyir
+        try {
+          const okunan = await ackIsle(ack)
+          if (okunan) markMessageRead(okunan, ack.username)
+        } catch { /* ignore */ }
       }
     }
 
