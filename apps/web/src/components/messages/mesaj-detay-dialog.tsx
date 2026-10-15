@@ -14,7 +14,7 @@ import {
   type MessageItem, type RecipientItem,
 } from "@/components/messages/mesaj-ortak"
 
-type AliciFiltre = "tumu" | "okudu" | "okumadi" | "hata"
+type AliciFiltre = "tumu" | "okudu" | "kapatti" | "okumadi" | "hata"
 
 /**
  * Gönderilen mesajın ayrıntısı — üste sabit pencere (Yeni Mesaj ile aynı dil). Alıcılar
@@ -48,6 +48,7 @@ export function MesajDetayDialog({
   const sayilar = useMemo(() => ({
     tumu:    alicilar.length,
     okudu:   alicilar.filter((a) => a.status === "read").length,
+    kapatti: alicilar.filter((a) => a.status === "closed").length,
     okumadi: alicilar.filter((a) => a.status === "delivered" || a.status === "pending").length,
     hata:    alicilar.filter((a) => a.status === "failed").length,
   }), [alicilar])
@@ -55,6 +56,7 @@ export function MesajDetayDialog({
   const gorunen = alicilar.filter((a) =>
     filtre === "tumu" ? true
     : filtre === "okudu" ? a.status === "read"
+    : filtre === "kapatti" ? a.status === "closed"
     : filtre === "okumadi" ? a.status === "delivered" || a.status === "pending"
     : a.status === "failed",
   )
@@ -124,7 +126,7 @@ export function MesajDetayDialog({
                   type="single" value={filtre} onValueChange={(v) => v && setFiltre(v as AliciFiltre)}
                   variant="outline" size="sm"
                 >
-                  {([["tumu", "Tümü"], ["okudu", "Okudu"], ["okumadi", "Okumadı"], ["hata", "Hata"]] as const).map(([k, ad]) => (
+                  {([["tumu", "Tümü"], ["okudu", "Okudu"], ["kapatti", "Kapattı"], ["okumadi", "Okumadı"], ["hata", "Hata"]] as const).map(([k, ad]) => (
                     <ToggleGroupItem key={k} value={k} className="h-7 gap-1.5 px-2.5 text-[12px]">
                       {ad} <span className="text-muted-foreground tabular-nums">{sayilar[k]}</span>
                     </ToggleGroupItem>
@@ -147,7 +149,7 @@ export function MesajDetayDialog({
                         <Server className="size-3 shrink-0" /> {r.serverName ?? "—"}
                       </span>
                       <span className="text-muted-foreground w-28 shrink-0 text-right text-[11px] tabular-nums">
-                        {tarihYaz(r.readAt ?? r.deliveredAt) || DURUM[r.status]?.label}
+                        {tarihYaz(r.readAt ?? r.closedAt ?? r.deliveredAt) || DURUM[r.status]?.label}
                       </span>
                     </div>
                     {r.status === "failed" && r.errorMessage && (

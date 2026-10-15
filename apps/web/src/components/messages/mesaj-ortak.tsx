@@ -1,4 +1,4 @@
-import { Check, CheckCheck, Clock, X } from "lucide-react"
+import { Check, CheckCheck, Clock, EyeOff, X } from "lucide-react"
 import type { AnketCevaplari } from "@/lib/anket"
 
 /* Mesajlar sayfası ve pencerelerinin ortak tipleri + görünüm yardımcıları. */
@@ -6,7 +6,8 @@ import type { AnketCevaplari } from "@/lib/anket"
 export type MsgType         = "info" | "warning" | "urgent"
 export type MsgPriority     = "normal" | "high" | "urgent"
 export type RecipientKind   = "all" | "company" | "selected"
-export type RecipientStatus = "pending" | "delivered" | "read" | "failed"
+/** closed: pencereyi okumadan kapattı (X / otomatik kapanma) — okundu sayılmaz (lib/anket.ts ackAyir) */
+export type RecipientStatus = "pending" | "delivered" | "read" | "closed" | "failed"
 
 /**
  * Mesaj şablonu ("Hazır mesaj"). built-in olanlar `lib/preset-messages.ts`'den,
@@ -50,6 +51,7 @@ export interface RecipientItem {
   status:       RecipientStatus
   deliveredAt:  string | null
   readAt:       string | null
+  closedAt?:    string | null
   errorMessage: string | null
   answers?:     AnketCevaplari | null
 }
@@ -88,6 +90,7 @@ export const DURUM: Record<RecipientStatus, { label: string; ikon: React.ReactNo
   pending:   { label: "Beklemede", ikon: <Clock      className="text-muted-foreground size-3.5" /> },
   delivered: { label: "İletildi",  ikon: <Check      className="size-3.5 text-sky-600 dark:text-sky-400" /> },
   read:      { label: "Okundu",    ikon: <CheckCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" /> },
+  closed:    { label: "Kapattı",   ikon: <EyeOff     className="size-3.5 text-amber-600 dark:text-amber-400" /> },
   failed:    { label: "Başarısız", ikon: <X          className="size-3.5 text-rose-600 dark:text-rose-400" /> },
 }
 
