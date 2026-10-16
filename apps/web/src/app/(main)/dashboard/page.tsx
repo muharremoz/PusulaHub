@@ -43,6 +43,7 @@ export default function DashboardPage() {
   const [yukleniyor, setYukleniyor] = useState(true)
   const [firma, setFirma] = useState<DashFirmalar | null>(null)
   const [firmaYukleniyor, setFirmaYukleniyor] = useState(true)
+  const [lisansTumu, setLisansTumu] = useState(false)
 
   /*  Yedek testi — /api/tv/yedek-testi (SSE, salt okuma). Biten sonuç sunucuda
    *  hub.settings'e yazılıyor; durum önbelleği 30 sn eski kalabileceği için
@@ -237,20 +238,30 @@ export default function DashboardPage() {
                   },
                 },
               ]
+              // İlk 10 kayıt; "Tümünü göster" ile hepsi (tablo boyu satır sayısına göre büyür)
+              const gorunen = lisansTumu ? satirlar : satirlar.slice(0, 10)
               return (
+                <>
                 <Table<L>
-                  data={satirlar}
+                  data={gorunen}
                   getRowId={(x) => x.firkod}
                   columns={sutunlar}
                   columnDividers
                   rowHeight={36}
                   headerHeight={30}
-                  // En çok 12 satır görünür, fazlası tablo içinde kayar
-                  height={tabloBoyu(Math.min(satirlar.length, 12))}
+                  height={tabloBoyu(gorunen.length)}
                   loading={firmaYukleniyor}
                   className="rounded-[8px] text-[13px]"
                   emptyState="Önümüzdeki 30 günde lisansı dolan firma yok."
                 />
+                {satirlar.length > 10 && (
+                  <button type="button" onClick={() => setLisansTumu((v) => !v)}
+                    className="mt-2 w-full rounded-[5px] bg-card px-4 py-2 text-left text-[12px] font-medium text-primary transition-colors hover:bg-muted/30"
+                    style={{ boxShadow: "var(--card-shadow)" }}>
+                    {lisansTumu ? "Daha az göster" : `Devamını göster (${satirlar.length - 10} firma daha)`}
+                  </button>
+                )}
+                </>
               )
             })()}
           </section>
