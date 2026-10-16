@@ -20,7 +20,16 @@ export interface DashFirmalar {
   lisans: { dolmus: DashFirmaSatir[]; yaklasan: DashFirmaSatir[] }
   hakAsan: DashFirmaSatir[]
   yogun: (DashFirmaSatir & { cpu: number; ram: number; disk: number; db: number })[]
-  oturum: { seri: { ts: string; kisi: number }[]; zirve: { ts: string; kisi: number } | null; simdi: number | null }
+  oturum: {
+    seri: { ts: string; kisi: number }[]
+    zirve: { ts: string; kisi: number } | null
+    simdi: number | null
+    /** Bağlantısı kopmuş ama kapanmamış oturum (sessions_total − sessions_active), son kova */
+    kopuk: number | null
+    terminaller: { ad: string; simdi: number | null; zirve: number; zirveTs: string; kopuk: number | null; cpu: number | null; ram: number | null }[]
+    /** Önceki 7 günün (bugün hariç) en kalabalık anı — bugünle kıyas için */
+    hafta: { ts: string; kisi: number } | null
+  }
   kaynakHata: string[]
 }
 
@@ -124,18 +133,58 @@ async function topla(): Promise<DashFirmalar> {
     return { firkod: f.company_id, ad: f.name, deger: skor, ...p, detay: `CPU %${p.cpu} · RAM %${p.ram} · Disk %${p.disk} · DB %${p.db}` }
   }).sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0)).slice(0, 5)
 
-  // ── Bugünkü terminal oturumları (server_metrics 5 dk kova, RDP sunucuları toplamı) ──
+  // ── Terminal kullanımı (server_metrics 5 dk kova, RDP sunucuları) ──
+  // Bugün: toplam eğri + terminal başına şimdi/zirve/CPU/RAM/kopuk. Hafta: önceki 7 günün zirvesi (bugün hariç).
   const rdpIdler = ((rdpRol.data ?? []) as { server_id: string }[]).map((r) => r.server_id)
-  let oturum: DashFirmalar["oturum"] = { seri: [], zirve: null, simdi: null }
+  let oturum: DashFirmalar["oturum"] = { seri: [], zirve: null, simdi: null, kopuk: null, terminaller: [], hafta: null }
   try {
     if (rdpIdler.length) {
-      const kovalar = await hepsi<{ ts: string; sessions_active: number | null }>((a, b) =>
-        sb.schema("hub").from("server_metrics").select("ts, sessions_active").in("server_id", rdpIdler).gte("ts", gunBasi.toISOString()).order("ts").range(a, b))
-      const top = new Map<string, number>()
-      for (const k of kovalar) top.set(k.ts, (top.get(k.ts) ?? 0) + (k.sessions_active ?? 0))
-      const seri = [...top].map(([ts, kisi]) => ({ ts, kisi })).sort((a, b) => a.ts.localeCompare(b.ts))
-      const zirve = seri.reduce<{ ts: string; kisi: number } | null>((m, x) => (!m || x.kisi > m.kisi ? x : m), null)
-      oturum = { seri, zirve, simdi: seri.length ? seri[seri.length - 1].kisi : null }
+      type Kova = { ts: string; server_id: string; server_name: string; sessions_active: number | null; sessions_total: number | null; cpu_avg: number | null; ram_used_mb: number | null; ram_total_mb: number | null }
+      const haftaBasi = new Date(gunBasi.getTime() - 7 * 86_400_000)
+      const [kovalar, haftalik] = await Promise.all([
+        hepsi<Kova>((a, b) => sb.schema("hub").from("server_metrics")
+          .select("ts, server_id, server_name, sessions_active, sessions_total, cpu_avg, ram_used_mb, ram_total_mb")
+          .in("server_id", rdpIdler).gte("ts", gunBasi.toISOString()).order("ts").order("server_id").range(a, b)),
+        hepsi<{ ts: string; sessions_active: number | null }>((a, b) => sb.schema("hub").from("server_metrics")
+          .select("ts, sessions_active").in("server_id", rdpIdler).gte("ts", haftaBasi.toISOString()).lt("ts", gunBasi.toISOString())
+          .order("ts").order("server_id").range(a, b)),
+      ])
+      const toplamSeri = (satirlar: { ts: string; sessions_active: number | null }[]) => {
+        const top = new Map<string, number>()
+        for (const k of satirlar) top.set(k.ts, (top.get(k.ts) ?? 0) + (k.sessions_active ?? 0))
+        return [...top].map(([ts, kisi]) => ({ ts, kisi })).sort((a, b) => a.ts.localeCompare(b.ts))
+      }
+      const enYuksek = (s: { ts: string; kisi: number }[]) => s.reduce<{ ts: string; kisi: number } | null>((m, x) => (!m || x.kisi > m.kisi ? x : m), null)
+      const seri = toplamSeri(kovalar)
+      const zirve = enYuksek(seri)
+      const sonTs = seri.length ? seri[seri.length - 1].ts : null
+
+      // Terminal başına — son kovada ölçümü olmayan terminal "—" (veri gelmiyor)
+      const sunucuKovalari = new Map<string, Kova[]>()
+      for (const k of kovalar) sunucuKovalari.set(k.server_id, [...(sunucuKovalari.get(k.server_id) ?? []), k])
+      const terminaller = [...sunucuKovalari.values()].map((ks) => {
+        const son = ks[ks.length - 1]
+        const z = ks.reduce((m, k) => ((k.sessions_active ?? 0) > (m.sessions_active ?? 0) ? k : m), ks[0])
+        const guncel = son.ts === sonTs
+        return {
+          ad: son.server_name,
+          simdi: guncel ? son.sessions_active ?? 0 : null,
+          zirve: z.sessions_active ?? 0,
+          zirveTs: z.ts,
+          kopuk: guncel ? Math.max(0, (son.sessions_total ?? 0) - (son.sessions_active ?? 0)) : null,
+          cpu: guncel && son.cpu_avg != null ? Math.round(son.cpu_avg) : null,
+          ram: guncel && son.ram_used_mb != null && son.ram_total_mb ? Math.round((son.ram_used_mb / son.ram_total_mb) * 100) : null,
+        }
+      }).sort((a, b) => a.ad.localeCompare(b.ad, "tr", { numeric: true }))
+
+      const haftaZirve = enYuksek(toplamSeri(haftalik))
+      oturum = {
+        seri, zirve,
+        simdi: seri.length ? seri[seri.length - 1].kisi : null,
+        kopuk: terminaller.some((t) => t.kopuk != null) ? terminaller.reduce((t, x) => t + (x.kopuk ?? 0), 0) : null,
+        terminaller,
+        hafta: haftaZirve,
+      }
     }
   } catch (e) { kaynakHata.push(`Oturum geçmişi: ${e instanceof Error ? e.message : e}`) }
 

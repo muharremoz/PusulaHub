@@ -130,37 +130,80 @@ export default function DashboardPage() {
           </section>
 
           <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
-            <h2 className="px-2 pb-2 pt-1 text-[13px] font-semibold">Bugün</h2>
+            <h2 className="px-2 pb-2 pt-1 text-[13px] font-semibold">Terminal Kullanımı</h2>
             <div className="space-y-2">
               <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-[13px] font-medium">Terminal oturumları</p>
-                    <p className="text-[12px] text-muted-foreground">Tüm terminallerin aktif oturum toplamı · 5 dk</p>
-                  </div>
-                  <div className="flex gap-4 text-right">
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Şimdi</p>
-                      <p className="text-[15px] font-semibold tabular-nums">{firma?.oturum.simdi ?? "—"}</p>
+                {(() => {
+                  const o = firma?.oturum
+                  const saat = (ts: string) => new Date(ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+                  const gun = (ts: string) => new Date(ts).toLocaleDateString("tr-TR", { weekday: "short", day: "2-digit", month: "2-digit" })
+                  const Deger = ({ baslik, children, title }: { baslik: string; children: React.ReactNode; title?: string }) => (
+                    <div title={title}>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{baslik}</p>
+                      <p className="whitespace-nowrap text-[15px] font-semibold tabular-nums">{children}</p>
                     </div>
-                    <div>
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Zirve</p>
-                      <p className="text-[15px] font-semibold tabular-nums">
-                        {firma?.oturum.zirve ? (
-                          <>
-                            {firma.oturum.zirve.kisi}
-                            <span className="text-[12px] font-medium text-muted-foreground">
-                              {" · "}{new Date(firma.oturum.zirve.ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
-                            </span>
-                          </>
-                        ) : "—"}
-                      </p>
+                  )
+                  return (
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium">Bugün</p>
+                        <p className="text-[12px] text-muted-foreground">Tüm terminallerin aktif oturum toplamı · 5 dk</p>
+                      </div>
+                      <div className="flex shrink-0 gap-4 text-right">
+                        <Deger baslik="Şimdi">{o?.simdi ?? "—"}</Deger>
+                        <Deger baslik="Bugün zirve">
+                          {o?.zirve ? <>{o.zirve.kisi}<span className="text-[12px] font-medium text-muted-foreground"> · {saat(o.zirve.ts)}</span></> : "—"}
+                        </Deger>
+                        <Deger baslik="Önceki 7 gün" title="Bugün hariç son 7 günün en kalabalık anı">
+                          {o?.hafta ? <>{o.hafta.kisi}<span className="text-[12px] font-medium text-muted-foreground"> · {gun(o.hafta.ts)}</span></> : "—"}
+                        </Deger>
+                        <Deger baslik="Kopuk" title="Bağlantısı kopmuş ama kapanmamış oturum — RAM tutmaya devam eder">
+                          <span className={(o?.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : ""}>{o?.kopuk ?? "—"}</span>
+                        </Deger>
+                      </div>
                     </div>
-                  </div>
-                </div>
+                  )
+                })()}
                 <div className="mt-2 h-[160px]">
                   {firmaYukleniyor ? <Skeleton className="h-full w-full rounded-[5px]" /> : <OturumGrafik seri={firma?.oturum.seri ?? []} />}
                 </div>
+              </div>
+
+              {/* Terminal başına */}
+              <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+                <div className="grid grid-cols-[1fr_repeat(5,64px)] gap-2 border-b px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <span>Terminal</span>
+                  <span className="text-right">Şimdi</span>
+                  <span className="text-right">Zirve</span>
+                  <span className="text-right">Kopuk</span>
+                  <span className="text-right">CPU</span>
+                  <span className="text-right">RAM</span>
+                </div>
+                {firmaYukleniyor ? (
+                  <div className="space-y-2 px-4 py-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-[5px]" />)}</div>
+                ) : !firma?.oturum.terminaller.length ? (
+                  <p className="px-4 py-3 text-[12px] text-muted-foreground">Bugün için terminal ölçümü yok.</p>
+                ) : (
+                  <ul className="divide-y">
+                    {firma.oturum.terminaller.map((t) => {
+                      const yuzde = (v: number | null) => (
+                        <span className={`text-right ${v == null ? "text-muted-foreground" : v >= 90 ? "font-semibold text-red-600 dark:text-red-400" : v >= 75 ? "font-semibold text-amber-700 dark:text-amber-400" : ""}`}>
+                          {v == null ? "—" : `%${v}`}
+                        </span>
+                      )
+                      return (
+                        <li key={t.ad} className="grid grid-cols-[1fr_repeat(5,64px)] items-center gap-2 px-4 py-2 text-[13px] tabular-nums">
+                          <span className="truncate font-medium">{t.ad}</span>
+                          <span className="text-right font-semibold">{t.simdi ?? "—"}</span>
+                          <span className="text-right text-muted-foreground" title={`Bugün ${new Date(t.zirveTs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}>{t.zirve}</span>
+                          <span className={`text-right ${(t.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>{t.kopuk ?? "—"}</span>
+                          {yuzde(t.cpu)}
+                          {yuzde(t.ram)}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
             </div>
           </section>
