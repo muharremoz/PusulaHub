@@ -76,6 +76,14 @@ namespace PusulaConnect
             // Oturumda Windows başlık çubuğu gizli (ConnectPenceresi.OturumAc): küçültme şeritte
             var kucult = Dugme("Küçült", false, P);
             kucult.Click += (s, e) => { var f = FindForm(); if (f != null) f.WindowState = FormWindowState.Minimized; };
+            // Sayım kuruluysa (Pusula X ya da Pusula; aynı anda biri) şeritten de başlatılır — oturumdan çıkmadan
+            var sayim = Sayim.PusulaX.Kurulu ? Sayim.PusulaX : Sayim.Eski.Kurulu ? Sayim.Eski : null;
+            if (sayim != null)
+            {
+                var sayimDugme = Dugme("Sayım", false, P);
+                sayimDugme.Click += (s, e) => SayimBaslat(sayim, sayimDugme);
+                sag.Controls.Add(sayimDugme);
+            }
             sag.Controls.Add(kucult);
             sag.Controls.Add(_tamEkran);
             sag.Controls.Add(kes);
@@ -395,6 +403,21 @@ namespace PusulaConnect
             var y = (int)Math.Round(Ekran.Dpi(this) * 100 / 96.0);
             foreach (var d in new[] { 100, 125, 150, 175, 200, 250, 300 }) if (y <= d + 12) return (uint)d;
             return 300;
+        }
+
+        private void SayimBaslat(Sayim sayim, Button dugme)
+        {
+            // Program kendi penceresinde açılır; çift tıklamada iki kopya açılmasın
+            dugme.Enabled = false;
+            var t = new Timer { Interval = 2500 };
+            t.Tick += (s, e) => { t.Stop(); t.Dispose(); dugme.Enabled = true; };
+            t.Start();
+            try { sayim.Baslat(); }
+            catch (Exception e)
+            {
+                Gunluk.Yaz("Sayım şeritten başlatılamadı: " + e.Message);
+                MessageBox.Show(FindForm(), e.Message, "Sayım başlatılamadı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
 
         private static Button Dugme(string metin, bool vurgulu, Func<int, int> p)
