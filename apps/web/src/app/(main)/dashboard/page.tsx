@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
-import type { DashDurum, DashSunucu, DikkatOge } from "@/app/api/dashboard/durum/route"
+import type { DashDurum, DikkatOge } from "@/app/api/dashboard/durum/route"
 import type { DashFirmalar, DashFirmaSatir } from "@/app/api/dashboard/firmalar/route"
 import dynamic from "next/dynamic"
 
@@ -27,8 +27,6 @@ const ILK_GOSTERIM = 8
 
 const seviyeRenk = (p: number | null) =>
   p == null ? "bg-muted" : p >= 90 ? "bg-red-500" : p >= 75 ? "bg-amber-500" : "bg-emerald-500"
-const seviyeMetin = (p: number | null) =>
-  p == null ? "text-muted-foreground" : p >= 90 ? "text-red-600 dark:text-red-400" : p >= 75 ? "text-amber-700 dark:text-amber-400" : "text-foreground"
 
 export default function DashboardPage() {
   const [veri, setVeri] = useState<DashDurum | null>(null)
@@ -161,27 +159,6 @@ export default function DashboardPage() {
           )}
         </section>
 
-        {/* Sunucular */}
-        <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
-          <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
-            <h2 className="text-[13px] font-semibold">Sunucular</h2>
-            {veri && terminaller.length > 0 && (
-              <span className="text-[12px] text-muted-foreground">
-                Terminallerde {terminaller.reduce((t, s) => t + (s.aktifKullanici ?? 0), 0)} kişi çalışıyor
-                {(() => {
-                  const atanan = terminaller.reduce((t, s) => t + (s.atanmisKullanici ?? 0), 0)
-                  return atanan > 0 ? ` · ${atanan} kayıtlı kullanıcı` : ""
-                })()}
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-            {ilkYukleme
-              ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-[168px] rounded-[5px]" />)
-              : sunucular.map((s) => <SunucuKarti key={s.id} s={s} />)}
-          </div>
-        </section>
-
         {/* Firmalar + bugün */}
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
@@ -300,65 +277,6 @@ function DikkatSatiri({ d }: { d: DikkatOge }) {
         ? <Link href={d.link} className="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-muted/30">{icerik}</Link>
         : <div className="flex items-start gap-3 px-4 py-2.5">{icerik}</div>}
     </li>
-  )
-}
-
-function Cubuk({ etiket, yuzde, ek }: { etiket: string; yuzde: number | null; ek?: string }) {
-  return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2 text-[12px]">
-        <span className="text-muted-foreground">{etiket}</span>
-        <span className="truncate tabular-nums">
-          {ek && <span className="text-muted-foreground">{ek} · </span>}
-          <span className={`font-medium ${seviyeMetin(yuzde)}`}>{yuzde == null ? "—" : `%${yuzde}`}</span>
-        </span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className={`h-full rounded-full ${seviyeRenk(yuzde)}`} style={{ width: `${Math.min(100, yuzde ?? 0)}%` }} />
-      </div>
-    </div>
-  )
-}
-
-function SunucuKarti({ s }: { s: DashSunucu }) {
-  const terminal = s.roller.includes("RDP")
-  return (
-    <Link href={`/servers/${s.slug}`} className="block rounded-[5px] bg-card px-4 py-3 transition-colors hover:bg-muted/20" style={{ boxShadow: "var(--card-shadow)" }}>
-      <div className="flex items-center gap-2">
-        <span className={`size-2 shrink-0 rounded-full ${s.cevrimici ? "bg-emerald-500" : "bg-red-500"}`} />
-        <span className="truncate text-[14px] font-semibold">{s.ad}</span>
-        <span className="ml-auto flex shrink-0 gap-1">
-          {s.roller.map((r) => (
-            <span key={r} className="inline-flex rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{r === "RDP" ? "Terminal" : r}</span>
-          ))}
-        </span>
-      </div>
-      <p className="mt-0.5 text-[12px] tabular-nums text-muted-foreground">
-        {s.ip}{s.calisma ? ` · ${s.calisma} çalışıyor` : ""}
-      </p>
-
-      {s.cevrimici ? (
-        <div className="mt-3 space-y-2">
-          <Cubuk etiket="CPU" yuzde={s.cpu} />
-          <Cubuk etiket="RAM" yuzde={s.ram} ek={s.ramGB ? `${s.ramGB.kullanilan.toLocaleString("tr-TR")} / ${s.ramGB.toplam} GB` : undefined} />
-          {s.diskler.map((d) => <Cubuk key={d.surucu} etiket={`Disk ${d.surucu}`} yuzde={d.yuzde} ek={`${d.bosGB} GB boş`} />)}
-        </div>
-      ) : (
-        <div className="mt-3 rounded-[5px] bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">
-          Agent'a ulaşılamıyor{s.sonGorulme ? ` — son rapor ${new Date(s.sonGorulme).toLocaleString("tr-TR")}` : ""}
-        </div>
-      )}
-
-      {terminal && s.cevrimici && (
-        <div className="mt-3 flex items-center justify-between border-t pt-2 text-[12px]">
-          <span className="text-muted-foreground">Aktif oturum</span>
-          <span className="tabular-nums">
-            <span className="font-semibold">{s.aktifKullanici ?? "—"}</span>
-            {s.atanmisKullanici != null && <span className="text-muted-foreground"> / {s.atanmisKullanici} kayıtlı</span>}
-          </span>
-        </div>
-      )}
-    </Link>
   )
 }
 
