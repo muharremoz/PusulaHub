@@ -6,6 +6,7 @@ import { RefreshCw } from "lucide-react"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { Table, type TableColumn } from "@muharremoz/pusula-ui"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 import type { DashDurum } from "@/app/api/dashboard/durum/route"
@@ -23,6 +24,8 @@ const OturumGrafik = dynamic(() => import("@/components/dashboard/oturum-grafik"
  */
 
 const YENILEME_MS = 60_000
+/** Table yüksekliği: başlık 30 + satır 36; boşken boş durum sığsın */
+const tabloBoyu = (n: number) => `${30 + (n > 0 ? n * 36 : 120) + 2}px`
 
 const seviyeRenk = (p: number | null) =>
   p == null ? "bg-muted" : p >= 90 ? "bg-red-500" : p >= 75 ? "bg-amber-500" : "bg-emerald-500"
@@ -118,14 +121,6 @@ export default function DashboardPage() {
                   ...(firma?.lisans.yaklasan ?? []).map((x) => ({ ...x, kritik: (x.deger ?? 99) <= 7 })),
                 ]}
                 not={firma ? `${firma.lisans.dolmus.length} dolmuş · ${firma.lisans.yaklasan.length} yaklaşan` : undefined} />
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <FirmaListesi baslik="Kullanıcı hakkını aşanlar" yukleniyor={firmaYukleniyor}
-                  bos="Açık hesap sayısı hakkını aşan firma yok."
-                  satirlar={(firma?.hakAsan ?? []).map((x) => ({ ...x, rozet: `+${x.deger}` }))} />
-                <FirmaListesi baslik="En yoğun 5 firma" yukleniyor={firmaYukleniyor}
-                  bos="Yoğunluk verisi yok."
-                  satirlar={(firma?.yogun ?? []).map((x) => ({ ...x, skor: x.deger }))} />
-              </div>
             </div>
           </section>
 
@@ -208,6 +203,73 @@ export default function DashboardPage() {
             </div>
           </section>
         </div>
+
+        {/* Kullanıcı hakkını aşanlar */}
+        <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+          <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
+            <h2 className="text-[13px] font-semibold">Kullanıcı hakkını aşanlar</h2>
+            {firma && <span className="text-[12px] tabular-nums text-muted-foreground">{firma.hakAsan.length} firma · açık AD hesabı kullanıcı hakkından fazla</span>}
+          </div>
+          <Table<DashFirmalar["hakAsan"][number]>
+            data={firma?.hakAsan ?? []}
+            getRowId={(x) => x.firkod}
+            columns={[
+              { key: "firkod", header: "Kod", width: "90px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
+              { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
+              { key: "acik", header: "Açık hesap", align: "right", width: "120px", cell: (x) => <span className="tabular-nums">{x.acik}</span> },
+              { key: "hak", header: "Hak", align: "right", width: "90px", cell: (x) => <span className="tabular-nums">{x.hak}</span> },
+              {
+                key: "fazla", header: "Fazla", align: "center", width: "100px",
+                cell: (x) => <span className="inline-flex rounded-[5px] bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-400">+{x.deger}</span>,
+              },
+            ] satisfies TableColumn<DashFirmalar["hakAsan"][number]>[]}
+            columnDividers
+            rowHeight={36}
+            headerHeight={30}
+            height={tabloBoyu(firma?.hakAsan.length ?? 0)}
+            loading={firmaYukleniyor}
+            className="rounded-[8px] text-[13px]"
+            emptyState="Açık hesap sayısı hakkını aşan firma yok."
+          />
+        </section>
+
+        {/* En yoğun 5 firma */}
+        <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+          <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
+            <h2 className="text-[13px] font-semibold">En yoğun 5 firma</h2>
+            <span className="text-[12px] text-muted-foreground">Son 30 gün · kotaya oran (CPU, RAM, Disk, Veritabanı ortalaması)</span>
+          </div>
+          <Table<DashFirmalar["yogun"][number]>
+            data={firma?.yogun ?? []}
+            getRowId={(x) => x.firkod}
+            columns={[
+              { key: "firkod", header: "Kod", width: "90px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
+              { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
+              ...(["cpu", "ram", "disk", "db"] as const).map((k) => ({
+                key: k, header: k === "db" ? "Veritabanı" : k.toUpperCase().replace("DISK", "Disk"), align: "right" as const, width: "100px",
+                cell: (x: DashFirmalar["yogun"][number]) => <span className={`tabular-nums ${x[k] >= 90 ? "text-red-600 dark:text-red-400" : x[k] >= 75 ? "text-amber-700 dark:text-amber-400" : ""}`}>%{x[k]}</span>,
+              })),
+              {
+                key: "skor", header: "Yoğunluk", width: "160px",
+                cell: (x) => (
+                  <span className="flex items-center gap-2">
+                    <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <span className={`block h-full rounded-full ${seviyeRenk(x.deger ?? 0)}`} style={{ width: `${x.deger ?? 0}%` }} />
+                    </span>
+                    <span className="w-9 text-right font-semibold tabular-nums">%{x.deger}</span>
+                  </span>
+                ),
+              },
+            ] satisfies TableColumn<DashFirmalar["yogun"][number]>[]}
+            columnDividers
+            rowHeight={36}
+            headerHeight={30}
+            height={tabloBoyu(firma?.yogun.length ?? 0)}
+            loading={firmaYukleniyor}
+            className="rounded-[8px] text-[13px]"
+            emptyState="Yoğunluk verisi yok."
+          />
+        </section>
       </div>
     </PageContainer>
   )

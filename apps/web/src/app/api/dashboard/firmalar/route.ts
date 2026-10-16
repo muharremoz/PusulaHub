@@ -18,7 +18,7 @@ export interface DashFirmaSatir { firkod: string; ad: string; detay: string; deg
 export interface DashFirmalar {
   zaman: string
   lisans: { dolmus: DashFirmaSatir[]; yaklasan: DashFirmaSatir[] }
-  hakAsan: DashFirmaSatir[]
+  hakAsan: (DashFirmaSatir & { acik: number; hak: number })[]
   yogun: (DashFirmaSatir & { cpu: number; ram: number; disk: number; db: number })[]
   oturum: {
     seri: { ts: string; kisi: number }[]
@@ -96,10 +96,10 @@ async function topla(): Promise<DashFirmalar> {
   // ── Hakkı aşanlar: açık AD hesabı > kullanıcı hakkı ──────
   const acikHesap = new Map<string, number>()
   for (const u of adlar) { const k = (u.ou ?? "").trim(); if (k && u.enabled) acikHesap.set(k, (acikHesap.get(k) ?? 0) + 1) }
-  const hakAsan: DashFirmaSatir[] = []
+  const hakAsan: DashFirmalar["hakAsan"] = []
   for (const f of firmalar) {
     const hak = f.user_count ?? 0, acik = acikHesap.get(f.company_id) ?? 0
-    if (hak > 0 && acik > hak) hakAsan.push({ firkod: f.company_id, ad: f.name, deger: acik - hak, detay: `${acik} açık hesap · hak ${hak}` })
+    if (hak > 0 && acik > hak) hakAsan.push({ firkod: f.company_id, ad: f.name, deger: acik - hak, acik, hak, detay: `${acik} açık hesap · hak ${hak}` })
   }
   hakAsan.sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0))
 
