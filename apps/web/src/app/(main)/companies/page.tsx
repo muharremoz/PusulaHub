@@ -2422,26 +2422,26 @@ tr:nth-child(even) td{background:#fafafa}
                     {
                       key: "username", header: "Kullanıcı", sortable: true, width: "220px",
                       filter: <InlineTextFilter value={kulAdFiltre} onChange={setKulAdFiltre} placeholder="Kullanıcı ara…" />,
-                      cell: (u) => <span className="block truncate font-medium" title={u.username}>{u.username}</span>,
+                      cell: (u) => <span className="block truncate" title={u.username}>{u.username}</span>,
                     },
                     {
                       key: "displayName", header: "Ad soyad", sortable: true,
                       filter: <InlineTextFilter value={kulIsimFiltre} onChange={setKulIsimFiltre} placeholder="Ad ara…" />,
-                      cell: (u) => <span className="block truncate text-muted-foreground" title={u.displayName}>{u.displayName || "—"}</span>,
+                      cell: (u) => <span className="block truncate" title={u.displayName}>{u.displayName || "—"}</span>,
                     },
                     {
                       key: "usageCpu", header: "CPU", sortable: true, align: "right", width: "80px",
                       sortValue: (u) => u.usageCpu ?? -1,
-                      cell: (u) => <span className="tabular-nums text-muted-foreground" title={u.usageDate ? `Son ölçüm: ${u.usageDate}` : "Ölçüm yok"}>{u.usageCpu != null ? `%${u.usageCpu}` : "—"}</span>,
+                      cell: (u) => <span className="tabular-nums" title={u.usageDate ? `Son ölçüm: ${u.usageDate}` : "Ölçüm yok"}>{u.usageCpu != null ? `%${u.usageCpu}` : "—"}</span>,
                     },
                     {
                       key: "usageRamMB", header: "RAM", sortable: true, align: "right", width: "90px",
                       sortValue: (u) => u.usageRamMB ?? -1,
-                      cell: (u) => <span className="tabular-nums text-muted-foreground" title={u.usageDate ? `Son ölçüm: ${u.usageDate}` : "Ölçüm yok"}>{u.usageRamMB != null ? ram(u.usageRamMB) : "—"}</span>,
+                      cell: (u) => <span className="tabular-nums" title={u.usageDate ? `Son ölçüm: ${u.usageDate}` : "Ölçüm yok"}>{u.usageRamMB != null ? ram(u.usageRamMB) : "—"}</span>,
                     },
                     {
                       key: "lastLogin", header: "Son giriş", sortable: true, width: "160px",
-                      cell: (u) => <span className="tabular-nums text-muted-foreground">{u.lastLogin || "—"}</span>,
+                      cell: (u) => <span className="tabular-nums">{u.lastLogin || "—"}</span>,
                     },
                     {
                       key: "enabled", header: "Durum", sortable: true, align: "center", width: "100px",
@@ -2760,8 +2760,8 @@ tr:nth-child(even) td{background:#fafafa}
                         ].filter(Boolean).join("\n")
                         return (
                           <span className="flex min-w-0 items-center gap-2" title={dosyalar}>
-                            <Database className="size-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate font-medium">{db.Name}</span>
+                            <Database className="size-3.5 shrink-0" />
+                            <span className="truncate">{db.Name}</span>
                           </span>
                         )
                       },
@@ -2770,31 +2770,31 @@ tr:nth-child(even) td{background:#fafafa}
                       key: "Server", header: "Sunucu", sortable: true, width: "170px",
                       cell: (db) => (
                         <span className="block truncate">
-                          {db.Server}{db.ServerIP && <span className="ml-1.5 tabular-nums text-muted-foreground">{db.ServerIP}</span>}
+                          {db.Server}{db.ServerIP && <span className="ml-1.5 tabular-nums">{db.ServerIP}</span>}
                         </span>
                       ),
                     },
                     {
                       key: "SizeMB", header: "Boyut", sortable: true, align: "right", width: "90px",
-                      cell: (db) => <span className="tabular-nums text-muted-foreground">{boyut(db.SizeMB)}</span>,
+                      cell: (db) => <span className="tabular-nums">{boyut(db.SizeMB)}</span>,
                     },
                     {
                       key: "RecoveryModel", header: "Kurtarma", sortable: true, width: "100px",
                       sortValue: (db) => db.RecoveryModel ?? "",
                       cell: (db) => db.RecoveryModel
-                        ? <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{db.RecoveryModel === "SIMPLE" ? "Simple" : db.RecoveryModel === "FULL" ? "Full" : db.RecoveryModel}</span>
-                        : <span className="text-muted-foreground">—</span>,
+                        ? <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">{db.RecoveryModel === "SIMPLE" ? "Simple" : db.RecoveryModel === "FULL" ? "Full" : db.RecoveryModel}</span>
+                        : <span>—</span>,
                     },
                     {
                       key: "Owner", header: "Sahip", sortable: true, width: "150px",
                       sortValue: (db) => db.Owner ?? "",
-                      cell: (db) => <span className="block truncate text-muted-foreground" title={db.Owner ?? ""}>{db.Owner ?? "—"}</span>,
+                      cell: (db) => <span className="block truncate" title={db.Owner ?? ""}>{db.Owner ?? "—"}</span>,
                     },
                     {
                       key: "LastBackup", header: "Tam yedek", sortable: true, width: "170px",
                       sortValue: (db) => db.LastBackup ?? "",
                       cell: (db) => (
-                        <span className="tabular-nums text-muted-foreground" title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş: ${db.LastBackup ?? "—"}` : ""}>
+                        <span className="tabular-nums" title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş: ${db.LastBackup ?? "—"}` : ""}>
                           {db.LastBackup ?? "—"}
                         </span>
                       ),
@@ -2803,7 +2803,7 @@ tr:nth-child(even) td{background:#fafafa}
                       key: "LastDiffBackup", header: "Diff yedek", sortable: true, width: "170px",
                       sortValue: (db) => db.LastDiffBackup ?? "",
                       cell: (db) => (
-                        <span className="tabular-nums text-muted-foreground" title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş: ${db.LastDiffBackup ?? "—"}` : ""}>
+                        <span className="tabular-nums" title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş: ${db.LastDiffBackup ?? "—"}` : ""}>
                           {db.LastDiffBackup ?? "—"}
                         </span>
                       ),
@@ -2816,7 +2816,7 @@ tr:nth-child(even) td{background:#fafafa}
                         getLabel={(o) => (o === "acik" ? "Alınıyor" : o === "kapali" ? "Kapalı" : "Kayıt yok")} />,
                       cell: (db) => {
                         const yd = yedekTur(db)
-                        if (yd === "kayitsiz") return <span className="text-muted-foreground" title="sirket.guvenlik'te kaydı yok — yedek kapsamı dışında">Kayıt yok</span>
+                        if (yd === "kayitsiz") return <span title="sirket.guvenlik'te kaydı yok — yedek kapsamı dışında">Kayıt yok</span>
                         return (
                           <UiTooltip>
                             <TooltipTrigger asChild>
