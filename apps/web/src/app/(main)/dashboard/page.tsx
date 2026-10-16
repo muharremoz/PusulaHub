@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { Play, RefreshCw } from "lucide-react"
+import { LogOut, Play, RefreshCw } from "lucide-react"
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@muharremoz/pusula-ui"
+import type { KopukKapatSonuc } from "@/app/api/dashboard/kopuk-kapat/route"
 import { toast } from "sonner"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -91,10 +96,10 @@ export default function DashboardPage() {
     return () => clearInterval(t)
   }, [firmaYukle])
 
-  const yukle = useCallback(async () => {
+  const yukle = useCallback(async (yenile = false) => {
     setYukleniyor(true)
     try {
-      const r = await fetch("/api/dashboard/durum", { cache: "no-store" })
+      const r = await fetch(`/api/dashboard/durum${yenile ? "?yenile=1" : ""}`, { cache: "no-store" })
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
       setVeri(j as DashDurum); setHata(null)
@@ -104,6 +109,30 @@ export default function DashboardPage() {
       setYukleniyor(false)
     }
   }, [])
+
+  /*  Kopuk oturumları kapat — terminallerdeki Disconnected oturumlara logoff.
+   *  Agent raporu ~30–60 sn'de bir geldiği için sayı hemen değil, sonraki raporla düşer. */
+  const [kopukOnay, setKopukOnay] = useState(false)
+  const [kopukKapatiliyor, setKopukKapatiliyor] = useState(false)
+  const kopukKapat = useCallback(async () => {
+    setKopukKapatiliyor(true)
+    try {
+      const r = await fetch("/api/dashboard/kopuk-kapat", { method: "POST" })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
+      const sn = j as KopukKapatSonuc
+      const hatali = sn.sunucular.filter((x) => x.hata)
+      const ozet = sn.sunucular.filter((x) => (x.kapatilan ?? 0) > 0).map((x) => `${x.ad}: ${x.kapatilan}`).join(" · ")
+      if (hatali.length === 0) toast.success(`${sn.kapatilan} kopuk oturum kapatıldı`, { description: ozet || undefined })
+      else toast.error(`${sn.kapatilan} oturum kapatıldı, ${hatali.length} sunucuda sorun var`, { description: hatali.map((x) => `${x.ad}: ${x.hata}`).join(" · ") })
+      setTimeout(() => void yukle(true), 45_000)
+    } catch (e) {
+      toast.error("Kopuk oturumlar kapatılamadı", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setKopukKapatiliyor(false); setKopukOnay(false)
+    }
+  }, [yukle])
+
 
   useEffect(() => {
     void yukle()
@@ -138,7 +167,13 @@ export default function DashboardPage() {
             deger={`${cevrimici} / ${sunucular.length}`} alt={cevrimici === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - cevrimici} ulaşılamıyor`}
             vurgu={cevrimici < sunucular.length ? "kritik" : "iyi"} />
           <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={ilkYukleme}
-            deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} kopuk` : ""}`} />
+            deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} kopuk` : ""}`}
+            aksiyon={anlikKopuk > 0 ? (
+              <Button variant="outline" size="sm" className="h-6 gap-1 rounded-[5px] px-2 text-[11px]" disabled={kopukKapatiliyor} onClick={() => setKopukOnay(true)}
+                title="Terminallerdeki bağlantısı kopmuş oturumları kapatır">
+                {kopukKapatiliyor ? <RefreshCw className="size-3 animate-spin" /> : <LogOut className="size-3" />} Kopukları kapat
+              </Button>
+            ) : undefined} />
           <Ozet ikon="shield-check" baslik="Yedek" yukleniyor={ilkYukleme}
             deger={!veri?.yedek ? "—" : veri.yedek.sorunlu > 0 ? `${veri.yedek.sorunlu} sorunlu` : veri.yedek.gecikmis > 0 ? `${veri.yedek.gecikmis} gecikmiş` : "Sağlıklı"}
             alt={veri?.yedek ? `${veri.yedek.saglikli} / ${veri.yedek.toplam} veritabanı güncel` : "okunamadı"}
@@ -366,6 +401,34 @@ export default function DashboardPage() {
           />
         </section>
       </div>
+      <AlertDialog open={kopukOnay} onOpenChange={(o) => { if (!kopukKapatiliyor) setKopukOnay(o) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kopuk oturumlar kapatılsın mı?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-[13px] text-muted-foreground">
+                <p>
+                  Terminallerde bağlantısı kopmuş <span className="font-semibold text-foreground">{anlikKopuk}</span> oturum kapatılacak.
+                  Bu kullanıcıların açık bıraktığı programlar kapanır, <span className="font-medium text-foreground">kaydedilmemiş işler kaybolur</span>.
+                  Aktif oturumlara dokunulmaz.
+                </p>
+                <ul className="rounded-[5px] bg-[var(--section-bg)] px-3 py-2 tabular-nums">
+                  {sunucular.filter((x) => x.roller.includes("RDP") && (x.kopukOturum ?? 0) > 0).map((x) => (
+                    <li key={x.id} className="flex justify-between"><span>{x.ad}</span><span className="font-medium text-foreground">{x.kopukOturum}</span></li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={kopukKapatiliyor}>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={kopukKapatiliyor}
+              onClick={(e) => { e.preventDefault(); void kopukKapat() }}>
+              {kopukKapatiliyor ? "Kapatılıyor…" : "Kopukları kapat"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageContainer>
   )
 }
