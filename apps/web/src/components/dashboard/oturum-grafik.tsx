@@ -36,7 +36,7 @@ export function OturumGrafik({ seri }: { seri: { ts: string; kisi: number }[] })
           labelFormatter={(ts) => saat(String(ts))}
           formatter={(v) => [`${v} kişi`, "Aktif oturum"]}
         />
-        <Area type="monotone" dataKey="kisi" stroke="#3b82f6" strokeWidth={2} fill="url(#dashOturum)" dot={false} activeDot={{ r: 3 }} />
+        <Area isAnimationActive={false} type="monotone" dataKey="kisi" stroke="#3b82f6" strokeWidth={2} fill="url(#dashOturum)" dot={false} activeDot={{ r: 3 }} />
       </AreaChart>
     </ResponsiveContainer>
   )

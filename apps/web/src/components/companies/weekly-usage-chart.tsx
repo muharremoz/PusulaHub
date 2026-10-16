@@ -87,15 +87,15 @@ export function WeeklyUsageChart({ data }: { data: WeeklyUsagePoint[] }) {
           }}
         />
 
-        <Area
+        <Area isAnimationActive={false}
           yAxisId="gb" type="monotone" dataKey="ramGB" name="ramGB"
           stroke={C_RAM} strokeWidth={2} fill="url(#wuRam)" dot={false} activeDot={{ r: 3 }} connectNulls={false}
         />
-        <Line
+        <Line isAnimationActive={false}
           yAxisId="gb" type="monotone" dataKey="diskGB" name="diskGB"
           stroke={C_DISK} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 3 }} connectNulls={false}
         />
-        <Line
+        <Line isAnimationActive={false}
           yAxisId="cpu" type="monotone" dataKey="cpu" name="cpu"
           stroke={C_CPU} strokeWidth={2} dot={false} activeDot={{ r: 3 }} connectNulls={false}
         />

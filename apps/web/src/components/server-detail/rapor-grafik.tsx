@@ -60,9 +60,9 @@ export function RaporGrafik({ seri, tur, donem, ramToplam }: { seri: RaporNokta[
           labelFormatter={(ts) => new Date(String(ts)).toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
           formatter={(v, ad) => [v == null ? "ölçüm yok" : birim(Number(v)), ad === zirveAnahtar ? "Zirve" : tur === "oturum" ? "Aktif oturum" : "Ortalama"]}
         />
-        <Area type="monotone" dataKey={anahtar} stroke={renk} strokeWidth={2} fill={`url(#${id})`} dot={false} activeDot={{ r: 3 }} connectNulls={false} />
+        <Area isAnimationActive={false} type="monotone" dataKey={anahtar} stroke={renk} strokeWidth={2} fill={`url(#${id})`} dot={false} activeDot={{ r: 3 }} connectNulls={false} />
         {zirveAnahtar && (
-          <Line type="monotone" dataKey={zirveAnahtar} stroke={renk} strokeOpacity={0.55} strokeWidth={1.25} strokeDasharray="4 3" dot={false} activeDot={{ r: 3 }} connectNulls={false} />
+          <Line isAnimationActive={false} type="monotone" dataKey={zirveAnahtar} stroke={renk} strokeOpacity={0.55} strokeWidth={1.25} strokeDasharray="4 3" dot={false} activeDot={{ r: 3 }} connectNulls={false} />
         )}
       </ComposedChart>
     </ResponsiveContainer>
