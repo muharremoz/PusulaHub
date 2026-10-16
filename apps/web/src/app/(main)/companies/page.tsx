@@ -2497,7 +2497,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "56px", align: "center",
+                      key: "islem", header: "", width: "64px", align: "center",
                       cell: (usr) => {
                         const yetkili = officeVar(usr)
                         return (
@@ -2707,7 +2707,7 @@ tr:nth-child(even) td{background:#fafafa}
                       },
                     },
                     {
-                      key: "islem", header: "", width: "56px", align: "center",
+                      key: "islem", header: "", width: "64px", align: "center",
                       cell: (svc) => (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -2919,7 +2919,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "56px", align: "center",
+                      key: "islem", header: "", width: "64px", align: "center",
                       cell: (db) => (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
