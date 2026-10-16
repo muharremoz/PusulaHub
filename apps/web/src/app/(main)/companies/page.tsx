@@ -17,7 +17,7 @@ import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-p
 const WeeklyUsageChart = dynamic(() => import("@/components/companies/weekly-usage-chart").then((m) => m.WeeklyUsageChart), { ssr: false, loading: () => <Skeleton className="h-full w-full" /> });
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muharremoz/pusula-ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@muharremoz/pusula-ui";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger, Table, InlineTextFilter, InlineSelectFilter, type TableColumn, type SortState } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -150,7 +150,7 @@ import { apiKimlikAlanHatalari, apiKimlikHatasi, apiSifreUret } from "@/lib/setu
 const AdProvisionRunner = dynamic(() => import("@/components/company-setup/ad-provision-runner").then((m) => m.AdProvisionRunner), { ssr: false });
 import { meetsAdComplexity } from "@/components/company-setup/step-users";
 import type { WizardServiceDto } from "@/app/api/services/route";
-import { Checkbox } from "@/components/shared/form"
+import { Checkbox, Field } from "@/components/shared/form"
 import { FirmaAnaliz } from "@/components/companies/firma-analiz";
 import { sqlLoginAdi } from "@/lib/firma-adlandirma";
 
@@ -987,6 +987,25 @@ export default function CompaniesPage() {
     loadNewSvcParsKatalog(newSvcParsService.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newSvcOpen, newSvcParsService?.id, newSvcParsKatalogFor, newSvcParsLoading])
+
+  // Yeni kullanıcı bitince müşteriye gidecek erişim bilgisi — pencerede satır satır + "Mesajı kopyala"
+  const newUserErisim = (() => {
+    const adSrv  = newUserAdServers.find((s) => s.id === newUserAdServerId)
+    const rdpSrv = newUserRdpServers.find((s) => s.id === newUserRdpServerId)
+    const sunucu = `${rdpSrv?.ip ?? ""}${rdpSrv?.rdpPort ? `:${rdpSrv.rdpPort}` : ""}`
+    const domainShort = (adSrv?.domain ?? "").split(".")[0]?.trim() ?? ""
+    const userPart = `${selectedFirma?.firkod ?? ""}.${newUserUsername.trim()}`
+    const kullanici = domainShort ? `${domainShort}\\${userPart}` : userPart
+    return {
+      satirlar: [
+        { ad: "Sunucu", deger: sunucu },
+        { ad: "Kullanıcı adı", deger: kullanici },
+        { ad: "Şifre", deger: newUserPassword },
+      ],
+      mesaj: ["Merhaba,", "", "Sunucu erişim bilgileriniz aşağıdadır.", "", `Sunucu: ${sunucu}`, "",
+        `Kullanıcı Adı: ${kullanici}`, `Şifre: ${newUserPassword}`, "", "İyi çalışmalar."].join("\n"),
+    }
+  })()
 
   const newUserValid =
     !!newUserAdServerId &&
@@ -3342,110 +3361,119 @@ tr:nth-child(even) td{background:#fafafa}
             </DialogContent>
           </Dialog>
 
-          {/* Yeni Kullanıcı Dialog */}
-          <Dialog open={newUserOpen} onOpenChange={(o) => { if (!newUserStarted) setNewUserOpen(o) }}>
-            <DialogContent className="sm:max-w-[560px] p-0 gap-0">
-              <DialogHeader className="px-5 py-4 border-b border-border/50">
-                <DialogTitle className="text-sm flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" /> Yeni Kullanıcı — <span className="font-mono">{selectedFirma?.firkod}</span>
-                </DialogTitle>
+          {/* Yeni Kullanıcı — Yeni Veritabanı / Yeni Hizmet pencereleriyle aynı düzen */}
+          <Dialog open={newUserOpen} onOpenChange={(o) => { if (!newUserStarted || newUserDone) { setNewUserOpen(o); if (!o) setNewUserStarted(false) } }}>
+            <DialogContent className="top-[8vh] translate-y-0 grid-cols-1 gap-0 p-0 sm:max-w-[560px]">
+              <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] px-5 py-4">
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1 ${newUserDone ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400" : "bg-primary/10 text-primary ring-primary/20"}`}>
+                  {newUserDone ? <CheckCircle2 className="size-[18px]" /> : <UserPlus className="size-[18px]" />}
+                </span>
+                <div className="min-w-0">
+                  <DialogTitle className="text-[15px] font-semibold">
+                    Yeni Kullanıcı <span className="font-medium text-muted-foreground">— {selectedFirma?.firkod}</span>
+                  </DialogTitle>
+                  <DialogDescription className="text-[12px]">
+                    {newUserDone ? "Kullanıcı oluşturuldu — erişim bilgilerini müşteriye iletin."
+                      : newUserStarted ? "Active Directory'de oluşturuluyor…"
+                      : `${selectedFirma?.firma ?? ""} — Active Directory'de firma kullanıcısı açılır`}
+                  </DialogDescription>
+                </div>
               </DialogHeader>
-              <ScrollArea className="max-h-[70vh]">
-                <div className="px-5 py-4 space-y-3">
+
+              <div className="max-h-[68vh] min-w-0 overflow-y-auto">
+                <div className="space-y-4 px-5 py-4">
                   {!newUserStarted ? (
                     <>
-                      {/* AD + RDP sunucu seçiciler */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] flex items-center gap-1">AD Sunucusu {newUserAdLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
-                          <Select value={newUserAdServerId} onValueChange={setNewUserAdServerId} disabled={newUserAdLocked}>
-                            <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                              <SelectValue placeholder={newUserAdServers.length ? "Seçin…" : "Yükleniyor…"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {newUserAdServers.map((s) => (
-                                <SelectItem key={s.id} value={s.id} className="text-[13px]">
-                                  {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[11px] flex items-center gap-1">RDP Sunucusu {newUserRdpLocked && <span className="text-[9px] text-muted-foreground font-normal">(firma kaydından)</span>}</Label>
-                          <Select value={newUserRdpServerId} onValueChange={setNewUserRdpServerId} disabled={newUserRdpLocked}>
-                            <SelectTrigger className="h-8 text-[13px] rounded-[5px]">
-                              <SelectValue placeholder={newUserRdpServers.length ? "Seçin…" : "Yükleniyor…"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {newUserRdpServers.map((s) => (
-                                <SelectItem key={s.id} value={s.id} className="text-[13px]">
-                                  {s.name} <span className="text-muted-foreground font-mono ml-1">{s.ip}</span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      {/* Sunucular — firma kaydında varsa sabit, yoksa seçilir */}
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        {([
+                          { etiket: "AD sunucusu", liste: newUserAdServers, deger: newUserAdServerId, set: setNewUserAdServerId, kilitli: newUserAdLocked },
+                          { etiket: "Bağlantı sunucusu (RDP)", liste: newUserRdpServers, deger: newUserRdpServerId, set: setNewUserRdpServerId, kilitli: newUserRdpLocked },
+                        ] as const).map((s) => {
+                          const secili = s.liste.find((x) => x.id === s.deger)
+                          return (
+                            <Field key={s.etiket} label={s.etiket} required hint={s.kilitli ? "Firma kaydından" : undefined}>
+                              {s.kilitli ? (
+                                <div className="flex h-8 items-center gap-2 rounded-[5px] border bg-muted/30 px-2.5 text-[13px]">
+                                  <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                                  <span className="truncate">{secili?.name ?? "—"}</span>
+                                  {secili?.ip && <span className="ml-auto shrink-0 text-[12px] tabular-nums text-muted-foreground">{secili.ip}</span>}
+                                </div>
+                              ) : (
+                                <Select value={s.deger} onValueChange={s.set}>
+                                  <SelectTrigger className="h-8 rounded-[5px] text-[13px]">
+                                    <SelectValue placeholder={s.liste.length ? "Seçin…" : "Yükleniyor…"} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {s.liste.map((x) => (
+                                      <SelectItem key={x.id} value={x.id} className="text-[13px]">
+                                        {x.name} <span className="ml-1 tabular-nums text-muted-foreground">{x.ip}</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </Field>
+                          )
+                        })}
                       </div>
 
-                      {/* Kullanıcı adı */}
-                      <div className="space-y-1.5">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı Adı</Label>
-                        <div className="flex items-center rounded-[5px] border border-border bg-background overflow-hidden focus-within:border-foreground/60 transition-colors h-8">
-                          <span className="text-[11px] text-muted-foreground bg-muted px-2 h-full flex items-center border-r border-border shrink-0 font-mono">
-                            {selectedFirma?.firkod}.
-                          </span>
+                      {/* Kullanıcı adı — firma kodu öneki sabit */}
+                      <Field label="Kullanıcı adı" required>
+                        <div className="flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40">
+                          <span className="flex h-full shrink-0 items-center border-r bg-muted px-2.5 text-[13px] text-muted-foreground">{selectedFirma?.firkod}.</span>
                           <input
                             value={newUserUsername}
                             onChange={(e) => setNewUserUsername(e.target.value)}
                             placeholder="kullanici"
-                            className="flex-1 px-2 text-[11px] bg-transparent outline-none min-w-0 h-full"
+                            autoFocus
+                            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
                           />
                         </div>
-                      </div>
+                      </Field>
 
-                      {/* Ad Soyad */}
-                      <div className="space-y-1.5">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Ad Soyad</Label>
-                        <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" className="h-8 rounded-[5px] text-[11px]" />
-                      </div>
+                      <Field label="Ad soyad">
+                        <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" />
+                      </Field>
 
-                      {/* Şifre */}
-                      <div className="space-y-1.5">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Şifre</Label>
-                        <div className={`flex items-center rounded-[5px] border bg-background h-8 ${newUserPassword && !meetsAdComplexity(newUserPassword) ? "border-red-400" : "border-border"}`}>
+                      {/* Şifre — göster / oluştur; AD karmaşıklık kuralı canlı kontrol */}
+                      <Field label="Şifre" required>
+                        <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${
+                          newUserPassword ? (meetsAdComplexity(newUserPassword) ? "border-emerald-500/60" : "border-red-500/60") : ""
+                        }`}>
                           <input
                             type={newUserShowPw ? "text" : "password"}
                             value={newUserPassword}
                             onChange={(e) => setNewUserPassword(e.target.value)}
                             placeholder="••••••••"
-                            className="flex-1 px-2 text-[11px] bg-transparent outline-none min-w-0 h-full"
+                            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
                           />
-                          <button type="button" onClick={() => setNewUserShowPw((v) => !v)} className="px-2 text-muted-foreground hover:text-foreground">
-                            {newUserShowPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                          <button type="button" onClick={() => setNewUserShowPw((v) => !v)} title={newUserShowPw ? "Gizle" : "Göster"} className="flex h-full w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
+                            {newUserShowPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                           </button>
-                          <button type="button" onClick={() => setNewUserPassword(generatePassword())} title="Şifre oluştur" className="px-2 border-l border-border text-muted-foreground hover:text-foreground">
-                            <RefreshCw className="h-3.5 w-3.5" />
+                          <button type="button" onClick={() => { setNewUserPassword(generatePassword()); setNewUserShowPw(true) }} title="Şifre oluştur" className="flex h-full items-center gap-1 border-l px-2.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground">
+                            <RefreshCw className="size-3.5" /> Oluştur
                           </button>
                         </div>
-                        {newUserPassword && !meetsAdComplexity(newUserPassword) && (
-                          <p className="text-[10px] text-red-500">En az 7 karakter, büyük/küçük harf + rakam/özel karakter (3 kategori)</p>
-                        )}
+                        <p className={`text-[12px] ${!newUserPassword ? "text-muted-foreground" : meetsAdComplexity(newUserPassword) ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
+                          {!newUserPassword ? "En az 7 karakter; büyük harf, küçük harf, rakam ve özel karakterden üçü."
+                            : meetsAdComplexity(newUserPassword) ? "Şifre AD kuralına uygun."
+                            : "AD kuralı karşılanmıyor: en az 7 karakter, dört gruptan üçü."}
+                        </p>
+                      </Field>
+
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field label="E-posta">
+                          <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" />
+                        </Field>
+                        <Field label="Telefon">
+                          <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" />
+                        </Field>
                       </div>
 
-                      {/* E-posta + Telefon */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                          <Label className="text-foreground/80 text-[12px] font-medium">E-posta</Label>
-                          <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" className="h-8 rounded-[5px] text-[11px]" />
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-foreground/80 text-[12px] font-medium">Telefon</Label>
-                          <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" className="h-8 rounded-[5px] text-[11px]" />
-                        </div>
-                      </div>
-
-                      {newUserError && <p className="text-[11px] text-red-500">{newUserError}</p>}
+                      {newUserError && (
+                        <p className="rounded-[5px] bg-red-500/15 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">{newUserError}</p>
+                      )}
                     </>
                   ) : (
                     selectedFirma && (
@@ -3473,53 +3501,50 @@ tr:nth-child(even) td{background:#fafafa}
                     )
                   )}
 
+                  {/* Bitti — müşteriye gidecek erişim bilgisi */}
                   {newUserDone && selectedFirma && (() => {
-                    const adSrv  = newUserAdServers.find((s) => s.id === newUserAdServerId)
-                    const rdpSrv = newUserRdpServers.find((s) => s.id === newUserRdpServerId)
-                    const srvAddr = rdpSrv?.ip ?? ""
-                    const portSfx = rdpSrv?.rdpPort ? `:${rdpSrv.rdpPort}` : ""
-                    const domainShort = (adSrv?.domain ?? "").split(".")[0]?.trim() ?? ""
-                    const userPart = `${selectedFirma.firkod}.${newUserUsername.trim()}`
-                    const fullUser = domainShort ? `${domainShort}\\${userPart}` : userPart
-                    const msg = [
-                      "Merhaba,",
-                      "",
-                      "Sunucu erişim bilgileriniz aşağıdadır.",
-                      "",
-                      `Sunucu: ${srvAddr}${portSfx}`,
-                      "",
-                      `Kullanıcı Adı: ${fullUser}`,
-                      `Şifre: ${newUserPassword}`,
-                      "",
-                      "İyi çalışmalar.",
-                    ].join("\n")
+                    const { satirlar } = newUserErisim
                     return (
-                      <div className="space-y-2 mt-2">
-                        <Label className="text-foreground/80 text-[12px] font-medium">Müşteri Bilgilendirme Mesajı</Label>
-                        <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed bg-muted/30 rounded-[5px] border border-border/50 p-3">{msg}</pre>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => { if (await copyToClipboard(msg)) { setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) } }}
-                          className="w-full rounded-[5px] h-8 text-[13px] gap-1.5"
-                        >
-                          {newUserMsgCopied ? <><CheckCircle2 className="h-3.5 w-3.5" /> Kopyalandı</> : <><Save className="h-3.5 w-3.5" /> Kopyala</>}
-                        </Button>
+                      <div className="space-y-2">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Müşteri bilgilendirme</p>
+                        <div className="overflow-hidden rounded-[5px] border bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+                          <ul className="divide-y">
+                            {satirlar.map((s) => (
+                              <li key={s.ad} className="flex items-center gap-2 px-3 py-1.5">
+                                <span className="w-[96px] shrink-0 text-[12px] text-muted-foreground">{s.ad}</span>
+                                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.deger || "—"}</span>
+                                <CopyIconButton value={s.deger} subtle />
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
                       </div>
                     )
                   })()}
                 </div>
-              </ScrollArea>
-              <div className="px-5 py-3 border-t border-border/50 flex items-center justify-end gap-2">
+              </div>
+
+              <div className="flex items-center gap-2 border-t px-5 py-3">
                 {!newUserStarted ? (
                   <>
-                    <Button size="sm" variant="outline" onClick={() => setNewUserOpen(false)} className="rounded-[5px] h-7 text-[11px]">Vazgeç</Button>
-                    <Button size="sm" disabled={!newUserValid} onClick={() => { setNewUserError(null); setNewUserStarted(true) }} className="rounded-[5px] h-7 text-[11px] gap-1.5">
-                      <UserPlus className="h-3.5 w-3.5" /> Oluştur
+                    <Button variant="outline" className="flex-1" onClick={() => setNewUserOpen(false)}>Vazgeç</Button>
+                    <Button className="flex-1" disabled={!newUserValid} onClick={() => { setNewUserError(null); setNewUserStarted(true) }}>
+                      <UserPlus className="size-3.5" /> Oluştur
+                    </Button>
+                  </>
+                ) : newUserDone && selectedFirma ? (
+                  <>
+                    <Button variant="outline" className="flex-1" onClick={() => { setNewUserOpen(false); setNewUserStarted(false) }}>Kapat</Button>
+                    <Button className="flex-1" onClick={async () => {
+                      if (await copyToClipboard(newUserErisim.mesaj)) { setNewUserMsgCopied(true); setTimeout(() => setNewUserMsgCopied(false), 2000) }
+                    }}>
+                      {newUserMsgCopied ? <><CheckCheck className="size-3.5" /> Kopyalandı</> : <><Copy className="size-3.5" /> Mesajı kopyala</>}
                     </Button>
                   </>
                 ) : (
-                  <Button size="sm" onClick={() => { setNewUserOpen(false); setNewUserStarted(false) }} className="rounded-[5px] h-7 text-[11px]">Kapat</Button>
+                  <Button variant="outline" className="flex-1" disabled={!newUserError} onClick={() => { setNewUserOpen(false); setNewUserStarted(false) }}>
+                    {newUserError ? "Kapat" : "Oluşturuluyor…"}
+                  </Button>
                 )}
               </div>
             </DialogContent>
