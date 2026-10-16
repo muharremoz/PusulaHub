@@ -74,7 +74,17 @@ export async function GET() {
         for await (const o of yedekTestiCalistir(hedef)) {
           if      (o.tip === "plan") send("plan",  o.plan)
           else if (o.tip === "adim") send("adim",  o.adim)
-          else                       send("bitti", o.sonuc)
+          else {
+            send("bitti", o.sonuc)
+            // Son sonuç dashboard özet kartı için saklanır (tek satır, üzerine yazılır)
+            try {
+              await sb.schema("hub").from("settings").upsert({
+                key: "yedek_testi_son",
+                value: JSON.stringify({ durum: o.sonuc.durum, ozet: o.sonuc.ozet, bitisAt: o.sonuc.bitisAt, sureMs: o.sonuc.sureMs }),
+                updated_at: new Date().toISOString(),
+              })
+            } catch (e) { console.error("[yedek-testi] sonuç saklanamadı:", e) }
+          }
         }
       } catch (err) {
         send("hata", { mesaj: err instanceof Error ? err.message : String(err) })

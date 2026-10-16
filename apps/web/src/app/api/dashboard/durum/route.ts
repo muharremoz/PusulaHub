@@ -8,6 +8,7 @@ import { withSqlConnection } from "@/lib/sql-external"
 import { decrypt } from "@/lib/crypto"
 import * as aktarim2 from "@/lib/aktarim2-proxy"
 import { listSessions as aktarim1Oturumlar } from "@/lib/aktarim-proxy"
+import { connectTumCihazlar } from "@/lib/connect-yonetim"
 
 /**
  * GET /api/dashboard/durum — dashboard 1. aşama: "Dikkat" listesi + sunucular.
@@ -50,6 +51,10 @@ export interface DashDurum {
   yedek: { toplam: number; saglikli: number; gecikmis: number; sorunlu: number } | null
   izleme: { toplam: number; calisan: number; dusen: number } | null
   aktarim: { aktif: number } | null
+  /** Son yedek doğrulama testi (/tv ekranından çalıştırılır, sonucu hub.settings yedek_testi_son) */
+  yedekTesti: { durum: "ok" | "uyari" | "hata" | "calisiyor"; ozet: string; bitisAt: string } | null
+  /** Pusula Connect: nabzı 3 dk içinde olan / iptal edilmemiş cihaz / bugün ilk kez bağlanan */
+  connect: { cevrimici: number; oturumda: number; toplam: number; bugunYeni: number } | null
   kaynakHata: string[]
 }
 
@@ -216,8 +221,33 @@ async function topla(): Promise<DashDurum> {
     }
   } catch (e) { kaynakHata.push(`Aktarım: ${e instanceof Error ? e.message : e}`) }
 
+  // ── Son yedek testi ────────────────────────────────────────
+  let yedekTesti: DashDurum["yedekTesti"] = null
+  try {
+    const { data } = await sb.schema("hub").from("settings").select("value").eq("key", "yedek_testi_son").maybeSingle()
+    const v = (data as { value: string | null } | null)?.value
+    if (v) yedekTesti = JSON.parse(v)
+  } catch { /* hiç çalıştırılmadı / bozuk kayıt — kart "—" */ }
+
+  // ── Pusula Connect ────────────────────────────────────────
+  let connect: DashDurum["connect"] = null
+  try {
+    const cihazlar = (await zamanAsimi(connectTumCihazlar())).filter((c) => !c.iptal)
+    // Connect servisi UTC saati ofsetsiz yazıyor ("2026-10-16 15:20:00") — connect sayfasıyla aynı okuma
+    const z = (s: string | null) => (s ? new Date(s.replace(" ", "T") + "Z").getTime() : 0)
+    const canli = cihazlar.filter((c) => Date.now() - z(c.sonNabiz) < 180_000)
+    const gunBasi = new Date(Date.now() + 3 * 3_600_000)
+    const bugunBas = Date.UTC(gunBasi.getUTCFullYear(), gunBasi.getUTCMonth(), gunBasi.getUTCDate()) - 3 * 3_600_000
+    connect = {
+      cevrimici: canli.length,
+      oturumda: canli.filter((c) => c.oturumAcik).length,
+      toplam: cihazlar.length,
+      bugunYeni: cihazlar.filter((c) => z(c.ilkGiris) >= bugunBas).length,
+    }
+  } catch (e) { kaynakHata.push(`Pusula Connect: ${e instanceof Error ? e.message : e}`) }
+
   dikkat.sort((a, b) => (a.seviye === b.seviye ? 0 : a.seviye === "kritik" ? -1 : 1))
-  return { zaman: new Date().toISOString(), sunucular, dikkat, yedek, izleme, aktarim, kaynakHata }
+  return { zaman: new Date().toISOString(), sunucular, dikkat, yedek, izleme, aktarim, yedekTesti, connect, kaynakHata }
 }
 
 export async function GET() {

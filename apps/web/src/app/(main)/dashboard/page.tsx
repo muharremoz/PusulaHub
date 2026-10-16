@@ -93,7 +93,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Özet */}
-        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 md:grid-cols-3 xl:grid-cols-6">
           <Ozet ikon="monitor-check" baslik="Sunucular" yukleniyor={ilkYukleme}
             deger={`${cevrimici} / ${sunucular.length}`} alt={cevrimici === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - cevrimici} ulaşılamıyor`}
             vurgu={cevrimici < sunucular.length ? "kritik" : "iyi"} />
@@ -107,6 +107,22 @@ export default function DashboardPage() {
             deger={kritik + uyari === 0 ? "Yok" : String(kritik + uyari)}
             alt={kritik + uyari === 0 ? "her şey yolunda" : `${kritik} kritik · ${uyari} uyarı`}
             vurgu={kritik > 0 ? "kritik" : uyari > 0 ? "uyari" : "iyi"} />
+          {(() => {
+            const t = veri?.yedekTesti
+            const once = (iso: string) => {
+              const dk = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
+              return dk < 60 ? `${dk} dk önce` : dk < 1440 ? `${Math.floor(dk / 60)} saat önce` : `${Math.floor(dk / 1440)} gün önce`
+            }
+            return (
+              <Ozet ikon="circle-check" baslik="Yedek testi" yukleniyor={ilkYukleme}
+                deger={!t ? "—" : t.durum === "ok" ? "Başarılı" : t.durum === "uyari" ? "Uyarı" : t.durum === "hata" ? "Hatalı" : "Sürüyor"}
+                alt={!t ? "henüz çalıştırılmadı" : `${once(t.bitisAt)} · ${t.ozet}`}
+                vurgu={!t ? undefined : t.durum === "ok" ? "iyi" : t.durum === "uyari" ? "uyari" : t.durum === "hata" ? "kritik" : undefined} />
+            )
+          })()}
+          <Ozet ikon="monitor-check" baslik="Pusula Connect" yukleniyor={ilkYukleme}
+            deger={veri?.connect ? String(veri.connect.cevrimici) : "—"}
+            alt={veri?.connect ? `çevrimiçi · ${veri.connect.oturumda} oturumda · ${veri.connect.toplam} cihaz${veri.connect.bugunYeni ? ` · bugün ${veri.connect.bugunYeni} yeni` : ""}` : "okunamadı"} />
         </div>
 
         {/* Firmalar + bugün */}
@@ -129,7 +145,7 @@ export default function DashboardPage() {
                 { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
                 { key: "bitis", header: "Bitiş", width: "110px", cell: (x) => <span className="tabular-nums">{tarih(x.bitis)}</span> },
                 {
-                  key: "kalan", header: "Durum", align: "center", width: "140px",
+                  key: "kalan", header: "Durum", align: "center", width: "180px",
                   cell: (x) => {
                     const k = x.deger ?? 0
                     const sinif = k < 0 ? "bg-red-500/15 text-red-700 dark:text-red-400" : k <= 7 ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground"
