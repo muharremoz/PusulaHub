@@ -4922,9 +4922,14 @@ function ListeAracSeridi({ sayac, filtreAcik, onFiltre, filtreSayisi, onTemizle,
   )
 }
 
-/** Tablo yüksekliği — satır sayısı kadar (36 px), en az 3 satırlık, en çok 520 px; filtre satırı açıksa +36. */
+/**
+ * Tablo yüksekliği — satır sayısı kadar (36 px), en az 3 satırlık, en çok 520 px; filtre satırı açıksa +36.
+ * Kayıt yokken boş durum (metin + "… ekle" düğmesi) sığsın diye 180 px gövde: 3 satırlık yerde
+ * kaydırma çubuğu çıkıp düğme kesiliyordu.
+ */
 function tabloYuksekligi(satir: number, filtreAcik: boolean): number {
-  return Math.min(520, 30 + (filtreAcik ? 36 : 0) + Math.max(satir, 3) * 36 + 2)
+  const govde = satir === 0 ? 180 : Math.max(satir, 3) * 36
+  return Math.min(520, 30 + (filtreAcik ? 36 : 0) + govde + 2)
 }
 
 /** Pencere içi bölüm — section-bg panel + başlık + beyaz kart (liste kartlarıyla aynı dil) */
