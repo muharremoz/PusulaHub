@@ -563,6 +563,11 @@ export default function CompaniesPage() {
   const [dbFiltreAcik, setDbFiltreAcik]     = useState(false);
   const [kulSira, setKulSira]               = useState<SortState | null>(null);
   const [dbSira, setDbSira]                 = useState<SortState | null>(null);
+  const [svcAdFiltre, setSvcAdFiltre]       = useState("");
+  const [svcKatFiltre, setSvcKatFiltre]     = useState<string[]>([]);
+  const [svcDurumFiltre, setSvcDurumFiltre] = useState<("calisiyor" | "durdu" | "yok")[]>([]);
+  const [svcFiltreAcik, setSvcFiltreAcik]   = useState(false);
+  const [svcSira, setSvcSira]               = useState<SortState | null>(null);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
@@ -1348,7 +1353,7 @@ tr:nth-child(even) td{background:#fafafa}
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     // Firma değişti — Erişim sekmesi verisi bayat, sekmeyi de başa al.
     setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([]); setWebUsersFirma(null); setParsSifreler([]); setParsSifreFirma(null)
-    setKulAdFiltre(""); setKulIsimFiltre(""); setKulDurumFiltre([]); setKulOfficeFiltre([]); setDbAdFiltre(""); setDbYedekFiltre([]); setDbDurumFiltre([])
+    setKulAdFiltre(""); setKulIsimFiltre(""); setKulDurumFiltre([]); setKulOfficeFiltre([]); setDbAdFiltre(""); setDbYedekFiltre([]); setDbDurumFiltre([]); setSvcAdFiltre(""); setSvcKatFiltre([]); setSvcDurumFiltre([])
     setAccessSel("servers")
     setCompanyDetail(null)
     setTabLoading(true)
@@ -2572,178 +2577,215 @@ tr:nth-child(even) td{background:#fafafa}
 
               {/* Hizmetler — hizmet başına satır; API hizmetinde Users.xml / Web.config (SarrafPro),
                   Pars'ta Ayar.mdb kullanıcıları canlı okunup kullanıcı + şifre olarak gösterilir */}
-              <TabsContent value="services" className="mt-0 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground text-[12px]">
-                    {tabLoading ? "" : `${collectServices().length} hizmet`}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm" variant="outline"
-                      onClick={() => selectedFirma && void loadServiceCreds(selectedFirma.firkod, true)}
-                      disabled={webUsersLoading || parsSifreLoading}
-                      className="h-7 gap-1.5 rounded-[5px] text-[12px]"
-                    >
-                      <RefreshCw className={`size-3.5 ${webUsersLoading || parsSifreLoading ? "animate-spin" : ""}`} /> Kullanıcıları yenile
-                    </Button>
-                    <Button size="sm" onClick={() => openNewSvcDialog()} className="h-7 gap-1.5 rounded-[5px] text-[12px]">
-                      <Plus className="size-3.5" /> Yeni Hizmet
-                    </Button>
-                  </div>
-                </div>
-                <div className="bg-card overflow-x-auto rounded-[5px] border">
-                  <table className="w-full text-[13px] font-medium leading-[20px]">
-                    <ListeThead>
-                      <th className="px-4 py-1.5 text-left font-medium">Hizmet</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Kategori</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">IIS adı</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Sunucu</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Port</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Kullanıcı</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Şifre</th>
-                      <th className="w-px px-4 py-1.5 text-left font-medium">Durum</th>
-                      <th className="w-px px-2 py-1.5" />
-                    </ListeThead>
-                    <tbody className="divide-y">
-                      {tabLoading ? (
-                        Array.from({ length: 3 }).map((_, i) => (
-                          <tr key={i}>
-                            {Array.from({ length: 9 }).map((_, j) => (
-                              <td key={j} className="px-4 py-2.5"><Skeleton className="h-4 w-full rounded-[5px]" /></td>
-                            ))}
-                          </tr>
-                        ))
-                      ) : collectServices().length === 0 ? (
-                        <tr>
-                          <td colSpan={9} className="px-4 py-10">
-                            <div className="text-muted-foreground flex flex-col items-center gap-2 text-center">
+              <TabsContent value="services" className="mt-0">
+                {(() => {
+                  type SvcSatir = TabCompanyService & { assigned: boolean }
+                  type Kimlik = { username: string; password: string | null }
+                  const tumu = collectServices()
+                  const tur = (s: SvcSatir) => (s.type === "iis-site" ? "API hizmeti" : s.type === "iis-resim" ? "Resim" : s.type === "pusula-program" ? "Pusula programı" : s.type === "pars" ? "Pars" : (s.type || "—"))
+                  const kategori = (s: SvcSatir) => s.category || tur(s)
+                  const durumu = (s: SvcSatir): "calisiyor" | "durdu" | "yok" => (!s.status ? "yok" : s.status === "Started" ? "calisiyor" : "durdu")
+                  // Kullanıcılar: tür başına kaynak — yükleniyor / okunamadı / yok / liste
+                  const kimlik = (s: SvcSatir): { durum: "yok" | "yukleniyor" | "hata" | "liste"; liste: Kimlik[]; hata: string; not: string } => {
+                    if (s.type === "iis-site" || s.type === "iis-resim") {
+                      const anahtar = (s.siteName || s.name).trim().toLowerCase()
+                      const xml = webUsers.find((w) => w.siteName.trim().toLowerCase() === anahtar)
+                      if (!xml) return { durum: webUsersLoading ? "yukleniyor" : "yok", liste: [], hata: "", not: "" }
+                      if (xml.error) return { durum: "hata", liste: [], hata: xml.error, not: "" }
+                      if (xml.notFound) return { durum: "yok", liste: [], hata: "", not: "" }
+                      return { durum: "liste", liste: xml.users, hata: "", not: xml.kaynak === "webconfig" ? "Web.config" : "" }
+                    }
+                    if (s.type === "pars") {
+                      const p = parsSifreler.find((x) => x.serviceId === s.parsServiceId)
+                      if (!p) return { durum: parsSifreLoading ? "yukleniyor" : "yok", liste: [], hata: "", not: "" }
+                      if (p.error) return { durum: "hata", liste: [], hata: p.error, not: "" }
+                      return { durum: "liste", liste: p.users, hata: "", not: "" }
+                    }
+                    return { durum: "yok", liste: [], hata: "", not: "" }
+                  }
+                  const ad = svcAdFiltre.trim().toLocaleLowerCase("tr-TR")
+                  const liste = tumu.filter((s) => {
+                    if (ad && !`${s.name} ${s.siteName ?? ""}`.toLocaleLowerCase("tr-TR").includes(ad)) return false
+                    if (svcKatFiltre.length && !svcKatFiltre.includes(kategori(s))) return false
+                    if (svcDurumFiltre.length && !svcDurumFiltre.includes(durumu(s))) return false
+                    return true
+                  })
+                  const kategoriler = [...new Set(tumu.map(kategori))].sort((a, b) => a.localeCompare(b, "tr"))
+                  const filtreSayisi = (ad ? 1 : 0) + (svcKatFiltre.length ? 1 : 0) + (svcDurumFiltre.length ? 1 : 0)
+                  const temizle = () => { setSvcAdFiltre(""); setSvcKatFiltre([]); setSvcDurumFiltre([]) }
+                  const sutunlar: TableColumn<SvcSatir>[] = [
+                    {
+                      key: "name", header: "Hizmet", sortable: true, width: "220px",
+                      filter: <InlineTextFilter value={svcAdFiltre} onChange={setSvcAdFiltre} placeholder="Hizmet ara…" />,
+                      cell: (s) => (
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className="truncate">{s.name}</span>
+                          {!s.assigned && <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground" title="Sihirbaz kaydı yok — IIS'te elle kurulmuş site">Elle kurulmuş</span>}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "category", header: "Kategori", sortable: true, width: "140px",
+                      sortValue: (s) => kategori(s),
+                      filter: <InlineSelectFilter options={kategoriler} selected={svcKatFiltre} onChange={setSvcKatFiltre} />,
+                      cell: (s) => <span className="block truncate">{kategori(s)}</span>,
+                    },
+                    {
+                      key: "siteName", header: "IIS adı", sortable: true, width: "170px",
+                      sortValue: (s) => (s.type === "pars" ? "" : s.siteName ?? ""),
+                      cell: (s) => <span className="block truncate">{s.siteName && s.type !== "pars" ? s.siteName : "—"}</span>,
+                    },
+                    {
+                      key: "server", header: "Sunucu", sortable: true, width: "140px",
+                      cell: (s) => <span className="block truncate">{s.server || "—"}</span>,
+                    },
+                    {
+                      key: "port", header: "Port", sortable: true, align: "right", width: "80px",
+                      sortValue: (s) => s.port ?? 0,
+                      cell: (s) => <span className="tabular-nums">{s.port ?? "—"}</span>,
+                    },
+                    {
+                      // Çok kullanıcılı hizmet: satır sabit yükseklikte — ilk kullanıcı + "+N" (tıklayınca hepsi)
+                      key: "kullanici", header: "Kullanıcı", width: "220px",
+                      cell: (s) => {
+                        const k = kimlik(s)
+                        if (k.durum === "yukleniyor") return <Skeleton className="h-4 w-28 rounded-[5px]" />
+                        if (k.durum === "hata") return <span className="text-rose-600 dark:text-rose-400" title={k.hata}>Okunamadı</span>
+                        if (k.durum === "yok") return <span>—</span>
+                        if (k.liste.length === 0) return <span>Kullanıcı yok</span>
+                        const ilk = k.liste[0]
+                        return (
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span className="truncate" title={k.not ? `Kaynak: ${k.not}` : undefined}>{ilk.username}</span>
+                            <CopyIconButton value={ilk.username} subtle />
+                            {k.liste.length > 1 && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button type="button" onClick={(e) => e.stopPropagation()} className="inline-flex shrink-0 rounded-[5px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20">
+                                    +{k.liste.length - 1}
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent align="start" className="w-80 p-0">
+                                  <p className="border-b bg-[var(--section-bg)] px-3 py-2 text-[12px] font-medium">{s.name} · {k.liste.length} kullanıcı{k.not ? ` · ${k.not}` : ""}</p>
+                                  <ul className="max-h-72 divide-y overflow-y-auto">
+                                    {k.liste.map((x) => (
+                                      <li key={x.username} className="flex items-center gap-2 px-3 py-1.5 text-[13px]">
+                                        <span className="min-w-0 flex-1 truncate">{x.username}</span>
+                                        <CopyIconButton value={x.username} subtle />
+                                        <SvcSifre deger={x.password} />
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </PopoverContent>
+                              </Popover>
+                            )}
+                          </span>
+                        )
+                      },
+                    },
+                    {
+                      key: "sifre", header: "Şifre", width: "170px",
+                      cell: (s) => {
+                        const k = kimlik(s)
+                        if (k.durum === "yukleniyor") return <Skeleton className="h-4 w-24 rounded-[5px]" />
+                        return k.durum === "liste" && k.liste.length > 0 ? <SvcSifre deger={k.liste[0].password} /> : <span>—</span>
+                      },
+                    },
+                    {
+                      key: "status", header: "Durum", sortable: true, align: "center", width: "110px",
+                      sortValue: (s) => (durumu(s) === "calisiyor" ? 2 : durumu(s) === "durdu" ? 1 : 0),
+                      filter: <InlineSelectFilter options={["calisiyor", "durdu", "yok"] as const} selected={svcDurumFiltre} onChange={setSvcDurumFiltre}
+                        getLabel={(o) => (o === "calisiyor" ? "Çalışıyor" : o === "durdu" ? "Durdu" : "Durum yok")} />,
+                      cell: (s) => {
+                        const d = durumu(s)
+                        if (d === "yok") return <span>—</span>
+                        return (
+                          <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${d === "calisiyor" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                            {d === "calisiyor" ? "Çalışıyor" : "Durdu"}
+                          </span>
+                        )
+                      },
+                    },
+                    {
+                      key: "islem", header: "", width: "64px", align: "right",
+                      cell: (svc) => (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="inline-flex size-7 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label={`${svc.name} işlemleri`}>
+                              <MoreVertical className="size-3.5 text-muted-foreground" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-56">
+                            {svc.type === "pars" && (
+                              <>
+                                <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
+                                  <KeyRound className="size-3.5" /> Kullanıcı adı / şifre
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "raporlar" })}>
+                                  <FileText className="size-3.5" /> Rapor / görev yetkileri
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "datalar" })}>
+                                  <Database className="size-3.5" /> Veritabanı ekle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openNewSvcDialog(true)}>
+                                  <UserPlus className="size-3.5" /> Pars kullanıcısı ekle
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                            {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
+                            <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" disabled={!svc.assigned || svc.type === "pars"}>
+                              <Trash2 className="size-3.5" /> Hizmeti kaldır
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ),
+                    },
+                  ]
+                  return (
+                    <div className="space-y-2">
+                      <ListeAracSeridi
+                        sayac={tabLoading ? "" : `${filtreSayisi > 0 ? `${liste.length} / ` : ""}${tumu.length} hizmet`}
+                        filtreAcik={svcFiltreAcik}
+                        onFiltre={() => setSvcFiltreAcik((v) => !v)}
+                        filtreSayisi={filtreSayisi}
+                        onTemizle={temizle}
+                      >
+                        <Button size="sm" variant="outline" onClick={() => selectedFirma && void loadServiceCreds(selectedFirma.firkod, true)}
+                          disabled={webUsersLoading || parsSifreLoading} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                          <RefreshCw className={`size-3.5 ${webUsersLoading || parsSifreLoading ? "animate-spin" : ""}`} /> Kullanıcıları yenile
+                        </Button>
+                        <Button size="sm" onClick={() => openNewSvcDialog()} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                          <Plus className="size-3.5" /> Yeni Hizmet
+                        </Button>
+                      </ListeAracSeridi>
+                      <Table<SvcSatir>
+                        data={liste}
+                        columns={sutunlar}
+                        getRowId={(s) => String(s.id)}
+                        sort={svcSira}
+                        onSortChange={setSvcSira}
+                        filterRow={svcFiltreAcik}
+                        columnDividers
+                        resizable
+                        rowHeight={36}
+                        headerHeight={30}
+                        height={tabloYuksekligi(liste.length, svcFiltreAcik)}
+                        loading={tabLoading}
+                        className="rounded-[8px] text-[13px]"
+                        emptyState={
+                          tumu.length === 0 ? (
+                            <div className="flex flex-col items-center gap-2 py-4 text-center text-muted-foreground">
                               <p className="text-[13px]">Bu firmaya henüz hizmet kurulmadı.</p>
                               <Button size="sm" onClick={() => openNewSvcDialog()} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
                                 <Plus className="size-3.5" /> Hizmet ekle
                               </Button>
                             </div>
-                          </td>
-                        </tr>
-                      ) : collectServices().map((svc) => {
-                        const running = svc.status === "Started"
-                        const typeLabel = svc.type === "iis-site" ? "API hizmeti" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula programı" : svc.type === "pars" ? "Pars" : (svc.type || "—")
-                        // Kullanıcılar: tür başına kaynak — yükleniyor / okunamadı / yok / liste
-                        type Kimlik = { username: string; password: string | null }
-                        let kimlikler: Kimlik[] = []
-                        let durum: "yok" | "yukleniyor" | "hata" | "liste" = "yok"
-                        let hataMetni = ""
-                        let notu = ""
-                        if (svc.type === "iis-site" || svc.type === "iis-resim") {
-                          const anahtar = (svc.siteName || svc.name).trim().toLowerCase()
-                          const xml = webUsers.find((w) => w.siteName.trim().toLowerCase() === anahtar)
-                          if (!xml) durum = webUsersLoading ? "yukleniyor" : "yok"
-                          else if (xml.error) { durum = "hata"; hataMetni = xml.error }
-                          else if (xml.notFound) durum = "yok"
-                          else { durum = "liste"; kimlikler = xml.users; if (xml.kaynak === "webconfig") notu = "Web.config" }
-                        } else if (svc.type === "pars") {
-                          const p = parsSifreler.find((x) => x.serviceId === svc.parsServiceId)
-                          if (!p) durum = parsSifreLoading ? "yukleniyor" : "yok"
-                          else if (p.error) { durum = "hata"; hataMetni = p.error }
-                          else { durum = "liste"; kimlikler = p.users }
+                          ) : "Filtreye uyan kayıt yok."
                         }
-                        // Hücre içeriği h-6 satırlarda: çok kullanıcılı hizmette kullanıcı ve şifre hizalı kalır
-                        const hucre = "px-4 py-1.5 align-top whitespace-nowrap"
-                        const satir = "flex h-6 items-center"
-
-                        return (
-                          <tr key={svc.id} className="group hover:bg-muted/20 transition-colors">
-                            <td className={hucre}>
-                              <div className={`${satir} gap-1.5`}>
-                                <span>{svc.name}</span>
-                                {!svc.assigned && (
-                                  <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium" title="Sihirbaz kaydı yok — IIS'te elle kurulmuş site">Elle kurulmuş</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className={`${hucre} text-muted-foreground text-[12px] font-normal`}><div className={satir}>{svc.category || typeLabel}</div></td>
-                            <td className={`${hucre} font-mono text-[12px] font-normal`}><div className={satir}>{svc.siteName && svc.type !== "pars" ? svc.siteName : "—"}</div></td>
-                            <td className={hucre}><div className={satir}>{svc.server || "—"}</div></td>
-                            <td className={`${hucre} text-muted-foreground text-[12px] font-normal tabular-nums`}><div className={satir}>{svc.port ?? "—"}</div></td>
-                            <td className={hucre}>
-                              {durum === "liste" && kimlikler.length > 0 ? (
-                                <div>
-                                  {kimlikler.map((k) => (
-                                    <div key={k.username} className={`${satir} gap-1`}>
-                                      <span className="font-mono text-[12px]">{k.username}</span>
-                                      <CopyIconButton value={k.username} subtle />
-                                    </div>
-                                  ))}
-                                  {notu && <div className="text-muted-foreground text-[11px] font-normal">{notu}</div>}
-                                </div>
-                              ) : (
-                                <div className={satir}>
-                                  {durum === "yukleniyor" ? <Skeleton className="h-4 w-28 rounded-[5px]" />
-                                    : durum === "hata" ? <span className="text-[12px] font-normal text-rose-600 dark:text-rose-400" title={hataMetni}>Okunamadı</span>
-                                    : durum === "liste" ? <span className="text-muted-foreground text-[12px] font-normal">Kullanıcı yok</span>
-                                    : <span className="text-muted-foreground">—</span>}
-                                </div>
-                              )}
-                            </td>
-                            <td className={hucre}>
-                              {durum === "liste" && kimlikler.length > 0 ? (
-                                <div>
-                                  {kimlikler.map((k) => (
-                                    <div key={k.username} className={satir}>
-                                      {k.password ? <AccessPwCell value={k.password} /> : <span className="text-muted-foreground">—</span>}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className={satir}>
-                                  {durum === "yukleniyor" ? <Skeleton className="h-4 w-24 rounded-[5px]" /> : <span className="text-muted-foreground">—</span>}
-                                </div>
-                              )}
-                            </td>
-                            <td className={hucre}>
-                              {svc.status ? (
-                                <span className={`inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${running ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
-                                  <span className={`size-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
-                                  {running ? "Çalışıyor" : "Durdu"}
-                                </span>
-                              ) : <span className="text-muted-foreground">—</span>}
-                            </td>
-                            <td className="px-2 py-1.5 align-top">
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" aria-label={`${svc.name} işlemleri`} className="text-muted-foreground size-7 rounded-[5px]">
-                                    <MoreVertical className="size-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56">
-                                  {svc.type === "pars" && (
-                                    <>
-                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
-                                        <KeyRound className="size-3.5" /> Kullanıcı adı / şifre
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "raporlar" })}>
-                                        <FileText className="size-3.5" /> Rapor / görev yetkileri
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "datalar" })}>
-                                        <Database className="size-3.5" /> Veritabanı ekle
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openNewSvcDialog(true)}>
-                                        <UserPlus className="size-3.5" /> Pars kullanıcısı ekle
-                                      </DropdownMenuItem>
-                                    </>
-                                  )}
-                                  {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
-                                  <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" disabled={!svc.assigned || svc.type === "pars"}>
-                                    <Trash2 className="size-3.5" /> Hizmeti kaldır
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                      />
+                    </div>
+                  )
+                })()}
               </TabsContent>
 
               {/* Veritabanları */}
@@ -4894,5 +4936,25 @@ function KullaniciBolum({ baslik, not, children }: { baslik: string; not?: strin
       </p>
       <div className="space-y-3 rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>{children}</div>
     </section>
+  )
+}
+
+/** Hizmetler tablosu şifre hücresi — gizli gelir; göster / kopyala (Table satırı `group` taşımadığı için düğmeler hep görünür) */
+function SvcSifre({ deger }: { deger: string | null }) {
+  const [goster, setGoster] = useState(false)
+  if (!deger) return <span>—</span>
+  return (
+    <span className="inline-flex min-w-0 items-center gap-0.5">
+      <span className="min-w-0 truncate">{goster ? deger : "••••••••"}</span>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setGoster((v) => !v) }}
+        className="inline-flex size-6 shrink-0 items-center justify-center rounded-[5px] text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+        title={goster ? "Gizle" : "Göster"}
+      >
+        {goster ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+      </button>
+      <CopyIconButton value={deger} subtle />
+    </span>
   )
 }
