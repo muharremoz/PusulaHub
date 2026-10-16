@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { AlertTriangle, ArrowRight, RefreshCw, XCircle } from "lucide-react"
+import { RefreshCw } from "lucide-react"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
-import type { DashDurum, DikkatOge } from "@/app/api/dashboard/durum/route"
+import type { DashDurum } from "@/app/api/dashboard/durum/route"
 import type { DashFirmalar, DashFirmaSatir } from "@/app/api/dashboard/firmalar/route"
 import dynamic from "next/dynamic"
 
@@ -23,7 +23,6 @@ const OturumGrafik = dynamic(() => import("@/components/dashboard/oturum-grafik"
  */
 
 const YENILEME_MS = 60_000
-const ILK_GOSTERIM = 8
 
 const seviyeRenk = (p: number | null) =>
   p == null ? "bg-muted" : p >= 90 ? "bg-red-500" : p >= 75 ? "bg-amber-500" : "bg-emerald-500"
@@ -32,7 +31,6 @@ export default function DashboardPage() {
   const [veri, setVeri] = useState<DashDurum | null>(null)
   const [hata, setHata] = useState<string | null>(null)
   const [yukleniyor, setYukleniyor] = useState(true)
-  const [tumDikkat, setTumDikkat] = useState(false)
   const [firma, setFirma] = useState<DashFirmalar | null>(null)
   const [firmaYukleniyor, setFirmaYukleniyor] = useState(true)
 
@@ -107,57 +105,6 @@ export default function DashboardPage() {
             alt={kritik + uyari === 0 ? "her şey yolunda" : `${kritik} kritik · ${uyari} uyarı`}
             vurgu={kritik > 0 ? "kritik" : uyari > 0 ? "uyari" : "iyi"} />
         </div>
-
-        {/* Dikkat gerektirenler */}
-        <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
-          <div className="flex items-center gap-2 px-2 pb-2 pt-1">
-            <h2 className="text-[13px] font-semibold">Dikkat gerektirenler</h2>
-            {veri && veri.dikkat.length > 0 && (
-              <span className="inline-flex rounded-[5px] bg-card px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{veri.dikkat.length}</span>
-            )}
-          </div>
-          <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
-            {ilkYukleme ? (
-              <div className="divide-y">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-2.5">
-                    <Skeleton className="size-4 rounded-full" />
-                    <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-64 rounded-[5px]" /><Skeleton className="h-3 w-40 rounded-[5px]" /></div>
-                  </div>
-                ))}
-              </div>
-            ) : !veri || veri.dikkat.length === 0 ? (
-              <div className="flex items-center gap-3 px-4 py-5">
-                <span className="flex size-8 items-center justify-center rounded-[5px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                  <Icon name="circle-check" size={16} />
-                </span>
-                <div>
-                  <p className="text-[13px] font-medium">{veri ? "Her şey yolunda" : "Durum alınamadı"}</p>
-                  <p className="text-[12px] text-muted-foreground">
-                    {veri ? "Sunucular, izleme, yedekler ve aktarımlarda bekleyen sorun yok." : "Yenile'ye basarak tekrar deneyin."}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <>
-                <ul className="divide-y">
-                  {(tumDikkat ? veri.dikkat : veri.dikkat.slice(0, ILK_GOSTERIM)).map((d, i) => <DikkatSatiri key={`${d.tur}-${d.baslik}-${i}`} d={d} />)}
-                </ul>
-                {veri.dikkat.length > ILK_GOSTERIM && (
-                  <button type="button" onClick={() => setTumDikkat((v) => !v)}
-                    className="w-full border-t px-4 py-2 text-left text-[12px] font-medium text-primary hover:bg-muted/30">
-                    {tumDikkat ? "Daha az göster" : `Tümünü göster (${veri.dikkat.length})`}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-          {veri && veri.kaynakHata.length > 0 && (
-            <p className="px-2 pt-2 text-[11px] text-muted-foreground" title={veri.kaynakHata.join("\n")}>
-              Okunamayan kaynak: {veri.kaynakHata.map((h) => h.split(":")[0]).join(", ")} — bu kaynaklardaki sorunlar listede görünmeyebilir.
-            </p>
-          )}
-        </section>
 
         {/* Firmalar + bugün */}
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -252,33 +199,6 @@ function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
         </>
       )}
     </div>
-  )
-}
-
-const TUR_ETIKET: Record<DikkatOge["tur"], string> = {
-  sunucu: "Sunucu", izleme: "İzleme", disk: "Disk", yedek: "Yedek", spare: "SpareBackup", aktarim: "Aktarım",
-}
-
-function DikkatSatiri({ d }: { d: DikkatOge }) {
-  const icerik = (
-    <>
-      <span className={`mt-0.5 shrink-0 ${d.seviye === "kritik" ? "text-red-600 dark:text-red-400" : "text-amber-600 dark:text-amber-400"}`}>
-        {d.seviye === "kritik" ? <XCircle className="size-4" /> : <AlertTriangle className="size-4" />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-medium">{d.baslik}</p>
-        <p className="truncate text-[12px] text-muted-foreground">{d.detay}</p>
-      </div>
-      <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{TUR_ETIKET[d.tur]}</span>
-      {d.link && <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />}
-    </>
-  )
-  return (
-    <li>
-      {d.link
-        ? <Link href={d.link} className="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-muted/30">{icerik}</Link>
-        : <div className="flex items-start gap-3 px-4 py-2.5">{icerik}</div>}
-    </li>
   )
 }
 
