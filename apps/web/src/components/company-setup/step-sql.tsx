@@ -6,7 +6,8 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X, Database, Server, Archive, Sparkles } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
 import {  } from "@muharremoz/pusula-ui"
@@ -78,6 +79,11 @@ export function StepSql({
   onSetAddFirmaPrefix, onSetAddToSirketDb,
 }: Props) {
   const showProgramColumn = selectedPusulaServices.length >= 2
+  const seciliSunucu = sqlServers.find((s) => s.id === selectedSqlServerId) ?? null
+  const seciliAdet = sqlMode === 0 ? backupFiles.filter((f) => f.selected).length : selectedDemoDbIds.length
+  const seciliOzet = seciliSunucu
+    ? `${seciliSunucu.ip}:${seciliSunucu.port} · ${seciliAdet > 0 ? `${seciliAdet} ${sqlMode === 0 ? "yedek" : "demo veritabanı"} seçili` : sqlMode === 0 ? "yedek dosyası seçin" : "demo veritabanı seçin"}`
+    : ""
   const hasSelection =
     (sqlMode === 0 && backupFiles.some((f) => f.selected)) ||
     (sqlMode === 1 && selectedDemoDbIds.length > 0)
@@ -257,61 +263,51 @@ export function StepSql({
   return (
     <div className="space-y-4">
 
-      {/* Üst şerit — bilgi notu + şirket DB toggle (sabit, sağ üst) */}
-      <div className="flex items-start justify-between gap-4">
-        <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Bu adım isteğe bağlıdır. SQL sunucusu seçmeden devam edebilirsiniz.
-        </p>
-        <div
-          className={cn(
-            "flex items-center gap-2 shrink-0 transition-opacity",
-            !hasSelection && "opacity-50",
-          )}
-          title={
-            hasSelection
-              ? "sirket.dbo.guvenlik tablosuna program kaydı oluşturulur"
-              : "Önce bir veritabanı seçmelisiniz"
-          }
-        >
-          <div className="text-right">
-            <p className="text-[11px] font-medium leading-tight">Şirket veritabanına ekle</p>
-            <p className="text-[9px] text-muted-foreground leading-tight">sirket.dbo.guvenlik kaydı</p>
-          </div>
-          <Switch
-            checked={addToSirketDb}
-            disabled={!hasSelection}
-            onCheckedChange={onSetAddToSirketDb}
-          />
-        </div>
-      </div>
-
-      {/* Sunucu secili ama veri secilmemis: kurulum bu adimi SESSIZCE atlar
-          (api/setup/run -> hasSqlWork). Uyari olmadigi icin kullanici firma
-          kuruldugunu sanip veritabaninin olusmadigini sonradan fark ediyordu. */}
-      {selectedSqlServerId !== null && !hasSelection && (
-        <div className="flex items-start gap-2.5 rounded-[8px] border border-amber-500/40 bg-amber-500/10 px-3.5 py-2.5">
-          <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
-          <p className="text-[11.5px] leading-relaxed text-amber-800 dark:text-amber-300">
-            <b>Sunucu seçtiniz ama {sqlMode === 0 ? "yedek dosyası" : "demo veritabanı"} seçmediniz.</b>{" "}
-            Bu hâliyle devam ederseniz SQL adımı atlanır ve veritabanı oluşturulmaz.
-            Aşağıdan seçim yapın veya SQL'i tamamen istemiyorsanız sunucu seçimini kaldırın.
+      {/* Üst şerit — seçim özeti + şirket DB anahtarı */}
+      <div className="flex items-center gap-3 rounded-[8px] bg-[var(--section-bg)] px-3 py-2.5">
+        <span className="bg-primary/10 text-primary ring-primary/20 flex size-8 shrink-0 items-center justify-center rounded-[5px] ring-1">
+          <Database className="size-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-semibold">
+            {seciliSunucu ? `${seciliSunucu.name} seçildi` : "SQL sunucusu seçin"}
+            {!seciliSunucu && <span className="ml-1.5 inline-flex rounded-[5px] bg-muted px-1.5 py-px align-middle text-[10px] font-medium text-muted-foreground">isteğe bağlı</span>}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {seciliSunucu
+              ? seciliOzet
+              : "Veritabanı kurulmayacaksa sunucu seçmeden devam edebilirsiniz."}
           </p>
         </div>
-      )}
+        {seciliSunucu && (
+          <label
+            className={cn("flex shrink-0 cursor-pointer items-center gap-2 transition-opacity", !hasSelection && "cursor-not-allowed opacity-50")}
+            title={hasSelection ? "sirket.dbo.guvenlik tablosuna program kaydı oluşturulur" : "Önce bir veritabanı seçmelisiniz"}
+          >
+            <span className="text-right">
+              <span className="block text-[12px] font-medium leading-tight">Şirket veritabanına ekle</span>
+              <span className="block text-[10px] leading-tight text-muted-foreground">sirket.dbo.guvenlik kaydı</span>
+            </span>
+            <Switch checked={addToSirketDb} disabled={!hasSelection} onCheckedChange={onSetAddToSirketDb} />
+          </label>
+        )}
+      </div>
 
-      {/* SQL Sunucu listesi */}
+      {/* SQL sunucusu — kartlar; seçili karta tekrar tıklayınca seçim kalkar */}
       <div>
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">SQL Sunucusu</p>
+        <p className="flex items-center gap-1.5 pb-2 text-[12px] font-medium">
+          <Server className="size-3.5 text-muted-foreground" />
+          SQL Sunucusu
+        </p>
 
         {/* Yükleniyor */}
         {sqlServersLoading && (
-          <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-3">
-                <Skeleton className="h-3 w-32 rounded-[5px]" />
+              <div key={i} className="space-y-2.5 rounded-[8px] border-2 p-3">
+                <Skeleton className="h-3.5 w-28 rounded-[5px]" />
+                <Skeleton className="h-3 w-36 rounded-[5px]" />
                 <Skeleton className="h-3 w-24 rounded-[5px]" />
-                <Skeleton className="h-3 w-20 rounded-[5px]" />
-                <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
               </div>
             ))}
           </div>
@@ -319,7 +315,7 @@ export function StepSql({
 
         {/* Hata */}
         {!sqlServersLoading && sqlServersError && (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
             <AlertTriangle className="size-3.5 shrink-0" />
             {sqlServersError}
           </div>
@@ -327,98 +323,110 @@ export function StepSql({
 
         {/* Boş */}
         {!sqlServersLoading && !sqlServersError && sqlServers.length === 0 && (
-          <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+          <div className="flex flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed px-4 py-8 text-center">
             <ServerOff className="size-6 text-muted-foreground" />
-            <p className="text-[12px] font-medium">SQL sunucusu tanımlı değil</p>
-            <p className="text-[10px] text-muted-foreground max-w-xs">
+            <p className="text-[13px] font-medium">SQL sunucusu tanımlı değil</p>
+            <p className="max-w-xs text-[12px] text-muted-foreground">
               Veritabanlarının kurulacağı bir sunucuyu sisteme SQL rolüyle eklemelisin.
             </p>
-            <a
-              href="/servers"
-              className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-            >
-              Sunucu Ekle
-            </a>
+            <Button asChild size="sm" className="mt-1"><a href="/servers">Sunucu Ekle</a></Button>
           </div>
         )}
 
-        {/* Liste */}
+        {/* Kartlar */}
         {!sqlServersLoading && !sqlServersError && sqlServers.length > 0 && (
-        <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
-          {sqlServers.map((srv) => {
-            const isSelected = selectedSqlServerId === srv.id
-            return (
-              <button
-                key={srv.id}
-                onClick={() => onSelectSqlServer(isSelected ? null : srv.id)}
-                disabled={!srv.isOnline}
-                className={cn(
-                  "w-full grid grid-cols-[1fr_90px_80px_80px_20px] gap-3 items-center px-3 py-2.5 text-left transition-colors",
-                  isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
-                  !srv.isOnline && "opacity-40 cursor-not-allowed"
-                )}
-              >
-                {/* Ad + IP:Port */}
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <p className="text-[11px] font-medium">{srv.name}</p>
-                    {srv.isOnline ? (
-                      <span className="relative flex size-1.5 shrink-0">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                        <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
-                      </span>
-                    ) : (
-                      <WifiOff className="size-3 text-red-400 shrink-0" />
-                    )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {sqlServers.map((srv) => {
+              const sec = selectedSqlServerId === srv.id
+              const kapali = !srv.isOnline
+              return (
+                <button
+                  key={srv.id}
+                  type="button"
+                  onClick={() => onSelectSqlServer(sec ? null : srv.id)}
+                  disabled={kapali}
+                  aria-pressed={sec}
+                  className={cn(
+                    "rounded-[8px] border-2 p-3 text-left transition-all",
+                    sec ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15" : "border-border bg-card hover:border-foreground/30",
+                    kapali && "cursor-not-allowed opacity-50",
+                  )}
+                  style={{ boxShadow: "var(--card-shadow)" }}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        {srv.isOnline ? (
+                          <span className="relative flex size-1.5 shrink-0">
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                            <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+                          </span>
+                        ) : (
+                          <WifiOff className="size-3 shrink-0 text-red-500" />
+                        )}
+                        <p className="truncate text-[13px] font-semibold">{srv.name}</p>
+                      </div>
+                      <p className="mt-0.5 truncate text-[12px] tabular-nums text-muted-foreground">{srv.ip}:{srv.port}</p>
+                    </div>
+                    <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", sec ? "border-emerald-500 bg-emerald-500" : "border-border")}>
+                      {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                    </span>
                   </div>
-                  <p className="text-[10px] text-muted-foreground font-mono">{srv.ip}:{srv.port}</p>
-                </div>
-                {/* Auth */}
-                <span className="text-[11px] text-muted-foreground">{srv.authType} Auth</span>
-                {/* DB sayısı */}
-                <span className="text-[11px] text-muted-foreground tabular-nums">{srv.dbCount} veritabanı</span>
-                {/* Boyut */}
-                <span className="text-[11px] text-muted-foreground tabular-nums">{srv.totalSizeGB} GB</span>
-                {/* Seçim */}
-                <div className={cn(
-                  "size-4 rounded-full border flex items-center justify-center shrink-0",
-                  isSelected ? "bg-foreground border-foreground" : "border-border"
-                )}>
-                  {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                </div>
-              </button>
-            )
-          })}
-        </div>
+                  <div className="mt-3 flex items-center gap-3 text-[12px] text-muted-foreground">
+                    <span><span className="font-medium tabular-nums text-foreground">{srv.dbCount}</span> veritabanı</span>
+                    <span><span className="font-medium tabular-nums text-foreground">{srv.totalSizeGB}</span> GB</span>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{srv.authType} Auth</span>
+                    {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
+                  </div>
+                </button>
+              )
+            })}
+          </div>
         )}
       </div>
 
-      {/* Sunucu seçildiyse — mod + içerik */}
+      {/* Sunucu seçildiyse — veri kaynağı + içerik */}
       {selectedSqlServerId !== null && (
         <div className="space-y-4">
           <Separator />
 
-          {/* Mod seçimi */}
+          {/* Veri kaynağı — kart biçiminde iki seçenek */}
           <div>
-            <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase mb-2">Veri Kaynağı</p>
-            <div className="flex gap-1 rounded-[5px] border border-border/50 p-1 bg-muted/20 w-fit">
-              {[
-                { mode: 0 as const, label: "Yedekten Yükle" },
-                { mode: 1 as const, label: "Demo Veritabanı" },
-              ].map(({ mode, label }) => (
-                <button
-                  key={mode}
-                  onClick={() => onSetSqlMode(mode)}
-                  className={cn(
-                    "px-3 py-1.5 rounded-[5px] text-[11px] font-medium transition-colors",
-                    sqlMode === mode
-                      ? "bg-background text-foreground shadow-sm border border-border/50"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
+            <p className="pb-2 text-[12px] font-medium">Veri kaynağı</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {([
+                { mode: 0 as const, ikon: Archive,  baslik: "Yedekten yükle",  alt: "Müşterinin .bak / mdf dosyalarını klasörden tara" },
+                { mode: 1 as const, ikon: Sparkles, baslik: "Demo veritabanı", alt: "Hazır demo datalarla boş kurulum" },
+              ]).map(({ mode, ikon: Ikon, baslik, alt }) => {
+                const sec = sqlMode === mode
+                return (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => onSetSqlMode(mode)}
+                    aria-pressed={sec}
+                    className={cn(
+                      "flex items-center gap-3 rounded-[8px] border-2 p-3 text-left transition-all",
+                      sec ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15" : "border-border bg-card hover:border-foreground/30",
+                    )}
+                    style={{ boxShadow: "var(--card-shadow)" }}
+                  >
+                    <span className={cn("flex size-9 shrink-0 items-center justify-center rounded-[5px]",
+                      mode === 0 ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-violet-500/15 text-violet-700 dark:text-violet-400")}>
+                      <Ikon className="size-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold">{baslik}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">{alt}</span>
+                    </span>
+                    <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", sec ? "border-emerald-500 bg-emerald-500" : "border-border")}>
+                      {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                    </span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 

@@ -1,14 +1,7 @@
 "use client"
 
-import { Check, WifiOff, ServerOff } from "lucide-react"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Check, WifiOff, ServerOff, Network, AlertTriangle, Building2, Users } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
 
@@ -24,6 +17,9 @@ export interface AdServerItem {
   companyCount: number
 }
 
+/** Yoğunluk çubuğu için kullanıcı üst sınırı (eski tabloyla aynı ölçek) */
+const KULLANICI_SINIRI = 500
+
 export function StepServer({
   servers,
   selectedId,
@@ -37,21 +33,38 @@ export function StepServer({
   loading?: boolean
   error?: string | null
 }) {
+  const secili = servers.find((s) => s.id === selectedId)
+  const cevrimici = servers.filter((s) => s.isOnline).length
+
   return (
-    <div className="space-y-2">
-      <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-        Active Directory Sunucusu
-      </p>
+    <div className="space-y-4">
+
+      {/* Üst şerit: seçim özeti */}
+      <div className="flex items-center gap-3 rounded-[8px] bg-[var(--section-bg)] px-3 py-2.5">
+        <span className="bg-primary/10 text-primary ring-primary/20 flex size-8 shrink-0 items-center justify-center rounded-[5px] ring-1">
+          <Network className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold">
+            {secili ? `${secili.name} seçildi` : "Active Directory sunucusunu seçin"}
+          </p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {secili
+              ? [secili.domain, secili.dns || secili.ip].filter(Boolean).join(" · ")
+              : loading ? "Sunucular yükleniyor…" : `${servers.length} sunucu, ${cevrimici} çevrimiçi — firmanın OU'su ve kullanıcıları burada açılır`}
+          </p>
+        </div>
+      </div>
 
       {/* Yüklenme */}
       {loading && (
-        <div className="rounded-[5px] border border-border/50 overflow-hidden divide-y divide-border/40">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-3 px-3 py-3">
-              <Skeleton className="h-3 w-32 rounded-[5px]" />
+            <div key={i} className="space-y-2.5 rounded-[8px] border-2 p-3">
+              <Skeleton className="h-3.5 w-28 rounded-[5px]" />
+              <Skeleton className="h-3 w-36 rounded-[5px]" />
+              <Skeleton className="h-1 w-full rounded-full" />
               <Skeleton className="h-3 w-24 rounded-[5px]" />
-              <Skeleton className="h-3 w-28 rounded-[5px]" />
-              <Skeleton className="h-3 w-16 rounded-[5px] ml-auto" />
             </div>
           ))}
         </div>
@@ -59,123 +72,85 @@ export function StepServer({
 
       {/* Hata */}
       {!loading && error && (
-        <div className="rounded-[5px] border border-destructive/30 bg-destructive/5 px-3 py-4 text-[11px] text-destructive">
+        <div className="flex items-center gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
+          <AlertTriangle className="size-3.5 shrink-0" />
           {error}
         </div>
       )}
 
       {/* Boş durum */}
       {!loading && !error && servers.length === 0 && (
-        <div className="rounded-[5px] border border-border/50 px-4 py-8 flex flex-col items-center justify-center gap-2 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-[8px] border border-dashed px-4 py-10 text-center">
           <ServerOff className="size-6 text-muted-foreground" />
-          <p className="text-[12px] font-medium">Henüz AD sunucusu tanımlı değil</p>
-          <p className="text-[10px] text-muted-foreground max-w-xs">
+          <p className="text-[13px] font-medium">Henüz AD sunucusu tanımlı değil</p>
+          <p className="max-w-xs text-[12px] text-muted-foreground">
             Firma kurulumu yapabilmek için önce sisteme AD rolünde bir sunucu eklemelisin.
           </p>
-          <a
-            href="/servers"
-            className="mt-1 text-[11px] font-medium px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-          >
-            Sunucu Ekle
-          </a>
+          <Button asChild size="sm" className="mt-1"><a href="/servers">Sunucu Ekle</a></Button>
         </div>
       )}
 
-      {/* Tablo */}
+      {/* Sunucu kartları */}
       {!loading && !error && servers.length > 0 && (
-      <div className="rounded-[5px] border border-border/50 overflow-hidden">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-muted/20 border-b border-border hover:bg-muted/30">
-              <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Sunucu</TableHead>
-              <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">IP</TableHead>
-              <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Domain</TableHead>
-              <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8 text-center">Firma</TableHead>
-              <TableHead className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide h-8">Kullanıcı Yoğunluğu</TableHead>
-              <TableHead className="h-8 w-8" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {servers.map((srv) => {
-              const isSelected = selectedId === srv.id
-              const isDisabled = !srv.isOnline
-              const densityPct = Math.min(100, Math.round((srv.userCount / 500) * 100))
-              const dColor = densityPct > 80 ? "text-red-500" : densityPct > 60 ? "text-amber-500" : "text-emerald-600 dark:text-emerald-400"
-              const barColor = densityPct > 80 ? "bg-red-500" : densityPct > 60 ? "bg-amber-500" : "bg-emerald-500"
-
-              return (
-                <TableRow
-                  key={srv.id}
-                  onClick={() => !isDisabled && onSelect(srv.id)}
-                  className={cn(
-                    "border-b border-border/40 transition-colors",
-                    isSelected ? "bg-foreground/[0.04]" : "hover:bg-muted/20",
-                    isDisabled ? "opacity-40 cursor-not-allowed" : "cursor-pointer"
-                  )}
-                >
-                  {/* Sunucu adı + online dot */}
-                  <TableCell className="py-2.5">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {servers.map((srv) => {
+            const sec = srv.id === selectedId
+            const kapali = !srv.isOnline
+            const pct = Math.min(100, Math.round((srv.userCount / KULLANICI_SINIRI) * 100))
+            return (
+              <button
+                key={srv.id}
+                type="button"
+                disabled={kapali}
+                onClick={() => onSelect(srv.id)}
+                aria-pressed={sec}
+                className={cn(
+                  "rounded-[8px] border-2 p-3 text-left transition-all",
+                  sec ? "border-emerald-500 bg-emerald-500/10 ring-4 ring-emerald-500/15" : "border-border bg-card hover:border-foreground/30",
+                  kapali && "cursor-not-allowed opacity-50",
+                )}
+                style={{ boxShadow: "var(--card-shadow)" }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium">{srv.name}</span>
                       {srv.isOnline ? (
                         <span className="relative flex size-1.5 shrink-0">
                           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                           <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
                         </span>
                       ) : (
-                        <WifiOff className="size-3 text-red-400 shrink-0" />
+                        <WifiOff className="size-3 shrink-0 text-red-500" />
                       )}
+                      <p className="truncate text-[13px] font-semibold">{srv.name}</p>
                     </div>
-                  </TableCell>
+                    <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{srv.domain || "—"}</p>
+                  </div>
+                  <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", sec ? "border-emerald-500 bg-emerald-500" : "border-border")}>
+                    {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
+                  </span>
+                </div>
 
-                  {/* IP */}
-                  <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                    {srv.ip}
-                  </TableCell>
+                <div className="mt-3 flex items-end justify-between">
+                  <span className="flex items-center gap-3 text-[12px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1"><Building2 className="size-3" /><span className="tabular-nums">{srv.companyCount}</span> firma</span>
+                    <span className="inline-flex items-center gap-1"><Users className="size-3" /><span className="tabular-nums">{srv.userCount}</span> kullanıcı</span>
+                  </span>
+                  <span className={cn("text-[11px] font-medium tabular-nums",
+                    pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>%{pct}</span>
+                </div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
+                  <div className={cn("h-full rounded-full", pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${pct}%` }} />
+                </div>
 
-                  {/* Domain */}
-                  <TableCell className="text-[11px] text-muted-foreground font-mono py-2.5">
-                    {srv.domain || "—"}
-                  </TableCell>
-
-                  {/* Firma sayısı */}
-                  <TableCell className="text-[11px] text-muted-foreground tabular-nums text-center py-2.5">
-                    {srv.companyCount}
-                  </TableCell>
-
-                  {/* Kullanıcı yoğunluk barı */}
-                  <TableCell className="py-2.5">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-                        <div className={cn("h-full rounded-full", barColor)} style={{ width: `${densityPct}%` }} />
-                      </div>
-                      <span className={cn("text-[10px] tabular-nums w-14 text-right shrink-0", dColor)}>
-                        {srv.userCount} kull.
-                      </span>
-                    </div>
-                  </TableCell>
-
-                  {/* Seçim */}
-                  <TableCell className="py-2.5">
-                    <div className={cn(
-                      "size-4 rounded-full border flex items-center justify-center",
-                      isSelected ? "bg-foreground border-foreground" : "border-border"
-                    )}>
-                      {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </div>
-      )}
-
-      {!loading && !error && servers.length > 0 && (
-        <p className="text-[10px] text-muted-foreground px-1">
-          {servers.length} sunucu listeleniyor
-        </p>
+                <div className="mt-2.5 flex items-center justify-between gap-2">
+                  <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? `${srv.dns} · ${srv.ip}` : srv.ip}</span>
+                  {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
+                </div>
+              </button>
+            )
+          })}
+        </div>
       )}
     </div>
   )
