@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { ServerSheet } from "@/components/servers/server-sheet"
-import { TerminalSheet } from "@/components/servers/terminal-sheet"
 import type { Server } from "@/types"
 
 /**
@@ -62,7 +61,6 @@ export default function ServersPage() {
 
   const [sheetAcik, setSheetAcik] = useState(false)
   const [duzenleId, setDuzenleId] = useState<string | null>(null)
-  const [terminal, setTerminal] = useState<{ id: string; ad: string } | null>(null)
   const [kaldir, setKaldir] = useState<Server | null>(null)
   const [kaldiriliyor, setKaldiriliyor] = useState(false)
 
@@ -119,7 +117,6 @@ export default function ServersPage() {
 
   const islemler = {
     duzenle: (s: Server) => { setDuzenleId(s.id); setSheetAcik(true) },
-    terminal: (s: Server) => setTerminal({ id: s.id, ad: s.name }),
     kaldir: (s: Server) => setKaldir(s),
   }
 
@@ -130,7 +127,6 @@ export default function ServersPage() {
   return (
     <PageContainer title="Sunucular" description="Sunucuların anlık durumu ve yönetimi">
       <ServerSheet open={sheetAcik} onOpenChange={(o) => { setSheetAcik(o); if (!o) setDuzenleId(null) }} onSaved={() => void yukle()} editServerId={duzenleId} />
-      <TerminalSheet open={terminal !== null} onOpenChange={(o) => { if (!o) setTerminal(null) }} serverId={terminal?.id ?? ""} serverName={terminal?.ad ?? ""} />
 
       <div className="space-y-3">
         {/* Araç şeridi */}
@@ -185,7 +181,7 @@ export default function ServersPage() {
   )
 }
 
-type Islemler = { duzenle: (s: Server) => void; terminal: (s: Server) => void; kaldir: (s: Server) => void }
+type Islemler = { duzenle: (s: Server) => void; kaldir: (s: Server) => void }
 
 function IslemMenusu({ s, islemler }: { s: Server; islemler: Islemler }) {
   const router = useRouter()
@@ -198,7 +194,6 @@ function IslemMenusu({ s, islemler }: { s: Server; islemler: Islemler }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem className="text-[12px]" onClick={() => router.push(`/servers/${s.slug ?? s.id}`)}>Detaylar</DropdownMenuItem>
-        <DropdownMenuItem className="text-[12px]" onClick={() => islemler.terminal(s)}>Komut çalıştır</DropdownMenuItem>
         <DropdownMenuItem className="text-[12px]" onClick={() => islemler.duzenle(s)}>Düzenle</DropdownMenuItem>
         <DropdownMenuItem className="text-[12px] text-rose-600 focus:text-rose-600" onClick={() => islemler.kaldir(s)}>Kaldır</DropdownMenuItem>
       </DropdownMenuContent>
