@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Check, Loader2, XCircle, AlertTriangle } from "lucide-react"
+import { Check, Loader2, XCircle, AlertTriangle, ChevronDown, Users, FolderOpen, HardDrive, Globe, Database, Smartphone, RefreshCw, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { ServiceType, ServiceConfig } from "@/app/api/services/route"
 
@@ -269,104 +269,208 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
 
   const formatElapsed = () => {
     const s = Math.floor(elapsedMs / 1000)
-    const ms = String(elapsedMs % 1000).padStart(3, "0").slice(0, 2)
-    return `${s}.${ms}s`
+    return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`
   }
+
+  /* Adımları gruplara topla — grup tahmini toplamı, henüz başlamamış grupları da göstermek için */
+  const tahmin: Record<GrupKey, number> = {
+    ad:    (parsOnly ? 0 : 3) + payload.users.length * 2,
+    dosya: (serviceCount > 0 ? 2 : 0) + Math.round(pusulaCount * 3.5) + desktopStepCount,
+    depo:  depoStepCount,
+    iis:   iisCount * 5 + resimCount * 2,
+    sql:   sqlStepCount,
+    pars:  parsStepCount,
+    kayit: 0,
+  }
+  const gruplar = GRUPLAR.map((g) => {
+    const adimlar = steps.filter((s) => grupBul(s.stepId) === g.key)
+    const bitti   = adimlar.filter((s) => s.status === "done").length
+    const durum: ProvisionStatus =
+      adimlar.some((s) => s.status === "error")   ? "error"
+      : adimlar.some((s) => s.status === "running") ? "running"
+      : adimlar.length > 0 && (completed || bitti >= tahmin[g.key]) ? "done"
+      : adimlar.length > 0 ? "running"
+      : "pending"
+    return { ...g, adimlar, bitti, toplam: Math.max(tahmin[g.key], adimlar.length), durum }
+  }).filter((g) => g.adimlar.length > 0 || (!completed && !fatalError && g.toplam > 0))
+
+  // Grup açık mı: kullanıcı seçimi yoksa çalışan / hatalı grup açık gelir
+  const [acik, setAcik] = useState<Partial<Record<GrupKey, boolean>>>({})
+  const durumMetni = completed ? "Kurulum tamamlandı" : (errorStep || fatalError) ? "Kurulum durdu" : "Kurulum çalışıyor"
 
   return (
     <div className="space-y-3">
 
-      {/* Progress bar */}
-      <div className="rounded-[5px] border border-border/50 overflow-hidden">
-        <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
-          <div className="flex items-center gap-2">
-            {completed ? (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} />
-                </span>
-                Tamamlandı
-              </span>
-            ) : errorStep || fatalError ? (
-              <span className="flex items-center gap-1.5 text-[11px] font-medium text-red-600 dark:text-red-400">
-                <XCircle className="size-3.5" />
-                Hata
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                <Loader2 className="size-3.5 animate-spin" />
-                Çalışıyor…
-              </span>
-            )}
-            <span className="text-[10px] text-muted-foreground">{doneCount} / {totalEstimated} adım</span>
+      {/* Durum kartı — başlık, adım/süre, yüzde, ilerleme çubuğu */}
+      <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
+        <div className="rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+          <div className="flex items-center gap-3">
+            <span className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1",
+              completed ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400"
+              : (errorStep || fatalError) ? "bg-red-500/15 text-red-700 ring-red-500/25 dark:text-red-400"
+              : "bg-primary/10 text-primary ring-primary/20",
+            )}>
+              {completed ? <Check className="size-[18px]" strokeWidth={2.5} />
+                : (errorStep || fatalError) ? <XCircle className="size-[18px]" />
+                : <Loader2 className="size-[18px] animate-spin" />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-semibold">
+                {durumMetni}
+                {payload.firmaId && <span className="font-medium text-muted-foreground"> · {payload.firmaId}</span>}
+              </p>
+              <p className="truncate text-[12px] text-muted-foreground">
+                {doneCount} / {Math.max(totalEstimated, steps.length)} adım · {formatElapsed()}
+                {errorStep && <> · <span className="text-red-700 dark:text-red-400">{errorStep.label}</span></>}
+              </p>
+            </div>
+            <span className="text-2xl font-bold tabular-nums">{completed ? 100 : progress}%</span>
           </div>
-          <span className="text-[10px] font-mono text-muted-foreground">{formatElapsed()}</span>
-        </div>
-        <div className="h-1 w-full bg-muted">
-          <div
-            className={cn(
-              "h-full transition-all duration-300",
-              completed ? "bg-emerald-500" : (errorStep || fatalError) ? "bg-red-500" : "bg-foreground"
-            )}
-            style={{ width: `${progress}%` }}
-          />
+          <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className={cn(
+                "h-full rounded-full transition-all duration-300",
+                completed ? "bg-emerald-500" : (errorStep || fatalError) ? "bg-red-500" : "bg-primary",
+              )}
+              style={{ width: `${completed ? 100 : progress}%` }}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Fatal error */}
+      {/* Başlatılamadı */}
       {fatalError && (
-        <div className="flex items-start gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400">
-          <AlertTriangle className="size-3.5 shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 rounded-[5px] bg-red-500/15 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
+          <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <div className="min-w-0">
             <p className="font-semibold">İstek başlatılamadı</p>
-            <p className="font-mono break-all mt-0.5">{fatalError}</p>
+            <p className="mt-0.5 break-all">{fatalError}</p>
           </div>
         </div>
       )}
 
-      {/* Adım listesi */}
-      {steps.length > 0 && (
-        <div className="rounded-[5px] border border-border/50 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">Kurulum Adımları</span>
-            {completed && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
-            {isRunning && <Loader2 className="size-3.5 text-foreground animate-spin" />}
+      {/* Gruplu adım listesi */}
+      {gruplar.length > 0 && (
+        <div className="overflow-hidden rounded-t-[10px] border-t bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+          <div className="flex items-center justify-between border-b px-4 py-1.5">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Kurulum adımları</span>
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Durum</span>
           </div>
-          {/*  Uzun kurulumlarda liste sayfayi asiyordu: sabit yukseklik +
-               kaydirma; son adim gorunur kalsin diye asagiya kayar.       */}
-          <div ref={listeRef} className="divide-y divide-border/40 max-h-[380px] overflow-y-auto">
-            {steps.map((step) => (
-              <div key={step.stepId} className={cn(
-                "flex items-start gap-2.5 px-3 py-2 transition-colors",
-                step.status === "running" && "bg-muted/20"
-              )}>
-                <span className="shrink-0 mt-0.5">
-                  {step.status === "done"    && <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center"><Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} /></span>}
-                  {step.status === "running" && <Loader2 className="size-4 animate-spin text-foreground" />}
-                  {step.status === "error"   && <XCircle className="size-4 text-red-500" />}
-                  {step.status === "pending" && <span className="size-4 rounded-full border-2 border-border/60 block" />}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className={cn(
-                    "text-[11px] font-mono",
-                    /* Tamamlanan: ustu cizili degil, yesil fosforlu kalemle isaretlenmis gibi */
-                    step.status === "done"    && "text-emerald-800 dark:text-emerald-300 bg-emerald-400/20 rounded-[3px] px-1 -mx-1 inline-block",
-                    step.status === "running" && "text-foreground font-semibold",
-                    step.status === "pending" && "text-muted-foreground/50",
-                    step.status === "error"   && "text-red-500",
-                  )}>
-                    {step.label}
-                  </p>
-                  {step.error && (
-                    <p className="text-[10px] text-red-500 font-mono mt-0.5 break-all whitespace-pre-wrap">{step.error}</p>
+          {/*  Uzun kurulumlarda liste sayfayı aşıyordu: sabit yükseklik + kaydırma */}
+          <div ref={listeRef} className="max-h-[420px] divide-y overflow-y-auto">
+            {gruplar.map((g) => {
+              const Ikon = g.ikon
+              const isOpen = (acik[g.key] ?? (g.durum === "running" || g.durum === "error")) && g.adimlar.length > 0
+              return (
+                <div key={g.key}>
+                  <button
+                    type="button"
+                    disabled={g.adimlar.length === 0}
+                    onClick={() => setAcik((p) => ({ ...p, [g.key]: !isOpen }))}
+                    className={cn(
+                      "flex w-full items-center gap-3 px-4 py-2 text-left transition-colors",
+                      g.adimlar.length > 0 && "hover:bg-muted/20",
+                      g.durum === "running" && "bg-muted/20",
+                    )}
+                  >
+                    <DurumIkon durum={g.durum} />
+                    <span className={cn(
+                      "flex size-6 shrink-0 items-center justify-center rounded-[5px]",
+                      g.durum === "pending" ? "bg-muted text-muted-foreground" : g.renk,
+                    )}>
+                      <Ikon className="size-3.5" />
+                    </span>
+                    <span className={cn(
+                      "min-w-0 flex-1 truncate text-[14px] font-medium leading-[20px]",
+                      g.durum === "pending" && "text-muted-foreground",
+                    )}>
+                      {g.ad}
+                    </span>
+                    <span className={cn(
+                      "inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                      g.durum === "done"    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                      : g.durum === "error" ? "bg-red-500/15 text-red-700 dark:text-red-400"
+                      : "bg-muted text-muted-foreground",
+                    )}>
+                      {g.durum === "done" ? `${g.bitti} adım` : `${g.bitti} / ${g.toplam}`}
+                    </span>
+                    <ChevronDown className={cn(
+                      "size-3.5 shrink-0 text-muted-foreground transition-transform",
+                      isOpen && "rotate-180",
+                      g.adimlar.length === 0 && "opacity-0",
+                    )} />
+                  </button>
+
+                  {isOpen && (
+                    <ul className="pb-1.5">
+                      {g.adimlar.map((step) => (
+                        <li key={step.stepId} className="flex items-start gap-2.5 py-1 pl-[52px] pr-4">
+                          <span className="mt-[3px]"><DurumIkon durum={step.status} kucuk /></span>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn(
+                              "text-[13px]",
+                              step.status === "running" && "font-medium text-foreground",
+                              step.status === "done"    && "text-muted-foreground",
+                              step.status === "pending" && "text-muted-foreground/60",
+                              step.status === "error"   && "font-medium text-red-700 dark:text-red-400",
+                            )}>
+                              {step.label}
+                            </p>
+                            {step.error && (
+                              <p className="mt-1 whitespace-pre-wrap break-all rounded-[5px] bg-red-500/15 px-2 py-1.5 text-[12px] text-red-700 dark:text-red-400">
+                                {step.error}
+                              </p>
+                            )}
+                          </div>
+                          {step.status === "running" && <span className="shrink-0 animate-pulse text-[12px] text-muted-foreground">işleniyor…</span>}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                 </div>
-                {step.status === "running" && <span className="text-[10px] text-muted-foreground animate-pulse shrink-0">işleniyor…</span>}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
     </div>
   )
+}
+
+/* ── Gruplar ──────────────────────────────────────────────────────────── */
+
+type GrupKey = "ad" | "dosya" | "depo" | "iis" | "sql" | "pars" | "kayit"
+
+const GRUPLAR: { key: GrupKey; ad: string; ikon: LucideIcon; renk: string }[] = [
+  { key: "ad",    ad: "Active Directory",  ikon: Users,      renk: "bg-sky-500/15 text-sky-700 dark:text-sky-400" },
+  { key: "dosya", ad: "Program dosyaları", ikon: FolderOpen, renk: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400" },
+  { key: "depo",  ad: "Depo",              ikon: HardDrive,  renk: "bg-teal-500/15 text-teal-700 dark:text-teal-400" },
+  { key: "iis",   ad: "IIS hizmetleri",    ikon: Globe,      renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  { key: "sql",   ad: "SQL veritabanları", ikon: Database,   renk: "bg-orange-500/15 text-orange-700 dark:text-orange-400" },
+  { key: "pars",  ad: "Pars (mobil)",      ikon: Smartphone, renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
+  { key: "kayit", ad: "Hub kaydı",         ikon: RefreshCw,  renk: "bg-muted text-muted-foreground" },
+]
+
+/** Adım kimliğinin öneki grubunu belirler (`/api/setup/run` stepId'leri) */
+function grupBul(stepId: string): GrupKey {
+  if (/^(ou_|group$|user_|member_|office_|bilkar_member_)/.test(stepId)) return "ad"
+  if (/^(iis_|resim_site_)/.test(stepId)) return "iis"
+  if (/^(sql_|sbm_|bm_)/.test(stepId)) return "sql"
+  if (/^pars_/.test(stepId)) return "pars"
+  if (/^depo_/.test(stepId)) return "depo"
+  if (/^(firma_root|ntfs$|svc_|desktop_|shortcut_|bilkar_desktop_)/.test(stepId)) return "dosya"
+  return "kayit"
+}
+
+function DurumIkon({ durum, kucuk }: { durum: ProvisionStatus; kucuk?: boolean }) {
+  const boyut = kucuk ? "size-3.5" : "size-4"
+  if (durum === "done") return (
+    <span className={cn(boyut, "flex shrink-0 items-center justify-center rounded-full bg-emerald-500")}>
+      <Check className="size-2.5 text-white" strokeWidth={3} />
+    </span>
+  )
+  if (durum === "running") return <Loader2 className={cn(boyut, "shrink-0 animate-spin text-foreground")} />
+  if (durum === "error")   return <XCircle className={cn(boyut, "shrink-0 text-red-600 dark:text-red-400")} />
+  return <span className={cn(boyut, "block shrink-0 rounded-full border-2 border-border")} />
 }
