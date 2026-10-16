@@ -2543,12 +2543,20 @@ async function startPushJob(token) {
  *   Perakende (programCode 909): yalnız <DATAKODU> firmaId </DATAKODU> bloğu
  *   Diğerleri: yalnız [DATA KODU] firmaId satırı
  * [OPEN OFFICE] 1 ARTIK YAZILMIYOR (2026-09-29): terminallerde Office kuruldu;
- * dosyada zaten olan [OPEN OFFICE] satırına dokunulmaz.
+ * dosyada zaten olan [OPEN OFFICE] satırı / <OPENOFFICE> bloğu da silinir (2026-10-16) —
+ * eski sunucudan gelen dosyalar ayarı geri getiriyordu.
  * Var olan değer güncellenir, yoksa sona eklenir. Dosya latin1 okunup yazılır:
  * baytlar aynen korunur (Windows-1254 Türkçe karakterler bozulmaz), yalnız ASCII
  * etiketler değişir. Satır sonu dosyadakiyle aynı tutulur. */
+function openOfficeSil(metin) {
+  return metin
+    .replace(/[ \t]*<OPENOFFICE>[\s\S]*?<\/OPENOFFICE>[ \t]*(\r?\n)?/gi, "")
+    .replace(/^[ \t]*\[OPEN ?OFFICE\][^\r\n]*(\r?\n|$)/gim, "")
+}
+
 function parametreMetni(metin, firmaId, perakende) {
   const nl = metin.includes("\r\n") ? "\r\n" : "\n"
+  metin = openOfficeSil(metin)
   if (perakende) {
     // Perakende: yalnız DATAKODU bloğu
     for (const [etiket, deger] of [["DATAKODU", firmaId]]) {

@@ -607,10 +607,18 @@ async function aktar(id) {
 /* Parametre dosyalarına DATA KODU = firma kodu (eski servis + sihirbazla aynı kural):
  *   Perakende (programCode 909): <DATAKODU> firmaId </DATAKODU> bloğu
  *   Diğerleri: [DATA KODU] firmaId satırı
- * [OPEN OFFICE] yazılmaz (2026-09-29). latin1 okuma/yazma: 1254 Türkçe baytlar
+ * [OPEN OFFICE] yazılmaz (2026-09-29); dosyada zaten varsa silinir (2026-10-16) —
+ * eski sunucudan gelen dosyalar ayarı geri getiriyordu. latin1 okuma/yazma: 1254 Türkçe baytlar
  * ve satır sonları korunur. İstemci param dosyalarını meta.param = true ile işaretler. */
+function openOfficeSil(metin) {
+  return metin
+    .replace(/[ \t]*<OPENOFFICE>[\s\S]*?<\/OPENOFFICE>[ \t]*(\r?\n)?/gi, "")
+    .replace(/^[ \t]*\[OPEN ?OFFICE\][^\r\n]*(\r?\n|$)/gim, "")
+}
+
 function parametreMetni(metin, firmaId, perakende) {
   const nl = metin.includes("\r\n") ? "\r\n" : "\n"
+  metin = openOfficeSil(metin)
   if (perakende) {
     const blok = "<DATAKODU>" + nl + firmaId + nl + "</DATAKODU>"
     const re = /<DATAKODU>[\s\S]*?<\/DATAKODU>/i
