@@ -278,7 +278,7 @@ function SunucuKarti({ s, islemler }: { s: Server; islemler: Islemler }) {
           <div className="mt-2 space-y-1.5 rounded-[5px] bg-[var(--section-bg)] px-2.5 py-2">
             {diskler(s).map((d) => (
               <div key={d.drive} className="flex items-center gap-2 text-[12px]">
-                <span className="w-7 shrink-0 font-medium text-muted-foreground">{d.drive === "Disk" ? "Disk" : d.drive.replace(/\$/, "")}</span>
+                <span className="w-7 shrink-0 font-medium text-muted-foreground">{d.drive === "Disk" ? "Disk" : d.drive.replace(/\\$/, "")}</span>
                 <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                   <div className={`h-full rounded-full ${seviyeRenk(d.percent)}`} style={{ width: `${Math.min(100, d.percent)}%` }} />
                 </div>
