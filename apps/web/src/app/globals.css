@@ -120,6 +120,14 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar: var(--sidebar);
   --animate-rainbow: rainbow var(--speed, 2s) infinite linear;
+  /* Doğrulama uyarısı: hatalı alan kısa sallanır (Yeni Kullanıcı vb.) — motion-safe ile kullan */
+  --animate-sallan: sallan 0.42s cubic-bezier(.36,.07,.19,.97) both;
+  @keyframes sallan {
+    10%, 90% { transform: translateX(-1px); }
+    20%, 80% { transform: translateX(2px); }
+    30%, 50%, 70% { transform: translateX(-4px); }
+    40%, 60% { transform: translateX(4px); }
+  }
   --color-color-5: var(--color-5);
   --color-color-4: var(--color-4);
   --color-color-3: var(--color-3);

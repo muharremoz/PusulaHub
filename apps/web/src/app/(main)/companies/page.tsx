@@ -618,6 +618,7 @@ export default function CompaniesPage() {
   const [newUserError, setNewUserError]           = useState<string | null>(null);
   // Olustur basildi mi — eksik alan uyarilari ancak o zaman gorunur (dugme hic silik durmasin)
   const [newUserDenendi, setNewUserDenendi]       = useState(false);
+  const [newUserSallan, setNewUserSallan]         = useState(false);
 
   // Kullanıcı aksiyonları
   const [pwResetUser, setPwResetUser]       = useState<TabUser | null>(null);
@@ -3393,7 +3394,7 @@ tr:nth-child(even) td{background:#fafafa}
                     const sunucuEksik = eksik(!newUserAdServerId || !newUserRdpServerId)
                     const adEksik = eksik(!newUserUsername.trim())
                     const sifreEksik = eksik(!newUserPassword.trim() || !meetsAdComplexity(newUserPassword))
-                    const hata = "border-red-500/60"
+                    const hata = `border-red-500/60 ${newUserSallan ? "motion-safe:animate-sallan" : ""}`
                     return (
                       <>
                         {/* Sunucular — firma kaydından geliyorsa tek bilgi şeridi, değilse seçici */}
@@ -3553,7 +3554,8 @@ tr:nth-child(even) td{background:#fafafa}
                     {/* Hiç silik değil: eksik varsa basınca alanların altında gösterilir */}
                     <Button className="flex-1" onClick={() => {
                       setNewUserDenendi(true)
-                      if (!newUserValid) return
+                      // Eksik/hatalı alanlar kısa sallanır (globals.css `sallan`, motion-safe)
+                      if (!newUserValid) { setNewUserSallan(true); setTimeout(() => setNewUserSallan(false), 450); return }
                       setNewUserError(null); setNewUserStarted(true)
                     }}>
                       <UserPlus className="size-3.5" /> Oluştur
