@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
-import { AlertTriangle, Check } from "lucide-react"
+import { Building2, ClipboardList, Database, Layers, Server, Smartphone, Users, ArrowRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import type { ParsWizardUser } from "@/lib/pars-katalog"
@@ -31,24 +31,49 @@ interface Props {
   pars?: { serviceName: string; users: ParsWizardUser[]; reportCount: number; totalReports: number } | null
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** Beyaz kart: başlık şeridi (ikon + başlık + sayaç) + gövde */
+function Kart({ baslik, ikon, sayac, children, className }: {
+  baslik: string
+  ikon: React.ReactNode
+  sayac?: React.ReactNode
+  children: React.ReactNode
+  className?: string
+}) {
   return (
-    <div className="rounded-[5px] border border-border/50 overflow-hidden">
-      <div className="px-3 py-2 bg-muted/20 border-b border-border">
-        <p className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{title}</p>
+    <div className={cn("flex flex-col overflow-hidden rounded-[5px] border bg-card", className)} style={{ boxShadow: "var(--card-shadow)" }}>
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-1.5">
+        <span className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {ikon}{baslik}
+        </span>
+        {sayac != null && <span className="rounded-full border bg-card px-1.5 text-[10px] tabular-nums text-muted-foreground">{sayac}</span>}
       </div>
-      <div className="divide-y divide-border/40">{children}</div>
+      <div className="flex-1 divide-y">{children}</div>
     </div>
   )
 }
 
-function Row({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/** Etiket — değer satırı */
+function Satir({ etiket, deger, alt }: { etiket: string; deger: React.ReactNode; alt?: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between px-3 py-2">
-      <span className="text-[11px] text-muted-foreground">{label}</span>
-      <span className={cn("text-[11px] font-medium", mono && "font-mono")}>{value}</span>
+    <div className="flex items-center justify-between gap-3 px-3 py-1.5">
+      <span className="shrink-0 text-[12px] text-muted-foreground">{etiket}</span>
+      <span className="min-w-0 text-right">
+        <span className="block truncate text-[13px] font-medium">{deger}</span>
+        {alt && <span className="block truncate text-[11px] text-muted-foreground">{alt}</span>}
+      </span>
     </div>
   )
+}
+
+function Bos({ metin }: { metin: string }) {
+  return <p className="px-3 py-2 text-[12px] text-muted-foreground">{metin}</p>
+}
+
+const TUR_ROZET: Record<string, { ad: string; renk: string }> = {
+  "pusula-program": { ad: "Program",   renk: "bg-indigo-500/15 text-indigo-700 dark:text-indigo-400" },
+  "iis-site":       { ad: "IIS sitesi", renk: "bg-sky-500/15 text-sky-700 dark:text-sky-400" },
+  "iis-resim":      { ad: "Resim",      renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400" },
+  "pars":           { ad: "Pars",       renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400" },
 }
 
 export function StepSummary({
@@ -64,165 +89,170 @@ export function StepSummary({
   const hasPusula = selectedServices.some((s) => s.type === "pusula-program")
   const firmaNameSafe = (company?.firma ? `${firmaId} - ${company.firma}` : firmaId).replace(/[\\/:*?"<>|]/g, "_").trim() || firmaId
 
-  // SQL aktif mi? — selectedSqlServerId set ise yeterli (sqlServer object henüz
-  // yüklenmemiş olabilir). Buna bağlı olarak işlemler ve SQL section gösterilir.
+  // SQL aktif mi? — selectedSqlServerId set ise yeterli (sqlServer nesnesi henüz yüklenmemiş olabilir).
+  // Sunucu seçili ama veri seçili değilse SQL adımında "İleri" kapalı; buraya o hâlde gelinmez.
   const hasSqlSelection = selectedSqlServerId !== null
   const sqlDbCount = sqlMode === 0 ? selectedBackups.length : selectedDemos.length
   const firstUser = users[0]
+  const sqlLogin = firstUser?.username ? sqlLoginAdi(firmaId, firstUser.username) : null
 
-  /* SQL sunucusu secili ama veri secilmemis: kurulum bu adimi SESSIZCE atlar
-     (bkz. api/setup/run -> hasSqlWork). Ozet de eskiden SQL satirini hic
-     gostermiyordu, yani kullanici hicbir sey olmayacagini anlamiyordu.
-     Yasandi: firma kuruldu, kullanicilar ve klasor acildi, veritabani
-     olusmadi ve hicbir uyari cikmadi. */
-  const sqlSecimiEksik = hasSqlSelection && sqlDbCount === 0
+  // Hedef veritabanları (önek uygulanmış)
+  const hedefDbler = sqlMode === 0
+    ? selectedBackups.map((f) => ({ id: `b${f.id}`, kaynak: f.fileName, hedef: `${addFirmaPrefix ? `${firmaId}_` : ""}${f.databaseName}`, yedek: f.yedekAl !== false }))
+    : selectedDemos.map((d) => ({ id: `d${d.id}`, kaynak: d.name, hedef: `${firmaId ? `${firmaId}_` : ""}${d.dataName}`, yedek: true }))
 
-  const operations = [
-    `AD'de Firmalar\\${firmaId} OU oluşturulacak`,
-    `OU içinde ${firmaId}_users güvenlik grubu oluşturulacak`,
-    `${users.length} domain kullanıcısı oluşturulup gruba eklenecek`,
-    `Depo sunucusunda D:\\Resimler\\${firmaId} klasörü açılacak`,
-    `${firmaId}_users grubuna Depo klasörü üzerinde tam yetki verilecek`,
-    `C:\\MUSTERI\\${firmaId} klasörü açılacak`,
-    `${selectedServiceIds.length} hizmet klasörü kopyalanacak`,
-    `Parametre dosyaları güncellenecek ([DATA KODU] → ${firmaId})`,
-    `NTFS yetkileri (Full Control) uygulanacak`,
+  const operations: { grup: string; is: string }[] = [
+    { grup: "AD",       is: `Firmalar\\${firmaId} OU'su oluşturulacak` },
+    { grup: "AD",       is: `${firmaId}_users güvenlik grubu oluşturulacak` },
+    { grup: "AD",       is: `${users.length} domain kullanıcısı oluşturulup gruba eklenecek` },
+    { grup: "Depo",     is: `Depo sunucusunda D:\\Resimler\\${firmaId} klasörü açılıp gruba tam yetki verilecek` },
+    { grup: "Dosyalar", is: `C:\\MUSTERI\\${firmaId} klasörü açılacak, ${selectedServiceIds.length} hizmet klasörü kopyalanacak` },
+    { grup: "Dosyalar", is: `Parametre dosyaları güncellenecek (DATA KODU → ${firmaId})` },
+    { grup: "Dosyalar", is: "NTFS yetkileri (Full Control) uygulanacak" },
     ...(hasPusula ? [
-      `Masaüstü MUSTERILER\\${firmaNameSafe} klasörü açılacak`,
-      `Pusula exe kısayolları ve Resimler kısayolu oluşturulacak`,
+      { grup: "Masaüstü", is: `MUSTERILER\\${firmaNameSafe} klasörü, Pusula exe ve Resimler kısayolları oluşturulacak` },
     ] : []),
-    ...(hasSqlSelection && sqlDbCount > 0
-      ? sqlMode === 0
-        ? [`${sqlDbCount} veritabanı restore edilecek`]
-        : [`${sqlDbCount} demo veritabanı oluşturulacak`]
-      : []),
-    ...(hasSqlSelection && sqlDbCount > 0 && firstUser?.username
-      ? [
-          `SQL login oluşturulacak: ${sqlLoginAdi(firmaId, firstUser.username)}`,
-          `DENY VIEW ANY DATABASE verilecek (kullanıcı sadece kendi DB'lerini görür)`,
-          `${sqlDbCount} veritabanının owner'ı ${sqlLoginAdi(firmaId, firstUser.username)} olarak ayarlanacak`,
-        ]
-      : []),
-    ...(sqlSecimiEksik ? ["SQL adımı ATLANACAK — veritabanı oluşturulmayacak"] : []),
+    ...(hasSqlSelection && sqlDbCount > 0 ? [
+      { grup: "SQL", is: sqlMode === 0 ? `${sqlDbCount} veritabanı yedekten kurulacak` : `${sqlDbCount} demo veritabanı oluşturulacak` },
+      ...(sqlLogin ? [
+        { grup: "SQL", is: `SQL girişi oluşturulacak: ${sqlLogin} (yalnız kendi veritabanlarını görür)` },
+        { grup: "SQL", is: `${sqlDbCount} veritabanının sahibi ${sqlLogin} yapılacak` },
+      ] : []),
+    ] : []),
     ...(pars ? [
-      `Pars: Ayar.mdb'ye ${pars.users.length} kullanıcı yazılacak (${pars.reportCount} rapor açık, diğerleri yasaklı)`,
-      sqlDbCount > 0
-        ? `Pars: ${sqlDbCount} veritabanı Datalar tablosuna bağlanacak`
-        : "Pars: veritabanı seçilmediği için Datalar bağlantısı yapılmayacak — kullanıcı rapor göremez",
+      { grup: "Pars", is: `Ayar.mdb'ye ${pars.users.length} kullanıcı yazılacak (${pars.reportCount} rapor açık, diğerleri yasaklı)` },
+      { grup: "Pars", is: sqlDbCount > 0
+          ? `${sqlDbCount} veritabanı Datalar tablosuna bağlanacak`
+          : "Veritabanı seçilmediği için Datalar bağlantısı yapılmayacak — kullanıcı rapor göremez" },
     ] : []),
   ]
 
-  return (
-    <div className="space-y-3">
+  const kpiler = [
+    { ad: "Kullanıcı",  deger: users.length,           ikon: Users },
+    { ad: "Hizmet",     deger: selectedServices.length, ikon: Layers },
+    { ad: "Veritabanı", deger: hasSqlSelection ? sqlDbCount : 0, ikon: Database },
+    ...(pars ? [{ ad: "Pars kullanıcısı", deger: pars.users.length, ikon: Smartphone }] : []),
+  ]
 
-      {/* SQL sunucusu secili ama veri yok -> adim atlanacak.
-          Kutu olarak gosteriliyor: islem listesindeki tek satir gozden kaciyor. */}
-      {sqlSecimiEksik && (
-        <div className="flex items-start gap-2.5 rounded-[8px] border border-amber-500/40 bg-amber-500/10 px-4 py-3">
-          <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
-          <div className="text-[12.5px] leading-relaxed">
-            <p className="font-semibold text-amber-800 dark:text-amber-300">
-              SQL adımı atlanacak — veritabanı oluşturulmayacak
-            </p>
-            <p className="text-amber-800/80 dark:text-amber-300/80">
-              SQL sunucusu seçtiniz ama {sqlMode === 0 ? "yedek dosyası" : "demo veritabanı"} seçmediniz.
-              Kurulum diğer adımları yapar, SQL adımını sessizce atlar. Veritabanı da
-              istiyorsanız <b>4. adıma dönüp seçim yapın</b>; istemiyorsanız bu uyarıyı
-              yok sayabilirsiniz.
+  return (
+    <div className="space-y-4">
+
+      {/* Firma şeridi + sayılar */}
+      <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
+        <div className="flex items-center gap-3 px-2 py-1.5">
+          <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
+            <Building2 className="size-[18px]" />
+          </span>
+          <div className="min-w-0">
+            <p className="truncate text-[15px] font-semibold">{firmaId}{company?.firma ? ` · ${company.firma}` : ""}</p>
+            <p className="truncate text-[12px] text-muted-foreground">
+              {[company?.city, adServer?.domain, windowsServer?.name].filter(Boolean).join(" · ") || "Kurulum özeti"}
             </p>
           </div>
         </div>
-      )}
-
-      {/* Sunucu + Firma yan yana */}
-      <div className="grid grid-cols-2 gap-3">
-        <Section title="Sunucu">
-          <Row label="AD Sunucusu" value={adServer?.name ?? "—"} mono />
-          <Row label="Bağlantı Sunucusu" value={windowsServer?.name ?? "—"} mono />
-        </Section>
-
-        <Section title="Firma">
-          <Row label="Firma Kodu" value={firmaId} mono />
-          <Row label="Firma Adı" value={company?.firma ?? "—"} />
-          <Row label="Şehir" value={company?.city ?? "—"} />
-        </Section>
+        <div className={cn("mt-2 grid gap-2", kpiler.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
+          {kpiler.map((k) => (
+            <div key={k.ad} className="rounded-[5px] bg-card px-3 py-2" style={{ boxShadow: "var(--card-shadow)" }}>
+              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><k.ikon className="size-3" />{k.ad}</p>
+              <p className="text-2xl font-bold tabular-nums">{k.deger}</p>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Kullanıcılar */}
-      <Section title={`Kullanıcılar — ${users.length} adet`}>
-        {users.map((u) => (
-          <div key={u.id} className="flex items-center justify-between px-3 py-2">
-            <span className="text-[11px] font-mono">{firmaId}.{u.username || "—"}</span>
-            <span className="text-[11px] text-muted-foreground">{u.displayName || "—"}</span>
-          </div>
-        ))}
-      </Section>
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {/* Sunucular */}
+        <Kart baslik="Sunucular" ikon={<Server className="size-3" />}>
+          <Satir etiket="Active Directory" deger={adServer?.name ?? "—"} alt={adServer?.domain || undefined} />
+          <Satir etiket="Bağlantı sunucusu" deger={windowsServer?.name ?? "—"} alt={windowsServer?.dns || undefined} />
+          <Satir
+            etiket="SQL sunucusu"
+            deger={hasSqlSelection ? (sqlServer?.name ?? "Yükleniyor…") : "Kurulmayacak"}
+            alt={hasSqlSelection && sqlServer ? `${sqlServer.ip}:${sqlServer.port}` : undefined}
+          />
+        </Kart>
 
-      {/* Hizmetler */}
-      <Section title={`Hizmetler — ${selectedServiceIds.length} adet`}>
-        {selectedServices.length === 0 ? (
-          <div className="px-3 py-2">
-            <span className="text-[11px] text-muted-foreground">Hizmet seçilmedi</span>
-          </div>
-        ) : selectedServices.map((s) => (
-          <div key={s.id} className="flex items-center justify-between px-3 py-2">
-            <span className="text-[11px] font-medium">{s.name}</span>
-            <span className="text-[10px] text-muted-foreground">{s.category}</span>
-          </div>
-        ))}
-      </Section>
+        {/* Kullanıcılar */}
+        <Kart baslik="Kullanıcılar" ikon={<Users className="size-3" />} sayac={users.length}>
+          {users.length === 0 ? <Bos metin="Kullanıcı eklenmeyecek." /> : users.map((u) => (
+            <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
+              <span className="truncate text-[13px] font-medium">{firmaId}.{u.username || "—"}</span>
+              <span className="truncate text-[12px] text-muted-foreground">{u.displayName || "—"}</span>
+            </div>
+          ))}
+        </Kart>
 
-      {/* SQL */}
-      {hasSqlSelection && (
-        <Section title="SQL Veritabanı">
-          <Row label="SQL Sunucusu" value={sqlServer?.name ?? "(yükleniyor…)"} mono />
-          <Row label="Mod" value={sqlMode === 0 ? "Yedekten Yükle" : "Demo Veritabanı"} />
-          {firstUser?.username && sqlDbCount > 0 && (
-            <Row label="SQL Login" value={`${sqlLoginAdi(firmaId, firstUser.username)}`} mono />
+        {/* Hizmetler */}
+        <Kart baslik="Hizmetler" ikon={<Layers className="size-3" />} sayac={selectedServices.length}>
+          {selectedServices.length === 0 ? <Bos metin="Hizmet seçilmedi." /> : selectedServices.map((s) => {
+            const tur = TUR_ROZET[s.type] ?? { ad: s.category, renk: "bg-muted text-muted-foreground" }
+            return (
+              <div key={s.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                <span className="truncate text-[13px] font-medium">{s.name}</span>
+                <span className={cn("inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium", tur.renk)}>{tur.ad}</span>
+              </div>
+            )
+          })}
+        </Kart>
+
+        {/* Veritabanları */}
+        <Kart
+          baslik="Veritabanları"
+          ikon={<Database className="size-3" />}
+          sayac={hasSqlSelection ? sqlDbCount : undefined}
+        >
+          {!hasSqlSelection ? <Bos metin="SQL adımı seçilmedi, veritabanı kurulmayacak." /> : (
+            <>
+              <Satir etiket="Kaynak" deger={sqlMode === 0 ? "Yedekten yükle" : "Demo veritabanı"} />
+              {sqlLogin && <Satir etiket="SQL girişi" deger={sqlLogin} />}
+              {hedefDbler.map((d) => (
+                <div key={d.id} className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground" title={d.kaynak}>{d.kaynak}</span>
+                  <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-right text-[13px] font-medium" title={d.hedef}>{d.hedef}</span>
+                  <span className={cn("inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
+                    d.yedek ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
+                    {d.yedek ? "Yedek" : "Yedeksiz"}
+                  </span>
+                </div>
+              ))}
+            </>
           )}
-          {sqlMode === 0 && selectedBackups.map((f) => (
-            <div key={f.id} className="flex items-center justify-between px-3 py-2">
-              <span className="text-[11px] font-mono truncate">{f.fileName}</span>
-              <span className="text-[11px] text-muted-foreground font-mono ml-4 shrink-0">
-                → {addFirmaPrefix ? `${firmaId}_` : ""}{f.databaseName}
-              </span>
-            </div>
-          ))}
-          {sqlMode === 1 && selectedDemos.map((d) => (
-            <div key={d.id} className="flex items-center justify-between px-3 py-2">
-              <span className="text-[11px] font-medium">{d.name}</span>
-              <span className="text-[11px] text-muted-foreground font-mono">
-                → {firmaId ? `${firmaId}_` : ""}{d.dataName}
-              </span>
-            </div>
-          ))}
-        </Section>
-      )}
+        </Kart>
 
-      {/* Pars */}
-      {pars && (
-        <Section title={`Pars — ${pars.users.length} kullanıcı · ${pars.reportCount}/${pars.totalReports} rapor`}>
-          {pars.users.map((u) => (
-            <div key={u.id} className="flex items-center justify-between px-3 py-2">
-              <span className="text-[11px] font-mono">{u.username || "—"}</span>
-              <span className="text-[10px] text-muted-foreground">{u.admin ? "Admin" : "Kullanıcı"}</span>
-            </div>
+        {/* Pars */}
+        {pars && (
+          <Kart
+            baslik="Pars"
+            ikon={<Smartphone className="size-3" />}
+            sayac={`${pars.reportCount}/${pars.totalReports} rapor`}
+            className="lg:col-span-2"
+          >
+            {pars.users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
+                <span className="truncate text-[13px] font-medium">{u.username || "—"}</span>
+                <span className={cn("inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
+                  u.admin ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground")}>
+                  {u.admin ? "Admin" : "Kullanıcı"}
+                </span>
+              </div>
+            ))}
+          </Kart>
+        )}
+      </div>
+
+      {/* Yapılacak işlemler — numaralı */}
+      <Kart baslik="Yapılacak işlemler" ikon={<ClipboardList className="size-3" />} sayac={operations.length}>
+        <ol className="divide-y">
+          {operations.map((op, i) => (
+            <li key={i} className="flex items-start gap-3 px-3 py-1.5">
+              <span className="mt-px flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-medium tabular-nums text-muted-foreground">{i + 1}</span>
+              <span className="min-w-0 flex-1 text-[13px]">{op.is}</span>
+              <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{op.grup}</span>
+            </li>
           ))}
-        </Section>
-      )}
-
-      {/* Yapılacak işlemler */}
-      <Section title="Yapılacak İşlemler">
-        {operations.map((op, i) => (
-          <div key={i} className="flex items-start gap-2.5 px-3 py-2">
-            <span className="size-4 rounded-full bg-emerald-100 flex items-center justify-center shrink-0 mt-0.5">
-              <Check className="size-2.5 text-emerald-700 dark:text-emerald-400" strokeWidth={3} />
-            </span>
-            <span className="text-[11px] text-muted-foreground">{op}</span>
-          </div>
-        ))}
-      </Section>
-
+        </ol>
+      </Kart>
     </div>
   )
 }

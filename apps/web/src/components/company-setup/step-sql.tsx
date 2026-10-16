@@ -6,14 +6,15 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, PlayCircle, X, Database, Server, Archive, Sparkles } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import {  } from "@muharremoz/pusula-ui"
 import { Switch } from "@muharremoz/pusula-ui"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import { Checkbox } from "@/components/shared/form"
+import { Input } from "@/components/ui/input"
+import { ListeKarti, ListeThead } from "@/components/shared/liste-karti"
 import { cn } from "@/lib/utils"
 
 interface Props {
@@ -179,86 +180,6 @@ export function StepSql({
 
   useEffect(() => { runPathCheck() }, [runPathCheck])
 
-  /* ── Restore Test ──────────────────────────────────────────
-   * Sihirbazdan bağımsız olarak seçili .bak dosyalarını / demo DB'leri
-   * gerçek RESTORE ile dener. Başarısızsa sebebini gösterir (yol yok,
-   * yetki hatası, zaten var, vs.). Test sonrası DB otomatik DROP edilir.
-   */
-  interface TestResult {
-    bakPath:      string
-    targetDbName: string
-    ok:           boolean
-    error?:       string
-    durationMs:   number
-    dropped?:     boolean
-  }
-  const [testing, setTesting] = useState(false)
-  const [testResults, setTestResults] = useState<TestResult[] | null>(null)
-  const [testError, setTestError] = useState<string | null>(null)
-  const [testDropAfter, setTestDropAfter] = useState(false)
-
-  async function handleTestRestore() {
-    if (!selectedSqlServerId) return
-    const prefix = addFirmaPrefix && firmaId ? `${firmaId}_` : ""
-
-    const tasks: Array<{ bakPath: string; targetDbName: string }> = []
-
-    if (sqlMode === 0) {
-      const folder = backupFolderPath.trim().replace(/[\\/]+$/, "")
-      for (const f of backupFiles) {
-        if (!f.selected) continue
-        const fileName = (f.fileName ?? "").trim()
-        const dbName   = (f.databaseName ?? "").trim()
-        if (!fileName || !dbName) continue
-        tasks.push({
-          bakPath:      folder ? `${folder}\\${fileName}` : fileName,
-          targetDbName: `${prefix}${dbName}`,
-        })
-      }
-    } else {
-      for (const db of demoDatabases) {
-        if (!selectedDemoDbIds.includes(db.id)) continue
-        const bakPath = (db.locationPath ?? "").trim()
-        if (!bakPath) continue
-        const name = (db.dataName ?? db.name).trim()
-        if (!name) continue
-        tasks.push({
-          bakPath,
-          targetDbName: `${prefix}${name}`,
-        })
-      }
-    }
-
-    if (tasks.length === 0) {
-      setTestError("Test edilecek görev yok — önce dosya/DB seçin")
-      setTestResults(null)
-      return
-    }
-
-    setTesting(true)
-    setTestError(null)
-    setTestResults(null)
-    try {
-      const r = await fetch(
-        `/api/setup/sql-servers/${encodeURIComponent(selectedSqlServerId)}/test-restore`,
-        {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({ tasks, dropAfter: testDropAfter }),
-        },
-      )
-      const data = await r.json()
-      if (!r.ok) {
-        setTestError(data?.error || `Hata (HTTP ${r.status})`)
-      } else {
-        setTestResults(data.results as TestResult[])
-      }
-    } catch (err) {
-      setTestError(err instanceof Error ? err.message : "İstek başarısız")
-    } finally {
-      setTesting(false)
-    }
-  }
 
   return (
     <div className="space-y-4">
@@ -433,151 +354,159 @@ export function StepSql({
           {/* Mod 0 — Yedek dosyaları */}
           {sqlMode === 0 && (
             <div className="space-y-3">
-              {/* Klasör yolu */}
+              {/* Klasör yolu + tara */}
               <div className="flex gap-2">
-                <div className="flex-1 flex items-center gap-2 px-2.5 py-2 rounded-[5px] border border-border bg-background focus-within:border-foreground/40 transition-colors">
-                  <FolderOpen className="size-3.5 text-muted-foreground shrink-0" />
-                  <input
-                    type="text"
+                <div className="relative flex-1">
+                  <FolderOpen className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <Input
                     value={backupFolderPath}
                     onChange={(e) => onSetBackupFolder(e.target.value)}
-                    placeholder="D:\Demo Data"
-                    className="flex-1 text-[11px] bg-transparent outline-none"
+                    onKeyDown={(e) => { if (e.key === "Enter" && !isScanning) onScanBackups() }}
+                    placeholder="D:\SQLData\<firma>\aktarim"
+                    className="pl-8"
                   />
                 </div>
-                <button
-                  onClick={onScanBackups}
-                  disabled={isScanning}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-[5px] border border-border text-[11px] font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
-                >
-                  {isScanning
-                    ? <Loader2 className="size-3.5 animate-spin" />
-                    : <RefreshCw className="size-3.5" />}
+                <Button variant="outline" size="sm" className="h-8" onClick={onScanBackups} disabled={isScanning}>
+                  {isScanning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                   Tara
-                </button>
+                </Button>
               </div>
+
+              {/* Taranıyor */}
+              {isScanning && backupFiles.length === 0 && (
+                <div className="space-y-2 rounded-[8px] bg-[var(--section-bg)] p-2">
+                  {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-[5px]" />)}
+                </div>
+              )}
+
+              {/* Henüz taranmadı / klasör boş */}
+              {!isScanning && backupFiles.length === 0 && (
+                <div className="flex flex-col items-center justify-center gap-1.5 rounded-[8px] border border-dashed px-4 py-6 text-center">
+                  <Archive className="size-5 text-muted-foreground" />
+                  <p className="text-[13px] font-medium">Yedek dosyası listelenmedi</p>
+                  <p className="max-w-sm text-[12px] text-muted-foreground">
+                    SQL sunucusundaki klasörü yazıp <span className="font-medium text-foreground">Tara</span>&apos;ya basın; .bak ve .mdf dosyaları burada listelenir.
+                  </p>
+                </div>
+              )}
 
               {/* Yedek dosyaları */}
               {backupFiles.length > 0 && (
-                <div className="rounded-[5px] border border-border/50 overflow-hidden">
-                  <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-b border-border">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-                      {backupFiles.length} yedek dosyası
-                    </span>
-                    <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                      <Checkbox
-                        checked={addFirmaPrefix}
-                        onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)}
-                      />
-                      Firma prefix ekle ({firmaId}_)
+                <ListeKarti
+                  baslik="Yedek dosyaları"
+                  ikon={<Archive className="size-3.5" />}
+                  toplam={backupFiles.length}
+                  filtreli={backupFiles.filter((f) => f.selected).length}
+                  aksiyon={
+                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
+                      <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
+                      Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
                     </label>
-                  </div>
-                  <div className="divide-y divide-border/40">
-                    {backupFiles.map((f) => {
-                      const showPrefix = addFirmaPrefix && !!firmaId
-                      const programMissing = showProgramColumn && f.selected && f.programServiceId == null
-                      return (
-                        <div
-                          key={f.id}
-                          onClick={() => onToggleBackup(f.id)}
-                          className={cn(
-                            "w-full grid gap-3 items-center px-3 py-2.5 text-left transition-colors cursor-pointer",
-                            showProgramColumn
-                              ? "grid-cols-[20px_1fr_200px_160px_86px_70px_70px]"
-                              : "grid-cols-[20px_1fr_240px_86px_70px_70px]",
-                            f.selected ? "bg-foreground/[0.03]" : "hover:bg-muted/20"
-                          )}
-                        >
-                          <span className={cn(
-                            "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0",
-                            f.selected ? "bg-foreground border-foreground" : "border-border"
-                          )}>
-                            {f.selected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                          </span>
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            {f.kind === "attach" && (
-                              <span
-                                className="shrink-0 rounded-[5px] bg-violet-100 text-violet-700 dark:text-violet-400 text-[9px] font-semibold px-1 py-0.5 leading-none"
-                                title={f.ldfFileName ? `${f.mdfFileName} + ${f.ldfFileName}` : `${f.mdfFileName} (log yeniden üretilecek)`}
-                              >
-                                ATTACH
-                              </span>
-                            )}
-                            <span className="text-[11px] font-mono truncate">{f.fileName}</span>
-                          </span>
-                          {/* Düzenlenebilir DB adı — prefix ayrı lozenj, input sadece name'i değiştirir */}
-                          <div
-                            className="flex items-center gap-1 min-w-0"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <span className="text-[11px] text-muted-foreground shrink-0">→</span>
-                            <div className="flex-1 flex items-center rounded-[5px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
-                              {showPrefix && (
-                                <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                                  {firmaId}_
+                  }
+                >
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[14px] font-medium leading-[20px]">
+                      <ListeThead>
+                        <th className="w-10 px-4 py-1.5 text-left font-medium" />
+                        <th className="px-4 py-1.5 text-left font-medium">Dosya</th>
+                        <th className="px-4 py-1.5 text-left font-medium">Hedef veritabanı</th>
+                        {showProgramColumn && <th className="px-4 py-1.5 text-left font-medium">Program</th>}
+                        <th className="px-4 py-1.5 text-left font-medium" title="Otomatik yedeklemeye dahil et (sirket.dbo.guvenlik · YedekAl)">Yedek</th>
+                        <th className="px-4 py-1.5 text-right font-medium">Boyut</th>
+                        <th className="px-4 py-1.5 text-right font-medium">Tarih</th>
+                      </ListeThead>
+                      <tbody>
+                        {backupFiles.map((f) => {
+                          const showPrefix = addFirmaPrefix && !!firmaId
+                          const programMissing = showProgramColumn && f.selected && f.programServiceId == null
+                          return (
+                            <tr
+                              key={f.id}
+                              onClick={() => onToggleBackup(f.id)}
+                              className={cn("cursor-pointer transition-colors hover:bg-muted/20", !f.selected && "text-muted-foreground")}
+                            >
+                              <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                <Checkbox checked={f.selected} onCheckedChange={() => onToggleBackup(f.id)} />
+                              </td>
+                              <td className="max-w-[260px] px-4 py-1.5">
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <span
+                                    className={cn(
+                                      "inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
+                                      f.kind === "attach"
+                                        ? "bg-violet-500/15 text-violet-700 dark:text-violet-400"
+                                        : "bg-sky-500/15 text-sky-700 dark:text-sky-400",
+                                    )}
+                                    title={f.kind === "attach"
+                                      ? (f.ldfFileName ? `${f.mdfFileName} + ${f.ldfFileName}` : `${f.mdfFileName} (log yeniden üretilecek)`)
+                                      : "RESTORE ile kurulur"}
+                                  >
+                                    {f.kind === "attach" ? "Attach" : "Yedek"}
+                                  </span>
+                                  <span className="truncate" title={f.fileName}>{f.fileName}</span>
                                 </span>
+                              </td>
+                              {/* Düzenlenebilir DB adı — önek ayrı, input yalnız adı değiştirir */}
+                              <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex h-7 min-w-[220px] items-center rounded-[5px] border bg-background px-2 transition-colors focus-within:border-foreground/40">
+                                  {showPrefix && <span className="shrink-0 text-[13px] text-muted-foreground">{firmaId}_</span>}
+                                  <input
+                                    type="text"
+                                    value={f.databaseName}
+                                    onChange={(e) => onUpdateBackupDatabaseName(f.id, e.target.value)}
+                                    className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
+                                  />
+                                </div>
+                              </td>
+                              {/* Program seçimi — yalnız 2+ Pusula programı seçildiyse */}
+                              {showProgramColumn && (
+                                <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <Select
+                                    value={f.programServiceId != null ? String(f.programServiceId) : undefined}
+                                    onValueChange={(v) => onUpdateBackupProgramServiceId(f.id, v ? Number(v) : null)}
+                                  >
+                                    <SelectTrigger
+                                      className={cn(
+                                        "h-7 w-[170px] rounded-[5px] px-2 text-[13px]",
+                                        programMissing && "border-amber-500/60 text-amber-700 dark:text-amber-400",
+                                      )}
+                                    >
+                                      <SelectValue placeholder="Program seç" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {selectedPusulaServices.map((s) => {
+                                        const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
+                                        return (
+                                          <SelectItem key={s.id} value={String(s.id)} className="text-[13px]">
+                                            {s.name}{code ? ` (${code})` : ""}
+                                          </SelectItem>
+                                        )
+                                      })}
+                                    </SelectContent>
+                                  </Select>
+                                </td>
                               )}
-                              <input
-                                type="text"
-                                value={f.databaseName}
-                                onChange={(e) => onUpdateBackupDatabaseName(f.id, e.target.value)}
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex-1 text-[11px] font-mono bg-transparent outline-none min-w-0"
-                              />
-                            </div>
-                          </div>
-                          {/* Program seçimi — sadece 2+ pusula servisi seçildiyse görünür */}
-                          {showProgramColumn && (
-                            <div onClick={(e) => e.stopPropagation()}>
-                              <Select
-                                value={f.programServiceId != null ? String(f.programServiceId) : undefined}
-                                onValueChange={(v) => onUpdateBackupProgramServiceId(f.id, v ? Number(v) : null)}
-                              >
-                                <SelectTrigger
-                                  className={cn(
-                                    "w-full h-7 rounded-[5px] px-2 text-[11px]",
-                                    programMissing && "border-amber-500/60 text-amber-700 dark:text-amber-400"
-                                  )}
-                                >
-                                  <SelectValue placeholder="— Program seç —" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {selectedPusulaServices.map((s) => {
-                                    const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
-                                    return (
-                                      <SelectItem key={s.id} value={String(s.id)} className="text-[13px]">
-                                        {s.name}{code ? ` (${code})` : ""}
-                                      </SelectItem>
-                                    )
-                                  })}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-                          {/*  Otomatik yedekleme — guvenlik.YedekAl. Eski yıl datası
-                               varsayılan kapalı gelir (yedek boyutunu şişirmesin),
-                               yılsız ve güncel yıl açık. */}
-                          <label
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none justify-self-start"
-                            title="Otomatik yedeklemeye dahil et (sirket.dbo.guvenlik · YedekAl)"
-                          >
-                            <Checkbox
-                              checked={f.yedekAl !== false}
-                              disabled={!addToSirketDb}
-                              onCheckedChange={() => onToggleBackupYedek(f.id)}
-                            />
-                            Yedek
-                          </label>
-                          <span className="text-[11px] text-muted-foreground tabular-nums text-right">
-                            {formatSize(f.fileSizeMB)}
-                          </span>
-                          <span className="text-[10px] text-muted-foreground text-right">{f.date}</span>
-                        </div>
-                      )
-                    })}
+                              {/*  Otomatik yedekleme — guvenlik.YedekAl. Eski yıl datası
+                                   varsayılan kapalı gelir (yedek boyutunu şişirmesin),
+                                   yılsız ve güncel yıl açık. */}
+                              <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                <span title={addToSirketDb ? "Otomatik yedeklemeye dahil et" : "Şirket veritabanına ekle kapalı — yedek kaydı yazılmaz"}>
+                                  <Checkbox
+                                    checked={f.yedekAl !== false}
+                                    disabled={!addToSirketDb}
+                                    onCheckedChange={() => onToggleBackupYedek(f.id)}
+                                  />
+                                </span>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums text-muted-foreground">{formatSize(f.fileSizeMB)}</td>
+                              <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">{f.date || "—"}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                </div>
+                </ListeKarti>
               )}
             </div>
           )}
@@ -751,111 +680,6 @@ export function StepSql({
             </div>
           )}
 
-          {/* Restore Test — sihirbazdan bağımsız deneme */}
-          {hasSelection && (
-            <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
-                <PlayCircle className="size-3.5 text-muted-foreground" />
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">
-                  Restore Testi
-                </span>
-                <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                  <Checkbox
-                    checked={testDropAfter}
-                    onCheckedChange={(v) => setTestDropAfter(!!v)}
-                  />
-                  Test sonrası DROP
-                </label>
-                <button
-                  type="button"
-                  onClick={handleTestRestore}
-                  disabled={testing}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-[5px] border border-border bg-background text-[10px] font-medium hover:bg-muted/40 transition-colors disabled:opacity-50"
-                >
-                  {testing
-                    ? <Loader2 className="size-3 animate-spin" />
-                    : <PlayCircle className="size-3" />}
-                  {testing ? "Deneniyor..." : "Restore'u Test Et"}
-                </button>
-              </div>
-              <div className="px-3 py-2.5 space-y-2">
-                {!testing && !testResults && !testError && (
-                  <p className="text-[10px] text-muted-foreground leading-relaxed">
-                    Seçili veritabanlarını gerçek RESTORE ile dener, başarısızsa nedenini gösterir.
-                    <strong className="font-medium"> DROP</strong> seçeneği açıksa test sonrası silinir; kapalıysa DB sunucuda kalır (veriyi inceleyebilirsin).
-                  </p>
-                )}
-                {testError && (
-                  <div className="flex items-start gap-2 px-2.5 py-2 rounded-[5px] bg-red-500/15 border border-red-500/25 text-[10px] text-red-700 dark:text-red-400">
-                    <AlertTriangle className="size-3 shrink-0 mt-0.5" />
-                    <span className="flex-1">{testError}</span>
-                    <button type="button" onClick={() => setTestError(null)} className="text-red-700 dark:text-red-400/60 hover:text-red-700 dark:text-red-400">
-                      <X className="size-3" />
-                    </button>
-                  </div>
-                )}
-                {testResults && (
-                  <div className="space-y-1.5">
-                    {testResults.map((r, i) => (
-                      <div
-                        key={i}
-                        className={cn(
-                          "px-2.5 py-2 rounded-[5px] border text-[10px]",
-                          r.ok
-                            ? "bg-emerald-500/15 border-emerald-500/25"
-                            : "bg-red-500/15 border-red-500/25",
-                        )}
-                      >
-                        <div className="flex items-start gap-2">
-                          {r.ok
-                            ? <FileCheck2 className="size-3 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-                            : <FileWarning className="size-3 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />}
-                          <div className="flex-1 min-w-0 space-y-0.5">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className={cn(
-                                "font-mono font-medium",
-                                r.ok ? "text-emerald-800" : "text-red-800",
-                              )}>
-                                [{r.targetDbName}]
-                              </span>
-                              <span className="text-muted-foreground tabular-nums">
-                                {(r.durationMs / 1000).toFixed(1)}s
-                              </span>
-                              {r.ok && r.dropped && (
-                                <span className="text-[9px] text-emerald-700 dark:text-emerald-400/70">
-                                  · test sonrası DROP edildi
-                                </span>
-                              )}
-                            </div>
-                            <p className="text-[9px] font-mono text-muted-foreground truncate" title={r.bakPath}>
-                              {r.bakPath}
-                            </p>
-                            {!r.ok && r.error && (
-                              <p className="text-[10px] text-red-700 dark:text-red-400 leading-relaxed whitespace-pre-wrap break-words">
-                                {r.error}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-3 pt-1 text-[9px] text-muted-foreground">
-                      <span>
-                        {testResults.filter((r) => r.ok).length}/{testResults.length} başarılı
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setTestResults(null)}
-                        className="ml-auto hover:text-foreground transition-colors"
-                      >
-                        Temizle
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
       )}
