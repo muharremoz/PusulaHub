@@ -21,7 +21,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tooltip as UiTooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
 import { Popover, PopoverContent, PopoverTrigger } from "@muharremoz/pusula-ui";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama } from "@/components/shared/liste-karti";
+import { ListeKarti, ListeThead, ListeBosSatir, ListeSayfalama, ListeAksiyonButonu } from "@/components/shared/liste-karti";
 import { MetinFiltre, SecimFiltre, SayiAralikFiltre, TarihFiltre, tarihUygun, type SayiAralikDeger, type TarihFiltreDeger } from "@/components/shared/liste-filtreleri";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@muharremoz/pusula-ui";
@@ -135,7 +135,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
@@ -550,6 +550,14 @@ export default function CompaniesPage() {
   const [sqlRefreshing, setSqlRefreshing] = useState(false);
   const [yedekAlKaydediliyor, setYedekAlKaydediliyor] = useState<string | null>(null);
   const [yedekKapatOnay, setYedekKapatOnay] = useState<TabSQLDatabase | null>(null);
+  // Kullanıcılar / Veritabanları sekmesi sütun başlığı filtreleri — firma değişince sıfırlanır
+  const [kulAdFiltre, setKulAdFiltre]       = useState("");
+  const [kulIsimFiltre, setKulIsimFiltre]   = useState("");
+  const [kulDurumFiltre, setKulDurumFiltre] = useState<("aktif" | "pasif")[]>([]);
+  const [kulOfficeFiltre, setKulOfficeFiltre] = useState<("var" | "yok")[]>([]);
+  const [dbAdFiltre, setDbAdFiltre]         = useState("");
+  const [dbYedekFiltre, setDbYedekFiltre]   = useState<("acik" | "kapali" | "kayitsiz")[]>([]);
+  const [dbDurumFiltre, setDbDurumFiltre]   = useState<("online" | "diger")[]>([]);
   const [tabServices, setTabServices] = useState<TabCompanyService[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
@@ -1308,6 +1316,7 @@ tr:nth-child(even) td{background:#fafafa}
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     // Firma değişti — Erişim sekmesi verisi bayat, sekmeyi de başa al.
     setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([]); setWebUsersFirma(null); setParsSifreler([]); setParsSifreFirma(null)
+    setKulAdFiltre(""); setKulIsimFiltre(""); setKulDurumFiltre([]); setKulOfficeFiltre([]); setDbAdFiltre(""); setDbYedekFiltre([]); setDbDurumFiltre([])
     setAccessSel("servers")
     setCompanyDetail(null)
     setTabLoading(true)
@@ -2389,135 +2398,143 @@ tr:nth-child(even) td{background:#fafafa}
               </TabsList>
 
               {/* Kullanıcılar */}
-              <TabsContent value="users" className="mt-0 space-y-2">
-                <div className="flex items-center justify-end">
-                  <Button
-                    size="sm"
-                    onClick={openNewUserDialog}
-                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
-                  >
-                    <UserPlus className="h-3.5 w-3.5" /> Yeni Kullanıcı Ekle
-                  </Button>
-                </div>
-                <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Kullanıcı</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Ad Soyad</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">CPU</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase text-right">RAM</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Son Giriş</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Office</span>
-                    <span />
-                  </div>
-                  <div className="divide-y divide-border/40">
-                    {tabLoading ? (
-                      Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] px-3 py-2.5 items-center gap-3">
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-3/4" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-12" />
-                          <Skeleton className="h-3 rounded-[5px] w-10" />
-                        </div>
-                      ))
-                    ) : tabUsers.length === 0 ? (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">Kullanıcı bulunamadı</p>
+              <TabsContent value="users" className="mt-0">
+                {(() => {
+                  const officeVar = (u: TabUser) => (u.groups ?? []).includes("Office_Kullanicilari")
+                  const ad = kulAdFiltre.trim().toLocaleLowerCase("tr-TR")
+                  const isim = kulIsimFiltre.trim().toLocaleLowerCase("tr-TR")
+                  const liste = tabUsers.filter((u) => {
+                    if (ad && !u.username.toLocaleLowerCase("tr-TR").includes(ad)) return false
+                    if (isim && !(u.displayName ?? "").toLocaleLowerCase("tr-TR").includes(isim)) return false
+                    if (kulDurumFiltre.length && !kulDurumFiltre.includes(u.enabled ? "aktif" : "pasif")) return false
+                    if (kulOfficeFiltre.length && !kulOfficeFiltre.includes(officeVar(u) ? "var" : "yok")) return false
+                    return true
+                  })
+                  const ram = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`)
+                  return (
+                    <ListeKarti
+                      baslik="Kullanıcılar"
+                      ikon={<Users className="size-3.5" />}
+                      toplam={tabLoading ? undefined : tabUsers.length}
+                      filtreli={liste.length}
+                      aksiyon={
+                        <ListeAksiyonButonu onClick={openNewUserDialog}>
+                          <UserPlus className="size-3.5" /> Yeni Kullanıcı
+                        </ListeAksiyonButonu>
+                      }
+                    >
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[14px] font-medium leading-[20px]">
+                          <ListeThead>
+                            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Kullanıcı" value={kulAdFiltre} onChange={setKulAdFiltre} /></th>
+                            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Ad soyad" value={kulIsimFiltre} onChange={setKulIsimFiltre} /></th>
+                            <th className="w-px px-4 py-1.5 text-right font-medium">CPU</th>
+                            <th className="w-px px-4 py-1.5 text-right font-medium">RAM</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Son giriş</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">
+                              <SecimFiltre label="Durum" options={["aktif", "pasif"] as const} getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")} selected={kulDurumFiltre} onChange={setKulDurumFiltre} />
+                            </th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">
+                              <SecimFiltre label="Office" options={["var", "yok"] as const} getLabel={(o) => (o === "var" ? "Var" : "Yok")} selected={kulOfficeFiltre} onChange={setKulOfficeFiltre} />
+                            </th>
+                            <th className="w-px px-2 py-1.5" />
+                          </ListeThead>
+                          <tbody>
+                            {tabLoading ? (
+                              Array.from({ length: 4 }).map((_, i) => (
+                                <tr key={i}>
+                                  {Array.from({ length: 8 }).map((_, j) => (
+                                    <td key={j} className="px-4 py-2"><Skeleton className="h-4 w-full rounded-[5px]" /></td>
+                                  ))}
+                                </tr>
+                              ))
+                            ) : tabUsers.length === 0 ? (
+                              <tr>
+                                <td colSpan={8} className="px-4 py-10">
+                                  <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                                    <p className="text-[13px]">Bu firmada henüz AD kullanıcısı yok.</p>
+                                    <Button size="sm" onClick={openNewUserDialog} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                                      <UserPlus className="size-3.5" /> Kullanıcı ekle
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : liste.length === 0 ? (
+                              <ListeBosSatir sutunSayisi={8} toplam={tabUsers.length} />
+                            ) : liste.map((usr) => {
+                              const yetkili = officeVar(usr)
+                              const olcum = usr.usageDate ? `Son ölçüm: ${usr.usageDate}` : "Ölçüm yok"
+                              return (
+                                <tr key={usr.username} className="transition-colors hover:bg-muted/20">
+                                  <td className="max-w-[240px] whitespace-nowrap px-4 py-1.5">
+                                    <span className="block truncate" title={usr.username}>{usr.username}</span>
+                                  </td>
+                                  <td className="max-w-[260px] whitespace-nowrap px-4 py-1.5">
+                                    <span className="block truncate text-muted-foreground" title={usr.displayName}>{usr.displayName || "—"}</span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground" title={olcum}>
+                                    {usr.usageCpu != null ? `%${usr.usageCpu}` : "—"}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground" title={olcum}>
+                                    {usr.usageRamMB != null ? ram(usr.usageRamMB) : "—"}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-[12px] tabular-nums text-muted-foreground">{usr.lastLogin || "—"}</td>
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${usr.enabled ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                                      {usr.enabled ? "Aktif" : "Pasif"}
+                                    </span>
+                                  </td>
+                                  {/*  Office yetkisi — AppLocker `Office_Kullanicilari` grubuna bakıyor.
+                                       Menüden değiştiriliyor, sütunda görünüyor.                        */}
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${yetkili ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-muted text-muted-foreground"}`}>
+                                      {yetkili ? "Var" : "Yok"}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="inline-flex size-7 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label="İşlemler">
+                                          <MoreVertical className="size-3.5 text-muted-foreground" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-52">
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setConnectKoduKullanici(usr.username)}>
+                                          <KeyRound className="size-3.5" /> Connect 2 kurulum kodu
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setConnectCihazKullanici(usr.username)}>
+                                          <Laptop className="size-3.5" /> Connect 2 cihazları
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openPwReset(usr)}>
+                                          <KeyRound className="size-3.5" /> Şifre sıfırla
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => toggleOffice(usr)}>
+                                          <FileText className="size-3.5" /> {yetkili ? "Office yetkisini kaldır" : "Office kullanabilsin"}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className={`gap-2 text-[12px] ${usr.enabled ? "text-rose-600 focus:text-rose-600" : ""}`}
+                                          onClick={() => setToggleUser(usr)}
+                                        >
+                                          <Ban className="size-3.5" /> {usr.enabled ? "Hesabı askıya al" : "Hesabı aktifleştir"}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="gap-2 text-[12px] text-rose-600 focus:text-rose-600"
+                                          onClick={() => { setDeleteUser(usr); setDeleteConfirm(""); setDeleteError(null) }}
+                                        >
+                                          <Trash2 className="size-3.5" /> Kullanıcıyı sil
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    ) : tabUsers.map((usr) => (
-                      <div key={usr.username} className="grid grid-cols-[1fr_1fr_80px_90px_120px_70px_70px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
-                        <span className="text-[11px] font-mono truncate">{usr.username}</span>
-                        <span className="text-[11px] truncate">{usr.displayName}</span>
-                        <span
-                          className="text-[10px] tabular-nums text-muted-foreground text-right"
-                          title={usr.usageDate ? `Son ölçüm: ${usr.usageDate}` : "Ölçüm yok"}
-                        >{usr.usageCpu != null ? `%${usr.usageCpu}` : "—"}</span>
-                        <span
-                          className="text-[10px] tabular-nums text-muted-foreground text-right"
-                          title={usr.usageDate ? `Son ölçüm: ${usr.usageDate}` : "Ölçüm yok"}
-                        >{usr.usageRamMB != null ? (usr.usageRamMB >= 1024 ? `${(usr.usageRamMB / 1024).toFixed(1)} GB` : `${Math.round(usr.usageRamMB)} MB`) : "—"}</span>
-                        <span className="text-[10px] tabular-nums text-muted-foreground">{usr.lastLogin || "—"}</span>
-                        <div className="flex items-center gap-1.5">
-                          <div className={`h-1.5 w-1.5 rounded-full ${usr.enabled ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${usr.enabled ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            {usr.enabled ? "Aktif" : "Pasif"}
-                          </span>
-                        </div>
-                        {/*  Office yetkisi — AppLocker `Office_Kullanicilari`
-                             grubuna bakiyor. Menuden degistiriliyor, sutunda
-                             gorunuyor: yetkiyi ogrenmek icin menuyu acmak
-                             gerekmesin.                                     */}
-                        {(() => {
-                          const yetkili = (usr.groups ?? []).includes("Office_Kullanicilari")
-                          return (
-                            <div className="flex items-center gap-1.5">
-                              <div className={`h-1.5 w-1.5 rounded-full ${yetkili ? "bg-emerald-500" : "bg-gray-300"}`} />
-                              <span className={`text-[10px] ${yetkili ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                                {yetkili ? "Var" : "Yok"}
-                              </span>
-                            </div>
-                          )
-                        })()}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52 text-[11px]">
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2"
-                              onClick={() => setConnectKoduKullanici(usr.username)}
-                            >
-                              <KeyRound className="h-3.5 w-3.5" /> Connect 2 Kurulum Kodu
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2"
-                              onClick={() => setConnectCihazKullanici(usr.username)}
-                            >
-                              <Laptop className="h-3.5 w-3.5" /> Connect 2 Cihazları
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2"
-                              onClick={() => openPwReset(usr)}
-                            >
-                              <KeyRound className="h-3.5 w-3.5" /> Şifre Sıfırla
-                            </DropdownMenuItem>
-                            {/*  Office yetkisi — AppLocker `Office_Kullanicilari`
-                                 grubuna bakıyor. Etiket mevcut duruma göre
-                                 değişiyor ki iki ayrı menü öğesi gerekmesin. */}
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2"
-                              onClick={() => toggleOffice(usr)}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              {(usr.groups ?? []).includes("Office_Kullanicilari")
-                                ? "Office Yetkisini Kaldır"
-                                : "Office Kullanabilsin"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className={`text-[11px] gap-2 ${usr.enabled ? "text-destructive focus:text-destructive" : ""}`}
-                              onClick={() => setToggleUser(usr)}
-                            >
-                              <Ban className="h-3.5 w-3.5" /> {usr.enabled ? "Hesabı Askıya Al" : "Hesabı Aktifleştir"}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="text-[11px] gap-2 text-destructive focus:text-destructive"
-                              onClick={() => { setDeleteUser(usr); setDeleteConfirm(""); setDeleteError(null) }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Kullanıcıyı Sil
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    </ListeKarti>
+                  )
+                })()}
               </TabsContent>
 
               {/* Hizmetler — hizmet başına satır; API hizmetinde Users.xml / Web.config (SarrafPro),
@@ -2698,149 +2715,185 @@ tr:nth-child(even) td{background:#fafafa}
 
               {/* Veritabanları */}
               <TabsContent value="databases" className="mt-0">
-                <div className="flex justify-end gap-2 mb-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setGirisSirasiOpen(true)}
-                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
-                  >
-                    <ListOrdered className="h-3.5 w-3.5" /> Giriş Sırası
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => setOldDataOpen(true)}
-                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Yeni Veritabanı Ekle
-                  </Button>
-                  <button
-                    onClick={async () => {
-                      if (!selectedFirma || sqlRefreshing) return
-                      setSqlRefreshing(true)
-                      try {
-                        const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql?refresh=1`)
-                        const data = r.ok ? await r.json() : []
-                        setTabSQL(Array.isArray(data) ? data : [])
-                        toast.success("Veritabanı listesi güncellendi")
-                      } catch {
-                        toast.error("Yenileme başarısız")
-                      } finally {
-                        setSqlRefreshing(false)
-                      }
-                    }}
-                    disabled={sqlRefreshing}
-                    className="h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border border-border/50 bg-card hover:bg-muted/40 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw className={`h-3 w-3 ${sqlRefreshing ? "animate-spin" : ""}`} />
-                    {sqlRefreshing ? "Yenileniyor…" : "Yenile"}
-                  </button>
-                </div>
-                <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  <div className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase pl-[22px]">Veritabanı</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Boyut</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Recovery</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Owner</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tam Yedek</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Diff Yedek</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase whitespace-nowrap">Yedek Alınacak</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
-                    <span />
-                  </div>
-                  <div className="divide-y divide-border/40">
-                    {tabLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-2.5 items-center">
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-12" />
-                          <Skeleton className="h-3 rounded-[5px] w-12" />
-                          <span />
-                        </div>
-                      ))
-                    ) : tabSQL.length === 0 ? (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">Veritabanı bulunamadı</p>
+                {(() => {
+                  const online = (d: TabSQLDatabase) => d.Status === "ONLINE" || d.Status === "Online"
+                  const yedekTur = (d: TabSQLDatabase): "acik" | "kapali" | "kayitsiz" => (d.YedekAl === null ? "kayitsiz" : d.YedekAl ? "acik" : "kapali")
+                  const ad = dbAdFiltre.trim().toLocaleLowerCase("tr-TR")
+                  const liste = tabSQL.filter((d) => {
+                    if (ad && !d.Name.toLocaleLowerCase("tr-TR").includes(ad)) return false
+                    if (dbYedekFiltre.length && !dbYedekFiltre.includes(yedekTur(d))) return false
+                    if (dbDurumFiltre.length && !dbDurumFiltre.includes(online(d) ? "online" : "diger")) return false
+                    return true
+                  })
+                  const boyut = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb} MB`)
+                  const yenile = async () => {
+                    if (!selectedFirma || sqlRefreshing) return
+                    setSqlRefreshing(true)
+                    try {
+                      const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql?refresh=1`)
+                      const data = r.ok ? await r.json() : []
+                      setTabSQL(Array.isArray(data) ? data : [])
+                      toast.success("Veritabanı listesi güncellendi")
+                    } catch {
+                      toast.error("Yenileme başarısız")
+                    } finally {
+                      setSqlRefreshing(false)
+                    }
+                  }
+                  return (
+                    <ListeKarti
+                      baslik="Veritabanları"
+                      ikon={<Database className="size-3.5" />}
+                      toplam={tabLoading ? undefined : tabSQL.length}
+                      filtreli={liste.length}
+                      aksiyon={<>
+                        <Button size="sm" variant="outline" onClick={() => void yenile()} disabled={sqlRefreshing} className="h-7 gap-1.5 rounded-[5px] text-[12px]">
+                          <RefreshCw className={`size-3.5 ${sqlRefreshing ? "animate-spin" : ""}`} /> {sqlRefreshing ? "Yenileniyor…" : "Yenile"}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setGirisSirasiOpen(true)} className="h-7 gap-1.5 rounded-[5px] text-[12px]">
+                          <ListOrdered className="size-3.5" /> Giriş sırası
+                        </Button>
+                        <ListeAksiyonButonu onClick={() => setOldDataOpen(true)}>
+                          <Plus className="size-3.5" /> Yeni Veritabanı
+                        </ListeAksiyonButonu>
+                      </>}
+                    >
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[14px] font-medium leading-[20px]">
+                          <ListeThead>
+                            <th className="px-4 py-1.5 text-left font-medium"><MetinFiltre label="Veritabanı" value={dbAdFiltre} onChange={setDbAdFiltre} /></th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Sunucu</th>
+                            <th className="w-px px-4 py-1.5 text-right font-medium">Boyut</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Kurtarma</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Sahip</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Tam yedek</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">Diff yedek</th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">
+                              <SecimFiltre label="Yedek" options={["acik", "kapali", "kayitsiz"] as const}
+                                getLabel={(o) => (o === "acik" ? "Alınıyor" : o === "kapali" ? "Kapalı" : "Kayıt yok")} selected={dbYedekFiltre} onChange={setDbYedekFiltre} />
+                            </th>
+                            <th className="w-px px-4 py-1.5 text-left font-medium">
+                              <SecimFiltre label="Durum" options={["online", "diger"] as const} getLabel={(o) => (o === "online" ? "Çevrimiçi" : "Çevrimdışı")} selected={dbDurumFiltre} onChange={setDbDurumFiltre} />
+                            </th>
+                            <th className="w-px px-2 py-1.5" />
+                          </ListeThead>
+                          <tbody>
+                            {tabLoading ? (
+                              Array.from({ length: 3 }).map((_, i) => (
+                                <tr key={i}>
+                                  {Array.from({ length: 10 }).map((_, j) => (
+                                    <td key={j} className="px-4 py-2"><Skeleton className="h-4 w-full rounded-[5px]" /></td>
+                                  ))}
+                                </tr>
+                              ))
+                            ) : tabSQL.length === 0 ? (
+                              <tr>
+                                <td colSpan={10} className="px-4 py-10">
+                                  <div className="flex flex-col items-center gap-2 text-center text-muted-foreground">
+                                    <p className="text-[13px]">Bu firmaya henüz veritabanı kurulmadı.</p>
+                                    <Button size="sm" onClick={() => setOldDataOpen(true)} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                                      <Plus className="size-3.5" /> Veritabanı ekle
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : liste.length === 0 ? (
+                              <ListeBosSatir sutunSayisi={10} toplam={tabSQL.length} />
+                            ) : liste.map((db) => {
+                              const dosyalar = [
+                                db.DataFilePath ? `MDF: ${db.DataFilePath}` : null,
+                                db.LogFilePath  ? `LDF: ${db.LogFilePath}`  : null,
+                                db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
+                              ].filter(Boolean).join("\n")
+                              const yd = yedekTur(db)
+                              const kaydediliyor = yedekAlKaydediliyor === db.Id
+                              return (
+                                <tr key={db.Id} className="transition-colors hover:bg-muted/20">
+                                  <td className="max-w-[280px] whitespace-nowrap px-4 py-1.5">
+                                    <span className="flex min-w-0 items-center gap-2" title={dosyalar}>
+                                      <Database className="size-3.5 shrink-0 text-muted-foreground" />
+                                      <span className="truncate">{db.Name}</span>
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    <span className="text-[13px]">{db.Server}</span>
+                                    {db.ServerIP && <span className="ml-1.5 text-[12px] tabular-nums text-muted-foreground">{db.ServerIP}</span>}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">{boyut(db.SizeMB)}</td>
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    {db.RecoveryModel
+                                      ? <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{db.RecoveryModel === "SIMPLE" ? "Simple" : db.RecoveryModel === "FULL" ? "Full" : db.RecoveryModel}</span>
+                                      : <span className="text-muted-foreground">—</span>}
+                                  </td>
+                                  <td className="max-w-[180px] whitespace-nowrap px-4 py-1.5">
+                                    <span className="block truncate text-[12px] text-muted-foreground" title={db.Owner ?? ""}>{db.Owner ?? "—"}</span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-[12px] tabular-nums text-muted-foreground"
+                                    title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş: ${db.LastBackup ?? "—"}` : ""}>
+                                    {db.LastBackup ?? "—"}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5 text-[12px] tabular-nums text-muted-foreground"
+                                    title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş: ${db.LastDiffBackup ?? "—"}` : ""}>
+                                    {db.LastDiffBackup ?? "—"}
+                                  </td>
+                                  {/* Yedek — sihirbaz ve Yeni Veritabanı penceresiyle aynı düğme; kapatmak onay ister */}
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    {yd === "kayitsiz" ? (
+                                      <span className="text-[12px] text-muted-foreground" title="sirket.guvenlik'te kaydı yok — yedek kapsamı dışında">Kayıt yok</span>
+                                    ) : (
+                                      <UiTooltip>
+                                        <TooltipTrigger asChild>
+                                          <button
+                                            type="button"
+                                            aria-pressed={yd === "acik"}
+                                            disabled={yedekAlKaydediliyor !== null}
+                                            onClick={() => { if (yd === "acik") setYedekKapatOnay(db); else void yedekAlDegistir(db, true) }}
+                                            className={`flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed ${kaydediliyor ? "animate-pulse" : ""} ${
+                                              yd === "acik"
+                                                ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                                : "text-muted-foreground line-through hover:text-foreground"
+                                            }`}
+                                          >
+                                            <ShieldCheck className="size-3.5" /> Yedek
+                                          </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {yd === "acik" ? "Yedek görevinde — kapatmak için tıklayın" : "Yedeği alınmıyor — açmak için tıklayın"}
+                                        </TooltipContent>
+                                      </UiTooltip>
+                                    )}
+                                  </td>
+                                  <td className="whitespace-nowrap px-4 py-1.5">
+                                    <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${online(db) ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-red-500/15 text-red-700 dark:text-red-400"}`}>
+                                      {online(db) ? "Çevrimiçi" : "Çevrimdışı"}
+                                    </span>
+                                  </td>
+                                  <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button className="inline-flex size-7 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label="İşlemler">
+                                          <MoreVertical className="size-3.5 text-muted-foreground" />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-44">
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => sqlBackup(db)}>
+                                          <Download className="size-3.5" /> Yedek al
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openQuery(db)}>
+                                          <Terminal className="size-3.5" /> Sorgu çalıştır
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
                       </div>
-                    ) : tabSQL.map((db) => {
-                      const tooltipLines = [
-                        db.DataFilePath ? `MDF: ${db.DataFilePath}` : null,
-                        db.LogFilePath  ? `LDF: ${db.LogFilePath}`  : null,
-                        db.ProgramCode  ? `Program: ${db.ProgramCode}` : null,
-                      ].filter(Boolean).join("\n")
-                      return (
-                      <div key={db.Id} title={tooltipLines} className="grid grid-cols-[minmax(220px,1fr)_180px_80px_95px_140px_120px_120px_105px_85px_32px] gap-3 px-3 py-1.5 hover:bg-muted/70 transition-colors items-center">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Database className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-[13px] font-medium truncate">{db.Name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-[11px] font-mono truncate">{db.Server}</span>
-                          {db.ServerIP && <span className="text-[10px] font-mono text-muted-foreground truncate">{db.ServerIP}</span>}
-                        </div>
-                        <span className="text-[11px] tabular-nums text-muted-foreground">{db.SizeMB >= 1024 ? `${(db.SizeMB / 1024).toFixed(1)} GB` : `${db.SizeMB} MB`}</span>
-                        <span className="text-[10px] text-muted-foreground truncate">{db.RecoveryModel ?? "—"}</span>
-                        <span className="text-[10px] text-muted-foreground truncate font-mono">{db.Owner ?? "—"}</span>
-                        <span
-                          className="text-[10px] tabular-nums text-muted-foreground cursor-help"
-                          title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş:      ${db.LastBackup ?? "—"}` : ""}
-                        >{db.LastBackup ?? "—"}</span>
-                        <span
-                          className="text-[10px] tabular-nums text-muted-foreground cursor-help"
-                          title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş:      ${db.LastDiffBackup ?? "—"}` : ""}
-                        >{db.LastDiffBackup ?? "—"}</span>
-                        {db.YedekAl === null ? (
-                          <span className="text-[10px] text-muted-foreground">—</span>
-                        ) : (
-                          <ToggleGroup
-                            type="single"
-                            variant="outline"
-                            size="sm"
-                            value={db.YedekAl ? "evet" : "hayir"}
-                            disabled={yedekAlKaydediliyor !== null}
-                            onValueChange={(v) => {
-                              if (v === "evet" && !db.YedekAl) yedekAlDegistir(db, true)
-                              else if (v === "hayir" && db.YedekAl) setYedekKapatOnay(db)
-                            }}
-                            className={yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""}
-                            aria-label="Yedek alınacak"
-                          >
-                            <ToggleGroupItem value="evet" className="h-6 px-2 text-[10px] data-[state=on]:bg-emerald-500/15 data-[state=on]:text-emerald-700 dark:data-[state=on]:text-emerald-400">Evet</ToggleGroupItem>
-                            <ToggleGroupItem value="hayir" className="h-6 px-2 text-[10px] data-[state=on]:bg-red-500/15 data-[state=on]:text-red-700 dark:data-[state=on]:text-red-400">Hayır</ToggleGroupItem>
-                          </ToggleGroup>
-                        )}
-                        <div className="flex items-center gap-1.5">
-                          <div className={`h-1.5 w-1.5 rounded-full ${db.Status === "ONLINE" || db.Status === "Online" ? "bg-emerald-500" : "bg-gray-300"}`} />
-                          <span className={`text-[10px] ${db.Status === "ONLINE" || db.Status === "Online" ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                            {(db.Status === "ONLINE" || db.Status === "Online") ? "Çevrimiçi" : "Çevrimdışı"}
-                          </span>
-                        </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
-                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-44">
-                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => sqlBackup(db)}>
-                              <Download className="h-3.5 w-3.5" /> Yedek Al
-                            </DropdownMenuItem>
-                            <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openQuery(db)}>
-                              <Terminal className="h-3.5 w-3.5" /> Sorgu Çalıştır
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    )})}
-                  </div>
-                </div>
+                    </ListeKarti>
+                  )
+                })()}
                 <AlertDialog open={!!yedekKapatOnay} onOpenChange={(o) => { if (!o) setYedekKapatOnay(null) }}>
                   <AlertDialogContent>
                     <AlertDialogHeader>
