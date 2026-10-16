@@ -321,7 +321,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
               Ort %{sayi(d.history30d.avgCpu)}
               <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakCpu == null ? "—" : `%${sayi(d.history30d.peakCpu)}`}</span>
             </span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakCpu != null ? tarih(d.history30d.peakCpuDate) : " "}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakCpu != null && d.history30d.peakCpuDate ? `zirve günü ${tarih(d.history30d.peakCpuDate)}` : " "}</span>
           </div>
           <div className="flex min-w-0 flex-col px-3">
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">RAM · 30 gün</span>
@@ -329,7 +329,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
               Ort {sayi(d.history30d.avgRamGB)} GB
               <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakRamGB == null ? "—" : `${sayi(d.history30d.peakRamGB)} GB`}</span>
             </span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakRamGB != null ? tarih(d.history30d.peakRamDate) : " "}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakRamGB != null && d.history30d.peakRamDate ? `zirve günü ${tarih(d.history30d.peakRamDate)}` : " "}</span>
           </div>
           <div className="flex min-w-0 flex-col pl-3">
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Veritabanı büyümesi</span>
