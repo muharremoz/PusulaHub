@@ -29,6 +29,9 @@ export function AnaEkran({ durum, setDurum }: P) {
   const k = durum.kontroller;
   const kayit = durum.kayit!;
   const vpnHazir = k.forti.kurulu && k.profil.dogru;
+  // VPN (FortiClient) bağlı ama sunucuya erişim yok: tünel açık, sunucuya yol yok. Çoğunlukla FortiGate'te kullanıcının
+  // policy'si başka sunucuya yazılmıştır (16.10.2026, 3382) — "VPN'e bağlanın" demek yanıltıyor; Pusula'ya bildirilmeli.
+  const yetkiYok = !k.terminal.erisim && !!k.terminal.zaman && !!k.terminal.vpnBagli;
   const [bekle, setBekle] = useState<string | null>(null);
   const [hata, setHata] = useState<string | null>(null);
   const [vpnUyari, setVpnUyari] = useState(false);
@@ -146,6 +149,17 @@ export function AnaEkran({ durum, setDurum }: P) {
       {bekle === "/vpn/kur" ? <Loader2 className="animate-spin" /> : <ShieldCheck />} Tanımla
     </Button>
     </>
+  );
+  const yetkiIcerik = (
+    <div className="flex flex-col gap-3">
+      <p className="text-sm">
+        VPN bağlı ama Pusula sunucusuna (<b>{kayit.profil.rdp}</b>) ulaşılamıyor. VPN yetkiniz bu sunucuya açık olmayabilir;
+        lütfen <b>Pusula'ya bildirin</b>. Sorun giderilince bağlantı kendiliğinden hazır olur.
+      </p>
+      <Button className="self-start" onClick={() => setOrta("talep")}>
+        <Headset /> Pusula'ya bildir
+      </Button>
+    </div>
   );
   const vpnBaglanIcerik = (
     <>
@@ -454,7 +468,7 @@ export function AnaEkran({ durum, setDurum }: P) {
                   </div>
                 ) : sifreIcerik,
               },
-              { baslik: "VPN'e bağlanın", aciklama: "FortiClient ile Pusula'ya güvenli bağlantı", tamam: k.terminal.erisim, icerik: vpnBaglanIcerik },
+              { baslik: "VPN'e bağlanın", aciklama: "FortiClient ile Pusula'ya güvenli bağlantı", tamam: k.terminal.erisim, icerik: yetkiYok ? yetkiIcerik : vpnBaglanIcerik },
             ]}
           />
         )}
@@ -487,10 +501,10 @@ export function AnaEkran({ durum, setDurum }: P) {
             baslik="Pusula sunucusu"
             durum={k.terminal.erisim ? (kalite(k.terminal.ms) >= 2 ? "iyi" : "uyari") : k.terminal.zaman ? "uyari" : "bekliyor"}
             deger={k.terminal.erisim ? "Erişiliyor" : k.terminal.zaman ? "Erişilemiyor" : "Kontrol ediliyor…"}
-            alt={k.terminal.erisim ? <Sinyal ms={k.terminal.ms} /> : k.terminal.zaman ? "VPN kapalı olabilir" : "Bir saniye…"}
+            alt={k.terminal.erisim ? <Sinyal ms={k.terminal.ms} /> : k.terminal.zaman ? (yetkiYok ? "VPN bağlı, sunucu yanıt vermiyor" : "VPN kapalı olabilir") : "Bir saniye…"}
             ortu={
               !k.terminal.erisim && k.terminal.zaman
-                ? vpnHazir ? "VPN bağlantısı bekleniyor" : "VPN kurulumu ve bağlantısı bekleniyor"
+                ? yetkiYok ? "Sunucuya erişim yok" : vpnHazir ? "VPN bağlantısı bekleniyor" : "VPN kurulumu ve bağlantısı bekleniyor"
                 : undefined
             }
           />
@@ -518,9 +532,15 @@ export function AnaEkran({ durum, setDurum }: P) {
 
         {/* Kullanıcı adı FortiClient'a tanımlanmadan bağlanma adımı gösterilmez — önce "Tanımla" kartı (07.10.2026) */}
         {!kurulumModu && vpnHazir && !!k.profil.kullaniciAdi && !k.terminal.erisim && !!k.terminal.zaman && !vk.suruyor && (
-          <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
-            {vpnBaglanIcerik}
-          </Bolum>
+          yetkiYok ? (
+            <Bolum baslik="Sunucuya ulaşılamıyor" ikon={<AlertTriangle />}>
+              {yetkiIcerik}
+            </Bolum>
+          ) : (
+            <Bolum baslik="VPN'e bağlanın" ikon={<ShieldCheck />}>
+              {vpnBaglanIcerik}
+            </Bolum>
+          )
         )}
 
         {!kurulumModu && sifreGoster && (
@@ -543,7 +563,7 @@ export function AnaEkran({ durum, setDurum }: P) {
           </Alert>
         )}
 
-        {vpnUyari && (
+        {vpnUyari && !yetkiYok && (
           <Alert>
             <AlertTriangle />
             <AlertDescription className="flex flex-col gap-2">
@@ -570,7 +590,7 @@ export function AnaEkran({ durum, setDurum }: P) {
             className="h-14 w-full rounded-lg border-dashed text-base text-foreground disabled:opacity-100"
           >
             <WifiOff className="text-amber-600 dark:text-amber-400" />
-            {k.terminal.zaman ? "Bağlanmak için önce VPN'e bağlanın." : "Pusula sunucusuna erişim denetleniyor…"}
+            {!k.terminal.zaman ? "Pusula sunucusuna erişim denetleniyor…" : yetkiYok ? "Sunucuya ulaşılamıyor — Pusula'ya bildirin." : "Bağlanmak için önce VPN'e bağlanın."}
           </Button>
         ) : (
           <>
@@ -647,7 +667,7 @@ export function AnaEkran({ durum, setDurum }: P) {
 
       {/* ── Sağ: görsel (ileride başka içerik gelecek) ─────── */}
       <aside className="relative hidden w-[380px] shrink-0 overflow-hidden border-l bg-gradient-to-br from-primary/5 via-card to-primary/10 xl:block">
-        <BaglantiGorseli bagli={k.terminal.erisim} kontrolEdildi={!!k.terminal.zaman} vpnHazir={vpnHazir} />
+        <BaglantiGorseli bagli={k.terminal.erisim} kontrolEdildi={!!k.terminal.zaman} vpnHazir={vpnHazir} yetkiYok={yetkiYok} />
       </aside>
     </div>
   );
@@ -864,7 +884,7 @@ function SolSatir({ ikon, ad, deger }: { ikon: React.ReactNode; ad: string; dege
 }
 
 /** Sağ panelin yer tutucu görseli: bilgisayar → güvenli tünel → Pusula sunucusu. */
-function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir }: { bagli: boolean; kontrolEdildi: boolean; vpnHazir: boolean }) {
+function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir, yetkiYok }: { bagli: boolean; kontrolEdildi: boolean; vpnHazir: boolean; yetkiYok?: boolean }) {
   const kopuk = !bagli && kontrolEdildi;
   return (
     <div className="flex h-svh flex-col items-center justify-center gap-6 p-8 text-center">
@@ -916,14 +936,16 @@ function BaglantiGorseli({ bagli, kontrolEdildi, vpnHazir }: { bagli: boolean; k
           </span>
         )}
         <div className="text-lg font-semibold">
-          {bagli ? "Pusula'ya bağlantı hazır" : !kontrolEdildi ? "Bağlantı kontrol ediliyor…" : vpnHazir ? "VPN bağlı değil" : "VPN kurulumu bekleniyor"}
+          {bagli ? "Pusula'ya bağlantı hazır" : !kontrolEdildi ? "Bağlantı kontrol ediliyor…" : yetkiYok ? "Sunucuya ulaşılamıyor" : vpnHazir ? "VPN bağlı değil" : "VPN kurulumu bekleniyor"}
         </div>
         <p className="mt-1 max-w-[280px] text-sm text-muted-foreground">
           {bagli
             ? "VPN açık, sunucuya erişiliyor."
             : !kontrolEdildi
               ? "Pusula sunucusuna erişim deneniyor."
-              : vpnHazir
+              : yetkiYok
+                ? "VPN bağlı ama sunucuya ulaşılamıyor. VPN yetkiniz bu sunucuya açık olmayabilir; Pusula'ya bildirin."
+                : vpnHazir
                 ? "Pusula sunucusuna ulaşılamıyor. VPN uygulamasını açıp Pusula bağlantısına bağlanın."
                 : "Pusula sunucusuna ulaşmak için önce VPN programını kurun, ardından FortiClient ile bağlanın."}
         </p>

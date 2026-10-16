@@ -40,6 +40,9 @@ namespace PusulaConnect
         private string _fortiSurum;
         private bool _profilDogru;
         private (bool erisim, int ms, string hata) _terminal;
+        /// <summary>FortiClient SSL VPN bağdaştırıcısı açık mı (VpnIzle günceller). Bağlı + erişim yok = tünel var ama
+        /// sunucuya yol yok (çoğunlukla FortiGate policy'si başka sunucuya yazılmış) — arayüz ayrı uyarı gösterir.</summary>
+        private volatile bool _vpnBagli;
         private DateTime _terminalZaman;
         private string _rdpKullanici;
         private bool _vpnKullaniciAdi;      // FortiClient'ta bu tünel için kullanıcı adı kayıtlı mı
@@ -369,7 +372,7 @@ namespace PusulaConnect
                     {
                         forti = new { kurulu = _fortiSurum != null, surum = _fortiSurum },
                         profil = new { dogru = _profilDogru, kullaniciAdi = _vpnKullaniciAdi, sifre = _vpnSifre },
-                        terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s"), dnsYok = _dnsYok },
+                        terminal = new { erisim = _terminal.erisim, ms = _terminal.ms, hata = _terminal.hata, zaman = _terminalZaman == default ? null : _terminalZaman.ToString("s"), dnsYok = _dnsYok, vpnBagli = _vpnBagli },
                         rdpSifre = new { kayitli = _rdpKullanici != null, kullanici = _rdpKullanici, aliniyor = _rdpKullanici == null && SifreHubdanBekleniyor },
                     },
                     vpnKurulum = new { suruyor = _vpnKuruluyor, durum = _vpnDurum },
@@ -567,6 +570,7 @@ namespace PusulaConnect
         private async Task VpnIzle()
         {
             var onceki = Fortinet.SslVpnBagli();
+            _vpnBagli = onceki;
             for (;;)
             {
                 await Task.Delay(1500);
@@ -574,6 +578,7 @@ namespace PusulaConnect
                 try { bagli = Fortinet.SslVpnBagli(); } catch { continue; }
                 if (bagli == onceki) continue;
                 onceki = bagli;
+                _vpnBagli = bagli;
                 bool kayitli; lock (_kilit) kayitli = _kayit != null;
                 if (!kayitli) continue;
                 Gunluk.Yaz("VPN " + (bagli ? "bağlandı" : "koptu") + " — erişim hemen denetleniyor");

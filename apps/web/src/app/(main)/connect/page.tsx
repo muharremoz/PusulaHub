@@ -488,6 +488,19 @@ const FORM_AD: Record<string, string> = { "612": "Perakende", "146": "Toptan" }
 /** Cihaz çevrimdışıysa (iptal dahil) VPN/sunucu bilgisi ESKİ — son nabızdan kalma, "Kapalı/Erişemiyor" yanıltıyordu (07.10.2026). */
 const canliMi = (c: ConnectCihazSatir) => { const d = canliDurum(c); return d === "oturumda" || d === "cevrimici" }
 
+/**
+ * VPN bağlı ama sunucuya erişim yok: tünel açık, sunucuya yol yok — çoğunlukla FortiGate'te kullanıcının policy'si
+ * başka sunucuya yazılmıştır (16.10.2026, 3382.emrullah1). İstemci de "Pusula'ya bildirin" uyarısı gösterir.
+ */
+const yetkiYokMu = (c: ConnectCihazSatir) => canliMi(c) && c.terminalErisim === false && c.durum?.vpn?.bagli === true
+const YETKI_IPUCU = "VPN bağlı ama sunucuya ulaşılamıyor — FortiGate'te kullanıcının policy'si bu sunucuya açık olmayabilir"
+
+function ErisemiyorMetni({ c }: { c: ConnectCihazSatir }) {
+  return yetkiYokMu(c)
+    ? <Ipucu icerik={YETKI_IPUCU}><span className="text-red-600 dark:text-red-400">Erişemiyor · VPN yetkisi?</span></Ipucu>
+    : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>
+}
+
 function VpnRozeti({ c }: { c: ConnectCihazSatir }) {
   const v = c.durum?.vpn
   if (v == null) return <span className="text-muted-foreground">—</span>
@@ -713,7 +726,7 @@ function CihazListesi({
                               <SinyalIkonu ms={c.terminalMs} />
                             </span></Ipucu>
                           )
-                          : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
+                          : <ErisemiyorMetni c={c} />}
                       </td>
                       <Ipucu icerik={tarihMetni(c.sonGorulme)}><td className="text-muted-foreground px-3 py-1 text-[12px] whitespace-nowrap">{onceMetni(c.sonGorulme ?? c.ilkGiris)}</td></Ipucu>
                       <td className="px-3 py-0.5 text-right" onClick={(e) => e.stopPropagation()}><CihazMenusu c={c} onIslem={onIslem} onSec={onSec} /></td>
@@ -1183,7 +1196,8 @@ function CihazDetay({
                         <SinyalIkonu ms={c.terminalMs} />
                       </span></Ipucu>
                     )
-                    : <span className="text-amber-700 dark:text-amber-400">Erişemiyor</span>}
+                    : <ErisemiyorMetni c={c} />}
+                  {yetkiYokMu(c) && <div className="text-muted-foreground text-[12px]">VPN bağlı ama sunucuya yol yok — FortiGate policy'sinde bu kullanıcıya {c.durum?.vpn?.ip ? `(${c.durum.vpn.ip}) ` : ""}bu sunucu açık olmayabilir.</div>}
                   {c.durum?.dnsYok && <span className="text-amber-700 dark:text-amber-400"> · DNS yok, IP ile</span>}
                 </Bilgi>
                 <Bilgi

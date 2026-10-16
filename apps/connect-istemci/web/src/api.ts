@@ -159,7 +159,7 @@ export type Durum = {
     /** sifre: FortiClient'ta şifre kayıtlı mı — kayitli | isaretsiz (Save Password kutusu var, işaretsiz) | yok (kutu henüz çıkmadı). */
     profil: { dogru: boolean; kullaniciAdi?: boolean; sifre?: "kayitli" | "isaretsiz" | "yok" };
     /** dnsYok: sunucu adı bu bilgisayarda çözülemedi, IP ile bağlanılıyor. */
-    terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null; dnsYok?: boolean };
+    terminal: { erisim: boolean; ms: number; hata: string | null; zaman: string | null; dnsYok?: boolean; /** FortiClient SSL VPN bağdaştırıcısı açık (0.7.6+) — bağlıyken erişim yoksa VPN yetkisi bu sunucuya açık değil olabilir */ vpnBagli?: boolean };
     rdpSifre: { kayitli: boolean; kullanici: string | null; /** Hub'da şifre var, birkaç saniyede kendiliğinden alınacak */ aliniyor?: boolean };
   };
   /** Pusula'dan şifre güncellemesi: bekliyor = 2FA açık, yeni şifre bir sonraki kodla alınacak; mesaj = kullanıcıya bilgi. */
