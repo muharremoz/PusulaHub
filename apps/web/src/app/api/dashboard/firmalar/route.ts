@@ -131,7 +131,7 @@ async function topla(): Promise<DashFirmalar> {
     }
     const skor = Math.round((p.cpu + p.ram + p.disk + p.db) / 4)
     return { firkod: f.company_id, ad: f.name, deger: skor, ...p, detay: `CPU %${p.cpu} · RAM %${p.ram} · Disk %${p.disk} · DB %${p.db}` }
-  }).sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0)).slice(0, 5)
+  }).sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0)).slice(0, 10)
 
   // ── Terminal kullanımı (server_metrics 5 dk kova, RDP sunucuları) ──
   // Bugün: toplam eğri + terminal başına şimdi/zirve/CPU/RAM/kopuk. Hafta: önceki 7 günün zirvesi (bugün hariç).

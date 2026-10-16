@@ -31,6 +31,7 @@ const OturumGrafik = dynamic(() => import("@/components/dashboard/oturum-grafik"
 
 const YENILEME_MS = 60_000
 /** Table yüksekliği: başlık 30 + satır 36; boşken boş durum sığsın */
+/** Yan yana kartlar 10 satırlık sabit boyda — fazlası tablo içinde kayar */
 const tabloBoyu = (n: number) => `${30 + (n > 0 ? n * 36 : 120) + 2}px`
 
 const seviyeRenk = (p: number | null) =>
@@ -357,17 +358,17 @@ export default function DashboardPage() {
             columnDividers
             rowHeight={36}
             headerHeight={30}
-            height={tabloBoyu(firma?.hakAsan.length ?? 0)}
+            height={tabloBoyu(10)}
             loading={firmaYukleniyor}
             className="rounded-[8px] text-[13px]"
             emptyState="Açık hesap sayısı hakkını aşan firma yok."
           />
         </section>
 
-        {/* En yoğun 5 firma */}
+        {/* En yoğun 10 firma */}
         <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
           <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
-            <h2 className="text-[13px] font-semibold">En yoğun 5 firma</h2>
+            <h2 className="text-[13px] font-semibold">En yoğun 10 firma</h2>
             <span className="text-[12px] text-muted-foreground">Son 30 gün · kotaya oran (CPU, RAM, Disk, Veritabanı ortalaması)</span>
           </div>
           <Table<DashFirmalar["yogun"][number]>
@@ -395,7 +396,7 @@ export default function DashboardPage() {
             columnDividers
             rowHeight={36}
             headerHeight={30}
-            height={tabloBoyu(firma?.yogun.length ?? 0)}
+            height={tabloBoyu(10)}
             loading={firmaYukleniyor}
             className="rounded-[8px] text-[13px]"
             emptyState="Yoğunluk verisi yok."
