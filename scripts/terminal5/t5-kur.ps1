@@ -162,15 +162,20 @@ Adim 'FSRM sablonlari (Pusula Masaustu)' {
   if ((Get-WindowsFeature FS-Resource-Manager).InstallState -ne 'Installed') { throw 'FSRM rolu yeniden baslatma bekliyor - yeniden baslatip t5-kur.ps1 i tekrar calistirin' }
   Import-Module FileServerResourceManager -ErrorAction Stop
   $izin = '*.bmp', '*.csv', '*.doc', '*.docm', '*.docx', '*.dot', '*.dotx', '*.gif', '*.heic', '*.ico', '*.jpeg', '*.jpg', '*.lnk', '*.log', '*.odp', '*.ods', '*.odt', '*.pdf', '*.png', '*.pps', '*.ppsx', '*.ppt', '*.pptm', '*.pptx', '*.rtf', '*.svg', '*.tif', '*.tiff', '*.tmp', '*.txt', '*.url', '*.webp', '*.xls', '*.xlsb', '*.xlsm', '*.xlsx', '*.xlt', '*.xltx', 'Thumbs.db', 'desktop.ini', '~$*'
-  $ref = Get-FsrmFileGroup -Name 'Pusula Masaustu izin disi' -ErrorAction SilentlyContinue
+  # Yoksa CIM 'Not found' firlatir; -ErrorAction SilentlyContinue bunu Stop altinda yutmaz (16.10 T5)
+  function Fsrm([scriptblock]$s) { try { & $s } catch { $null } }
+  # Ilk acilista FSRM deposu bos kalabiliyor (varsayilan gruplar yok, New-* 'Not found' verir;
+  # SRMSVC olay 8194). Servisi yeniden baslatmak depoyu hazirliyor (16.10 T5).
+  if (@(Fsrm { Get-FsrmFileGroup }).Count -eq 0) { Restart-Service SrmSvc -Force; Start-Sleep -Seconds 10 }
+  $ref = Fsrm { Get-FsrmFileGroup -Name 'Pusula Masaustu izin disi' }
   if (-not $ref) { New-FsrmFileGroup -Name 'Pusula Masaustu izin disi' -IncludePattern @('*') -ExcludePattern $izin | Out-Null }
-  if (-not (Get-FsrmQuotaTemplate -Name 'Pusula Masaustu 100MB' -ErrorAction SilentlyContinue)) {
+  if (-not (Fsrm { Get-FsrmQuotaTemplate -Name 'Pusula Masaustu 100MB' })) {
     $c = New-FsrmAction -Type Event -EventType Warning -Body 'Masaustu kotasi: [Quota Path] [Quota Used Percent]% dolu ([Source Io Owner]).'
     $t1 = New-FsrmQuotaThreshold -Percentage 85 -Action $c
     $t2 = New-FsrmQuotaThreshold -Percentage 100 -Action $c
     New-FsrmQuotaTemplate -Name 'Pusula Masaustu 100MB' -Size 100MB -SoftLimit -Threshold $t1, $t2 | Out-Null
   }
-  if (-not (Get-FsrmFileScreenTemplate -Name 'Pusula Masaustu tur izleme' -ErrorAction SilentlyContinue)) {
+  if (-not (Fsrm { Get-FsrmFileScreenTemplate -Name 'Pusula Masaustu tur izleme' })) {
     $e = New-FsrmAction -Type Event -EventType Warning -Body 'Masaustu dosya turu: [Source File Path] ([Source Io Owner]).'
     New-FsrmFileScreenTemplate -Name 'Pusula Masaustu tur izleme' -IncludeGroup 'Pusula Masaustu izin disi' -Notification $e | Out-Null
     Set-FsrmFileScreenTemplate -Name 'Pusula Masaustu tur izleme' -Active:$false | Out-Null

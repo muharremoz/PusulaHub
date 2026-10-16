@@ -111,3 +111,8 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
   derlenmiş 5535F2C1 `.bak-20261015`), config.json izni SYSTEM+Administrators; yeni popup
   (27E01418, eskisi `.eski-20261016`). WebView2 Runtime 155.0.4283.60 kuruldu (Microsoft imzalı
   bootstrapper `C:\Kurulum\WebView2\MicrosoftEdgeWebview2Setup.exe` T5'te duruyor, `/silent /install`).
+- **16.10.2026 13:20–13:44** — `t5-kur.ps1` yerel Alusup ile çalıştı (domain hesabı gerekmedi:
+  `net use \10.15.2.12\c$ /user:10.15.2.12\Alusup *`, T4 için de aynısı). 16/18 TAMAM, Thinstuff bekçisi
+  bilerek atlandı. FSRM iki tuzak: rol ilk kurulumda **InstallPending** (yeniden başlatma şart) ve ilk
+  açılışta FSRM deposu boş geldi (varsayılan grup yok, `New-FsrmFileGroup` → "Not found", SRMSVC 8194);
+  `Restart-Service SrmSvc` düzeltti. İkisi de betiğe eklendi (13b91d4 + sonrası). Şablonlar doğrulandı.
