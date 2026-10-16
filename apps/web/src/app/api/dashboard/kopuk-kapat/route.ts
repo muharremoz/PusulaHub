@@ -16,6 +16,7 @@ import { decrypt } from "@/lib/crypto"
  * kalıba uymaz; aynı kullanıcının aktif oturumu yanlışlıkla kapanmaz.
  * Sistem dili (Disc / Bağlantı kesildi) bu kontrolü etkilemez.
  *
+ * Gövde (isteğe bağlı): { sunucular: string[] } — yalnız bu sunucu id'leri; yoksa tüm terminaller.
  * Yetki: servers:write. Komut tek satır, çift tırnaksız (agent exec kuralı).
  */
 
@@ -28,7 +29,7 @@ export interface KopukKapatSonuc {
 const psQuote = (s: string) => (s ?? "").replace(/'/g, "''")
 const sadeAd = (u: string) => (u.includes("\\") ? u.split("\\").pop()! : u)
 
-export async function POST() {
+export async function POST(req: Request) {
   const gate = await requirePermission("servers", "write")
   if (gate) return gate
   try {
@@ -39,7 +40,10 @@ export async function POST() {
     ])
     const rdp = new Set(((rolData ?? []) as { server_id: string }[]).map((r) => r.server_id))
     type Srv = { id: string; name: string; ip: string; agent_port: number | null; api_key: string | null }
-    const srvler = ((srvData ?? []) as Srv[]).filter((s) => rdp.has(s.id))
+    const govde = (await req.json().catch(() => null)) as { sunucular?: unknown } | null
+    const secili = Array.isArray(govde?.sunucular) ? new Set(govde.sunucular.filter((x): x is string => typeof x === "string")) : null
+    if (secili && secili.size === 0) return NextResponse.json({ error: "Terminal seçilmedi" }, { status: 400 })
+    const srvler = ((srvData ?? []) as Srv[]).filter((s) => rdp.has(s.id) && (!secili || secili.has(s.id)))
     const ajanlar = getAllAgents()
 
     const sunucular = await Promise.all(srvler.map(async (s): Promise<KopukKapatSonuc["sunucular"][number]> => {

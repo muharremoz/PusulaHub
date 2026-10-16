@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { Table, type TableColumn, Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Icon } from "@/components/shared/icon"
+import { Checkbox } from "@/components/shared/form"
 import type { IconName } from "@/components/shared/icon-registry"
 import type { DashDurum } from "@/app/api/dashboard/durum/route"
 import type { DashFirmalar } from "@/app/api/dashboard/firmalar/route"
@@ -115,11 +116,15 @@ export default function DashboardPage() {
   /*  Kopuk oturumları kapat — terminallerdeki Disconnected oturumlara logoff.
    *  Agent raporu ~30–60 sn'de bir geldiği için sayı hemen değil, sonraki raporla düşer. */
   const [kopukOnay, setKopukOnay] = useState(false)
+  // Onay penceresinde kapatılacak terminaller (açılışta disconnect'i olan hepsi seçili)
+  const [kopukSecili, setKopukSecili] = useState<string[]>([])
   const [kopukKapatiliyor, setKopukKapatiliyor] = useState(false)
   const kopukKapat = useCallback(async () => {
     setKopukKapatiliyor(true)
     try {
-      const r = await fetch("/api/dashboard/kopuk-kapat", { method: "POST" })
+      const r = await fetch("/api/dashboard/kopuk-kapat", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sunucular: kopukSecili }),
+      })
       const j = await r.json()
       if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
       const sn = j as KopukKapatSonuc
@@ -133,7 +138,7 @@ export default function DashboardPage() {
     } finally {
       setKopukKapatiliyor(false); setKopukOnay(false)
     }
-  }, [yukle])
+  }, [yukle, kopukSecili])
 
 
   useEffect(() => {
@@ -171,7 +176,7 @@ export default function DashboardPage() {
           <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={ilkYukleme}
             deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} disconnect` : ""}`}
             aksiyon={anlikKopuk > 0 ? (
-              <Button variant="outline" size="sm" className="h-6 gap-1 rounded-[5px] px-2 text-[11px]" disabled={kopukKapatiliyor} onClick={() => setKopukOnay(true)}
+              <Button variant="outline" size="sm" className="h-6 gap-1 rounded-[5px] px-2 text-[11px]" disabled={kopukKapatiliyor} onClick={() => { setKopukSecili(sunucular.filter((x) => x.roller.includes("RDP") && (x.kopukOturum ?? 0) > 0).map((x) => x.id)); setKopukOnay(true) }}
                 title="Terminallerdeki bağlantısı kopmuş oturumları kapatır">
                 {kopukKapatiliyor ? <RefreshCw className="size-3 animate-spin" /> : <LogOut className="size-3" />} {"Disconnect'leri kapat"}
               </Button>
@@ -440,21 +445,35 @@ export default function DashboardPage() {
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-[13px] text-muted-foreground">
                 <p>
-                  Terminallerde bağlantısı kopmuş (disconnect) <span className="font-semibold text-foreground">{anlikKopuk}</span> oturum kapatılacak.
+                  Seçili terminallerde bağlantısı kopmuş (disconnect){" "}
+                  <span className="font-semibold text-foreground">
+                    {sunucular.filter((x) => kopukSecili.includes(x.id)).reduce((t, x) => t + (x.kopukOturum ?? 0), 0)}
+                  </span>{" "}
+                  oturum kapatılacak.
                   Bu kullanıcıların açık bıraktığı programlar kapanır, <span className="font-medium text-foreground">kaydedilmemiş işler kaybolur</span>.
                   Aktif oturumlara dokunulmaz.
                 </p>
-                <ul className="rounded-[5px] bg-[var(--section-bg)] px-3 py-2 tabular-nums">
-                  {sunucular.filter((x) => x.roller.includes("RDP") && (x.kopukOturum ?? 0) > 0).map((x) => (
-                    <li key={x.id} className="flex justify-between"><span>{x.ad}</span><span className="font-medium text-foreground">{x.kopukOturum}</span></li>
-                  ))}
+                <ul className="divide-y rounded-[5px] bg-[var(--section-bg)] tabular-nums">
+                  {sunucular.filter((x) => x.roller.includes("RDP") && (x.kopukOturum ?? 0) > 0).map((x) => {
+                    const on = kopukSecili.includes(x.id)
+                    return (
+                      <li key={x.id}>
+                        <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 hover:bg-muted/30">
+                          <Checkbox checked={on} disabled={kopukKapatiliyor}
+                            onCheckedChange={() => setKopukSecili((p) => (on ? p.filter((id) => id !== x.id) : [...p, x.id]))} />
+                          <span className={on ? "text-foreground" : ""}>{x.ad}</span>
+                          <span className={`ml-auto font-medium ${on ? "text-foreground" : ""}`}>{x.kopukOturum} disconnect</span>
+                        </label>
+                      </li>
+                    )
+                  })}
                 </ul>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={kopukKapatiliyor}>Vazgeç</AlertDialogCancel>
-            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={kopukKapatiliyor}
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={kopukKapatiliyor || kopukSecili.length === 0}
               onClick={(e) => { e.preventDefault(); void kopukKapat() }}>
               {kopukKapatiliyor ? "Kapatılıyor…" : "Disconnect'leri kapat"}
             </AlertDialogAction>
