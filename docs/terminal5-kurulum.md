@@ -116,3 +116,10 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
   bilerek atlandı. FSRM iki tuzak: rol ilk kurulumda **InstallPending** (yeniden başlatma şart) ve ilk
   açılışta FSRM deposu boş geldi (varsayılan grup yok, `New-FsrmFileGroup` → "Not found", SRMSVC 8194);
   `Restart-Service SrmSvc` düzeltti. İkisi de betiğe eklendi (13b91d4 + sonrası). Şablonlar doğrulandı.
+- **16.10.2026 13:45–14:20** — Claude agent ile kurdu (kurulum dosyaları T4'ten, SHA doğrulamalı, T5 `C:\Kurulum\Yazilim`):
+  Office LTSC ProPlus 2024 (ODT `C:\Kurulum\Office2024`, T4'ün sade config'i — T3'ten gelen geçiş config'i
+  `config.xml.t3-gecis` olarak yedekte; 16.0.17932.21056, **etkinleştirilmedi**, MAK sende), VC++ 2008 x86+x64
+  9.0.30729.6161 (`/q`; dosya sürümü 5677 = KB2538243, 6161 kurar), 7-Zip 26.03 (`/S`), SumatraPDF 3.6.1
+  (`-install -all-users -silent`, `C:\Program Files\SumatraPDF`). Windows Update: SYSTEM görevi
+  `PusulaT5WindowsUpdate` → `C:\ProgramData\Pusula\t5-wu.ps1` (COM Update API, yeniden başlatmaz), günlük `wu.log`.
+  Agent ile dosya gönderimi: `apps/web/__dosya-gonder-hizli.mjs` (24000 karakter parça; 22 MB ≈ 15 dk).
