@@ -13,7 +13,6 @@ import type { WebServiceUsersDto } from "@/app/api/companies/[firkod]/web-users/
 import type { WebUserTestResult } from "@/app/api/companies/[firkod]/web-users/test/route";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { ProgressBar } from "@/components/shared/progress-bar";
-import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
 const WeeklyUsageChart = dynamic(() => import("@/components/companies/weekly-usage-chart").then((m) => m.WeeklyUsageChart), { ssr: false, loading: () => <Skeleton className="h-full w-full" /> });
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@muharremoz/pusula-ui";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@muharremoz/pusula-ui";
@@ -191,7 +190,6 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
     ? 0
     : Math.round(((d.quotaCpu > 0 ? cpuPct : 0) + (d.quotaRam > 0 ? ramPct : 0) + (d.quotaDisk > 0 ? diskPct : 0) + (d.dbQuota > 0 ? dbPct : 0)) / active);
 
-  const [animValue, setAnimValue] = useState(0);
   const [detailOpen, setDetailOpen] = useState(false);
   // Kota düzenleme
   const [quotaOpen, setQuotaOpen]   = useState(false);
@@ -231,125 +229,115 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
       setQuotaSaving(false);
     }
   }
-  useEffect(() => {
-    const t = setTimeout(() => setAnimValue(yogunluk), 50);
-    return () => clearTimeout(t);
-  }, [yogunluk]);
 
-  const scoreColor =
-    yogunluk >= 80 ? { text: "text-red-600 dark:text-red-400",    primary: "#ef4444" } :
-    yogunluk >= 60 ? { text: "text-amber-600 dark:text-amber-400",  primary: "#f59e0b" } :
-                     { text: "text-emerald-600 dark:text-emerald-400", primary: "#10b981" };
+  // Seviye: renk + etiket — skor, metrik kutuları ve çubuklar aynı eşikleri kullanır
+  const seviye = (p: number) =>
+    p >= 80 ? { etiket: "Kritik", metin: "text-red-600 dark:text-red-400",       cubuk: "bg-red-500",     rozet: "bg-red-500/15 text-red-700 dark:text-red-400" } :
+    p >= 60 ? { etiket: "Yoğun",  metin: "text-amber-600 dark:text-amber-400",   cubuk: "bg-amber-500",   rozet: "bg-amber-500/15 text-amber-700 dark:text-amber-400" } :
+              { etiket: "Normal", metin: "text-emerald-600 dark:text-emerald-400", cubuk: "bg-emerald-500", rozet: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
+  const sayi = (n: number, basamak = 1) => n.toLocaleString("tr-TR", { maximumFractionDigits: basamak });
+  const tarih = (s: string | null | undefined) => {
+    if (!s) return "";
+    const [y, a, g] = s.slice(0, 10).split("-");
+    return y && a && g ? `${g}.${a}.${y}` : s;
+  };
+  const skor = seviye(yogunluk);
 
   const metrics = [
-    { label: "CPU",  icon: <Cpu className="h-3.5 w-3.5 text-muted-foreground" />,        pct: cpuPct,  quota: mq?.cpuPct ? `%${mq.cpuPct}`   : null },
-    { label: "RAM",  icon: <MemoryStick className="h-3.5 w-3.5 text-muted-foreground" />, pct: ramPct,  quota: mq?.ramGB  ? `${mq.ramGB} GB`  : null },
-    { label: "Disk", icon: <HardDrive className="h-3.5 w-3.5 text-muted-foreground" />,   pct: diskPct, quota: mq?.diskGB ? `${mq.diskGB} GB` : null },
-    { label: "DB",   icon: <Database className="h-3.5 w-3.5 text-muted-foreground" />,    pct: dbPct,   quota: mq?.dbGB   ? `${mq.dbGB} GB`   : null },
+    { label: "CPU",        icon: <Cpu className="size-3.5" />,         pct: cpuPct,
+      detay: `Ort %${sayi(avgCpuValue)}${mq?.cpuPct ? ` / %${mq.cpuPct}` : ""}`, manuel: !!mq?.cpuPct },
+    { label: "RAM",        icon: <MemoryStick className="size-3.5" />, pct: ramPct,
+      detay: `${sayi(avgRamMB / 1024)} / ${sayi(mq?.ramGB ?? d.quotaRamMB / 1024)} GB`, manuel: !!mq?.ramGB },
+    { label: "Disk",       icon: <HardDrive className="size-3.5" />,   pct: diskPct,
+      detay: `${sayi(d.usageDiskMB / 1024)} / ${sayi(mq?.diskGB ?? d.quotaDiskMB / 1024)} GB`, manuel: !!mq?.diskGB },
+    { label: "Veritabanı", icon: <Database className="size-3.5" />,    pct: dbPct,
+      detay: `${sayi(avgDbMB / 1024, 2)} / ${sayi(mq?.dbGB ?? d.dbTotalMB / 1024)} GB`, manuel: !!mq?.dbGB },
   ];
 
   return (
     <>
     <NestedCard
       className="h-full flex flex-col"
-      innerClassName="flex-1"
+      innerClassName="flex-1 flex flex-col gap-3"
       footer={
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-1.5">
-            <Activity className="h-3 w-3" />
-            <span>Son 30 gün ortalaması · CPU + RAM + Disk + Kullanıcı + Veritabanı</span>
+            <Activity className="size-3" />
+            <span>Son 30 gün ortalamasının kotaya oranı · CPU, RAM, Disk, Veritabanı</span>
           </div>
           <button
             onClick={() => setDetailOpen(true)}
             className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Info className="h-3 w-3" />
-            Detaylar
+            <Info className="size-3" />
+            Hesaplama
           </button>
         </div>
       }
     >
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold">Kullanım Yoğunluğu</h3>
-        <button
-          onClick={openQuota}
-          className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-[5px] px-2 py-1"
-          title="Firma için manuel kota ayarla"
-        >
-          <Settings2 className="h-3 w-3" />
-          Kota Ayarla
-        </button>
-      </div>
-
-      <div className="flex items-stretch gap-0">
-        <div className="flex flex-col items-center justify-center pr-4 shrink-0">
-          <div className="relative">
-            <AnimatedCircularProgressBar
-              value={animValue}
-              gaugePrimaryColor={scoreColor.primary}
-              gaugeSecondaryColor="#e5e7eb"
-              className="size-32 text-transparent"
-            />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className={`text-2xl font-bold tabular-nums leading-none ${scoreColor.text}`}>%{yogunluk}</span>
-              <span className="text-[10px] text-muted-foreground mt-1">Yoğunluk</span>
-            </div>
+      {/* Başlık + skor */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold">Kullanım Yoğunluğu</h3>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className={`text-3xl font-bold tabular-nums leading-none ${skor.metin}`}>%{yogunluk}</span>
+            <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${skor.rozet}`}>{skor.etiket}</span>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={openQuota} className="h-7 shrink-0 gap-1.5 rounded-[5px] px-2.5 text-[12px]" title="Firma için manuel kota ayarla">
+          <Settings2 className="size-3.5" /> Kota
+        </Button>
+      </div>
 
-        <div className="w-px bg-border/40 mx-1 self-stretch" />
-
-        <div className="flex-1 flex flex-col justify-center pl-4 space-y-2.5">
-          {metrics.map((m) => {
-            const barColor =
-              m.pct >= 80 ? "bg-red-500" :
-              m.pct >= 60 ? "bg-amber-400" :
-                            "bg-emerald-500";
-            return (
-              <div key={m.label} className="flex items-center gap-2">
+      {/* Metrikler — 2×2 kutu */}
+      <div className="grid grid-cols-2 gap-2">
+        {metrics.map((m) => {
+          const s = seviye(m.pct);
+          return (
+            <div key={m.label} className="rounded-[5px] bg-[var(--section-bg)] px-3 py-2">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
                 {m.icon}
-                <span className="text-[11px] text-muted-foreground w-7">{m.label}</span>
-                <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${m.pct}%` }} />
-                </div>
-                <span className="text-[10px] font-medium tabular-nums text-right whitespace-nowrap">
-                  {m.pct}%
-                  {m.quota && (
-                    <span className="text-muted-foreground font-normal" title="Manuel kota"> / {m.quota}</span>
-                  )}
-                </span>
+                <span className="text-[12px] font-medium">{m.label}</span>
+                <span className={`ml-auto text-[13px] font-semibold tabular-nums ${m.pct >= 60 ? s.metin : "text-foreground"}`}>%{m.pct}</span>
               </div>
-            );
-          })}
-        </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className={`h-full rounded-full ${s.cubuk}`} style={{ width: `${m.pct}%` }} />
+              </div>
+              <p className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground" title={m.manuel ? "Elle verilmiş kotaya göre" : undefined}>
+                {m.detay}{m.manuel && <span className="text-primary"> · elle kota</span>}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
-      {/* 30 günlük geçmiş özeti — satış için */}
+      {/* 30 günlük geçmiş özeti */}
       {d.history30d && (
-        <div className="mt-4 pt-3 border-t border-border/40 grid grid-cols-3 gap-3">
-          <div className="flex flex-col">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">CPU 30g</span>
-            {/* Zirve ölçülmemişse (eski hatalı kayıtlar temizlendi) "—" göster,
-                sıfır yazıp "hiç yük olmamış" izlenimi verme. */}
-            <span className="text-[13px] font-semibold tabular-nums">Ort %{d.history30d.avgCpu} <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakCpu == null ? "—" : `%${d.history30d.peakCpu}`}</span></span>
-            {d.history30d.peakCpu != null && d.history30d.peakCpuDate && (
-              <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakCpuDate}</span>
-            )}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">RAM 30g</span>
-            <span className="text-[13px] font-semibold tabular-nums">Ort {d.history30d.avgRamGB} GB <span className="text-muted-foreground font-normal">/ Peak {d.history30d.peakRamGB == null ? "—" : `${d.history30d.peakRamGB} GB`}</span></span>
-            {d.history30d.peakRamGB != null && d.history30d.peakRamDate && (
-              <span className="text-[9px] text-muted-foreground">Peak: {d.history30d.peakRamDate}</span>
-            )}
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wide">DB Büyüme</span>
+        <div className="mt-auto grid grid-cols-3 divide-x border-t pt-3">
+          <div className="flex min-w-0 flex-col pr-3">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">CPU · 30 gün</span>
+            {/* Zirve ölçülmemişse "—": sıfır yazıp "hiç yük olmamış" izlenimi verme */}
             <span className="text-[13px] font-semibold tabular-nums">
-              {(d.history30d.dbStartMB / 1024).toFixed(1)} → {(d.history30d.dbEndMB / 1024).toFixed(1)} GB
+              Ort %{sayi(d.history30d.avgCpu)}
+              <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakCpu == null ? "—" : `%${sayi(d.history30d.peakCpu)}`}</span>
             </span>
-            <span className={`text-[9px] ${d.history30d.dbGrowthPct >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
-              {d.history30d.dbGrowthPct >= 0 ? "+" : ""}{d.history30d.dbGrowthPct}%
+            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakCpu != null ? tarih(d.history30d.peakCpuDate) : " "}</span>
+          </div>
+          <div className="flex min-w-0 flex-col px-3">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">RAM · 30 gün</span>
+            <span className="text-[13px] font-semibold tabular-nums">
+              Ort {sayi(d.history30d.avgRamGB)} GB
+              <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakRamGB == null ? "—" : `${sayi(d.history30d.peakRamGB)} GB`}</span>
+            </span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakRamGB != null ? tarih(d.history30d.peakRamDate) : " "}</span>
+          </div>
+          <div className="flex min-w-0 flex-col pl-3">
+            <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Veritabanı büyümesi</span>
+            <span className="text-[13px] font-semibold tabular-nums">
+              {sayi(d.history30d.dbStartMB / 1024)} → {sayi(d.history30d.dbEndMB / 1024)} GB
+            </span>
+            <span className={`text-[11px] font-medium tabular-nums ${d.history30d.dbGrowthPct > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+              {d.history30d.dbGrowthPct > 0 ? "+" : ""}%{sayi(d.history30d.dbGrowthPct)}
             </span>
           </div>
         </div>
@@ -2416,12 +2404,11 @@ tr:nth-child(even) td{background:#fafafa}
               <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
                 <div className="rounded-[5px] px-4 py-4 space-y-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
                   <Skeleton className="h-4 w-36 rounded-[5px]" />
-                  <div className="flex gap-4 items-center">
-                    <Skeleton className="size-32 rounded-full shrink-0" />
-                    <div className="flex-1 space-y-2.5">
-                      {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-2 w-full rounded-full" />)}
-                    </div>
+                  <Skeleton className="h-8 w-28 rounded-[5px]" />
+                  <div className="grid grid-cols-2 gap-2">
+                    {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[62px] rounded-[5px]" />)}
                   </div>
+                  <Skeleton className="h-10 w-full rounded-[5px]" />
                 </div>
                         </div>
             ) : companyDetail ? (
@@ -2450,21 +2437,48 @@ tr:nth-child(even) td{background:#fafafa}
               footer={
                 <>
                   <Activity className="h-3 w-3" />
-                  <span>Firmanın tüm kullanıcılarının günlük toplam kullanımı</span>
+                  <span>Firmanın tüm kullanıcılarının günlük toplamı · RAM/Disk sol, CPU sağ eksen</span>
                 </>
               }
             >
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-semibold">Haftalık Kullanım</h3>
-                <div className="flex items-center gap-3">
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />RAM (GB)</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-amber-400" />Disk (GB)</span>
-                  <span className="flex items-center gap-1 text-[10px] text-muted-foreground"><span className="inline-block h-2 w-2 rounded-full bg-blue-400" />CPU (%)</span>
-                </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                <WeeklyUsageChart data={companyDetail?.weeklyUsage ?? []} />
-              </div>
+              {(() => {
+                const veri = companyDetail?.weeklyUsage ?? []
+                const ort = (k: "ramGB" | "cpu" | "diskGB") => {
+                  const v = veri.map((p) => p[k]).filter((x): x is number => x != null)
+                  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null
+                }
+                const sayi = (n: number | null) => (n == null ? "—" : n.toLocaleString("tr-TR", { maximumFractionDigits: 1 }))
+                const sonDisk = [...veri].reverse().find((p) => p.diskGB != null)?.diskGB ?? null
+                const ogeler = [
+                  { ad: "RAM",  renk: "bg-emerald-500", deger: `${sayi(ort("ramGB"))} GB`, alt: "ortalama" },
+                  { ad: "CPU",  renk: "bg-blue-500",    deger: `%${sayi(ort("cpu"))}`,     alt: "ortalama" },
+                  { ad: "Disk", renk: "bg-amber-500",   deger: `${sayi(sonDisk)} GB`,      alt: "son" },
+                ]
+                return (
+                  <>
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="text-[13px] font-semibold">Haftalık Kullanım</h3>
+                        <p className="text-[12px] text-muted-foreground">Son 7 gün · günlük toplam</p>
+                      </div>
+                      <div className="flex shrink-0 items-start gap-4">
+                        {ogeler.map((o) => (
+                          <div key={o.ad} className="text-right">
+                            <p className="flex items-center justify-end gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                              <span className={`size-2 rounded-full ${o.renk}`} />{o.ad}
+                            </p>
+                            <p className="text-[15px] font-semibold tabular-nums leading-tight">{detailLoading ? "—" : o.deger}</p>
+                            <p className="text-[11px] text-muted-foreground">{o.alt}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="min-h-[170px] flex-1">
+                      {detailLoading ? <Skeleton className="h-full w-full rounded-[5px]" /> : <WeeklyUsageChart data={veri} />}
+                    </div>
+                  </>
+                )
+              })()}
             </NestedCard>
           </div>
 
