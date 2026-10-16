@@ -201,7 +201,9 @@ export function buildPusulaXFileXml(folderPath: string): string {
  *
  * `[OPEN OFFICE] 1` ARTIK YAZILMIYOR (2026-09-29, kullanıcı kararı): sunucularda
  * Office yokken programlar OpenOffice kullansın diye ekleniyordu; terminallerde
- * Office kuruldu. Dosyada zaten olan [OPEN OFFICE] satırına dokunulmaz.
+ * Office kuruldu. Dosyada zaten olan [OPEN OFFICE] satırı da silinir (2026-10-16):
+ * şablon/eski dosyalar ayarı geri getiriyordu. Agent exec `^`'yi yiyor → satır başı
+ * kontrolü regex yerine TrimStart().StartsWith ile.
  */
 export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): string {
   const f = psQuote(paramFilePath)
@@ -213,7 +215,9 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
       `$lines = Get-Content -LiteralPath $f -Encoding UTF8; ` +
       `$dkVar = $false; ` +
       `$out = foreach($line in $lines){` +
-        `if($line -match '^\\[DATA KODU\\]'){$dkVar = $true; $dk} ` +
+        `$bas = $line.TrimStart().ToUpperInvariant(); ` +
+        `if($bas.StartsWith('[OPEN OFFICE]') -or $bas.StartsWith('[OPENOFFICE]')){} ` +
+        `elseif($line -match '^\\[DATA KODU\\]'){$dkVar = $true; $dk} ` +
         `else {$line}}; ` +
       `if(-not $dkVar){$out = @($out) + @($dk)}; ` +
       `Set-Content -LiteralPath $f -Value $out -Encoding UTF8; ` +
@@ -234,7 +238,8 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
  *
  * Değer yine firmaId'dir (diğer programlarla aynı kaynak). Yalnızca BİÇİM
  * farklıdır. Dosyada var olan blok güncellenir; yoksa dosya sonuna eklenir.
- * Open Office ayarı yazılmaz (hiçbir programda — bkz. buildUpdateParamTxt).
+ * Open Office ayarı yazılmaz; dosyada zaten olan <OPENOFFICE> bloğu / [OPEN OFFICE]
+ * satırı silinir (2026-10-16, bkz. buildUpdateParamTxt).
  * Çift tırnak yasak → satır sonu için [char]13/[char]10 kullanılır.
  */
 export function buildUpdateDataKoduXml(paramFilePath: string, firmaId: string): string {
@@ -246,6 +251,8 @@ export function buildUpdateDataKoduXml(paramFilePath: string, firmaId: string): 
       `$nl = [string]([char]13) + [string]([char]10); ` +
       `$blk = '<DATAKODU>' + $nl + '${id}' + $nl + '</DATAKODU>'; ` +
       `$c = Get-Content -LiteralPath $f -Raw -Encoding UTF8; ` +
+      `$c = [regex]::Replace($c, '(?si)[ \\t]*<OPENOFFICE>.*?</OPENOFFICE>[ \\t]*(\\r?\\n)?', ''); ` +
+      `$c = [regex]::Replace($c, '(?i)[ \\t]*\\[OPEN ?OFFICE\\].*(\\n)?', ''); ` +
       `if($c -match '(?si)<DATAKODU>.*?</DATAKODU>'){` +
         `$c = [regex]::Replace($c, '(?si)<DATAKODU>.*?</DATAKODU>', $blk); ` +
         `Set-Content -LiteralPath $f -Value $c -NoNewline -Encoding UTF8; ` +
