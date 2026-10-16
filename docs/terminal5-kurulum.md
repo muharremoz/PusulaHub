@@ -88,7 +88,7 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
 - [ ] Bir firma kullanıcısıyla gir: Başlat menüsü, Excel (lisans sormamalı), Picture Manager,
       BGInfo'lu duvar kağıdı (ilk girişte boş gelmemeli, döşenmemeli)
 - [ ] Hub: sunucu kaydı; Kuma ping monitörü "Terminal 5" (41'in kopyası, `apps/web/__kuma-kopya.mjs`); TV haritası
-- [ ] Defender: Tamper Protection **elle** aç (uzaktan açılamaz — [[sunucu-guvenlik-durumu]]); imza güncel mi
+- [x] Defender: Tamper Protection **elle** aç (16.10: açık, kaynak UI) (uzaktan açılamaz — [[sunucu-guvenlik-durumu]]); imza güncel mi
 - [ ] ASR/CFA denetim modu yalnız T3'te — T5'e şimdilik uygulanmıyor ([[asr-cfa-denetim]])
 - [ ] Sihirbazda Terminal 5 bağlantı sunucusu olarak seçilebiliyor mu (firma taşımadan önce)
 
