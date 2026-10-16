@@ -619,6 +619,8 @@ export default function CompaniesPage() {
   // Olustur basildi mi — eksik alan uyarilari ancak o zaman gorunur (dugme hic silik durmasin)
   const [newUserDenendi, setNewUserDenendi]       = useState(false);
   const [newUserSallan, setNewUserSallan]         = useState(false);
+  // Sunucu secenekleri gelene kadar iskelet — yoksa once secici, sonra serit gorunup ziplıyordu
+  const [newUserSunucuYukleniyor, setNewUserSunucuYukleniyor] = useState(false);
 
   // Kullanıcı aksiyonları
   const [pwResetUser, setPwResetUser]       = useState<TabUser | null>(null);
@@ -809,6 +811,7 @@ export default function CompaniesPage() {
     setNewUserStarted(false); setNewUserError(null); setNewUserDone(false); setNewUserMsgCopied(false); setNewUserDenendi(false)
     setNewUserUsername(""); setNewUserDisplayName(""); setNewUserEmail(""); setNewUserPhone(""); setNewUserPassword(""); setNewUserShowPw(false)
     setNewUserAdServerId(""); setNewUserRdpServerId(""); setNewUserAdLocked(false); setNewUserRdpLocked(false)
+    setNewUserSunucuYukleniyor(true)
     try {
       const r = await fetch(`/api/companies/${selectedFirma.firkod}/server-options`)
       const d = await r.json()
@@ -827,6 +830,8 @@ export default function CompaniesPage() {
       }
     } catch (err) {
       setNewUserError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setNewUserSunucuYukleniyor(false)
     }
   }
 
@@ -3397,8 +3402,16 @@ tr:nth-child(even) td{background:#fafafa}
                     const hata = `border-red-500/60 ${newUserSallan ? "motion-safe:animate-sallan" : ""}`
                     return (
                       <>
-                        {/* Sunucular — firma kaydından geliyorsa tek bilgi şeridi, değilse seçici */}
-                        {ikisiKilitli ? (
+                        {/* Sunucular — firma kaydından geliyorsa tek bilgi şeridi, değilse seçici.
+                            Seçenekler gelene kadar şerit boyunda iskelet: aksi halde önce seçici, sonra şerit görünüp zıplıyor. */}
+                        {newUserSunucuYukleniyor ? (
+                          <div className="flex items-center gap-2 rounded-[8px] bg-[var(--section-bg)] px-3 py-2">
+                            <Skeleton className="size-3.5 rounded-[3px]" />
+                            <Skeleton className="h-3.5 w-28 rounded-[5px]" />
+                            <Skeleton className="h-3.5 w-20 rounded-[5px]" />
+                            <Skeleton className="h-3.5 w-28 rounded-[5px]" />
+                          </div>
+                        ) : ikisiKilitli ? (
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[8px] bg-[var(--section-bg)] px-3 py-2 text-[12px]">
                             <Server className="size-3.5 shrink-0 text-muted-foreground" />
                             <span className="font-medium">{adSrv?.name ?? "—"}</span>
