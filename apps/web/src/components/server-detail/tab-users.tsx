@@ -1,30 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import { Key, UserX, UserCheck, MoreVertical, Info } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@muharremoz/pusula-ui";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@muharremoz/pusula-ui";
+import Link from "next/link";
+import { Info } from "lucide-react";
+import { Table, InlineTextFilter, InlineSelectFilter, type TableColumn, type SortState } from "@muharremoz/pusula-ui";
+import { Button } from "@/components/ui/button";
 import type { AgentReport } from "@/lib/agent-types";
+
+/**
+ * Sunucu detay — Kullanıcılar (salt okunur liste).
+ *
+ * AD rolündeki sunucuda AD kullanıcıları, değilse yerel kullanıcılar.
+ * Eski sekmedeki "Şifre Sıfırla / Devre Dışı Bırak" hiçbir şey yapmıyordu;
+ * kaldırıldı — bu işlemler firma detayında (Firmalar → Kullanıcılar) çalışır,
+ * firma koduna tıklayınca oraya gidilir.
+ */
 
 type ADUser = NonNullable<AgentReport["ad"]>["users"][number];
 type LocalUser = NonNullable<AgentReport["localUsers"]>[number];
+type Satir = { username: string; displayName: string; firkod: string | null; aciklama: string; enabled: boolean; lastLogin: string };
 
 interface Props {
   users: ADUser[];
@@ -32,206 +26,99 @@ interface Props {
   firmaMap: Record<string, string>;
 }
 
-type StatusFilter = "all" | "active" | "disabled";
-
 export function TabUsers({ users, localUsers, firmaMap }: Props) {
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [toggleTarget, setToggleTarget] = useState<{ username: string; enabled: boolean } | null>(null);
+  const [filtreAcik, setFiltreAcik] = useState(false);
+  const [adFiltre, setAdFiltre] = useState("");
+  const [durumFiltre, setDurumFiltre] = useState<string[]>([]);
+  const [sira, setSira] = useState<SortState | null>({ key: "username", direction: "asc" });
 
   const isAD = users.length > 0;
-  const isLocal = !isAD && localUsers && localUsers.length > 0;
+  const satirlar: Satir[] = isAD
+    ? users.map((u) => ({ username: u.username, displayName: u.displayName, firkod: u.ou?.trim() || null, aciklama: "", enabled: u.enabled, lastLogin: u.lastLogin }))
+    : (localUsers ?? []).map((u: LocalUser) => ({ username: u.username, displayName: u.displayName, firkod: null, aciklama: u.description, enabled: u.enabled, lastLogin: u.lastLogin }));
 
-  // Ortak liste — AD önce, yoksa local
-  const allUsers: { username: string; displayName: string; extra: string; enabled: boolean; lastLogin: string }[] = isAD
-    ? users.map((u) => ({ username: u.username, displayName: u.displayName, extra: u.ou, enabled: u.enabled, lastLogin: u.lastLogin }))
-    : (localUsers ?? []).map((u: LocalUser) => ({ username: u.username, displayName: u.displayName, extra: u.description, enabled: u.enabled, lastLogin: u.lastLogin }));
-
-  const activeCount = allUsers.filter((u) => u.enabled).length;
-  const disabledCount = allUsers.filter((u) => !u.enabled).length;
-
-  const filtered = allUsers.filter((u) => {
-    if (statusFilter === "active" && !u.enabled) return false;
-    if (statusFilter === "disabled" && u.enabled) return false;
-    if (
-      search &&
-      !u.username.toLowerCase().includes(search.toLowerCase()) &&
-      !u.displayName.toLowerCase().includes(search.toLowerCase()) &&
-      !u.extra.toLowerCase().includes(search.toLowerCase())
-    )
-      return false;
+  const q = adFiltre.trim().toLocaleLowerCase("tr-TR");
+  const liste = satirlar.filter((u) => {
+    if (q && !`${u.username} ${u.displayName} ${u.firkod ?? ""} ${u.firkod ? firmaMap[u.firkod] ?? "" : ""} ${u.aciklama}`.toLocaleLowerCase("tr-TR").includes(q)) return false;
+    if (durumFiltre.length && !durumFiltre.includes(u.enabled ? "aktif" : "pasif")) return false;
     return true;
   });
+  const aktif = satirlar.filter((u) => u.enabled).length;
+  const filtreSayisi = (q ? 1 : 0) + (durumFiltre.length ? 1 : 0);
 
-  const filters: { key: StatusFilter; label: string }[] = [
-    { key: "all", label: "Tümü" },
-    { key: "active", label: "Aktif" },
-    { key: "disabled", label: "Devre Dışı" },
+  const sutunlar: TableColumn<Satir>[] = [
+    {
+      key: "username", header: "Kullanıcı", sortable: true, width: "200px",
+      filter: <InlineTextFilter value={adFiltre} onChange={setAdFiltre} placeholder="Kullanıcı, ad, firma…" />,
+      cell: (u) => <span className="block truncate font-medium">{u.username}</span>,
+    },
+    { key: "displayName", header: "Ad soyad", sortable: true, cell: (u) => <span className="block truncate">{u.displayName || "—"}</span> },
+    isAD
+      ? {
+          key: "firma", header: "Firma", sortable: true, sortValue: (u) => (u.firkod ? firmaMap[u.firkod] ?? u.firkod : ""),
+          cell: (u) => u.firkod
+            ? (
+              <Link href={`/companies?firkod=${u.firkod}`} className="flex min-w-0 items-center gap-2 hover:underline">
+                <span className="shrink-0 tabular-nums text-muted-foreground">{u.firkod}</span>
+                <span className="truncate">{firmaMap[u.firkod] ?? "—"}</span>
+              </Link>
+            )
+            : <span className="text-muted-foreground">—</span>,
+        }
+      : { key: "aciklama", header: "Açıklama", cell: (u) => <span className="block truncate text-muted-foreground">{u.aciklama || "—"}</span> },
+    { key: "lastLogin", header: "Son giriş", sortable: true, width: "170px", cell: (u) => <span className="tabular-nums">{u.lastLogin || "—"}</span> },
+    {
+      key: "enabled", header: "Durum", sortable: true, align: "center", width: "110px", sortValue: (u) => (u.enabled ? 1 : 0),
+      filter: <InlineSelectFilter options={["aktif", "pasif"] as const} selected={durumFiltre} onChange={setDurumFiltre} getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")} />,
+      cell: (u) => (
+        <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${u.enabled ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+          {u.enabled ? "Aktif" : "Pasif"}
+        </span>
+      ),
+    },
   ];
 
-  if (allUsers.length === 0) {
-    return (
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-        <div
-          className="rounded-[5px] px-3 py-12 text-center"
-          style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
-        >
-          <p className="text-[11px] text-muted-foreground">Kullanıcı verisi henüz alınamadı.</p>
-        </div>
-        </div>
-    );
-  }
-
   return (
-    <div className="space-y-3">
-      {/* Local kullanıcı uyarısı */}
-      {isLocal && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-[5px] bg-amber-500/15 border border-amber-500/25 text-amber-800">
+    <div className="space-y-2">
+      {!isAD && satirlar.length > 0 && (
+        <div className="flex items-center gap-2 rounded-[5px] bg-amber-500/15 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-400">
           <Info className="size-3.5 shrink-0" />
-          <span className="text-[11px]">
-            Bu sunucu Active Directory rolü taşımıyor. Aşağıda <span className="font-semibold">yerel kullanıcılar</span> listeleniyor.
-          </span>
+          Bu sunucu Active Directory rolü taşımıyor; yerel kullanıcılar listeleniyor.
         </div>
       )}
-
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Toplam", value: allUsers.length },
-          { label: "Aktif", value: activeCount },
-          { label: "Devre Dışı", value: disabledCount },
-        ].map(({ label, value }) => (
-          <div key={label} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-            <div className="rounded-[5px] px-3 py-3" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-              <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase block mb-1">{label}</span>
-              <span className="text-2xl font-bold">{value}</span>
-            </div>
-                </div>
-        ))}
-      </div>
-
-      {/* List */}
-      <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-        <div className="rounded-[5px]" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
-          {/* Toolbar */}
-          <div className="px-3 py-2 bg-muted/20 border-b border-border flex items-center gap-3">
-            <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase flex-1">
-              {isAD ? "AD Kullanıcıları" : "Yerel Kullanıcılar"}
-            </span>
-            <div className="flex items-center rounded-[8px] p-0.5" style={{ backgroundColor: "var(--section-bg)" }}>
-              {filters.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => setStatusFilter(key)}
-                  className={cn(
-                    "rounded-[5px] text-[10px] px-2.5 py-1 font-medium transition-colors",
-                    statusFilter === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <Input
-              placeholder="Kullanıcı ara..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-7 text-[11px] rounded-[5px] w-44 border-border/50"
-            />
-          </div>
-
-          {/* Column headers */}
-          <div className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2 bg-muted/10 border-b border-border/40">
-            {["Kullanıcı", "Görünen Ad", isAD ? "Firma" : "Açıklama", "Son Giriş", "Durum"].map((h) => (
-              <span key={h} className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">{h}</span>
-            ))}
-            <span />
-          </div>
-
-          {/* Rows */}
-          <div className="divide-y divide-border/40">
-            {filtered.map((user) => (
-              <div
-                key={user.username}
-                className="grid grid-cols-[1fr_1fr_1fr_120px_80px_28px] gap-3 px-3 py-2.5 hover:bg-muted/70 transition-colors items-center"
-              >
-                <span className="text-[11px] font-mono truncate">{user.username}</span>
-                <span className="text-[11px] truncate">{user.displayName}</span>
-                <span className="text-[11px] text-muted-foreground truncate">
-                  {isAD ? ((firmaMap[user.extra] ?? user.extra) || "—") : (user.extra || "—")}
-                </span>
-                <span className="text-[10px] text-muted-foreground">{user.lastLogin}</span>
-                <div className="flex items-center gap-1.5">
-                  <span className={cn("size-1.5 rounded-full shrink-0", user.enabled ? "bg-emerald-500" : "bg-muted-foreground")} />
-                  <span className={cn("text-[10px]", user.enabled ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground")}>
-                    {user.enabled ? "Aktif" : "Devre Dışı"}
-                  </span>
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
-                      <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="rounded-[5px]">
-                    <DropdownMenuItem className="text-xs cursor-pointer">
-                      <Key className="size-3.5 mr-2" />
-                      Şifre Sıfırla
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-xs cursor-pointer text-destructive"
-                      onClick={() => setToggleTarget({ username: user.username, enabled: user.enabled })}
-                    >
-                      {user.enabled
-                        ? <><UserX className="size-3.5 mr-2" />Devre Dışı Bırak</>
-                        : <><UserCheck className="size-3.5 mr-2" />Etkinleştir</>
-                      }
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            ))}
-
-            {filtered.length === 0 && (
-              <div className="px-3 py-8 text-center text-[11px] text-muted-foreground">
-                Kullanıcı bulunamadı.
-              </div>
+      <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+        <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+          <h2 className="text-[13px] font-semibold">{isAD ? "AD kullanıcıları" : "Yerel kullanıcılar"}</h2>
+          <span className="text-[12px] tabular-nums text-muted-foreground">
+            {filtreSayisi ? `${liste.length} / ` : ""}{satirlar.length} kullanıcı · {aktif} aktif · {satirlar.length - aktif} pasif
+          </span>
+          <span className="ml-auto flex items-center gap-2">
+            {filtreSayisi > 0 && (
+              <button type="button" className="text-[12px] font-medium text-primary hover:underline" onClick={() => { setAdFiltre(""); setDurumFiltre([]); }}>
+                Filtreleri temizle
+              </button>
             )}
-          </div>
+            <Button variant="outline" size="sm" className="h-7 rounded-[5px] px-2.5 text-[12px]" onClick={() => setFiltreAcik((v) => !v)}>
+              {filtreAcik ? "Filtreleri gizle" : "Filtrele"}
+            </Button>
+          </span>
         </div>
-        </div>
-
-      {/* Devre Dışı / Etkinleştir AlertDialog */}
-      <AlertDialog open={!!toggleTarget} onOpenChange={(open) => !open && setToggleTarget(null)}>
-        <AlertDialogContent className="rounded-[8px] max-w-[400px]">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="text-sm font-semibold">
-              {toggleTarget?.enabled ? "Kullanıcıyı Devre Dışı Bırak" : "Kullanıcıyı Etkinleştir"}
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-[11px] text-muted-foreground">
-              <span className="font-mono font-medium text-foreground">{toggleTarget?.username}</span>{" "}
-              {toggleTarget?.enabled
-                ? "kullanıcısı devre dışı bırakılacak. Onaylıyor musunuz?"
-                : "kullanıcısı etkinleştirilecek. Onaylıyor musunuz?"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="h-8 px-3 rounded-[5px] text-[11px]">İptal</AlertDialogCancel>
-            <AlertDialogAction
-              className={cn(
-                "h-8 px-3 rounded-[5px] text-[11px]",
-                toggleTarget?.enabled
-                  ? "bg-destructive text-white hover:bg-destructive/90"
-                  : "bg-emerald-600 text-white hover:bg-emerald-700"
-              )}
-              onClick={() => setToggleTarget(null)}
-            >
-              {toggleTarget?.enabled ? "Devre Dışı Bırak" : "Etkinleştir"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <Table<Satir>
+          data={liste}
+          columns={sutunlar}
+          getRowId={(u) => u.username}
+          sort={sira ?? undefined}
+          onSortChange={setSira}
+          filterRow={filtreAcik}
+          columnDividers
+          resizable
+          rowHeight={36}
+          headerHeight={30}
+          height={`${30 + (filtreAcik ? 34 : 0) + Math.min(Math.max(liste.length, 3), 16) * 36 + 2}px`}
+          className="rounded-[8px] text-[13px]"
+          emptyState={satirlar.length === 0 ? "Kullanıcı verisi henüz alınamadı." : "Filtreye uyan kullanıcı yok."}
+        />
+      </section>
     </div>
   );
 }
