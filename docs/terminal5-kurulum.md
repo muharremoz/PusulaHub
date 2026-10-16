@@ -104,3 +104,9 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
 - **16.10.2026** — VM oluşturuldu (moid 20) ve açıldı; Windows kurulumunu bekliyor.
   Oluşturma betiği: `apps/web/__t5-olustur.mjs` (+ `__esxi-soap.mjs`, T4 donanımı; ConfigSpec'te
   `tools` içinde `toolsUpgradePolicy` saat eşitleme alanlarından ÖNCE gelmeli).
+- **16.10.2026** — Windows + VMware Tools + agent kullanıcıda kuruldu (PUSULARDP5, 10.15.2.14 sabit,
+  Alusup RID 500). Claude: AD nesnesi `CN=Computers` → `OU=Bilgisayarlar`; `Rdp_KopukOturum_1Saat`
+  filtresine `PUSULARDP5$` (5 GPO uygulanıyor, MaxDisconnectionTime 3600000); `t5-kur.ps1` → T3
+  `C:\Kurulum\T5\` (SHA 1457BEA1…); agent standart sürüme (exe 88F5D127, cs DD908867; yerinde
+  derlenmiş 5535F2C1 `.bak-20261015`), config.json izni SYSTEM+Administrators; yeni popup
+  (27E01418, eskisi `.eski-20261016`). **WebView2 Runtime yok** — popup onsuz açılmaz.
