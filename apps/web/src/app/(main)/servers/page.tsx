@@ -216,26 +216,27 @@ function Grup({ baslik, alt, sunucular, yukleniyor, islemler }: { baslik: string
       </div>
       <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         {yukleniyor
-          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[196px] rounded-[5px]" />)
+          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[230px] rounded-[5px]" />)
           : [...sunucular].sort((a, b) => a.name.localeCompare(b.name, "tr", { numeric: true })).map((s) => <SunucuKarti key={s.id} s={s} islemler={islemler} />)}
       </div>
     </section>
   )
 }
 
-function Cubuk({ etiket, yuzde, ek }: { etiket: string; yuzde: number | null | undefined; ek?: string }) {
+/** "17s 58d" / "3g 4s" (API) → "17 sa 58 dk" / "3 gün 4 sa" */
+const sureOku = (u: string | undefined) =>
+  !u || u === "—" ? "—" : u.replace(/(\d+)g/, "$1 gün").replace(/(\d+)s\b/, "$1 sa").replace(/(\d+)d\b/, "$1 dk")
+
+/** Kaynak kutusu: etiket, büyük yüzde, ince çubuk, alt bilgi */
+function Kaynak({ etiket, yuzde, alt }: { etiket: string; yuzde: number | null | undefined; alt?: string }) {
   return (
-    <div>
-      <div className="flex items-baseline justify-between gap-2 text-[12px]">
-        <span className="text-muted-foreground">{etiket}</span>
-        <span className="truncate tabular-nums">
-          {ek && <span className="text-muted-foreground">{ek} · </span>}
-          <span className={seviyeMetin(yuzde)}>{yuzde == null ? "—" : `%${Math.round(yuzde)}`}</span>
-        </span>
-      </div>
-      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+    <div className="min-w-0 rounded-[5px] bg-[var(--section-bg)] px-2.5 py-2">
+      <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{etiket}</p>
+      <p className={`text-[18px] font-bold leading-tight tabular-nums ${seviyeMetin(yuzde)}`}>{yuzde == null ? "—" : `%${Math.round(yuzde)}`}</p>
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
         <div className={`h-full rounded-full ${seviyeRenk(yuzde)}`} style={{ width: `${Math.min(100, yuzde ?? 0)}%` }} />
       </div>
+      <p className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground" title={alt}>{alt ?? " "}</p>
     </div>
   )
 }
@@ -243,47 +244,71 @@ function Cubuk({ etiket, yuzde, ek }: { etiket: string; yuzde: number | null | u
 function SunucuKarti({ s, islemler }: { s: Server; islemler: Islemler }) {
   const acik = cevrimici(s)
   const terminal = terminalMi(s)
+  const aktif = s.aktifOturum ?? 0
+  const kopuk = s.kopukOturum ?? 0
+  const toplam = aktif + kopuk
   return (
-    <div className="flex flex-col rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
-      <div className="flex items-center gap-2">
-        <span className={`size-2 shrink-0 rounded-full ${acik ? "bg-emerald-500" : "bg-red-500"}`} />
-        <Link href={`/servers/${s.slug ?? s.id}`} className="truncate text-[14px] font-semibold hover:underline">{s.name}</Link>
-        <span className="ml-auto"><IslemMenusu s={s} islemler={islemler} /></span>
-      </div>
-      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-        <span className="text-[12px] tabular-nums text-muted-foreground">{s.ip}</span>
-        {s.roles.map((r) => (
-          <span key={r} className="inline-flex rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{rolAdi(r)}</span>
-        ))}
+    <div className="flex flex-col rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>
+      {/* Başlık */}
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <Link href={`/servers/${s.slug ?? s.id}`} className="truncate text-[14px] font-semibold hover:underline">{s.name}</Link>
+            <span className={`inline-flex shrink-0 items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium ${
+              acik ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-red-500/15 text-red-700 dark:text-red-400"}`}>
+              <span className={`size-1.5 rounded-full ${acik ? "bg-emerald-500" : "bg-red-500"}`} />
+              {acik ? "Çevrimiçi" : "Ulaşılamıyor"}
+            </span>
+          </div>
+          <p className="mt-0.5 truncate text-[12px] tabular-nums text-muted-foreground">
+            {s.ip}
+            {s.roles.length > 0 && <> · {s.roles.map(rolAdi).join(", ")}</>}
+          </p>
+        </div>
+        <IslemMenusu s={s} islemler={islemler} />
       </div>
 
       {acik ? (
-        <div className="mt-3 space-y-2">
-          <Cubuk etiket="CPU" yuzde={s.cpu} />
-          <Cubuk etiket="RAM" yuzde={s.ram} ek={s.ramGB ? `${s.ramGB.kullanilan.toLocaleString("tr-TR")} / ${s.ramGB.toplam} GB` : undefined} />
-          {diskler(s).map((d) => (
-            <Cubuk key={d.drive} etiket={d.drive === "Disk" ? "Disk" : `Disk ${d.drive}`} yuzde={d.percent}
-              ek={d.totalGB ? `${Math.round(d.totalGB - d.usedGB)} GB boş` : undefined} />
-          ))}
-        </div>
+        <>
+          {/* Kaynaklar — CPU, RAM ve her disk ayrı kutu */}
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            <Kaynak etiket="CPU" yuzde={s.cpu} />
+            <Kaynak etiket="RAM" yuzde={s.ram} alt={s.ramGB ? `${s.ramGB.kullanilan.toLocaleString("tr-TR")} / ${s.ramGB.toplam} GB` : undefined} />
+            {diskler(s).map((d) => (
+              <Kaynak key={d.drive} etiket={d.drive === "Disk" ? "Disk" : d.drive.replace(/\$/, "")} yuzde={d.percent}
+                alt={d.totalGB ? `${Math.round(d.totalGB - d.usedGB)} GB boş` : undefined} />
+            ))}
+          </div>
+
+          {/* Terminal: oturum dağılımı */}
+          {terminal && (
+            <div className="mt-3">
+              <div className="flex items-baseline justify-between text-[12px]">
+                <span className="tabular-nums">
+                  <span className="text-[15px] font-bold">{aktif}</span> <span className="text-muted-foreground">aktif oturum</span>
+                </span>
+                <span className={`tabular-nums ${kopuk > 0 ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                  {kopuk > 0 ? `${kopuk} kopuk` : "kopuk yok"}
+                </span>
+              </div>
+              <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-muted" title={`${aktif} aktif · ${kopuk} kopuk`}>
+                {toplam > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aktif / toplam) * 100}%` }} />}
+                {toplam > 0 && <div className="h-full bg-amber-500" style={{ width: `${(kopuk / toplam) * 100}%` }} />}
+              </div>
+            </div>
+          )}
+        </>
       ) : (
-        <div className="mt-3 rounded-[5px] bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">
-          Agent'a ulaşılamıyor · son rapor {onceYaz(s.lastChecked)}
+        <div className="mt-3 rounded-[5px] bg-red-500/10 px-3 py-2.5 text-[12px] text-red-700 dark:text-red-400">
+          Agent'a ulaşılamıyor
+          <span className="block text-[11px] opacity-80">Son rapor {onceYaz(s.lastChecked)}</span>
         </div>
       )}
 
-      <div className="mt-auto pt-3">
-        <div className="flex items-center justify-between gap-2 border-t pt-2 text-[12px] text-muted-foreground">
-          {terminal && acik ? (
-            <span className="tabular-nums">
-              <span className="font-semibold text-foreground">{s.aktifOturum ?? "—"}</span> aktif
-              {(s.kopukOturum ?? 0) > 0 && <span className="text-amber-700 dark:text-amber-400"> · {s.kopukOturum} kopuk</span>}
-            </span>
-          ) : (
-            <span className="tabular-nums">{acik ? `${s.uptime} çalışıyor` : "—"}</span>
-          )}
-          <span className="tabular-nums" title={s.lastChecked}>{terminal && acik ? `${s.uptime} çalışıyor` : onceYaz(s.lastChecked)}</span>
-        </div>
+      {/* Alt bilgi */}
+      <div className="mt-auto flex items-center justify-between gap-2 pt-3 text-[11px] text-muted-foreground">
+        <span className="tabular-nums">{acik ? `${sureOku(s.uptime)} açık` : "—"}</span>
+        <span className="tabular-nums" title={s.lastChecked}>rapor {onceYaz(s.lastChecked)}</span>
       </div>
     </div>
   )
