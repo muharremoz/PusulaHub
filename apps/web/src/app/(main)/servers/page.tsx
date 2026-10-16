@@ -15,8 +15,6 @@ import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import { Icon } from "@/components/shared/icon"
-import type { IconName } from "@/components/shared/icon-registry"
 import { ServerSheet } from "@/components/servers/server-sheet"
 import { TerminalSheet } from "@/components/servers/terminal-sheet"
 import type { Server } from "@/types"
@@ -24,7 +22,7 @@ import type { Server } from "@/types"
 /**
  * Sunucular — yeniden tasarım (16.10.2026).
  *
- * Üstte özet, altında rol gruplu kartlar (Terminaller / Altyapı) ya da tek
+ * Rol gruplu kartlar (Terminaller / Altyapı) ya da tek
  * tablo. Veri /api/servers (agent son raporu + hub.servers); 10 sn'de bir,
  * sekme görünürken yenilenir. Oturum sayıları dashboard ile aynı kural
  * (Server.aktifOturum / kopukOturum).
@@ -125,16 +123,10 @@ export default function ServersPage() {
     kaldir: (s: Server) => setKaldir(s),
   }
 
-  // ── Özet ──────────────────────────────────────────────────
   const acik = sunucular.filter(cevrimici)
   const terminaller = sunucular.filter(terminalMi)
   const aktif = terminaller.reduce((t, s) => t + (s.aktifOturum ?? 0), 0)
   const kopuk = terminaller.reduce((t, s) => t + (s.kopukOturum ?? 0), 0)
-  const ort = (f: (s: Server) => number) => (acik.length ? Math.round(acik.reduce((t, s) => t + f(s), 0) / acik.length) : null)
-  const doluDisk = acik
-    .flatMap((s) => diskler(s).map((d) => ({ sunucu: s.name, ...d })))
-    .reduce<{ sunucu: string; drive: string; percent: number } | null>((m, d) => (!m || d.percent > m.percent ? d : m), null)
-
   return (
     <PageContainer title="Sunucular" description="Sunucuların anlık durumu ve yönetimi">
       <ServerSheet open={sheetAcik} onOpenChange={(o) => { setSheetAcik(o); if (!o) setDuzenleId(null) }} onSaved={() => void yukle()} editServerId={duzenleId} />
@@ -154,22 +146,6 @@ export default function ServersPage() {
           <Button size="sm" className="h-8 gap-1.5 rounded-[5px] text-[12px]" onClick={() => { setDuzenleId(null); setSheetAcik(true) }}>
             <Plus className="size-3.5" /> Sunucu ekle
           </Button>
-        </div>
-
-        {/* Özet */}
-        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 md:grid-cols-3 xl:grid-cols-5">
-          <Ozet ikon="monitor-check" baslik="Çevrimiçi" yukleniyor={yukleniyor}
-            deger={`${acik.length} / ${sunucular.length}`} alt={acik.length === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - acik.length} ulaşılamıyor`}
-            vurgu={acik.length < sunucular.length ? "kritik" : "iyi"} />
-          <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={yukleniyor}
-            deger={String(aktif)} alt={`${terminaller.length} terminal${kopuk ? ` · ${kopuk} kopuk` : ""}`} />
-          <Ozet ikon="zap" baslik="Ortalama CPU" yukleniyor={yukleniyor}
-            deger={ort((s) => s.cpu) == null ? "—" : `%${ort((s) => s.cpu)}`} alt="çevrimiçi sunucular" />
-          <Ozet ikon="layers" baslik="Ortalama RAM" yukleniyor={yukleniyor}
-            deger={ort((s) => s.ram) == null ? "—" : `%${ort((s) => s.ram)}`} alt="çevrimiçi sunucular" />
-          <Ozet ikon="archive" baslik="En dolu disk" yukleniyor={yukleniyor}
-            deger={doluDisk ? `%${Math.round(doluDisk.percent)}` : "—"} alt={doluDisk ? `${doluDisk.sunucu} · ${doluDisk.drive}` : "veri yok"}
-            vurgu={!doluDisk ? undefined : doluDisk.percent >= 90 ? "kritik" : doluDisk.percent >= 75 ? "uyari" : undefined} />
         </div>
 
         {gorunum === "kart" ? (
@@ -210,27 +186,6 @@ export default function ServersPage() {
 }
 
 type Islemler = { duzenle: (s: Server) => void; terminal: (s: Server) => void; kaldir: (s: Server) => void }
-
-function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
-  ikon: IconName; baslik: string; deger: string; alt: string; vurgu?: "iyi" | "uyari" | "kritik"; yukleniyor: boolean
-}) {
-  const renk = vurgu === "kritik" ? "text-red-600 dark:text-red-400" : vurgu === "uyari" ? "text-amber-700 dark:text-amber-400" : vurgu === "iyi" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
-  return (
-    <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
-      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        <Icon name={ikon} size={13} /> {baslik}
-      </p>
-      {yukleniyor ? (
-        <div className="mt-2 space-y-1.5"><Skeleton className="h-7 w-20 rounded-[5px]" /><Skeleton className="h-3 w-28 rounded-[5px]" /></div>
-      ) : (
-        <>
-          <p className={`mt-1 text-2xl font-bold tabular-nums ${renk}`}>{deger}</p>
-          <p className="truncate text-[12px] text-muted-foreground">{alt}</p>
-        </>
-      )}
-    </div>
-  )
-}
 
 function IslemMenusu({ s, islemler }: { s: Server; islemler: Islemler }) {
   const router = useRouter()
