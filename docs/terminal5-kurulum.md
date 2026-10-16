@@ -41,10 +41,11 @@
 ## A2. Domain tarafı (agent gelince Claude yapabilir — onayınla)
 
 - [ ] AD nesnesi `CN=Computers`'a düşerse → `OU=Bilgisayarlar`'a taşı (T4'te düştü)
-- [ ] GPO **`Rdp_KopukOturum_1Saat`** güvenlik filtresine **`PUSULARDP5$`** ekle — filtre bilgisayar
-      bazlı (PUSULARDP$/2$/3$/4$); eklenmezse kopuk oturumlar 1 saatte kapanmaz
+- [ ] GPO **`Rdp_KopukOturum_30Dk`** (16.10.2026'ya kadar adı `Rdp_KopukOturum_1Saat`, süre 1 saatti)
+      güvenlik filtresine yeni terminalin bilgisayar hesabını (`PUSULARDPn$`) ekle — filtre bilgisayar
+      bazlı; eklenmezse disconnect oturumlar 30 dakikada kapanmaz
 - [ ] `gpresult /r /scope:computer` → `Rdp_Camera`, `Office_AppLocker`, `Default Domain Policy`,
-      `Rdp_KopukOturum_1Saat`, `Pusula_DuvarKagidi`
+      `Rdp_KopukOturum_30Dk`, `Pusula_DuvarKagidi`; `MaxDisconnectionTime` = **1800000**
 
 ## B. Betik — `t5-kur.ps1` (T5'te, Domain Admin, yönetici PowerShell)
 
@@ -119,7 +120,8 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
   `tools` içinde `toolsUpgradePolicy` saat eşitleme alanlarından ÖNCE gelmeli).
 - **16.10.2026** — Windows + VMware Tools + agent kullanıcıda kuruldu (PUSULARDP5, 10.15.2.14 sabit,
   Alusup RID 500). Claude: AD nesnesi `CN=Computers` → `OU=Bilgisayarlar`; `Rdp_KopukOturum_1Saat`
-  filtresine `PUSULARDP5$` (5 GPO uygulanıyor, MaxDisconnectionTime 3600000); `t5-kur.ps1` → T3
+  filtresine `PUSULARDP5$` (5 GPO uygulanıyor, MaxDisconnectionTime 3600000 — 16.10 akşam 1800000'e
+  indirildi, GPO adı `Rdp_KopukOturum_30Dk`); `t5-kur.ps1` → T3
   `C:\Kurulum\T5\` (SHA 1457BEA1…); agent standart sürüme (exe 88F5D127, cs DD908867; yerinde
   derlenmiş 5535F2C1 `.bak-20261015`), config.json izni SYSTEM+Administrators; yeni popup
   (27E01418, eskisi `.eski-20261016`). WebView2 Runtime 155.0.4283.60 kuruldu (Microsoft imzalı
