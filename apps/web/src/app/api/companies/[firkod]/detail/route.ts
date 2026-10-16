@@ -32,6 +32,11 @@ export interface WeeklyUsagePoint {
   users:  number | null // o gün oturum açmış kullanıcı sayısı
 }
 
+/** Yoğunluk varsayılan kotaları (elle kota yoksa) */
+const VARSAYILAN_DB_GB      = 5
+const KULLANICI_BASI_CPU    = 5      // %
+const KULLANICI_BASI_RAM_MB = 2048   // 2 GB
+
 export interface CompanyDetail {
   usageCpu:     number  // Firmanın kullandığı CPU yüzdesi (0-100)
   quotaCpu:     number  // 100 — CPU zaten oran
@@ -47,7 +52,10 @@ export interface CompanyDetail {
   userCapacity: number  // Sunucudaki toplam oturum
   dbSizeMB:     number
   dbQuota:      number  // GB — sunucudaki tüm DB'lerin toplam boyutu
-  dbTotalMB:    number  // MB — sunucudaki tüm DB'lerin toplam boyutu (hassas)
+  dbTotalMB:    number  // MB — DB kotası (varsayılan 5 GB)
+  /** Yoğunluk için son 30 günün firma TOPLAMI (user_daily_usage, gün bazında toplanıp ortalanır)
+   *  ve kullanıcı başı varsayılan kotalar: CPU %5, RAM 2 GB × ortalama günlük kullanıcı. */
+  yogunluk30d?: { cpu: number; ramMB: number; users: number; quotaCpu: number; quotaRamMB: number }
   weeklyUsage:  WeeklyUsagePoint[]
   history30d?:  CompanyUsageHistory
   /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
@@ -161,7 +169,8 @@ export async function GET(
     const quotaDiskMB   = quotaDiskGB * 1024
 
     // DB kotası = Companies.DbQuota (varsayılan 1 GB)
-    const dbQuotaGB = c.db_quota ?? 1
+    // Eski varsayılan 1 GB kayıtlı olabilir — onu da varsayılan say (5 GB)
+    const dbQuotaGB = c.db_quota != null && c.db_quota > 0 && c.db_quota !== 1 ? c.db_quota : VARSAYILAN_DB_GB
     const dbQuotaMB = dbQuotaGB * 1024
 
     const detail: CompanyDetail = {
@@ -179,18 +188,18 @@ export async function GET(
       userCapacity: Math.max(userCount, userCapacity),
       dbSizeMB:     firmaDbMB,
       dbQuota:      dbQuotaGB,
-      dbTotalMB:    Math.max(1, dbQuotaMB),  // "payda" artık kota (1 GB)
+      dbTotalMB:    Math.max(1, dbQuotaMB),  // "payda" kota (varsayılan 5 GB)
       weeklyUsage:  [],
     }
 
     // Manuel kota: Companies kolonları default'tan farklıysa "elle atanmış" say.
-    // Default'lar: DB=1 GB, Disk=25 GB, CPU/RAM=0 (atanmamış). Manuel değer
+    // Default'lar: DB=5 GB (eski 1 GB da varsayılan sayılır), Disk=25 GB, CPU/RAM=0 (atanmamış). Manuel değer
     // varsa bar o kotaya göre dolar ve "kullanım / kota" gösterilir.
     detail.manualQuota = {
       cpuPct: (c.quota_cpu ?? 0) > 0                          ? c.quota_cpu!  : null,
       ramGB:  (c.quota_ram ?? 0) > 0                          ? c.quota_ram!  : null,
       diskGB: (c.quota_disk != null && c.quota_disk > 0 && c.quota_disk !== 25) ? c.quota_disk : null,
-      dbGB:   (c.db_quota   != null && c.db_quota   > 0 && c.db_quota   !== 1)   ? c.db_quota   : null,
+      dbGB:   (c.db_quota   != null && c.db_quota   > 0 && c.db_quota   !== 1 && c.db_quota !== VARSAYILAN_DB_GB) ? c.db_quota : null,
     }
 
     // Haftalık kullanım grafiği — firmanın O GÜNKÜ TOPLAM kullanımı, gerçek
@@ -207,12 +216,24 @@ export async function GET(
       interface DiskDayRow { date: string; disk_mb: number | null }
 
       const since = new Date()
-      since.setDate(since.getDate() - 6)
+      since.setDate(since.getDate() - 29)   // 30 gün: grafik son 7 günü, yoğunluk 30 günü kullanır
       const sinceIso = since.toISOString().slice(0, 10)
 
-      const [{ data: userDaysRaw }, { data: diskDaysRaw }] = await Promise.all([
-        sb.schema("hub").from("user_daily_usage")
-          .select("date, username, avg_cpu, avg_ram_mb").eq("firma_no", firkod).gte("date", sinceIso),
+      // kullanıcı × 30 gün 1000 satırı (PostgREST sınırı) aşabilir → sayfalı oku
+      const kullaniciGunleri = async (): Promise<UserDayRow[]> => {
+        const tumu: UserDayRow[] = []
+        for (let bas = 0; bas < 20_000; bas += 1000) {
+          const { data } = await sb.schema("hub").from("user_daily_usage")
+            .select("date, username, avg_cpu, avg_ram_mb").eq("firma_no", firkod).gte("date", sinceIso)
+            .order("date").order("username").range(bas, bas + 999)
+          const parca = (data ?? []) as UserDayRow[]
+          tumu.push(...parca)
+          if (parca.length < 1000) break
+        }
+        return tumu
+      }
+      const [userDaysRaw, { data: diskDaysRaw }] = await Promise.all([
+        kullaniciGunleri(),
         sb.schema("hub").from("company_usage_daily")
           .select("date, disk_mb").eq("company_id", firkod).gte("date", sinceIso),
       ])
@@ -253,6 +274,20 @@ export async function GET(
         })
       }
       detail.weeklyUsage = out
+
+      // Yoğunluk — 30 günün ölçülen günlerinde firma toplamı ortalaması
+      const gunler = [...agg.values()]
+      if (gunler.length) {
+        const ort = (f: (g: { cpu: number; ramMB: number; users: Set<string> }) => number) => gunler.reduce((t, g) => t + f(g), 0) / gunler.length
+        const users = Math.max(1, Math.round(ort((g) => g.users.size)))
+        detail.yogunluk30d = {
+          cpu:        Math.round(ort((g) => g.cpu) * 10) / 10,
+          ramMB:      Math.round(ort((g) => g.ramMB)),
+          users,
+          quotaCpu:   Math.min(100, users * KULLANICI_BASI_CPU),
+          quotaRamMB: users * KULLANICI_BASI_RAM_MB,
+        }
+      }
     } catch { /* tablo yoksa sorun değil */ }
 
     // 30 günlük geçmiş özeti (CompanyUsageDaily) — satış için

@@ -171,16 +171,21 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
   // 30 günlük ortalama bazlı bar değerleri (satış konuşması için daha anlamlı).
   // Geçmiş veri yoksa canlı değerlere düş.
+  // CPU/RAM: 30 günün firma TOPLAMI (y30) — yoksa eski geçmiş özeti / canlı değer.
+  const mq = d.manualQuota;
   const h = d.history30d;
-  const avgRamMB    = h ? h.avgRamGB * 1024 : d.usageRamMB;
+  const y30 = d.yogunluk30d;
+  const avgRamMB    = y30 ? y30.ramMB : h ? h.avgRamGB * 1024 : d.usageRamMB;
   const avgDbMB     = h ? (h.dbStartMB + h.dbEndMB) / 2 : d.dbSizeMB;
-  const avgCpuValue = h ? h.avgCpu : d.usageCpu;
+  const avgCpuValue = y30 ? y30.cpu : h ? h.avgCpu : d.usageCpu;
+  // Varsayılan kota: kullanıcı başı CPU %5 / RAM 2 GB (sunucunun tamamına oranlamak her firmayı %5 gösteriyordu)
+  const cpuKota   = mq?.cpuPct || y30?.quotaCpu || 100;
+  const ramKotaMB = (mq?.ramGB ? mq.ramGB * 1024 : 0) || y30?.quotaRamMB || d.quotaRamMB;
 
   // Manuel kota verildiyse bar o kotaya göre hesaplanır; yoksa mevcut davranış
   // (paylaşımlı sunucu oranı / varsayılan kota).
-  const mq = d.manualQuota;
-  const cpuPct  = mq?.cpuPct ? pctMB(avgCpuValue,    mq.cpuPct)         : pctCpu(avgCpuValue);
-  const ramPct  = mq?.ramGB  ? pctMB(avgRamMB,       mq.ramGB  * 1024)  : pctMB(avgRamMB,      d.quotaRamMB);
+  const cpuPct  = cpuKota === 100 ? pctCpu(avgCpuValue) : pctMB(avgCpuValue, cpuKota);
+  const ramPct  = pctMB(avgRamMB, ramKotaMB);
   const diskPct = mq?.diskGB ? pctMB(d.usageDiskMB,  mq.diskGB * 1024)  : pctMB(d.usageDiskMB, d.quotaDiskMB);
   const dbPct   = mq?.dbGB   ? pctMB(avgDbMB,        mq.dbGB   * 1024)  : pctMB(avgDbMB,       d.dbTotalMB);
 
@@ -216,7 +221,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
           cpuPct: Number(qCpu)  || 0,
           ramGB:  Number(qRam)  || 0,
           diskGB: Number(qDisk) || 25,
-          dbGB:   Number(qDb)   || 1,
+          dbGB:   Number(qDb)   || 5,
         }),
       });
       if (!r.ok) { toast.error("Kota kaydedilemedi"); return; }
@@ -245,9 +250,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
   const metrics = [
     { label: "CPU",        icon: <Cpu className="size-3.5" />,         pct: cpuPct,
-      detay: `Ort %${sayi(avgCpuValue)}${mq?.cpuPct ? ` / %${mq.cpuPct}` : ""}`, manuel: !!mq?.cpuPct },
+      detay: `Ort %${sayi(avgCpuValue)} / %${sayi(cpuKota)}${!mq?.cpuPct && y30 ? ` · ${y30.users} kişi` : ""}`, manuel: !!mq?.cpuPct },
     { label: "RAM",        icon: <MemoryStick className="size-3.5" />, pct: ramPct,
-      detay: `${sayi(avgRamMB / 1024)} / ${sayi(mq?.ramGB ?? d.quotaRamMB / 1024)} GB`, manuel: !!mq?.ramGB },
+      detay: `${sayi(avgRamMB / 1024)} / ${sayi(ramKotaMB / 1024)} GB${!mq?.ramGB && y30 ? ` · ${y30.users} kişi` : ""}`, manuel: !!mq?.ramGB },
     { label: "Disk",       icon: <HardDrive className="size-3.5" />,   pct: diskPct,
       detay: `${sayi(d.usageDiskMB / 1024)} / ${sayi(mq?.diskGB ?? d.quotaDiskMB / 1024)} GB`, manuel: !!mq?.diskGB },
     { label: "Veritabanı", icon: <Database className="size-3.5" />,    pct: dbPct,
@@ -356,15 +361,17 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           Firmanın kaynak kullanımı (son 30 gün ortalaması) ile kotasına oranı.
+          Elle kota yoksa varsayılanlar: CPU kullanıcı başı %5, RAM kullanıcı başı 2 GB
+          (son 30 günün ortalama günlük kullanıcı sayısı), Disk 25 GB, Veritabanı 5 GB.
           4 metriğin ortalaması yoğunluk skorunu oluşturur:
         </p>
 
         <div className="space-y-1.5 mt-1">
           {[
-            { label: "CPU Kullanımı",  icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `Ort %${h?.avgCpu ?? 0} · Peak ${h?.peakCpu == null ? "—" : `%${h.peakCpu}`}` },
-            { label: "RAM Kullanımı",  icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${(avgRamMB/1024).toFixed(1)} / ${d.quotaRam} GB` },
-            { label: "Disk Kullanımı", icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk.toFixed(1)} / ${d.quotaDisk} GB` },
-            { label: "Veritabanı",     icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(d.dbSizeMB / 1024).toFixed(2)} / ${d.dbQuota} GB` },
+            { label: "CPU Kullanımı",  icon: <Cpu className="h-3.5 w-3.5" />,        pct: cpuPct,  detail: `Ort %${avgCpuValue} / %${cpuKota}` },
+            { label: "RAM Kullanımı",  icon: <MemoryStick className="h-3.5 w-3.5" />, pct: ramPct,  detail: `${(avgRamMB/1024).toFixed(1)} / ${(ramKotaMB/1024).toFixed(1)} GB` },
+            { label: "Disk Kullanımı", icon: <HardDrive className="h-3.5 w-3.5" />,   pct: diskPct, detail: `${d.usageDisk.toFixed(1)} / ${(d.quotaDiskMB / 1024).toFixed(0)} GB` },
+            { label: "Veritabanı",     icon: <Database className="h-3.5 w-3.5" />,    pct: dbPct,   detail: `${(avgDbMB / 1024).toFixed(2)} / ${(d.dbTotalMB / 1024).toFixed(0)} GB` },
           ].map((m) => {
             const color = m.pct >= 80 ? "text-red-600 dark:text-red-400" : m.pct >= 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400";
             const bar   = m.pct >= 80 ? "bg-red-500"   : m.pct >= 60 ? "bg-amber-400"   : "bg-emerald-500";
@@ -413,10 +420,10 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
         </p>
         <div className="space-y-2.5 mt-1">
           {[
-            { lbl: "CPU limiti (%)", val: qCpu,  set: setQCpu,  ph: "Kota yok",  unit: "%"  },
-            { lbl: "RAM (GB)",       val: qRam,  set: setQRam,  ph: "Kota yok",  unit: "GB" },
+            { lbl: "CPU limiti (%)", val: qCpu,  set: setQCpu,  ph: "Kullanıcı başı %5",  unit: "%"  },
+            { lbl: "RAM (GB)",       val: qRam,  set: setQRam,  ph: "Kullanıcı başı 2 GB",  unit: "GB" },
             { lbl: "Disk (GB)",      val: qDisk, set: setQDisk, ph: "25 (varsayılan)", unit: "GB" },
-            { lbl: "Veritabanı (GB)",val: qDb,   set: setQDb,   ph: "1 (varsayılan)",  unit: "GB" },
+            { lbl: "Veritabanı (GB)",val: qDb,   set: setQDb,   ph: "5 (varsayılan)",  unit: "GB" },
           ].map((f) => (
             <div key={f.lbl} className="flex items-center gap-2">
               <Label className="text-[11px] text-muted-foreground w-32 shrink-0">{f.lbl}</Label>

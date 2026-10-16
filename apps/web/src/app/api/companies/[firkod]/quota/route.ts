@@ -31,7 +31,7 @@ export async function PUT(
   const cpu  = clamp(Math.round(Number(body.cpuPct) || 0), 0, 100)
   const ram  = clamp(Math.round((Number(body.ramGB)  || 0) * 10) / 10, 0, 1024)
   const disk = clamp(Math.round(Number(body.diskGB) || 25), 1, 100000)
-  const db   = clamp(Math.round(Number(body.dbGB)   || 1),  1, 100000)
+  const db   = clamp(Math.round(Number(body.dbGB)   || 5),  1, 100000)
 
   try {
     const sb = await getSupabaseServer()
