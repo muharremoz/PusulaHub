@@ -7,7 +7,7 @@ import type { Donem, RaporFirma, RaporKullanici } from "@/app/api/servers/[id]/r
 import { DonemSecici, useRapor } from "./tab-rapor"
 
 /**
- * Firma kullanımı — seçilen dönemde bu terminali kullanan firmalar
+ * Firmalar (terminal) — bu terminale atanmış firmalar + seçilen dönemde kullananlar
  * (/api/servers/[id]/rapor, user_daily_usage). Satıra tıklayınca altında
  * o firmanın kullanıcı kırılımı açılır.
  */
@@ -38,33 +38,54 @@ export function TabFirmaKullanim({ serverId }: { serverId: string }) {
     {
       key: "ad", header: "Firma", sortable: true, sortValue: (f) => f.ad ?? f.firma,
       filter: <InlineTextFilter value={adFiltre} onChange={setAdFiltre} placeholder="Firma ara…" />,
-      cell: (f) => f.firma === "—" ? <span className="text-muted-foreground">Firmasız kullanıcı</span>
-        : <Link href={`/companies?firkod=${f.firma}`} onClick={(e) => e.stopPropagation()} className="block truncate hover:underline">{f.ad ?? f.firma}</Link>,
+      cell: (f) => f.firma === "—" ? <span className="text-muted-foreground">Firmasız kullanıcı</span> : (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <Link href={`/companies?firkod=${f.firma}`} onClick={(e) => e.stopPropagation()} className={`truncate hover:underline ${f.saat === 0 ? "text-muted-foreground" : ""}`}>{f.ad ?? f.firma}</Link>
+          {!f.atanmis && (
+            <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground" title="Firma kaydında bu sunucu atanmış değil — kullanıcıları başka terminalden de giriyor olabilir">atanmamış</span>
+          )}
+        </span>
+      ),
     },
-    { key: "kisi", header: "Kişi", sortable: true, align: "right", width: "90px", cell: (f) => <span className="tabular-nums">{f.kisi}</span> },
-    { key: "saat", header: "Toplam saat", sortable: true, align: "right", width: "130px", cell: (f) => <span className="font-medium tabular-nums">{sayi(f.saat)} sa</span> },
-    { key: "kisiBasiSaat", header: "Kişi başı", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">{sayi(f.kisiBasiSaat)} sa</span> },
-    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">%{sayi(f.cpu, 2)}</span> },
-    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">{ram(f.ramMB)}</span> },
+    {
+      key: "kayitli", header: "Kayıtlı", sortable: true, align: "right", width: "100px",
+      cell: (f) => <span className="tabular-nums text-muted-foreground" title="Firmanın AD'deki açık hesap sayısı">{f.kayitli || "—"}</span>,
+    },
+    {
+      key: "kisi", header: "Kullanan", sortable: true, align: "right", width: "110px",
+      cell: (f) => <span className={`tabular-nums ${f.kisi === 0 ? "text-muted-foreground" : ""}`}>{f.kisi}</span>,
+    },
+    { key: "saat", header: "Toplam saat", sortable: true, align: "right", width: "130px", cell: (f) => (f.saat === 0 ? <span className="text-muted-foreground">kullanılmadı</span> : <span className="font-medium tabular-nums">{sayi(f.saat)} sa</span>) },
+    { key: "kisiBasiSaat", header: "Kişi başı", sortable: true, align: "right", width: "120px", cell: (f) => (f.saat === 0 ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">{sayi(f.kisiBasiSaat)} sa</span>) },
+    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (f) => (f.saat === 0 ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">%{sayi(f.cpu, 2)}</span>) },
+    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (f) => (f.saat === 0 ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">{ram(f.ramMB)}</span>) },
   ]
 
   const kSutunlar: TableColumn<RaporKullanici>[] = [
-    { key: "kullanici", header: "Kullanıcı", sortable: true, cell: (u) => <span className="block truncate">{u.kullanici}</span> },
-    { key: "gun", header: "Gün", sortable: true, align: "right", width: "90px", cell: (u) => <span className="tabular-nums">{u.gun}</span> },
-    { key: "saat", header: "Saat", sortable: true, align: "right", width: "100px", cell: (u) => <span className="font-medium tabular-nums">{sayi(u.saat)}</span> },
-    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (u) => <span className="tabular-nums">%{sayi(u.cpu, 2)}</span> },
-    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (u) => <span className="tabular-nums">{ram(u.ramMB)}</span> },
-    { key: "sonGun", header: "Son gün", sortable: true, width: "120px", cell: (u) => <span className="tabular-nums">{tarih(u.sonGun)}</span> },
+    {
+      key: "kullanici", header: "Kullanıcı", sortable: true,
+      cell: (u) => (
+        <span className="flex min-w-0 items-center gap-1.5">
+          <span className={`truncate ${u.kullanmadi ? "text-muted-foreground" : ""}`}>{u.kullanici}</span>
+          {u.pasif && <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">pasif</span>}
+        </span>
+      ),
+    },
+    { key: "gun", header: "Gün", sortable: true, align: "right", width: "90px", cell: (u) => <span className={`tabular-nums ${u.kullanmadi ? "text-muted-foreground" : ""}`}>{u.gun}</span> },
+    { key: "saat", header: "Saat", sortable: true, align: "right", width: "100px", cell: (u) => (u.kullanmadi ? <span className="text-muted-foreground">girmedi</span> : <span className="font-medium tabular-nums">{sayi(u.saat)}</span>) },
+    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (u) => (u.kullanmadi ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">%{sayi(u.cpu, 2)}</span>) },
+    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (u) => (u.kullanmadi ? <span className="text-muted-foreground">—</span> : <span className="tabular-nums">{ram(u.ramMB)}</span>) },
+    { key: "sonGun", header: "Son gün", sortable: true, width: "120px", cell: (u) => <span className="tabular-nums">{u.sonGun ? tarih(u.sonGun) : "—"}</span> },
   ]
 
   return (
     <div className="space-y-3">
       <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
         <div className="flex min-h-7 flex-wrap items-center gap-2 px-2 pb-2 pt-1">
-          <h2 className="text-[13px] font-semibold">Firma kullanımı</h2>
+          <h2 className="text-[13px] font-semibold">Firmalar</h2>
           {veri && !yukleniyor && (
             <span className="text-[12px] tabular-nums text-muted-foreground">
-              {veri.firmalar.length} firma · {veri.toplam.kisi} kişi · {sayi(veri.toplam.saat)} saat
+              {veri.firmalar.length} firma · {veri.firmalar.filter((f) => f.saat > 0).length} kullandı · {veri.toplam.kisi} kişi · {sayi(veri.toplam.saat)} saat
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -89,7 +110,7 @@ export function TabFirmaKullanim({ serverId }: { serverId: string }) {
           height={tabloBoyu(Math.min(firmalar.length, 15), filtreAcik ? 34 : 0)}
           loading={yukleniyor}
           className="rounded-[8px] text-[13px]"
-          emptyState={(veri?.firmalar.length ?? 0) === 0 ? "Bu dönemde bu sunucuyu kullanan firma yok." : "Filtreye uyan firma yok."}
+          emptyState={(veri?.firmalar.length ?? 0) === 0 ? "Bu sunucuya atanmış ya da dönemde kullanan firma yok." : "Filtreye uyan firma yok."}
         />
         {!yukleniyor && firmalar.length > 0 && !seciliFirma && (
           <p className="px-2 pt-2 text-[11px] text-muted-foreground">Kullanıcı kırılımı için bir firmaya tıklayın. Süre: oturumun açık olduğu süre (10 sn örnekleme).</p>
@@ -100,7 +121,7 @@ export function TabFirmaKullanim({ serverId }: { serverId: string }) {
         <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
           <div className="flex min-h-7 items-center gap-2 px-2 pb-2 pt-1">
             <h2 className="truncate text-[13px] font-semibold">{seciliFirma.ad ?? seciliFirma.firma} · kullanıcılar</h2>
-            <span className="text-[12px] tabular-nums text-muted-foreground">{seciliFirma.kisi} kişi · {sayi(seciliFirma.saat)} saat</span>
+            <span className="text-[12px] tabular-nums text-muted-foreground">{seciliFirma.kisi} / {seciliFirma.kullanicilar.length} kişi girdi · {sayi(seciliFirma.saat)} saat</span>
             <button type="button" className="ml-auto text-[12px] font-medium text-primary hover:underline" onClick={() => setSecili(null)}>Kapat</button>
           </div>
           <Table<RaporKullanici>

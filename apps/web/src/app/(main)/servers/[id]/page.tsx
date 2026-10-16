@@ -36,7 +36,6 @@ const mkStaticTabIcon = (I: React.ElementType) => {
   return Wrapped;
 };
 const DashboardTab = mkTabIcon("layers");
-const KullanimTab  = mkTabIcon("chart-pie");
 const MonitorTab   = mkTabIcon("monitor-check");
 const BuildingTab  = mkStaticTabIcon(Building2);
 const ChartTab     = mkTabIcon("chart-bar-increasing");
@@ -175,11 +174,13 @@ export default function ServerDetailPage({ params }: { params: Promise<{ id: str
 
   const tabs: { id: TabId; label: string; icon: React.ElementType; count?: number }[] = [
     { id: "overview", label: "Genel Bakış", icon: DashboardTab },
-    ...(terminal ? [{ id: "kullanim" as TabId, label: "Firma kullanımı", icon: KullanimTab }] : []),
+    /*  Terminalde Firmalar = atanmış + kullanan firmalar ve kullanımları (eski "Firma kullanımı"
+     *  ile AD OU listesi birleşti); diğer sunucularda AD OU listesi.                              */
+    ...(terminal ? [{ id: "kullanim" as TabId, label: "Firmalar", icon: BuildingTab }] : []),
     { id: "sessions", label: "Oturumlar", icon: MonitorTab, count: sessionCount },
     /*  Analiz oturum geçmişi olan sunucularda anlamlı (pratikte terminaller). */
     ...(terminal || sessionCount > 0 ? [{ id: "analiz" as TabId, label: "Analiz", icon: ChartTab }] : []),
-    { id: "companies", label: "Firmalar", icon: BuildingTab },
+    ...(!terminal ? [{ id: "companies" as TabId, label: "Firmalar", icon: BuildingTab }] : []),
     { id: "users", label: "Kullanıcılar", icon: UsersTab, count: userCount },
   ];
 

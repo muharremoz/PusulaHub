@@ -20,8 +20,10 @@ import { requirePermission } from "@/lib/require-permission"
 export type Donem = "bugun" | "7g" | "30g"
 
 export interface RaporNokta { ts: string; cpu: number | null; cpuMax: number | null; ramGB: number | null; ramMaxGB: number | null; oturum: number | null }
-export interface RaporKullanici { kullanici: string; gun: number; saat: number; cpu: number; ramMB: number; sonGun: string }
-export interface RaporFirma { firma: string; ad: string | null; kisi: number; saat: number; kisiBasiSaat: number; cpu: number; ramMB: number; kullanicilar: RaporKullanici[] }
+/** kullanmadi: AD'de kayıtlı ama dönemde bu sunucuda hiç oturumu yok (gun/saat 0) */
+export interface RaporKullanici { kullanici: string; gun: number; saat: number; cpu: number; ramMB: number; sonGun: string; kullanmadi?: boolean; pasif?: boolean }
+/** kayitli: firmanın AD'deki açık hesap sayısı · atanmis: firma bu sunucuya atanmış (companies.windows_server_id) */
+export interface RaporFirma { firma: string; ad: string | null; kisi: number; saat: number; kisiBasiSaat: number; cpu: number; ramMB: number; kullanicilar: RaporKullanici[]; kayitli: number; atanmis: boolean }
 export interface RaporYanit {
   donem: Donem
   baslangic: string
@@ -123,17 +125,34 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       u.gunler.add(r.date); u.ornek += n; u.cpuW += (r.avg_cpu ?? 0) * n; u.ramW += (r.avg_ram_mb ?? 0) * n
       if (r.date > u.sonGun) u.sonGun = r.date
     }
+    // Bu sunucuya atanmış firmalar — dönemde hiç kullanmasa da listede (0 kullanım)
+    const { data: atananlar } = await sb.schema("hub").from("companies").select("company_id").eq("windows_server_id", id).limit(10_000)
+    const atanmisSet = new Set(((atananlar ?? []) as { company_id: string }[]).map((c) => String(c.company_id)))
+    for (const k of atanmisSet) if (!firmaMap.has(k)) firmaMap.set(k, new Map())
+
     const kodlar = [...firmaMap.keys()].filter((k) => k !== "—")
-    const { data: adlar } = kodlar.length
-      ? await sb.schema("hub").from("companies").select("company_id, name").in("company_id", kodlar)
-      : { data: [] }
+    const [{ data: adlar }, adKul] = await Promise.all([
+      kodlar.length ? sb.schema("hub").from("companies").select("company_id, name").in("company_id", kodlar) : Promise.resolve({ data: [] }),
+      kodlar.length
+        ? hepsi<{ ou: string | null; username: string; enabled: boolean }>((a, b) => sb.schema("hub").from("ad_users").select("ou, username, enabled").in("ou", kodlar).order("id").range(a, b))
+        : Promise.resolve([] as { ou: string | null; username: string; enabled: boolean }[]),
+    ])
     const firmaAd = new Map(((adlar ?? []) as { company_id: string; name: string }[]).map((c) => [String(c.company_id), c.name]))
+    const adHesap = new Map<string, { username: string; enabled: boolean }[]>()
+    for (const u of adKul) { const k = (u.ou ?? "").trim(); if (k) adHesap.set(k, [...(adHesap.get(k) ?? []), u]) }
 
     const firmalar: RaporFirma[] = [...firmaMap].map(([firma, km]) => {
       const kullanicilar: RaporKullanici[] = [...km].map(([kullanici, u]) => ({
         kullanici, gun: u.gunler.size, saat: yuvarla(u.ornek * ORNEK_SAAT),
         cpu: u.ornek ? yuvarla(u.cpuW / u.ornek, 2) : 0, ramMB: u.ornek ? Math.round(u.ramW / u.ornek) : 0, sonGun: u.sonGun,
-      })).sort((a, b) => b.saat - a.saat)
+      }))
+      // AD'de olup dönemde hiç girmeyen hesaplar da kırılımda (kullanmadi)
+      const kullanan = new Set(kullanicilar.map((k) => k.kullanici.toLowerCase()))
+      const hesaplar = adHesap.get(firma) ?? []
+      for (const h of hesaplar) {
+        if (!kullanan.has(h.username.toLowerCase())) kullanicilar.push({ kullanici: h.username, gun: 0, saat: 0, cpu: 0, ramMB: 0, sonGun: "", kullanmadi: true, pasif: !h.enabled })
+      }
+      kullanicilar.sort((a, b) => b.saat - a.saat || a.kullanici.localeCompare(b.kullanici, "tr", { numeric: true }))
       const ornek = [...km.values()].reduce((t, u) => t + u.ornek, 0)
       const saat = yuvarla(ornek * ORNEK_SAAT)
       return {
@@ -142,8 +161,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
         cpu: ornek ? yuvarla([...km.values()].reduce((t, u) => t + u.cpuW, 0) / ornek, 2) : 0,
         ramMB: ornek ? Math.round([...km.values()].reduce((t, u) => t + u.ramW, 0) / ornek) : 0,
         kullanicilar,
+        kayitli: hesaplar.filter((h) => h.enabled).length,
+        atanmis: atanmisSet.has(firma),
       }
-    }).sort((a, b) => b.saat - a.saat)
+    }).sort((a, b) => b.saat - a.saat || a.firma.localeCompare(b.firma, "tr", { numeric: true }))
 
     const yanit: RaporYanit = {
       donem, baslangic: bas.toISOString(), seri, ozet, firmalar,
