@@ -45,6 +45,15 @@ const SERVICE = "SQL Backup Master"
 /** Masaüstü arayüzünün süreç adı (uzantısız) */
 const UI_PROCESS = "SQLBackupMaster"
 
+/** Ürünün günlük klasörü — iş sürerken her veritabanında bir satır yazar */
+const LOG_KLASOR = "C:/ProgramData/Key Metric Software/SQL Backup Master/logs"
+
+/**
+ * Çıktı bu önekle başlıyorsa iş yapılmadı: yedek işi sürüyordu. Hata değil —
+ * saatlik eşitleme (lib/bm-zamanli.ts) veritabanını sonra listeye alır.
+ */
+export const SBM_ATLANDI = "ATLANDI"
+
 const DATA_NS   = "http://schemas.datacontract.org/2004/07/SQLBackupMaster.Data"
 const ARRAYS_NS = "http://schemas.microsoft.com/2003/10/Serialization/Arrays"
 
@@ -61,6 +70,7 @@ function psQuote(s: string): string {
  * yollar ileri bölü ile.
  *
  * Akış — sırası önemli:
+ *   0. Yedek işi sürüyorsa (son 10 dk günlük yazılmış) DOKUNMA, `ATLANDI` yaz.
  *   1. Arayüz açıksa DUR. Açık arayüz kapanırken bellekteki hali dosyanın
  *      üstüne yazar ve eklediğimiz kayıt sessizce kaybolur.
  *   2. Zaman damgalı yedek al (ürünün kendi .bak'ı üzerine yazılıyor,
@@ -79,6 +89,12 @@ export function buildAddDatabasesToBackupJobs(dbNames: string[]): string {
     `$dbs=@(${liste})`,
     `$f='${JOBS_XML}'`,
     `$svc='${SERVICE}'`,
+
+    /* 0) Yedek işi sürüyorsa dokunma — servisi durdurmak işi yarıda keser ve kalan
+     *    veritabanları o turda yedeklenmez (16.10.2026 12:18: öğlen turu 5111'de
+     *    kesildi, sonrakiler atlandı). esitleBackupMaster ile aynı ölçüt. */
+    `$lg=(Get-ChildItem -LiteralPath '${LOG_KLASOR}' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1)`,
+    `if ($lg -and $lg.LastWriteTime -gt (Get-Date).AddMinutes(-10)) { Write-Output ('${SBM_ATLANDI} yedek isi suruyor - liste saatlik esitlemede guncellenecek'); exit 0 }`,
 
     /* 1) Arayüz açıksa dokunma */
     `if (Get-Process -Name '${UI_PROCESS}' -ErrorAction SilentlyContinue) { throw ('SQL Backup Master arayuzu acik; kapatilmadan Jobs.xml duzenlenemez') }`,

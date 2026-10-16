@@ -9,7 +9,7 @@ import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { apiKullaniciAdi, sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
-import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
+import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
@@ -1561,12 +1561,26 @@ export async function POST(req: NextRequest) {
                    * akisi gostermeye devam eder.
                    */
                   if (sqlTarget?.agent && restoredDbNames.length > 0) {
-                    await runStep(
-                      sqlTarget.agent,
-                      "sbm_add",
-                      `SQL Backup Master yedek görevine ekleniyor (${restoredDbNames.length} veritabanı)`,
-                      buildAddDatabasesToBackupJobs(restoredDbNames),
-                    )
+                    /*  runStep çıktıya bakmıyor; yedek işi sürerken komut dokunmadan
+                     *  "ATLANDI" der (servisi durdurmak işi yarıda keser) — bunu
+                     *  "eklendi" diye göstermemek için çıktı burada okunuyor.      */
+                    const etiket = `SQL Backup Master yedek görevine ekleniyor (${restoredDbNames.length} veritabanı)`
+                    send("step", { stepId: "sbm_add", label: etiket, status: "running" })
+                    try {
+                      const r = await execOnAgent(sqlTarget.agent.ip, sqlTarget.agent.port, sqlTarget.agent.apiKey,
+                        buildAddDatabasesToBackupJobs(restoredDbNames), 90)
+                      const cikti = (r.stdout ?? "").trim()
+                      const hata = (r.stderr ?? "").trim()
+                      if (r.exitCode !== 0 || hata) {
+                        send("step", { stepId: "sbm_add", label: etiket, status: "error", error: hata || cikti || `exit ${r.exitCode}` })
+                      } else if (cikti.startsWith(SBM_ATLANDI)) {
+                        send("step", { stepId: "sbm_add", label: "Backup Master yedek işi sürüyor — liste saatlik eşitlemede güncellenecek", status: "done", output: cikti })
+                      } else {
+                        send("step", { stepId: "sbm_add", label: etiket, status: "done", output: cikti })
+                      }
+                    } catch (err) {
+                      send("step", { stepId: "sbm_add", label: etiket, status: "error", error: err instanceof Error ? err.message : String(err) })
+                    }
                   }
                 },
               )

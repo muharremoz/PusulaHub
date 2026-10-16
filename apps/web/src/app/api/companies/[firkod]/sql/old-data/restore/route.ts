@@ -36,7 +36,7 @@ import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/l
 import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginArama } from "@/lib/firma-adlandirma"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
-import { buildAddDatabasesToBackupJobs } from "@/lib/sql-backup-master"
+import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import {
   buildPullBakFromDepo,
   buildPullAttachFilesFromDepo,
@@ -352,6 +352,9 @@ export async function POST(
                 const hata = (r.stderr ?? "").trim()
                 if (r.exitCode !== 0 || hata) {
                   step("sbm_add", "Yedek görevine eklenemedi — elle eklenmeli", "error", { error: hata || `exit ${r.exitCode}` })
+                } else if ((r.stdout ?? "").trim().startsWith(SBM_ATLANDI)) {
+                  // Yedek işi sürüyordu — servise dokunulmadı; saatlik eşitleme ekler (lib/bm-zamanli.ts)
+                  step("sbm_add", "Backup Master yedek işi sürüyor — liste saatlik eşitlemede güncellenecek", "done")
                 } else {
                   step("sbm_add", `Yedek görevine eklendi: ${eklenecek.length} veritabanı`, "done")
                 }

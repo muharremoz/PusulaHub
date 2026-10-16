@@ -165,7 +165,7 @@ export function StepRun({
   const [showManual, setShowManual] = useState(false)
   /*  SQL Backup Master eklemesi kritik olmayan bir adim: basarisiz olsa
    *  da kurulum devam ediyor. Sonucu modalda gostermek icin izleniyor.  */
-  const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "hata">("yok")
+  const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "sonra" | "hata">("yok")
   /*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor — guvenlik kaydı yazılan
    *  DB otomatik yedeğe girer. Kayıt yazılamayan DB'yi ayrıca göstermek için. */
   const [guvenlikDurum, setGuvenlikDurum] = useState<Record<string, "tamam" | "hata">>({})
@@ -415,7 +415,8 @@ export function StepRun({
         onStep={(st) => {
           // sbm_add: eski "listeye ekle" adımı; bm_esitle: guvenlik ile eşitleme (sonra gelir, son sözü o söyler)
           if (st.stepId === "sbm_add" || st.stepId === "bm_esitle") {
-            if (st.status === "done")  setSbmDurum("tamam")
+            // Yedek işi sürüyorsa servise dokunulmaz, saatlik eşitleme ekler (lib/bm-zamanli.ts)
+            if (st.status === "done")  setSbmDurum(/sürüyor|atlandı/i.test(st.label) ? "sonra" : "tamam")
             if (st.status === "error") setSbmDurum("hata")
           }
           if (st.stepId.startsWith("sql_guvenlik_") && !st.stepId.startsWith("sql_guvenlik_skip")) {
@@ -768,9 +769,10 @@ function ElleKart({ ikon, renk, baslik, children }: { ikon: React.ReactNode; ren
 }
 
 /** Yedek yazılımının bu kurulumdaki durumu — tek satır, nokta + ad + sonuç */
-function YedekDurum({ ad, durum }: { ad: string; durum: "yok" | "tamam" | "hata" }) {
+function YedekDurum({ ad, durum }: { ad: string; durum: "yok" | "tamam" | "sonra" | "hata" }) {
   const [renk, metin] =
     durum === "tamam" ? ["bg-emerald-500", "otomatik eklendi"]
+    : durum === "sonra" ? ["bg-amber-500", "yedek işi sürüyordu — saatlik eşitlemede eklenecek"]
     : durum === "hata" ? ["bg-red-500", "eklenemedi"]
     : ["bg-muted-foreground/40", "çalışmadı"]
   return (

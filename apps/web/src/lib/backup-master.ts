@@ -1,6 +1,7 @@
-import "server-only"
-import { execOnAgent } from "@/lib/agent-poller"
-import { withSqlConnection } from "@/lib/sql-external"
+// "server-only" YOK: custom server.ts saatlik eşitlemeyi (lib/bm-zamanli.ts) başlatıyor;
+// o zincirde "server-only" sunucuyu düşürür (bkz. lib/agent-poller.ts). İstemci bunu import etmez.
+import { execOnAgent } from "./agent-poller"
+import { withSqlConnection } from "./sql-external"
 
 /**
  * SQL Backup Master iş listelerini `sirket.dbo.guvenlik` ile eşitler.
