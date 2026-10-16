@@ -34,40 +34,27 @@ export function TabFirmaKullanim({ serverId }: { serverId: string }) {
   const seciliFirma = veri?.firmalar.find((f) => f.firma === secili) ?? null
 
   const sutunlar: TableColumn<RaporFirma>[] = [
-    { key: "firma", header: "Kod", sortable: true, width: "80px", cell: (f) => <span className="tabular-nums text-muted-foreground">{f.firma}</span> },
+    { key: "firma", header: "Kod", sortable: true, width: "90px", cell: (f) => <span className="tabular-nums text-muted-foreground">{f.firma}</span> },
     {
       key: "ad", header: "Firma", sortable: true, sortValue: (f) => f.ad ?? f.firma,
       filter: <InlineTextFilter value={adFiltre} onChange={setAdFiltre} placeholder="Firma ara…" />,
       cell: (f) => f.firma === "—" ? <span className="text-muted-foreground">Firmasız kullanıcı</span>
         : <Link href={`/companies?firkod=${f.firma}`} onClick={(e) => e.stopPropagation()} className="block truncate hover:underline">{f.ad ?? f.firma}</Link>,
     },
-    { key: "kisi", header: "Kişi", sortable: true, align: "right", width: "80px", cell: (f) => <span className="tabular-nums">{f.kisi}</span> },
-    {
-      key: "saat", header: "Toplam saat", sortable: true, align: "right", width: "180px",
-      cell: (f) => {
-        const enCok = veri?.firmalar[0]?.saat || 1
-        return (
-          <span className="flex items-center justify-end gap-2">
-            <span className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-              <span className="block h-full rounded-full bg-primary/70" style={{ width: `${Math.min(100, (f.saat / enCok) * 100)}%` }} />
-            </span>
-            <span className="w-14 text-right font-medium tabular-nums">{sayi(f.saat)}</span>
-          </span>
-        )
-      },
-    },
-    { key: "kisiBasiSaat", header: "Kişi başı", sortable: true, align: "right", width: "100px", cell: (f) => <span className="tabular-nums">{sayi(f.kisiBasiSaat)} sa</span> },
-    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "100px", cell: (f) => <span className="tabular-nums">%{sayi(f.cpu, 2)}</span> },
-    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "100px", cell: (f) => <span className="tabular-nums">{ram(f.ramMB)}</span> },
+    { key: "kisi", header: "Kişi", sortable: true, align: "right", width: "90px", cell: (f) => <span className="tabular-nums">{f.kisi}</span> },
+    { key: "saat", header: "Toplam saat", sortable: true, align: "right", width: "130px", cell: (f) => <span className="font-medium tabular-nums">{sayi(f.saat)} sa</span> },
+    { key: "kisiBasiSaat", header: "Kişi başı", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">{sayi(f.kisiBasiSaat)} sa</span> },
+    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">%{sayi(f.cpu, 2)}</span> },
+    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (f) => <span className="tabular-nums">{ram(f.ramMB)}</span> },
   ]
 
   const kSutunlar: TableColumn<RaporKullanici>[] = [
     { key: "kullanici", header: "Kullanıcı", sortable: true, cell: (u) => <span className="block truncate">{u.kullanici}</span> },
-    { key: "gun", header: "Gün", sortable: true, align: "right", width: "80px", cell: (u) => <span className="tabular-nums">{u.gun}</span> },
+    { key: "gun", header: "Gün", sortable: true, align: "right", width: "90px", cell: (u) => <span className="tabular-nums">{u.gun}</span> },
     { key: "saat", header: "Saat", sortable: true, align: "right", width: "100px", cell: (u) => <span className="font-medium tabular-nums">{sayi(u.saat)}</span> },
-    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "100px", cell: (u) => <span className="tabular-nums">%{sayi(u.cpu, 2)}</span> },
-    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "100px", cell: (u) => <span className="tabular-nums">{ram(u.ramMB)}</span> },
-    { key: "sonGun", header: "Son gün", sortable: true, width: "110px", cell: (u) => <span className="tabular-nums">{tarih(u.sonGun)}</span> },
+    { key: "cpu", header: "Ort. CPU", sortable: true, align: "right", width: "120px", cell: (u) => <span className="tabular-nums">%{sayi(u.cpu, 2)}</span> },
+    { key: "ramMB", header: "Ort. RAM", sortable: true, align: "right", width: "120px", cell: (u) => <span className="tabular-nums">{ram(u.ramMB)}</span> },
+    { key: "sonGun", header: "Son gün", sortable: true, width: "120px", cell: (u) => <span className="tabular-nums">{tarih(u.sonGun)}</span> },
   ]
 
   return (
