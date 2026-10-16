@@ -227,16 +227,18 @@ function Grup({ baslik, alt, sunucular, yukleniyor, islemler }: { baslik: string
 const sureOku = (u: string | undefined) =>
   !u || u === "—" ? "—" : u.replace(/(\d+)g/, "$1 gün").replace(/(\d+)s\b/, "$1 sa").replace(/(\d+)d\b/, "$1 dk")
 
-/** Kaynak kutusu: etiket, büyük yüzde, ince çubuk, alt bilgi */
+/** Kaynak kutusu: etiket (sağ üstte miktar), büyük yüzde, ince çubuk */
 function Kaynak({ etiket, yuzde, alt }: { etiket: string; yuzde: number | null | undefined; alt?: string }) {
   return (
     <div className="min-w-0 rounded-[5px] bg-[var(--section-bg)] px-2.5 py-2">
-      <p className="truncate text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{etiket}</p>
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{etiket}</p>
+        {alt && <p className="min-w-0 truncate text-[11px] tabular-nums text-muted-foreground" title={alt}>{alt}</p>}
+      </div>
       <p className={`text-[18px] font-bold leading-tight tabular-nums ${seviyeMetin(yuzde)}`}>{yuzde == null ? "—" : `%${Math.round(yuzde)}`}</p>
       <div className="mt-1 h-1 overflow-hidden rounded-full bg-muted">
         <div className={`h-full rounded-full ${seviyeRenk(yuzde)}`} style={{ width: `${Math.min(100, yuzde ?? 0)}%` }} />
       </div>
-      <p className="mt-1 truncate text-[11px] tabular-nums text-muted-foreground" title={alt}>{alt ?? " "}</p>
     </div>
   )
 }
