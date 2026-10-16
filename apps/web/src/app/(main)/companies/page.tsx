@@ -2444,7 +2444,7 @@ tr:nth-child(even) td{background:#fafafa}
                       cell: (u) => <span className="tabular-nums text-muted-foreground">{u.lastLogin || "—"}</span>,
                     },
                     {
-                      key: "enabled", header: "Durum", sortable: true, width: "100px",
+                      key: "enabled", header: "Durum", sortable: true, align: "center", width: "100px",
                       sortValue: (u) => (u.enabled ? 1 : 0),
                       filter: <InlineSelectFilter options={["aktif", "pasif"] as const} selected={kulDurumFiltre} onChange={setKulDurumFiltre} getLabel={(o) => (o === "aktif" ? "Aktif" : "Pasif")} />,
                       cell: (u) => (
@@ -2455,11 +2455,11 @@ tr:nth-child(even) td{background:#fafafa}
                     },
                     {
                       // Office yetkisi — AppLocker `Office_Kullanicilari` grubuna bakıyor; menüden değiştiriliyor
-                      key: "office", header: "Office", sortable: true, width: "90px",
+                      key: "office", header: "Office", sortable: true, align: "center", width: "90px",
                       sortValue: (u) => (officeVar(u) ? 1 : 0),
                       filter: <InlineSelectFilter options={["var", "yok"] as const} selected={kulOfficeFiltre} onChange={setKulOfficeFiltre} getLabel={(o) => (o === "var" ? "Var" : "Yok")} />,
                       cell: (u) => (
-                        <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${officeVar(u) ? "bg-sky-500/15 text-sky-700 dark:text-sky-400" : "bg-muted text-muted-foreground"}`}>
+                        <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${officeVar(u) ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
                           {officeVar(u) ? "Var" : "Yok"}
                         </span>
                       ),
@@ -2840,7 +2840,7 @@ tr:nth-child(even) td{background:#fafafa}
                       },
                     },
                     {
-                      key: "Status", header: "Durum", sortable: true, width: "110px",
+                      key: "Status", header: "Durum", sortable: true, align: "center", width: "110px",
                       sortValue: (db) => (online(db) ? 1 : 0),
                       filter: <InlineSelectFilter options={["online", "diger"] as const} selected={dbDurumFiltre} onChange={setDbDurumFiltre} getLabel={(o) => (o === "online" ? "Çevrimiçi" : "Çevrimdışı")} />,
                       cell: (db) => (
