@@ -29,6 +29,10 @@ export interface DashSunucu {
   calisma: string | null          // uptime
   aktifKullanici: number | null   // Active oturumu olan farklı kullanıcı
   atanmisKullanici: number | null // sunucuya atanmış firmaların AD kullanıcıları
+  /** Anlık oturum — server_metrics ile AYNI kural (console/services hariç; aktif = state Active).
+   *  Dashboard'daki tüm "şimdi" sayıları bundan; geçmiş eğri de aynı kuralla yazılıyor. */
+  aktifOturum: number | null
+  kopukOturum: number | null
 }
 
 export interface DashDurum {
@@ -94,6 +98,8 @@ async function topla(): Promise<DashDurum> {
     const cevrimici = a?.status === "online"
     const oturum = a?.lastReport?.sessions
     const ramKul = m ? (m.ram.realUsedMB ?? m.ram.usedMB) : 0
+    const rdpOturum = oturum && cevrimici ? oturum.filter((x) => !/console|services/i.test(x.sessionType ?? "")) : null
+    const aktifOturum = rdpOturum ? rdpOturum.filter((x) => /^active$/i.test(x.state ?? "")).length : null
     return {
       id: r.id, slug: slugify(r.name), ad: r.name, ip: r.ip,
       roller: roller.get(r.id) ?? [],
@@ -106,6 +112,8 @@ async function topla(): Promise<DashDurum> {
       calisma: m && cevrimici ? sureYaz(m.uptimeSeconds) : null,
       aktifKullanici: oturum && cevrimici ? new Set(oturum.filter((s) => s.username && s.state === "Active").map((s) => s.username.toLowerCase())).size : null,
       atanmisKullanici: atanmis.get(r.id) ?? null,
+      aktifOturum,
+      kopukOturum: rdpOturum && aktifOturum != null ? rdpOturum.length - aktifOturum : null,
     }
   })
 

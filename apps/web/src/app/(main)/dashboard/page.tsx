@@ -113,7 +113,10 @@ export default function DashboardPage() {
 
   const sunucular = veri?.sunucular ?? []
   const cevrimici = sunucular.filter((s) => s.cevrimici).length
-  const aktifKisi = sunucular.reduce((t, s) => t + (s.aktifKullanici ?? 0), 0)
+  // Anlık oturum: yalnız terminaller, server_metrics ile aynı kural (bkz. DashSunucu.aktifOturum)
+  const anlikOturum = sunucular.filter((s) => s.roller.includes("RDP")).reduce((t, s) => t + (s.aktifOturum ?? 0), 0)
+  const anlikKopuk = sunucular.filter((s) => s.roller.includes("RDP")).reduce((t, s) => t + (s.kopukOturum ?? 0), 0)
+  const anlikSunucu = new Map(sunucular.map((s) => [s.ad, s]))
   const terminaller = sunucular.filter((s) => s.roller.includes("RDP"))
   const ilkYukleme = !veri && yukleniyor
 
@@ -134,8 +137,8 @@ export default function DashboardPage() {
           <Ozet ikon="monitor-check" baslik="Sunucular" yukleniyor={ilkYukleme}
             deger={`${cevrimici} / ${sunucular.length}`} alt={cevrimici === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - cevrimici} ulaşılamıyor`}
             vurgu={cevrimici < sunucular.length ? "kritik" : "iyi"} />
-          <Ozet ikon="users" baslik="Çalışan kişi" yukleniyor={ilkYukleme}
-            deger={String(aktifKisi)} alt={`${terminaller.length} terminalde aktif oturum`} />
+          <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={ilkYukleme}
+            deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} kopuk` : ""}`} />
           <Ozet ikon="shield-check" baslik="Yedek" yukleniyor={ilkYukleme}
             deger={!veri?.yedek ? "—" : veri.yedek.sorunlu > 0 ? `${veri.yedek.sorunlu} sorunlu` : veri.yedek.gecikmis > 0 ? `${veri.yedek.gecikmis} gecikmiş` : "Sağlıklı"}
             alt={veri?.yedek ? `${veri.yedek.saglikli} / ${veri.yedek.toplam} veritabanı güncel` : "okunamadı"}
@@ -237,7 +240,7 @@ export default function DashboardPage() {
                         <p className="text-[12px] text-muted-foreground">Tüm terminallerin aktif oturum toplamı · 5 dk</p>
                       </div>
                       <div className="flex shrink-0 gap-4 text-right">
-                        <Deger baslik="Şimdi">{o?.simdi ?? "—"}</Deger>
+                        <Deger baslik="Şimdi" title="Anlık — agent son raporu">{veri ? anlikOturum : o?.simdi ?? "—"}</Deger>
                         <Deger baslik="Bugün zirve">
                           {o?.zirve ? <>{o.zirve.kisi}<span className="text-[12px] font-medium text-muted-foreground"> · {saat(o.zirve.ts)}</span></> : "—"}
                         </Deger>
@@ -245,7 +248,7 @@ export default function DashboardPage() {
                           {o?.hafta ? <>{o.hafta.kisi}<span className="text-[12px] font-medium text-muted-foreground"> · {gun(o.hafta.ts)}</span></> : "—"}
                         </Deger>
                         <Deger baslik="Kopuk" title="Bağlantısı kopmuş ama kapanmamış oturum — RAM tutmaya devam eder">
-                          <span className={(o?.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : ""}>{o?.kopuk ?? "—"}</span>
+                          <span className={(veri ? anlikKopuk : o?.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : ""}>{veri ? anlikKopuk : o?.kopuk ?? "—"}</span>
                         </Deger>
                       </div>
                     </div>
@@ -281,9 +284,9 @@ export default function DashboardPage() {
                       return (
                         <li key={t.ad} className="grid grid-cols-[1fr_repeat(5,64px)] items-center gap-2 px-4 py-2 text-[13px] tabular-nums">
                           <span className="truncate font-medium">{t.ad}</span>
-                          <span className="text-right font-semibold">{t.simdi ?? "—"}</span>
+                          <span className="text-right font-semibold">{anlikSunucu.get(t.ad)?.aktifOturum ?? t.simdi ?? "—"}</span>
                           <span className="text-right text-muted-foreground" title={`Bugün ${new Date(t.zirveTs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}>{t.zirve}</span>
-                          <span className={`text-right ${(t.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>{t.kopuk ?? "—"}</span>
+                          {(() => { const k = anlikSunucu.get(t.ad)?.kopukOturum ?? t.kopuk; return <span className={`text-right ${(k ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>{k ?? "—"}</span> })()}
                           {yuzde(t.cpu)}
                           {yuzde(t.ram)}
                         </li>
