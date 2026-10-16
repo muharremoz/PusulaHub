@@ -43,6 +43,8 @@ interface FirmaCompany {
   email: string
   phone: string
   userCount: number
+  /** Kullanıcı hakkı (hub.companies.user_count — lisans API ya da elle hak) */
+  licenseCount?: number
   lisansBitis: string
   /** CRM'deki müşteri temsilcisi — CRM'e ulaşılamazsa null */
   temsilci?: { id: string; ad: string; parsKodu: number | null; aktif: boolean } | null
@@ -2348,7 +2350,7 @@ tr:nth-child(even) td{background:#fafafa}
                   return (
                     <div className="hidden shrink-0 items-center gap-4 lg:flex">
                       <Kutu baslik="Kullanıcı" title="AD hesabı / kullanıcı hakkı">
-                        {tabUsers.length}<span className="text-[12px] font-medium text-muted-foreground"> / {selectedFirma.userCount}</span>
+                        {tabUsers.length}<span className="text-[12px] font-medium text-muted-foreground"> / {selectedFirma.licenseCount ?? "—"}</span>
                       </Kutu>
                       <Ayrac />
                       <Kutu baslik="Hizmet">{hizmetSayisi}</Kutu>

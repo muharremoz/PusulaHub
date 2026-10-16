@@ -9,6 +9,12 @@ import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 import type { DashDurum, DashSunucu, DikkatOge } from "@/app/api/dashboard/durum/route"
+import type { DashFirmalar, DashFirmaSatir } from "@/app/api/dashboard/firmalar/route"
+import dynamic from "next/dynamic"
+
+const OturumGrafik = dynamic(() => import("@/components/dashboard/oturum-grafik").then((m) => m.OturumGrafik), {
+  ssr: false, loading: () => <Skeleton className="h-full w-full rounded-[5px]" />,
+})
 
 /**
  * Dashboard — 1. aşama (16.10.2026): üstte özet, "Dikkat gerektirenler",
@@ -29,6 +35,23 @@ export default function DashboardPage() {
   const [hata, setHata] = useState<string | null>(null)
   const [yukleniyor, setYukleniyor] = useState(true)
   const [tumDikkat, setTumDikkat] = useState(false)
+  const [firma, setFirma] = useState<DashFirmalar | null>(null)
+  const [firmaYukleniyor, setFirmaYukleniyor] = useState(true)
+
+  // Firmalar + hareket: sunucu tarafı 5 dk önbellekli, aynı 60 sn döngüde yenilenir
+  const firmaYukle = useCallback(async () => {
+    try {
+      const r = await fetch("/api/dashboard/firmalar", { cache: "no-store" })
+      if (r.ok) setFirma((await r.json()) as DashFirmalar)
+    } catch { /* bölüm boş kalır, üst kısım etkilenmez */ }
+    finally { setFirmaYukleniyor(false) }
+  }, [])
+
+  useEffect(() => {
+    void firmaYukle()
+    const t = setInterval(() => { if (document.visibilityState === "visible") void firmaYukle() }, YENILEME_MS)
+    return () => clearInterval(t)
+  }, [firmaYukle])
 
   const yukle = useCallback(async () => {
     setYukleniyor(true)
@@ -158,6 +181,75 @@ export default function DashboardPage() {
               : sunucular.map((s) => <SunucuKarti key={s.id} s={s} />)}
           </div>
         </section>
+
+        {/* Firmalar + bugün */}
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+            <h2 className="px-2 pb-2 pt-1 text-[13px] font-semibold">Firmalar</h2>
+            <div className="space-y-2">
+              <FirmaListesi baslik="Lisansı dolan" yukleniyor={firmaYukleniyor}
+                bos="Önümüzdeki 30 günde lisansı dolan firma yok."
+                satirlar={[
+                  ...(firma?.lisans.dolmus ?? []).map((x) => ({ ...x, kritik: true })),
+                  ...(firma?.lisans.yaklasan ?? []).map((x) => ({ ...x, kritik: (x.deger ?? 99) <= 7 })),
+                ]}
+                not={firma ? `${firma.lisans.dolmus.length} dolmuş · ${firma.lisans.yaklasan.length} yaklaşan` : undefined} />
+              <FirmaListesi baslik="Kullanıcı hakkını aşanlar" yukleniyor={firmaYukleniyor}
+                bos="Açık hesap sayısı hakkını aşan firma yok."
+                satirlar={(firma?.hakAsan ?? []).map((x) => ({ ...x, rozet: `+${x.deger}` }))} />
+              <FirmaListesi baslik="En yoğun 5 firma" yukleniyor={firmaYukleniyor}
+                bos="Yoğunluk verisi yok."
+                satirlar={(firma?.yogun ?? []).map((x) => ({ ...x, skor: x.deger }))} />
+            </div>
+          </section>
+
+          <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+            <h2 className="px-2 pb-2 pt-1 text-[13px] font-semibold">Bugün</h2>
+            <div className="space-y-2">
+              <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[13px] font-medium">Terminal oturumları</p>
+                    <p className="text-[12px] text-muted-foreground">Tüm terminallerin aktif oturum toplamı · 5 dk</p>
+                  </div>
+                  <div className="flex gap-4 text-right">
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Şimdi</p>
+                      <p className="text-[15px] font-semibold tabular-nums">{firma?.oturum.simdi ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Zirve</p>
+                      <p className="text-[15px] font-semibold tabular-nums">
+                        {firma?.oturum.zirve ? (
+                          <>
+                            {firma.oturum.zirve.kisi}
+                            <span className="text-[12px] font-medium text-muted-foreground">
+                              {" · "}{new Date(firma.oturum.zirve.ts).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          </>
+                        ) : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-2 h-[160px]">
+                  {firmaYukleniyor ? <Skeleton className="h-full w-full rounded-[5px]" /> : <OturumGrafik seri={firma?.oturum.seri ?? []} />}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <HareketKutusu baslik="Aktarım" yukleniyor={firmaYukleniyor}
+                  deger={firma?.hareket.aktarimBugun ?? null}
+                  alt={firma?.hareket.aktarimBugun == null ? "okunamadı" : `başladı · ${firma.hareket.aktarimTamamlanan ?? 0} tamamlandı`} />
+                <HareketKutusu baslik="Mesaj" yukleniyor={firmaYukleniyor}
+                  deger={firma?.hareket.mesajBugun ?? null}
+                  alt={firma ? `${firma.hareket.mesajAlici} alıcı · ${firma.hareket.mesajOkunan} okundu` : ""} />
+                <HareketKutusu baslik="Anket · 30 gün" yukleniyor={firmaYukleniyor}
+                  deger={firma?.hareket.anket?.yanitlanan ?? null}
+                  alt={firma?.hareket.anket ? `yanıt · ${firma.hareket.anket.gonderilen} kişiye gitti` : "okunamadı"} />
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </PageContainer>
   )
@@ -267,5 +359,76 @@ function SunucuKarti({ s }: { s: DashSunucu }) {
         </div>
       )}
     </Link>
+  )
+}
+
+type FirmaSatiri = DashFirmaSatir & { kritik?: boolean; rozet?: string; skor?: number }
+
+function FirmaListesi({ baslik, satirlar, bos, not, yukleniyor }: {
+  baslik: string; satirlar: FirmaSatiri[]; bos: string; not?: string; yukleniyor: boolean
+}) {
+  const [tumu, setTumu] = useState(false)
+  const gorunen = tumu ? satirlar : satirlar.slice(0, 5)
+  return (
+    <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
+      <div className="flex items-baseline gap-2 border-b px-4 py-2">
+        <p className="text-[13px] font-medium">{baslik}</p>
+        {!yukleniyor && satirlar.length > 0 && <span className="text-[12px] tabular-nums text-muted-foreground">{not ?? satirlar.length}</span>}
+      </div>
+      {yukleniyor ? (
+        <div className="space-y-2 px-4 py-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-[5px]" />)}</div>
+      ) : satirlar.length === 0 ? (
+        <p className="px-4 py-3 text-[12px] text-muted-foreground">{bos}</p>
+      ) : (
+        <>
+          <ul className="divide-y">
+            {gorunen.map((x) => (
+              <li key={x.firkod}>
+                <Link href={`/companies?firkod=${x.firkod}`} className="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/30">
+                  <span className="w-12 shrink-0 text-[12px] tabular-nums text-muted-foreground">{x.firkod}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium">{x.ad}</p>
+                    <p className={`truncate text-[12px] ${x.kritik ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{x.detay}</p>
+                  </div>
+                  {x.rozet && (
+                    <span className="inline-flex shrink-0 rounded-[5px] bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-400">{x.rozet}</span>
+                  )}
+                  {x.skor != null && (
+                    <div className="flex w-24 shrink-0 items-center gap-2">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div className={`h-full rounded-full ${seviyeRenk(x.skor)}`} style={{ width: `${x.skor}%` }} />
+                      </div>
+                      <span className="w-9 text-right text-[12px] font-semibold tabular-nums">%{x.skor}</span>
+                    </div>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {satirlar.length > 5 && (
+            <button type="button" onClick={() => setTumu((v) => !v)}
+              className="w-full border-t px-4 py-1.5 text-left text-[12px] font-medium text-primary hover:bg-muted/30">
+              {tumu ? "Daha az göster" : `Tümünü göster (${satirlar.length})`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function HareketKutusu({ baslik, deger, alt, yukleniyor }: { baslik: string; deger: number | null; alt: string; yukleniyor: boolean }) {
+  return (
+    <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
+      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{baslik}</p>
+      {yukleniyor ? (
+        <div className="mt-2 space-y-1.5"><Skeleton className="h-6 w-12 rounded-[5px]" /><Skeleton className="h-3 w-28 rounded-[5px]" /></div>
+      ) : (
+        <>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{deger ?? "—"}</p>
+          <p className="truncate text-[12px] text-muted-foreground">{alt}</p>
+        </>
+      )}
+    </div>
   )
 }
