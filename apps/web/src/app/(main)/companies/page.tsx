@@ -515,6 +515,12 @@ export default function CompaniesPage() {
   // Web hizmetlerinin sunucudaki Config\Users.xml içeriği (kullanıcı/şifre/DB)
   const [webUsers, setWebUsers]             = useState<WebServiceUsersDto[]>([]);
   const [webUsersLoading, setWebUsersLoading] = useState(false);
+  /** webUsers hangi firma için yüklendi — Hizmetler ve Erişim sekmesi aynı veriyi paylaşır, iki kez okunmasın */
+  const [webUsersFirma, setWebUsersFirma]   = useState<string | null>(null);
+  // Pars kullanıcı şifreleri (Ayar.mdb'den canlı) — Hizmetler listesinde gösterilir
+  const [parsSifreler, setParsSifreler]     = useState<{ serviceId: number; users: { parsUserId: number; username: string; password: string | null }[]; error?: string }[]>([]);
+  const [parsSifreLoading, setParsSifreLoading] = useState(false);
+  const [parsSifreFirma, setParsSifreFirma] = useState<string | null>(null);
   // Detay sayfası sekmesi — "access" sekmesi seçilince veri lazy yüklenir
   const [detailTab, setDetailTab]           = useState("users");
   // Erişim sekmesi: soldaki kart listesinde seçili olan blok
@@ -1301,7 +1307,7 @@ tr:nth-child(even) td{background:#fafafa}
     const firkod = selectedFirma.firkod
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     // Firma değişti — Erişim sekmesi verisi bayat, sekmeyi de başa al.
-    setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([])
+    setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([]); setWebUsersFirma(null); setParsSifreler([]); setParsSifreFirma(null)
     setAccessSel("servers")
     setCompanyDetail(null)
     setTabLoading(true)
@@ -1570,6 +1576,7 @@ tr:nth-child(even) td{background:#fafafa}
   async function loadWebUsers(firkod: string) {
     setWebUsers([])
     setWebUsersLoading(true)
+    setWebUsersFirma(firkod)
     try {
       const r = await fetch(`/api/companies/${encodeURIComponent(firkod)}/web-users`)
       const d = await r.json()
@@ -1578,6 +1585,26 @@ tr:nth-child(even) td{background:#fafafa}
       setWebUsers([])
     } finally {
       setWebUsersLoading(false)
+    }
+  }
+
+  /**
+   * Hizmetler sekmesi kullanıcı/şifreleri — sekmeye ilk geçişte bir kez:
+   * API hizmetleri Users.xml / Web.config'ten (Erişim sekmesiyle ortak veri),
+   * Pars kullanıcıları Ayar.mdb'den. İkisi de agent üzerinden canlı okunur.
+   */
+  async function loadServiceCreds(firkod: string, taze = false) {
+    if (taze || (webUsersFirma !== firkod && !webUsersLoading)) void loadWebUsers(firkod)
+    if (!taze && (parsSifreFirma === firkod || parsSifreLoading)) return
+    setParsSifreFirma(firkod); setParsSifreLoading(true); setParsSifreler([])
+    try {
+      const r = await fetch(`/api/companies/${encodeURIComponent(firkod)}/pars-sifreler`, { cache: "no-store" })
+      const d = await r.json()
+      setParsSifreler(r.ok && Array.isArray(d) ? d : [])
+    } catch {
+      setParsSifreler([])
+    } finally {
+      setParsSifreLoading(false)
     }
   }
 
@@ -2334,9 +2361,9 @@ tr:nth-child(even) td{background:#fafafa}
               value={detailTab}
               onValueChange={(v) => {
                 setDetailTab(v)
-                // Erişim sekmesi ağır: access-info + agent'tan Users.xml okuma.
+
                 // Sekmeye geçilene kadar hiç istek atmıyoruz, sonra bir kez.
-                if (v === "access" && selectedFirma) loadAccessTab(selectedFirma.firkod)
+                if (v === "services" && selectedFirma) void loadServiceCreds(selectedFirma.firkod)
               }}
             >
               <TabsList className="mb-3 h-8">
@@ -2358,10 +2385,6 @@ tr:nth-child(even) td{background:#fafafa}
                 <TabsTrigger value="analiz" className="text-[11px] h-7 gap-1.5">
                   <Activity className="h-3.5 w-3.5" />
                   Analiz
-                </TabsTrigger>
-                <TabsTrigger value="access" className="text-[11px] h-7 gap-1.5">
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Erişim
                 </TabsTrigger>
               </TabsList>
 
@@ -2497,110 +2520,179 @@ tr:nth-child(even) td{background:#fafafa}
                 </div>
               </TabsContent>
 
-              {/* Hizmetler */}
+              {/* Hizmetler — hizmet başına satır; API hizmetinde Users.xml / Web.config (SarrafPro),
+                  Pars'ta Ayar.mdb kullanıcıları canlı okunup kullanıcı + şifre olarak gösterilir */}
               <TabsContent value="services" className="mt-0 space-y-2">
-                <div className="flex items-center justify-end">
-                  <Button
-                    size="sm"
-                    onClick={() => openNewSvcDialog()}
-                    className="rounded-[5px] h-7 text-[11px] gap-1.5"
-                  >
-                    <Plus className="h-3.5 w-3.5" /> Yeni Hizmet Ekle
-                  </Button>
-                </div>
-                <div className="rounded-[5px] overflow-hidden border border-border/40">
-                  {/* gap-3: satırlarla AYNI olmalı, yoksa başlıklar kayar */}
-                  <div className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] gap-3 px-3 py-1.5 bg-muted/20 border-b border-border">
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Hizmet</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Tip</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Sunucu</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Port</span>
-                    <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">Durum</span>
-                    <span />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground text-[12px]">
+                    {tabLoading ? "" : `${collectServices().length} hizmet`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm" variant="outline"
+                      onClick={() => selectedFirma && void loadServiceCreds(selectedFirma.firkod, true)}
+                      disabled={webUsersLoading || parsSifreLoading}
+                      className="h-7 gap-1.5 rounded-[5px] text-[12px]"
+                    >
+                      <RefreshCw className={`size-3.5 ${webUsersLoading || parsSifreLoading ? "animate-spin" : ""}`} /> Kullanıcıları yenile
+                    </Button>
+                    <Button size="sm" onClick={() => openNewSvcDialog()} className="h-7 gap-1.5 rounded-[5px] text-[12px]">
+                      <Plus className="size-3.5" /> Yeni Hizmet
+                    </Button>
                   </div>
-                  <div className="divide-y divide-border/40">
-                    {tabLoading ? (
-                      Array.from({ length: 3 }).map((_, i) => (
-                        <div key={i} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-2.5 items-center gap-3">
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-2/3" />
-                          <Skeleton className="h-3 rounded-[5px]" />
-                          <Skeleton className="h-3 rounded-[5px] w-10" />
-                          <Skeleton className="h-3 rounded-[5px] w-14" />
-                        </div>
-                      ))
-                    ) : collectServices().length === 0 ? (
-                      <div className="flex items-center justify-center py-8">
-                        <p className="text-xs text-muted-foreground">Firmaya atanmış hizmet bulunamadı</p>
-                      </div>
-                    ) : collectServices().map((svc) => {
-                      const running = svc.status === "Started"
-                      const typeLabel = svc.type === "iis-site" ? "IIS Site" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula Program" : svc.type === "pars" ? "Pars" : (svc.type || "—")
-                      return (
-                        <div key={svc.id} className="grid grid-cols-[1fr_110px_140px_60px_90px_32px] px-3 py-1.5 hover:bg-muted/70 transition-colors items-center gap-3">
-                          <div className="flex items-center gap-2 min-w-0">
-                            {svc.assigned
-                              ? <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                              : <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[13px] font-medium truncate">{svc.name}</span>
-                              {svc.siteName && <span className="text-[10px] font-mono text-muted-foreground truncate">{svc.siteName}</span>}
+                </div>
+                <div className="bg-card overflow-x-auto rounded-[5px] border">
+                  <table className="w-full text-[13px] font-medium leading-[20px]">
+                    <ListeThead>
+                      <th className="px-4 py-1.5 text-left font-medium">Hizmet</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Kategori</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">IIS adı</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Sunucu</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Port</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Kullanıcı</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Şifre</th>
+                      <th className="w-px px-4 py-1.5 text-left font-medium">Durum</th>
+                      <th className="w-px px-2 py-1.5" />
+                    </ListeThead>
+                    <tbody className="divide-y">
+                      {tabLoading ? (
+                        Array.from({ length: 3 }).map((_, i) => (
+                          <tr key={i}>
+                            {Array.from({ length: 9 }).map((_, j) => (
+                              <td key={j} className="px-4 py-2.5"><Skeleton className="h-4 w-full rounded-[5px]" /></td>
+                            ))}
+                          </tr>
+                        ))
+                      ) : collectServices().length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="px-4 py-10">
+                            <div className="text-muted-foreground flex flex-col items-center gap-2 text-center">
+                              <p className="text-[13px]">Bu firmaya henüz hizmet kurulmadı.</p>
+                              <Button size="sm" onClick={() => openNewSvcDialog()} className="h-8 gap-1.5 rounded-[5px] text-[12px]">
+                                <Plus className="size-3.5" /> Hizmet ekle
+                              </Button>
                             </div>
-                          </div>
-                          <span className="text-[10px] text-muted-foreground truncate">{typeLabel}</span>
-                          <span className="text-[11px] font-mono text-muted-foreground truncate">{svc.server || "—"}</span>
-                          <span className="text-[11px] tabular-nums text-muted-foreground">{svc.port ?? "—"}</span>
-                          {svc.status ? (
-                            <div className="flex items-center gap-1.5">
-                              <div className={`h-1.5 w-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-gray-300"}`} />
-                              <span className={`text-[10px] ${running ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                                {running ? "Çalışıyor" : "Durdu"}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground">—</span>
-                          )}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
-                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-56 text-[11px]">
-                              {svc.type === "pars" && (
-                                <>
-                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
-                                    <KeyRound className="h-3.5 w-3.5" /> Kullanıcı Adı / Şifre
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "raporlar" })}>
-                                    <FileText className="h-3.5 w-3.5" /> Rapor / Görev Yetkileri
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "datalar" })}>
-                                    <Database className="h-3.5 w-3.5" /> Veritabanı Ekle
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="text-[11px] gap-2" onClick={() => openNewSvcDialog(true)}>
-                                    <UserPlus className="h-3.5 w-3.5" /> Pars Kullanıcısı Ekle
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
-                              <DropdownMenuItem
-                                className="text-[11px] gap-2 text-destructive focus:text-destructive"
-                                disabled={!svc.assigned || svc.type === "pars"}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Hizmeti Kaldır
-                              </DropdownMenuItem>
-                              {!svc.assigned && (
-                                <div className="px-2 py-1.5 text-[10px] text-muted-foreground border-t border-border/40">
-                                  Sihirbaz kaydı yok — IIS&apos;te elle kurulmuş site
+                          </td>
+                        </tr>
+                      ) : collectServices().map((svc) => {
+                        const running = svc.status === "Started"
+                        const typeLabel = svc.type === "iis-site" ? "API hizmeti" : svc.type === "iis-resim" ? "Resim" : svc.type === "pusula-program" ? "Pusula programı" : svc.type === "pars" ? "Pars" : (svc.type || "—")
+                        // Kullanıcılar: tür başına kaynak — yükleniyor / okunamadı / yok / liste
+                        type Kimlik = { username: string; password: string | null }
+                        let kimlikler: Kimlik[] = []
+                        let durum: "yok" | "yukleniyor" | "hata" | "liste" = "yok"
+                        let hataMetni = ""
+                        let notu = ""
+                        if (svc.type === "iis-site" || svc.type === "iis-resim") {
+                          const anahtar = (svc.siteName || svc.name).trim().toLowerCase()
+                          const xml = webUsers.find((w) => w.siteName.trim().toLowerCase() === anahtar)
+                          if (!xml) durum = webUsersLoading ? "yukleniyor" : "yok"
+                          else if (xml.error) { durum = "hata"; hataMetni = xml.error }
+                          else if (xml.notFound) durum = "yok"
+                          else { durum = "liste"; kimlikler = xml.users; if (xml.kaynak === "webconfig") notu = "Web.config" }
+                        } else if (svc.type === "pars") {
+                          const p = parsSifreler.find((x) => x.serviceId === svc.parsServiceId)
+                          if (!p) durum = parsSifreLoading ? "yukleniyor" : "yok"
+                          else if (p.error) { durum = "hata"; hataMetni = p.error }
+                          else { durum = "liste"; kimlikler = p.users }
+                        }
+                        // Hücre içeriği h-6 satırlarda: çok kullanıcılı hizmette kullanıcı ve şifre hizalı kalır
+                        const hucre = "px-4 py-1.5 align-top whitespace-nowrap"
+                        const satir = "flex h-6 items-center"
+
+                        return (
+                          <tr key={svc.id} className="group hover:bg-muted/20 transition-colors">
+                            <td className={hucre}>
+                              <div className={`${satir} gap-1.5`}>
+                                <span>{svc.name}</span>
+                                {!svc.assigned && (
+                                  <span className="bg-muted text-muted-foreground inline-flex shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium" title="Sihirbaz kaydı yok — IIS'te elle kurulmuş site">Elle kurulmuş</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className={`${hucre} text-muted-foreground text-[12px] font-normal`}><div className={satir}>{svc.category || typeLabel}</div></td>
+                            <td className={`${hucre} font-mono text-[12px] font-normal`}><div className={satir}>{svc.siteName && svc.type !== "pars" ? svc.siteName : "—"}</div></td>
+                            <td className={hucre}><div className={satir}>{svc.server || "—"}</div></td>
+                            <td className={`${hucre} text-muted-foreground text-[12px] font-normal tabular-nums`}><div className={satir}>{svc.port ?? "—"}</div></td>
+                            <td className={hucre}>
+                              {durum === "liste" && kimlikler.length > 0 ? (
+                                <div>
+                                  {kimlikler.map((k) => (
+                                    <div key={k.username} className={`${satir} gap-1`}>
+                                      <span className="font-mono text-[12px]">{k.username}</span>
+                                      <CopyIconButton value={k.username} subtle />
+                                    </div>
+                                  ))}
+                                  {notu && <div className="text-muted-foreground text-[11px] font-normal">{notu}</div>}
+                                </div>
+                              ) : (
+                                <div className={satir}>
+                                  {durum === "yukleniyor" ? <Skeleton className="h-4 w-28 rounded-[5px]" />
+                                    : durum === "hata" ? <span className="text-[12px] font-normal text-rose-600 dark:text-rose-400" title={hataMetni}>Okunamadı</span>
+                                    : durum === "liste" ? <span className="text-muted-foreground text-[12px] font-normal">Kullanıcı yok</span>
+                                    : <span className="text-muted-foreground">—</span>}
                                 </div>
                               )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      )
-                    })}
-                  </div>
+                            </td>
+                            <td className={hucre}>
+                              {durum === "liste" && kimlikler.length > 0 ? (
+                                <div>
+                                  {kimlikler.map((k) => (
+                                    <div key={k.username} className={satir}>
+                                      {k.password ? <AccessPwCell value={k.password} /> : <span className="text-muted-foreground">—</span>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className={satir}>
+                                  {durum === "yukleniyor" ? <Skeleton className="h-4 w-24 rounded-[5px]" /> : <span className="text-muted-foreground">—</span>}
+                                </div>
+                              )}
+                            </td>
+                            <td className={hucre}>
+                              {svc.status ? (
+                                <span className={`inline-flex items-center gap-1.5 rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${running ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground"}`}>
+                                  <span className={`size-1.5 rounded-full ${running ? "bg-emerald-500" : "bg-muted-foreground/50"}`} />
+                                  {running ? "Çalışıyor" : "Durdu"}
+                                </span>
+                              ) : <span className="text-muted-foreground">—</span>}
+                            </td>
+                            <td className="px-2 py-1.5 align-top">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="icon" aria-label={`${svc.name} işlemleri`} className="text-muted-foreground size-7 rounded-[5px]">
+                                    <MoreVertical className="size-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-56">
+                                  {svc.type === "pars" && (
+                                    <>
+                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
+                                        <KeyRound className="size-3.5" /> Kullanıcı adı / şifre
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "raporlar" })}>
+                                        <FileText className="size-3.5" /> Rapor / görev yetkileri
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "datalar" })}>
+                                        <Database className="size-3.5" /> Veritabanı ekle
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openNewSvcDialog(true)}>
+                                        <UserPlus className="size-3.5" /> Pars kullanıcısı ekle
+                                      </DropdownMenuItem>
+                                    </>
+                                  )}
+                                  {/* Sihirbaz ataması olmayan site: kaldıracak atama kaydı yok */}
+                                  <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" disabled={!svc.assigned || svc.type === "pars"}>
+                                    <Trash2 className="size-3.5" /> Hizmeti kaldır
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </TabsContent>
 
@@ -2775,345 +2867,6 @@ tr:nth-child(even) td{background:#fafafa}
               {/* Analiz — firmanın kendi kullanımı, müşteriye rapor üretilir */}
               <TabsContent value="analiz" className="mt-0">
                 {selectedFirma && <FirmaAnaliz firkod={selectedFirma.firkod} />}
-              </TabsContent>
-
-              <TabsContent value="access" className="mt-0 space-y-2">
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={handleCopyAccessText}
-                    disabled={!accessInfo || accessLoading}
-                    className={`h-7 px-2.5 inline-flex items-center gap-1.5 text-[11px] rounded-[5px] border transition-colors disabled:opacity-50 ${
-                      accessCopied
-                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                        : "bg-card border-border/50 hover:bg-muted/40"
-                    }`}
-                  >
-                    {accessCopied
-                      ? (<><CheckCheck className="h-3 w-3" /> Kopyalandı</>)
-                      : (<><Copy className="h-3 w-3" /> Metin Olarak Kopyala</>)}
-                  </button>
-                </div>
-
-                {accessLoading && (
-                  <div className="space-y-2">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <Skeleton key={i} className="h-16 w-full rounded-[5px]" />
-                    ))}
-                  </div>
-                )}
-
-                {!accessLoading && accessError && (
-                  <div className="flex items-center gap-2 px-3 py-2.5 rounded-[5px] border border-red-500/25 bg-red-500/15 text-[11px] text-red-700 dark:text-red-400">
-                    {accessError}
-                  </div>
-                )}
-
-                {!accessLoading && !accessError && accessInfo && selectedFirma && (() => {
-                  const firkod      = selectedFirma.firkod
-                  const domainShort = (accessInfo.ad?.domain ?? "").split(".")[0]?.trim() ?? ""
-                  const rdpHost     = accessInfo.windows?.dns?.trim() || accessInfo.windows?.name || ""
-                  const rdpTarget   = `${rdpHost}${accessInfo.windows?.rdpPort ? `:${accessInfo.windows.rdpPort}` : ""}`
-                  const sqlIp       = tabSQL[0]?.ServerIP || ""
-                  const credentials = accessInfo.credentials ?? {}
-    /*  SQL giris sifresi AYRI kaynaktan: AD sifresi degisince bu
-        degismiyor, tek kaynaktan gosterilirse ekran yanlis sifre
-        veriyordu (2026-08-28, firma 2311).                        */
-    const sqlCredentials = accessInfo.sqlCredentials ?? {}
-    /*  Giriş adı SAKLANAN değerden; yoksa türetilir. Türetme tek
-        başına yanlış ad veriyordu — ad kuralı alt çizgiden noktaya
-        döndü ama mevcut girişler alt çizgili kaldı.               */
-    const sqlLogins = accessInfo.sqlLogins ?? {}
-                  const webServices = collectWebServices()
-                  return (
-                    <div className="flex gap-2 min-h-[320px]">
-                      {/* ── Sol: kart listesi ─────────────────────────────── */}
-                      <div className="w-[220px] shrink-0 space-y-1">
-                        <AccessNavCard
-                          active={accessSel === "servers"}
-                          onClick={() => setAccessSel("servers")}
-                          icon={<Server className="h-3.5 w-3.5" />}
-                          title="Sunucular"
-                          subtitle={[accessInfo.ad && "AD", accessInfo.windows && "RDP", sqlIp && "SQL"].filter(Boolean).join(" · ") || "—"}
-                        />
-                        <AccessNavCard
-                          active={accessSel === "users"}
-                          onClick={() => setAccessSel("users")}
-                          icon={<Users className="h-3.5 w-3.5" />}
-                          title="Kullanıcılar"
-                          count={tabUsers.length}
-                          subtitle="VPN · RDP · API"
-                        />
-                        <AccessNavCard
-                          active={accessSel === "databases"}
-                          onClick={() => setAccessSel("databases")}
-                          icon={<Database className="h-3.5 w-3.5" />}
-                          title="Veritabanları"
-                          count={tabSQL.length}
-                          subtitle="SQL login + DB"
-                        />
-
-                        {webServices.length > 0 && (
-                          <div className="pt-1.5 pb-0.5 px-1 text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-                            Web Hizmetleri
-                          </div>
-                        )}
-                        {webServices.map((s) => {
-                          const xml = webUsers.find(
-                            (w) => w.siteName.trim().toLowerCase() === s.name.trim().toLowerCase(),
-                          )
-                          const uc = xml && !xml.notFound && !xml.error ? xml.users.length : 0
-                          return (
-                            <AccessNavCard
-                              key={s.key}
-                              active={accessSel === s.key}
-                              onClick={() => setAccessSel(s.key)}
-                              icon={<Globe className="h-3.5 w-3.5" />}
-                              title={s.name}
-                              count={uc || undefined}
-                              subtitle={s.url.replace(/^https?:\/\//, "")}
-                              loading={webUsersLoading && !xml}
-                            />
-                          )
-                        })}
-                      </div>
-
-                      {/* ── Sağ: seçilenin detayı ─────────────────────────── */}
-                      <div className="flex-1 min-w-0 rounded-[5px] border border-border/60 bg-card overflow-hidden">
-                        {accessSel === "servers" && (
-                          <>
-                            <AccessDetailHeader title="Sunucular" />
-                            <div className="divide-y divide-border/40">
-                              {accessInfo.ad && (
-                                <AccessDetailRow
-                                  label="AD Sunucusu"
-                                  value={`${accessInfo.ad.domain || accessInfo.ad.name} · ${accessInfo.ad.ip}`}
-                                  copyValue={accessInfo.ad.ip}
-                                />
-                              )}
-                              {accessInfo.windows && (
-                                <AccessDetailRow
-                                  label="RDP"
-                                  value={rdpTarget || `${accessInfo.windows.name} · ${accessInfo.windows.ip}`}
-                                  copyValue={rdpTarget || accessInfo.windows.ip}
-                                />
-                              )}
-                              {accessInfo.windows && (
-                                <div className="flex justify-end px-3 py-2">
-                                  <Button variant="outline" size="sm" className="h-7 gap-1.5 text-[11px]" onClick={() => setTerminalDegistirAcik(true)}>
-                                    <Server className="h-3.5 w-3.5" /> Terminal sunucusunu değiştir
-                                  </Button>
-                                </div>
-                              )}
-                              {sqlIp && <AccessDetailRow label="SQL Sunucusu" value={sqlIp} copyValue={sqlIp} />}
-                              {!accessInfo.ad && !accessInfo.windows && !sqlIp && <AccessEmpty text="Sunucu ataması yok" />}
-                            </div>
-                          </>
-                        )}
-
-                        {accessSel === "users" && (
-                          <>
-                            <AccessDetailHeader title={`Kullanıcılar (${tabUsers.length})`} />
-                            {tabUsers.length === 0 ? (
-                              <AccessEmpty text="Firmaya ait kullanıcı bulunamadı" />
-                            ) : (
-                              <>
-                                <div className={ACCESS_USER_COLS + " px-3 py-1.5 bg-muted/40 border-b border-border/50"}>
-                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">VPN / Kullanıcı</span>
-                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Şifre</span>
-                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">RDP</span>
-                                  <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">API</span>
-                                </div>
-                                <div className="divide-y divide-border/40">
-                                  {tabUsers.map((u) => {
-                                    const fullUser = domainShort ? `${domainShort}\\${u.username}` : u.username
-                                    const apiUser  = `${firkod}_${shortUsername(firkod, u.username)}`
-                                    const pw       = credentials[u.username] ?? ""
-                                    return (
-                                      <div
-                                        key={u.username}
-                                        className={ACCESS_USER_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
-                                      >
-                                        <AccessCell value={u.username} muted={!u.enabled} />
-                                        {pw
-                                          ? <AccessPwCell value={pw} />
-                                          : <span className="text-[10px] text-muted-foreground italic">saklanmamış</span>}
-                                        <AccessCell value={fullUser} />
-                                        <AccessCell value={webServices.length > 0 ? apiUser : "—"} />
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </>
-                            )}
-                          </>
-                        )}
-
-                        {accessSel === "databases" && (
-                          <>
-                            <AccessDetailHeader title={`Veritabanları (${tabSQL.length})`} />
-                            <div className="divide-y divide-border/40">
-                              {tabUsers[0] && (() => {
-                                const sqlLogin = sqlLogins[tabUsers[0].username] ?? sqlLoginAdi(firkod, tabUsers[0].username)
-                                const sqlPw    = sqlCredentials[tabUsers[0].username] ?? ""
-                                return (
-                                  <>
-                                    <AccessDetailRow label="SQL Login" value={sqlLogin} copyValue={sqlLogin} />
-                                    {!sqlPw && (
-                                      <div className="flex items-center gap-3 px-3 py-2">
-                                        <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">Şifre</span>
-                                        <span className="text-[10px] text-muted-foreground italic">
-                                          kaydedilmemiş — AD şifresiyle aynı olduğu varsayılamaz
-                                        </span>
-                                      </div>
-                                    )}
-                                    {sqlPw && (
-                                      <div className="group flex items-center gap-3 px-3 py-2">
-                                        <span className="text-[11px] text-foreground/60 w-[110px] shrink-0">Şifre</span>
-                                        <AccessPwCell value={sqlPw} />
-                                      </div>
-                                    )}
-                                  </>
-                                )
-                              })()}
-                              {tabSQL.length === 0
-                                ? <AccessEmpty text="Firmaya ait veritabanı bulunamadı" />
-                                : tabSQL.map((d) => (
-                                    <AccessDetailRow key={d.Id} label="DB" value={d.Name} copyValue={d.Name} />
-                                  ))}
-                            </div>
-                          </>
-                        )}
-
-                        {(() => {
-                          const svc = webServices.find((s) => s.key === accessSel)
-                          if (!svc) return null
-                          const xml = webUsers.find(
-                            (w) => w.siteName.trim().toLowerCase() === svc.name.trim().toLowerCase(),
-                          )
-                          const users = xml && !xml.notFound && !xml.error ? xml.users : []
-                          return (
-                            <>
-                              <div className="flex items-center gap-2 px-3 py-2 bg-muted/20 border-b border-border">
-                                <span className="text-[11px] font-semibold flex-1 truncate">{svc.name}</span>
-                                {/* Users.xml'i olmayan hizmete kullanıcı eklenemez */}
-                                {!xml?.notFound && !xml?.error && (
-                                  <Button
-                                    size="sm"
-                                    className="rounded-[5px] h-6 text-[10px] gap-1"
-                                    onClick={() => openWebUserDialog(svc.name, xml?.dbs ?? [])}
-                                  >
-                                    <UserPlus className="h-3 w-3" /> Kullanıcı Ekle
-                                  </Button>
-                                )}
-                              </div>
-                              <div className="divide-y divide-border/40">
-                                <AccessDetailRow label="Adres" value={svc.url} copyValue={svc.url} link />
-                                {xml?.path && <AccessDetailRow label="Klasör" value={xml.path} copyValue={xml.path} />}
-                              </div>
-
-                              {webUsersLoading && !xml && (
-                                <div className="px-3 py-3 space-y-2">
-                                  <Skeleton className="h-3 w-1/2 rounded-[5px]" />
-                                  <Skeleton className="h-3 w-2/3 rounded-[5px]" />
-                                </div>
-                              )}
-
-                              {xml?.error && <AccessEmpty text={xml.error} />}
-                              {xml?.notFound && (
-                                <AccessEmpty text="Bu hizmette Users.xml yok — uygulama içi kullanıcı tutmuyor" />
-                              )}
-
-                              {users.length > 0 && (
-                                <>
-                                  <div className={ACCESS_SVC_COLS + " px-3 py-1.5 bg-muted/40 border-y border-border/50"}>
-                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Kullanıcı</span>
-                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Şifre</span>
-                                    <span className="text-[10px] font-semibold text-foreground/70 tracking-wide uppercase">Veritabanı</span>
-                                    <span />
-                                  </div>
-                                  <div className="divide-y divide-border/40">
-                                    {users.map((u) => (
-                                      <div
-                                        key={u.username}
-                                        className={ACCESS_SVC_COLS + " group px-3 py-2 items-center hover:bg-muted/70 transition-colors"}
-                                      >
-                                        <AccessCell value={u.username} />
-                                        {u.password
-                                          ? <AccessPwCell value={u.password} />
-                                          : <span className="text-[11px] text-muted-foreground">—</span>}
-                                        <span className="inline-flex items-center gap-1.5 min-w-0">
-                                          <AccessCell value={u.dbs.length > 0 ? u.dbs.join(", ") : "—"} />
-                                          {(() => {
-                                            const key = `${svc.name}::${u.username}`
-                                            if (webUserTestBusy === key) {
-                                              return <RefreshCw className="h-3 w-3 shrink-0 text-blue-600 dark:text-blue-400 animate-spin" />
-                                            }
-                                            const res = webUserTestResult[key]
-                                            if (!res) return null
-                                            return res.ok
-                                              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-label="Erişim başarılı" />
-                                              : <XCircle className="h-3.5 w-3.5 shrink-0 text-destructive" aria-label={res.message} />
-                                          })()}
-                                        </span>
-                                        <DropdownMenu>
-                                          <DropdownMenuTrigger asChild>
-                                            <button className="h-6 w-6 flex items-center justify-center rounded-[5px] hover:bg-muted/60 transition-colors">
-                                              <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-                                            </button>
-                                          </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end" className="w-44 text-[11px]">
-                                            <DropdownMenuItem
-                                              className="text-[11px] gap-2"
-                                              onSelect={() => testWebUser(svc.name, u, "lan")}
-                                              disabled={!u.password}
-                                            >
-                                              <Play className="h-3.5 w-3.5" /> Test Et (LAN)
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem
-                                              className="text-[11px] gap-2"
-                                              onSelect={() => testWebUser(svc.name, u, "wan")}
-                                              disabled={!u.password}
-                                            >
-                                              <Globe className="h-3.5 w-3.5" /> Dışarıdan Test Et
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                              className="text-[11px] gap-2"
-                                              onSelect={() => editWebUserDialog(svc.name, xml?.dbs ?? [], u)}
-                                            >
-                                              <Settings2 className="h-3.5 w-3.5" /> Düzenle
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem
-                                              className="text-[11px] gap-2 text-destructive focus:text-destructive"
-                                              onSelect={(e) => {
-                                                e.preventDefault()
-                                                setWebUserDelTarget({ siteName: svc.name, username: u.username })
-                                              }}
-                                            >
-                                              <Trash2 className="h-3.5 w-3.5" /> Sil
-                                            </DropdownMenuItem>
-                                          </DropdownMenuContent>
-                                        </DropdownMenu>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </>
-                              )}
-                            </>
-                          )
-                        })()}
-
-                        {Object.keys(credentials).length === 0 && accessSel === "users" && (
-                          <div className="m-3 text-[11px] text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-[5px] px-3 py-2">
-                            Bu firma için şifreler henüz saklanmamış. Sihirbazdan yeniden çalıştırma veya kullanıcının
-                            şifresini sıfırlama sonrası burada görünür.
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })()}
               </TabsContent>
             </Tabs>
           </NestedCard>

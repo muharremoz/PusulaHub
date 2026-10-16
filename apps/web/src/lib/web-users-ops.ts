@@ -43,6 +43,12 @@ export interface WebServiceUsersDto {
   notFound?: boolean
   /** Gerçek hata (parse bozuk, agent'a ulaşılamadı, sunucu kaydı eksik) */
   error?:   string
+  /**
+   * Kullanıcının okunduğu yer. Yoksa Users.xml. "webconfig" → Users.xml'i olmayan
+   * hizmet (SarrafPro), tek kullanıcı Web.config appSettings User/Pass'te; bu
+   * kayıt Users.xml yazma uçlarıyla (ekle/güncelle/sil) DEĞİŞTİRİLEMEZ.
+   */
+  kaynak?:  "webconfig"
 }
 
 export interface WebUserTestResult {
@@ -94,7 +100,15 @@ function buildReadUsersXml(targets: Array<{ site: string; fallbackPath: string }
       `$p = [Environment]::ExpandEnvironmentVariables($p); ` +
       `Write-Output ('###PATH ' + $p); ` +
       `$f = Join-Path $p 'Config\\Users.xml'; ` +
-      `if(-not (Test-Path -LiteralPath $f)){ Write-Output '###ERR NOFILE'; continue }; ` +
+      // Users.xml yoksa Web.config appSettings User/Pass (SarrafPro); o da yoksa NOFILE
+      `if(-not (Test-Path -LiteralPath $f)){ ` +
+        `$wc = Join-Path $p 'Web.config'; $ok = $false; ` +
+        `if(Test-Path -LiteralPath $wc){ try{ [xml]$w = Get-Content -LiteralPath $wc -Raw -Encoding UTF8; ` +
+          `$uN = $w.SelectSingleNode('//appSettings/add[@key=''User'']'); $pN = $w.SelectSingleNode('//appSettings/add[@key=''Pass'']'); ` +
+          `if($uN -and $pN){ $ok = $true; Write-Output '###SRC webconfig'; if([string]$uN.GetAttribute('value')){ Write-Output ('###USER ' + [string]$uN.GetAttribute('value') + '|' + [string]$pN.GetAttribute('value') + '|') } } ` +
+        `}catch{} }; ` +
+        `if(-not $ok){ Write-Output '###ERR NOFILE' }; continue ` +
+      `}; ` +
       `try{ [xml]$d = Get-Content -LiteralPath $f -Raw -Encoding UTF8 }catch{ Write-Output '###ERR PARSE'; continue }; ` +
       `foreach($u in @($d.SelectNodes('/Users/User'))){` +
         `$unNode = $u.SelectSingleNode('Username'); ` +
@@ -128,6 +142,10 @@ function parseOutput(stdout: string, server: string): Map<string, WebServiceUser
 
     if (line.startsWith("###PATH ")) {
       cur.path = line.slice(8).trim()
+      continue
+    }
+    if (line.startsWith("###SRC ")) {
+      if (line.slice(7).trim() === "webconfig") cur.kaynak = "webconfig"
       continue
     }
     if (line.startsWith("###ERR ")) {
