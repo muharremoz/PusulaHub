@@ -2169,22 +2169,29 @@ tr:nth-child(even) td{background:#fafafa}
             ediliyor — detay header'ını ve panelini render etme, liste görünür kalsın. */}
         {selectedFirma && canViewCompanyDetail ? (
           /* Seçili firma: kompakt header bar */
-          <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-            <div className="rounded-[5px] px-4 py-2.5" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
+          <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
+            <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
               <div className="flex items-center gap-3">
                 <>
-                  <span className={`h-2 w-2 rounded-full shrink-0 ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
+                  {/* Baş harf rozeti — köşedeki nokta firma durumu */}
+                  <span className={`relative flex size-10 shrink-0 items-center justify-center rounded-[5px] text-[13px] font-semibold ring-1 ${
+                    firmaIsActive(selectedFirma) ? "bg-primary/10 text-primary ring-primary/20" : "bg-red-500/15 text-red-700 ring-red-500/25 dark:text-red-400"}`}>
+                    {selectedFirma.firma.trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? "").join("").toLocaleUpperCase("tr-TR")}
+                    <span className={`absolute -right-1 -top-1 size-2.5 rounded-full ring-2 ring-card ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
+                  </span>
 
-                  {/* Firma adı üstte; e-posta / telefon / lisans altında,
-                      ikonlu ve dikey ayraçlı tek satır. */}
+                  {/* Firma adı üstte; iletişim + temsilci altında, kopyalanabilir */}
                   <div className="min-w-0 flex-1">
-                    {/* İlk satır: ad + durum rozeti + etiketler */}
+                    {/* İlk satır: ad + kod + durum rozeti + etiketler */}
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
-                      <h2 className="truncate text-sm font-semibold tracking-tight">{selectedFirma.firma}</h2>
-                      <span className={`shrink-0 inline-flex items-center rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${
+                      <h2 className="truncate text-[15px] font-semibold tracking-tight">{selectedFirma.firma}</h2>
+                      {selectedFirma.firkod && (
+                        <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{selectedFirma.firkod}</span>
+                      )}
+                      <span className={`inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${
                         firmaIsActive(selectedFirma)
-                          ? "text-emerald-700 dark:text-emerald-400 border-emerald-500/25 bg-emerald-500/15"
-                          : "text-red-700 dark:text-red-400 border-red-500/25 bg-red-500/15"
+                          ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                          : "bg-red-500/15 text-red-700 dark:text-red-400"
                       }`}>
                         {firmaIsActive(selectedFirma) ? "Aktif" : "Pasif"}
                       </span>
@@ -2194,7 +2201,7 @@ tr:nth-child(even) td{background:#fafafa}
                             {firmaTags.map((tag) => (
                               <span
                                 key={tag}
-                                className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-0.5 text-[9px] font-medium ${tagColor(tag)}`}
+                                className={`group/tag shrink-0 inline-flex items-center gap-1 rounded-[5px] border px-1.5 py-0.5 text-[11px] font-medium ${tagColor(tag)}`}
                               >
                                 {tag}
                                 <button
@@ -2268,53 +2275,75 @@ tr:nth-child(even) td{background:#fafafa}
                           </div>
                         )}
                     </div>
-                    <div className="text-muted-foreground mt-0.5 flex items-center gap-2 text-[11px]">
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted-foreground">
                       {selectedFirma.email && (
-                        <span className="inline-flex min-w-0 items-center gap-1">
-                          <Mail className="size-3 shrink-0" />
+                        <span className="inline-flex min-w-0 items-center gap-1.5">
+                          <Mail className="size-3.5 shrink-0" />
                           <span className="truncate">{selectedFirma.email}</span>
+                          <CopyIconButton value={selectedFirma.email} subtle />
                         </span>
-                      )}
-                      {selectedFirma.email && selectedFirma.phone && (
-                        <span className="bg-border h-3 w-px shrink-0" />
                       )}
                       {selectedFirma.phone && (
-                        <span className="inline-flex shrink-0 items-center gap-1 font-mono">
-                          <Phone className="size-3 shrink-0" />
-                          {selectedFirma.phone}
+                        <span className="inline-flex shrink-0 items-center gap-1.5">
+                          <Phone className="size-3.5 shrink-0" />
+                          <span className="tabular-nums">{selectedFirma.phone}</span>
+                          <CopyIconButton value={selectedFirma.phone} subtle />
                         </span>
                       )}
-                      {(selectedFirma.email || selectedFirma.phone) && selectedFirma.lisansBitis && (
-                        <span className="bg-border h-3 w-px shrink-0" />
-                      )}
+                      {/* Dar ekranda sağdaki özet gizli — lisans burada */}
                       {selectedFirma.lisansBitis && (
-                        <span className="inline-flex shrink-0 items-center gap-1 tabular-nums">
-                          <Calendar className="size-3 shrink-0" />
+                        <span className="inline-flex shrink-0 items-center gap-1.5 tabular-nums lg:hidden">
+                          <Calendar className="size-3.5 shrink-0" />
                           {lisansGoster(selectedFirma.lisansBitis)}
                         </span>
                       )}
                       {/* Müşteri temsilcisi — CRM'den; pasifse firma devredilmemiş olabilir */}
                       {selectedFirma.temsilci && (
-                        <>
-                          <span className="bg-border h-3 w-px shrink-0" />
-                          <span
-                            className="inline-flex shrink-0 items-center gap-1"
-                            title={selectedFirma.temsilci.aktif ? "Müşteri temsilcisi" : "Müşteri temsilcisi pasif — firma devredilmemiş olabilir"}
-                          >
-                            <User className="size-3 shrink-0" />
-                            <span className={selectedFirma.temsilci.aktif ? "" : "opacity-60"}>{selectedFirma.temsilci.ad}</span>
-                            {!selectedFirma.temsilci.aktif && (
-                              <span className="inline-flex rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[9px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
-                            )}
-                          </span>
-                        </>
+                        <span
+                          className="inline-flex shrink-0 items-center gap-1.5"
+                          title={selectedFirma.temsilci.aktif ? "Müşteri temsilcisi" : "Müşteri temsilcisi pasif — firma devredilmemiş olabilir"}
+                        >
+                          <User className="size-3.5 shrink-0" />
+                          <span className={selectedFirma.temsilci.aktif ? "" : "opacity-60"}>{selectedFirma.temsilci.ad}</span>
+                          {!selectedFirma.temsilci.aktif && (
+                            <span className="inline-flex rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
+                          )}
+                        </span>
                       )}
                     </div>
                   </div>
 
                 </>
 
-                <div className="flex-1" />
+                {/* Sağ: kullanıcı + lisans özeti (geniş ekranda) */}
+                {(() => {
+                  const iso = lisansIso(selectedFirma.lisansBitis ?? "")
+                  const kalan = iso ? Math.ceil((new Date(`${iso}T23:59:59`).getTime() - Date.now()) / 86_400_000) : null
+                  const kalanRenk = kalan === null ? "" : kalan < 0 ? "text-red-600 dark:text-red-400" : kalan <= 30 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                  return (
+                    <div className="hidden shrink-0 items-center gap-4 lg:flex">
+                      <div className="text-right">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Kullanıcı</p>
+                        {tabLoading ? <Skeleton className="ml-auto mt-1 h-4 w-12 rounded-[5px]" /> : (
+                          <p className="text-[15px] font-semibold tabular-nums leading-tight" title="AD hesabı / kullanıcı hakkı">
+                            {tabUsers.length}<span className="text-[12px] font-medium text-muted-foreground"> / {selectedFirma.userCount}</span>
+                          </p>
+                        )}
+                      </div>
+                      <span className="h-8 w-px bg-border" />
+                      <div className="text-right">
+                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Lisans bitiş</p>
+                        <p className="text-[15px] font-semibold tabular-nums leading-tight">
+                          {lisansGoster(selectedFirma.lisansBitis ?? "")}
+                          {kalan !== null && (
+                            <span className={`ml-1.5 text-[12px] font-medium ${kalanRenk}`}>{kalan < 0 ? "doldu" : `${kalan} gün`}</span>
+                          )}
+                        </p>
+                      </div>
+                      <span className="h-8 w-px bg-border" />
+                    </div>
+                  )
+                })()}
 
                 {/* Panik — firmanın erişimini kes / geri aç.
                     Tüm hesaplar pasifse buton yön değiştirir; aksi halde
@@ -2327,7 +2356,7 @@ tr:nth-child(even) td{background:#fafafa}
                     (firmaErisimiKesik
                       ? "border-emerald-600/40 text-emerald-700 hover:bg-emerald-600 dark:text-emerald-400 "
                       : "border-destructive/40 text-destructive hover:bg-destructive ") +
-                    "hover:text-white inline-flex shrink-0 items-center gap-1.5 rounded-[5px] border px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
+                    "hover:text-white inline-flex h-8 shrink-0 items-center gap-1.5 rounded-[5px] border px-3 text-[12px] font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
                   }
                   title={
                     firmaErisimiKesik
@@ -2440,7 +2469,7 @@ tr:nth-child(even) td{background:#fafafa}
               </TabsList>
 
               {/* Kullanıcılar */}
-              <TabsContent value="users" className="mt-0">
+              <TabsContent layout={false} value="users" className="mt-0">
                 {(() => {
                   const officeVar = (u: TabUser) => (u.groups ?? []).includes("Office_Kullanicilari")
                   const ad = kulAdFiltre.trim().toLocaleLowerCase("tr-TR")
@@ -2582,7 +2611,7 @@ tr:nth-child(even) td{background:#fafafa}
 
               {/* Hizmetler — hizmet başına satır; API hizmetinde Users.xml / Web.config (SarrafPro),
                   Pars'ta Ayar.mdb kullanıcıları canlı okunup kullanıcı + şifre olarak gösterilir */}
-              <TabsContent value="services" className="mt-0">
+              <TabsContent layout={false} value="services" className="mt-0">
                 {(() => {
                   type SvcSatir = TabCompanyService & { assigned: boolean }
                   type Kimlik = { username: string; password: string | null; dbs?: string[] }
@@ -2864,7 +2893,7 @@ tr:nth-child(even) td{background:#fafafa}
               </TabsContent>
 
               {/* Veritabanları */}
-              <TabsContent value="databases" className="mt-0">
+              <TabsContent layout={false} value="databases" className="mt-0">
                 {(() => {
                   const online = (d: TabSQLDatabase) => d.Status === "ONLINE" || d.Status === "Online"
                   const yedekTur = (d: TabSQLDatabase): "acik" | "kapali" | "kayitsiz" => (d.YedekAl === null ? "kayitsiz" : d.YedekAl ? "acik" : "kapali")
@@ -3085,7 +3114,7 @@ tr:nth-child(even) td{background:#fafafa}
                   Modal'a sığmayan erişim bilgileri burada, sayfa genişliğinde
                   ve kompakt tablo düzeninde. Veri sekmeye geçilince yükleniyor. */}
               {/* Analiz — firmanın kendi kullanımı, müşteriye rapor üretilir */}
-              <TabsContent value="analiz" className="mt-0">
+              <TabsContent layout={false} value="analiz" className="mt-0">
                 {selectedFirma && <FirmaAnaliz firkod={selectedFirma.firkod} />}
               </TabsContent>
             </Tabs>
