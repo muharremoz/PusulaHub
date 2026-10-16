@@ -41,8 +41,6 @@ const MonitorTab   = mkTabIcon("monitor-check");
 const BuildingTab  = mkStaticTabIcon(Building2);
 const ChartTab     = mkTabIcon("chart-bar-increasing");
 const UsersTab     = mkTabIcon("users");
-const ShieldTab    = mkTabIcon("shield-check");
-const FileTab      = mkTabIcon("file-text");
 
 const yukleme = () => <div className="p-4"><Skeleton className="h-40 w-full" /></div>;
 const TabRapor          = dynamic(() => import("@/components/server-detail/tab-rapor").then((m) => m.TabRapor),                   { ssr: false, loading: yukleme });
@@ -51,8 +49,6 @@ const TabSessions  = dynamic(() => import("@/components/server-detail/tab-sessio
 const TabAnaliz    = dynamic(() => import("@/components/server-detail/tab-analiz").then((m) => m.TabAnaliz),        { ssr: false, loading: yukleme });
 const TabCompanies = dynamic(() => import("@/components/server-detail/tab-companies").then((m) => m.TabCompanies),  { ssr: false, loading: yukleme });
 const TabUsers     = dynamic(() => import("@/components/server-detail/tab-users").then((m) => m.TabUsers),          { ssr: false, loading: yukleme });
-const TabSecurity  = dynamic(() => import("@/components/server-detail/tab-security").then((m) => m.TabSecurity),    { ssr: false, loading: yukleme });
-const TabLogs      = dynamic(() => import("@/components/server-detail/tab-logs").then((m) => m.TabLogs),            { ssr: false, loading: yukleme });
 
 /** API /detail endpoint'inden dönen veri yapısı */
 interface ServerDetailData {
@@ -67,7 +63,7 @@ interface ServerDetailData {
   ram: AgentReport["metrics"]["ram"] | null;
 }
 
-type TabId = "overview" | "kullanim" | "sessions" | "analiz" | "companies" | "users" | "security" | "logs";
+type TabId = "overview" | "kullanim" | "sessions" | "analiz" | "companies" | "users";
 
 const EMPTY_DETAIL: ServerDetailData = {
   sessions: [], security: null, logs: null, ad: null, localUsers: null, sql: null, iis: null, roles: [], ram: null,
@@ -185,8 +181,6 @@ export default function ServerDetailPage({ params }: { params: Promise<{ id: str
     ...(terminal || sessionCount > 0 ? [{ id: "analiz" as TabId, label: "Analiz", icon: ChartTab }] : []),
     { id: "companies", label: "Firmalar", icon: BuildingTab },
     { id: "users", label: "Kullanıcılar", icon: UsersTab, count: userCount },
-    { id: "security", label: "Güvenlik", icon: ShieldTab },
-    { id: "logs", label: "Kayıtlar", icon: FileTab },
   ];
 
   return (
@@ -270,7 +264,7 @@ export default function ServerDetailPage({ params }: { params: Promise<{ id: str
         {activeTab === "overview" && <TabRapor server={server} />}
         {activeTab === "kullanim" && <TabFirmaKullanim serverId={server.id} />}
         {activeTab === "analiz" && <TabAnaliz serverId={server.id} />}
-        {detailLoading && ["sessions", "companies", "users", "security", "logs"].includes(activeTab) ? (
+        {detailLoading && ["sessions", "companies", "users"].includes(activeTab) ? (
           <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
             <div className="space-y-px overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
               {Array.from({ length: 6 }).map((_, i) => (
@@ -285,11 +279,9 @@ export default function ServerDetailPage({ params }: { params: Promise<{ id: str
           </div>
         ) : (
           <>
-            {activeTab === "sessions" && <TabSessions sessions={detail.sessions} serverId={server.id} />}
+            {activeTab === "sessions" && <TabSessions sessions={detail.sessions} serverId={server.id} firmaMap={firmaMap} />}
             {activeTab === "companies" && <TabCompanies companies={detail.ad?.companies ?? []} firmaMap={firmaMap} />}
             {activeTab === "users" && <TabUsers users={detail.ad?.users ?? []} localUsers={detail.localUsers ?? null} firmaMap={firmaMap} />}
-            {activeTab === "security" && <TabSecurity security={detail.security} roles={detail.roles} />}
-            {activeTab === "logs" && <TabLogs logs={detail.logs} />}
           </>
         )}
       </div>
