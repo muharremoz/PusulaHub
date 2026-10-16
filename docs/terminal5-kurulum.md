@@ -13,6 +13,16 @@
 | Kaynak | T3 `\\10.15.2.12\c$` (Pusula, Demo, görevler) + T4 `\\10.15.2.13\c$` (BGInfo) |
 | Betik | [scripts/terminal5/t5-kur.ps1](../scripts/terminal5/t5-kur.ps1) → T3'te `C:\Kurulum\T5\t5-kur.ps1` olarak durur |
 
+> ⚠ **Her yeni terminalde zorunlu — giriş gecikmesinin çözümü (16.10.2026):**
+> `DontDisplayLastUserName = 1` (DWORD) **iki** anahtara:
+> `HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System` ve
+> `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon`.
+> Olmazsa giriş ekranı her turda tüm açık oturumların kullanıcı adını arar; bekleme oturum
+> sayısıyla büyür (40 oturumda 10–12 sn). T2'de aynı yükte **9,7 sn → 0,6 sn**. `t5-kur.ps1`
+> bunu yapar; GPO yönetmiyor, yenilemede geri dönmez. Ayrıntı:
+> [terminal1-oturum-gecikmesi.md](terminal1-oturum-gecikmesi.md).
+> Aynı gün: `FirewallPolicy\DeleteUserAppContainersOnLogoff = 1` (duvar kuralı birikmesi) — betik yapar.
+
 > Kapasite: 8/64 ile ~70 eşzamanlı oturum. RAM sıcak eklemeyle kapatmadan artırılabilir
 > (`apps/web/__t4-ram.mjs` deseni); vCPU artırmak kapatma ister.
 
@@ -52,6 +62,8 @@ Tekrar çalıştırmak zararsız. Günlük `C:\ProgramData\Pusula\t5-kur.log`, s
 | Saat dilimi Turkey, sistem yereli + biçim tr-TR | yeniden başlatmada geçerli |
 | .NET 3.5 (CD'deyse `sources\sxs`'ten), FSRM rolü | |
 | AppIDSvc otomatik, Fusion günlüğü kapalı | [[fusion-log-disk-tuzagi]] |
+| **Giriş gecikmesi: `DontDisplayLastUserName=1`** (Policies\System + Winlogon) | 16.10 çözüm — yukarıdaki not |
+| Duvar kuralı birikmesi: `DeleteUserAppContainersOnLogoff=1` | 16.10 |
 | Remote Desktop Users = `PUSULADC\Domain Users` | |
 | Duvar: ping, `RDP` 3389, `Pusula Aktarim SMB (10.15.2.6)` 445 | |
 | `Pusula Kurulum.msi` + `C:\Pusula`, `C:\Database`, `C:\Demo` | T3'ten, yamalar dahil |

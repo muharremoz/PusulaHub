@@ -85,6 +85,14 @@ Adim 'Fusion gunlugu kapali' {
   $f = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Fusion' -ErrorAction SilentlyContinue
   if ($f -and $f.EnableLog -eq 1) { Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Fusion' -Name EnableLog -Value 0 }
 }
+# GIRIS GECIKMESININ COZUMU (16.10.2026): LogonUI her turda acik oturumlarin kullanici adini
+# arar (SID->ad, ~64 tur x oturum sayisi) -> 40 oturumda 10-12 sn bekleme. Bu ayarla T2'de
+# ayni yukte 9,7 sn -> 0,6 sn. Yan etki: giris ekraninda son kullanici adi dolu gelmez.
+# Kaynak: RSA KB "Please wait for Local Session Manager". docs/terminal1-oturum-gecikmesi.md
+Adim 'Giris gecikmesi: DontDisplayLastUserName=1 (iki anahtar)' {
+  New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System' -Name 'DontDisplayLastUserName' -PropertyType DWord -Value 1 -Force | Out-Null
+  New-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon' -Name 'DontDisplayLastUserName' -PropertyType DWord -Value 1 -Force | Out-Null
+}
 # Her giriste eklenen UWP/AppContainer duvar kurallari cikista silinmez, profil basi ~95 birikir
 # (16.10: T1'de 9.485) -> yavas giris. Bu deger cikista siler (T1-T5'e 16.10'da acildi).
 Adim 'Duvar kurali birikmesi (DeleteUserAppContainersOnLogoff=1)' {
