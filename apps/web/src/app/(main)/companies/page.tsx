@@ -2308,32 +2308,72 @@ tr:nth-child(even) td{background:#fafafa}
 
                 </>
 
-                {/* Sağ: kullanıcı + lisans özeti (geniş ekranda) */}
+                {/* Sağ: firma özeti (geniş ekranda) — kullanıcı, hizmet, veritabanı, yedek, lisans */}
                 {(() => {
                   const iso = lisansIso(selectedFirma.lisansBitis ?? "")
                   const kalan = iso ? Math.ceil((new Date(`${iso}T23:59:59`).getTime() - Date.now()) / 86_400_000) : null
                   const kalanRenk = kalan === null ? "" : kalan < 0 ? "text-red-600 dark:text-red-400" : kalan <= 30 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"
+                  const hizmetSayisi = collectServices().length
+                  const toplamMB = tabSQL.reduce((t, d) => t + (d.SizeMB || 0), 0)
+                  const boyutYaz = (mb: number) => (mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${Math.round(mb)} MB`)
+                  /*  Yedek sağlığı: yalnız yedeği açık (guvenlik.YedekAl=1) DB'ler. Son yedek = tam/diferansiyelin
+                   *  en yenisi. SpareBackup her gün alıyor → 26 saati geçen gecikmiş, 48 saati geçen / hiç olmayan sorunlu. */
+                  const zaman = (s: string | null) => (s ? new Date(s.replace(" ", "T")).getTime() : NaN)
+                  const yedekli = tabSQL.filter((d) => d.YedekAl === true)
+                  const saat = (d: TabSQLDatabase) => {
+                    const son = Math.max(zaman(d.LastBackup) || 0, zaman(d.LastDiffBackup) || 0)
+                    return son ? (Date.now() - son) / 3_600_000 : Infinity
+                  }
+                  const sorunlu = yedekli.filter((d) => saat(d) > 48)
+                  const gecikmis = yedekli.filter((d) => saat(d) > 26 && saat(d) <= 48)
+                  const yedekDurum: { metin: string; renk: string; nokta: string; aciklama: string } =
+                    yedekli.length === 0
+                      ? { metin: "Kapalı", renk: "text-muted-foreground", nokta: "bg-muted-foreground/50", aciklama: "Yedeği açık veritabanı yok" }
+                      : sorunlu.length > 0
+                        ? { metin: `${sorunlu.length} sorunlu`, renk: "text-red-600 dark:text-red-400", nokta: "bg-red-500",
+                            aciklama: `48 saattir yedek yok: ${sorunlu.map((d) => d.Name).join(", ")}` }
+                        : gecikmis.length > 0
+                          ? { metin: `${gecikmis.length} gecikmiş`, renk: "text-amber-700 dark:text-amber-400", nokta: "bg-amber-500",
+                              aciklama: `Son yedek 26 saatten eski: ${gecikmis.map((d) => d.Name).join(", ")}` }
+                          : { metin: "Sağlıklı", renk: "text-emerald-700 dark:text-emerald-400", nokta: "bg-emerald-500",
+                              aciklama: `${yedekli.length} veritabanının hepsi son 26 saatte yedeklendi` }
+                  const Kutu = ({ baslik, children, title }: { baslik: string; children: React.ReactNode; title?: string }) => (
+                    <div className="text-right" title={title}>
+                      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{baslik}</p>
+                      {tabLoading ? <Skeleton className="ml-auto mt-1 h-4 w-12 rounded-[5px]" /> : (
+                        <p className="whitespace-nowrap text-[15px] font-semibold tabular-nums leading-tight">{children}</p>
+                      )}
+                    </div>
+                  )
+                  const Ayrac = () => <span className="h-8 w-px shrink-0 bg-border" />
                   return (
                     <div className="hidden shrink-0 items-center gap-4 lg:flex">
-                      <div className="text-right">
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Kullanıcı</p>
-                        {tabLoading ? <Skeleton className="ml-auto mt-1 h-4 w-12 rounded-[5px]" /> : (
-                          <p className="text-[15px] font-semibold tabular-nums leading-tight" title="AD hesabı / kullanıcı hakkı">
-                            {tabUsers.length}<span className="text-[12px] font-medium text-muted-foreground"> / {selectedFirma.userCount}</span>
-                          </p>
-                        )}
-                      </div>
-                      <span className="h-8 w-px bg-border" />
+                      <Kutu baslik="Kullanıcı" title="AD hesabı / kullanıcı hakkı">
+                        {tabUsers.length}<span className="text-[12px] font-medium text-muted-foreground"> / {selectedFirma.userCount}</span>
+                      </Kutu>
+                      <Ayrac />
+                      <Kutu baslik="Hizmet">{hizmetSayisi}</Kutu>
+                      <Ayrac />
+                      <Kutu baslik="Veritabanı" title="Adet · toplam boyut">
+                        {tabSQL.length}<span className="text-[12px] font-medium text-muted-foreground"> · {boyutYaz(toplamMB)}</span>
+                      </Kutu>
+                      <Ayrac />
+                      <Kutu baslik="Yedek" title={yedekDurum.aciklama}>
+                        <span className={`inline-flex items-center gap-1.5 ${yedekDurum.renk}`}>
+                          <span className={`size-2 rounded-full ${yedekDurum.nokta}`} />{yedekDurum.metin}
+                        </span>
+                      </Kutu>
+                      <Ayrac />
                       <div className="text-right">
                         <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Lisans bitiş</p>
-                        <p className="text-[15px] font-semibold tabular-nums leading-tight">
+                        <p className="whitespace-nowrap text-[15px] font-semibold tabular-nums leading-tight">
                           {lisansGoster(selectedFirma.lisansBitis ?? "")}
                           {kalan !== null && (
                             <span className={`ml-1.5 text-[12px] font-medium ${kalanRenk}`}>{kalan < 0 ? "doldu" : `${kalan} gün`}</span>
                           )}
                         </p>
                       </div>
-                      <span className="h-8 w-px bg-border" />
+                      <Ayrac />
                     </div>
                   )
                 })()}
