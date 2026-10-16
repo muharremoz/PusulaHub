@@ -135,7 +135,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter, ArrowRight } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter, ArrowRight, Pencil, Network } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
@@ -534,6 +534,9 @@ export default function CompaniesPage() {
   const [webUserPw, setWebUserPw]         = useState("");
   const [webUserDbs, setWebUserDbs]       = useState<string[]>([]);
   const [webUserSaving, setWebUserSaving] = useState(false);
+  // Kaydet'e basıldı mı (uyarılar ancak o zaman) + eksik alan sallanması
+  const [webUserDenendi, setWebUserDenendi] = useState(false);
+  const [webUserSallan, setWebUserSallan]   = useState(false);
   // Users.xml yazma + IIS restart ilerlemesi (dialog gövdesinde gösterilir)
   const [webUserSteps, setWebUserSteps] = useState<
     { label: string; status: "pending" | "running" | "done" | "error"; error?: string }[] | null
@@ -1671,6 +1674,7 @@ tr:nth-child(even) td{background:#fafafa}
     setWebUserPw(generateSafePassword())
     setWebUserDbs(opts)
     setWebUserSteps(null)
+    setWebUserDenendi(false)
   }
 
   /** Mevcut Users.xml kullanıcısını düzenlemek için dialog'u aç. */
@@ -1688,6 +1692,7 @@ tr:nth-child(even) td{background:#fafafa}
     setWebUserPw(user.password)
     setWebUserDbs(user.dbs)
     setWebUserSteps(null)
+    setWebUserDenendi(false)
   }
 
   /**
@@ -2580,28 +2585,34 @@ tr:nth-child(even) td{background:#fafafa}
               <TabsContent value="services" className="mt-0">
                 {(() => {
                   type SvcSatir = TabCompanyService & { assigned: boolean }
-                  type Kimlik = { username: string; password: string | null }
+                  type Kimlik = { username: string; password: string | null; dbs?: string[] }
                   const tumu = collectServices()
                   const tur = (s: SvcSatir) => (s.type === "iis-site" ? "API hizmeti" : s.type === "iis-resim" ? "Resim" : s.type === "pusula-program" ? "Pusula programı" : s.type === "pars" ? "Pars" : (s.type || "—"))
                   const kategori = (s: SvcSatir) => s.category || tur(s)
                   const durumu = (s: SvcSatir): "calisiyor" | "durdu" | "yok" => (!s.status ? "yok" : s.status === "Started" ? "calisiyor" : "durdu")
                   // Kullanıcılar: tür başına kaynak — yükleniyor / okunamadı / yok / liste
-                  const kimlik = (s: SvcSatir): { durum: "yok" | "yukleniyor" | "hata" | "liste"; liste: Kimlik[]; hata: string; not: string } => {
+                  /*  yonet: Users.xml'li API hizmeti — ekle/düzenle/sil/test buradan (site = Users.xml'in IIS adı,
+                   *  dbs = Users.xml global DB listesi). Web.config (SarrafPro) ve Pars burada salt okunur;
+                   *  Pars kullanıcıları satır menüsündeki Pars yönetiminden değişir.                          */
+                  type KimlikBilgi = { durum: "yok" | "yukleniyor" | "hata" | "liste"; liste: Kimlik[]; hata: string; not: string; yonet: { site: string; dbs: string[] } | null }
+                  const bos: KimlikBilgi = { durum: "yok", liste: [], hata: "", not: "", yonet: null }
+                  const kimlik = (s: SvcSatir): KimlikBilgi => {
                     if (s.type === "iis-site" || s.type === "iis-resim") {
                       const anahtar = (s.siteName || s.name).trim().toLowerCase()
                       const xml = webUsers.find((w) => w.siteName.trim().toLowerCase() === anahtar)
-                      if (!xml) return { durum: webUsersLoading ? "yukleniyor" : "yok", liste: [], hata: "", not: "" }
-                      if (xml.error) return { durum: "hata", liste: [], hata: xml.error, not: "" }
-                      if (xml.notFound) return { durum: "yok", liste: [], hata: "", not: "" }
-                      return { durum: "liste", liste: xml.users, hata: "", not: xml.kaynak === "webconfig" ? "Web.config" : "" }
+                      if (!xml) return { ...bos, durum: webUsersLoading ? "yukleniyor" : "yok" }
+                      if (xml.error) return { ...bos, durum: "hata", hata: xml.error }
+                      if (xml.notFound) return bos
+                      const webconfig = xml.kaynak === "webconfig"
+                      return { durum: "liste", liste: xml.users, hata: "", not: webconfig ? "Web.config" : "", yonet: webconfig ? null : { site: xml.siteName, dbs: xml.dbs ?? [] } }
                     }
                     if (s.type === "pars") {
                       const p = parsSifreler.find((x) => x.serviceId === s.parsServiceId)
-                      if (!p) return { durum: parsSifreLoading ? "yukleniyor" : "yok", liste: [], hata: "", not: "" }
-                      if (p.error) return { durum: "hata", liste: [], hata: p.error, not: "" }
-                      return { durum: "liste", liste: p.users, hata: "", not: "" }
+                      if (!p) return { ...bos, durum: parsSifreLoading ? "yukleniyor" : "yok" }
+                      if (p.error) return { ...bos, durum: "hata", hata: p.error }
+                      return { ...bos, durum: "liste", liste: p.users }
                     }
-                    return { durum: "yok", liste: [], hata: "", not: "" }
+                    return bos
                   }
                   const ad = svcAdFiltre.trim().toLocaleLowerCase("tr-TR")
                   const liste = tumu.filter((s) => {
@@ -2652,30 +2663,86 @@ tr:nth-child(even) td{background:#fafafa}
                         if (k.durum === "yukleniyor") return <Skeleton className="h-4 w-28 rounded-[5px]" />
                         if (k.durum === "hata") return <span className="text-rose-600 dark:text-rose-400" title={k.hata}>Okunamadı</span>
                         if (k.durum === "yok") return <span>—</span>
-                        if (k.liste.length === 0) return <span>Kullanıcı yok</span>
+                        const y = k.yonet
                         const ilk = k.liste[0]
+                        // Users.xml'li hizmette liste tek kullanıcıda da açılır — işlemler orada
+                        const panelVar = k.liste.length > 1 || (y !== null)
                         return (
                           <span className="flex min-w-0 items-center gap-1">
-                            <span className="truncate" title={k.not ? `Kaynak: ${k.not}` : undefined}>{ilk.username}</span>
-                            <CopyIconButton value={ilk.username} subtle />
-                            {k.liste.length > 1 && (
+                            {ilk ? (
+                              <>
+                                <span className="truncate" title={k.not ? `Kaynak: ${k.not}` : undefined}>{ilk.username}</span>
+                                <CopyIconButton value={ilk.username} subtle />
+                              </>
+                            ) : (
+                              <span className="truncate">Kullanıcı yok</span>
+                            )}
+                            {panelVar && (
                               <Popover>
                                 <PopoverTrigger asChild>
-                                  <button type="button" onClick={(e) => e.stopPropagation()} className="inline-flex shrink-0 rounded-[5px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20">
-                                    +{k.liste.length - 1}
+                                  <button type="button" onClick={(e) => e.stopPropagation()} title={y ? "Kullanıcıları yönet" : "Tüm kullanıcılar"}
+                                    className="inline-flex shrink-0 items-center gap-1 rounded-[5px] bg-primary/10 px-1.5 py-0.5 text-[11px] font-medium text-primary transition-colors hover:bg-primary/20">
+                                    {k.liste.length > 1 ? `+${k.liste.length - 1}` : y && k.liste.length === 0 ? <><Plus className="size-3" />Ekle</> : <Settings2 className="size-3" />}
                                   </button>
                                 </PopoverTrigger>
-                                <PopoverContent align="start" className="w-80 p-0">
+                                <PopoverContent align="start" className="w-[22rem] p-0">
                                   <p className="border-b bg-[var(--section-bg)] px-3 py-2 text-[12px] font-medium">{s.name} · {k.liste.length} kullanıcı{k.not ? ` · ${k.not}` : ""}</p>
-                                  <ul className="max-h-72 divide-y overflow-y-auto">
-                                    {k.liste.map((x) => (
-                                      <li key={x.username} className="flex items-center gap-2 px-3 py-1.5 text-[13px]">
-                                        <span className="min-w-0 flex-1 truncate">{x.username}</span>
-                                        <CopyIconButton value={x.username} subtle />
-                                        <SvcSifre deger={x.password} />
-                                      </li>
-                                    ))}
-                                  </ul>
+                                  {k.liste.length === 0 ? (
+                                    <p className="px-3 py-4 text-center text-[12px] text-muted-foreground">Users.xml'de kullanıcı yok.</p>
+                                  ) : (
+                                    <ul className="max-h-72 divide-y overflow-y-auto">
+                                      {k.liste.map((x) => {
+                                        const tAnahtar = y ? `${y.site}::${x.username}` : ""
+                                        const sonuc = y ? webUserTestResult[tAnahtar] : undefined
+                                        const sinaniyor = y !== null && webUserTestBusy === tAnahtar
+                                        const u = { username: x.username, password: x.password ?? "", dbs: x.dbs ?? [] }
+                                        return (
+                                          <li key={x.username} className="flex flex-col gap-0.5 px-3 py-1.5 text-[13px]">
+                                            <span className="flex items-center gap-2">
+                                              <span className="min-w-0 flex-1 truncate" title={x.dbs?.length ? `Veritabanları: ${x.dbs.join(", ")}` : undefined}>{x.username}</span>
+                                              <CopyIconButton value={x.username} subtle />
+                                              <SvcSifre deger={x.password} />
+                                              {y && (
+                                                <DropdownMenu>
+                                                  <DropdownMenuTrigger asChild>
+                                                    <button type="button" className="inline-flex size-6 shrink-0 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label={`${x.username} işlemleri`}>
+                                                      {sinaniyor ? <RefreshCw className="size-3.5 animate-spin text-muted-foreground" /> : <MoreVertical className="size-3.5 text-muted-foreground" />}
+                                                    </button>
+                                                  </DropdownMenuTrigger>
+                                                  <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuItem className="gap-2 text-[12px]" disabled={sinaniyor} onClick={() => void testWebUser(y.site, u, "lan")}>
+                                                      <Network className="size-3.5" /> Erişim testi (LAN)
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="gap-2 text-[12px]" disabled={sinaniyor} onClick={() => void testWebUser(y.site, u, "wan")}>
+                                                      <Globe className="size-3.5" /> Erişim testi (WAN)
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => editWebUserDialog(y.site, y.dbs, u)}>
+                                                      <Pencil className="size-3.5" /> Düzenle
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" onClick={() => setWebUserDelTarget({ siteName: y.site, username: x.username })}>
+                                                      <Trash2 className="size-3.5" /> Sil
+                                                    </DropdownMenuItem>
+                                                  </DropdownMenuContent>
+                                                </DropdownMenu>
+                                              )}
+                                            </span>
+                                            {sonuc && (
+                                              <span className={`truncate text-[11px] ${sonuc.ok ? "text-emerald-700 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`} title={sonuc.message}>
+                                                {sonuc.ok ? "Erişim başarılı" : "Erişim başarısız"}{sonuc.message ? ` — ${sonuc.message}` : ""}
+                                              </span>
+                                            )}
+                                          </li>
+                                        )
+                                      })}
+                                    </ul>
+                                  )}
+                                  {y && (
+                                    <div className="border-t p-2">
+                                      <Button size="sm" variant="outline" className="h-7 w-full gap-1.5 rounded-[5px] text-[12px]" onClick={() => openWebUserDialog(y.site, y.dbs)}>
+                                        <UserPlus className="size-3.5" /> Kullanıcı ekle
+                                      </Button>
+                                    </div>
+                                  )}
                                 </PopoverContent>
                               </Popover>
                             )}
@@ -2708,7 +2775,9 @@ tr:nth-child(even) td{background:#fafafa}
                     },
                     {
                       key: "islem", header: "", width: "64px", align: "center",
-                      cell: (svc) => (
+                      cell: (svc) => {
+                        const y = kimlik(svc).yonet
+                        return (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <button className="inline-flex size-7 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label={`${svc.name} işlemleri`}>
@@ -2716,6 +2785,11 @@ tr:nth-child(even) td{background:#fafafa}
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-56">
+                            {y && (
+                              <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => openWebUserDialog(y.site, y.dbs)}>
+                                <UserPlus className="size-3.5" /> Kullanıcı ekle
+                              </DropdownMenuItem>
+                            )}
                             {svc.type === "pars" && (
                               <>
                                 <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => setParsYonetim({ serviceId: svc.parsServiceId ?? null, sekme: "kullanicilar" })}>
@@ -2738,7 +2812,8 @@ tr:nth-child(even) td{background:#fafafa}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      ),
+                        )
+                      },
                     },
                   ]
                   return (
@@ -4454,147 +4529,173 @@ tr:nth-child(even) td{background:#fafafa}
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi */}
+      {/* Web hizmeti Users.xml kullanıcısı — ekle / düzenle / silme ilerlemesi (Yeni Kullanıcı ile aynı düzen) */}
       <Dialog
         open={webUserDlg !== null}
         onOpenChange={(o) => { if (!o && !webUserSaving) { setWebUserDlg(null); setWebUserSteps(null) } }}
       >
-        <DialogContent className="max-w-md p-0 gap-0">
-          <DialogHeader className="px-5 py-3.5 border-b border-border/50">
-            <DialogTitle className="flex items-center gap-2 text-[13px]">
-              <UserPlus className="h-4 w-4 text-muted-foreground" />
-              <span className="text-muted-foreground font-normal">
-                {webUserDlg?.mode === "edit" ? "Kullanıcı Düzenle"
-                  : webUserDlg?.mode === "delete" ? "Kullanıcı Siliniyor"
-                  : "Kullanıcı Ekle"}
-              </span>
-              <span className="text-foreground">— {webUserDlg?.siteName}</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          {/* İşlem başladıysa form yerine adım listesi */}
-          {webUserSteps ? (
-            <div className="px-5 py-4 space-y-2">
-              {webUserSteps.map((s, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="mt-0.5 shrink-0">
-                    {s.status === "done"    && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />}
-                    {s.status === "running" && <RefreshCw className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 animate-spin" />}
-                    {s.status === "error"   && <XCircle className="h-3.5 w-3.5 text-destructive" />}
-                    {s.status === "pending" && <span className="block h-3.5 w-3.5 rounded-full border border-border" />}
+        <DialogContent className="top-[8vh] translate-y-0 grid-cols-1 gap-0 p-0 sm:max-w-[480px]">
+          {(() => {
+            const kayit = webUserDlg ? webUsers.find((w) => w.siteName === webUserDlg.siteName) : undefined
+            const mod = webUserDlg?.mode ?? "add"
+            const bitti = webUserSteps !== null && !webUserSaving && webUserSteps.every((s) => s.status === "done")
+            const hatali = webUserSteps?.some((s) => s.status === "error") ?? false
+            const ad = webUserName.trim()
+            // Aynı adda başka kullanıcı (düzenlemede kendi eski adı hariç) — Users.xml'de çakışır
+            const cakisan = !!ad && (kayit?.users ?? []).some((u) =>
+              u.username.toLocaleLowerCase("tr-TR") === ad.toLocaleLowerCase("tr-TR") &&
+              (mod !== "edit" || u.username !== webUserDlg?.original))
+            const secenekler = webUserDlg?.dbOptions ?? []
+            const dbGerekli = secenekler.length > 0
+            const adHata = !ad ? "Zorunlu" : cakisan ? "Bu ad zaten kullanılıyor" : ""
+            const sifreHata = !webUserPw ? "Zorunlu" : ""
+            const dbHata = dbGerekli && webUserDbs.length === 0 ? "En az bir veritabanı seçin" : ""
+            const gecerli = !adHata && !sifreHata && !dbHata
+            const goster = (h: string) => (webUserDenendi && h ? <span className="text-red-600 dark:text-red-400">{h}</span> : null)
+            const hataSinifi = (h: string) => (webUserDenendi && h ? `border-red-500/60 ${webUserSallan ? "motion-safe:animate-sallan" : ""}` : "")
+            const tumu = secenekler.length > 0 && secenekler.every((d) => webUserDbs.includes(d))
+            const kapat = () => { setWebUserDlg(null); setWebUserSteps(null) }
+            return (
+              <>
+                <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] px-5 py-4">
+                  <span className={`flex size-9 shrink-0 items-center justify-center rounded-[5px] ${
+                    bitti ? "bg-emerald-600 text-white" : hatali ? "bg-rose-600 text-white" : mod === "delete" ? "bg-rose-500/15 text-rose-600 dark:text-rose-400" : "bg-primary text-primary-foreground"}`}>
+                    {bitti ? <CheckCircle2 className="size-[18px]" />
+                      : hatali ? <XCircle className="size-[18px]" />
+                      : mod === "delete" ? <Trash2 className="size-[18px]" />
+                      : mod === "edit" ? <Pencil className="size-[18px]" />
+                      : <UserPlus className="size-[18px]" />}
                   </span>
                   <div className="min-w-0">
-                    <p className={`text-[11px] ${s.status === "pending" ? "text-muted-foreground" : ""}`}>{s.label}</p>
-                    {s.error && <p className="text-[10px] text-destructive mt-0.5">{s.error}</p>}
+                    <DialogTitle className="text-[15px] font-semibold">
+                      {mod === "edit" ? "Kullanıcı Düzenle" : mod === "delete" ? "Kullanıcı Siliniyor" : "Kullanıcı Ekle"}
+                      <span className="font-medium text-muted-foreground"> — {webUserDlg?.siteName}</span>
+                    </DialogTitle>
+                    <DialogDescription className="truncate text-[12px]">
+                      {bitti ? "İşlem tamamlandı."
+                        : webUserSteps ? (webUserSaving ? "Sunucuda uygulanıyor…" : "İşlem tamamlanamadı.")
+                        : mod === "edit" ? `${webUserDlg?.original ?? ""} kullanıcısı · ${kayit?.server ?? "API hizmeti"}`
+                        : `Users.xml'e yeni kullanıcı · ${kayit?.server ?? "API hizmeti"}`}
+                    </DialogDescription>
+                  </div>
+                </DialogHeader>
+
+                <div className="max-h-[68vh] min-w-0 overflow-y-auto">
+                  <div className="space-y-3 p-4">
+                    {webUserSteps ? (
+                      <KullaniciBolum baslik="İlerleme">
+                        <ul className="-mx-3 -my-3 divide-y">
+                          {webUserSteps.map((s, i) => (
+                            <li key={i} className="flex items-start gap-2.5 px-3 py-2">
+                              <span className="mt-0.5 shrink-0">
+                                {s.status === "done"    && <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />}
+                                {s.status === "running" && <RefreshCw className="size-4 animate-spin text-muted-foreground" />}
+                                {s.status === "error"   && <XCircle className="size-4 text-rose-600 dark:text-rose-400" />}
+                                {s.status === "pending" && <span className="block size-4 rounded-full border border-border" />}
+                              </span>
+                              <div className="min-w-0">
+                                <p className={`text-[13px] ${s.status === "pending" ? "text-muted-foreground" : "font-medium"}`}>{s.label}</p>
+                                {s.error && <p className="mt-0.5 text-[12px] text-rose-600 dark:text-rose-400">{s.error}</p>}
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </KullaniciBolum>
+                    ) : (
+                      <>
+                        <KullaniciBolum baslik="Hesap">
+                          <Field label="Kullanıcı adı" required ek={goster(adHata)}>
+                            <Input
+                              value={webUserName}
+                              onChange={(e) => setWebUserName(e.target.value)}
+                              placeholder="örn. MERKEZ"
+                              className={hataSinifi(adHata)}
+                              autoFocus
+                            />
+                          </Field>
+                          <Field label="Şifre" required ek={goster(sifreHata)}>
+                            <div className="flex items-center gap-1.5">
+                              <Input value={webUserPw} onChange={(e) => setWebUserPw(e.target.value)} className={`flex-1 ${hataSinifi(sifreHata)}`} />
+                              <CopyIconButton value={webUserPw} subtle />
+                              <Button type="button" variant="outline" className="h-8 shrink-0 gap-1.5 rounded-[5px] px-2.5 text-[12px]"
+                                onClick={() => setWebUserPw(generateSafePassword())} title="Yeni şifre üret">
+                                <RefreshCw className="size-3.5" /> Üret
+                              </Button>
+                            </div>
+                          </Field>
+                        </KullaniciBolum>
+
+                        <section className={`rounded-[8px] bg-[var(--section-bg)] p-1.5 ${webUserDenendi && dbHata && webUserSallan ? "motion-safe:animate-sallan" : ""}`}>
+                          <div className="flex items-center gap-1.5 px-2 pb-1.5 pt-0.5">
+                            <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                              Veritabanları
+                              {secenekler.length > 0 && <span className="normal-case tracking-normal"> · {webUserDbs.length}/{secenekler.length} seçili</span>}
+                            </p>
+                            <span className="ml-auto text-[11px]">{goster(dbHata)}</span>
+                            {secenekler.length > 1 && (
+                              <button type="button" className="text-[11px] font-medium text-primary hover:underline"
+                                onClick={() => setWebUserDbs(tumu ? [] : secenekler)}>
+                                {tumu ? "Hiçbiri" : "Tümü"}
+                              </button>
+                            )}
+                          </div>
+                          <div className={`overflow-hidden rounded-[5px] bg-card ${webUserDenendi && dbHata ? "ring-1 ring-red-500/60" : ""}`} style={{ boxShadow: "var(--card-shadow)" }}>
+                            {secenekler.length === 0 ? (
+                              <p className="px-3 py-3 text-[12px] text-muted-foreground">Bu hizmet için veritabanı listesi bulunamadı.</p>
+                            ) : (
+                              <ul className="max-h-48 divide-y overflow-y-auto">
+                                {secenekler.map((db) => {
+                                  const on = webUserDbs.includes(db)
+                                  return (
+                                    <li key={db}>
+                                      <label className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-[13px] transition-colors hover:bg-muted/30">
+                                        <Checkbox checked={on} onCheckedChange={() => setWebUserDbs((prev) => (on ? prev.filter((x) => x !== db) : [...prev, db]))} />
+                                        <span className={`truncate ${on ? "font-medium" : "text-muted-foreground"}`}>{db}</span>
+                                      </label>
+                                    </li>
+                                  )
+                                })}
+                              </ul>
+                            )}
+                          </div>
+                        </section>
+
+                        <div className="flex items-start gap-2 rounded-[8px] bg-[var(--section-bg)] px-3 py-2 text-[12px] text-muted-foreground">
+                          <Info className="mt-0.5 size-3.5 shrink-0" />
+                          <span>Sunucudaki <span className="font-medium text-foreground">Config\Users.xml</span> güncellenir (önceki hali .bak olarak saklanır), ardından IIS sitesi yeniden başlatılır.</span>
+                        </div>
+                      </>
+                    )}
+
+                    {webUserSteps && hatali && webUserSteps[0].status === "done" && (
+                      <p className="rounded-[5px] bg-amber-500/15 px-3 py-2 text-[12px] text-amber-800 dark:text-amber-400">
+                        Users.xml güncellendi ama site yeniden başlatılamadı — değişiklik uygulama yeniden başlatılana kadar geçerli olmayabilir.
+                      </p>
+                    )}
                   </div>
                 </div>
-              ))}
-              {webUserSteps.some((s) => s.status === "error") && webUserSteps[0].status === "done" && (
-                <p className="text-[10px] text-amber-800 bg-amber-500/15 border border-amber-500/25 rounded-[5px] px-2.5 py-1.5">
-                  Users.xml güncellendi ama site yeniden başlatılamadı — değişiklik uygulama yeniden
-                  başlatılana kadar geçerli olmayabilir.
-                </p>
-              )}
-            </div>
-          ) : (
-          <div className="px-5 py-4 space-y-3">
-            <div className="space-y-1">
-              <Label className="text-foreground/80 text-[12px] font-medium">Kullanıcı Adı</Label>
-              <Input
-                value={webUserName}
-                onChange={(e) => setWebUserName(e.target.value)}
-                placeholder="örn. MERKEZ"
-                className="rounded-[5px] h-8 text-[13px] font-mono"
-                autoFocus
-              />
-            </div>
 
-            <div className="space-y-1">
-              <Label className="text-foreground/80 text-[12px] font-medium">Şifre</Label>
-              <div className="flex items-center gap-1.5">
-                <Input
-                  value={webUserPw}
-                  onChange={(e) => setWebUserPw(e.target.value)}
-                  className="rounded-[5px] h-8 text-[13px] font-mono"
-                />
-                <button
-                  type="button"
-                  onClick={() => setWebUserPw(generateSafePassword())}
-                  className="h-8 px-2.5 shrink-0 inline-flex items-center gap-1 text-[11px] rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors"
-                  title="Yeni şifre üret"
-                >
-                  <RefreshCw className="h-3 w-3" /> Üret
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-foreground/80 text-[12px] font-medium">Veritabanları</Label>
-              {webUserDlg?.dbOptions.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">Bu hizmet için veritabanı listesi bulunamadı.</p>
-              ) : (
-                <div className="rounded-[5px] border border-border/50 divide-y divide-border/40 max-h-40 overflow-y-auto">
-                  {webUserDlg?.dbOptions.map((db) => {
-                    const on = webUserDbs.includes(db)
-                    return (
-                      <label
-                        key={db}
-                        className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] font-mono cursor-pointer hover:bg-muted/20"
-                      >
-                        <Checkbox
-                          checked={on}
-                          onCheckedChange={() =>
-                            setWebUserDbs((prev) => (on ? prev.filter((x) => x !== db) : [...prev, db]))
-                          }
-                          className="size-3.5"
-                        />
-                        {db}
-                      </label>
-                    )
-                  })}
+                <div className="flex items-center gap-2 border-t px-5 py-3">
+                  {webUserSteps ? (
+                    <Button variant="outline" className="flex-1" onClick={kapat} disabled={webUserSaving}>
+                      {webUserSaving ? "Uygulanıyor…" : "Kapat"}
+                    </Button>
+                  ) : (
+                    <>
+                      <Button variant="outline" className="flex-1" onClick={kapat} disabled={webUserSaving}>Vazgeç</Button>
+                      <Button className="flex-1" disabled={webUserSaving} onClick={() => {
+                        setWebUserDenendi(true)
+                        if (!gecerli) { setWebUserSallan(true); setTimeout(() => setWebUserSallan(false), 450); return }
+                        void saveWebUser()
+                      }}>
+                        {mod === "edit" ? <><Save className="size-3.5" /> Kaydet</> : <><UserPlus className="size-3.5" /> Ekle</>}
+                      </Button>
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
-
-            <p className="text-[10px] text-muted-foreground">
-              Değişiklik sunucudaki <span className="font-mono">Config\Users.xml</span> dosyasına yazılır
-              (önceki hali <span className="font-mono">.bak</span> olarak yedeklenir) ve ardından IIS
-              sitesi yeniden başlatılır.
-            </p>
-          </div>
-          )}
-
-          <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border/50 bg-muted/10">
-            {webUserSteps ? (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => { setWebUserDlg(null); setWebUserSteps(null) }}
-                disabled={webUserSaving}
-                className="rounded-[5px] h-7 text-[11px]"
-              >
-                {webUserSaving ? "Lütfen bekleyin…" : "Kapat"}
-              </Button>
-            ) : (
-              <>
-                <button
-                  onClick={() => setWebUserDlg(null)}
-                  disabled={webUserSaving}
-                  className="px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 text-[11px] font-medium text-muted-foreground transition-colors disabled:opacity-50"
-                >
-                  Vazgeç
-                </button>
-                <Button
-                  size="sm"
-                  onClick={saveWebUser}
-                  disabled={webUserSaving || !webUserName.trim() || !webUserPw}
-                  className="rounded-[5px] h-7 text-[11px] gap-1.5"
-                >
-                  {webUserDlg?.mode === "edit" ? "Kaydet" : "Ekle"}
-                </Button>
               </>
-            )}
-          </div>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
