@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
-import * as aktarim2 from "@/lib/aktarim2-proxy"
-import { listSessions as aktarim1Oturumlar } from "@/lib/aktarim-proxy"
 
 /**
- * GET /api/dashboard/firmalar — dashboard 2. aşama: firmalar + günlük hareket.
+ * GET /api/dashboard/firmalar — dashboard 2. aşama: firmalar + bugünkü terminal oturumları.
  *
  * Yalnız KURULU firmalar (ad_server_id dolu). Yoğunluk, firma detayındaki kartla
  * aynı kurallarla hesaplanır: son 30 günün firma toplamı (user_daily_usage gün
@@ -23,23 +21,12 @@ export interface DashFirmalar {
   hakAsan: DashFirmaSatir[]
   yogun: (DashFirmaSatir & { cpu: number; ram: number; disk: number; db: number })[]
   oturum: { seri: { ts: string; kisi: number }[]; zirve: { ts: string; kisi: number } | null; simdi: number | null }
-  hareket: {
-    aktarimBugun: number | null
-    aktarimTamamlanan: number | null
-    mesajBugun: number
-    mesajAlici: number
-    mesajOkunan: number
-    anket: { gonderilen: number; yanitlanan: number } | null
-  }
   kaynakHata: string[]
 }
 
 let onbellek: { at: number; veri: DashFirmalar } | null = null
 const TTL = 5 * 60_000
 const LISANS_GUN = 30
-
-const zamanAsimi = <T,>(p: Promise<T>, ms = 8000): Promise<T> =>
-  Promise.race([p, new Promise<T>((_, red) => setTimeout(() => red(new Error("zaman aşımı")), ms))])
 
 /** PostgREST max-rows (1000) sessizce keser — sayfalı oku */
 async function hepsi<T>(sorgu: (bas: number, son: number) => PromiseLike<{ data: unknown; error: unknown }>): Promise<T[]> {
@@ -152,43 +139,12 @@ async function topla(): Promise<DashFirmalar> {
     }
   } catch (e) { kaynakHata.push(`Oturum geçmişi: ${e instanceof Error ? e.message : e}`) }
 
-  // ── Günlük hareket ────────────────────────────────────────
-  let aktarimBugun: number | null = null, aktarimTamamlanan: number | null = null
-  try {
-    const [a1, a2] = await Promise.all([zamanAsimi(aktarim1Oturumlar()), zamanAsimi(aktarim2.oturumlar())])
-    const bugunMu = (s: string | null | undefined) => !!s && new Date(s).getTime() >= gunBasi.getTime()
-    aktarimBugun = a1.filter((o) => bugunMu(o.createdAt)).length + a2.filter((o) => bugunMu(o.olusturma)).length
-    aktarimTamamlanan = a1.filter((o) => bugunMu(o.completedAt)).length + a2.filter((o) => bugunMu(o.tamamlanma)).length
-  } catch (e) { kaynakHata.push(`Aktarım: ${e instanceof Error ? e.message : e}`) }
-
-  const { data: mesajlar } = await sb.schema("hub").from("messages").select("id, total_count, read_count").gte("sent_at", gunBasi.toISOString())
-  const m = (mesajlar ?? []) as { id: string; total_count: number; read_count: number }[]
-
-  let anket: DashFirmalar["hareket"]["anket"] = null
-  try {
-    const { data: anketler } = await sb.schema("hub").from("messages").select("id")
-      .not("survey", "is", null).gte("sent_at", new Date(Date.now() - 30 * 86_400_000).toISOString())
-    const idler = ((anketler ?? []) as { id: string }[]).map((x) => x.id)
-    if (idler.length) {
-      const alicilar = await hepsi<{ answers: unknown }>((a, b) =>
-        sb.schema("hub").from("message_recipients").select("answers").in("message_id", idler).order("id").range(a, b))
-      anket = { gonderilen: alicilar.length, yanitlanan: alicilar.filter((x) => x.answers != null).length }
-    } else anket = { gonderilen: 0, yanitlanan: 0 }
-  } catch (e) { kaynakHata.push(`Anket: ${e instanceof Error ? e.message : e}`) }
-
   return {
     zaman: new Date().toISOString(),
     lisans: { dolmus, yaklasan },
     hakAsan,
     yogun,
     oturum,
-    hareket: {
-      aktarimBugun, aktarimTamamlanan,
-      mesajBugun: m.length,
-      mesajAlici: m.reduce((t, x) => t + (x.total_count ?? 0), 0),
-      mesajOkunan: m.reduce((t, x) => t + (x.read_count ?? 0), 0),
-      anket,
-    },
     kaynakHata,
   }
 }

@@ -162,17 +162,6 @@ export default function DashboardPage() {
                   {firmaYukleniyor ? <Skeleton className="h-full w-full rounded-[5px]" /> : <OturumGrafik seri={firma?.oturum.seri ?? []} />}
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <HareketKutusu baslik="Aktarım" yukleniyor={firmaYukleniyor}
-                  deger={firma?.hareket.aktarimBugun ?? null}
-                  alt={firma?.hareket.aktarimBugun == null ? "okunamadı" : `başladı · ${firma.hareket.aktarimTamamlanan ?? 0} tamamlandı`} />
-                <HareketKutusu baslik="Mesaj" yukleniyor={firmaYukleniyor}
-                  deger={firma?.hareket.mesajBugun ?? null}
-                  alt={firma ? `${firma.hareket.mesajAlici} alıcı · ${firma.hareket.mesajOkunan} okundu` : ""} />
-                <HareketKutusu baslik="Anket · 30 gün" yukleniyor={firmaYukleniyor}
-                  deger={firma?.hareket.anket?.yanitlanan ?? null}
-                  alt={firma?.hareket.anket ? `yanıt · ${firma.hareket.anket.gonderilen} kişiye gitti` : "okunamadı"} />
-              </div>
             </div>
           </section>
         </div>
@@ -251,22 +240,6 @@ function FirmaListesi({ baslik, satirlar, bos, not, yukleniyor }: {
               {tumu ? "Daha az göster" : `Tümünü göster (${satirlar.length})`}
             </button>
           )}
-        </>
-      )}
-    </div>
-  )
-}
-
-function HareketKutusu({ baslik, deger, alt, yukleniyor }: { baslik: string; deger: number | null; alt: string; yukleniyor: boolean }) {
-  return (
-    <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
-      <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{baslik}</p>
-      {yukleniyor ? (
-        <div className="mt-2 space-y-1.5"><Skeleton className="h-6 w-12 rounded-[5px]" /><Skeleton className="h-3 w-28 rounded-[5px]" /></div>
-      ) : (
-        <>
-          <p className="mt-1 text-2xl font-bold tabular-nums">{deger ?? "—"}</p>
-          <p className="truncate text-[12px] text-muted-foreground">{alt}</p>
         </>
       )}
     </div>
