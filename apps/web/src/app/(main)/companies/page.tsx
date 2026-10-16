@@ -250,9 +250,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
   const metrics = [
     { label: "CPU",        icon: <Cpu className="size-3.5" />,         pct: cpuPct,
-      detay: `Ort %${sayi(avgCpuValue)} / %${sayi(cpuKota)}${!mq?.cpuPct && y30 ? ` · ${y30.users} kişi` : ""}`, manuel: !!mq?.cpuPct },
+      detay: `Ort %${sayi(avgCpuValue)} / %${sayi(cpuKota)}${!mq?.cpuPct && y30 ? ` · en fazla ${y30.users} kişi` : ""}`, manuel: !!mq?.cpuPct },
     { label: "RAM",        icon: <MemoryStick className="size-3.5" />, pct: ramPct,
-      detay: `${sayi(avgRamMB / 1024)} / ${sayi(ramKotaMB / 1024)} GB${!mq?.ramGB && y30 ? ` · ${y30.users} kişi` : ""}`, manuel: !!mq?.ramGB },
+      detay: `${sayi(avgRamMB / 1024)} / ${sayi(ramKotaMB / 1024)} GB${!mq?.ramGB && y30 ? ` · en fazla ${y30.users} kişi` : ""}`, manuel: !!mq?.ramGB },
     { label: "Disk",       icon: <HardDrive className="size-3.5" />,   pct: diskPct,
       detay: `${sayi(d.usageDiskMB / 1024)} / ${sayi(mq?.diskGB ?? d.quotaDiskMB / 1024)} GB`, manuel: !!mq?.diskGB },
     { label: "Veritabanı", icon: <Database className="size-3.5" />,    pct: dbPct,
@@ -362,7 +362,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
         <p className="text-[11px] text-muted-foreground leading-relaxed">
           Firmanın kaynak kullanımı (son 30 gün ortalaması) ile kotasına oranı.
           Elle kota yoksa varsayılanlar: CPU kullanıcı başı %5, RAM kullanıcı başı 2 GB
-          (son 30 günün ortalama günlük kullanıcı sayısı), Disk 25 GB, Veritabanı 5 GB.
+          (son 30 günde bir günde giren en fazla kişi), Disk 25 GB, Veritabanı 5 GB.
           4 metriğin ortalaması yoğunluk skorunu oluşturur:
         </p>
 

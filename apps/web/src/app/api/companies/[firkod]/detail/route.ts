@@ -54,7 +54,7 @@ export interface CompanyDetail {
   dbQuota:      number  // GB — sunucudaki tüm DB'lerin toplam boyutu
   dbTotalMB:    number  // MB — DB kotası (varsayılan 5 GB)
   /** Yoğunluk için son 30 günün firma TOPLAMI (user_daily_usage, gün bazında toplanıp ortalanır)
-   *  ve kullanıcı başı varsayılan kotalar: CPU %5, RAM 2 GB × ortalama günlük kullanıcı. */
+   *  ve kullanıcı başı varsayılan kotalar: CPU %5, RAM 2 GB × 30 günde bir günde görülen en fazla kullanıcı. */
   yogunluk30d?: { cpu: number; ramMB: number; users: number; quotaCpu: number; quotaRamMB: number }
   weeklyUsage:  WeeklyUsagePoint[]
   history30d?:  CompanyUsageHistory
@@ -279,7 +279,8 @@ export async function GET(
       const gunler = [...agg.values()]
       if (gunler.length) {
         const ort = (f: (g: { cpu: number; ramMB: number; users: Set<string> }) => number) => gunler.reduce((t, g) => t + f(g), 0) / gunler.length
-        const users = Math.max(1, Math.round(ort((g) => g.users.size)))
+        // Kota tabanı: 30 günde aynı gün giren EN FAZLA kişi — kapasite en kalabalık güne göre planlanır
+        const users = Math.max(1, ...gunler.map((g) => g.users.size))
         detail.yogunluk30d = {
           cpu:        Math.round(ort((g) => g.cpu) * 10) / 10,
           ramMB:      Math.round(ort((g) => g.ramMB)),
