@@ -3414,7 +3414,7 @@ tr:nth-child(even) td{background:#fafafa}
                                 { etiket: "AD sunucusu", liste: newUserAdServers, deger: newUserAdServerId, set: setNewUserAdServerId, kilitli: newUserAdLocked, sec: adSrv },
                                 { etiket: "Bağlantı sunucusu (RDP)", liste: newUserRdpServers, deger: newUserRdpServerId, set: setNewUserRdpServerId, kilitli: newUserRdpLocked, sec: rdpSrv },
                               ] as const).map((s) => (
-                                <Field key={s.etiket} label={s.etiket} required hint={s.kilitli ? "Firma kaydından" : undefined}>
+                                <Field key={s.etiket} label={s.etiket} required hint={s.kilitli ? "Firma kaydından" : undefined} ek={sunucuEksik && !s.deger ? <span className="text-red-700 dark:text-red-400">Seçin</span> : undefined}>
                                   {s.kilitli ? (
                                     <div className="flex h-8 items-center gap-2 rounded-[5px] border px-2.5 text-[13px]">
                                       <span className="truncate">{s.sec?.name ?? "—"}</span>
@@ -3437,13 +3437,12 @@ tr:nth-child(even) td{background:#fafafa}
                                 </Field>
                               ))}
                             </div>
-                            {sunucuEksik && <p className="text-[12px] text-red-700 dark:text-red-400">Sunucu seçin.</p>}
                           </KullaniciBolum>
                         )}
 
                         <KullaniciBolum baslik="Hesap">
                           {/* Kullanıcı adı — firma kodu öneki sabit */}
-                          <Field label="Kullanıcı adı" required>
+                          <Field label="Kullanıcı adı" required ek={adEksik ? <span className="text-red-700 dark:text-red-400">Kullanıcı adı girin</span> : undefined}>
                             <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${adEksik ? hata : ""}`}>
                               <span className="flex h-full shrink-0 items-center border-r bg-muted px-2.5 text-[13px] font-medium">{selectedFirma?.firkod}.</span>
                               <input
@@ -3454,7 +3453,6 @@ tr:nth-child(even) td{background:#fafafa}
                                 className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
                               />
                             </div>
-                            {adEksik && <p className="text-[12px] text-red-700 dark:text-red-400">Kullanıcı adı girin.</p>}
                           </Field>
 
                           <Field label="Ad soyad">
@@ -3462,7 +3460,13 @@ tr:nth-child(even) td{background:#fafafa}
                           </Field>
 
                           {/* Şifre — göster / oluştur; AD karmaşıklık kuralı canlı kontrol */}
-                          <Field label="Şifre" required>
+                          <Field label="Şifre" required ek={
+                            !newUserPassword
+                              ? <span className={sifreEksik ? "text-red-700 dark:text-red-400" : "text-muted-foreground"}>{sifreEksik ? "Şifre girin ya da Oluştur'a basın" : "En az 7 karakter, 4 gruptan 3'ü"}</span>
+                              : meetsAdComplexity(newUserPassword)
+                                ? <span className="text-emerald-700 dark:text-emerald-400">AD kuralına uygun</span>
+                                : <span className="text-red-700 dark:text-red-400">Kurala uymuyor — en az 7 karakter, 4 gruptan 3&apos;ü</span>
+                          }>
                             <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${
                               sifreEksik ? hata : newUserPassword ? (meetsAdComplexity(newUserPassword) ? "border-emerald-500/60" : hata) : ""
                             }`}>
@@ -3480,14 +3484,6 @@ tr:nth-child(even) td{background:#fafafa}
                                 <RefreshCw className="size-3.5" /> Oluştur
                               </button>
                             </div>
-                            <p className={`text-[12px] ${
-                              !newUserPassword ? (sifreEksik ? "text-red-700 dark:text-red-400" : "text-muted-foreground")
-                              : meetsAdComplexity(newUserPassword) ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
-                            }`}>
-                              {!newUserPassword ? (sifreEksik ? "Şifre girin ya da Oluştur'a basın." : "En az 7 karakter; büyük harf, küçük harf, rakam ve özel karakterden üçü.")
-                                : meetsAdComplexity(newUserPassword) ? "Şifre AD kuralına uygun."
-                                : "AD kuralı karşılanmıyor: en az 7 karakter, dört gruptan üçü."}
-                            </p>
                           </Field>
                         </KullaniciBolum>
 

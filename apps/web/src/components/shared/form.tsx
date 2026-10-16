@@ -22,6 +22,7 @@ export function Field({
   label,
   required,
   hint,
+  ek,
   children,
   className,
 }: {
@@ -29,15 +30,20 @@ export function Field({
   required?: boolean;
   /** Alanın altında görünen küçük açıklama. */
   hint?: React.ReactNode;
+  /** Etiket satırının sağında, alanın ÜSTÜNDE — doğrulama uyarısı / durum (ör. "Kurala uygun"). */
+  ek?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <div className={cn("flex flex-col gap-1", className)}>
-      <Label className="text-foreground/80 text-[12px] font-medium">
-        {label}
-        {required && <span className="text-primary"> *</span>}
-      </Label>
+      <div className="flex items-baseline justify-between gap-3">
+        <Label className="text-foreground/80 text-[12px] font-medium">
+          {label}
+          {required && <span className="text-primary"> *</span>}
+        </Label>
+        {ek && <span className="min-w-0 truncate text-right text-[11px]">{ek}</span>}
+      </div>
       {children}
       {hint && <p className="text-muted-foreground text-[11px]">{hint}</p>}
     </div>
