@@ -157,6 +157,10 @@ Adim 'Kurulum klasoru (Picture Manager paketi, resim varsayilani)' {
 
 # ---- 6) Masaustu kotasi (FSRM) - T3/T4 ile ayni: UYARI modu ----
 Adim 'FSRM sablonlari (Pusula Masaustu)' {
+  # FSRM rolu ilk kurulumda InstallPending kalir; modul ve SrmSvc yeniden baslatmadan sonra gelir
+  # (16.10 T5'te boyle oldu). O durumda acik mesajla durur - yeniden baslatip betigi tekrar calistir.
+  if ((Get-WindowsFeature FS-Resource-Manager).InstallState -ne 'Installed') { throw 'FSRM rolu yeniden baslatma bekliyor - yeniden baslatip t5-kur.ps1 i tekrar calistirin' }
+  Import-Module FileServerResourceManager -ErrorAction Stop
   $izin = '*.bmp', '*.csv', '*.doc', '*.docm', '*.docx', '*.dot', '*.dotx', '*.gif', '*.heic', '*.ico', '*.jpeg', '*.jpg', '*.lnk', '*.log', '*.odp', '*.ods', '*.odt', '*.pdf', '*.png', '*.pps', '*.ppsx', '*.ppt', '*.pptm', '*.pptx', '*.rtf', '*.svg', '*.tif', '*.tiff', '*.tmp', '*.txt', '*.url', '*.webp', '*.xls', '*.xlsb', '*.xlsm', '*.xlsx', '*.xlt', '*.xltx', 'Thumbs.db', 'desktop.ini', '~$*'
   $ref = Get-FsrmFileGroup -Name 'Pusula Masaustu izin disi' -ErrorAction SilentlyContinue
   if (-not $ref) { New-FsrmFileGroup -Name 'Pusula Masaustu izin disi' -IncludePattern @('*') -ExcludePattern $izin | Out-Null }
