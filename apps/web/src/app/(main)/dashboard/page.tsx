@@ -171,12 +171,14 @@ export default function DashboardPage() {
                   ...(firma?.lisans.yaklasan ?? []).map((x) => ({ ...x, kritik: (x.deger ?? 99) <= 7 })),
                 ]}
                 not={firma ? `${firma.lisans.dolmus.length} dolmuş · ${firma.lisans.yaklasan.length} yaklaşan` : undefined} />
-              <FirmaListesi baslik="Kullanıcı hakkını aşanlar" yukleniyor={firmaYukleniyor}
-                bos="Açık hesap sayısı hakkını aşan firma yok."
-                satirlar={(firma?.hakAsan ?? []).map((x) => ({ ...x, rozet: `+${x.deger}` }))} />
-              <FirmaListesi baslik="En yoğun 5 firma" yukleniyor={firmaYukleniyor}
-                bos="Yoğunluk verisi yok."
-                satirlar={(firma?.yogun ?? []).map((x) => ({ ...x, skor: x.deger }))} />
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <FirmaListesi baslik="Kullanıcı hakkını aşanlar" yukleniyor={firmaYukleniyor}
+                  bos="Açık hesap sayısı hakkını aşan firma yok."
+                  satirlar={(firma?.hakAsan ?? []).map((x) => ({ ...x, rozet: `+${x.deger}` }))} />
+                <FirmaListesi baslik="En yoğun 5 firma" yukleniyor={firmaYukleniyor}
+                  bos="Yoğunluk verisi yok."
+                  satirlar={(firma?.yogun ?? []).map((x) => ({ ...x, skor: x.deger }))} />
+              </div>
             </div>
           </section>
 
