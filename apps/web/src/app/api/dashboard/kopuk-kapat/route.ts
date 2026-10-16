@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server"
 import { requirePermission } from "@/lib/require-permission"
 import { getAllAgents } from "@/lib/agent-store"
 import { execOnAgent } from "@/lib/agent-poller"
+import { decrypt } from "@/lib/crypto"
 
 /**
  * POST /api/dashboard/kopuk-kapat — terminallerdeki KOPUK (Disconnected)
@@ -60,7 +61,7 @@ export async function POST() {
         `try { logoff $t[1]; $n++ } catch { } } }; ` +
         `Write-Output ('KAPATILAN=' + $n)`
       try {
-        const res = await execOnAgent(s.ip, s.agent_port, s.api_key, cmd, 60)
+        const res = await execOnAgent(s.ip, s.agent_port, decrypt(s.api_key) ?? "", cmd, 60)
         const m = /KAPATILAN=(\d+)/.exec(res.stdout ?? "")
         return m ? { ad: s.name, hedef: adlar.length, kapatilan: Number(m[1]) }
           : { ad: s.name, hedef: adlar.length, kapatilan: null, hata: (res.stderr || res.stdout || "yanıt okunamadı").trim().slice(0, 200) }
