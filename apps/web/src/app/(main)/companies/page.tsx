@@ -2173,13 +2173,6 @@ tr:nth-child(even) td{background:#fafafa}
             <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
               <div className="flex items-center gap-3">
                 <>
-                  {/* Baş harf rozeti — köşedeki nokta firma durumu */}
-                  <span className={`relative flex size-10 shrink-0 items-center justify-center rounded-[5px] text-[13px] font-semibold ring-1 ${
-                    firmaIsActive(selectedFirma) ? "bg-primary/10 text-primary ring-primary/20" : "bg-red-500/15 text-red-700 ring-red-500/25 dark:text-red-400"}`}>
-                    {selectedFirma.firma.trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? "").join("").toLocaleUpperCase("tr-TR")}
-                    <span className={`absolute -right-1 -top-1 size-2.5 rounded-full ring-2 ring-card ${firmaIsActive(selectedFirma) ? "bg-emerald-500" : "bg-red-500"}`} />
-                  </span>
-
                   {/* Firma adı üstte; iletişim + temsilci altında, kopyalanabilir */}
                   <div className="min-w-0 flex-1">
                     {/* İlk satır: ad + kod + durum rozeti + etiketler */}
