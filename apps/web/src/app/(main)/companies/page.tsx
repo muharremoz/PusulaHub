@@ -337,7 +337,11 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
               {sayi(d.history30d.dbStartMB / 1024)} → {sayi(d.history30d.dbEndMB / 1024)} GB
             </span>
             <span className={`text-[11px] font-medium tabular-nums ${d.history30d.dbGrowthPct > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
-              {d.history30d.dbGrowthPct > 0 ? "+" : ""}%{sayi(d.history30d.dbGrowthPct)}
+              {(() => {
+                const farkGB = (d.history30d.dbEndMB - d.history30d.dbStartMB) / 1024
+                const isaret = (n: number) => (n > 0 ? "+" : n < 0 ? "−" : "")
+                return `${isaret(d.history30d.dbGrowthPct)}%${sayi(Math.abs(d.history30d.dbGrowthPct))} · 30 günde ${isaret(farkGB)}${sayi(Math.abs(farkGB))} GB`
+              })()}
             </span>
           </div>
         </div>
