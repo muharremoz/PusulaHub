@@ -334,6 +334,7 @@ export default function DashboardPage() {
           </section>
         </div>
 
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         {/* Kullanıcı hakkını aşanlar */}
         <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
           <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
@@ -344,12 +345,12 @@ export default function DashboardPage() {
             data={firma?.hakAsan ?? []}
             getRowId={(x) => x.firkod}
             columns={[
-              { key: "firkod", header: "Kod", width: "90px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
+              { key: "firkod", header: "Kod", width: "72px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
               { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
-              { key: "acik", header: "Açık hesap", align: "right", width: "120px", cell: (x) => <span className="tabular-nums">{x.acik}</span> },
+              { key: "acik", header: "Açık hesap", align: "right", width: "110px", cell: (x) => <span className="tabular-nums">{x.acik}</span> },
               { key: "hak", header: "Hak", align: "right", width: "90px", cell: (x) => <span className="tabular-nums">{x.hak}</span> },
               {
-                key: "fazla", header: "Fazla", align: "center", width: "100px",
+                key: "fazla", header: "Fazla", align: "center", width: "80px",
                 cell: (x) => <span className="inline-flex rounded-[5px] bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-400">+{x.deger}</span>,
               },
             ] satisfies TableColumn<DashFirmalar["hakAsan"][number]>[]}
@@ -373,14 +374,14 @@ export default function DashboardPage() {
             data={firma?.yogun ?? []}
             getRowId={(x) => x.firkod}
             columns={[
-              { key: "firkod", header: "Kod", width: "90px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
+              { key: "firkod", header: "Kod", width: "72px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
               { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
               ...(["cpu", "ram", "disk", "db"] as const).map((k) => ({
-                key: k, header: k === "db" ? "Veritabanı" : k.toUpperCase().replace("DISK", "Disk"), align: "right" as const, width: "100px",
+                key: k, header: k === "db" ? "DB" : k.toUpperCase().replace("DISK", "Disk"), align: "right" as const, width: "80px",
                 cell: (x: DashFirmalar["yogun"][number]) => <span className={`tabular-nums ${x[k] >= 90 ? "text-red-600 dark:text-red-400" : x[k] >= 75 ? "text-amber-700 dark:text-amber-400" : ""}`}>%{x[k]}</span>,
               })),
               {
-                key: "skor", header: "Yoğunluk", width: "160px",
+                key: "skor", header: "Yoğunluk", width: "140px",
                 cell: (x) => (
                   <span className="flex items-center gap-2">
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -400,6 +401,7 @@ export default function DashboardPage() {
             emptyState="Yoğunluk verisi yok."
           />
         </section>
+        </div>
       </div>
       <AlertDialog open={kopukOnay} onOpenChange={(o) => { if (!kopukKapatiliyor) setKopukOnay(o) }}>
         <AlertDialogContent>
