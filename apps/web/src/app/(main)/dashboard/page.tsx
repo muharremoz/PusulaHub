@@ -295,42 +295,57 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Terminal başına */}
-              <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
-                <div className="grid grid-cols-[1fr_repeat(5,64px)] gap-2 border-b px-4 py-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                  <span>Terminal</span>
-                  <span className="text-right">Şimdi</span>
-                  <span className="text-right">Zirve</span>
-                  <span className="text-right">Kopuk</span>
-                  <span className="text-right">CPU</span>
-                  <span className="text-right">RAM</span>
+              {/* Terminal başına — kart; şimdi/kopuk/CPU/RAM anlık (agent), zirve bugünün geçmişinden */}
+              {firmaYukleniyor ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-5">
+                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[116px] rounded-[5px]" />)}
                 </div>
-                {firmaYukleniyor ? (
-                  <div className="space-y-2 px-4 py-3">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-[5px]" />)}</div>
-                ) : !firma?.oturum.terminaller.length ? (
-                  <p className="px-4 py-3 text-[12px] text-muted-foreground">Bugün için terminal ölçümü yok.</p>
-                ) : (
-                  <ul className="divide-y">
-                    {firma.oturum.terminaller.map((t) => {
-                      const yuzde = (v: number | null) => (
-                        <span className={`text-right ${v == null ? "text-muted-foreground" : v >= 90 ? "font-semibold text-red-600 dark:text-red-400" : v >= 75 ? "font-semibold text-amber-700 dark:text-amber-400" : ""}`}>
-                          {v == null ? "—" : `%${v}`}
-                        </span>
-                      )
-                      return (
-                        <li key={t.ad} className="grid grid-cols-[1fr_repeat(5,64px)] items-center gap-2 px-4 py-2 text-[13px] tabular-nums">
-                          <span className="truncate font-medium">{t.ad}</span>
-                          <span className="text-right font-semibold">{anlikSunucu.get(t.ad)?.aktifOturum ?? t.simdi ?? "—"}</span>
-                          <span className="text-right text-muted-foreground" title={`Bugün ${new Date(t.zirveTs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}>{t.zirve}</span>
-                          {(() => { const k = anlikSunucu.get(t.ad)?.kopukOturum ?? t.kopuk; return <span className={`text-right ${(k ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>{k ?? "—"}</span> })()}
-                          {yuzde(t.cpu)}
-                          {yuzde(t.ram)}
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
+              ) : !firma?.oturum.terminaller.length ? (
+                <p className="rounded-[5px] bg-card px-4 py-3 text-[12px] text-muted-foreground" style={{ boxShadow: "var(--card-shadow)" }}>Bugün için terminal ölçümü yok.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 2xl:grid-cols-5">
+                  {firma.oturum.terminaller.map((t) => {
+                    const canli = anlikSunucu.get(t.ad)
+                    const simdi = canli?.aktifOturum ?? t.simdi
+                    const kopuk = canli?.kopukOturum ?? t.kopuk
+                    const cpu = canli?.cpu ?? t.cpu
+                    const ram = canli?.ram ?? t.ram
+                    const Cubuk = ({ ad, v }: { ad: string; v: number | null }) => (
+                      <div>
+                        <div className="flex justify-between text-[11px]">
+                          <span className="text-muted-foreground">{ad}</span>
+                          <span className={`tabular-nums ${v != null && v >= 90 ? "font-semibold text-red-600 dark:text-red-400" : v != null && v >= 75 ? "font-semibold text-amber-700 dark:text-amber-400" : ""}`}>{v == null ? "—" : `%${v}`}</span>
+                        </div>
+                        <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-muted">
+                          <div className={`h-full rounded-full ${seviyeRenk(v)}`} style={{ width: `${Math.min(100, v ?? 0)}%` }} />
+                        </div>
+                      </div>
+                    )
+                    return (
+                      <div key={t.ad} className="rounded-[5px] bg-card px-3 py-2.5" style={{ boxShadow: "var(--card-shadow)" }}>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`size-1.5 shrink-0 rounded-full ${canli?.cevrimici === false ? "bg-red-500" : "bg-emerald-500"}`} />
+                          <span className="truncate text-[12px] font-medium" title={t.ad}>{t.ad}</span>
+                        </div>
+                        <div className="mt-1 flex items-baseline gap-1.5">
+                          <span className="text-xl font-bold tabular-nums">{simdi ?? "—"}</span>
+                          <span className="truncate text-[11px] tabular-nums text-muted-foreground"
+                            title={`Bugünkü zirve ${new Date(t.zirveTs).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}`}>
+                            / zirve {t.zirve}
+                          </span>
+                        </div>
+                        <p className={`text-[11px] tabular-nums ${(kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                          {kopuk == null ? "kopuk —" : kopuk > 0 ? `${kopuk} kopuk oturum` : "kopuk yok"}
+                        </p>
+                        <div className="mt-2 space-y-1.5">
+                          <Cubuk ad="CPU" v={cpu} />
+                          <Cubuk ad="RAM" v={ram} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </section>
         </div>
