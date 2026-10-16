@@ -135,7 +135,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter, ArrowRight } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
@@ -616,6 +616,8 @@ export default function CompaniesPage() {
   const [newUserShowPw, setNewUserShowPw]         = useState(false);
   const [newUserStarted, setNewUserStarted]       = useState(false);
   const [newUserError, setNewUserError]           = useState<string | null>(null);
+  // Olustur basildi mi — eksik alan uyarilari ancak o zaman gorunur (dugme hic silik durmasin)
+  const [newUserDenendi, setNewUserDenendi]       = useState(false);
 
   // Kullanıcı aksiyonları
   const [pwResetUser, setPwResetUser]       = useState<TabUser | null>(null);
@@ -803,7 +805,7 @@ export default function CompaniesPage() {
   async function openNewUserDialog() {
     if (!selectedFirma) return
     setNewUserOpen(true)
-    setNewUserStarted(false); setNewUserError(null); setNewUserDone(false); setNewUserMsgCopied(false)
+    setNewUserStarted(false); setNewUserError(null); setNewUserDone(false); setNewUserMsgCopied(false); setNewUserDenendi(false)
     setNewUserUsername(""); setNewUserDisplayName(""); setNewUserEmail(""); setNewUserPhone(""); setNewUserPassword(""); setNewUserShowPw(false)
     setNewUserAdServerId(""); setNewUserRdpServerId(""); setNewUserAdLocked(false); setNewUserRdpLocked(false)
     try {
@@ -3365,117 +3367,147 @@ tr:nth-child(even) td{background:#fafafa}
           <Dialog open={newUserOpen} onOpenChange={(o) => { if (!newUserStarted || newUserDone) { setNewUserOpen(o); if (!o) setNewUserStarted(false) } }}>
             <DialogContent className="top-[8vh] translate-y-0 grid-cols-1 gap-0 p-0 sm:max-w-[560px]">
               <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] px-5 py-4">
-                <span className={`flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1 ${newUserDone ? "bg-emerald-500/15 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400" : "bg-primary/10 text-primary ring-primary/20"}`}>
+                <span className={`flex size-9 shrink-0 items-center justify-center rounded-[5px] ${newUserDone ? "bg-emerald-600 text-white" : "bg-primary text-primary-foreground"}`}>
                   {newUserDone ? <CheckCircle2 className="size-[18px]" /> : <UserPlus className="size-[18px]" />}
                 </span>
                 <div className="min-w-0">
                   <DialogTitle className="text-[15px] font-semibold">
                     Yeni Kullanıcı <span className="font-medium text-muted-foreground">— {selectedFirma?.firkod}</span>
                   </DialogTitle>
-                  <DialogDescription className="text-[12px]">
+                  <DialogDescription className="truncate text-[12px]">
                     {newUserDone ? "Kullanıcı oluşturuldu — erişim bilgilerini müşteriye iletin."
                       : newUserStarted ? "Active Directory'de oluşturuluyor…"
-                      : `${selectedFirma?.firma ?? ""} — Active Directory'de firma kullanıcısı açılır`}
+                      : selectedFirma?.firma ?? ""}
                   </DialogDescription>
                 </div>
               </DialogHeader>
 
               <div className="max-h-[68vh] min-w-0 overflow-y-auto">
-                <div className="space-y-4 px-5 py-4">
-                  {!newUserStarted ? (
-                    <>
-                      {/* Sunucular — firma kaydında varsa sabit, yoksa seçilir */}
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        {([
-                          { etiket: "AD sunucusu", liste: newUserAdServers, deger: newUserAdServerId, set: setNewUserAdServerId, kilitli: newUserAdLocked },
-                          { etiket: "Bağlantı sunucusu (RDP)", liste: newUserRdpServers, deger: newUserRdpServerId, set: setNewUserRdpServerId, kilitli: newUserRdpLocked },
-                        ] as const).map((s) => {
-                          const secili = s.liste.find((x) => x.id === s.deger)
-                          return (
-                            <Field key={s.etiket} label={s.etiket} required hint={s.kilitli ? "Firma kaydından" : undefined}>
-                              {s.kilitli ? (
-                                <div className="flex h-8 items-center gap-2 rounded-[5px] border bg-muted/30 px-2.5 text-[13px]">
-                                  <Server className="size-3.5 shrink-0 text-muted-foreground" />
-                                  <span className="truncate">{secili?.name ?? "—"}</span>
-                                  {secili?.ip && <span className="ml-auto shrink-0 text-[12px] tabular-nums text-muted-foreground">{secili.ip}</span>}
-                                </div>
-                              ) : (
-                                <Select value={s.deger} onValueChange={s.set}>
-                                  <SelectTrigger className="h-8 rounded-[5px] text-[13px]">
-                                    <SelectValue placeholder={s.liste.length ? "Seçin…" : "Yükleniyor…"} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {s.liste.map((x) => (
-                                      <SelectItem key={x.id} value={x.id} className="text-[13px]">
-                                        {x.name} <span className="ml-1 tabular-nums text-muted-foreground">{x.ip}</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              )}
+                <div className="space-y-3 p-4 [&_label]:text-foreground">
+                  {!newUserStarted ? (() => {
+                    const adSrv  = newUserAdServers.find((x) => x.id === newUserAdServerId)
+                    const rdpSrv = newUserRdpServers.find((x) => x.id === newUserRdpServerId)
+                    const ikisiKilitli = newUserAdLocked && newUserRdpLocked
+                    // Eksik alan uyarıları yalnız Oluştur'a basıldıktan sonra
+                    const eksik = (kosul: boolean) => newUserDenendi && kosul
+                    const sunucuEksik = eksik(!newUserAdServerId || !newUserRdpServerId)
+                    const adEksik = eksik(!newUserUsername.trim())
+                    const sifreEksik = eksik(!newUserPassword.trim() || !meetsAdComplexity(newUserPassword))
+                    const hata = "border-red-500/60"
+                    return (
+                      <>
+                        {/* Sunucular — firma kaydından geliyorsa tek bilgi şeridi, değilse seçici */}
+                        {ikisiKilitli ? (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[8px] bg-[var(--section-bg)] px-3 py-2 text-[12px]">
+                            <Server className="size-3.5 shrink-0 text-muted-foreground" />
+                            <span className="font-medium">{adSrv?.name ?? "—"}</span>
+                            <span className="tabular-nums text-muted-foreground">{adSrv?.ip}</span>
+                            <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+                            <span className="font-medium">{rdpSrv?.name ?? "—"}</span>
+                            <span className="tabular-nums text-muted-foreground">{rdpSrv?.ip}</span>
+                            <span className="ml-auto text-muted-foreground">firma kaydından</span>
+                          </div>
+                        ) : (
+                          <KullaniciBolum baslik="Sunucular">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                              {([
+                                { etiket: "AD sunucusu", liste: newUserAdServers, deger: newUserAdServerId, set: setNewUserAdServerId, kilitli: newUserAdLocked, sec: adSrv },
+                                { etiket: "Bağlantı sunucusu (RDP)", liste: newUserRdpServers, deger: newUserRdpServerId, set: setNewUserRdpServerId, kilitli: newUserRdpLocked, sec: rdpSrv },
+                              ] as const).map((s) => (
+                                <Field key={s.etiket} label={s.etiket} required hint={s.kilitli ? "Firma kaydından" : undefined}>
+                                  {s.kilitli ? (
+                                    <div className="flex h-8 items-center gap-2 rounded-[5px] border px-2.5 text-[13px]">
+                                      <span className="truncate">{s.sec?.name ?? "—"}</span>
+                                      {s.sec?.ip && <span className="ml-auto shrink-0 text-[12px] tabular-nums text-muted-foreground">{s.sec.ip}</span>}
+                                    </div>
+                                  ) : (
+                                    <Select value={s.deger} onValueChange={s.set}>
+                                      <SelectTrigger className={`h-8 rounded-[5px] text-[13px] ${sunucuEksik && !s.deger ? hata : ""}`}>
+                                        <SelectValue placeholder={s.liste.length ? "Seçin…" : "Yükleniyor…"} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {s.liste.map((x) => (
+                                          <SelectItem key={x.id} value={x.id} className="text-[13px]">
+                                            {x.name} <span className="ml-1 tabular-nums text-muted-foreground">{x.ip}</span>
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  )}
+                                </Field>
+                              ))}
+                            </div>
+                            {sunucuEksik && <p className="text-[12px] text-red-700 dark:text-red-400">Sunucu seçin.</p>}
+                          </KullaniciBolum>
+                        )}
+
+                        <KullaniciBolum baslik="Hesap">
+                          {/* Kullanıcı adı — firma kodu öneki sabit */}
+                          <Field label="Kullanıcı adı" required>
+                            <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${adEksik ? hata : ""}`}>
+                              <span className="flex h-full shrink-0 items-center border-r bg-muted px-2.5 text-[13px] font-medium">{selectedFirma?.firkod}.</span>
+                              <input
+                                value={newUserUsername}
+                                onChange={(e) => setNewUserUsername(e.target.value)}
+                                placeholder="kullanici"
+                                autoFocus
+                                className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
+                              />
+                            </div>
+                            {adEksik && <p className="text-[12px] text-red-700 dark:text-red-400">Kullanıcı adı girin.</p>}
+                          </Field>
+
+                          <Field label="Ad soyad">
+                            <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" />
+                          </Field>
+
+                          {/* Şifre — göster / oluştur; AD karmaşıklık kuralı canlı kontrol */}
+                          <Field label="Şifre" required>
+                            <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${
+                              sifreEksik ? hata : newUserPassword ? (meetsAdComplexity(newUserPassword) ? "border-emerald-500/60" : hata) : ""
+                            }`}>
+                              <input
+                                type={newUserShowPw ? "text" : "password"}
+                                value={newUserPassword}
+                                onChange={(e) => setNewUserPassword(e.target.value)}
+                                placeholder="••••••••"
+                                className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
+                              />
+                              <button type="button" onClick={() => setNewUserShowPw((v) => !v)} title={newUserShowPw ? "Gizle" : "Göster"} className="flex h-full w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
+                                {newUserShowPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                              </button>
+                              <button type="button" onClick={() => { setNewUserPassword(generatePassword()); setNewUserShowPw(true) }} title="Şifre oluştur" className="flex h-full items-center gap-1 border-l bg-muted/40 px-2.5 text-[12px] font-medium transition-colors hover:bg-muted">
+                                <RefreshCw className="size-3.5" /> Oluştur
+                              </button>
+                            </div>
+                            <p className={`text-[12px] ${
+                              !newUserPassword ? (sifreEksik ? "text-red-700 dark:text-red-400" : "text-muted-foreground")
+                              : meetsAdComplexity(newUserPassword) ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"
+                            }`}>
+                              {!newUserPassword ? (sifreEksik ? "Şifre girin ya da Oluştur'a basın." : "En az 7 karakter; büyük harf, küçük harf, rakam ve özel karakterden üçü.")
+                                : meetsAdComplexity(newUserPassword) ? "Şifre AD kuralına uygun."
+                                : "AD kuralı karşılanmıyor: en az 7 karakter, dört gruptan üçü."}
+                            </p>
+                          </Field>
+                        </KullaniciBolum>
+
+                        <KullaniciBolum baslik="İletişim" not="isteğe bağlı">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <Field label="E-posta">
+                              <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" />
                             </Field>
-                          )
-                        })}
-                      </div>
+                            <Field label="Telefon">
+                              <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" />
+                            </Field>
+                          </div>
+                        </KullaniciBolum>
 
-                      {/* Kullanıcı adı — firma kodu öneki sabit */}
-                      <Field label="Kullanıcı adı" required>
-                        <div className="flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40">
-                          <span className="flex h-full shrink-0 items-center border-r bg-muted px-2.5 text-[13px] text-muted-foreground">{selectedFirma?.firkod}.</span>
-                          <input
-                            value={newUserUsername}
-                            onChange={(e) => setNewUserUsername(e.target.value)}
-                            placeholder="kullanici"
-                            autoFocus
-                            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
-                          />
-                        </div>
-                      </Field>
-
-                      <Field label="Ad soyad">
-                        <Input value={newUserDisplayName} onChange={(e) => setNewUserDisplayName(e.target.value)} placeholder="Adı Soyadı" />
-                      </Field>
-
-                      {/* Şifre — göster / oluştur; AD karmaşıklık kuralı canlı kontrol */}
-                      <Field label="Şifre" required>
-                        <div className={`flex h-8 items-center overflow-hidden rounded-[5px] border bg-background transition-colors focus-within:border-foreground/40 ${
-                          newUserPassword ? (meetsAdComplexity(newUserPassword) ? "border-emerald-500/60" : "border-red-500/60") : ""
-                        }`}>
-                          <input
-                            type={newUserShowPw ? "text" : "password"}
-                            value={newUserPassword}
-                            onChange={(e) => setNewUserPassword(e.target.value)}
-                            placeholder="••••••••"
-                            className="h-full min-w-0 flex-1 bg-transparent px-2.5 text-[13px] outline-none"
-                          />
-                          <button type="button" onClick={() => setNewUserShowPw((v) => !v)} title={newUserShowPw ? "Gizle" : "Göster"} className="flex h-full w-8 items-center justify-center text-muted-foreground transition-colors hover:text-foreground">
-                            {newUserShowPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                          </button>
-                          <button type="button" onClick={() => { setNewUserPassword(generatePassword()); setNewUserShowPw(true) }} title="Şifre oluştur" className="flex h-full items-center gap-1 border-l px-2.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground">
-                            <RefreshCw className="size-3.5" /> Oluştur
-                          </button>
-                        </div>
-                        <p className={`text-[12px] ${!newUserPassword ? "text-muted-foreground" : meetsAdComplexity(newUserPassword) ? "text-emerald-700 dark:text-emerald-400" : "text-red-700 dark:text-red-400"}`}>
-                          {!newUserPassword ? "En az 7 karakter; büyük harf, küçük harf, rakam ve özel karakterden üçü."
-                            : meetsAdComplexity(newUserPassword) ? "Şifre AD kuralına uygun."
-                            : "AD kuralı karşılanmıyor: en az 7 karakter, dört gruptan üçü."}
-                        </p>
-                      </Field>
-
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <Field label="E-posta">
-                          <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="ad@sirket.com" />
-                        </Field>
-                        <Field label="Telefon">
-                          <Input type="tel" value={newUserPhone} onChange={(e) => setNewUserPhone(e.target.value)} placeholder="05xx xxx xx xx" />
-                        </Field>
-                      </div>
-
-                      {newUserError && (
-                        <p className="rounded-[5px] bg-red-500/15 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">{newUserError}</p>
-                      )}
-                    </>
-                  ) : (
+                        {newUserError && (
+                          <p className="rounded-[5px] bg-red-500/15 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">{newUserError}</p>
+                        )}
+                      </>
+                    )
+                  })() : (
                     selectedFirma && (
                       <AdProvisionRunner
                         payload={{
@@ -3502,25 +3534,19 @@ tr:nth-child(even) td{background:#fafafa}
                   )}
 
                   {/* Bitti — müşteriye gidecek erişim bilgisi */}
-                  {newUserDone && selectedFirma && (() => {
-                    const { satirlar } = newUserErisim
-                    return (
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Müşteri bilgilendirme</p>
-                        <div className="overflow-hidden rounded-[5px] border bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
-                          <ul className="divide-y">
-                            {satirlar.map((s) => (
-                              <li key={s.ad} className="flex items-center gap-2 px-3 py-1.5">
-                                <span className="w-[96px] shrink-0 text-[12px] text-muted-foreground">{s.ad}</span>
-                                <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.deger || "—"}</span>
-                                <CopyIconButton value={s.deger} subtle />
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-                    )
-                  })()}
+                  {newUserDone && selectedFirma && (
+                    <KullaniciBolum baslik="Müşteri bilgilendirme">
+                      <ul className="-mx-3 -my-3 divide-y">
+                        {newUserErisim.satirlar.map((s) => (
+                          <li key={s.ad} className="flex items-center gap-2 px-3 py-2">
+                            <span className="w-[96px] shrink-0 text-[12px] text-muted-foreground">{s.ad}</span>
+                            <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{s.deger || "—"}</span>
+                            <CopyIconButton value={s.deger} subtle />
+                          </li>
+                        ))}
+                      </ul>
+                    </KullaniciBolum>
+                  )}
                 </div>
               </div>
 
@@ -3528,7 +3554,12 @@ tr:nth-child(even) td{background:#fafafa}
                 {!newUserStarted ? (
                   <>
                     <Button variant="outline" className="flex-1" onClick={() => setNewUserOpen(false)}>Vazgeç</Button>
-                    <Button className="flex-1" disabled={!newUserValid} onClick={() => { setNewUserError(null); setNewUserStarted(true) }}>
+                    {/* Hiç silik değil: eksik varsa basınca alanların altında gösterilir */}
+                    <Button className="flex-1" onClick={() => {
+                      setNewUserDenendi(true)
+                      if (!newUserValid) return
+                      setNewUserError(null); setNewUserStarted(true)
+                    }}>
                       <UserPlus className="size-3.5" /> Oluştur
                     </Button>
                   </>
@@ -4841,4 +4872,16 @@ function ListeAracSeridi({ sayac, filtreAcik, onFiltre, filtreSayisi, onTemizle,
 /** Tablo yüksekliği — satır sayısı kadar (36 px), en az 3 satırlık, en çok 520 px; filtre satırı açıksa +36. */
 function tabloYuksekligi(satir: number, filtreAcik: boolean): number {
   return Math.min(520, 30 + (filtreAcik ? 36 : 0) + Math.max(satir, 3) * 36 + 2)
+}
+
+/** Pencere içi bölüm — section-bg panel + başlık + beyaz kart (liste kartlarıyla aynı dil) */
+function KullaniciBolum({ baslik, not, children }: { baslik: string; not?: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-[8px] bg-[var(--section-bg)] p-1.5">
+      <p className="flex items-center gap-1.5 px-2 pb-1.5 pt-0.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {baslik}{not && <span className="normal-case tracking-normal">· {not}</span>}
+      </p>
+      <div className="space-y-3 rounded-[5px] bg-card p-3" style={{ boxShadow: "var(--card-shadow)" }}>{children}</div>
+    </section>
+  )
 }
