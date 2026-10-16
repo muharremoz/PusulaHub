@@ -1671,7 +1671,7 @@ tr:nth-child(even) td{background:#fafafa}
     const opts = firmaDbs.length > 0 ? firmaDbs : xmlDbs
     setWebUserDlg({ siteName, dbOptions: opts, mode: "add" })
     setWebUserName("")
-    setWebUserPw(generateSafePassword())
+    setWebUserPw(webSifreUret())
     setWebUserDbs(opts)
     setWebUserSteps(null)
     setWebUserDenendi(false)
@@ -4548,7 +4548,7 @@ tr:nth-child(even) td{background:#fafafa}
             const secenekler = webUserDlg?.dbOptions ?? []
             const dbGerekli = secenekler.length > 0
             const adHata = !ad ? "Zorunlu" : cakisan ? "Bu ad zaten kullanılıyor" : ""
-            const sifreHata = !webUserPw ? "Zorunlu" : ""
+            const sifreHata = !webUserPw ? "Zorunlu" : !WEB_SIFRE_DESENI.test(webUserPw) ? "6 haneli, yalnız rakam" : ""
             const dbHata = dbGerekli && webUserDbs.length === 0 ? "En az bir veritabanı seçin" : ""
             const gecerli = !adHata && !sifreHata && !dbHata
             const goster = (h: string) => (webUserDenendi && h ? <span className="text-red-600 dark:text-red-400">{h}</span> : null)
@@ -4615,10 +4615,11 @@ tr:nth-child(even) td{background:#fafafa}
                           </Field>
                           <Field label="Şifre" required ek={goster(sifreHata)}>
                             <div className="flex items-center gap-1.5">
-                              <Input value={webUserPw} onChange={(e) => setWebUserPw(e.target.value)} className={`flex-1 ${hataSinifi(sifreHata)}`} />
+                              <Input value={webUserPw} inputMode="numeric" maxLength={6} placeholder="6 haneli rakam"
+                                onChange={(e) => setWebUserPw(e.target.value.replace(/\D/g, "").slice(0, 6))} className={`flex-1 tabular-nums tracking-[0.2em] ${hataSinifi(sifreHata)}`} />
                               <CopyIconButton value={webUserPw} subtle />
                               <Button type="button" variant="outline" className="h-8 shrink-0 gap-1.5 rounded-[5px] px-2.5 text-[12px]"
-                                onClick={() => setWebUserPw(generateSafePassword())} title="Yeni şifre üret">
+                                onClick={() => setWebUserPw(webSifreUret())} title="Yeni şifre üret">
                                 <RefreshCw className="size-3.5" /> Üret
                               </Button>
                             </div>
@@ -5063,4 +5064,12 @@ function SvcSifre({ deger }: { deger: string | null }) {
       <CopyIconButton value={deger} subtle />
     </span>
   )
+}
+
+/** API hizmeti (Users.xml) şifresi — 6 haneli, yalnız rakam */
+const WEB_SIFRE_DESENI = /^\d{6}$/
+function webSifreUret(): string {
+  const a = new Uint32Array(6)
+  crypto.getRandomValues(a)
+  return Array.from(a, (n) => String(n % 10)).join("")
 }
