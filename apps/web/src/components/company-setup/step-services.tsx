@@ -24,14 +24,14 @@ interface Props {
   iisServersLoading?: boolean
   iisServersError?:   string | null
   selectedIisServerId: string | null
-  onSelectIisServer:   (id: string) => void
+  onSelectIisServer:   (id: string | null) => void
 
   /** Depo sunucu seçimi (yalnızca Pusula programı seçildiğinde gerekli) */
   depoServers:         DepoServerItem[]
   depoServersLoading?: boolean
   depoServersError?:   string | null
   selectedDepoServerId: string | null
-  onSelectDepoServer:   (id: string) => void
+  onSelectDepoServer:   (id: string | null) => void
 
   /** Pars paneli — yalnız Pars hizmeti seçiliyken dolu */
   pars?: ComponentProps<typeof StepServicesPars> | null
@@ -70,15 +70,18 @@ export function StepServices({
 
   // Seçili hizmetler arasında IIS'te kurulan (iis-site / iis-resim) var mı?
   const hasIisSelected = services.some((s) => isIisType(s.type) && selectedIds.includes(s.id))
-  // Aktif tab IIS hizmetlerini içeriyor mu? (henüz seçilmemiş olsa bile)
-  const activeTabHasIis = catItems.some((s) => isIisType(s.type))
-  // IIS picker'ı göster: ya zaten seçili ya da aktif tab IIS kategorisi
-  const showIisPicker = hasIisSelected || activeTabHasIis
+  // IIS picker'ı yalnız IIS'te kurulan bir hizmet seçiliyken göster (sekmeye geçmek yetmez)
+  const showIisPicker = hasIisSelected
 
   // Pusula programı ya da Resim seçili mi? Seçiliyse depo sunucusu istenir
   // (Resim: yayınlanan paylaşım Depo'da, Connect as kimliği de oradan).
   const hasPusulaSelected = services.some((s) => s.type === "pusula-program" && selectedIds.includes(s.id))
   const hasResimSelected  = services.some((s) => s.type === "iis-resim" && selectedIds.includes(s.id))
+  const showDepoPicker = hasPusulaSelected || hasResimSelected
+
+  // Seçici gizlenince (ilgili hizmet bırakıldı) seçili sunucu da bırakılır — kurulum ona iş göndermesin
+  useEffect(() => { if (!showIisPicker && selectedIisServerId) onSelectIisServer(null) }, [showIisPicker, selectedIisServerId, onSelectIisServer])
+  useEffect(() => { if (!showDepoPicker && selectedDepoServerId) onSelectDepoServer(null) }, [showDepoPicker, selectedDepoServerId, onSelectDepoServer])
 
   if (loading) {
     return (
@@ -229,7 +232,7 @@ export function StepServices({
       {/* Pars — kullanıcılar + rapor seçimi (Pars hizmeti seçildiyse) */}
       {pars && <StepServicesPars {...pars} />}
 
-      {/* IIS sunucusu — aktif sekme IIS hizmeti içeriyorsa ya da IIS hizmeti seçiliyse */}
+      {/* IIS sunucusu — IIS'te kurulan hizmet (API hizmeti / Resim) seçiliyse */}
       {showIisPicker && (
         <SunucuSecici
           baslik="IIS Sunucusu"
@@ -248,7 +251,7 @@ export function StepServices({
       )}
 
       {/* Depo sunucusu — Pusula programı (resim klasörü) ya da Resim (paylaşım) için */}
-      {(hasPusulaSelected || hasResimSelected) && (
+      {showDepoPicker && (
         <SunucuSecici
           baslik="Depo Sunucusu"
           ikon={<HardDrive className="size-3.5 text-muted-foreground" />}
@@ -284,7 +287,8 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
   yukleniyor?: boolean
   hata?: string | null
   seciliId: string | null
-  onSec: (id: string) => void
+  /** Seçili karta tekrar tıklanınca null → seçim bırakılır */
+  onSec: (id: string | null) => void
   bos: { ikon: React.ReactNode; baslik: string; metin: string }
 }) {
   const secili = sunucular.find((s) => s.id === seciliId)
@@ -335,7 +339,7 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                 key={srv.id}
                 type="button"
                 disabled={kapali}
-                onClick={() => onSec(srv.id)}
+                onClick={() => onSec(sec ? null : srv.id)}
                 aria-pressed={sec}
                 className={cn(
                   "rounded-[8px] border-2 p-3 text-left transition-all",
