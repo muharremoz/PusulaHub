@@ -4,7 +4,7 @@ import { use, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
-import { Building2, FolderOpen } from "lucide-react";
+import { Building2 } from "lucide-react";
 import { Icon } from "@/components/shared/icon";
 import type { IconName } from "@/components/shared/icon-registry";
 
@@ -30,8 +30,6 @@ const ChartTab     = mkTabIcon("chart-bar-increasing");
 const UsersTab     = mkTabIcon("users");
 const ShieldTab    = mkTabIcon("shield-check");
 const FileTab      = mkTabIcon("file-text");
-const MessageTab   = mkTabIcon("message-square");
-const FolderTab    = mkStaticTabIcon(FolderOpen);
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Server } from "@/types";
@@ -44,8 +42,6 @@ const TabCompanies = dynamic(() => import("@/components/server-detail/tab-compan
 const TabUsers     = dynamic(() => import("@/components/server-detail/tab-users").then((m) => m.TabUsers),          { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 const TabSecurity  = dynamic(() => import("@/components/server-detail/tab-security").then((m) => m.TabSecurity),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 const TabLogs      = dynamic(() => import("@/components/server-detail/tab-logs").then((m) => m.TabLogs),            { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
-const TabMessages  = dynamic(() => import("@/components/server-detail/tab-messages").then((m) => m.TabMessages),    { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
-const TabFiles     = dynamic(() => import("@/components/server-detail/tab-files").then((m) => m.TabFiles),          { ssr: false, loading: () => <div className="p-4"><Skeleton className="h-40 w-full" /></div> });
 import type { FirmaCompany } from "@/app/api/firma/companies/route";
 
 /** API /detail endpoint'inden dönen veri yapısı */
@@ -68,9 +64,7 @@ type TabId =
   | "companies"
   | "users"
   | "security"
-  | "logs"
-  | "messages"
-  | "files";
+  | "logs";
 
 const STATUS_DOT: Record<string, string> = {
   online: "bg-emerald-500",
@@ -205,8 +199,6 @@ export default function ServerDetailPage({
     { id: "users", label: "Kullanıcılar", icon: UsersTab, count: userCount },
     { id: "security", label: "Güvenlik", icon: ShieldTab },
     { id: "logs", label: "Kayıtlar", icon: FileTab },
-    { id: "messages", label: "Mesaj", icon: MessageTab },
-    { id: "files", label: "Dosyalar", icon: FolderTab },
   ];
 
   return (
@@ -310,7 +302,7 @@ export default function ServerDetailPage({
 
       {/* Tab Content */}
       <div>
-        {detailLoading && activeTab !== "overview" && activeTab !== "files" ? (
+        {detailLoading && activeTab !== "overview" ? (
           <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
             <div className="rounded-[5px] overflow-hidden space-y-px" style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}>
               {Array.from({ length: 6 }).map((_, i) => (
@@ -345,12 +337,6 @@ export default function ServerDetailPage({
             )}
             {activeTab === "logs" && (
               <TabLogs logs={detail.logs} />
-            )}
-            {activeTab === "messages" && (
-              <TabMessages sessions={detail.sessions} serverId={server.id} />
-            )}
-            {activeTab === "files" && (
-              <TabFiles serverId={server.id} />
             )}
           </>
         )}
