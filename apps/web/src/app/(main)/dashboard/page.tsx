@@ -125,11 +125,11 @@ export default function DashboardPage() {
       const sn = j as KopukKapatSonuc
       const hatali = sn.sunucular.filter((x) => x.hata)
       const ozet = sn.sunucular.filter((x) => (x.kapatilan ?? 0) > 0).map((x) => `${x.ad}: ${x.kapatilan}`).join(" · ")
-      if (hatali.length === 0) toast.success(`${sn.kapatilan} kopuk oturum kapatıldı`, { description: ozet || undefined })
+      if (hatali.length === 0) toast.success(`${sn.kapatilan} disconnect oturum kapatıldı`, { description: ozet || undefined })
       else toast.error(`${sn.kapatilan} oturum kapatıldı, ${hatali.length} sunucuda sorun var`, { description: hatali.map((x) => `${x.ad}: ${x.hata}`).join(" · ") })
       setTimeout(() => void yukle(true), 45_000)
     } catch (e) {
-      toast.error("Kopuk oturumlar kapatılamadı", { description: e instanceof Error ? e.message : String(e) })
+      toast.error("Disconnect oturumlar kapatılamadı", { description: e instanceof Error ? e.message : String(e) })
     } finally {
       setKopukKapatiliyor(false); setKopukOnay(false)
     }
@@ -169,11 +169,11 @@ export default function DashboardPage() {
             deger={`${cevrimici} / ${sunucular.length}`} alt={cevrimici === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - cevrimici} ulaşılamıyor`}
             vurgu={cevrimici < sunucular.length ? "kritik" : "iyi"} />
           <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={ilkYukleme}
-            deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} kopuk` : ""}`}
+            deger={String(anlikOturum)} alt={`${terminaller.length} terminal${anlikKopuk ? ` · ${anlikKopuk} disconnect` : ""}`}
             aksiyon={anlikKopuk > 0 ? (
               <Button variant="outline" size="sm" className="h-6 gap-1 rounded-[5px] px-2 text-[11px]" disabled={kopukKapatiliyor} onClick={() => setKopukOnay(true)}
                 title="Terminallerdeki bağlantısı kopmuş oturumları kapatır">
-                {kopukKapatiliyor ? <RefreshCw className="size-3 animate-spin" /> : <LogOut className="size-3" />} Kopukları kapat
+                {kopukKapatiliyor ? <RefreshCw className="size-3 animate-spin" /> : <LogOut className="size-3" />} {"Disconnect'leri kapat"}
               </Button>
             ) : undefined} />
           <Ozet ikon="shield-check" baslik="Yedek" yukleniyor={ilkYukleme}
@@ -297,7 +297,7 @@ export default function DashboardPage() {
                         <Deger baslik="Önceki 7 gün" title="Bugün hariç son 7 günün en kalabalık anı">
                           {o?.hafta ? <>{o.hafta.kisi}<span className="text-[12px] font-medium text-muted-foreground"> · {gun(o.hafta.ts)}</span></> : "—"}
                         </Deger>
-                        <Deger baslik="Kopuk" title="Bağlantısı kopmuş ama kapanmamış oturum — RAM tutmaya devam eder">
+                        <Deger baslik="Disconnect" title="Bağlantısı kopmuş ama kapanmamış oturum (disconnect) — RAM tutmaya devam eder">
                           <span className={(veri ? anlikKopuk : o?.kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : ""}>{veri ? anlikKopuk : o?.kopuk ?? "—"}</span>
                         </Deger>
                       </div>
@@ -349,7 +349,7 @@ export default function DashboardPage() {
                           </span>
                         </div>
                         <p className={`text-[11px] tabular-nums ${(kopuk ?? 0) > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
-                          {kopuk == null ? "kopuk —" : kopuk > 0 ? `${kopuk} kopuk oturum` : "kopuk yok"}
+                          {kopuk == null ? "disconnect —" : kopuk > 0 ? `${kopuk} disconnect` : "disconnect yok"}
                         </p>
                         <div className="mt-2 space-y-1.5">
                           <Cubuk ad="CPU" v={cpu} />
@@ -436,11 +436,11 @@ export default function DashboardPage() {
       <AlertDialog open={kopukOnay} onOpenChange={(o) => { if (!kopukKapatiliyor) setKopukOnay(o) }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Kopuk oturumlar kapatılsın mı?</AlertDialogTitle>
+            <AlertDialogTitle>Disconnect oturumlar kapatılsın mı?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-2 text-[13px] text-muted-foreground">
                 <p>
-                  Terminallerde bağlantısı kopmuş <span className="font-semibold text-foreground">{anlikKopuk}</span> oturum kapatılacak.
+                  Terminallerde bağlantısı kopmuş (disconnect) <span className="font-semibold text-foreground">{anlikKopuk}</span> oturum kapatılacak.
                   Bu kullanıcıların açık bıraktığı programlar kapanır, <span className="font-medium text-foreground">kaydedilmemiş işler kaybolur</span>.
                   Aktif oturumlara dokunulmaz.
                 </p>
@@ -456,7 +456,7 @@ export default function DashboardPage() {
             <AlertDialogCancel disabled={kopukKapatiliyor}>Vazgeç</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={kopukKapatiliyor}
               onClick={(e) => { e.preventDefault(); void kopukKapat() }}>
-              {kopukKapatiliyor ? "Kapatılıyor…" : "Kopukları kapat"}
+              {kopukKapatiliyor ? "Kapatılıyor…" : "Disconnect'leri kapat"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

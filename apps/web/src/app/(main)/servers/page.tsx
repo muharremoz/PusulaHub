@@ -298,10 +298,10 @@ function SunucuKarti({ s, islemler }: { s: Server; islemler: Islemler }) {
                   <span className="text-[15px] font-bold">{aktif}</span> <span className="text-muted-foreground">aktif oturum</span>
                 </span>
                 <span className={`tabular-nums ${kopuk > 0 ? "font-medium text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
-                  {kopuk > 0 ? `${kopuk} kopuk` : "kopuk yok"}
+                  {kopuk > 0 ? `${kopuk} disconnect` : "disconnect yok"}
                 </span>
               </div>
-              <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-muted" title={`${aktif} aktif · ${kopuk} kopuk`}>
+              <div className="mt-1 flex h-1.5 overflow-hidden rounded-full bg-muted" title={`${aktif} aktif · ${kopuk} disconnect`}>
                 {toplam > 0 && <div className="h-full bg-emerald-500" style={{ width: `${(aktif / toplam) * 100}%` }} />}
                 {toplam > 0 && <div className="h-full bg-amber-500" style={{ width: `${(kopuk / toplam) * 100}%` }} />}
               </div>
