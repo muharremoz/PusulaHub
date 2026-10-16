@@ -6,7 +6,8 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, Sparkles } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, Sparkles, ShieldCheck } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
@@ -489,14 +490,35 @@ export function StepSql({
                               {/*  Otomatik yedekleme — guvenlik.YedekAl. Eski yıl datası
                                    varsayılan kapalı gelir (yedek boyutunu şişirmesin),
                                    yılsız ve güncel yıl açık. */}
+                              {/* Yedek görevi — firma detayı "Yeni Veritabanı" penceresiyle aynı düğme */}
                               <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
-                                <span title={addToSirketDb ? "Otomatik yedeklemeye dahil et" : "Şirket veritabanına ekle kapalı — yedek kaydı yazılmaz"}>
-                                  <Checkbox
-                                    checked={f.yedekAl !== false}
-                                    disabled={!addToSirketDb}
-                                    onCheckedChange={() => onToggleBackupYedek(f.id)}
-                                  />
-                                </span>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <span className="inline-flex">
+                                      <button
+                                        type="button"
+                                        aria-pressed={f.yedekAl !== false}
+                                        disabled={!addToSirketDb}
+                                        onClick={() => onToggleBackupYedek(f.id)}
+                                        className={cn(
+                                          "flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                          f.yedekAl !== false && addToSirketDb
+                                            ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                            : "text-muted-foreground line-through hover:text-foreground",
+                                        )}
+                                      >
+                                        <ShieldCheck className="size-3.5" /> Yedek
+                                      </button>
+                                    </span>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {!addToSirketDb
+                                      ? "Şirket veritabanına ekle kapalı — yedek kaydı yazılmaz"
+                                      : f.yedekAl !== false
+                                        ? "Yedek görevine eklenir — kapatmak için tıklayın"
+                                        : "Yedeği alınmayacak · güvenlik kaydı YedekAl = false"}
+                                  </TooltipContent>
+                                </Tooltip>
                               </td>
                               <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums text-muted-foreground">{formatSize(f.fileSizeMB)}</td>
                               <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">{f.date || "—"}</td>
