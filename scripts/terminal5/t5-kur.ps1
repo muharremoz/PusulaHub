@@ -85,6 +85,11 @@ Adim 'Fusion gunlugu kapali' {
   $f = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Fusion' -ErrorAction SilentlyContinue
   if ($f -and $f.EnableLog -eq 1) { Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Fusion' -Name EnableLog -Value 0 }
 }
+# Her giriste eklenen UWP/AppContainer duvar kurallari cikista silinmez, profil basi ~95 birikir
+# (16.10: T1'de 9.485) -> yavas giris. Bu deger cikista siler (T1-T5'e 16.10'da acildi).
+Adim 'Duvar kurali birikmesi (DeleteUserAppContainersOnLogoff=1)' {
+  New-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\SharedAccess\Parameters\FirewallPolicy' -Name 'DeleteUserAppContainersOnLogoff' -PropertyType DWord -Value 1 -Force | Out-Null
+}
 Adim 'Remote Desktop Users = PUSULADC\Domain Users' {
   $u = (Get-LocalGroupMember 'Remote Desktop Users' -ErrorAction SilentlyContinue).Name
   if ($u -notcontains 'PUSULADC\Domain Users') { Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'PUSULADC\Domain Users' }

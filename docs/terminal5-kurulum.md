@@ -90,6 +90,7 @@ alanı silinmeli). T1–T4: id 45/46/47/48.
 - [ ] Hub: sunucu kaydı; Kuma ping monitörü "Terminal 5" (41'in kopyası, `apps/web/__kuma-kopya.mjs`); TV haritası
 - [x] Defender: Tamper Protection **elle** aç (16.10: açık, kaynak UI) (uzaktan açılamaz — [[sunucu-guvenlik-durumu]]); imza güncel mi
 - [ ] ASR/CFA denetim modu yalnız T3'te — T5'e şimdilik uygulanmıyor ([[asr-cfa-denetim]])
+- [x] Duvar kuralı birikmesi: `DeleteUserAppContainersOnLogoff=1` (16.10, betik de yapıyor; T1–T4 de açıldı)
 - [ ] Sihirbazda Terminal 5 bağlantı sunucusu olarak seçilebiliyor mu (firma taşımadan önce)
 
 ## Bilerek dahil edilmeyenler
