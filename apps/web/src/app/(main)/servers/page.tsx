@@ -270,13 +270,21 @@ function SunucuKarti({ s, islemler }: { s: Server; islemler: Islemler }) {
 
       {acik ? (
         <>
-          {/* Kaynaklar — CPU, RAM ve her disk ayrı kutu */}
-          <div className="mt-3 grid grid-cols-3 gap-1.5">
+          {/* Kaynaklar — CPU ve RAM kutu; diskler altta satır (disk sayısı kartı bozmasın) */}
+          <div className="mt-3 grid grid-cols-2 gap-1.5">
             <Kaynak etiket="CPU" yuzde={s.cpu} />
             <Kaynak etiket="RAM" yuzde={s.ram} alt={s.ramGB ? `${s.ramGB.kullanilan.toLocaleString("tr-TR")} / ${s.ramGB.toplam} GB` : undefined} />
+          </div>
+          <div className="mt-2 space-y-1.5 rounded-[5px] bg-[var(--section-bg)] px-2.5 py-2">
             {diskler(s).map((d) => (
-              <Kaynak key={d.drive} etiket={d.drive === "Disk" ? "Disk" : d.drive.replace(/\$/, "")} yuzde={d.percent}
-                alt={d.totalGB ? `${Math.round(d.totalGB - d.usedGB)} GB boş` : undefined} />
+              <div key={d.drive} className="flex items-center gap-2 text-[12px]">
+                <span className="w-7 shrink-0 font-medium text-muted-foreground">{d.drive === "Disk" ? "Disk" : d.drive.replace(/\$/, "")}</span>
+                <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                  <div className={`h-full rounded-full ${seviyeRenk(d.percent)}`} style={{ width: `${Math.min(100, d.percent)}%` }} />
+                </div>
+                <span className={`w-9 shrink-0 text-right tabular-nums ${seviyeMetin(d.percent)}`}>%{Math.round(d.percent)}</span>
+                {d.totalGB > 0 && <span className="w-[74px] shrink-0 truncate text-right text-[11px] tabular-nums text-muted-foreground">{Math.round(d.totalGB - d.usedGB)} GB boş</span>}
+              </div>
             ))}
           </div>
 
