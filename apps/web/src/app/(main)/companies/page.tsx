@@ -45,6 +45,8 @@ interface FirmaCompany {
   userCount: number
   /** Kullanıcı hakkı (hub.companies.user_count — lisans API ya da elle hak) */
   licenseCount?: number
+  /** Atanmış terminal (RDP) sunucusunun adı */
+  rdpSunucu?: string | null
   lisansBitis: string
   /** CRM'deki müşteri temsilcisi — CRM'e ulaşılamazsa null */
   temsilci?: { id: string; ad: string; parsKodu: number | null; aktif: boolean } | null
@@ -493,6 +495,7 @@ export default function CompaniesPage() {
   const [kodFiltre,    setKodFiltre]    = useState("");
   const [durumFiltre,  setDurumFiltre]  = useState<string[]>([]);
   const [temsilciFiltre, setTemsilciFiltre] = useState<string[]>([]);
+  const [rdpFiltre, setRdpFiltre] = useState<string[]>([]);
   const [lisansFiltre, setLisansFiltre] = useState<TarihFiltreDeger>({ mode: "tum" });
   const [kullaniciFiltre, setKullaniciFiltre] = useState<SayiAralikDeger>({});
 
@@ -1211,11 +1214,12 @@ export default function CompaniesPage() {
     if (!listeFiltreli.length) return
     const XLSX = await import("xlsx")
 
-    const header = ["Firma Kodu", "Firma", "Temsilci", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
+    const header = ["Firma Kodu", "Firma", "Temsilci", "RDP Sunucusu", "E-posta", "Telefon", "Kullanıcı", "Lisans Bitiş", "Durum"]
     const rows = listeFiltreli.map((c) => [
       c.firkod,
       c.firma,
       c.temsilci ? (c.temsilci.aktif ? c.temsilci.ad : `${c.temsilci.ad} (pasif)`) : "",
+      c.rdpSunucu ?? "",
       c.email || "",
       c.phone || "",
       c.userCount,
@@ -2128,7 +2132,7 @@ tr:nth-child(even) td{background:#fafafa}
   /* Filtre değişince kullanıcı 3. sayfada boş liste görmesin. */
   useEffect(() => {
     setFirmaSayfa(1);
-  }, [firmaFiltre, kodFiltre, durumFiltre, temsilciFiltre, lisansFiltre, kullaniciFiltre]);
+  }, [firmaFiltre, kodFiltre, durumFiltre, temsilciFiltre, rdpFiltre, lisansFiltre, kullaniciFiltre]);
 
   /* Temsilci filtresi seçenekleri — listedeki temsilciler + "Temsilcisiz". */
   const TEMSILCISIZ = "— Temsilcisiz —";
@@ -2140,6 +2144,16 @@ tr:nth-child(even) td{background:#fafafa}
     return bosVar ? [...liste, TEMSILCISIZ] : liste;
   }, [apiCompanies]);
 
+  /* RDP sunucusu filtresi seçenekleri — listedeki sunucular + "Atanmamış". */
+  const RDPSIZ = "— Atanmamış —";
+  const rdpSecenekleri = useMemo(() => {
+    const ad = new Set<string>();
+    let bosVar = false;
+    for (const c of apiCompanies) { if (c.rdpSunucu) ad.add(c.rdpSunucu); else bosVar = true; }
+    const liste = [...ad].sort((a, b) => a.localeCompare(b, "tr", { numeric: true }));
+    return bosVar ? [...liste, RDPSIZ] : liste;
+  }, [apiCompanies]);
+
   /* Sütun başlığı filtreleri — üstteki serbest arama ile VE (AND) birleşir. */
   const listeFiltreli = listSorted.filter((c) => {
     const f = firmaFiltre.trim().toLocaleLowerCase("tr-TR");
@@ -2148,6 +2162,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (k && !(c.firkod || "").toLocaleLowerCase("tr-TR").includes(k)) return false;
     if (durumFiltre.length && !durumFiltre.includes(firmaIsActive(c) ? "aktif" : "doldu")) return false;
     if (temsilciFiltre.length && !temsilciFiltre.includes(c.temsilci?.ad ?? TEMSILCISIZ)) return false;
+    if (rdpFiltre.length && !rdpFiltre.includes(c.rdpSunucu ?? RDPSIZ)) return false;
     if (!tarihUygun(lisansIso(c.lisansBitis), lisansFiltre)) return false;
     if (kullaniciFiltre.min != null && c.userCount < kullaniciFiltre.min) return false;
     if (kullaniciFiltre.max != null && c.userCount > kullaniciFiltre.max) return false;
@@ -4440,117 +4455,88 @@ tr:nth-child(even) td{background:#fafafa}
             </Button>
           }
         >
-          <div className="min-h-0 flex-1 overflow-auto">
-            <table className="w-full text-[14px] font-medium leading-[20px]">
-              <ListeThead>
-                <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
-                  <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />
-                </th>
-                {/* Boş alanı bu sütun yutar — diğerleri içeriğine göre daralır. */}
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />
-                </th>
-                <th className="w-px px-4 py-1.5 text-left font-medium whitespace-nowrap">
-                  <SecimFiltre
-                    label="Temsilci"
-                    options={temsilciSecenekleri}
-                    getLabel={(o) => o}
-                    selected={temsilciFiltre}
-                    onChange={(v) => setTemsilciFiltre(v as string[])}
-                    aranabilir
-                    ilkGosterim={8}
-                  />
-                </th>
-                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
-                  <SayiAralikFiltre label="Kullanıcı" value={kullaniciFiltre} onChange={setKullaniciFiltre} />
-                </th>
-                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
-                  <TarihFiltre
-                    label="Lisans Bitiş"
-                    value={lisansFiltre}
-                    onChange={setLisansFiltre}
-                    buAyLabel="Bu ay doluyor"
-                    align="end"
-                  />
-                </th>
-                <th className="w-px px-4 py-1.5 text-right font-medium whitespace-nowrap">
-                  <SecimFiltre
-                    label="Durum"
-                    options={["aktif", "doldu"] as const}
-                    getLabel={(o) => (o === "aktif" ? "Aktif" : "Süresi Doldu")}
-                    selected={durumFiltre}
-                    onChange={(v) => setDurumFiltre(v as string[])}
-                  />
-                </th>
-              </ListeThead>
-              <tbody>
-                {apiLoading ? (
-                  Array.from({ length: 8 }).map((_, i) => (
-                    <tr key={i}>
-                      {Array.from({ length: 6 }).map((_, j) => (
-                        <td key={j} className="px-4 py-1.5"><Skeleton className="h-3 w-full rounded-[5px]" /></td>
-                      ))}
-                    </tr>
-                  ))
-                ) : listeFiltreli.length === 0 ? (
-                  <ListeBosSatir
-                    sutunSayisi={6}
-                    toplam={apiCompanies.length}
-                    bosMesaj="Kayıtlı firma yok."
-                    filtreliMesaj="Arama sonucu bulunamadı."
-                  />
-                ) : firmaSayfalik.map((comp) => {
-                  const active = firmaIsActive(comp);
-                  return (
-                    <tr
-                      key={comp.id}
-                      onClick={() => selectFirma(comp)}
-                      className="hover:bg-muted/20 cursor-pointer transition-colors"
-                    >
-                      <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">
-                        {comp.firkod || "—"}
-                      </td>
-                      <td className="px-4 py-1.5 text-[12px]">
-                        <span className="flex min-w-0 items-center gap-2">
-                          <Building2 className="text-muted-foreground h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate">{comp.firma}</span>
-                        </span>
-                      </td>
-                      <td className="text-muted-foreground w-px px-4 py-1.5 whitespace-nowrap text-[12px]">
-                        {comp.temsilci ? (
-                          <span className="inline-flex items-center gap-1.5" title={comp.temsilci.aktif ? undefined : "Temsilci pasif — firma devredilmemiş olabilir"}>
-                            <User className="h-3 w-3 shrink-0" />
-                            <span className={comp.temsilci.aktif ? "" : "opacity-60"}>{comp.temsilci.ad}</span>
-                            {!comp.temsilci.aktif && (
-                              <span className="inline-flex rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
-                            )}
-                          </span>
-                        ) : "—"}
-                      </td>
-                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
-                        <span className="inline-flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {comp.userCount}
-                        </span>
-                      </td>
-                      <td className="text-muted-foreground w-px px-4 py-1.5 text-right whitespace-nowrap text-[12px] tabular-nums">
-                        {lisansGoster(comp.lisansBitis)}
-                      </td>
-                      <td className="w-px px-4 py-1.5 text-right whitespace-nowrap">
-                        {active ? (
-                          <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif
-                          </span>
-                        ) : (
-                          <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Süresi Doldu
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {(() => {
+            /*  pusula-ui Table — başlıklar sütun filtresi popover'larının kendisi
+             *  (MetinFiltre / SecimFiltre / SayiAralikFiltre / TarihFiltre), sıralama
+             *  listSorted'da. Sayfa başına 25 satır; tablo boyu satır sayısına göre.   */
+            const sutunlar: TableColumn<FirmaCompany>[] = [
+              {
+                key: "firkod", width: "110px",
+                header: <MetinFiltre label="Firma Kodu" value={kodFiltre} onChange={setKodFiltre} />,
+                cell: (c) => <span className="tabular-nums text-muted-foreground">{c.firkod || "—"}</span>,
+              },
+              {
+                key: "firma",
+                header: <MetinFiltre label="Firma" value={firmaFiltre} onChange={setFirmaFiltre} />,
+                cell: (c) => (
+                  <span className="flex min-w-0 items-center gap-2">
+                    <Building2 className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{c.firma}</span>
+                  </span>
+                ),
+              },
+              {
+                key: "rdp", width: "170px",
+                header: (
+                  <SecimFiltre label="RDP Sunucusu" options={rdpSecenekleri} getLabel={(o) => o}
+                    selected={rdpFiltre} onChange={(v) => setRdpFiltre(v as string[])} />
+                ),
+                cell: (c) => c.rdpSunucu
+                  ? <span className="flex min-w-0 items-center gap-1.5"><Server className="size-3.5 shrink-0 text-muted-foreground" /><span className="truncate">{c.rdpSunucu}</span></span>
+                  : <span className="text-muted-foreground">—</span>,
+              },
+              {
+                key: "temsilci", width: "170px",
+                header: (
+                  <SecimFiltre label="Temsilci" options={temsilciSecenekleri} getLabel={(o) => o}
+                    selected={temsilciFiltre} onChange={(v) => setTemsilciFiltre(v as string[])} aranabilir ilkGosterim={8} />
+                ),
+                cell: (c) => c.temsilci ? (
+                  <span className="flex min-w-0 items-center gap-1.5" title={c.temsilci.aktif ? undefined : "Temsilci pasif — firma devredilmemiş olabilir"}>
+                    <span className={`truncate ${c.temsilci.aktif ? "" : "opacity-60"}`}>{c.temsilci.ad}</span>
+                    {!c.temsilci.aktif && (
+                      <span className="inline-flex shrink-0 rounded-[5px] bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-medium text-amber-700 dark:text-amber-400">pasif</span>
+                    )}
+                  </span>
+                ) : <span className="text-muted-foreground">—</span>,
+              },
+              {
+                key: "userCount", width: "120px", align: "right",
+                header: <SayiAralikFiltre label="Kullanıcı" value={kullaniciFiltre} onChange={setKullaniciFiltre} />,
+                cell: (c) => <span className="tabular-nums">{c.userCount}</span>,
+              },
+              {
+                key: "lisansBitis", width: "140px", align: "right",
+                header: <TarihFiltre label="Lisans Bitiş" value={lisansFiltre} onChange={setLisansFiltre} buAyLabel="Bu ay doluyor" align="end" />,
+                cell: (c) => <span className="tabular-nums">{lisansGoster(c.lisansBitis)}</span>,
+              },
+              {
+                key: "durum", width: "130px", align: "center",
+                header: (
+                  <SecimFiltre label="Durum" options={["aktif", "doldu"] as const} getLabel={(o) => (o === "aktif" ? "Aktif" : "Süresi Doldu")}
+                    selected={durumFiltre} onChange={(v) => setDurumFiltre(v as string[])} />
+                ),
+                cell: (c) => firmaIsActive(c)
+                  ? <span className="inline-flex rounded-[5px] bg-emerald-500/15 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">Aktif</span>
+                  : <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Süresi Doldu</span>,
+              },
+            ]
+            return (
+              <Table<FirmaCompany>
+                data={firmaSayfalik}
+                columns={sutunlar}
+                getRowId={(c) => String(c.id)}
+                onRowClick={(c) => selectFirma(c)}
+                columnDividers
+                rowHeight={36}
+                headerHeight={34}
+                height={`${34 + Math.max(firmaSayfalik.length, apiLoading ? 8 : 3) * 36 + 2}px`}
+                loading={apiLoading}
+                className="rounded-none border-0 text-[13px]"
+                emptyState={apiCompanies.length === 0 ? "Kayıtlı firma yok." : "Arama sonucu bulunamadı."}
+              />
+            )
+          })()}
           <ListeSayfalama
             sayfa={firmaSayfa}
             onSayfaChange={setFirmaSayfa}

@@ -8,6 +8,8 @@ export interface FirmaCompany {
   userCount: number; licenseCount: number; lisansBitis: string
   /** Firmanın atanmış terminal (RDP) sunucusu — kurulmamışsa null */
   windowsServerId: string | null
+  /** Atanmış terminal (RDP) sunucusunun adı — windowsServerId → hub.servers.name */
+  rdpSunucu: string | null
   /** CRM'deki müşteri temsilcisi — CRM'e ulaşılamazsa null */
   temsilci: CrmTemsilci | null
 }
@@ -64,14 +66,16 @@ export async function GET(req: NextRequest) {
       return out
     }
 
-    const [comps, { data: adu }, temsilciler] = await Promise.all([
+    const [comps, { data: adu }, temsilciler, { data: srvAdlari }] = await Promise.all([
       fetchAllCompanies(),
       // ad_users şu an ~58 satır; max-rows sınırının çok altında. Tablo
       // binleri geçerse buraya da sayfalama gerekir.
       sb.schema("hub").from("ad_users").select("ou"),
       // CRM'den temsilciler — 15 dk önbellekli, hata olursa boş harita
       firmaTemsilcileri(),
+      sb.schema("hub").from("servers").select("id, name"),
     ])
+    const sunucuAdi = new Map(((srvAdlari ?? []) as { id: string; name: string }[]).map((x) => [x.id, x.name]))
     // Kurulu firmada userCount = ad_users OU sayımı; değilse lisans (company.user_count)
     const ouCnt = new Map<string, number>()
     for (const a of (adu ?? []) as { ou: string }[]) ouCnt.set(a.ou, (ouCnt.get(a.ou) ?? 0) + 1)
@@ -83,6 +87,7 @@ export async function GET(req: NextRequest) {
       licenseCount: c.user_count ?? 0,
       lisansBitis: c.contract_end ? c.contract_end.slice(0, 10) : "",
       windowsServerId: c.windows_server_id ?? null,
+      rdpSunucu: c.windows_server_id ? sunucuAdi.get(c.windows_server_id) ?? null : null,
       temsilci: temsilciler.get(c.company_id) ?? null,
     }))
 
