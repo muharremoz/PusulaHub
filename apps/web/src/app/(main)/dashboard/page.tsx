@@ -6,7 +6,7 @@ import { RefreshCw } from "lucide-react"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Table, type TableColumn } from "@muharremoz/pusula-ui"
+import { Table, type TableColumn, Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 import type { DashDurum } from "@/app/api/dashboard/durum/route"
@@ -117,7 +117,7 @@ export default function DashboardPage() {
           <Ozet ikon="monitor-check" baslik="Pusula Connect" yukleniyor={ilkYukleme}
             deger={veri?.connect ? String(veri.connect.cevrimici) : "—"}
             ek={veri?.connect ? `/ ${veri.connect.toplam} çevrimiçi` : undefined}
-            alt={veri?.connect ? undefined : "okunamadı"}
+            alt={veri?.connect ? `${veri.connect.oturumda} kişi oturumda` : "okunamadı"}
             satirlar={veri?.connect ? [
               { nokta: "bg-emerald-500", metin: `${veri.connect.oturumda} kişi terminalde oturumda` },
               { nokta: "bg-sky-500", metin: `${veri.connect.cevrimici - veri.connect.oturumda} bağlı, oturum açmamış` },
@@ -332,8 +332,8 @@ function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor }: {
   vurgu?: "iyi" | "uyari" | "kritik"; yukleniyor: boolean
 }) {
   const renk = vurgu === "kritik" ? "text-red-600 dark:text-red-400" : vurgu === "uyari" ? "text-amber-700 dark:text-amber-400" : vurgu === "iyi" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
-  return (
-    <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
+  const kart = (
+    <div className={`rounded-[5px] bg-card px-4 py-3 ${satirlar ? "cursor-default transition-colors hover:bg-muted/20" : ""}`} style={{ boxShadow: "var(--card-shadow)" }}>
       <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
         <Icon name={ikon} size={13} /> {baslik}
       </p>
@@ -345,19 +345,25 @@ function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor }: {
             {deger}{ek && <span className="text-[14px] font-medium text-muted-foreground"> {ek}</span>}
           </p>
           {alt && <p className="truncate text-[12px] text-muted-foreground">{alt}</p>}
-          {satirlar && (
-            <ul className="mt-0.5 space-y-0.5">
-              {satirlar.map((x) => (
-                <li key={x.metin} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
-                  <span className={`size-1.5 shrink-0 rounded-full ${x.nokta}`} />
-                  <span className="truncate">{x.metin}</span>
-                </li>
-              ))}
-            </ul>
-          )}
         </>
       )}
     </div>
+  )
+  if (!satirlar || yukleniyor) return kart
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{kart}</TooltipTrigger>
+      <TooltipContent side="bottom" align="start">
+        <ul className="space-y-1">
+          {satirlar.map((x) => (
+            <li key={x.metin} className="flex items-center gap-1.5 text-[12px]">
+              <span className={`size-1.5 shrink-0 rounded-full ${x.nokta}`} />
+              {x.metin}
+            </li>
+          ))}
+        </ul>
+      </TooltipContent>
+    </Tooltip>
   )
 }
 
