@@ -225,23 +225,34 @@ export default function DashboardPage() {
               type L = DashFirmalar["lisans"]["dolmus"][number]
               const satirlar: L[] = [...(firma?.lisans.dolmus ?? []), ...(firma?.lisans.yaklasan ?? [])]
               const tarih = (iso: string) => { const [y, a, g] = iso.split("-"); return `${g}.${a}.${y}` }
+              /*  10 satırlık sabit boy. Fazla kayıt varsa 10. satır "Devamını göster";
+               *  basınca tüm kayıtlar aynı boyda tablo içinde kayar (liste uzamaz).   */
+              const DAHA = "__daha"
+              const daha = (x: L) => x.firkod === DAHA
               const sutunlar: TableColumn<L>[] = [
-                { key: "firkod", header: "Kod", width: "80px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
-                { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
-                { key: "bitis", header: "Bitiş", width: "110px", cell: (x) => <span className="tabular-nums">{tarih(x.bitis)}</span> },
+                { key: "firkod", header: "Kod", width: "80px", cell: (x) => (daha(x) ? null : <span className="tabular-nums text-muted-foreground">{x.firkod}</span>) },
+                {
+                  key: "ad", header: "Firma",
+                  cell: (x) => daha(x)
+                    ? <button type="button" onClick={() => setLisansTumu(true)} className="text-[12px] font-medium text-primary hover:underline">Devamını göster ({satirlar.length - 9} firma daha)</button>
+                    : <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link>,
+                },
+                { key: "bitis", header: "Bitiş", width: "110px", cell: (x) => (daha(x) ? null : <span className="tabular-nums">{tarih(x.bitis)}</span>) },
                 {
                   key: "kalan", header: "Durum", align: "center", width: "180px",
                   cell: (x) => {
+                    if (daha(x)) return null
                     const k = x.deger ?? 0
                     const sinif = k < 0 ? "bg-red-500/15 text-red-700 dark:text-red-400" : k <= 7 ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground"
                     return <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium tabular-nums ${sinif}`}>{k < 0 ? `${-k} gün önce doldu` : k === 0 ? "bugün doluyor" : `${k} gün kaldı`}</span>
                   },
                 },
               ]
-              // İlk 10 kayıt; "Tümünü göster" ile hepsi (tablo boyu satır sayısına göre büyür)
-              const gorunen = lisansTumu ? satirlar : satirlar.slice(0, 10)
+              const fazla = satirlar.length > 10
+              const gorunen: L[] = !fazla || lisansTumu
+                ? satirlar
+                : [...satirlar.slice(0, 9), { firkod: DAHA, ad: "", detay: "", deger: 0, bitis: "" }]
               return (
-                <>
                 <Table<L>
                   data={gorunen}
                   getRowId={(x) => x.firkod}
@@ -249,19 +260,11 @@ export default function DashboardPage() {
                   columnDividers
                   rowHeight={36}
                   headerHeight={30}
-                  height={tabloBoyu(gorunen.length)}
+                  height={tabloBoyu(Math.min(satirlar.length, 10))}
                   loading={firmaYukleniyor}
                   className="rounded-[8px] text-[13px]"
                   emptyState="Önümüzdeki 30 günde lisansı dolan firma yok."
                 />
-                {satirlar.length > 10 && (
-                  <button type="button" onClick={() => setLisansTumu((v) => !v)}
-                    className="mt-2 w-full rounded-[5px] bg-card px-4 py-2 text-left text-[12px] font-medium text-primary transition-colors hover:bg-muted/30"
-                    style={{ boxShadow: "var(--card-shadow)" }}>
-                    {lisansTumu ? "Daha az göster" : `Devamını göster (${satirlar.length - 10} firma daha)`}
-                  </button>
-                )}
-                </>
               )
             })()}
           </section>
