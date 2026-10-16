@@ -2440,7 +2440,7 @@ tr:nth-child(even) td{background:#fafafa}
                       cell: (u) => <span className="tabular-nums text-muted-foreground" title={u.usageDate ? `Son ölçüm: ${u.usageDate}` : "Ölçüm yok"}>{u.usageRamMB != null ? ram(u.usageRamMB) : "—"}</span>,
                     },
                     {
-                      key: "lastLogin", header: "Son giriş", sortable: true, width: "140px",
+                      key: "lastLogin", header: "Son giriş", sortable: true, width: "160px",
                       cell: (u) => <span className="tabular-nums text-muted-foreground">{u.lastLogin || "—"}</span>,
                     },
                     {
@@ -2465,7 +2465,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "52px", align: "right",
+                      key: "islem", header: "", width: "64px", align: "right",
                       cell: (usr) => {
                         const yetkili = officeVar(usr)
                         return (
@@ -2791,7 +2791,7 @@ tr:nth-child(even) td{background:#fafafa}
                       cell: (db) => <span className="block truncate text-muted-foreground" title={db.Owner ?? ""}>{db.Owner ?? "—"}</span>,
                     },
                     {
-                      key: "LastBackup", header: "Tam yedek", sortable: true, width: "150px",
+                      key: "LastBackup", header: "Tam yedek", sortable: true, width: "170px",
                       sortValue: (db) => db.LastBackup ?? "",
                       cell: (db) => (
                         <span className="tabular-nums text-muted-foreground" title={db.LastBackupStart ? `Başlangıç: ${db.LastBackupStart}\nBitiş: ${db.LastBackup ?? "—"}` : ""}>
@@ -2800,7 +2800,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "LastDiffBackup", header: "Diff yedek", sortable: true, width: "150px",
+                      key: "LastDiffBackup", header: "Diff yedek", sortable: true, width: "170px",
                       sortValue: (db) => db.LastDiffBackup ?? "",
                       cell: (db) => (
                         <span className="tabular-nums text-muted-foreground" title={db.LastDiffBackupStart ? `Başlangıç: ${db.LastDiffBackupStart}\nBitiş: ${db.LastDiffBackup ?? "—"}` : ""}>
@@ -2850,7 +2850,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "52px", align: "right",
+                      key: "islem", header: "", width: "64px", align: "right",
                       cell: (db) => (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
