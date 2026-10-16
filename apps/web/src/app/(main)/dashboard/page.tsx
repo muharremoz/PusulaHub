@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
-import { RefreshCw } from "lucide-react"
+import { Play, RefreshCw } from "lucide-react"
+import { toast } from "sonner"
 import { PageContainer } from "@/components/layout/page-container"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
@@ -36,6 +37,44 @@ export default function DashboardPage() {
   const [yukleniyor, setYukleniyor] = useState(true)
   const [firma, setFirma] = useState<DashFirmalar | null>(null)
   const [firmaYukleniyor, setFirmaYukleniyor] = useState(true)
+
+  /*  Yedek testi — /api/tv/yedek-testi (SSE, salt okuma). Biten sonuç sunucuda
+   *  hub.settings'e yazılıyor; durum önbelleği 30 sn eski kalabileceği için
+   *  sonucu burada da tutup kartta hemen gösteriyoruz.                        */
+  const [test, setTest] = useState<{ adim: number; toplam: number; baslik: string } | null>(null)
+  const [testSonuc, setTestSonuc] = useState<NonNullable<DashDurum["yedekTesti"]> | null>(null)
+  const testBaslat = useCallback(() => {
+    if (test) return
+    setTest({ adim: 0, toplam: 7, baslik: "Başlatılıyor" })
+    const es = new EventSource("/api/tv/yedek-testi")
+    let bitti = false
+    const adimlar = new Map<string, string>()
+    let plan: string[] = []
+    es.addEventListener("plan", (e) => { plan = (JSON.parse((e as MessageEvent).data) as { id: string }[]).map((x) => x.id); setTest((t) => t && { ...t, toplam: plan.length }) })
+    es.addEventListener("adim", (e) => {
+      const a = JSON.parse((e as MessageEvent).data) as { id: string; baslik: string; durum: string }
+      adimlar.set(a.id, a.durum)
+      const tamam = [...adimlar.values()].filter((d) => d !== "calisiyor").length
+      setTest((t) => t && { ...t, adim: tamam, baslik: a.baslik })
+    })
+    es.addEventListener("bitti", (e) => {
+      bitti = true; es.close(); setTest(null)
+      const sn = JSON.parse((e as MessageEvent).data) as NonNullable<DashDurum["yedekTesti"]>
+      setTestSonuc(sn)
+      if (sn.durum === "ok") toast.success("Yedek testi başarılı", { description: sn.ozet })
+      else toast.error(sn.durum === "uyari" ? "Yedek testinde uyarı var" : "Yedek testi başarısız", { description: sn.ozet })
+    })
+    es.addEventListener("hata", (e) => {
+      bitti = true; es.close(); setTest(null)
+      toast.error("Yedek testi tamamlanamadı", { description: (JSON.parse((e as MessageEvent).data) as { mesaj: string }).mesaj })
+    })
+    es.onerror = () => {
+      if (bitti) return
+      es.close(); setTest(null)
+      // 409 (başka test sürüyor) ve yetki hataları EventSource'ta ayrıntısız gelir
+      toast.error("Yedek testi başlatılamadı", { description: "Başka bir test sürüyor olabilir ya da yetkiniz yok." })
+    }
+  }, [test])
 
   // Firmalar + hareket: sunucu tarafı 5 dk önbellekli, aynı 60 sn döngüde yenilenir
   const firmaYukle = useCallback(async () => {
@@ -102,16 +141,22 @@ export default function DashboardPage() {
             alt={veri?.yedek ? `${veri.yedek.saglikli} / ${veri.yedek.toplam} veritabanı güncel` : "okunamadı"}
             vurgu={!veri?.yedek ? undefined : veri.yedek.sorunlu > 0 ? "kritik" : veri.yedek.gecikmis > 0 ? "uyari" : "iyi"} />
           {(() => {
-            const t = veri?.yedekTesti
+            const t = testSonuc ?? veri?.yedekTesti
             const once = (iso: string) => {
               const dk = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60_000))
               return dk < 60 ? `${dk} dk önce` : dk < 1440 ? `${Math.floor(dk / 60)} saat önce` : `${Math.floor(dk / 1440)} gün önce`
             }
             return (
               <Ozet ikon="circle-check" baslik="Yedek testi" yukleniyor={ilkYukleme}
-                deger={!t ? "—" : t.durum === "ok" ? "Başarılı" : t.durum === "uyari" ? "Uyarı" : t.durum === "hata" ? "Hatalı" : "Sürüyor"}
-                alt={!t ? "henüz çalıştırılmadı" : `${once(t.bitisAt)} · ${t.ozet}`}
-                vurgu={!t ? undefined : t.durum === "ok" ? "iyi" : t.durum === "uyari" ? "uyari" : t.durum === "hata" ? "kritik" : undefined} />
+                deger={test ? `${test.adim} / ${test.toplam}` : !t ? "—" : t.durum === "ok" ? "Başarılı" : t.durum === "uyari" ? "Uyarı" : t.durum === "hata" ? "Hatalı" : "Sürüyor"}
+                alt={test ? `${test.baslik} sınanıyor…` : !t ? "henüz çalıştırılmadı" : `${once(t.bitisAt)} · ${t.ozet}`}
+                vurgu={test || !t ? undefined : t.durum === "ok" ? "iyi" : t.durum === "uyari" ? "uyari" : t.durum === "hata" ? "kritik" : undefined}
+                aksiyon={
+                  <Button variant="outline" size="sm" className="h-6 gap-1 rounded-[5px] px-2 text-[11px]" disabled={!!test} onClick={testBaslat}
+                    title="SQL sunucusundaki yedekleri doğrular (salt okuma, ~1 dk)">
+                    {test ? <RefreshCw className="size-3 animate-spin" /> : <Play className="size-3" />} {test ? "Sürüyor" : "Test et"}
+                  </Button>
+                } />
             )
           })()}
           <Ozet ikon="monitor-check" baslik="Pusula Connect" yukleniyor={ilkYukleme}
@@ -322,8 +367,10 @@ export default function DashboardPage() {
   )
 }
 
-function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor }: {
+function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor, aksiyon }: {
   ikon: IconName; baslik: string; deger: string
+  /** Başlık satırının sağında küçük düğme */
+  aksiyon?: React.ReactNode
   /** Değerin yanında soluk ek (ör. "/ 92") */
   ek?: string
   alt?: string
@@ -334,9 +381,12 @@ function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor }: {
   const renk = vurgu === "kritik" ? "text-red-600 dark:text-red-400" : vurgu === "uyari" ? "text-amber-700 dark:text-amber-400" : vurgu === "iyi" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
   const kart = (
     <div className={`rounded-[5px] bg-card px-4 py-3 ${satirlar ? "cursor-default transition-colors hover:bg-muted/20" : ""}`} style={{ boxShadow: "var(--card-shadow)" }}>
-      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-        <Icon name={ikon} size={13} /> {baslik}
-      </p>
+      <div className="flex min-h-6 items-center gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Icon name={ikon} size={13} /> {baslik}
+        </p>
+        {aksiyon && <span className="ml-auto">{aksiyon}</span>}
+      </div>
       {yukleniyor ? (
         <div className="mt-2 space-y-1.5"><Skeleton className="h-7 w-24 rounded-[5px]" /><Skeleton className="h-3 w-32 rounded-[5px]" /></div>
       ) : (
