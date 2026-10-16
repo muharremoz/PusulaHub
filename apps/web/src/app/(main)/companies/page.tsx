@@ -2497,7 +2497,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "64px", align: "right",
+                      key: "islem", header: "", width: "56px", align: "center",
                       cell: (usr) => {
                         const yetkili = officeVar(usr)
                         return (
@@ -2615,7 +2615,7 @@ tr:nth-child(even) td{background:#fafafa}
                   const temizle = () => { setSvcAdFiltre(""); setSvcKatFiltre([]); setSvcDurumFiltre([]) }
                   const sutunlar: TableColumn<SvcSatir>[] = [
                     {
-                      key: "name", header: "Hizmet", sortable: true, width: "220px",
+                      key: "name", header: "Hizmet", sortable: true,
                       filter: <InlineTextFilter value={svcAdFiltre} onChange={setSvcAdFiltre} placeholder="Hizmet ara…" />,
                       cell: (s) => (
                         <span className="flex min-w-0 items-center gap-1.5">
@@ -2640,7 +2640,7 @@ tr:nth-child(even) td{background:#fafafa}
                       cell: (s) => <span className="block truncate">{s.server || "—"}</span>,
                     },
                     {
-                      key: "port", header: "Port", sortable: true, align: "right", width: "80px",
+                      key: "port", header: "Port", sortable: true, align: "center", width: "80px",
                       sortValue: (s) => s.port ?? 0,
                       cell: (s) => <span className="tabular-nums">{s.port ?? "—"}</span>,
                     },
@@ -2707,7 +2707,7 @@ tr:nth-child(even) td{background:#fafafa}
                       },
                     },
                     {
-                      key: "islem", header: "", width: "64px", align: "right",
+                      key: "islem", header: "", width: "56px", align: "center",
                       cell: (svc) => (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -2819,7 +2819,7 @@ tr:nth-child(even) td{background:#fafafa}
                   }
                   const sutunlar: TableColumn<TabSQLDatabase>[] = [
                     {
-                      key: "Name", header: "Veritabanı", sortable: true, width: "240px",
+                      key: "Name", header: "Veritabanı", sortable: true,
                       filter: <InlineTextFilter value={dbAdFiltre} onChange={setDbAdFiltre} placeholder="Veritabanı ara…" />,
                       cell: (db) => {
                         const dosyalar = [
@@ -2848,7 +2848,7 @@ tr:nth-child(even) td{background:#fafafa}
                       cell: (db) => <span className="tabular-nums">{boyut(db.SizeMB)}</span>,
                     },
                     {
-                      key: "RecoveryModel", header: "Kurtarma", sortable: true, width: "100px",
+                      key: "RecoveryModel", header: "Kurtarma", sortable: true, align: "center", width: "100px",
                       sortValue: (db) => db.RecoveryModel ?? "",
                       cell: (db) => db.RecoveryModel
                         ? <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">{db.RecoveryModel === "SIMPLE" ? "Simple" : db.RecoveryModel === "FULL" ? "Full" : db.RecoveryModel}</span>
@@ -2879,7 +2879,7 @@ tr:nth-child(even) td{background:#fafafa}
                     },
                     {
                       // Yedek — sihirbaz ve Yeni Veritabanı penceresiyle aynı düğme; kapatmak onay ister
-                      key: "YedekAl", header: "Yedek", sortable: true, width: "110px",
+                      key: "YedekAl", header: "Yedek", sortable: true, align: "center", width: "110px",
                       sortValue: (db) => (db.YedekAl === null ? 0 : db.YedekAl ? 2 : 1),
                       filter: <InlineSelectFilter options={["acik", "kapali", "kayitsiz"] as const} selected={dbYedekFiltre} onChange={setDbYedekFiltre}
                         getLabel={(o) => (o === "acik" ? "Alınıyor" : o === "kapali" ? "Kapalı" : "Kayıt yok")} />,
@@ -2894,7 +2894,7 @@ tr:nth-child(even) td{background:#fafafa}
                                 aria-pressed={yd === "acik"}
                                 disabled={yedekAlKaydediliyor !== null}
                                 onClick={(e) => { e.stopPropagation(); if (yd === "acik") setYedekKapatOnay(db); else void yedekAlDegistir(db, true) }}
-                                className={`flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""} ${
+                                className={`inline-flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed ${yedekAlKaydediliyor === db.Id ? "animate-pulse" : ""} ${
                                   yd === "acik"
                                     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
                                     : "text-muted-foreground line-through hover:text-foreground"
@@ -2919,7 +2919,7 @@ tr:nth-child(even) td{background:#fafafa}
                       ),
                     },
                     {
-                      key: "islem", header: "", width: "64px", align: "right",
+                      key: "islem", header: "", width: "56px", align: "center",
                       cell: (db) => (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
