@@ -76,8 +76,6 @@ export default function DashboardPage() {
   const cevrimici = sunucular.filter((s) => s.cevrimici).length
   const aktifKisi = sunucular.reduce((t, s) => t + (s.aktifKullanici ?? 0), 0)
   const terminaller = sunucular.filter((s) => s.roller.includes("RDP"))
-  const kritik = veri?.dikkat.filter((d) => d.seviye === "kritik").length ?? 0
-  const uyari = (veri?.dikkat.length ?? 0) - kritik
   const ilkYukleme = !veri && yukleniyor
 
   return (
@@ -93,7 +91,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Özet */}
-        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 md:grid-cols-3 xl:grid-cols-5">
           <Ozet ikon="monitor-check" baslik="Sunucular" yukleniyor={ilkYukleme}
             deger={`${cevrimici} / ${sunucular.length}`} alt={cevrimici === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - cevrimici} ulaşılamıyor`}
             vurgu={cevrimici < sunucular.length ? "kritik" : "iyi"} />
@@ -103,10 +101,6 @@ export default function DashboardPage() {
             deger={!veri?.yedek ? "—" : veri.yedek.sorunlu > 0 ? `${veri.yedek.sorunlu} sorunlu` : veri.yedek.gecikmis > 0 ? `${veri.yedek.gecikmis} gecikmiş` : "Sağlıklı"}
             alt={veri?.yedek ? `${veri.yedek.saglikli} / ${veri.yedek.toplam} veritabanı güncel` : "okunamadı"}
             vurgu={!veri?.yedek ? undefined : veri.yedek.sorunlu > 0 ? "kritik" : veri.yedek.gecikmis > 0 ? "uyari" : "iyi"} />
-          <Ozet ikon="badge-alert" baslik="Dikkat" yukleniyor={ilkYukleme}
-            deger={kritik + uyari === 0 ? "Yok" : String(kritik + uyari)}
-            alt={kritik + uyari === 0 ? "her şey yolunda" : `${kritik} kritik · ${uyari} uyarı`}
-            vurgu={kritik > 0 ? "kritik" : uyari > 0 ? "uyari" : "iyi"} />
           {(() => {
             const t = veri?.yedekTesti
             const once = (iso: string) => {
@@ -122,7 +116,13 @@ export default function DashboardPage() {
           })()}
           <Ozet ikon="monitor-check" baslik="Pusula Connect" yukleniyor={ilkYukleme}
             deger={veri?.connect ? String(veri.connect.cevrimici) : "—"}
-            alt={veri?.connect ? `çevrimiçi · ${veri.connect.oturumda} oturumda · ${veri.connect.toplam} cihaz${veri.connect.bugunYeni ? ` · bugün ${veri.connect.bugunYeni} yeni` : ""}` : "okunamadı"} />
+            ek={veri?.connect ? `/ ${veri.connect.toplam} çevrimiçi` : undefined}
+            alt={veri?.connect ? undefined : "okunamadı"}
+            satirlar={veri?.connect ? [
+              { nokta: "bg-emerald-500", metin: `${veri.connect.oturumda} kişi terminalde oturumda` },
+              { nokta: "bg-sky-500", metin: `${veri.connect.cevrimici - veri.connect.oturumda} bağlı, oturum açmamış` },
+              ...(veri.connect.bugunYeni ? [{ nokta: "bg-primary", metin: `bugün ${veri.connect.bugunYeni} yeni cihaz` }] : []),
+            ] : undefined} />
         </div>
 
         {/* Firmalar + bugün */}
@@ -322,8 +322,14 @@ export default function DashboardPage() {
   )
 }
 
-function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
-  ikon: IconName; baslik: string; deger: string; alt: string; vurgu?: "iyi" | "uyari" | "kritik"; yukleniyor: boolean
+function Ozet({ ikon, baslik, deger, ek, alt, satirlar, vurgu, yukleniyor }: {
+  ikon: IconName; baslik: string; deger: string
+  /** Değerin yanında soluk ek (ör. "/ 92") */
+  ek?: string
+  alt?: string
+  /** Tek satıra sığmayan ayrıntı: renkli noktalı kısa satırlar (alt yerine) */
+  satirlar?: { nokta: string; metin: string }[]
+  vurgu?: "iyi" | "uyari" | "kritik"; yukleniyor: boolean
 }) {
   const renk = vurgu === "kritik" ? "text-red-600 dark:text-red-400" : vurgu === "uyari" ? "text-amber-700 dark:text-amber-400" : vurgu === "iyi" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
   return (
@@ -335,8 +341,20 @@ function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
         <div className="mt-2 space-y-1.5"><Skeleton className="h-7 w-24 rounded-[5px]" /><Skeleton className="h-3 w-32 rounded-[5px]" /></div>
       ) : (
         <>
-          <p className={`mt-1 text-2xl font-bold tabular-nums ${renk}`}>{deger}</p>
-          <p className="truncate text-[12px] text-muted-foreground">{alt}</p>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${renk}`}>
+            {deger}{ek && <span className="text-[14px] font-medium text-muted-foreground"> {ek}</span>}
+          </p>
+          {alt && <p className="truncate text-[12px] text-muted-foreground">{alt}</p>}
+          {satirlar && (
+            <ul className="mt-0.5 space-y-0.5">
+              {satirlar.map((x) => (
+                <li key={x.metin} className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
+                  <span className={`size-1.5 shrink-0 rounded-full ${x.nokta}`} />
+                  <span className="truncate">{x.metin}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
     </div>
