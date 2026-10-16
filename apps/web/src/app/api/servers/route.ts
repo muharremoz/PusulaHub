@@ -95,6 +95,15 @@ export async function GET() {
         disks: m?.disks?.map((d) => ({
           drive: d.drive, totalGB: d.totalGB, usedGB: d.usedGB, percent: d.percent,
         })),
+        ...(() => {
+          if (!oturumlar) return {}
+          const rdp = oturumlar.filter((o) => !/console|services/i.test(o.sessionType ?? ""))
+          const aktif = rdp.filter((o) => /^active$/i.test(o.state ?? "")).length
+          return { aktifOturum: aktif, kopukOturum: rdp.length - aktif }
+        })(),
+        ramGB: m?.ram?.totalMB
+          ? { kullanilan: Math.round((m.ram.realUsedMB ?? m.ram.usedMB) / 102.4) / 10, toplam: Math.round(m.ram.totalMB / 1024) }
+          : undefined,
       }
     })
 

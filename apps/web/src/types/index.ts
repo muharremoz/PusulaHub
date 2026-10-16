@@ -36,6 +36,15 @@ export interface Server {
    * /tv disk panelinde hepsi gösteriliyor. Agent bildirmiyorsa undefined.
    */
   disks?: { drive: string; totalGB: number; usedGB: number; percent: number }[];
+  /**
+   * Oturum SAYISI (kullanıcı değil) — server_metrics ile aynı kural: console/services
+   * hariç, aktif = state Active, kopuk = geri kalan. Dashboard ve Sunucular sayfası
+   * aynı sayıyı göstersin diye. Agent bildirmiyorsa undefined.
+   */
+  aktifOturum?: number;
+  kopukOturum?: number;
+  /** Gerçek RAM (önbellek hariç, realUsedMB) — GB. `ram` yüzdesi usedMB'den (geriye uyum). */
+  ramGB?: { kullanilan: number; toplam: number };
 }
 
 export interface ADUser {

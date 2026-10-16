@@ -1,634 +1,443 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { PageContainer } from "@/components/layout/page-container";
-import { StatusBadge } from "@/components/shared/status-badge";
-import { ProgressBar } from "@/components/shared/progress-bar";
-import { AnimatedCircularProgressBar } from "@/components/ui/animated-circular-progress-bar";
-import type { Server as ServerType } from "@/types";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui";
-import { MoreVertical, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
-import { RefreshCw, Rows3 } from "lucide-react";
-import { Icon } from "@/components/shared/icon";
-import type { IconName } from "@/components/shared/icon-registry";
-import { ListeKarti, ListeThead, ListeBosSatir } from "@/components/shared/liste-karti";
-import { MetinFiltre, SecimFiltre } from "@/components/shared/liste-filtreleri";
-
-/** Animasyonlu registry ikonu (lucide-animated) — proje tek icon kaynağı. */
-const Ic = ({ name, className }: { name: IconName; className?: string }) => (
-  <Icon name={name} size={14} className={`inline-flex ${className ?? ""}`} />
-);
+import { useCallback, useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { LayoutGrid, MoreVertical, Plus, RefreshCw, Rows3 } from "lucide-react"
+import { toast } from "sonner"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@muharremoz/pusula-ui";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@muharremoz/pusula-ui";
-import { toast } from "sonner";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { ServerSheet } from "@/components/servers/server-sheet";
-import { TerminalSheet } from "@/components/servers/terminal-sheet";
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  Table, InlineTextFilter, InlineSelectFilter, type TableColumn, type SortState,
+} from "@muharremoz/pusula-ui"
+import { PageContainer } from "@/components/layout/page-container"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Icon } from "@/components/shared/icon"
+import type { IconName } from "@/components/shared/icon-registry"
+import { ServerSheet } from "@/components/servers/server-sheet"
+import { TerminalSheet } from "@/components/servers/terminal-sheet"
+import type { Server } from "@/types"
 
-type ViewMode = "list" | "card";
-type SortKey = "name" | "ip" | "dns" | "status" | "cpu" | "ram" | "disk" | "role";
-type SortDir = "asc" | "desc";
+/**
+ * Sunucular — yeniden tasarım (16.10.2026).
+ *
+ * Üstte özet, altında rol gruplu kartlar (Terminaller / Altyapı) ya da tek
+ * tablo. Veri /api/servers (agent son raporu + hub.servers); 10 sn'de bir,
+ * sekme görünürken yenilenir. Oturum sayıları dashboard ile aynı kural
+ * (Server.aktifOturum / kopukOturum).
+ *
+ * Eski sayfadaki "Yeniden Başlat" kaldırıldı: hiçbir şey yapmayan bir TODO'ydu.
+ */
 
-const STATUS_ORDER: Record<string, number> = { online: 0, warning: 1, offline: 2 };
+const YENILEME_MS = 10_000
+type Gorunum = "kart" | "liste"
 
-const STATUS_DOT: Record<string, string> = {
-  online: "bg-emerald-500",
-  warning: "bg-amber-400",
-  offline: "bg-red-400",
-};
+const ROL_ETIKET: Record<string, string> = { RDP: "Terminal", File: "Depo", General: "Genel" }
+const rolAdi = (r: string) => ROL_ETIKET[r] ?? r
+const terminalMi = (s: Server) => s.roles.includes("RDP" as Server["roles"][number])
+const cevrimici = (s: Server) => s.status === "online"
 
-function gaugeColor(value: number) {
-  if (value >= 90) return { primary: "#ef4444", secondary: "#fee2e2" }
-  if (value >= 75) return { primary: "#f59e0b", secondary: "#fef3c7" }
-  return { primary: "#10b981", secondary: "#d1fae5" }
+const seviyeRenk = (p: number | null | undefined) =>
+  p == null ? "bg-muted" : p >= 90 ? "bg-red-500" : p >= 75 ? "bg-amber-500" : "bg-emerald-500"
+const seviyeMetin = (p: number | null | undefined) =>
+  p == null ? "text-muted-foreground" : p >= 90 ? "font-semibold text-red-600 dark:text-red-400" : p >= 75 ? "font-semibold text-amber-700 dark:text-amber-400" : ""
+
+const diskler = (s: Server) => s.disks?.length ? s.disks : [{ drive: "Disk", totalGB: 0, usedGB: 0, percent: s.disk }]
+const enDoluDisk = (s: Server) => diskler(s).reduce((m, d) => (d.percent > m.percent ? d : m), diskler(s)[0])
+
+function onceYaz(iso: string | undefined): string {
+  if (!iso || iso === "—") return "—"
+  const sn = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000))
+  if (!Number.isFinite(sn)) return "—"
+  return sn < 60 ? `${sn} sn önce` : sn < 3600 ? `${Math.floor(sn / 60)} dk önce` : sn < 86400 ? `${Math.floor(sn / 3600)} saat önce` : `${Math.floor(sn / 86400)} gün önce`
 }
 
-function AnimatedGauge({ value, className }: { value: number; className?: string }) {
-  const [displayed, setDisplayed] = useState(0)
+export default function ServersPage() {
+  const [sunucular, setSunucular] = useState<Server[]>([])
+  const [yukleniyor, setYukleniyor] = useState(true)
+  const [yenileniyor, setYenileniyor] = useState(false)
+  const [sonGuncelleme, setSonGuncelleme] = useState<Date | null>(null)
+  const [gorunum, setGorunum] = useState<Gorunum>("kart")
+
+  const [sheetAcik, setSheetAcik] = useState(false)
+  const [duzenleId, setDuzenleId] = useState<string | null>(null)
+  const [terminal, setTerminal] = useState<{ id: string; ad: string } | null>(null)
+  const [kaldir, setKaldir] = useState<Server | null>(null)
+  const [kaldiriliyor, setKaldiriliyor] = useState(false)
+
+  // Liste görünümü filtre / sıralama
+  const [filtreAcik, setFiltreAcik] = useState(false)
+  const [adFiltre, setAdFiltre] = useState("")
+  const [rolFiltre, setRolFiltre] = useState<string[]>([])
+  const [durumFiltre, setDurumFiltre] = useState<string[]>([])
+  const [sira, setSira] = useState<SortState | null>({ key: "name", direction: "asc" } as SortState)
+
+  // Görünüm tercihi bu tarayıcıda hatırlanır
   useEffect(() => {
-    const t = setTimeout(() => setDisplayed(value), 80)
-    return () => clearTimeout(t)
-  }, [value])
-  const { primary, secondary } = gaugeColor(value)
-  return (
-    <AnimatedCircularProgressBar
-      value={displayed}
-      gaugePrimaryColor={primary}
-      gaugeSecondaryColor={secondary}
-      className={className}
-    />
-  )
-}
+    try { const g = localStorage.getItem("sunucular.gorunum"); if (g === "kart" || g === "liste") setGorunum(g) } catch { /* yok */ }
+  }, [])
+  const gorunumSec = (g: Gorunum) => { setGorunum(g); try { localStorage.setItem("sunucular.gorunum", g) } catch { /* yok */ } }
 
-function SortHeader({
-  label, sortKey, active, dir, onSort,
-}: {
-  label: string; sortKey: SortKey; active: SortKey; dir: SortDir; onSort: (k: SortKey) => void;
-}) {
-  const isActive = active === sortKey;
-  return (
-    <button
-      onClick={() => onSort(sortKey)}
-      className={cn(
-        "flex items-center gap-1 text-[10px] font-medium tracking-wide uppercase transition-colors select-none",
-        isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground"
-      )}
-    >
-      {label}
-      <span className="shrink-0">
-        {isActive
-          ? dir === "asc"
-            ? <ChevronUp className="size-3" />
-            : <ChevronDown className="size-3" />
-          : <ChevronsUpDown className="size-3 opacity-40" />
-        }
-      </span>
-    </button>
-  );
-}
+  const yukle = useCallback(async () => {
+    try {
+      const r = await fetch("/api/servers", { cache: "no-store" })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`)
+      setSunucular(Array.isArray(j) ? j : [])
+      setSonGuncelleme(new Date())
+    } catch (e) {
+      toast.error("Sunucular alınamadı", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setYukleniyor(false)
+    }
+  }, [])
 
-type DialogAction = "remove" | "restart" | null;
+  useEffect(() => {
+    void yukle()
+    const t = setInterval(() => { if (document.visibilityState === "visible") void yukle() }, YENILEME_MS)
+    return () => clearInterval(t)
+  }, [yukle])
 
-function ActionMenu({ serverId, serverSlug, serverName, onRemoved, onTerminal, onEdit }: { serverId: string; serverSlug: string; serverName: string; onRemoved: (id: string) => void; onTerminal: () => void; onEdit: () => void }) {
-  const router = useRouter();
-  const [action, setAction] = useState<DialogAction>(null);
-  const [dialogAction, setDialogAction] = useState<"remove" | "restart">("remove");
-  const [loading, setLoading] = useState(false);
+  const elleYenile = async () => { setYenileniyor(true); await yukle(); setYenileniyor(false) }
 
-  function openAction(a: "remove" | "restart") {
-    setDialogAction(a);
-    setAction(a);
+  const kaldirOnayla = async () => {
+    if (!kaldir) return
+    setKaldiriliyor(true)
+    try {
+      const r = await fetch(`/api/servers/${kaldir.id}`, { method: "DELETE" })
+      if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error ?? `HTTP ${r.status}`)
+      toast.success("Sunucu kaldırıldı", { description: kaldir.name })
+      setSunucular((p) => p.filter((x) => x.id !== kaldir.id))
+      setKaldir(null)
+    } catch (e) {
+      toast.error("Sunucu kaldırılamadı", { description: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setKaldiriliyor(false)
+    }
   }
 
-  const handleConfirm = async () => {
-    setLoading(true);
-    try {
-      if (action === "remove") {
-        await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
-        toast.success("Sunucu kaldırıldı", { description: serverName });
-        onRemoved(serverId);
-      } else if (action === "restart") {
-        // TODO: restart API
-        toast.success("Yeniden başlatma isteği gönderildi", { description: serverName });
-      }
-      setAction(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const islemler = {
+    duzenle: (s: Server) => { setDuzenleId(s.id); setSheetAcik(true) },
+    terminal: (s: Server) => setTerminal({ id: s.id, ad: s.name }),
+    kaldir: (s: Server) => setKaldir(s),
+  }
+
+  // ── Özet ──────────────────────────────────────────────────
+  const acik = sunucular.filter(cevrimici)
+  const terminaller = sunucular.filter(terminalMi)
+  const aktif = terminaller.reduce((t, s) => t + (s.aktifOturum ?? 0), 0)
+  const kopuk = terminaller.reduce((t, s) => t + (s.kopukOturum ?? 0), 0)
+  const ort = (f: (s: Server) => number) => (acik.length ? Math.round(acik.reduce((t, s) => t + f(s), 0) / acik.length) : null)
+  const doluDisk = acik
+    .flatMap((s) => diskler(s).map((d) => ({ sunucu: s.name, ...d })))
+    .reduce<{ sunucu: string; drive: string; percent: number } | null>((m, d) => (!m || d.percent > m.percent ? d : m), null)
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="flex items-center justify-center h-6 w-6 rounded-[5px] hover:bg-muted/60 transition-colors shrink-0">
-            <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="rounded-[5px]">
-          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => router.push(`/servers/${serverSlug}`)}>
-            Detaylar
-          </DropdownMenuItem>
-          <DropdownMenuItem className="text-xs cursor-pointer" onClick={onEdit}>
-            Düzenle
-          </DropdownMenuItem>
-          <DropdownMenuItem className="text-xs cursor-pointer" onClick={() => openAction("restart")}>
-            Yeniden Başlat
-          </DropdownMenuItem>
-          <DropdownMenuItem className="text-xs cursor-pointer" onClick={onTerminal}>
-            Terminal
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-xs text-destructive cursor-pointer" onClick={() => openAction("remove")}>
-            Kaldır
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <PageContainer title="Sunucular" description="Sunucuların anlık durumu ve yönetimi">
+      <ServerSheet open={sheetAcik} onOpenChange={(o) => { setSheetAcik(o); if (!o) setDuzenleId(null) }} onSaved={() => void yukle()} editServerId={duzenleId} />
+      <TerminalSheet open={terminal !== null} onOpenChange={(o) => { if (!o) setTerminal(null) }} serverId={terminal?.id ?? ""} serverName={terminal?.ad ?? ""} />
 
-      <AlertDialog open={action !== null} onOpenChange={(o) => { if (!o && !loading) setAction(null); }}>
-        <AlertDialogContent className="max-w-sm">
+      <div className="space-y-3">
+        {/* Araç şeridi */}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {sonGuncelleme && <span className="mr-auto text-[12px] tabular-nums text-muted-foreground">Son güncelleme {sonGuncelleme.toLocaleTimeString("tr-TR")} · 10 sn'de bir yenilenir</span>}
+          <ToggleGroup type="single" value={gorunum} onValueChange={(v) => v && gorunumSec(v as Gorunum)} className="h-8 rounded-[5px] bg-[var(--section-bg)] p-0.5">
+            <ToggleGroupItem value="kart" aria-label="Kart görünümü" className="h-7 gap-1.5 rounded-[5px] px-2.5 text-[12px]"><LayoutGrid className="size-3.5" /> Kart</ToggleGroupItem>
+            <ToggleGroupItem value="liste" aria-label="Liste görünümü" className="h-7 gap-1.5 rounded-[5px] px-2.5 text-[12px]"><Rows3 className="size-3.5" /> Liste</ToggleGroupItem>
+          </ToggleGroup>
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-[5px] text-[12px]" onClick={() => void elleYenile()} disabled={yenileniyor}>
+            <RefreshCw className={`size-3.5 ${yenileniyor ? "animate-spin" : ""}`} /> Yenile
+          </Button>
+          <Button size="sm" className="h-8 gap-1.5 rounded-[5px] text-[12px]" onClick={() => { setDuzenleId(null); setSheetAcik(true) }}>
+            <Plus className="size-3.5" /> Sunucu ekle
+          </Button>
+        </div>
+
+        {/* Özet */}
+        <div className="grid grid-cols-2 gap-2 rounded-[8px] bg-[var(--section-bg)] p-2 md:grid-cols-3 xl:grid-cols-5">
+          <Ozet ikon="monitor-check" baslik="Çevrimiçi" yukleniyor={yukleniyor}
+            deger={`${acik.length} / ${sunucular.length}`} alt={acik.length === sunucular.length ? "hepsi çevrimiçi" : `${sunucular.length - acik.length} ulaşılamıyor`}
+            vurgu={acik.length < sunucular.length ? "kritik" : "iyi"} />
+          <Ozet ikon="users" baslik="Aktif oturum" yukleniyor={yukleniyor}
+            deger={String(aktif)} alt={`${terminaller.length} terminal${kopuk ? ` · ${kopuk} kopuk` : ""}`} />
+          <Ozet ikon="zap" baslik="Ortalama CPU" yukleniyor={yukleniyor}
+            deger={ort((s) => s.cpu) == null ? "—" : `%${ort((s) => s.cpu)}`} alt="çevrimiçi sunucular" />
+          <Ozet ikon="layers" baslik="Ortalama RAM" yukleniyor={yukleniyor}
+            deger={ort((s) => s.ram) == null ? "—" : `%${ort((s) => s.ram)}`} alt="çevrimiçi sunucular" />
+          <Ozet ikon="archive" baslik="En dolu disk" yukleniyor={yukleniyor}
+            deger={doluDisk ? `%${Math.round(doluDisk.percent)}` : "—"} alt={doluDisk ? `${doluDisk.sunucu} · ${doluDisk.drive}` : "veri yok"}
+            vurgu={!doluDisk ? undefined : doluDisk.percent >= 90 ? "kritik" : doluDisk.percent >= 75 ? "uyari" : undefined} />
+        </div>
+
+        {gorunum === "kart" ? (
+          <>
+            <Grup baslik="Terminaller" alt={`${terminaller.filter(cevrimici).length} / ${terminaller.length} çevrimiçi · ${aktif} aktif oturum`}
+              sunucular={terminaller} yukleniyor={yukleniyor} islemler={islemler} />
+            <Grup baslik="Altyapı" alt="Active Directory, SQL, IIS, Depo"
+              sunucular={sunucular.filter((s) => !terminalMi(s))} yukleniyor={yukleniyor} islemler={islemler} />
+          </>
+        ) : (
+          <Liste sunucular={sunucular} yukleniyor={yukleniyor} islemler={islemler}
+            filtreAcik={filtreAcik} setFiltreAcik={setFiltreAcik}
+            adFiltre={adFiltre} setAdFiltre={setAdFiltre} rolFiltre={rolFiltre} setRolFiltre={setRolFiltre}
+            durumFiltre={durumFiltre} setDurumFiltre={setDurumFiltre} sira={sira} setSira={setSira} />
+        )}
+      </div>
+
+      <AlertDialog open={kaldir !== null} onOpenChange={(o) => { if (!o && !kaldiriliyor) setKaldir(null) }}>
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>
-              {dialogAction === "remove" ? "Sunucuyu kaldır" : "Sunucuyu yeniden başlat"}
-            </AlertDialogTitle>
+            <AlertDialogTitle>Sunucu kaldırılsın mı?</AlertDialogTitle>
             <AlertDialogDescription>
-              <span className="font-medium text-foreground">{serverName}</span>{" "}
-              {dialogAction === "remove"
-                ? "sunucusu listeden kalıcı olarak kaldırılacak. Bu işlem geri alınamaz."
-                : "sunucusu yeniden başlatılacak. Aktif bağlantılar kesilecek."}
+              <span className="font-medium text-foreground">{kaldir?.name}</span> ({kaldir?.ip}) Hub'dan kaldırılacak. Sunucunun kendisine
+              dokunulmaz; yalnız Hub kaydı, rolleri ve izlemesi silinir. Bu işlem geri alınamaz.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={loading} className="text-xs">İptal</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={(e) => { e.preventDefault(); handleConfirm(); }}
-              disabled={loading}
-              className={dialogAction === "remove"
-                ? "text-xs bg-destructive text-white hover:bg-destructive/90"
-                : "text-xs"}
-            >
-              {loading
-                ? dialogAction === "remove" ? "Kaldırılıyor..." : "Başlatılıyor..."
-                : dialogAction === "remove" ? "Kaldır" : "Yeniden Başlat"}
+            <AlertDialogCancel disabled={kaldiriliyor}>Vazgeç</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-white hover:bg-destructive/90" disabled={kaldiriliyor}
+              onClick={(e) => { e.preventDefault(); void kaldirOnayla() }}>
+              {kaldiriliyor ? "Kaldırılıyor…" : "Kaldır"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </>
-  );
-}
-
-function ResourceBar({ label, value }: { label: string; value: number }) {
-  const color =
-    value >= 90 ? "bg-red-500" :
-    value >= 75 ? "bg-amber-400" :
-    "bg-foreground";
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-[10px] text-muted-foreground w-6 shrink-0">{label}</span>
-      <div className="flex-1 h-1 rounded-full bg-muted overflow-hidden">
-        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
-      </div>
-      <span className="text-[10px] tabular-nums text-muted-foreground w-7 text-right">%{value}</span>
-    </div>
-  );
-}
-
-export default function ServersPage() {
-  const [servers, setServers] = useState<ServerType[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [osFilter, setOsFilter] = useState<"all" | "windows" | "ubuntu">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "online" | "warning" | "offline">("all");
-
-  /* Sütun başlığı filtreleri — liste görünümünde tablo başlıklarından. */
-  const [adFiltre,  setAdFiltre]  = useState("");
-  const [ipFiltre,  setIpFiltre]  = useState("");
-  const [dnsFiltre, setDnsFiltre] = useState("");
-  const [rolFiltre, setRolFiltre] = useState<string[]>([]);
-  const [view, setView] = useState<ViewMode>("list");
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [terminalOpen, setTerminalOpen] = useState(false);
-  const [terminalServer, setTerminalServer] = useState<{ id: string; name: string } | null>(null);
-  const [editServerId, setEditServerId] = useState<string | null>(null);
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [refreshing, setRefreshing] = useState(false);
-
-  function openTerminal(id: string, name: string) {
-    setTerminalServer({ id, name });
-    setTerminalOpen(true);
-  }
-
-  const fetchServers = async (showLoading = false) => {
-    if (showLoading) setLoading(true);
-    try {
-      const res = await fetch("/api/servers");
-      const data = await res.json();
-      setServers(Array.isArray(data) ? data : []);
-      setLastUpdate(new Date());
-    } catch (err) {
-      console.error(err);
-    } finally {
-      if (showLoading) setLoading(false);
-    }
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetchServers();
-    setRefreshing(false);
-  };
-
-  const handleRemoved = (id: string) => {
-    setServers((prev) => prev.filter((s) => s.id !== id));
-    fetchServers();
-  };
-
-  useEffect(() => {
-    fetchServers(true);
-    const interval = setInterval(() => fetchServers(), 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  /* Listede geçen roller — Rol sütunu filtresi için. */
-  const roller = useMemo(
-    () => [...new Set(servers.flatMap((s) => s.roles))].sort((a, b) => a.localeCompare(b, "tr")),
-    [servers],
-  );
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) setSortDir((d) => d === "asc" ? "desc" : "asc");
-    else { setSortKey(key); setSortDir("asc"); }
-  };
-
-  const filtered = servers
-    .filter((s) => {
-      if (osFilter === "windows" && !s.os.startsWith("Windows")) return false;
-      if (osFilter === "ubuntu" && !s.os.startsWith("Ubuntu")) return false;
-      if (statusFilter !== "all" && s.status !== statusFilter) return false;
-      const ad  = adFiltre.trim().toLocaleLowerCase("tr-TR");
-      const ip  = ipFiltre.trim().toLocaleLowerCase("tr-TR");
-      const dns = dnsFiltre.trim().toLocaleLowerCase("tr-TR");
-      if (ad && !s.name.toLocaleLowerCase("tr-TR").includes(ad)) return false;
-      if (ip && !s.ip.toLowerCase().includes(ip)) return false;
-      if (dns && !(s.dns ?? "").toLowerCase().includes(dns)) return false;
-      if (rolFiltre.length && !s.roles.some((r) => rolFiltre.includes(r))) return false;
-      return true;
-    })
-    .sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "name":   cmp = a.name.localeCompare(b.name); break;
-        case "ip":     cmp = a.ip.localeCompare(b.ip, undefined, { numeric: true }); break;
-        case "dns":    cmp = (a.dns ?? "").localeCompare(b.dns ?? ""); break;
-        case "status": cmp = (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9); break;
-        case "cpu":    cmp = a.cpu - b.cpu; break;
-        case "ram":    cmp = a.ram - b.ram; break;
-        case "disk":   cmp = a.disk - b.disk; break;
-        case "role":   cmp = (a.roles[0] ?? "").localeCompare(b.roles[0] ?? ""); break;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-
-  return (
-    <PageContainer title="Sunucular" description="Tüm sunucuların listesi ve yönetimi">
-      <ServerSheet open={sheetOpen} onOpenChange={(o) => { setSheetOpen(o); if (!o) setEditServerId(null); }} onSaved={fetchServers} editServerId={editServerId} />
-      <TerminalSheet
-        open={terminalOpen}
-        onOpenChange={setTerminalOpen}
-        serverId={terminalServer?.id ?? ""}
-        serverName={terminalServer?.name ?? ""}
-      />
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {/* OS filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
-          {(["all", "windows", "ubuntu"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setOsFilter(f)}
-              className={cn(
-                "rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                osFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {f === "all" ? "Tümü" : f === "windows" ? "Windows" : "Ubuntu"}
-            </button>
-          ))}
-        </div>
-
-        {/* Status filter */}
-        <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
-          {(["all", "online", "warning", "offline"] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setStatusFilter(f)}
-              className={cn(
-                "rounded-[5px] text-[11px] px-3 py-1.5 font-medium transition-colors",
-                statusFilter === f ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {f === "all" ? "Tümü" : f === "online" ? "Aktif" : f === "warning" ? "Uyarı" : "Kapalı"}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto flex items-center gap-2">
-          {/* View toggle */}
-          <div className="flex items-center rounded-[8px] p-1" style={{ backgroundColor: "var(--section-bg)" }}>
-            <button
-              onClick={() => setView("list")}
-              className={cn(
-                "flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-[12px] font-medium transition-colors",
-                view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <span className="inline-flex"><Rows3 className="size-3.5" /></span>
-              Liste
-            </button>
-            <button
-              onClick={() => setView("card")}
-              className={cn(
-                "flex items-center gap-1.5 h-7 px-2.5 rounded-[5px] text-[12px] font-medium transition-colors",
-                view === "card" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Ic name="blocks" />
-              Kart
-            </button>
-          </div>
-
-          {/* Refresh + Last Update */}
-          <div className="flex items-center gap-2">
-            {lastUpdate && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-[10px] text-muted-foreground tabular-nums cursor-default">
-                      {lastUpdate.toLocaleTimeString("tr-TR")}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-[11px]">
-                    Her 5 saniyede otomatik yenilenir
-                  </TooltipContent>
-                </Tooltip>
-            )}
-            <button
-              onClick={handleRefresh}
-              className="flex items-center gap-1.5 text-[11px] font-medium px-3 py-1.5 rounded-[5px] border border-border/60 hover:bg-muted/40 transition-colors text-muted-foreground hover:text-foreground"
-            >
-              <span className={cn("inline-flex", refreshing && "animate-spin")}><RefreshCw className="size-3.5" /></span>
-              Yenile
-            </button>
-          </div>
-
-          {/* New server */}
-          <button
-            onClick={() => setSheetOpen(true)}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
-          >
-            <Ic name="plus" />
-            Yeni Sunucu
-          </button>
-        </div>
-      </div>
-
-      {/* ── SKELETON ── */}
-      {loading && (
-        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-          <div className="border-border flex flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
-            {/* Header */}
-            <div className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-2 bg-muted/20 border-b border-border items-center">
-              {Array.from({ length: 11 }).map((_, i) => (
-                <Skeleton key={i} className="h-3 rounded-[5px]" />
-              ))}
-            </div>
-            {/* Rows */}
-            <div className="divide-y divide-border/40">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="grid grid-cols-[16px_1.4fr_100px_1fr_68px_0.75fr_0.75fr_0.75fr_64px_72px_28px] gap-3 px-3 py-3 items-center">
-                  <Skeleton className="size-2 rounded-full" />
-                  <Skeleton className="h-3 rounded-[5px] w-3/4" />
-                  <Skeleton className="h-3 rounded-[5px]" />
-                  <Skeleton className="h-3 rounded-[5px] w-2/3" />
-                  <Skeleton className="h-5 rounded-[5px] w-14" />
-                  <Skeleton className="h-2 rounded-full" />
-                  <Skeleton className="h-2 rounded-full" />
-                  <Skeleton className="h-2 rounded-full" />
-                  <Skeleton className="h-5 rounded-[5px] w-10" />
-                  <Skeleton className="size-5 rounded-[5px]" />
-                </div>
-              ))}
-            </div>
-          </div>
-            </div>
-      )}
-
-      {/* ── BOŞ DURUM ── */}
-      {!loading && servers.length === 0 && (
-        <div className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-          <div
-            className="rounded-[5px] flex flex-col items-center justify-center py-16 gap-3"
-            style={{ backgroundColor: "var(--card)", boxShadow: "var(--card-shadow)" }}
-          >
-            <Icon name="monitor-check" size={32} className="text-muted-foreground/30" />
-            <div className="text-center space-y-1">
-              <p className="text-[13px] font-medium text-foreground">Henüz sunucu eklenmedi</p>
-              <p className="text-[11px] text-muted-foreground">Yönetmek istediğiniz sunucuları buradan ekleyin.</p>
-            </div>
-            <button
-              onClick={() => setSheetOpen(true)}
-              className="flex items-center gap-1.5 text-[11px] font-semibold px-4 py-2 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors mt-1"
-            >
-              <Ic name="plus" />
-              Yeni Sunucu Ekle
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── LIST VIEW ── */}
-      {view === "list" && servers.length > 0 && (
-        <ListeKarti
-          baslik="Sunucular"
-          ikon={<Icon name="monitor-check" size={13} className="inline-flex" />}
-          toplam={servers.length}
-          filtreli={filtered.length}
-        >
-          <div className="overflow-x-auto">
-            <table className="w-full text-[14px] font-medium leading-[20px]">
-              <ListeThead>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="Sunucu Adı" value={adFiltre} onChange={setAdFiltre} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="IP Adresi" value={ipFiltre} onChange={setIpFiltre} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <MetinFiltre label="DNS Adresi" value={dnsFiltre} onChange={setDnsFiltre} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <SortHeader label="Durum" sortKey="status" active={sortKey} dir={sortDir} onSort={handleSort} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <SortHeader label="CPU" sortKey="cpu" active={sortKey} dir={sortDir} onSort={handleSort} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <SortHeader label="RAM" sortKey="ram" active={sortKey} dir={sortDir} onSort={handleSort} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <SortHeader label="Disk" sortKey="disk" active={sortKey} dir={sortDir} onSort={handleSort} />
-                </th>
-                <th className="px-4 py-1.5 text-left font-medium">Uptime</th>
-                <th className="px-4 py-1.5 text-left font-medium">
-                  <SecimFiltre
-                    label="Rol"
-                    options={roller}
-                    getLabel={(o) => o}
-                    selected={rolFiltre}
-                    onChange={(v) => setRolFiltre(v as string[])}
-                  />
-                </th>
-                <th className="px-4 py-1.5 text-right font-medium">İşlem</th>
-              </ListeThead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <ListeBosSatir sutunSayisi={10} toplam={servers.length} bosMesaj="Henüz sunucu eklenmedi." />
-                ) : filtered.map((srv) => (
-                  <tr key={srv.id} className="hover:bg-muted/70 transition-colors">
-                    <td className="px-4 py-1.5 whitespace-nowrap">
-                      <span className="flex items-center gap-2">
-                        <span className={cn("size-1.5 shrink-0 rounded-full", STATUS_DOT[srv.status])} />
-                        <span className="font-medium">{srv.name}</span>
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap font-mono text-[12px] tabular-nums">{srv.ip}</td>
-                    <td className="text-muted-foreground/60 px-4 py-1.5 font-mono text-[12px] max-w-56 truncate">{srv.dns ?? "—"}</td>
-                    <td className="px-4 py-1.5 whitespace-nowrap"><StatusBadge status={srv.status} className="w-fit" /></td>
-                    <td className="px-4 py-1.5 min-w-24">
-                      <span className="flex items-center gap-1.5">
-                        <ProgressBar value={srv.cpu} className="flex-1" />
-                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.cpu}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-1.5 min-w-24">
-                      <span className="flex items-center gap-1.5">
-                        <ProgressBar value={srv.ram} className="flex-1" />
-                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.ram}</span>
-                      </span>
-                    </td>
-                    <td className="px-4 py-1.5 min-w-24">
-                      <span className="flex items-center gap-1.5">
-                        <ProgressBar value={srv.disk} className="flex-1" />
-                        <span className="text-muted-foreground w-7 text-right text-[11px] tabular-nums">%{srv.disk}</span>
-                      </span>
-                    </td>
-                    <td className="text-muted-foreground px-4 py-1.5 whitespace-nowrap text-[12px] tabular-nums">{srv.uptime}</td>
-                    <td className="px-4 py-1.5 whitespace-nowrap">
-                      <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium">
-                        {srv.roles[0]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-1.5 text-right whitespace-nowrap">
-                      <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </ListeKarti>
-      )}
-
-      {view === "card" && servers.length > 0 && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {filtered.map((srv) => (
-              <div key={srv.id} className="rounded-[8px] p-2" style={{ backgroundColor: "var(--section-bg)" }}>
-                <div className="border-border flex flex-1 flex-col overflow-hidden rounded-t-[10px] border-t bg-card shadow-[0_-2px_6px_-4px_rgba(15,31,27,0.10)]">
-
-                  {/* Card header */}
-                  <div className="px-3 pt-3 pb-2.5 border-b border-border/40">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className="relative flex size-1.5 shrink-0">
-                            {srv.status === "online" && (
-                              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-                            )}
-                            <span className={cn("relative inline-flex size-1.5 rounded-full", STATUS_DOT[srv.status])} />
-                          </span>
-                          <p className="text-[11px] font-semibold truncate">{srv.name}</p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[10px] text-muted-foreground font-mono">{srv.ip}</span>
-                          {srv.dns && (
-                            <>
-                              <span className="text-[10px] text-border">·</span>
-                              <span className="text-[10px] text-muted-foreground/70 font-mono truncate">{srv.dns}</span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        {srv.roles.map((role) => (
-                          <span key={role} className="text-[9px] bg-muted px-1.5 py-0.5 rounded-[5px] font-medium">
-                            {role}
-                          </span>
-                        ))}
-                        <ActionMenu serverId={srv.id} serverSlug={srv.slug ?? srv.id} serverName={srv.name} onRemoved={handleRemoved} onTerminal={() => openTerminal(srv.id, srv.name)} onEdit={() => { setEditServerId(srv.id); setSheetOpen(true); }} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Circular metrics */}
-                  <div className="grid grid-cols-3 divide-x divide-border/40 border-b border-border/40">
-                    {[
-                      { label: "CPU", value: srv.cpu },
-                      { label: "RAM", value: srv.ram },
-                      { label: "Disk", value: srv.disk },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex flex-col items-center py-3 gap-1">
-                        <AnimatedGauge value={value} className="size-14 text-[11px] font-semibold" />
-                        <span className="text-[10px] text-muted-foreground font-medium">{label}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Card footer */}
-                  <div className="flex items-center gap-1 px-3 py-2 border-t border-border/40 bg-muted/20">
-                    <Icon name="clock" size={12} className="inline-flex text-muted-foreground" />
-                    <span className="text-[10px] text-muted-foreground">{srv.lastChecked}</span>
-                    <span className="ml-auto text-[10px] text-muted-foreground">↑ {srv.uptime}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground px-1">
-            <Icon name="monitor-check" size={12} className="inline-flex" />
-            <span>{filtered.length} sunucu listeleniyor</span>
-          </div>
-        </div>
-      )}
     </PageContainer>
-  );
+  )
+}
+
+type Islemler = { duzenle: (s: Server) => void; terminal: (s: Server) => void; kaldir: (s: Server) => void }
+
+function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
+  ikon: IconName; baslik: string; deger: string; alt: string; vurgu?: "iyi" | "uyari" | "kritik"; yukleniyor: boolean
+}) {
+  const renk = vurgu === "kritik" ? "text-red-600 dark:text-red-400" : vurgu === "uyari" ? "text-amber-700 dark:text-amber-400" : vurgu === "iyi" ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"
+  return (
+    <div className="rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
+      <p className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <Icon name={ikon} size={13} /> {baslik}
+      </p>
+      {yukleniyor ? (
+        <div className="mt-2 space-y-1.5"><Skeleton className="h-7 w-20 rounded-[5px]" /><Skeleton className="h-3 w-28 rounded-[5px]" /></div>
+      ) : (
+        <>
+          <p className={`mt-1 text-2xl font-bold tabular-nums ${renk}`}>{deger}</p>
+          <p className="truncate text-[12px] text-muted-foreground">{alt}</p>
+        </>
+      )}
+    </div>
+  )
+}
+
+function IslemMenusu({ s, islemler }: { s: Server; islemler: Islemler }) {
+  const router = useRouter()
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" onClick={(e) => e.preventDefault()} className="inline-flex size-7 shrink-0 items-center justify-center rounded-[5px] transition-colors hover:bg-muted/60" aria-label={`${s.name} işlemleri`}>
+          <MoreVertical className="size-3.5 text-muted-foreground" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem className="text-[12px]" onClick={() => router.push(`/servers/${s.slug ?? s.id}`)}>Detaylar</DropdownMenuItem>
+        <DropdownMenuItem className="text-[12px]" onClick={() => islemler.terminal(s)}>Komut çalıştır</DropdownMenuItem>
+        <DropdownMenuItem className="text-[12px]" onClick={() => islemler.duzenle(s)}>Düzenle</DropdownMenuItem>
+        <DropdownMenuItem className="text-[12px] text-rose-600 focus:text-rose-600" onClick={() => islemler.kaldir(s)}>Kaldır</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+function Grup({ baslik, alt, sunucular, yukleniyor, islemler }: { baslik: string; alt: string; sunucular: Server[]; yukleniyor: boolean; islemler: Islemler }) {
+  if (!yukleniyor && sunucular.length === 0) return null
+  return (
+    <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+      <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
+        <h2 className="text-[13px] font-semibold">{baslik}</h2>
+        {!yukleniyor && <span className="text-[12px] tabular-nums text-muted-foreground">{alt}</span>}
+      </div>
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+        {yukleniyor
+          ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-[196px] rounded-[5px]" />)
+          : [...sunucular].sort((a, b) => a.name.localeCompare(b.name, "tr", { numeric: true })).map((s) => <SunucuKarti key={s.id} s={s} islemler={islemler} />)}
+      </div>
+    </section>
+  )
+}
+
+function Cubuk({ etiket, yuzde, ek }: { etiket: string; yuzde: number | null | undefined; ek?: string }) {
+  return (
+    <div>
+      <div className="flex items-baseline justify-between gap-2 text-[12px]">
+        <span className="text-muted-foreground">{etiket}</span>
+        <span className="truncate tabular-nums">
+          {ek && <span className="text-muted-foreground">{ek} · </span>}
+          <span className={seviyeMetin(yuzde)}>{yuzde == null ? "—" : `%${Math.round(yuzde)}`}</span>
+        </span>
+      </div>
+      <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+        <div className={`h-full rounded-full ${seviyeRenk(yuzde)}`} style={{ width: `${Math.min(100, yuzde ?? 0)}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function SunucuKarti({ s, islemler }: { s: Server; islemler: Islemler }) {
+  const acik = cevrimici(s)
+  const terminal = terminalMi(s)
+  return (
+    <div className="flex flex-col rounded-[5px] bg-card px-4 py-3" style={{ boxShadow: "var(--card-shadow)" }}>
+      <div className="flex items-center gap-2">
+        <span className={`size-2 shrink-0 rounded-full ${acik ? "bg-emerald-500" : "bg-red-500"}`} />
+        <Link href={`/servers/${s.slug ?? s.id}`} className="truncate text-[14px] font-semibold hover:underline">{s.name}</Link>
+        <span className="ml-auto"><IslemMenusu s={s} islemler={islemler} /></span>
+      </div>
+      <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+        <span className="text-[12px] tabular-nums text-muted-foreground">{s.ip}</span>
+        {s.roles.map((r) => (
+          <span key={r} className="inline-flex rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground">{rolAdi(r)}</span>
+        ))}
+      </div>
+
+      {acik ? (
+        <div className="mt-3 space-y-2">
+          <Cubuk etiket="CPU" yuzde={s.cpu} />
+          <Cubuk etiket="RAM" yuzde={s.ram} ek={s.ramGB ? `${s.ramGB.kullanilan.toLocaleString("tr-TR")} / ${s.ramGB.toplam} GB` : undefined} />
+          {diskler(s).map((d) => (
+            <Cubuk key={d.drive} etiket={d.drive === "Disk" ? "Disk" : `Disk ${d.drive}`} yuzde={d.percent}
+              ek={d.totalGB ? `${Math.round(d.totalGB - d.usedGB)} GB boş` : undefined} />
+          ))}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-[5px] bg-red-500/10 px-3 py-2 text-[12px] text-red-700 dark:text-red-400">
+          Agent'a ulaşılamıyor · son rapor {onceYaz(s.lastChecked)}
+        </div>
+      )}
+
+      <div className="mt-auto pt-3">
+        <div className="flex items-center justify-between gap-2 border-t pt-2 text-[12px] text-muted-foreground">
+          {terminal && acik ? (
+            <span className="tabular-nums">
+              <span className="font-semibold text-foreground">{s.aktifOturum ?? "—"}</span> aktif
+              {(s.kopukOturum ?? 0) > 0 && <span className="text-amber-700 dark:text-amber-400"> · {s.kopukOturum} kopuk</span>}
+            </span>
+          ) : (
+            <span className="tabular-nums">{acik ? `${s.uptime} çalışıyor` : "—"}</span>
+          )}
+          <span className="tabular-nums" title={s.lastChecked}>{terminal && acik ? `${s.uptime} çalışıyor` : onceYaz(s.lastChecked)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Liste({
+  sunucular, yukleniyor, islemler, filtreAcik, setFiltreAcik, adFiltre, setAdFiltre, rolFiltre, setRolFiltre, durumFiltre, setDurumFiltre, sira, setSira,
+}: {
+  sunucular: Server[]; yukleniyor: boolean; islemler: Islemler
+  filtreAcik: boolean; setFiltreAcik: (f: (v: boolean) => boolean) => void
+  adFiltre: string; setAdFiltre: (v: string) => void
+  rolFiltre: string[]; setRolFiltre: (v: string[]) => void
+  durumFiltre: string[]; setDurumFiltre: (v: string[]) => void
+  sira: SortState | null; setSira: (s: SortState | null) => void
+}) {
+  const roller = useMemo(() => [...new Set(sunucular.flatMap((s) => s.roles as string[]))].sort((a, b) => a.localeCompare(b, "tr")), [sunucular])
+  const ad = adFiltre.trim().toLocaleLowerCase("tr-TR")
+  const liste = sunucular.filter((s) => {
+    if (ad && !`${s.name} ${s.ip} ${s.dns ?? ""}`.toLocaleLowerCase("tr-TR").includes(ad)) return false
+    if (rolFiltre.length && !s.roles.some((r) => rolFiltre.includes(r))) return false
+    if (durumFiltre.length && !durumFiltre.includes(cevrimici(s) ? "acik" : "kapali")) return false
+    return true
+  })
+  const filtreSayisi = (ad ? 1 : 0) + (rolFiltre.length ? 1 : 0) + (durumFiltre.length ? 1 : 0)
+  const yuzde = (v: number | null | undefined) => <span className={`tabular-nums ${seviyeMetin(v)}`}>{v == null ? "—" : `%${Math.round(v)}`}</span>
+
+  const sutunlar: TableColumn<Server>[] = [
+    {
+      key: "name", header: "Sunucu", sortable: true,
+      filter: <InlineTextFilter value={adFiltre} onChange={setAdFiltre} placeholder="Ad, IP ara…" />,
+      cell: (s) => (
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`size-2 shrink-0 rounded-full ${cevrimici(s) ? "bg-emerald-500" : "bg-red-500"}`} />
+          <Link href={`/servers/${s.slug ?? s.id}`} className="truncate hover:underline">{s.name}</Link>
+        </span>
+      ),
+    },
+    { key: "ip", header: "IP", sortable: true, width: "120px", cell: (s) => <span className="tabular-nums">{s.ip}</span> },
+    {
+      key: "roles", header: "Rol", width: "140px", sortValue: (s) => s.roles.join(","),
+      filter: <InlineSelectFilter options={roller} selected={rolFiltre} onChange={setRolFiltre} getLabel={rolAdi} />,
+      cell: (s) => <span className="block truncate">{s.roles.map(rolAdi).join(", ") || "—"}</span>,
+    },
+    { key: "cpu", header: "CPU", sortable: true, align: "right", width: "80px", sortValue: (s) => (cevrimici(s) ? s.cpu : -1), cell: (s) => (cevrimici(s) ? yuzde(s.cpu) : <span>—</span>) },
+    { key: "ram", header: "RAM", sortable: true, align: "right", width: "80px", sortValue: (s) => (cevrimici(s) ? s.ram : -1), cell: (s) => (cevrimici(s) ? yuzde(s.ram) : <span>—</span>) },
+    {
+      key: "disk", header: "En dolu disk", sortable: true, align: "right", width: "120px",
+      sortValue: (s) => (cevrimici(s) ? enDoluDisk(s).percent : -1),
+      cell: (s) => {
+        if (!cevrimici(s)) return <span>—</span>
+        const d = enDoluDisk(s)
+        return <span className="tabular-nums">{d.drive !== "Disk" && <span className="text-muted-foreground">{d.drive} </span>}{yuzde(d.percent)}</span>
+      },
+    },
+    {
+      key: "oturum", header: "Oturum", sortable: true, align: "right", width: "110px",
+      sortValue: (s) => s.aktifOturum ?? -1,
+      cell: (s) => (!terminalMi(s) || !cevrimici(s) ? <span>—</span> : (
+        <span className="tabular-nums">
+          {s.aktifOturum ?? "—"}
+          {(s.kopukOturum ?? 0) > 0 && <span className="text-amber-700 dark:text-amber-400"> · {s.kopukOturum}</span>}
+        </span>
+      )),
+    },
+    { key: "uptime", header: "Çalışma", width: "100px", cell: (s) => <span className="tabular-nums">{cevrimici(s) ? s.uptime : "—"}</span> },
+    {
+      key: "status", header: "Durum", sortable: true, align: "center", width: "120px",
+      sortValue: (s) => (cevrimici(s) ? 1 : 0),
+      filter: <InlineSelectFilter options={["acik", "kapali"] as const} selected={durumFiltre} onChange={setDurumFiltre} getLabel={(o) => (o === "acik" ? "Çevrimiçi" : "Ulaşılamıyor")} />,
+      cell: (s) => (
+        <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${cevrimici(s) ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-red-500/15 text-red-700 dark:text-red-400"}`}>
+          {cevrimici(s) ? "Çevrimiçi" : "Ulaşılamıyor"}
+        </span>
+      ),
+    },
+    { key: "islem", header: "", width: "64px", align: "center", cell: (s) => <IslemMenusu s={s} islemler={islemler} /> },
+  ]
+
+  return (
+    <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
+      <div className="flex items-center gap-2 px-2 pb-2 pt-1">
+        <h2 className="text-[13px] font-semibold">Tüm sunucular</h2>
+        <span className="text-[12px] tabular-nums text-muted-foreground">{filtreSayisi ? `${liste.length} / ` : ""}{sunucular.length} sunucu</span>
+        <span className="ml-auto flex items-center gap-2">
+          {filtreSayisi > 0 && (
+            <button type="button" className="text-[12px] font-medium text-primary hover:underline"
+              onClick={() => { setAdFiltre(""); setRolFiltre([]); setDurumFiltre([]) }}>Filtreleri temizle</button>
+          )}
+          <Button variant="outline" size="sm" className="h-7 rounded-[5px] px-2.5 text-[12px]" onClick={() => setFiltreAcik((v) => !v)}>
+            {filtreAcik ? "Filtreleri gizle" : "Filtrele"}
+          </Button>
+        </span>
+      </div>
+      <Table<Server>
+        data={liste}
+        columns={sutunlar}
+        getRowId={(s) => s.id}
+        sort={sira ?? undefined}
+        onSortChange={setSira}
+        filterRow={filtreAcik}
+        columnDividers
+        resizable
+        rowHeight={36}
+        headerHeight={30}
+        height={`${30 + (filtreAcik ? 34 : 0) + Math.max(liste.length, 3) * 36 + 2}px`}
+        loading={yukleniyor}
+        className="rounded-[8px] text-[13px]"
+        emptyState={sunucular.length === 0 ? "Henüz sunucu eklenmedi." : "Filtreye uyan sunucu yok."}
+      />
+    </section>
+  )
 }
