@@ -17,7 +17,7 @@ import { requirePermission } from "@/lib/require-permission"
 export interface DashFirmaSatir { firkod: string; ad: string; detay: string; deger?: number }
 export interface DashFirmalar {
   zaman: string
-  lisans: { dolmus: DashFirmaSatir[]; yaklasan: DashFirmaSatir[] }
+  lisans: { dolmus: (DashFirmaSatir & { bitis: string })[]; yaklasan: (DashFirmaSatir & { bitis: string })[] }
   hakAsan: (DashFirmaSatir & { acik: number; hak: number })[]
   yogun: (DashFirmaSatir & { cpu: number; ram: number; disk: number; db: number })[]
   oturum: {
@@ -78,7 +78,7 @@ async function topla(): Promise<DashFirmalar> {
   ])
 
   // ── Lisans ────────────────────────────────────────────────
-  const dolmus: DashFirmaSatir[] = [], yaklasan: DashFirmaSatir[] = []
+  const dolmus: DashFirmalar["lisans"]["dolmus"] = [], yaklasan: DashFirmalar["lisans"]["yaklasan"] = []
   const bugun = new Date(gunBasi.getTime() + 3 * 3_600_000).toISOString().slice(0, 10)
   const gunFarki = (iso: string) => Math.round((Date.parse(iso) - Date.parse(bugun)) / 86_400_000)
   const tarihYaz = (iso: string) => { const [y, a, g] = iso.split("-"); return `${g}.${a}.${y}` }
@@ -87,8 +87,8 @@ async function topla(): Promise<DashFirmalar> {
     // 2000-01-01 gibi değerler lisans API'sinde "tarih girilmemiş" — sona ermiş sayma
     if (!t || Number(t.slice(0, 4)) < 2010) continue
     const kalan = gunFarki(t)
-    if (kalan < 0) dolmus.push({ firkod: f.company_id, ad: f.name, deger: kalan, detay: `${tarihYaz(t)} · ${-kalan} gün önce doldu` })
-    else if (kalan <= LISANS_GUN) yaklasan.push({ firkod: f.company_id, ad: f.name, deger: kalan, detay: `${tarihYaz(t)} · ${kalan === 0 ? "bugün doluyor" : `${kalan} gün kaldı`}` })
+    if (kalan < 0) dolmus.push({ firkod: f.company_id, ad: f.name, deger: kalan, bitis: t, detay: `${tarihYaz(t)} · ${-kalan} gün önce doldu` })
+    else if (kalan <= LISANS_GUN) yaklasan.push({ firkod: f.company_id, ad: f.name, deger: kalan, bitis: t, detay: `${tarihYaz(t)} · ${kalan === 0 ? "bugün doluyor" : `${kalan} gün kaldı`}` })
   }
   dolmus.sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0))
   yaklasan.sort((a, b) => (a.deger ?? 0) - (b.deger ?? 0))

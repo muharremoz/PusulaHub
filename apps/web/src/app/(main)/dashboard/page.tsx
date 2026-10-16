@@ -10,7 +10,7 @@ import { Table, type TableColumn } from "@muharremoz/pusula-ui"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 import type { DashDurum } from "@/app/api/dashboard/durum/route"
-import type { DashFirmalar, DashFirmaSatir } from "@/app/api/dashboard/firmalar/route"
+import type { DashFirmalar } from "@/app/api/dashboard/firmalar/route"
 import dynamic from "next/dynamic"
 
 const OturumGrafik = dynamic(() => import("@/components/dashboard/oturum-grafik").then((m) => m.OturumGrafik), {
@@ -112,16 +112,47 @@ export default function DashboardPage() {
         {/* Firmalar + bugün */}
         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
-            <h2 className="px-2 pb-2 pt-1 text-[13px] font-semibold">Firmalar</h2>
-            <div className="space-y-2">
-              <FirmaListesi baslik="Lisansı dolan" yukleniyor={firmaYukleniyor}
-                bos="Önümüzdeki 30 günde lisansı dolan firma yok."
-                satirlar={[
-                  ...(firma?.lisans.dolmus ?? []).map((x) => ({ ...x, kritik: true })),
-                  ...(firma?.lisans.yaklasan ?? []).map((x) => ({ ...x, kritik: (x.deger ?? 99) <= 7 })),
-                ]}
-                not={firma ? `${firma.lisans.dolmus.length} dolmuş · ${firma.lisans.yaklasan.length} yaklaşan` : undefined} />
+            <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
+              <h2 className="text-[13px] font-semibold">Lisansı dolan firmalar</h2>
+              {firma && (
+                <span className="text-[12px] tabular-nums text-muted-foreground">
+                  {firma.lisans.dolmus.length} dolmuş · {firma.lisans.yaklasan.length} 30 gün içinde
+                </span>
+              )}
             </div>
+            {(() => {
+              type L = DashFirmalar["lisans"]["dolmus"][number]
+              const satirlar: L[] = [...(firma?.lisans.dolmus ?? []), ...(firma?.lisans.yaklasan ?? [])]
+              const tarih = (iso: string) => { const [y, a, g] = iso.split("-"); return `${g}.${a}.${y}` }
+              const sutunlar: TableColumn<L>[] = [
+                { key: "firkod", header: "Kod", width: "80px", cell: (x) => <span className="tabular-nums text-muted-foreground">{x.firkod}</span> },
+                { key: "ad", header: "Firma", cell: (x) => <Link href={`/companies?firkod=${x.firkod}`} className="block truncate hover:underline">{x.ad}</Link> },
+                { key: "bitis", header: "Bitiş", width: "110px", cell: (x) => <span className="tabular-nums">{tarih(x.bitis)}</span> },
+                {
+                  key: "kalan", header: "Durum", align: "center", width: "140px",
+                  cell: (x) => {
+                    const k = x.deger ?? 0
+                    const sinif = k < 0 ? "bg-red-500/15 text-red-700 dark:text-red-400" : k <= 7 ? "bg-amber-500/15 text-amber-700 dark:text-amber-400" : "bg-muted text-muted-foreground"
+                    return <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium tabular-nums ${sinif}`}>{k < 0 ? `${-k} gün önce doldu` : k === 0 ? "bugün doluyor" : `${k} gün kaldı`}</span>
+                  },
+                },
+              ]
+              return (
+                <Table<L>
+                  data={satirlar}
+                  getRowId={(x) => x.firkod}
+                  columns={sutunlar}
+                  columnDividers
+                  rowHeight={36}
+                  headerHeight={30}
+                  // En çok 12 satır görünür, fazlası tablo içinde kayar
+                  height={tabloBoyu(Math.min(satirlar.length, 12))}
+                  loading={firmaYukleniyor}
+                  className="rounded-[8px] text-[13px]"
+                  emptyState="Önümüzdeki 30 günde lisansı dolan firma yok."
+                />
+              )
+            })()}
           </section>
 
           <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
@@ -296,57 +327,3 @@ function Ozet({ ikon, baslik, deger, alt, vurgu, yukleniyor }: {
   )
 }
 
-type FirmaSatiri = DashFirmaSatir & { kritik?: boolean; rozet?: string; skor?: number }
-
-function FirmaListesi({ baslik, satirlar, bos, not, yukleniyor }: {
-  baslik: string; satirlar: FirmaSatiri[]; bos: string; not?: string; yukleniyor: boolean
-}) {
-  const [tumu, setTumu] = useState(false)
-  const gorunen = tumu ? satirlar : satirlar.slice(0, 5)
-  return (
-    <div className="overflow-hidden rounded-[5px] bg-card" style={{ boxShadow: "var(--card-shadow)" }}>
-      <div className="flex items-baseline gap-2 border-b px-4 py-2">
-        <p className="text-[13px] font-medium">{baslik}</p>
-        {!yukleniyor && satirlar.length > 0 && <span className="text-[12px] tabular-nums text-muted-foreground">{not ?? satirlar.length}</span>}
-      </div>
-      {yukleniyor ? (
-        <div className="space-y-2 px-4 py-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-4 w-full rounded-[5px]" />)}</div>
-      ) : satirlar.length === 0 ? (
-        <p className="px-4 py-3 text-[12px] text-muted-foreground">{bos}</p>
-      ) : (
-        <>
-          <ul className="divide-y">
-            {gorunen.map((x) => (
-              <li key={x.firkod}>
-                <Link href={`/companies?firkod=${x.firkod}`} className="flex items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/30">
-                  <span className="w-12 shrink-0 text-[12px] tabular-nums text-muted-foreground">{x.firkod}</span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium">{x.ad}</p>
-                    <p className={`truncate text-[12px] ${x.kritik ? "text-red-600 dark:text-red-400" : "text-muted-foreground"}`}>{x.detay}</p>
-                  </div>
-                  {x.rozet && (
-                    <span className="inline-flex shrink-0 rounded-[5px] bg-amber-500/15 px-2 py-0.5 text-[11px] font-medium tabular-nums text-amber-700 dark:text-amber-400">{x.rozet}</span>
-                  )}
-                  {x.skor != null && (
-                    <div className="flex w-24 shrink-0 items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                        <div className={`h-full rounded-full ${seviyeRenk(x.skor)}`} style={{ width: `${x.skor}%` }} />
-                      </div>
-                      <span className="w-9 text-right text-[12px] font-semibold tabular-nums">%{x.skor}</span>
-                    </div>
-                  )}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          {satirlar.length > 5 && (
-            <button type="button" onClick={() => setTumu((v) => !v)}
-              className="w-full border-t px-4 py-1.5 text-left text-[12px] font-medium text-primary hover:bg-muted/30">
-              {tumu ? "Daha az göster" : `Tümünü göster (${satirlar.length})`}
-            </button>
-          )}
-        </>
-      )}
-    </div>
-  )
-}
