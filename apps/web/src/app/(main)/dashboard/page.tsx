@@ -84,9 +84,9 @@ export default function DashboardPage() {
   }, [test])
 
   // Firmalar + hareket: sunucu tarafı 5 dk önbellekli, aynı 60 sn döngüde yenilenir
-  const firmaYukle = useCallback(async () => {
+  const firmaYukle = useCallback(async (yenile = false) => {
     try {
-      const r = await fetch("/api/dashboard/firmalar", { cache: "no-store" })
+      const r = await fetch(`/api/dashboard/firmalar${yenile ? "?yenile=1" : ""}`, { cache: "no-store" })
       if (r.ok) setFirma((await r.json()) as DashFirmalar)
     } catch { /* bölüm boş kalır, üst kısım etkilenmez */ }
     finally { setFirmaYukleniyor(false) }
@@ -158,7 +158,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-end gap-2 text-[12px] text-muted-foreground">
           {hata && <span className="text-red-600 dark:text-red-400">Yenilenemedi: {hata}</span>}
           {veri && <span className="tabular-nums">Son güncelleme {new Date(veri.zaman).toLocaleTimeString("tr-TR")}</span>}
-          <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-[5px] px-2.5 text-[12px]" onClick={() => void yukle()} disabled={yukleniyor}>
+          <Button variant="outline" size="sm" className="h-7 gap-1.5 rounded-[5px] px-2.5 text-[12px]" onClick={() => { void yukle(true); void firmaYukle(true) }} disabled={yukleniyor}>
             <RefreshCw className={`size-3.5 ${yukleniyor ? "animate-spin" : ""}`} /> Yenile
           </Button>
         </div>

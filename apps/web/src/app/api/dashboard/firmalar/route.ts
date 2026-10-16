@@ -198,11 +198,13 @@ async function topla(): Promise<DashFirmalar> {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const gate = await requirePermission("dashboard", "read")
   if (gate) return gate
   try {
-    if (!onbellek || Date.now() - onbellek.at > TTL) onbellek = { at: Date.now(), veri: await topla() }
+    // ?yenile=1 — kullanıcının "Yenile"si önbelleği atlar
+    const yenile = new URL(req.url).searchParams.get("yenile") === "1"
+    if (yenile || !onbellek || Date.now() - onbellek.at > TTL) onbellek = { at: Date.now(), veri: await topla() }
     return NextResponse.json(onbellek.veri)
   } catch (err) {
     console.error("[GET /api/dashboard/firmalar]", err)
