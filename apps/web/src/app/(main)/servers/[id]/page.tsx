@@ -3,8 +3,8 @@
 import { use, useState, useEffect, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, Power as IsPower } from "lucide-react";
-import { Building2, FolderOpen, RefreshCw, LogOut } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
+import { Building2, FolderOpen } from "lucide-react";
 import { Icon } from "@/components/shared/icon";
 import type { IconName } from "@/components/shared/icon-registry";
 
@@ -32,13 +32,6 @@ const ShieldTab    = mkTabIcon("shield-check");
 const FileTab      = mkTabIcon("file-text");
 const MessageTab   = mkTabIcon("message-square");
 const FolderTab    = mkStaticTabIcon(FolderOpen);
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@muharremoz/pusula-ui";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Server } from "@/types";
@@ -278,34 +271,6 @@ export default function ServerDetailPage({
             {/* Spacer */}
             <div className="flex-1" />
 
-            {/* Power dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 border border-border/60 hover:bg-muted/40 rounded-[5px] text-[11px] font-medium px-3 py-1.5 text-muted-foreground transition-colors">
-                  <IsPower className="size-3.5" />
-                  Güç
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-[5px] min-w-[160px]">
-                <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <RefreshCw className="size-3.5" />
-                  Yeniden Başlat
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer text-destructive">
-                  <IsPower className="size-3.5" />
-                  Kapat
-                </DropdownMenuItem>
-                <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <LogOut className="size-3.5" />
-                  Oturumları Kapat
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-xs flex items-center gap-2 cursor-pointer">
-                  <Icon name="settings" size={14} className="inline-flex" />
-                  Detayları Düzenle
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </div>
