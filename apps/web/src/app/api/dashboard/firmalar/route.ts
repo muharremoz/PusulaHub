@@ -129,9 +129,12 @@ async function topla(): Promise<DashFirmalar> {
       disk: oran(f.file_storage_mb ?? 0, diskKota),
       db: oran(dbMB.get(f.company_id) ?? 0, dbKota),
     }
-    const skor = Math.round((p.cpu + p.ram + p.disk + p.db) / 4)
-    return { firkod: f.company_id, ad: f.name, deger: skor, ...p, detay: `CPU %${p.cpu} · RAM %${p.ram} · Disk %${p.disk} · DB %${p.db}` }
-  }).sort((a, b) => (b.deger ?? 0) - (a.deger ?? 0)).slice(0, 10)
+    // Skor = EN DOLU kaynak (firma kartındaki "Kota Doluluğu" ile aynı). Ortalama
+    // anlık yük ile biriken veriyi karıştırıyordu; eşitlikte sıralamayı o belirler.
+    const skor = Math.max(p.cpu, p.ram, p.disk, p.db)
+    const ort  = (p.cpu + p.ram + p.disk + p.db) / 4
+    return { firkod: f.company_id, ad: f.name, deger: skor, ort, ...p, detay: `CPU %${p.cpu} · RAM %${p.ram} · Disk %${p.disk} · DB %${p.db}` }
+  }).sort((a, b) => (b.deger - a.deger) || (b.ort - a.ort)).slice(0, 10).map(({ ort: _ort, ...x }) => x)
 
   // ── Terminal kullanımı (server_metrics 5 dk kova, RDP sunucuları) ──
   // Bugün: toplam eğri + terminal başına şimdi/zirve/CPU/RAM/kopuk. Hafta: önceki 7 günün zirvesi (bugün hariç).

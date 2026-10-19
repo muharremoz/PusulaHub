@@ -29,6 +29,21 @@ const C_DISK = "#f59e0b"
 const C_CPU  = "#3b82f6"
 
 const sayi = (v: number) => v.toLocaleString("tr-TR", { maximumFractionDigits: 1 })
+
+/**
+ * Yalnız iki yanı boş (null) olan noktaya işaret koyar. Çizgi iki nokta
+ * arasında çizildiği için hafta sonu boş kalınca pazartesinin tek ölçümü
+ * hiç görünmüyordu. Diğer noktalar çizginin kendisinde okunuyor.
+ */
+function yalnizNokta(data: WeeklyUsagePoint[], key: "cpu" | "ramGB" | "diskGB", renk: string) {
+  const NoktaIsareti = (p: { cx?: number; cy?: number; index?: number }) => {
+    const i = p.index ?? -1
+    const yalniz = data[i]?.[key] != null && data[i - 1]?.[key] == null && data[i + 1]?.[key] == null
+    if (!yalniz || p.cx == null || p.cy == null) return <g key={`${key}-${i}`} />
+    return <circle key={`${key}-${i}`} cx={p.cx} cy={p.cy} r={3} fill={renk} />
+  }
+  return NoktaIsareti
+}
 const eksen = { fontSize: 11, fill: "var(--muted-foreground)" }
 
 export function WeeklyUsageChart({ data }: { data: WeeklyUsagePoint[] }) {
@@ -89,15 +104,15 @@ export function WeeklyUsageChart({ data }: { data: WeeklyUsagePoint[] }) {
 
         <Area isAnimationActive={false}
           yAxisId="gb" type="monotone" dataKey="ramGB" name="ramGB"
-          stroke={C_RAM} strokeWidth={2} fill="url(#wuRam)" dot={false} activeDot={{ r: 3 }} connectNulls={false}
+          stroke={C_RAM} strokeWidth={2} fill="url(#wuRam)" dot={yalnizNokta(data, "ramGB", C_RAM)} activeDot={{ r: 3 }} connectNulls={false}
         />
         <Line isAnimationActive={false}
           yAxisId="gb" type="monotone" dataKey="diskGB" name="diskGB"
-          stroke={C_DISK} strokeWidth={1.5} strokeDasharray="4 3" dot={false} activeDot={{ r: 3 }} connectNulls={false}
+          stroke={C_DISK} strokeWidth={1.5} strokeDasharray="4 3" dot={yalnizNokta(data, "diskGB", C_DISK)} activeDot={{ r: 3 }} connectNulls={false}
         />
         <Line isAnimationActive={false}
           yAxisId="cpu" type="monotone" dataKey="cpu" name="cpu"
-          stroke={C_CPU} strokeWidth={2} dot={false} activeDot={{ r: 3 }} connectNulls={false}
+          stroke={C_CPU} strokeWidth={2} dot={yalnizNokta(data, "cpu", C_CPU)} activeDot={{ r: 3 }} connectNulls={false}
         />
       </ComposedChart>
     </ResponsiveContainer>

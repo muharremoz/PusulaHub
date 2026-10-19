@@ -55,7 +55,12 @@ export interface CompanyDetail {
   dbTotalMB:    number  // MB — DB kotası (varsayılan 5 GB)
   /** Yoğunluk için son 30 günün firma TOPLAMI (user_daily_usage, gün bazında toplanıp ortalanır)
    *  ve kullanıcı başı varsayılan kotalar: CPU %5, RAM 2 GB × 30 günde bir günde görülen en fazla kullanıcı. */
-  yogunluk30d?: { cpu: number; ramMB: number; users: number; quotaCpu: number; quotaRamMB: number }
+  yogunluk30d?: {
+    cpu: number; ramMB: number; users: number; quotaCpu: number; quotaRamMB: number
+    /** Aynı kaynaktan (firma günlük toplamı) en yoğun gün — kartın alt satırı.
+     *  Anlık zirve DEĞİL: o günün ortalama toplamı. */
+    enCpu: number; enCpuTarih: string; enRamMB: number; enRamTarih: string
+  }
   weeklyUsage:  WeeklyUsagePoint[]
   history30d?:  CompanyUsageHistory
   /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
@@ -281,12 +286,19 @@ export async function GET(
         const ort = (f: (g: { cpu: number; ramMB: number; users: Set<string> }) => number) => gunler.reduce((t, g) => t + f(g), 0) / gunler.length
         // Kota tabanı: 30 günde aynı gün giren EN FAZLA kişi — kapasite en kalabalık güne göre planlanır
         const users = Math.max(1, ...gunler.map((g) => g.users.size))
+        const tarihli = [...agg.entries()]
+        const enCpu = tarihli.reduce((m, x) => (x[1].cpu > m[1].cpu ? x : m), tarihli[0])
+        const enRam = tarihli.reduce((m, x) => (x[1].ramMB > m[1].ramMB ? x : m), tarihli[0])
         detail.yogunluk30d = {
           cpu:        Math.round(ort((g) => g.cpu) * 10) / 10,
           ramMB:      Math.round(ort((g) => g.ramMB)),
           users,
           quotaCpu:   Math.min(100, users * KULLANICI_BASI_CPU),
           quotaRamMB: users * KULLANICI_BASI_RAM_MB,
+          enCpu:      Math.round(enCpu[1].cpu * 10) / 10,
+          enCpuTarih: enCpu[0],
+          enRamMB:    Math.round(enRam[1].ramMB),
+          enRamTarih: enRam[0],
         }
       }
     } catch { /* tablo yoksa sorun değil */ }

@@ -265,7 +265,9 @@ export default function DashboardPage() {
                   columnDividers
                   rowHeight={36}
                   headerHeight={30}
-                  height={tabloBoyu(Math.min(satirlar.length, 10))}
+                  /*  Yüklenirken satır sayısı 0 → boy boş-durum yüksekliğine
+                   *  iniyordu, iskelet alanın üstünde kalıp altı boş görünüyordu. */
+                  height={tabloBoyu(firmaYukleniyor && !firma ? 10 : Math.min(satirlar.length, 10))}
                   loading={firmaYukleniyor}
                   className="rounded-[8px] text-[13px]"
                   emptyState="Önümüzdeki 30 günde lisansı dolan firma yok."
@@ -402,8 +404,8 @@ export default function DashboardPage() {
         {/* En yoğun 10 firma */}
         <section className="rounded-[8px] bg-[var(--section-bg)] p-2">
           <div className="flex items-baseline gap-2 px-2 pb-2 pt-1">
-            <h2 className="text-[13px] font-semibold">En yoğun 10 firma</h2>
-            <span className="text-[12px] text-muted-foreground">Son 30 gün · kotaya oran (CPU, RAM, Disk, Veritabanı ortalaması)</span>
+            <h2 className="text-[13px] font-semibold">Kotası en dolu 10 firma</h2>
+            <span className="text-[12px] text-muted-foreground">Son 30 gün · kotaya oran · doluluk = en dolu kaynak</span>
           </div>
           <Table<DashFirmalar["yogun"][number]>
             data={firma?.yogun ?? []}
@@ -416,7 +418,7 @@ export default function DashboardPage() {
                 cell: (x: DashFirmalar["yogun"][number]) => <span className={`tabular-nums ${x[k] >= 90 ? "text-red-600 dark:text-red-400" : x[k] >= 75 ? "text-amber-700 dark:text-amber-400" : ""}`}>%{x[k]}</span>,
               })),
               {
-                key: "skor", header: "Yoğunluk", width: "140px",
+                key: "skor", header: "Doluluk", width: "140px",
                 cell: (x) => (
                   <span className="flex items-center gap-2">
                     <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
@@ -433,7 +435,7 @@ export default function DashboardPage() {
             height={tabloBoyu(10)}
             loading={firmaYukleniyor}
             className="rounded-[8px] text-[13px]"
-            emptyState="Yoğunluk verisi yok."
+            emptyState="Kota verisi yok."
           />
         </section>
         </div>

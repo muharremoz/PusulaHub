@@ -180,7 +180,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
   const h = d.history30d;
   const y30 = d.yogunluk30d;
   const avgRamMB    = y30 ? y30.ramMB : h ? h.avgRamGB * 1024 : d.usageRamMB;
-  const avgDbMB     = h ? (h.dbStartMB + h.dbEndMB) / 2 : d.dbSizeMB;
+  // Disk ve Veritabanı BİRİKEN veri — kotayı bugünkü boyut doldurur, ortalaması
+  // anlamsız. Önce DB için (30 gün önce + bugün) ÷ 2 kullanılıyordu.
+  const avgDbMB     = d.dbSizeMB;
   const avgCpuValue = y30 ? y30.cpu : h ? h.avgCpu : d.usageCpu;
   // Varsayılan kota: kullanıcı başı CPU %5 / RAM 2 GB (sunucunun tamamına oranlamak her firmayı %5 gösteriyordu)
   const cpuKota   = mq?.cpuPct || y30?.quotaCpu || 100;
@@ -193,11 +195,23 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
   const diskPct = mq?.diskGB ? pctMB(d.usageDiskMB,  mq.diskGB * 1024)  : pctMB(d.usageDiskMB, d.quotaDiskMB);
   const dbPct   = mq?.dbGB   ? pctMB(avgDbMB,        mq.dbGB   * 1024)  : pctMB(avgDbMB,       d.dbTotalMB);
 
-  // Yoğunluk: CPU + RAM + Disk + DB yüzdelerinin ortalaması (User kaldırıldı)
-  const active = [d.quotaCpu > 0, d.quotaRam > 0, d.quotaDisk > 0, d.dbQuota > 0].filter(Boolean).length;
-  const yogunluk = active === 0
-    ? 0
-    : Math.round(((d.quotaCpu > 0 ? cpuPct : 0) + (d.quotaRam > 0 ? ramPct : 0) + (d.quotaDisk > 0 ? diskPct : 0) + (d.dbQuota > 0 ? dbPct : 0)) / active);
+  // Kota doluluğu: EN DOLU kaynak. Önce dört oranın ortalamasıydı; anlık yük
+  // (CPU/RAM) ile biriken veriyi (Disk/DB) karıştırıyor, iki kaynak taşarken
+  // "%54 Normal" diyor ve "sunucunun %54'ü" gibi okunuyordu.
+  const kaynaklar = [
+    { ad: "CPU",        pct: cpuPct,  var: d.quotaCpu > 0 },
+    { ad: "RAM",        pct: ramPct,  var: d.quotaRam > 0 },
+    { ad: "Disk",       pct: diskPct, var: d.quotaDisk > 0 },
+    { ad: "Veritabanı", pct: dbPct,   var: d.dbQuota > 0 },
+  ].filter((k) => k.var);
+  const doluluk = kaynaklar.length ? Math.max(...kaynaklar.map((k) => k.pct)) : 0;
+  // Aynı orandaki kaynakların HEPSİ (Disk ve Veritabanı ikisi de %100 olabilir)
+  const enDoluAdlar = kaynaklar.filter((k) => k.pct === doluluk && doluluk > 0).map((k) => k.ad);
+
+  // Sunucu payı — firmanın terminal sunucusunun toplamına oranı (kotadan bağımsız).
+  // d.quotaRamMB = sunucunun toplam RAM'i; CPU süreç yüzdeleri zaten sunucunun tamamına göre.
+  const sunucuRamPay = d.quotaRamMB > 0 ? (avgRamMB / d.quotaRamMB) * 100 : null;
+  const sunucuCpuPay = avgCpuValue;
 
   const [detailOpen, setDetailOpen] = useState(false);
   // Kota düzenleme
@@ -241,6 +255,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
 
   // Seviye: renk + etiket — skor, metrik kutuları ve çubuklar aynı eşikleri kullanır
   const seviye = (p: number) =>
+    p >= 100 ? { etiket: "Kota aşıldı", metin: "text-red-600 dark:text-red-400", cubuk: "bg-red-500",     rozet: "bg-red-500/15 text-red-700 dark:text-red-400" } :
     p >= 80 ? { etiket: "Kritik", metin: "text-red-600 dark:text-red-400",       cubuk: "bg-red-500",     rozet: "bg-red-500/15 text-red-700 dark:text-red-400" } :
     p >= 60 ? { etiket: "Yoğun",  metin: "text-amber-600 dark:text-amber-400",   cubuk: "bg-amber-500",   rozet: "bg-amber-500/15 text-amber-700 dark:text-amber-400" } :
               { etiket: "Normal", metin: "text-emerald-600 dark:text-emerald-400", cubuk: "bg-emerald-500", rozet: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" };
@@ -250,16 +265,17 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
     const [y, a, g] = s.slice(0, 10).split("-");
     return y && a && g ? `${g}.${a}.${y}` : s;
   };
-  const skor = seviye(yogunluk);
+  const skor = seviye(doluluk);
 
+  const ortNot = y30 || h ? "30 gün ort." : "anlık";
   const metrics = [
-    { label: "CPU",        icon: <Cpu className="size-3.5" />,         pct: cpuPct,
-      detay: `Ort %${sayi(avgCpuValue)} / %${sayi(cpuKota)}${!mq?.cpuPct && y30 ? ` · en fazla ${y30.users} kişi` : ""}`, manuel: !!mq?.cpuPct },
-    { label: "RAM",        icon: <MemoryStick className="size-3.5" />, pct: ramPct,
+    { label: "CPU",        icon: <Cpu className="size-3.5" />,         pct: cpuPct,  not: ortNot,
+      detay: `%${sayi(avgCpuValue)} / %${sayi(cpuKota)}${!mq?.cpuPct && y30 ? ` · en fazla ${y30.users} kişi` : ""}`, manuel: !!mq?.cpuPct },
+    { label: "RAM",        icon: <MemoryStick className="size-3.5" />, pct: ramPct,  not: ortNot,
       detay: `${sayi(avgRamMB / 1024)} / ${sayi(ramKotaMB / 1024)} GB${!mq?.ramGB && y30 ? ` · en fazla ${y30.users} kişi` : ""}`, manuel: !!mq?.ramGB },
-    { label: "Disk",       icon: <HardDrive className="size-3.5" />,   pct: diskPct,
+    { label: "Disk",       icon: <HardDrive className="size-3.5" />,   pct: diskPct, not: "güncel",
       detay: `${sayi(d.usageDiskMB / 1024)} / ${sayi(mq?.diskGB ?? d.quotaDiskMB / 1024)} GB`, manuel: !!mq?.diskGB },
-    { label: "Veritabanı", icon: <Database className="size-3.5" />,    pct: dbPct,
+    { label: "Veritabanı", icon: <Database className="size-3.5" />,    pct: dbPct,   not: "güncel",
       detay: `${sayi(avgDbMB / 1024, 2)} / ${sayi(mq?.dbGB ?? d.dbTotalMB / 1024)} GB`, manuel: !!mq?.dbGB },
   ];
 
@@ -272,7 +288,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
         <div className="flex items-center justify-between w-full">
           <div className="flex items-center gap-1.5">
             <Activity className="size-3" />
-            <span>Son 30 gün ortalamasının kotaya oranı · CPU, RAM, Disk, Veritabanı</span>
+            <span>Kotaya oran · CPU/RAM 30 gün ort., Disk/DB güncel · en dolu kaynak gösterilir</span>
           </div>
           <button
             onClick={() => setDetailOpen(true)}
@@ -285,12 +301,32 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
       }
     >
       {/* Başlık + skor */}
+      {/*  İki ayrı soru, iki ayrı blok: "kotasını ne kadar doldurdu?" ve
+           "sunucunun ne kadarını kullanıyor?". Aynı satırda durunca ikisi
+           birbirine karışıyordu.                                          */}
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h3 className="text-[13px] font-semibold">Kullanım Yoğunluğu</h3>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className={`text-3xl font-bold tabular-nums leading-none ${skor.metin}`}>%{yogunluk}</span>
-            <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${skor.rozet}`}>{skor.etiket}</span>
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-4">
+          <div className="min-w-0">
+            <h3 className="text-[13px] font-semibold">Kota Doluluğu</h3>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className={`text-3xl font-bold tabular-nums leading-none ${skor.metin}`}>%{doluluk}</span>
+              <span className={`inline-flex rounded-[5px] px-2 py-0.5 text-[11px] font-medium ${skor.rozet}`}>{skor.etiket}</span>
+            </div>
+            <p className="mt-1 truncate text-[12px] text-muted-foreground">
+              {enDoluAdlar.length ? <>En dolu: <span className="font-medium text-foreground">{enDoluAdlar.join(", ")}</span></> : "—"}
+            </p>
+          </div>
+          <div className="min-w-0 border-l pl-4">
+            <h3 className="text-[13px] font-semibold">Sunucu Payı</h3>
+            <div className="mt-1 flex items-baseline gap-3">
+              <span className="text-3xl font-bold tabular-nums leading-none">
+                %{sayi(sunucuCpuPay)}<span className="ml-1 text-[11px] font-medium text-muted-foreground">CPU</span>
+              </span>
+              <span className="text-3xl font-bold tabular-nums leading-none">
+                {sunucuRamPay != null ? `%${sayi(sunucuRamPay)}` : "—"}<span className="ml-1 text-[11px] font-medium text-muted-foreground">RAM</span>
+              </span>
+            </div>
+            <p className="mt-1 truncate text-[12px] text-muted-foreground">Terminal sunucusunun toplamına oran</p>
           </div>
         </div>
         <Button variant="outline" size="sm" onClick={openQuota} className="h-7 shrink-0 gap-1.5 rounded-[5px] px-2.5 text-[12px]" title="Firma için manuel kota ayarla">
@@ -307,6 +343,7 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
               <div className="flex items-center gap-1.5 text-muted-foreground">
                 {m.icon}
                 <span className="text-[12px] font-medium">{m.label}</span>
+                <span className="text-[10px] text-muted-foreground/80">· {m.not}</span>
                 <span className={`ml-auto text-[13px] font-semibold tabular-nums ${m.pct >= 60 ? s.metin : "text-foreground"}`}>%{m.pct}</span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -324,34 +361,43 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
       {d.history30d && (
         <div className="mt-auto grid grid-cols-3 divide-x border-t pt-3">
           <div className="flex min-w-0 flex-col pr-3">
+            {/*  CPU/RAM özeti üstteki kutularla AYNI kaynaktan (firmanın günlük
+                 toplamı, y30). Önce company_usage_daily'den geliyordu: o tablo
+                 kullanıcıların ortalamasını tutuyor ve hafta sonlarını da
+                 sayıyor → üstte %3,8, altta %2,8 gibi çelişkili iki "ortalama".
+                 "En yoğun gün" anlık zirve değil, o günün ortalama toplamı. */}
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">CPU · 30 gün</span>
-            {/* Zirve ölçülmemişse "—": sıfır yazıp "hiç yük olmamış" izlenimi verme */}
             <span className="text-[13px] font-semibold tabular-nums">
-              Ort %{sayi(d.history30d.avgCpu)}
-              <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakCpu == null ? "—" : `%${sayi(d.history30d.peakCpu)}`}</span>
+              Ort %{sayi(avgCpuValue)}
+              <span className="font-normal text-muted-foreground"> · en yoğun gün {y30 ? `%${sayi(y30.enCpu)}` : "—"}</span>
             </span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakCpu != null && d.history30d.peakCpuDate ? `zirve günü ${tarih(d.history30d.peakCpuDate)}` : " "}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{y30 ? tarih(y30.enCpuTarih) : " "}</span>
           </div>
           <div className="flex min-w-0 flex-col px-3">
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">RAM · 30 gün</span>
             <span className="text-[13px] font-semibold tabular-nums">
-              Ort {sayi(d.history30d.avgRamGB)} GB
-              <span className="font-normal text-muted-foreground"> · zirve {d.history30d.peakRamGB == null ? "—" : `${sayi(d.history30d.peakRamGB)} GB`}</span>
+              Ort {sayi(avgRamMB / 1024)} GB
+              <span className="font-normal text-muted-foreground"> · en yoğun gün {y30 ? `${sayi(y30.enRamMB / 1024)} GB` : "—"}</span>
             </span>
-            <span className="text-[11px] tabular-nums text-muted-foreground">{d.history30d.peakRamGB != null && d.history30d.peakRamDate ? `zirve günü ${tarih(d.history30d.peakRamDate)}` : " "}</span>
+            <span className="text-[11px] tabular-nums text-muted-foreground">{y30 ? tarih(y30.enRamTarih) : " "}</span>
           </div>
           <div className="flex min-w-0 flex-col pl-3">
             <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Veritabanı büyümesi</span>
             <span className="text-[13px] font-semibold tabular-nums">
-              {sayi(d.history30d.dbStartMB / 1024)} → {sayi(d.history30d.dbEndMB / 1024)} GB
+              {sayi(d.history30d.dbStartMB / 1024)} → {sayi(avgDbMB / 1024)} GB
             </span>
-            <span className={`text-[11px] font-medium tabular-nums ${d.history30d.dbGrowthPct > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
-              {(() => {
-                const farkGB = (d.history30d.dbEndMB - d.history30d.dbStartMB) / 1024
-                const isaret = (n: number) => (n > 0 ? "+" : n < 0 ? "−" : "")
-                return `${isaret(d.history30d.dbGrowthPct)}%${sayi(Math.abs(d.history30d.dbGrowthPct))} · 30 günde ${isaret(farkGB)}${sayi(Math.abs(farkGB))} GB`
-              })()}
-            </span>
+            {(() => {
+              // Bitiş = güncel boyut (üstteki Veritabanı kutusuyla aynı sayı)
+              const bas = d.history30d.dbStartMB
+              const buyume = bas > 0 ? Math.round(((avgDbMB - bas) / bas) * 100) : 0
+              const farkGB = (avgDbMB - bas) / 1024
+              const isaret = (n: number) => (n > 0 ? "+" : n < 0 ? "−" : "")
+              return (
+                <span className={`text-[11px] font-medium tabular-nums ${buyume > 0 ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}`}>
+                  {`${isaret(buyume)}%${sayi(Math.abs(buyume))} · 30 günde ${isaret(farkGB)}${sayi(Math.abs(farkGB))} GB`}
+                </span>
+              )
+            })()}
           </div>
         </div>
       )}
@@ -360,14 +406,16 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
     <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm font-semibold">Yoğunluk Skoru Hesaplama</DialogTitle>
+          <DialogTitle className="text-sm font-semibold">Kota Doluluğu Hesaplama</DialogTitle>
         </DialogHeader>
 
         <p className="text-[11px] text-muted-foreground leading-relaxed">
-          Firmanın kaynak kullanımı (son 30 gün ortalaması) ile kotasına oranı.
+          Firmanın kaynak kullanımının kotasına oranı. CPU ve RAM son 30 günün
+          ortalaması (yalnız ölçüm olan günler); Disk ve Veritabanı bugünkü boyut.
           Elle kota yoksa varsayılanlar: CPU kullanıcı başı %5, RAM kullanıcı başı 2 GB
           (son 30 günde bir günde giren en fazla kişi), Disk 25 GB, Veritabanı 5 GB.
-          4 metriğin ortalaması yoğunluk skorunu oluşturur:
+          Skor, kotasına en çok yaklaşan (en dolu) kaynaktır. Sunucunun ne kadarını
+          kullandığını göstermez; o, başlığın altındaki &quot;sunucu payı&quot;dır.
         </p>
 
         <div className="space-y-1.5 mt-1">
@@ -402,11 +450,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
         <div className="mt-2 rounded-[5px] border border-border/40 px-3 py-2.5 bg-muted/20">
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-muted-foreground">
-              ({cpuPct} + {ramPct} + {diskPct} + {dbPct}) ÷ 4
+              en yüksek ({cpuPct}, {ramPct}, {diskPct}, {dbPct}){enDoluAdlar.length ? ` · ${enDoluAdlar.join(", ")}` : ""}
             </span>
-            <span className={`text-base font-bold tabular-nums ${
-              yogunluk >= 80 ? "text-red-600 dark:text-red-400" : yogunluk >= 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
-            }`}>= %{yogunluk}</span>
+            <span className={`text-base font-bold tabular-nums ${skor.metin}`}>= %{doluluk}</span>
           </div>
         </div>
       </DialogContent>
