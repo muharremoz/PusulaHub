@@ -38,7 +38,6 @@ import { useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_
 import { useServerMetrics, useServerList } from "./_components/use-server-metrics"
 import { useBackupStorage, useEsxi } from "./_components/use-esxi"
 import { PhysicalHostCard, DiskCard, BackupImageCard, RdpUsersCard } from "./_components/infra-cards"
-import { YedekTestiDugmesi, YedekTestiPaneli } from "./_components/yedek-testi"
 
 const PAGE   = "#0B0B0D"
 const PANEL  = "#141417"
@@ -92,10 +91,6 @@ export default function TvAgacPage() {
   /* Seçili yaprak — yalnızca vurgu için; detay paneli kaldırıldı */
   const [selected, setSelected] = useState<string | null>(null)
 
-  /*  Yedek doğrulama testi. Ekran bir vitrin: ofise gelen müşteriye
-   *  "yedekleriniz duruyor" demek yerine kanıtı canlı gösteriyoruz.
-   *  Panel açıkken test kendiliğinden başlar (bkz. yedek-testi.tsx).   */
-  const [yedekTesti, setYedekTesti] = useState(false)
 
   /*
    * ── Arizada otomatik odaklanma ──────────────────────────────────────
@@ -181,8 +176,6 @@ export default function TvAgacPage() {
         since={downMonitors[0] ? tracker.get(downMonitors[0].name)?.since : undefined}
         now={now}
       />
-      <YedekTestiDugmesi onClick={() => setYedekTesti(true)} />
-      {yedekTesti && <YedekTestiPaneli onClose={() => setYedekTesti(false)} />}
       <AlarmControls
         soundOn={soundOn}
         onToggleSound={() => setSoundOn((v) => !v)}

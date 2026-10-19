@@ -37,13 +37,15 @@ import { type MetricsMap, metricsFor } from "./use-server-metrics"
 import { causesFor } from "./causes"
 import { type TreeGroup, type TreeKey, SUBGROUPS, subGroupOf } from "../_shared/monitor-groups"
 import { SPHERE_R_FACTOR } from "./core-sphere"
-import { ThinkingOrbCanvas } from "./orb"
+import { Shdr07 } from "@/components/ui/shdr-07"
 import { Sky } from "./sky"
 
 /* ── Palet ── */
 const LINE      = "rgba(255,255,255,0.13)"
 const LINE_DOWN = "rgba(239,68,68,0.5)"
-const FLOW      = "#7DD3FC"
+/** Akış — merkez orb (shdr-07) paletinden: eflatun uç, mor gövde */
+const FLOW      = "#C4B5FD"
+const FLOW_DEEP = "#A855F7"
 /** Sayfa zemini — düğüm diskinin içini doldurup ortadaki sayıyı okunur kılar */
 const TXT       = "#D4D4D8"
 const TXT_DIM   = "#71717A"
@@ -230,7 +232,7 @@ function pushAway(
 function loadColor(v: number): string {
   if (v >= 85) return "#EF4444"
   if (v >= 70) return "#FBBF24"
-  return "#7DD3FC"
+  return FLOW
 }
 
 /** Kutuyu ölç */
@@ -685,20 +687,25 @@ export function Nexus({
               style={{
                 inset: "-35%",
                 background: `radial-gradient(circle, rgba(${
-                  coreUi === "offline" ? "239,68,68" : "56,189,248"
+                  coreUi === "offline" ? "239,68,68" : "168,85,247"
                 },0.24) 0%, rgba(${
-                  coreUi === "offline" ? "239,68,68" : "56,189,248"
+                  coreUi === "offline" ? "239,68,68" : "168,85,247"
                 },0.06) 42%, transparent 68%)`,
                 filter: "blur(18px)",
                 animationDuration: coreUi === "offline" ? "1.4s" : "3.2s",
               }}
             />
-            <ThinkingOrbCanvas
-              state="composing"
+            {/*  orbkit shdr-07 — kabukları dolanan burulma dalgası. Normalde
+                 "idle" (yavaş dolanma); çevrimdışıyken "thinking" (sıkı
+                 burulma, hızlı titreşim) + kırmızı ton. Explicit `colors`
+                 durum rengini ezer. Düğümlerdeki küçük orb'lar da aynı
+                 shader; dallar bu paletin morundan eflatununa akıyor. */}
+            <Shdr07
+              state={coreUi === "offline" ? "thinking" : "idle"}
               size={geo.S}
-              className="relative h-full w-full"
-              tint={coreUi === "offline" ? "239,68,68" : "56,189,248"}
-              speedMul={coreUi === "offline" ? 1.2 : 0.4}
+              colors={{ tint: coreUi === "offline" ? "#ff6b6b" : "#ffffff" }}
+              maxDpr={1.5}
+              className="relative"
             />
           </div>
         )}
@@ -736,8 +743,8 @@ export function Nexus({
                 >
                   <stop offset="0%"   stopColor={t.down ? DOT.offline : FLOW} stopOpacity={0} />
                   <stop offset="34%"  stopColor={t.down ? DOT.offline : FLOW} stopOpacity={0} />
-                  <stop offset="62%"  stopColor={t.down ? DOT.offline : FLOW} stopOpacity={t.down ? 0.26 : 0.13} />
-                  <stop offset="100%" stopColor={t.down ? DOT.offline : FLOW} stopOpacity={t.down ? 0.45 : 0.24} />
+                  <stop offset="62%"  stopColor={t.down ? DOT.offline : FLOW_DEEP} stopOpacity={t.down ? 0.26 : 0.2} />
+                  <stop offset="100%" stopColor={t.down ? DOT.offline : FLOW} stopOpacity={t.down ? 0.45 : 0.3} />
                 </linearGradient>
               ))}
               {/* Darbe de aynı doğuş eğrisini izliyor: paket çekirdeğin
@@ -751,7 +758,7 @@ export function Nexus({
                 >
                   <stop offset="0%"   stopColor={t.down ? DOT.offline : FLOW} stopOpacity={0} />
                   <stop offset="38%"  stopColor={t.down ? DOT.offline : FLOW} stopOpacity={0} />
-                  <stop offset="72%"  stopColor={t.down ? DOT.offline : FLOW} stopOpacity={0.85} />
+                  <stop offset="72%"  stopColor={t.down ? DOT.offline : FLOW_DEEP} stopOpacity={0.85} />
                   <stop offset="100%" stopColor={t.down ? DOT.offline : FLOW} stopOpacity={1} />
                 </linearGradient>
               ))}
@@ -846,11 +853,15 @@ export function Nexus({
                     x={t.x - 22} y={t.y - 22} width={44} height={44}
                     style={{ pointerEvents: "none" }}
                   >
-                    <ThinkingOrbCanvas
-                      state="breathing"
+                    {/*  Merkezdeki shdr-07'nin küçüğü — dallar aynı küreden
+                         doğmuş gibi görünsün. Arızada "thinking" (sıkı burulma)
+                         + kırmızı ton. 6 düğüm + merkez = 7 WebGL bağlamı,
+                         tarayıcı sınırının (16) altında. */}
+                    <Shdr07
+                      state={t.down ? "thinking" : "idle"}
                       size={44}
-                      tint={col === DOT.offline ? "239,68,68" : "56,189,248"}
-                      speedMul={t.down ? 2 : 1}
+                      colors={{ tint: col === DOT.offline ? "#ff6b6b" : "#ffffff" }}
+                      maxDpr={2}
                     />
                   </foreignObject>
 
