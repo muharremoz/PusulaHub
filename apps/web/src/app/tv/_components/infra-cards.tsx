@@ -377,7 +377,7 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
  *   Burada yalniz "su an hangi tur donuyor" sorusu icin kullaniliyor.  */
 const TUR_TOLERANS_MS = 45 * 60_000
 
-type TurDurumu = "var" | "gec" | "yok" | "bekliyor" | "aliniyor"
+type TurDurumu = "var" | "yok" | "bekliyor" | "aliniyor"
 
 /**
  * Tek tur kutusu.
@@ -385,18 +385,15 @@ type TurDurumu = "var" | "gec" | "yok" | "bekliyor" | "aliniyor"
  * `bekliyor`: turun saati henüz gelmedi. Sonucu belli olmayan turu
  * kırmızı göstermek yanlış alarm olurdu.
  * `aliniyor` : şu an alınıyor — yanıp sönüyor.
- * `gec`      : yedek alındı ama tur saatinden 45 dk'dan geç başladı — sarı.
  */
 function TurKutusu({ durum }: { durum: TurDurumu }) {
   const renk =
     durum === "var"        ? GREEN
-    : durum === "gec"      ? AMBER
     : durum === "yok"      ? RED
     : durum === "aliniyor" ? FLOW
     :                        TXT_DIM
   const zemin =
     durum === "var"        ? "rgba(52,211,153,0.12)"
-    : durum === "gec"      ? "rgba(251,191,36,0.14)"
     : durum === "yok"      ? "rgba(248,113,113,0.14)"
     : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
     :                        "rgba(255,255,255,0.04)"
@@ -495,6 +492,11 @@ export function BackupImageCard({
    */
   const surenTur = (b: EsxiVmBackup): string | null => {
     if (!b.running || !b.times.length || !slots?.length) return null
+    /*  Süren yedeğin izi sunucuda zaten bir tura atanmış: makineyi içeren
+     *  EN SON tur. "En yakın saat" 19.10'da yanılttı — 12:00 turu 14:04'e
+     *  sarkınca Coolify'ın süren yedeği 15:00 kutusunda yanıp söndü.    */
+    const iceren = slots.filter((y) => y.vms.includes(b.vmName))
+    if (iceren.length) return iceren[iceren.length - 1].at
     const sonIz = new Date(b.times[b.times.length - 1]).getTime()
     let enYakin = slots[0]
     for (const y of slots) {
@@ -505,7 +507,9 @@ export function BackupImageCard({
 
   const turDurumu = (b: EsxiVmBackup, x: BackupSlot): TurDurumu => {
     if (surenTur(b) === x.at)     return "aliniyor"
-    if (x.vms.includes(b.vmName)) return x.gec?.includes(b.vmName) ? "gec" : "var"
+    /*  Alındıysa yeşil — geç alınmış olsa da (19.10.2026, kullanıcı isteği).
+     *  Gecikme ayrı bir alarm değil; turun hiç dönmemesi asıl sorun.    */
+    if (x.vms.includes(b.vmName)) return "var"
     if (x.status === "pending")   return "bekliyor"
     /*  Makine o tarihte yedek isinde degildi (ilk yedegi daha sonra).
      *  Terminal 2 ise bugun eklendi; dunu kirmizi gostermek yanlis.    */
@@ -539,7 +543,7 @@ export function BackupImageCard({
          *  ekrana sığmadı. Saat sütun başlığından okunuyor.              */
         <div
           className="mt-2 grid items-center gap-x-1 gap-y-[5px]"
-          style={{ gridTemplateColumns: `minmax(0,1fr) repeat(${list.length}, 34px)` }}
+          style={{ gridTemplateColumns: `minmax(64px,1fr) repeat(${list.length}, 28px)` }}
         >
           <span />
           {list.map((x) => (

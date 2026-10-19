@@ -710,7 +710,10 @@ export function computeBackupCycle(
   const turlar: { bas: number; son: number; vms: Set<string> }[] = []
   for (const pt of points) {
     const son = turlar[turlar.length - 1]
-    if (son && pt.t - son.son <= TUR_ARASI_MS) {
+    /*  Aynı makine ikinci kez görülürse YENİ tur: her makine bir turda bir
+     *  kez yedekleniyor. Sarkan bir tur sonrakine 60 dk'dan yakın bitince
+     *  ikisi tek tura birleşmesin (yoksa 15:00 yedekleri 12:00'ye yazılır). */
+    if (son && pt.t - son.son <= TUR_ARASI_MS && !son.vms.has(pt.vm)) {
       son.son = pt.t
       son.vms.add(pt.vm)
     } else {
@@ -731,8 +734,19 @@ export function computeBackupCycle(
     set.add(gun)
     daysByHour.set(h, set)
   }
+  /*  Eşik: en az 2 gün VE verideki günlerin en az YARISI (19.10.2026).
+   *
+   *  Yalnız ">= 2 gün" yetmiyordu: 15.10'da 14:07'de başlayan düzensiz bir
+   *  tur ile 19.10'da 13:36'ya sarkan 12:00 turu ikisi de 14:00'e yuvarlandı
+   *  ve 14:00 sahte bir program saati oldu — kart dünü bile "14:00 alınmadı"
+   *  diye kırmızı gösterdi. Gerçek program saatleri (12/15/18/22) her gün
+   *  görülüyor; tek tük sapmalar yarı eşiğini geçemiyor. Program gerçekten
+   *  değişirse yeni saat birkaç gün içinde eşiği geçip yerini alıyor.   */
+  const tumGunler = new Set<string>()
+  for (const g of daysByHour.values()) for (const d of g) tumGunler.add(d)
+  const esik = Math.max(2, Math.ceil(tumGunler.size / 2))
   const slotHours = [...daysByHour.entries()]
-    .filter(([, gunler]) => gunler.size >= 2)
+    .filter(([, gunler]) => gunler.size >= esik)
     .map(([h]) => h)
     .sort((a, b) => a - b)
   if (!slotHours.length) return bos
@@ -762,6 +776,19 @@ export function computeBackupCycle(
    *  turuyla 60 dk kuralıyla BİRLEŞTİ → 18:00 "hiç alınmadı" göründü,
    *  oysa 10 makinenin hepsi 17:53–18:23'te yedeklenmişti. Geç alınan
    *  yedek artık o tura sayılıyor ve `gec` listesinde ayrıca işaretleniyor. */
+  /*  Her yedeği, içinde bulunduğu kesintisiz turun BAŞLANGICINA göre
+   *  program anına ata (19.10.2026). Yalnız yedeğin kendi saatine bakınca,
+   *  13:36–14:22'ye sarkan 12:00 turunun 14:15'ten sonraki makineleri
+   *  (Terminal 3) bir sonraki 15:00 turuna sayılıyor ve 12:00 kırmızı
+   *  görünüyordu — oysa aynı turun parçasıydılar.                       */
+  const turBas = new Map<{ t: number; vm: string }, number>()
+  {
+    let k = 0
+    for (const pt of points) {
+      while (k < turlar.length - 1 && pt.t > turlar[k].son) k++
+      turBas.set(pt, turlar[k].bas)
+    }
+  }
   const tumAnlar = [...anlar, anlar[anlar.length - 1] + DAY_MS]
   const slots: BackupSlot[] = pencere.map((t) => {
     const sonraki = tumAnlar.find((x) => x > t) ?? t + DAY_MS
@@ -769,7 +796,8 @@ export function computeBackupCycle(
     const ilkler  = new Map<string, number>()
     let sonNokta  = 0
     for (const pt of points) {
-      if (pt.t < bas || pt.t >= bit) continue
+      const ref = turBas.get(pt) ?? pt.t
+      if (ref < bas || ref >= bit) continue
       if (!ilkler.has(pt.vm)) ilkler.set(pt.vm, pt.t)
       sonNokta = Math.max(sonNokta, pt.t)
     }
