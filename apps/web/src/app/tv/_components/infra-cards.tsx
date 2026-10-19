@@ -22,7 +22,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import type { BackupSlot, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 
 /**
@@ -387,7 +387,7 @@ type TurDurumu = "var" | "gec" | "yok" | "bekliyor" | "aliniyor"
  * `aliniyor` : şu an alınıyor — yanıp sönüyor.
  * `gec`      : yedek alındı ama tur saatinden 45 dk'dan geç başladı — sarı.
  */
-function TurKutusu({ saat, durum }: { saat: string; durum: TurDurumu }) {
+function TurKutusu({ durum }: { durum: TurDurumu }) {
   const renk =
     durum === "var"        ? GREEN
     : durum === "gec"      ? AMBER
@@ -400,17 +400,18 @@ function TurKutusu({ saat, durum }: { saat: string; durum: TurDurumu }) {
     : durum === "yok"      ? "rgba(248,113,113,0.14)"
     : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
     :                        "rgba(255,255,255,0.04)"
-  /*  Isaret YOK — durumu rengin kendisi anlatiyor. Kartlarda ikon
-   *  kullanilmiyor; 9 piksellik bir gliften cok renk okunuyor zaten.  */
+  /*  Isaret ve saat YOK — saat sutun basliginda, durumu rengin kendisi
+   *  anlatiyor. Ince bir cerceve + yumusak zemin: bos (bekliyor) hucre
+   *  de seciliyor ama dolu olanla karismiyor.                          */
   return (
     <span
-      className={`flex flex-1 items-center justify-center rounded-[4px] py-[2px] font-mono text-[9px] font-semibold tabular-nums${
-        durum === "aliniyor" ? " animate-pulse" : ""
-      }`}
-      style={{ color: renk, background: zemin }}
-    >
-      {saat}
-    </span>
+      className={`block h-[10px] rounded-[3px]${durum === "aliniyor" ? " animate-pulse" : ""}`}
+      style={{
+        background: durum === "bekliyor" ? zemin : renk,
+        opacity: durum === "bekliyor" ? 1 : 0.85,
+        boxShadow: durum === "bekliyor" ? "inset 0 0 0 1px rgba(255,255,255,0.06)" : undefined,
+      }}
+    />
   )
 }
 
@@ -532,22 +533,33 @@ export function BackupImageCard({
           {slots && slots.length ? "o gün tur yok" : "program çıkarılamadı"}
         </div>
       ) : (
-        <div className="mt-2 flex flex-col gap-1.5">
+        /*  Tablo düzeni: saatler TEK kez başlıkta, her makine tek satır
+         *  (ad solda, tur hücreleri sağda). Önce her makinenin altında
+         *  saat yazılı dört kutu vardı; makine sayısı 11'e çıkınca kart
+         *  ekrana sığmadı. Saat sütun başlığından okunuyor.              */
+        <div
+          className="mt-2 grid items-center gap-x-1 gap-y-[5px]"
+          style={{ gridTemplateColumns: `minmax(0,1fr) repeat(${list.length}, 34px)` }}
+        >
+          <span />
+          {list.map((x) => (
+            <span
+              key={x.at}
+              className="text-center font-mono text-[9px] tabular-nums"
+              style={{ color: TXT_DIM }}
+            >
+              {new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          ))}
           {isinde.map((b) => (
-            <div key={b.vmName}>
-              <div className="truncate text-[11px]" style={{ color: TXT }}>
+            <Fragment key={b.vmName}>
+              <span className="min-w-0 truncate text-[11px] leading-[14px]" style={{ color: TXT }}>
                 {kisaAd(b.vmName)}
-              </div>
-              <div className="mt-[3px] flex gap-1">
-                {list.map((x) => (
-                  <TurKutusu
-                    key={x.at}
-                    saat={new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
-                    durum={turDurumu(b, x)}
-                  />
-                ))}
-              </div>
-            </div>
+              </span>
+              {list.map((x) => (
+                <TurKutusu key={x.at} durum={turDurumu(b, x)} />
+              ))}
+            </Fragment>
           ))}
         </div>
       )}
