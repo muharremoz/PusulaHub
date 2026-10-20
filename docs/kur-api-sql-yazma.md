@@ -233,3 +233,36 @@ Dosya 12.10 20:19'dan beri güncellenmiyordu (KurPanel durunca); kur-api'nin ken
 - `.env`: `RATE_FTP_ENABLED/HOST/USER/PASSWORD/PATH/INTERVAL_MS` (şifre yalnız sunucuda).
 - Yedek: `/root/kurapi-ftp-yedek-20261014-1802` (değişen dosyalar + `.env` + FTP'deki önceki `pusula.txt`).
 - Kapatma: `RATE_FTP_ENABLED=false` + `pm2 restart kur-api --update-env`.
+
+## 7. Hub "Kur API" sayfası + yönetim ucu (20.10.2026, canlı)
+
+Hub `/kur-api` (Servisler → Kur API, yetki modülü `kur-api`): kaynak durumları, SQL/FTP yazıcıları,
+uyarı/hata günlüğü ve ayar düzenleme. Okuma `read`, kaydetme/yeniden başlatma `write` ister.
+
+**kur-api tarafı** (10.15.2.6 `/root/api.pusulanet.net`, yedek `src.yedek-20261020-2141` + `.env.yedek-20261020-2141`):
+
+| Dosya | Ne yapar |
+|---|---|
+| `src/controllers/adminController.js` | `GET/PUT /admin/config`, `POST /admin/restart`, `GET /admin/logs?seviye=warn&limit=200` |
+| `src/services/envFileService.js` | `.env` okur/yazar: izinli 32 anahtar (kaynak aç/kapa, adresler, süreler, SQL/FTP bağlantısı); şifreler yanıtta yok; BOM + satır sonu korunur; her yazmada `env-yedekleri/.env.<zaman>` (son 30) |
+| `src/routes/index.js` | `/admin*` istekleri fiyat API anahtarından önce yönetim ucuna gider |
+
+- Koruma: `.env` `ADMIN_API_KEY` (64 hex) → `X-Admin-Key` başlığı **ve** kaynak IP `10.15.2.x` / `127.0.0.1`.
+  8080 internete açık (ufw "Anywhere") — dışarıdan `/admin` → 403. `ADMIN_API_KEY` yoksa uçlar 404 (kapalı).
+- Yeniden başlatma: yönetim ucu kendine SIGTERM gönderir → `app.js` denetleyicisi ~2 sn sonra alt süreci açar,
+  alt süreç `.env`'i baştan okur. pm2 restart sayacı artmaz. Ölçülen kesinti ~4 sn.
+- Değişiklikler sistem günlüğüne `admin_config_changed` (anahtar adları + yedek + Hub kullanıcısı) ve
+  `admin_restart` olarak düşer; değerler yazılmaz.
+- Doğrulama: her alan tipine göre (süre 5 sn–24 sa, bayat 60 sn–24 sa, port, http(s) adresi); bir alan hatalıysa hiçbiri yazılmaz.
+
+**Hub tarafı:** `lib/kur-api.ts`, `api/kur-api` (GET), `api/kur-api/config` (PUT), `api/kur-api/restart` (POST).
+Env: `KUR_API_URL=http://10.15.2.6:8080` (LAN adresi şart — `api.pusulanet.net` dış IP'ye çıkar, 403 alır),
+`KUR_API_ADMIN_KEY` (= sunucudaki `ADMIN_API_KEY`).
+
+**Yerel geliştirme:** PC LAN dışında (10.10.10.x) → tünel:
+`ssh -i ~/.ssh/claude_ops -N -L 18080:127.0.0.1:8080 root@10.15.2.6` ve `.env.local`'de `KUR_API_URL=http://127.0.0.1:18080`.
+
+**Açık bulgular (20.10):**
+- `apiKeyService.isValid`: `key === apiFormat` → karakter listesi metni (`0123…XYZ`) her zaman geçerli fiyat API anahtarı. Kapatılmadı, karar bekliyor.
+- `H_RUBTRY` 12.10'dan beri güncellenmiyor: Harem `RUBTRY` göndermiyor (yalnız `USDRUB`); KurPanel durunca bayat kaldı.
+- `logs/payloads` 5,5 GB — `LOG_RETENTION_DAYS=1`'e rağmen birikiyor gibi; disk 85 GB boş, acil değil.

@@ -11,7 +11,7 @@ import {
   CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import { Building2, Database, Globe, Network } from "lucide-react"
+import { Building2, Coins, Database, Globe, Network } from "lucide-react"
 import { Icon } from "@/components/shared/icon"
 import type { IconName } from "@/components/shared/icon-registry"
 
@@ -34,6 +34,7 @@ const NAV: NavEntry[] = [
   { group: "Servisler", label: "Active Directory",   url: "/ad",             icon: "shield-check", keywords: "ad active directory" },
   { group: "Servisler", label: "SQL",                url: "/sql",            icon: "file-text" },
   { group: "Servisler", label: "Port Yönetimi",      url: "/ports",          icon: Network },
+  { group: "Servisler", label: "Kur API",            url: "/kur-api",        icon: Coins, keywords: "kur döviz altın harem ozan altınkaynak" },
   { group: "Yönetim", label: "Yetkiler", url: "/permissions", icon: "users", keywords: "user kullanıcı yetki izin" },
   { group: "Yönetim", label: "Şifre Kasası", url: "/vault",    icon: "lock-keyhole", keywords: "password vault" },
   { group: "Yönetim", label: "Ayarlar",      url: "/settings", icon: "settings" },

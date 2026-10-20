@@ -38,6 +38,7 @@ export const MODULES: ModuleDef[] = [
   { key: "active-directory", label: "Active Directory",  group: "services" },
   { key: "sql",              label: "SQL",               group: "services" },
   { key: "ports",            label: "Port Yönetimi",     group: "services" },
+  { key: "kur-api",          label: "Kur API",           group: "services" },
 
   // Yönetim
   { key: "users",            label: "Yetkiler",          group: "admin" },

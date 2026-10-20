@@ -46,6 +46,7 @@ import {
   Shield,
   Sun,
   Moon,
+  Coins,
 } from "lucide-react";
 
 // ---- Nav grupları (yetkiye göre filtrelenir) ----
@@ -88,6 +89,7 @@ const NAV: NavGroupDef[] = [
       { title: "Active Directory", url: "/ad", icon: ShieldCheck, moduleKey: "active-directory" },
       { title: "SQL", url: "/sql", icon: FileText, moduleKey: "sql" },
       { title: "Port Yönetimi", url: "/ports", icon: Network, moduleKey: "ports" },
+      { title: "Kur API", url: "/kur-api", icon: Coins, moduleKey: "kur-api" },
     ],
   },
   {
