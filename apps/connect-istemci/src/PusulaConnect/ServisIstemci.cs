@@ -79,6 +79,8 @@ namespace PusulaConnect
         /// <summary>Firmanın veritabanları ve son yedek zamanları (salt gösterim).</summary>
         public Task<JObject> Yedekler() => Gonder(HttpMethod.Get, "api/yedekler", null);
         public Task<JObject> DuyuruOkundu(string id) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/okundu", new { });
+        /// <summary>Anket yanıtı — servis cihaz başına tek yanıt tutar ve duyuruyu okundu sayar.</summary>
+        public Task<JObject> DuyuruCevap(string id, JObject cevaplar) => Gonder(HttpMethod.Post, "api/duyurular/" + Uri.EscapeDataString(id) + "/cevap", new { cevaplar });
         public async Task Olay(string tur, object ayrinti = null)
         {
             if (Token == null) return;

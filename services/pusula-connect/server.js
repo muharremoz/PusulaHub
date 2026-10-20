@@ -45,9 +45,11 @@
  *     POST   /api/olay                  { tur, ayrinti } — oturum açıldı/bitti, güncellendi…
  *     GET    /api/duyurular             bu cihaza yayındaki duyurular (+ okundu zamanı)
  *     POST   /api/duyurular/:id/okundu  kullanıcı okudu
+ *     POST   /api/duyurular/:id/cevap   anket yanıtı { cevaplar } (cihaz başına tek; okundu da sayılır)
  *     (nabız yanıtı { duyuru: { imza, okunmamis } } — imza değişince istemci listeyi yeniden çeker)
  *   Duyurular (Hub → müşteri; X-Service-Key):
- *     POST   /admin/duyurular           { baslik, metin, onem, firmaId?, firmaAdi?, kullanici?, gunSayisi?, olusturan }
+ *     POST   /admin/duyurular           { baslik, metin, onem, firmaId?, firmaAdi?, kullanici?, gunSayisi?, olusturan, anket? }
+ *     GET    /admin/duyurular/:id/cevaplar    anket + yanıtlar (firma/kullanıcı/makine kopyalı)
  *     GET    /admin/duyurular           hedef cihaz + okuyan sayısıyla
  *     GET    /admin/duyurular/:id/okuyanlar   hedefteki cihazlar, okuduysa zamanı
  *     POST   /admin/duyurular/:id/iptal       yayından kaldır { yapan }
@@ -205,7 +207,23 @@ db.exec(`
     zaman    TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (duyuruId, cihazId)
   );
+  -- Anket yanıtları (20.10.2026). Firma/kullanıcı/makine KOPYALANIR: cihaz kaydı silinse de
+  -- yanıt sonuçlarda kalsın. Cihaz başına tek yanıt (ikinci gönderim yok sayılır).
+  CREATE TABLE IF NOT EXISTS duyuru_cevap (
+    duyuruId  TEXT NOT NULL REFERENCES duyurular(id) ON DELETE CASCADE,
+    cihazId   TEXT NOT NULL,
+    firmaId   TEXT,
+    firmaAdi  TEXT,
+    kullanici TEXT,
+    makine    TEXT,
+    cevaplar  TEXT NOT NULL,        -- {"s1":"Evet","s2":4,...}
+    zaman     TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (duyuruId, cihazId)
+  );
 `)
+// Anketli duyuru: duyurular.anket = {"sorular":[{id,tip,soru,secenekler?,zorunlu}]} (NULL = düz duyuru).
+// Biçim Hub'ın apps/web/src/lib/anket.ts'iyle AYNI — Hub'ın anket oluşturucu/sonuç bileşenleri doğrudan kullanılıyor.
+try { db.exec(`ALTER TABLE duyurular ADD COLUMN anket TEXT`) } catch { /* zaten var */ }
 db.exec(`
   CREATE TABLE IF NOT EXISTS gunlukler (
     cihazId TEXT PRIMARY KEY,           -- cihaz başına son yüklenen günlük (yenisi üstüne yazılır)
@@ -221,6 +239,48 @@ const DUYURU_ONEM = new Set(["bilgi", "uyari", "kritik"])
 /** Duyurunun hedefi bu cihaz mı (SQL'de aynı koşul: DUYURU_HEDEF). */
 const DUYURU_HEDEF = `(d.firmaId IS NULL OR d.firmaId = k.firmaId) AND (d.kullanici IS NULL OR d.kullanici = k.kullanici)`
 const DUYURU_YAYINDA = `d.iptal = 0 AND (d.bitis IS NULL OR d.bitis > datetime('now'))`
+
+/* ── Anket — apps/web/src/lib/anket.ts'in servis kopyası (sınırlar ve kurallar AYNI tutulmalı) ── */
+const ANKET_SORU_SINIRI = 10, ANKET_SECENEK_SINIRI = 8, ANKET_METIN_SINIRI = 500
+const ANKET_TIPLER = new Set(["tek", "coklu", "puan", "metin"])
+/** Anketi doğrular/temizler → { anket } ya da { hata } */
+function anketDogrula(a) {
+  const sorular = a?.sorular
+  if (!Array.isArray(sorular) || sorular.length === 0) return { hata: "Ankette en az bir soru olmalı" }
+  if (sorular.length > ANKET_SORU_SINIRI) return { hata: `En fazla ${ANKET_SORU_SINIRI} soru eklenebilir` }
+  const temiz = []
+  for (const [i, s] of sorular.entries()) {
+    const soru = String(s?.soru ?? "").trim()
+    if (!soru) return { hata: `${i + 1}. sorunun metni boş` }
+    if (!ANKET_TIPLER.has(s?.tip)) return { hata: `${i + 1}. sorunun tipi geçersiz` }
+    let secenekler
+    if (s.tip === "tek" || s.tip === "coklu") {
+      secenekler = [...new Set((s.secenekler ?? []).map((x) => String(x).trim()).filter(Boolean))]
+      if (secenekler.length < 2) return { hata: `${i + 1}. soruda en az iki seçenek olmalı` }
+      if (secenekler.length > ANKET_SECENEK_SINIRI) return { hata: `${i + 1}. soruda en fazla ${ANKET_SECENEK_SINIRI} seçenek olabilir` }
+    }
+    temiz.push({ id: `s${i + 1}`, tip: s.tip, soru: soru.slice(0, 300), secenekler, zorunlu: !!s.zorunlu })
+  }
+  return { anket: { sorular: temiz } }
+}
+/** Gelen yanıtı ankete göre süzer: bilinmeyen soru/seçenek atılır, metin kısaltılır. */
+function anketCevapTemizle(anket, c) {
+  const out = {}
+  for (const s of anket.sorular) {
+    const v = c?.[s.id]
+    if (v === undefined || v === null) continue
+    if (s.tip === "tek" && typeof v === "string" && s.secenekler?.includes(v)) out[s.id] = v
+    else if (s.tip === "coklu" && Array.isArray(v)) {
+      const sec = v.filter((x) => typeof x === "string" && s.secenekler?.includes(x))
+      if (sec.length) out[s.id] = sec
+    } else if (s.tip === "puan") {
+      const n = Number(v)
+      if (Number.isInteger(n) && n >= 1 && n <= 5) out[s.id] = n
+    } else if (s.tip === "metin" && typeof v === "string" && v.trim()) out[s.id] = v.trim().slice(0, ANKET_METIN_SINIRI)
+  }
+  return out
+}
+const anketOku = (t) => { if (!t) return null; try { return JSON.parse(t) } catch { return null } }
 
 /** Olay kaydı 180 gün tutulur. */
 const OLAY_GUN = 180
@@ -290,16 +350,21 @@ const sql = {
                        WHERE (@firma IS NULL OR firmaId = @firma) AND (@cihaz IS NULL OR cihazId = @cihaz)
                          AND (@once IS NULL OR id < @once)
                        ORDER BY id DESC LIMIT @limit`),
-  duyuruEkle: db.prepare(`INSERT INTO duyurular (id, baslik, metin, onem, firmaId, firmaAdi, kullanici, olusturan, bitis)
-                          VALUES (@id, @baslik, @metin, @onem, @firmaId, @firmaAdi, @kullanici, @olusturan, @bitis)`),
+  duyuruEkle: db.prepare(`INSERT INTO duyurular (id, baslik, metin, onem, firmaId, firmaAdi, kullanici, olusturan, bitis, anket)
+                          VALUES (@id, @baslik, @metin, @onem, @firmaId, @firmaAdi, @kullanici, @olusturan, @bitis, @anket)`),
   duyuruIptal: db.prepare(`UPDATE duyurular SET iptal = 1, iptalEden = ?, iptalZaman = datetime('now') WHERE id = ? AND iptal = 0`),
   duyuruBul: db.prepare(`SELECT * FROM duyurular WHERE id = ?`),
   // Hub listesi: hedefteki etkin cihaz sayısı ve okuyan cihaz sayısıyla
   duyurularAdmin: db.prepare(`SELECT d.*,
       (SELECT COUNT(*) FROM cihazlar c JOIN kodlar k ON k.id = c.kodId
         WHERE c.iptal = 0 AND k.durum <> 'iptal' AND ${DUYURU_HEDEF}) AS hedefCihaz,
-      (SELECT COUNT(*) FROM duyuru_okuma o WHERE o.duyuruId = d.id) AS okuyan
+      (SELECT COUNT(*) FROM duyuru_okuma o WHERE o.duyuruId = d.id) AS okuyan,
+      (SELECT COUNT(*) FROM duyuru_cevap y WHERE y.duyuruId = d.id) AS cevaplayan
     FROM duyurular d ORDER BY d.olusturma DESC LIMIT 500`),
+  duyuruCevaplar: db.prepare(`SELECT cihazId, firmaId, firmaAdi, kullanici, makine, cevaplar, zaman
+    FROM duyuru_cevap WHERE duyuruId = ? ORDER BY zaman DESC`),
+  cevapEkle: db.prepare(`INSERT OR IGNORE INTO duyuru_cevap (duyuruId, cihazId, firmaId, firmaAdi, kullanici, makine, cevaplar)
+                         VALUES (@duyuruId, @cihazId, @firmaId, @firmaAdi, @kullanici, @makine, @cevaplar)`),
   duyuruOkuyanlar: db.prepare(`SELECT c.id AS cihazId, c.makine, k.firmaId, k.firmaAdi, k.kullanici, o.zaman AS okundu
     FROM duyurular d
     JOIN cihazlar c ON c.iptal = 0
@@ -307,9 +372,11 @@ const sql = {
     LEFT JOIN duyuru_okuma o ON o.duyuruId = d.id AND o.cihazId = c.id
     WHERE d.id = ? ORDER BY o.zaman IS NULL, o.zaman DESC, k.firmaId, k.kullanici`),
   // İstemci: bu cihaza yayındaki duyurular (son 30 gün içinde yayınlananlar ya da süresi sürenler)
-  duyurularCihaz: db.prepare(`SELECT d.id, d.baslik, d.metin, d.onem, d.olusturma, d.bitis, o.zaman AS okundu
+  duyurularCihaz: db.prepare(`SELECT d.id, d.baslik, d.metin, d.onem, d.olusturma, d.bitis, o.zaman AS okundu,
+      d.anket, y.zaman AS cevaplandi
     FROM duyurular d JOIN kodlar k ON k.id = @kodId
     LEFT JOIN duyuru_okuma o ON o.duyuruId = d.id AND o.cihazId = @cihazId
+    LEFT JOIN duyuru_cevap y ON y.duyuruId = d.id AND y.cihazId = @cihazId
     WHERE ${DUYURU_YAYINDA} AND ${DUYURU_HEDEF} AND (d.bitis IS NOT NULL OR d.olusturma > datetime('now', '-30 days'))
     ORDER BY d.olusturma DESC LIMIT 50`),
   kodProfil: db.prepare(`UPDATE kodlar SET profil = ? WHERE id = ?`),
@@ -319,7 +386,7 @@ const sql = {
 /** Nabız yanıtındaki imza: yayındaki duyuru kümesi ya da okunma durumu değişince değişir → istemci listeyi yeniden çeker. */
 function duyuruImzasi(c) {
   const l = sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId })
-  return { imza: ozet(l.map((d) => d.id + (d.okundu ? "+" : "")).join(",")).slice(0, 16), okunmamis: l.filter((d) => !d.okundu).length }
+  return { imza: ozet(l.map((d) => d.id + (d.okundu ? "+" : "") + (d.cevaplandi ? "c" : "")).join(",")).slice(0, 16), okunmamis: l.filter((d) => !d.okundu).length }
 }
 
 /** Olay kaydı — hata yutulur (kayıt yazılamadı diye asıl iş bozulmasın). */
@@ -635,15 +702,33 @@ fastify.post("/admin/duyurular", async (req, reply) => {
   const kullanici = firmaId && b.kullanici ? String(b.kullanici) : null
   const gun = Number(b.gunSayisi)
   const bitis = Number.isFinite(gun) && gun > 0 ? new Date(Date.now() + Math.min(gun, 365) * 86400000).toISOString().replace("T", " ").slice(0, 19) : null
+  // İsteğe bağlı anket — Hub'ın anket biçimi (lib/anket.ts) aynen
+  let anket = null
+  if (b.anket) {
+    const a = anketDogrula(b.anket)
+    if (a.hata) return reply.code(400).send({ hata: a.hata })
+    anket = JSON.stringify(a.anket)
+  }
   const id = randomBytes(8).toString("hex")
-  sql.duyuruEkle.run({ id, baslik, metin, onem, firmaId, firmaAdi: firmaId ? String(b.firmaAdi ?? "") || null : null, kullanici, olusturan: b.olusturan ?? null, bitis })
-  olay("duyuru_yayinlandi", { firmaId, kullanici, kaynak: "yonetici", ayrinti: (b.olusturan ? b.olusturan + " · " : "") + baslik })
+  sql.duyuruEkle.run({ id, baslik, metin, onem, firmaId, firmaAdi: firmaId ? String(b.firmaAdi ?? "") || null : null, kullanici, olusturan: b.olusturan ?? null, bitis, anket })
+  olay(anket ? "anket_yayinlandi" : "duyuru_yayinlandi", { firmaId, kullanici, kaynak: "yonetici", ayrinti: (b.olusturan ? b.olusturan + " · " : "") + baslik })
   return { id }
 })
 
 fastify.get("/admin/duyurular", async (req, reply) => {
   if (!yonetici(req, reply)) return
-  return sql.duyurularAdmin.all().map((d) => ({ ...d, iptal: !!d.iptal }))
+  return sql.duyurularAdmin.all().map((d) => ({ ...d, iptal: !!d.iptal, anket: anketOku(d.anket) }))
+})
+
+/** Anket yanıtları — Hub sonuç ekranı (AnketSonuclari) için. */
+fastify.get("/admin/duyurular/:id/cevaplar", async (req, reply) => {
+  if (!yonetici(req, reply)) return
+  const d = sql.duyuruBul.get(req.params.id)
+  if (!d) return reply.code(404).send({ hata: "bulunamadi" })
+  return {
+    anket: anketOku(d.anket),
+    cevaplar: sql.duyuruCevaplar.all(req.params.id).map((y) => ({ ...y, cevaplar: anketOku(y.cevaplar) ?? {} })),
+  }
 })
 
 fastify.get("/admin/duyurular/:id/okuyanlar", async (req, reply) => {
@@ -972,7 +1057,27 @@ fastify.post("/api/nabiz", async (req, reply) => {
 
 fastify.get("/api/duyurular", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
-  return sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId })
+  return sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId }).map((d) => ({ ...d, anket: anketOku(d.anket) }))
+})
+
+/** Anket yanıtı: { cevaplar: { s1: ..., s2: ... } }. Cihaz başına tek yanıt; okundu da sayılır. */
+fastify.post("/api/duyurular/:id/cevap", async (req, reply) => {
+  const c = cihaz(req, reply); if (!c) return
+  const d = sql.duyurularCihaz.all({ kodId: c.id, cihazId: c.cihazId }).find((x) => x.id === req.params.id)
+  if (!d) return reply.code(404).send({ hata: "Duyuru bulunamadı" })
+  const anket = anketOku(d.anket)
+  if (!anket) return reply.code(400).send({ hata: "Bu duyuruda anket yok" })
+  if (d.cevaplandi) return { tamam: true, onceden: true }
+  const temiz = anketCevapTemizle(anket, req.body?.cevaplar)
+  const eksik = anket.sorular.find((s) => s.zorunlu && temiz[s.id] === undefined)
+  if (eksik) return reply.code(400).send({ hata: "Zorunlu soru yanıtlanmadı: " + eksik.soru })
+  db.transaction(() => {
+    sql.cevapEkle.run({ duyuruId: d.id, cihazId: c.cihazId, firmaId: c.firmaId, firmaAdi: c.firmaAdi ?? null,
+      kullanici: c.kullanici, makine: c.makine ?? null, cevaplar: JSON.stringify(temiz) })
+    sql.duyuruOku.run(d.id, c.cihazId)
+  })()
+  olay("anket_yanitlandi", { cihaz: c, kaynak: "istemci", ayrinti: d.baslik, ip: istemciIp(req) })
+  return { tamam: true }
 })
 
 fastify.post("/api/duyurular/:id/okundu", async (req, reply) => {

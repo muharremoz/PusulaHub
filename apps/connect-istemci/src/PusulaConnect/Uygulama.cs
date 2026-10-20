@@ -1203,6 +1203,25 @@ namespace PusulaConnect
             return Durum();
         }
 
+        /// <summary>Anketli duyurunun yanıtını gönderir (doğrulama serviste; zorunlu soru eksikse servis hatası kullanıcıya gider).</summary>
+        public async Task<object> DuyuruCevap(string id, JObject cevaplar)
+        {
+            if (string.IsNullOrEmpty(id)) throw new KullaniciHatasi("Duyuru belirtilmedi.");
+            if (cevaplar == null) throw new KullaniciHatasi("Yanıt boş.");
+            await _servis.DuyuruCevap(id, cevaplar);
+            var simdi = DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+            lock (_kilit)
+            {
+                foreach (var d in _duyurular)
+                {
+                    if (d.Value<string>("id") != id) continue;
+                    d["cevaplandi"] = simdi;
+                    if (d["okundu"]?.Type == JTokenType.Null) d["okundu"] = simdi;
+                }
+            }
+            return Durum();
+        }
+
         // ------------------------------------------------------------ iki adımlı doğrulama
 
         /// <summary>Yeni TOTP gizlisi → { gizli, uri }. Arayüz QR olarak gösterir; onaylanana kadar etkin değil.</summary>

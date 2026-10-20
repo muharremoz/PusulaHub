@@ -189,6 +189,7 @@ namespace PusulaConnect
                 case "POST /ayarlar": return Task.FromResult(_uygulama.AyarKaydet(i.Govde));
                 case "POST /sifre/goster": return _uygulama.SifreGoster(i.Metin("kod"));
                 case "POST /duyuru/okundu": return _uygulama.DuyuruOkundu(i.Metin("id"));
+                case "POST /duyuru/cevap": return _uygulama.DuyuruCevap(i.Metin("id"), i.Govde?["cevaplar"] as JObject);
                 case "POST /yazici/durum": return Task.Run(YaziciAjani.Durum);
                 case "POST /yazici/port": return YaziciAjani.PortDenetle(i.Sayi("port"));
                 case "POST /yazici/kur": return TekYazdirmaKur(true, i.Metin("yazici"), i.Sayi("port"));

@@ -1,11 +1,12 @@
 /**
  * GET  /api/connect/duyurular   Connect duyuruları (hedef cihaz + okuyan sayısıyla)
- * POST /api/connect/duyurular   { baslik, metin, onem, firmaId?, firmaAdi?, kullanici?, gunSayisi? } — yayınlar
+ * POST /api/connect/duyurular   { baslik, metin, onem, firmaId?, firmaAdi?, kullanici?, gunSayisi?, anket? } — yayınlar
  */
 import { NextRequest, NextResponse } from "next/server"
 import { requirePermission } from "@/lib/require-permission"
 import { auth } from "@/auth"
 import { connectDuyuruEkle, connectDuyurular, type ConnectDuyuruOnem } from "@/lib/connect-yonetim"
+import { anketDogrula, type Anket } from "@/lib/anket"
 
 const ONEMLER: ConnectDuyuruOnem[] = ["bilgi", "uyari", "kritik"]
 
@@ -30,6 +31,13 @@ export async function POST(req: NextRequest) {
   if (metin.length > 4000) return NextResponse.json({ error: "Metin en fazla 4000 karakter" }, { status: 400 })
   const onem = ONEMLER.includes(b.onem as ConnectDuyuruOnem) ? (b.onem as ConnectDuyuruOnem) : "bilgi"
   const firmaId = typeof b.firmaId === "string" && b.firmaId ? b.firmaId : null
+  // İsteğe bağlı anket — Mesajlar'daki anketle aynı kurallar (servis de aynısını uygular)
+  let anket: Anket | null = null
+  if (b.anket) {
+    const a = anketDogrula(b.anket)
+    if ("hata" in a) return NextResponse.json({ error: a.hata }, { status: 400 })
+    anket = a.anket
+  }
   const session = await auth()
   try {
     const r = await connectDuyuruEkle({
@@ -39,6 +47,7 @@ export async function POST(req: NextRequest) {
       kullanici: firmaId && typeof b.kullanici === "string" && b.kullanici ? b.kullanici : null,
       gunSayisi: Number(b.gunSayisi) > 0 ? Number(b.gunSayisi) : null,
       olusturan: session?.user?.username ?? session?.user?.email ?? null,
+      anket,
     })
     return NextResponse.json(r)
   } catch (err) {

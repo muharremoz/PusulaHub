@@ -25,8 +25,11 @@ import {
 } from "@muharremoz/pusula-ui"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
-import { AlertTriangle, Ban, Eye, Info, Megaphone, MoreVertical, OctagonAlert, Plus } from "lucide-react"
-import type { ConnectCihazSatir, ConnectDuyuru, ConnectDuyuruOkuyan, ConnectDuyuruOnem } from "@/lib/connect-yonetim"
+import { AlertTriangle, Ban, ClipboardList, Eye, Info, Megaphone, MoreVertical, OctagonAlert, Plus } from "lucide-react"
+import type { ConnectAnketCevabi, ConnectCihazSatir, ConnectDuyuru, ConnectDuyuruOkuyan, ConnectDuyuruOnem } from "@/lib/connect-yonetim"
+import { AnketOlusturucu, yeniSoru } from "@/components/messages/anket-olusturucu"
+import { AnketSonuclari, type AnketAlicisi } from "@/components/messages/anket-sonuclari"
+import type { AnketSorusu } from "@/lib/anket"
 
 /** Servis zamanları SQLite datetime('now') = UTC "YYYY-MM-DD HH:MM:SS". */
 const zaman = (s: string | null) => (s ? new Date(s.replace(" ", "T") + "Z") : null)
@@ -175,7 +178,14 @@ function DuyuruListesi({
               return (
                 <tr key={d.id} className="cursor-pointer border-b last:border-0 hover:bg-muted/20" onClick={() => onSec(d)}>
                   <td className="max-w-[360px] px-4 py-1.5">
-                    <div className="truncate">{d.baslik}</div>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      {d.anket && (
+                        <span className="inline-flex shrink-0 items-center gap-1 rounded-[5px] bg-violet-500/15 px-1.5 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-400">
+                          <ClipboardList className="size-3" />Anket
+                        </span>
+                      )}
+                      <span className="truncate">{d.baslik}</span>
+                    </div>
                     <div className="text-muted-foreground truncate text-[12px] font-normal">{d.metin}</div>
                   </td>
                   <td className="px-4 py-1.5"><OnemRozeti onem={d.onem} /></td>
@@ -187,6 +197,7 @@ function DuyuruListesi({
                           <span className="bg-primary absolute inset-y-0 left-0" style={{ width: `${oran}%` }} />
                         </span>
                         {d.okuyan}/{d.hedefCihaz}
+                        {d.anket && <span className="text-muted-foreground">· {d.cevaplayan ?? 0} yanıt</span>}
                       </span>
                     )}
                   </td>
@@ -202,7 +213,9 @@ function DuyuruListesi({
                         <Button variant="ghost" size="icon" className="size-7" aria-label="İşlemler"><MoreVertical className="size-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onSec(d)}><Eye className="size-3.5" />Kimler okudu</DropdownMenuItem>
+                        <DropdownMenuItem className="gap-2 text-[12px]" onClick={() => onSec(d)}>
+                          {d.anket ? <><ClipboardList className="size-3.5" />Anket sonuçları</> : <><Eye className="size-3.5" />Kimler okudu</>}
+                        </DropdownMenuItem>
                         {y === "yayinda" && (
                           <DropdownMenuItem className="gap-2 text-[12px] text-rose-600 focus:text-rose-600" onClick={() => onKaldir(d)}><Ban className="size-3.5" />Yayından kaldır</DropdownMenuItem>
                         )}
@@ -246,10 +259,14 @@ function YeniDuyuru({
   const [kullanici, setKullanici] = useState("")
   const [gun, setGun] = useState("7")
   const [gonderiliyor, setGonderiliyor] = useState(false)
+  // Anket (20.10.2026): Mesajlar'daki oluşturucunun aynısı; yanıtlar Connect servisinde tutulur
+  const [anketAcik, setAnketAcik] = useState(false)
+  const [sorular, setSorular] = useState<AnketSorusu[]>([])
 
   useEffect(() => {
     if (!acik) return
     setBaslik(""); setMetin(""); setOnem("bilgi"); setHedefTur("hepsi"); setFirmaId(""); setKullanici(""); setGun("7")
+    setAnketAcik(false); setSorular([])
   }, [acik])
 
   // Hedef seçenekleri: Connect kurulu (iptal edilmemiş) cihazı olan firmalar ve kullanıcılar
@@ -277,6 +294,7 @@ function YeniDuyuru({
 
   const yayinla = async () => {
     if (!gecerli) return
+    if (anketAcik && sorular.length === 0) { toast.error("Ankete en az bir soru ekleyin"); return }
     setGonderiliyor(true)
     try {
       const firma = firmalar.find((f) => f.id === firmaId)
@@ -289,11 +307,12 @@ function YeniDuyuru({
           firmaAdi: hedefTur === "hepsi" ? null : firma?.ad ?? null,
           kullanici: hedefTur === "kullanici" ? kullanici : null,
           gunSayisi: Number(gun),
+          anket: anketAcik ? { sorular } : null,
         }),
       })
       const d = await r.json().catch(() => ({}))
       if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`)
-      toast.success("Duyuru yayınlandı", { description: `${hedefCihaz} cihaza bir dakika içinde ulaşır; kapalı olanlara açılınca.` })
+      toast.success(anketAcik ? "Anket yayınlandı" : "Duyuru yayınlandı", { description: `${hedefCihaz} cihaza bir dakika içinde ulaşır; kapalı olanlara açılınca.` })
       onYayinlandi()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Yayınlanamadı")
@@ -323,8 +342,23 @@ function YeniDuyuru({
               <Input value={baslik} maxLength={120} placeholder="Ör. Bu gece 02:00–03:00 arası bakım" onChange={(e) => setBaslik(e.target.value)} />
             </Field>
             <Field label="Metin" required>
-              <Textarea rows={10} className="resize-none" value={metin} maxLength={4000} placeholder="Müşterinin ne yapması gerektiğini de yazın." onChange={(e) => setMetin(e.target.value)} />
+              <Textarea rows={anketAcik ? 4 : 10} className="resize-none" value={metin} maxLength={4000} placeholder={anketAcik ? "Anketin amacını kısaca yazın." : "Müşterinin ne yapması gerektiğini de yazın."} onChange={(e) => setMetin(e.target.value)} />
             </Field>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span className="text-foreground/80 text-[12px] font-medium">Anket</span>
+                <Button
+                  variant={anketAcik ? "outline" : "ghost"} size="sm"
+                  className="h-7 gap-1.5 rounded-[5px] px-2 text-[12px]"
+                  onClick={() => { if (anketAcik) { setAnketAcik(false); setSorular([]) } else { setAnketAcik(true); setSorular([yeniSoru(1)]) } }}
+                >
+                  <ClipboardList className="size-3.5" /> {anketAcik ? "Anketi kaldır" : "Anket ekle"}
+                </Button>
+              </div>
+              {anketAcik
+                ? <AnketOlusturucu sorular={sorular} onChange={setSorular} />
+                : <p className="text-muted-foreground text-[12px]">İsterseniz soru ekleyip yanıtları toplayabilirsiniz. Uygulamanın eski sürümünde anket düz duyuru olarak görünür.</p>}
+            </div>
           </ModalBolumu>
           <ModalBolumu baslik="Hedef ve süre">
             <Field label="Önem" hint={onem === "bilgi" ? "Yenilik, hatırlatma." : onem === "uyari" ? "Planlı bakım, kısa kesinti." : "Kesinti ya da hemen yapılması gereken bir şey."}>
@@ -433,6 +467,26 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
     return () => { iptal = true }
   }, [d])
 
+  // Anket yanıtları — yalnız anketli duyuruda çekilir
+  const [cevaplar, setCevaplar] = useState<ConnectAnketCevabi[] | null>(null)
+  useEffect(() => {
+    if (!d?.anket) { setCevaplar(null); return }
+    setCevaplar(null)
+    let iptal = false
+    fetch(`/api/connect/duyurular/${d.id}/cevaplar`, { cache: "no-store" })
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j?.error ?? "Alınamadı"); return (j?.cevaplar ?? []) as ConnectAnketCevabi[] })
+      .then((l) => { if (!iptal) setCevaplar(l) })
+      .catch((e) => { if (!iptal) { setCevaplar([]); toast.error(e instanceof Error ? e.message : "Yanıtlar alınamadı") } })
+    return () => { iptal = true }
+  }, [d])
+  // AnketSonuclari (Mesajlar) alıcı biçimine: kullanıcı + "firma · makine"
+  const alicilar: AnketAlicisi[] = (cevaplar ?? []).map((c) => ({
+    username: c.kullanici ?? "—",
+    serverName: [d && !d.firmaId ? `${c.firmaId ?? ""} ${c.firmaAdi ?? ""}`.trim() : null, c.makine].filter(Boolean).join(" · ") || null,
+    readAt: c.zaman,
+    answers: c.cevaplar,
+  }))
+
   const okuyan = okuyanlar?.filter((o) => o.okundu).length ?? 0
   // MODAL (07.10.2026): yeni duyuru ve cihaz modalıyla aynı kimlik — solda duyuru, sağda hedefteki cihazlar
   return (
@@ -466,6 +520,18 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
               </div>
 
               <p className="text-[13px] whitespace-pre-line">{d.metin}</p>
+
+              {d.anket && (
+                <div className="border-t pt-3">
+                  {!cevaplar ? (
+                    <div className="flex flex-col gap-2">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-5 w-full" />)}</div>
+                  ) : cevaplar.length === 0 ? (
+                    <p className="text-muted-foreground text-[12px]">Henüz yanıt yok. Uygulamayı açan müşteriler bir dakika içinde anketi görür.</p>
+                  ) : (
+                    <AnketSonuclari anket={d.anket} alicilar={alicilar} />
+                  )}
+                </div>
+              )}
             </ModalBolumu>
 
               <section className="flex min-h-0 flex-col self-start overflow-hidden rounded-[8px] border">

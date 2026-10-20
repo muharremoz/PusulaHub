@@ -4,6 +4,7 @@
  */
 
 import { connectServisAnahtari } from "@/lib/connect-hub-ic"
+import type { Anket, AnketCevaplari } from "@/lib/anket"
 
 const BASE = process.env.CONNECT_SERVICE_URL ?? "https://aktarim.pusulanet.net/connect"
 const KEY = connectServisAnahtari()
@@ -207,6 +208,16 @@ export interface ConnectDuyuru {
   /** Hedefteki etkin cihaz sayısı */
   hedefCihaz: number
   okuyan: number
+  /** Anketli duyuru (servis 20.10.2026+); null = düz duyuru. Biçim lib/anket.ts. */
+  anket?: Anket | null
+  /** Anketi yanıtlayan cihaz sayısı */
+  cevaplayan?: number
+}
+
+export interface ConnectAnketCevabi {
+  cihazId: string; firmaId: string | null; firmaAdi: string | null; kullanici: string | null; makine: string | null
+  cevaplar: AnketCevaplari
+  zaman: string
 }
 
 export interface ConnectDuyuruOkuyan {
@@ -221,6 +232,8 @@ export interface ConnectDuyuruYeni {
   /** 0/boş = süresiz */
   gunSayisi?: number | null
   olusturan: string | null
+  /** İsteğe bağlı anket (anketDogrula'dan geçmiş) */
+  anket?: Anket | null
 }
 
 export const connectDuyurular = () => istek<ConnectDuyuru[]>("/admin/duyurular")
@@ -231,5 +244,8 @@ export const connectDuyuruEkle = (d: ConnectDuyuruYeni) =>
 export const connectDuyuruOkuyanlar = (id: string) =>
   istek<ConnectDuyuruOkuyan[]>(`/admin/duyurular/${encodeURIComponent(id)}/okuyanlar`)
 
-export const connectDuyuruKaldir = (id: string, yapan: string | null) =>
+export const connectDuyuruCevaplar = (id: string) =>
+  istek<{ anket: Anket | null; cevaplar: ConnectAnketCevabi[] }>(`/admin/duyurular/${encodeURIComponent(id)}/cevaplar`)
+
+export const connectDuyuruKaldir =(id: string, yapan: string | null) =>
   istek<{ tamam: boolean }>(`/admin/duyurular/${encodeURIComponent(id)}/iptal`, { method: "POST", body: JSON.stringify({ yapan }) })

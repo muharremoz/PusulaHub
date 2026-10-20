@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Info, Loader2, Megaphone, OctagonAlert } from "lucide-react";
+import { AlertTriangle, Check, ClipboardList, Info, Loader2, Megaphone, OctagonAlert } from "lucide-react";
 import { api, type Duyuru, type Durum } from "@/api";
 import { Button } from "@/components/ui/button";
+import { AnketFormu, AnketYanitlandi } from "./anket";
 
 /** Servis zamanı UTC "YYYY-MM-DD HH:MM:SS". */
 const tarih = (s: string) =>
@@ -64,15 +65,27 @@ export function DuyuruSeritleri({ durum, setDurum, onTumu }: { durum: Durum; set
               <span className="font-semibold">{d.baslik}</span>
               {d.metin && <span className="text-primary-foreground/70"> — {d.metin}</span>}
             </p>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
-              disabled={bekle === d.id}
-              onClick={() => void okundu(d.id)}
-            >
-              {bekle === d.id ? <Loader2 className="animate-spin" /> : <Check />} Okudum
-            </Button>
+            {/*  Anketli duyuru: şeritte form yok — panele götürür. Yanıt verilmeden "Okudum" denmesin. */}
+            {d.anket && !d.cevaplandi ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                onClick={onTumu}
+              >
+                <ClipboardList /> Ankete katıl
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 shrink-0 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                disabled={bekle === d.id}
+                onClick={() => void okundu(d.id)}
+              >
+                {bekle === d.id ? <Loader2 className="animate-spin" /> : <Check />} Okudum
+              </Button>
+            )}
           </div>
         );
       })}
@@ -116,7 +129,15 @@ export function DuyurularIcerik({ durum, setDurum }: { durum: Durum; setDurum: (
               </div>
               <h2 className="mt-0.5 text-[15px] leading-snug font-semibold">{d.baslik}</h2>
               <p className="mt-1 text-sm whitespace-pre-line">{d.metin}</p>
-              {!d.okundu && (
+              {d.anket && d.cevaplandi && <AnketYanitlandi />}
+              {d.anket && !d.cevaplandi && !d.okundu && <AnketFormu duyuruId={d.id} anket={d.anket} setDurum={setDurum} />}
+              {/*  Anket: yanıtlamadan kapatma = okundu (şerit kaybolur). */}
+              {d.anket && !d.cevaplandi && !d.okundu && (
+                <Button size="sm" variant="ghost" className="mt-2 text-muted-foreground" disabled={bekle === d.id} onClick={() => void okundu(d.id)}>
+                  {bekle === d.id && <Loader2 className="animate-spin" />} Yanıtlamak istemiyorum
+                </Button>
+              )}
+              {!d.anket && !d.okundu && (
                 <Button size="sm" variant="outline" className="mt-3" disabled={bekle === d.id} onClick={() => void okundu(d.id)}>
                   {bekle === d.id ? <Loader2 className="animate-spin" /> : <Check />} Okudum
                 </Button>

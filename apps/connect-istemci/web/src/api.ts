@@ -80,7 +80,17 @@ export type Duyuru = {
   olusturma: string;
   bitis: string | null;
   okundu: string | null;
+  /** Anketli duyuru (servis 20.10.2026+). Biçim Hub'ın lib/anket.ts'iyle aynı. */
+  anket?: Anket | null;
+  /** Bu cihazdan yanıt verildiyse zamanı (UTC). */
+  cevaplandi?: string | null;
 };
+
+export type AnketSoruTipi = "tek" | "coklu" | "puan" | "metin";
+export type AnketSorusu = { id: string; tip: AnketSoruTipi; soru: string; secenekler?: string[]; zorunlu: boolean };
+export type Anket = { sorular: AnketSorusu[] };
+/** soru id → yanıt: tek=seçenek, coklu=seçenekler, puan=1..5, metin=yazı */
+export type AnketCevaplari = Record<string, string | string[] | number>;
 
 export type SayimTest = {
   zaman: string;
