@@ -17,6 +17,14 @@ export interface KumaMonitor {
   responseMs: number | null
 }
 
+export interface KurYazici {
+  enabled:   boolean
+  state:     string
+  lastAt:    string | null
+  lastCount: number | null
+  lastError: string | null
+}
+
 export interface ExchangeHealthEntry {
   status:        string
   state:         string
@@ -31,6 +39,8 @@ export interface MonitoringResponse {
   counts:          { total: number; online: number; warning: number; offline: number }
   monitors:        KumaMonitor[]
   exchangeHealth?: Record<string, ExchangeHealthEntry> | null
+  /** kur-api SQL / FTP yazıcıları; kur-api'ye ulaşılamazsa null */
+  kurYazicilar?: { sql: KurYazici | null; ftp: KurYazici | null } | null
 }
 
 export interface StatusTrack { status: KumaStatus; since: number }

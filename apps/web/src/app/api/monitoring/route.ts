@@ -15,14 +15,35 @@ interface HealthUpstream {
   lastChangedAt: string
   lastError:     string | null
 }
-interface HealthResponse { services: { upstream: Record<string, HealthUpstream> } }
+/** kur-api yazıcıları (PUSLICANCE SQL, FTP pusula.txt) — /tv "Kur Yazıcıları" kartı */
+interface KurYazici {
+  enabled:    boolean
+  state:      string
+  /** SQL: lastWriteAt, FTP: lastUploadAt */
+  lastAt:     string | null
+  lastCount:  number | null
+  lastError:  string | null
+}
+interface HealthWriter { enabled: boolean; state: string; lastWriteAt?: string | null; lastUploadAt?: string | null; lastCount?: number | null; lastError?: string | null }
+interface HealthResponse {
+  services: { upstream: Record<string, HealthUpstream>; sqlWriter?: HealthWriter | null; ftpWriter?: HealthWriter | null }
+}
 
-let healthCache: { at: number; data: Record<string, HealthUpstream> } | null = null
-async function fetchExchangeHealth(): Promise<Record<string, HealthUpstream>> {
+const yazici = (w: HealthWriter | null | undefined): KurYazici | null => w ? {
+  enabled: w.enabled, state: w.state, lastAt: w.lastWriteAt ?? w.lastUploadAt ?? null,
+  lastCount: w.lastCount ?? null, lastError: w.lastError ?? null,
+} : null
+
+type HealthOzet = { upstream: Record<string, HealthUpstream>; kurYazicilar: { sql: KurYazici | null; ftp: KurYazici | null } }
+let healthCache: { at: number; data: HealthOzet } | null = null
+async function fetchExchangeHealth(): Promise<HealthOzet> {
   if (healthCache && Date.now() - healthCache.at < 10_000) return healthCache.data
   const res  = await fetch("http://api.pusulanet.net:8080/health", { cache: "no-store", signal: AbortSignal.timeout(2500) })
   const json = await res.json() as HealthResponse
-  const data = json.services?.upstream ?? {}
+  const data = {
+    upstream: json.services?.upstream ?? {},
+    kurYazicilar: { sql: yazici(json.services?.sqlWriter), ftp: yazici(json.services?.ftpWriter) },
+  }
   healthCache = { at: Date.now(), data }
   return data
 }
@@ -62,8 +83,11 @@ export async function GET(req: NextRequest) {
 
     // Döviz kaynakları için son güncelleme zamanı (best-effort, patlarsa sessiz)
     let exchangeHealth: Record<string, HealthUpstream> | null = null
+    let kurYazicilar: HealthOzet["kurYazicilar"] | null = null
     try {
-      exchangeHealth = await fetchExchangeHealth()
+      const h = await fetchExchangeHealth()
+      exchangeHealth = h.upstream
+      kurYazicilar = h.kurYazicilar
     } catch (e) {
       console.error("[monitoring] exchange health fetch failed:", e)
     }
@@ -75,6 +99,7 @@ export async function GET(req: NextRequest) {
       monitors,
       history,
       exchangeHealth,
+      kurYazicilar,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Kuma'ya ulaşılamadı."

@@ -25,6 +25,7 @@ import type { BandwidthData } from "@/lib/bandwidth"
 import type { SpareBackupOffline } from "@/lib/sparebackup-offline"
 import type { DomainExpiry } from "@/lib/domain-expiry"
 import type { BackupStorage } from "./use-esxi"
+import { formatAgo, type KurYazici } from "../_shared/types"
 
 const FLOW    = "#7DD3FC"
 const TXT     = "#D4D4D8"
@@ -367,12 +368,58 @@ function DomainsCard({ data }: { data: DomainExpiry[] | null }) {
    Şerit
 ══════════════════════════════════════════════════════════ */
 
+/* ══════════════════════════════════════════════════════════
+   Kur yazıcıları — kur-api'nin PUSLICANCE (SQL) ve pusula.txt (FTP)
+   yazımları. İkisi de dakikada bir yazar; durursa müşterilerin kur
+   ekranı sessizce bayatlar, alarm üretmez. Bu yüzden sürekli gözde.
+══════════════════════════════════════════════════════════ */
+
+/** Son yazma bundan eskiyse dikkat / kritik (yazma aralığı 1 dk) */
+const KUR_UYARI_DK = 3
+const KUR_KRITIK_DK = 10
+
+function kurYaziciDurumu(w: KurYazici | null | undefined, now: Date): { value: string; color: string; alt: string | null } {
+  if (!w) return { value: "—", color: TXT_DIM, alt: null }
+  if (!w.enabled) return { value: "Kapalı", color: TXT_DIM, alt: null }
+  if (!w.lastAt) return { value: "Yazmadı", color: RED, alt: w.lastError }
+  const dk = (now.getTime() - new Date(w.lastAt).getTime()) / 60_000
+  const color = dk >= KUR_KRITIK_DK || w.state === "error" ? RED : dk >= KUR_UYARI_DK || w.lastError ? AMBER : TXT
+  return { value: formatAgo(w.lastAt, now), color, alt: w.lastError }
+}
+
+function KurYazicilarCard({ data }: { data: { sql: KurYazici | null; ftp: KurYazici | null } | null | undefined }) {
+  const now = new Date()
+  const satirlar = [
+    { ad: "SQL · PUSLICANCE", d: kurYaziciDurumu(data?.sql, now), sayi: data?.sql?.lastCount },
+    { ad: "FTP · pusula.txt", d: kurYaziciDurumu(data?.ftp, now), sayi: data?.ftp?.lastCount },
+  ]
+  return (
+    <Card>
+      <Title>Kur Yazıcıları</Title>
+      <div className="mt-2.5">
+        {!data ? <Empty text="Kur API'ye ulaşılamadı" /> : satirlar.map((r) => (
+          <div key={r.ad}>
+            <Row name={r.sayi != null ? `${r.ad} (${r.sayi})` : r.ad} value={r.d.value} color={r.d.color} />
+            {r.d.alt && (
+              <div className="truncate pb-[3px] text-[10px]" style={{ color: r.d.color === TXT ? TXT_DIM : r.d.color }}>
+                {r.d.alt}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 interface Props {
   bandwidth:    BandwidthData | null
   offlineFirms: SpareBackupOffline | null
   domains:      DomainExpiry[] | null
   /** Spare Backup deposunun disk dolulugu - ayni kartta gosteriliyor */
   backupStorage: BackupStorage | null
+  /** kur-api SQL / FTP yazıcıları (/api/monitoring → kurYazicilar) */
+  kurYazicilar?: { sql: KurYazici | null; ftp: KurYazici | null } | null
   /**
    * Üç kartın ALTINA eklenen kartlar (imaj yedekleri). Sol altyapı sütunu
    * dört kartla 1080 piksele sığmıyordu; sağ şeridin altı boştu.
@@ -380,7 +427,7 @@ interface Props {
   children?: React.ReactNode
 }
 
-export function RightRail({ bandwidth, offlineFirms, domains, backupStorage, children }: Props) {
+export function RightRail({ bandwidth, offlineFirms, domains, backupStorage, kurYazicilar, children }: Props) {
   return (
     <>
       {/* Sağdan sola sönen karartı — kartların okunabilirlik zemini */}
@@ -397,6 +444,7 @@ export function RightRail({ bandwidth, offlineFirms, domains, backupStorage, chi
            yalnız seçici kendi için geri açıyor.                          */}
       <div className="pointer-events-none absolute right-6 top-6 z-20 flex w-[262px] select-none flex-col gap-4">
         <TrafficCard data={bandwidth} />
+        <KurYazicilarCard data={kurYazicilar} />
         <BackupsCard data={offlineFirms} storage={backupStorage} />
         <DomainsCard data={domains} />
         {children}

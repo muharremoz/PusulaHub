@@ -187,6 +187,7 @@ export default function TvAgacPage() {
         offlineFirms={mockFirms ?? offlineFirms}
         domains={domains}
         backupStorage={backupDisk}
+        kurYazicilar={data?.kurYazicilar}
       >
         {/*  İmaj yedekleri sağ şeritte: sol sütun dört kartla TV'ye
              sığmıyordu (alt kısmı kesiliyordu), sağ şeridin altı boştu. */}
