@@ -192,10 +192,19 @@ export function buildPusulaXFileXml(folderPath: string): string {
   ].join("; ")
 }
 
+/**
+ * Hizmet ayarındaki parametre dosya adı uzantısız girilmişse
+ * (örn. StokCari: "StokCariParametre" — dosya "StokCariParametre.txt")
+ * adım dosyayı bulamayıp sessizce geçiyordu. Adı bulunamazsa ".txt" ekini de dene.
+ */
+const PARAM_TXT_FALLBACK =
+  `if(-not (Test-Path -LiteralPath $f) -and (Test-Path -LiteralPath ($f + '.txt'))){$f = $f + '.txt'}`
+
 /* ── Parametre TXT dosyasında [DATA KODU] satırı ──────────────────────── */
 /**
  * Eski uygulama ile aynı davranış:
- *   - Dosya yoksa: SKIPPED (hata değil, devam et)
+ *   - Dosya yoksa: hata (adım kırmızı görünür; kurulum yine devam eder —
+ *     eskiden SKIPPED yazıp "tamamlandı" görünüyordu, StokCari böyle kaçtı)
  *   - `[DATA KODU]` ile başlayan satır → `[DATA KODU] {firmaId}`; yoksa sona eklenir
  *   - UTF-8 ile yazılır
  *
@@ -210,7 +219,8 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
   const id = psQuote(firmaId)
   return [
     `$f='${f}'`,
-    `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIPPED'} else {` +
+    PARAM_TXT_FALLBACK,
+    `if(-not (Test-Path -LiteralPath $f)){Write-Error ('Parametre dosyasi bulunamadi: ' + $f)} else {` +
       `$dk = '[DATA KODU] ${id}'; ` +
       `$lines = Get-Content -LiteralPath $f -Encoding UTF8; ` +
       `$dkVar = $false; ` +
@@ -247,7 +257,8 @@ export function buildUpdateDataKoduXml(paramFilePath: string, firmaId: string): 
   const id = psQuote(firmaId)
   return [
     `$f='${f}'`,
-    `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIPPED'} else {` +
+    PARAM_TXT_FALLBACK,
+    `if(-not (Test-Path -LiteralPath $f)){Write-Error ('Parametre dosyasi bulunamadi: ' + $f)} else {` +
       `$nl = [string]([char]13) + [string]([char]10); ` +
       `$blk = '<DATAKODU>' + $nl + '${id}' + $nl + '</DATAKODU>'; ` +
       `$c = Get-Content -LiteralPath $f -Raw -Encoding UTF8; ` +
