@@ -63,6 +63,7 @@ import type {
 import { parsHedefYukle, parsKatalogOku, parsKatalogOnbellekTemizle, parsKullanicilariKaydet } from "@/lib/pars-service"
 import { buildParsKullaniciYaz, parsJsonAyikla } from "@/lib/setup-parsops"
 import { parsTipFromProgramCode } from "@/lib/pars-katalog"
+import { pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
 
 /**
  * POST /api/setup/run
@@ -1424,18 +1425,13 @@ export async function POST(req: NextRequest) {
                   // Depo adımı atlanmışsa (skipDepo) resim paylaşımı için bulunan Depo adresi
                   const resimDepoIp = depoSrv?.ip ?? resimDepo?.ip ?? null
                   if (pusulaXSecili && resimDepoIp && restoredDbNames.length > 0) {
-                    const resimYolu = `\\\\${resimDepoIp}\\Resimler\\${payload.firmaId}\\`
+                    const resimYolu = pusulaXResimYolu(resimDepoIp, payload.firmaId)
                     for (const dbName of restoredDbNames) {
-                      const db = dbName.replace(/]/g, "]]")
                       await runSqlStep(
                         `sql_resimyolu_${dbName}`,
                         `Pusula X resim yolu: [${dbName}]`,
                         async () => {
-                          const r = await masterPool.request().input("yol", resimYolu).query(
-                            `IF COL_LENGTH(N'[${db}].dbo.Sabitler', N'ImagePath') IS NULL SELECT CAST(-1 AS int) AS n
-                             ELSE BEGIN UPDATE [${db}].dbo.Sabitler SET ImagePath = @yol; SELECT @@ROWCOUNT AS n END`,
-                          )
-                          const n = (r.recordset?.[0] as { n?: number } | undefined)?.n ?? 0
+                          const n = await yazPusulaXResimYolu(masterPool, dbName, resimYolu)
                           return n < 0 ? "Pusula X verisi değil (Sabitler.ImagePath yok) — atlandı" : `Sabitler.ImagePath = ${resimYolu} (${n} satır)`
                         },
                       )

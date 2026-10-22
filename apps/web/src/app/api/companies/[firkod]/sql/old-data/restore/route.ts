@@ -12,7 +12,8 @@
  *   3) DB owner = firmanın mevcut SQL login'i ({firmaId}_*)
  *   4) sirket DB erişimi (idempotent)
  *   5) sirket.dbo.guvenlik kaydı (programCode)
- *   6) yalnız KOPYALANAN geçici .bak temizlenir
+ *   6) Pusula X datasıysa Sabitler.ImagePath = \\<Depo>\Resimler\{firmaId}\
+ *   7) yalnız KOPYALANAN geçici .bak temizlenir
  *
  * Kaynak eskiden Depo'daki `D:\Eski Datalar\{firmaId}` klasörüne sabitti.
  * Artık klasör ve sunucu seçilebiliyor: normal/şablon veritabanları da
@@ -36,6 +37,7 @@ import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/l
 import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { sqlLoginArama } from "@/lib/firma-adlandirma"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
+import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
 import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import {
   buildPullBakFromDepo,
@@ -283,7 +285,7 @@ export async function POST(
 
               await sonrakiAdimlar(f, targetDb)
 
-              // 6) geçici .bak temizliği — SADECE Depo'dan kopyaladığımız dosya.
+              // 7) geçici .bak temizliği — SADECE Depo'dan kopyaladığımız dosya.
               // SQL sunucusundaki kaynak dosya kullanıcının kendi şablonu/yedeği
               // olabilir, ona dokunulmaz.
               if (!isLocal) {
@@ -327,6 +329,22 @@ export async function POST(
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
+              }
+
+              // 6) Pusula X resim yolu — yedekteki (şablon/eski sunucu) yol yerine firmanın Depo klasörü.
+              //    Pusula X datası değilse (Sabitler.ImagePath yok) sessizce atlanır.
+              try {
+                if ((await okuPusulaXResimYolu(masterPool, targetDb)) !== null) {
+                  if (!depo) {
+                    step(`resimyolu_${targetDb}`, `Pusula X resim yolu yazılamadı: ${targetDb}`, "error", { error: "Firmaya tanımlı Depo sunucusu yok — ImagePath elle düzeltilmeli." })
+                  } else {
+                    const yol = pusulaXResimYolu(depo.ip, firkod)
+                    await yazPusulaXResimYolu(masterPool, targetDb, yol)
+                    step(`resimyolu_${targetDb}`, `Pusula X resim yolu: ${yol}`, "done")
+                  }
+                }
+              } catch (err) {
+                step(`resimyolu_${targetDb}`, `Pusula X resim yolu yazılamadı: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
               }
             }
 
