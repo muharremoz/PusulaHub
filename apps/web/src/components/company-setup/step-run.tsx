@@ -140,6 +140,10 @@ interface Props {
   addToSirketDb?:      boolean
   /** Pars hizmeti seçildiyse — kullanıcılar Ayar.mdb'ye yazılır, mesajda gösterilir */
   pars?:               { serviceId: number; users: ParsWizardUser[]; allowedReportIds: number[]; baglanti?: ParsBaglanti | null } | null
+  /** Hedef DB adı → guvenlik.KOD (SQL adımı; boş kod = firma numarası) */
+  kodlar?:             Record<string, number>
+  /** API hizmeti (iis-site) id → data + elle girilen uygulama kullanıcıları (API hizmetleri adımı) */
+  apiAyarlari?:        Record<number, { dbler: string[]; kullanicilar: { username: string; password: string }[] }>
   onComplete:      () => void
   onReset:         () => void
   onConfetti:      () => void
@@ -148,7 +152,7 @@ interface Props {
 export function StepRun({
   serverId, windowsServerId, iisServerId, iisServerDns, depoServerId, firmaId, firmaName, serverName, serverDomain, serverDns, serverRdpPort, users, services,
   sqlServerId, sqlServer, sqlMode, backupFolderPath, backupFiles, selectedDemoDbIds, demoDatabases, addFirmaPrefix, addToSirketDb,
-  pars,
+  pars, kodlar, apiAyarlari,
   onComplete, onReset, onConfetti,
 }: Props) {
   const [completed, setCompleted]   = useState(false)
@@ -374,12 +378,21 @@ export function StepRun({
             phone:       u.phone,
             password:    u.password,
           })),
-          services: services.map((s) => ({
-            id:     s.id,
-            name:   s.name,
-            type:   s.type,
-            config: s.config,
-          })),
+          services: services.map((s) => {
+            const a = s.type === "iis-site" ? apiAyarlari?.[s.id] : undefined
+            return {
+              id:     s.id,
+              name:   s.name,
+              type:   s.type,
+              config: s.config,
+              // Sihirbaz API adımı: Users.xml = yalnız bu kullanıcılar + bu datalar (RDP kullanıcıları değil)
+              ...(a ? {
+                apiUsers: a.kullanicilar.map((k) => ({ username: k.username.trim(), password: k.password })),
+                apiDbler: a.dbler,
+              } : {}),
+            }
+          }),
+          kodlar,
           /* 4. adım: SQL (boşsa backend atlar) */
           sqlServerId:       sqlServerId ?? undefined,
           sqlMode,

@@ -64,7 +64,7 @@ import type {
 import { parsHedefYukle, parsKatalogOku, parsKatalogOnbellekTemizle, parsKullanicilariKaydet } from "@/lib/pars-service"
 import { buildParsKullaniciYaz, parsJsonAyikla } from "@/lib/setup-parsops"
 import { parsTipFromProgramCode } from "@/lib/pars-katalog"
-import { pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
+import { pusulaXResimYolu, yazPusulaXResimYolu, yazPusulaXEntegrasyon } from "@/lib/pusulax-resim-yolu"
 
 /**
  * POST /api/setup/run
@@ -97,6 +97,11 @@ interface RunService {
   config: ServiceConfig | null
   /** API hizmeti (iis-site) için elle girilen uygulama kullanıcısı → Users.xml'de tek kullanıcı */
   appUser?: { username: string; password: string }
+  /** Sihirbaz API adımı: Users.xml'e yazılacak uygulama kullanıcıları (ali, veli… — RDP kullanıcıları DEĞİL).
+   *  Verilirse (boş liste dahil) firma kullanıcıları Users.xml'e yazılmaz. */
+  apiUsers?: { username: string; password: string }[]
+  /** Sihirbaz API adımı: Users.xml <DB> ve kullanıcı Data listesi (varsayılan güncel data) */
+  apiDbler?: string[]
 }
 
 /** Pattern içindeki {firmaKod} / {port} placeholder'larını değiştirir. */
@@ -245,6 +250,8 @@ interface RunPayload {
   /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır.
    *  Tekil kullanıcı ekleme gibi depo ile ilgisiz akışlar için. */
   skipDepo?:         boolean
+  /** Hedef DB adı → guvenlik.KOD (sihirbaz SQL adımı). Verilmeyen DB'ye firma ID yazılır. */
+  kodlar?:           Record<string, number>
 
   /* ── Pars (mobil raporlama) ────────────────────────────────────
    * Hizmetler adımında Pars hizmeti seçildiyse gelir. Hizmet config'i
@@ -383,6 +390,8 @@ export async function POST(req: NextRequest) {
 
   // IIS sunucusu — yalnızca iis-site / iis-resim varsa zorunlu
   let iisAgent: AgentTarget | null = null
+  /** IIS sunucusunun dış adresi (DNS, yoksa IP) — Pusula X EntegrasyonResimYolu için */
+  let iisDisAdres: string | null = null
   if (iisServices.length > 0 || resimServices.length > 0) {
     if (!payload.iisServerId) {
       return new Response(JSON.stringify({ error: "IIS hizmetleri için iisServerId zorunlu" }), {
@@ -402,6 +411,7 @@ export async function POST(req: NextRequest) {
       port:   iisSrv.agent_port,
       apiKey: iisSrv.api_key,
     }
+    iisDisAdres = iisSrv.dns?.trim() || iisSrv.ip
   }
 
   // Depo sunucusu — sihirbazda Pusula programı seçilmişse payload.depoServerId
@@ -945,6 +955,9 @@ export async function POST(req: NextRequest) {
           usersXml: boolean
           /** Elle girilen uygulama kullanıcısı — 7d'de Users.xml'e yazılır */
           appUser?: { username: string; password: string }
+          /** Sihirbaz API adımı — Users.xml kullanıcıları ve datası (verilmezse eski davranış: firma kullanıcıları + tüm DB'ler) */
+          apiUsers?: { username: string; password: string }[]
+          apiDbler?: string[]
         }> = []
 
         if (iisServices.length > 0 && iisAgent) {
@@ -1104,6 +1117,12 @@ export async function POST(req: NextRequest) {
                 && !apiKimlikHatasi(s.appUser.username, s.appUser.password)
                 ? { username: s.appUser.username.trim(), password: s.appUser.password }
                 : undefined,
+              apiUsers: s.type === "iis-site" && Array.isArray(s.apiUsers)
+                ? s.apiUsers
+                    .map((u) => ({ username: String(u?.username ?? "").trim(), password: String(u?.password ?? "") }))
+                    .filter((u) => u.username && !apiKimlikHatasi(u.username, u.password))
+                : undefined,
+              apiDbler: s.type === "iis-site" && Array.isArray(s.apiDbler) ? s.apiDbler.map(String) : undefined,
             })
 
             servicesInstalled++
@@ -1114,6 +1133,8 @@ export async function POST(req: NextRequest) {
         // Klasör kopyalanmaz: site Depo'daki \\<depo>\Resimler\<firmaId>
         // paylaşımını yayınlar. Site önceden (elle) kurulmuşsa portu korunur —
         // dışarıdaki port yönlendirmesi o porta bağlı.
+        /** Kurulan RESIM sitesinin portu — Pusula X Sabitler.ImagePort / EntegrasyonResimYolu (7. adım) */
+        let resimSitePortu: number | null = null
         if (resimServices.length > 0 && iisAgent && resimDepo) {
           const liveUsedPorts = await scanLivePorts(iisAgent)
           for (const s of resimServices) {
@@ -1184,6 +1205,7 @@ export async function POST(req: NextRequest) {
                 password:     resimDepo.password,
               }),
             ))) { controller.close(); return }
+            resimSitePortu = alloc.port
 
             servicesInstalled++
           }
@@ -1212,6 +1234,8 @@ export async function POST(req: NextRequest) {
             programCode:  string | null
             /** guvenlik.YedekAl — sihirbazda kullanıcı kapatabilir (eski yıl datası). */
             yedekAl:      boolean
+            /** Data Pusula X programına mı bağlı (hizmet exe'si pusulax.exe) — Perakende de 909 kullandığı için koddan değil hizmetten */
+            pusulaX:      boolean
           }
           const tasks: RestoreTask[] = []
 
@@ -1224,6 +1248,10 @@ export async function POST(req: NextRequest) {
             for (const s of pusulaServices) {
               const cfg = s.config as PusulaProgramConfig | null
               codeByServiceId.set(s.id, cfg?.programCode?.trim() || null)
+            }
+            const pxHizmet = (id: number | null | undefined) => {
+              const sv = id != null ? pusulaServices.find((x) => x.id === id) : pusulaServices.length === 1 ? pusulaServices[0] : undefined
+              return ((sv?.config as PusulaProgramConfig | null)?.exeName ?? "").trim().toLowerCase() === "pusulax.exe"
             }
             const firstPusulaProgramCode = pusulaServices
               .map((s) => (s.config as PusulaProgramConfig | null)?.programCode ?? null)
@@ -1253,6 +1281,7 @@ export async function POST(req: NextRequest) {
                   srkAdi:      dbName,
                   programCode,
                   yedekAl:     bf.yedekAl !== false,
+                  pusulaX:     pxHizmet(bf.programServiceId),
                 })
               } else {
                 const fileName = (bf.fileName ?? "").trim()
@@ -1266,6 +1295,7 @@ export async function POST(req: NextRequest) {
                   srkAdi:      dbName,
                   programCode,
                   yedekAl:     bf.yedekAl !== false,
+                  pusulaX:     pxHizmet(bf.programServiceId),
                 })
               }
             }
@@ -1327,6 +1357,7 @@ export async function POST(req: NextRequest) {
                   srkAdi:      rawName,
                   programCode,
                   yedekAl:     true,   // demo DB güncel data, yedeğe girer
+                  pusulaX:     linkedServiceIds.some((sid) => ((pusulaServices.find((x) => x.id === sid)?.config as PusulaProgramConfig | null)?.exeName ?? "").trim().toLowerCase() === "pusulax.exe"),
                 })
               }
             }
@@ -1347,6 +1378,8 @@ export async function POST(req: NextRequest) {
                 },
                 async (masterPool) => {
                   const restoredDbNames: string[] = []
+                  /** Geri yüklenen ve Pusula X programına bağlı datalar — resim yolu / entegrasyon yalnız bunlara */
+                  const pusulaXDbler: string[] = []
                   for (const t of tasks) {
                     if (t.kind === "attach") {
                       // ATTACH: ham .mdf/.ldf → D:\SQLData\{firmaId}'ye agent ile
@@ -1377,7 +1410,7 @@ export async function POST(req: NextRequest) {
                           return `${t.srcMdf}${t.srcLdf ? " + .ldf" : ""} → [${t.dbName}] (ATTACH)`
                         },
                       )
-                      if (ok) { restoredDbNames.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
+                      if (ok) { restoredDbNames.push(t.dbName); if (t.pusulaX) pusulaXDbler.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
                     } else {
                       const restoreStepId = `sql_restore_${t.dbName}`
                       const restoreLabel  = `Veritabanı restore ediliyor: ${t.dbName}`
@@ -1398,7 +1431,7 @@ export async function POST(req: NextRequest) {
                           return `${t.bakPath} → [${t.dbName}]`
                         },
                       )
-                      if (ok) { restoredDbNames.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
+                      if (ok) { restoredDbNames.push(t.dbName); if (t.pusulaX) pusulaXDbler.push(t.dbName); parsDatalar.push({ data: t.dbName, programCode: t.programCode }) }
                     }
                   }
 
@@ -1420,20 +1453,25 @@ export async function POST(req: NextRequest) {
                   // ağ zaman aşımı kadar dondurur (~22 sn; donma şikâyetlerinin çoğu bu).
                   // Pusula X ile Perakende aynı program kodunu (909) kullandığı için hizmet
                   // exe adından tanınır; yalnız ImagePath sütunu olan DB'ye yazılır.
-                  const pusulaXSecili = pusulaServices.some(
-                    (s) => ((s.config as PusulaProgramConfig | null)?.exeName ?? "").trim().toLowerCase() === "pusulax.exe",
-                  )
+                  // Yalnız Pusula X programına bağlı datalar (Perakende de Sabitler taşıyabilir — ona yazılmaz).
+                  // Resim hizmeti kurulduysa entegrasyon adresi de: http://<IIS DNS>:<RESIM portu>/ + ImagePort.
                   // Depo adımı atlanmışsa (skipDepo) resim paylaşımı için bulunan Depo adresi
                   const resimDepoIp = depoSrv?.ip ?? resimDepo?.ip ?? null
-                  if (pusulaXSecili && resimDepoIp && restoredDbNames.length > 0) {
+                  if (resimDepoIp && pusulaXDbler.length > 0) {
                     const resimYolu = pusulaXResimYolu(resimDepoIp, payload.firmaId)
-                    for (const dbName of restoredDbNames) {
+                    for (const dbName of pusulaXDbler) {
                       await runSqlStep(
                         `sql_resimyolu_${dbName}`,
                         `Pusula X resim yolu: [${dbName}]`,
                         async () => {
                           const n = await yazPusulaXResimYolu(masterPool, dbName, resimYolu)
-                          return n < 0 ? "Pusula X verisi değil (Sabitler.ImagePath yok) — atlandı" : `Sabitler.ImagePath = ${resimYolu} (${n} satır)`
+                          if (n < 0) return "Sabitler.ImagePath yok — atlandı"
+                          let ek = ""
+                          if (resimSitePortu && iisDisAdres) {
+                            await yazPusulaXEntegrasyon(masterPool, dbName, iisDisAdres, resimSitePortu)
+                            ek = ` · EntegrasyonResimYolu = http://${iisDisAdres}:${resimSitePortu}/ · ImagePort = ${resimSitePortu}`
+                          }
+                          return `Sabitler.ImagePath = ${resimYolu}${ek}`
                         },
                       )
                     }
@@ -1530,19 +1568,30 @@ export async function POST(req: NextRequest) {
                       }))
 
                     for (const svc of installedIisServices) {
+                      // Sihirbaz API adımı: yalnız elle girilen uygulama kullanıcıları + seçilen data
+                      // (kurulan DB'lerle kesişim). Kullanıcı girilmediyse yalnız DB listesi yazılır.
+                      const apiAkisi = Array.isArray(svc.apiUsers)
+                      const dbler = apiAkisi && svc.apiDbler
+                        ? svc.apiDbler.filter((d) => restoredDbNames.includes(d))
+                        : restoredDbNames
+                      const kullanicilar = apiAkisi ? svc.apiUsers! : xmlUsers
+                      if (apiAkisi && dbler.length === 0) continue
                       const ok = await runStep(
                         iisAgent,
                         `iis_usersxml_${svc.id}`,
-                        `Users.xml güncelleniyor: ${svc.name}`,
+                        apiAkisi
+                          ? `Users.xml güncelleniyor: ${svc.name} (${kullanicilar.length ? kullanicilar.map((k) => k.username).join(", ") : "kullanıcısız"} · ${dbler.join(", ")})`
+                          : `Users.xml güncelleniyor: ${svc.name}`,
                         buildPatchUsersXml({
                           configPath: `${svc.destPath}\\Config\\Users.xml`,
-                          users:      xmlUsers,
-                          dbNames:    restoredDbNames,
-                          keepUsers:  svc.keepUsers,
+                          users:      kullanicilar,
+                          dbNames:    dbler,
+                          keepUsers:  apiAkisi ? false : svc.keepUsers,
+                          bosKullaniciIzinli: apiAkisi,
                         }),
                       )
-                      // Şifreli kullanıcı yoksa komut SKIP_EMPTY döner — yazılmış sayılmaz
-                      svc.usersXml = ok && (svc.keepUsers || xmlUsers.length > 0)
+                      // Şifreli kullanıcı yoksa komut SKIP_EMPTY döner — yazılmış sayılmaz (API akışında DB listesi yazıldıysa sayılır)
+                      svc.usersXml = ok && (apiAkisi || svc.keepUsers || xmlUsers.length > 0)
                     }
                   }
 
@@ -1649,6 +1698,7 @@ export async function POST(req: NextRequest) {
                               firmaId:     payload.firmaId,
                               programCode: t.programCode!,
                               yedekAl:     t.yedekAl,
+                              kod:         payload.kodlar?.[t.dbName],
                             })
                             sqlGuvenlik++
                           },

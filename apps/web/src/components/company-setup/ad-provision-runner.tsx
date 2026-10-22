@@ -36,6 +36,10 @@ export interface AdProvisionService {
   config: ServiceConfig | null
   /** API hizmeti için elle girilen uygulama kullanıcısı (Users.xml'de tek kullanıcı) */
   appUser?: { username: string; password: string }
+  /** Sihirbaz API adımı: Users.xml'e yazılacak uygulama kullanıcıları (RDP değil) — verilirse firma kullanıcıları yazılmaz */
+  apiUsers?: { username: string; password: string }[]
+  /** Sihirbaz API adımı: Users.xml <DB> / kullanıcı Data listesi (varsayılan güncel data) */
+  apiDbler?: string[]
 }
 
 export interface AdProvisionBackupFile {
@@ -68,6 +72,8 @@ export interface AdProvisionPayload {
   addToSirketDb?:     boolean
   /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır */
   skipDepo?:          boolean
+  /** Hedef DB adı → guvenlik.KOD; verilmeyen DB'ye firma numarası yazılır */
+  kodlar?:            Record<string, number>
 
   /* ── Pars (mobil raporlama) — Hizmetler adımında Pars hizmeti seçildiyse ── */
   pars?: {

@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
-import { Building2, ClipboardList, Database, Layers, Server, Smartphone, Users, ArrowRight } from "lucide-react"
+import { Building2, ClipboardList, Database, Layers, Server, Smartphone, Users, ArrowRight, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import type { ParsWizardUser } from "@/lib/pars-katalog"
@@ -29,6 +29,10 @@ interface Props {
   addFirmaPrefix: boolean
   /** Pars hizmeti seçiliyse — kullanıcılar ve seçilen rapor sayısı */
   pars?: { serviceName: string; users: ParsWizardUser[]; reportCount: number; totalReports: number } | null
+  /** SQL adımındaki datalar — hedef ad → guvenlik kodu */
+  veriler?: { ad: string; kod: number }[]
+  /** API hizmetleri: data + elle girilen uygulama kullanıcıları */
+  apiOzet?: { ad: string; dbler: string[]; kullanicilar: { username: string }[] }[]
 }
 
 /** Beyaz kart: başlık şeridi (ikon + başlık + sayaç) + gövde */
@@ -79,8 +83,9 @@ const TUR_ROZET: Record<string, { ad: string; renk: string }> = {
 export function StepSummary({
   adServer, windowsServer, company, users, services,
   selectedServiceIds, sqlServer, selectedSqlServerId, sqlMode, backupFiles,
-  selectedDemoDbIds, demoDatabases, addFirmaPrefix, pars,
+  selectedDemoDbIds, demoDatabases, addFirmaPrefix, pars, veriler = [], apiOzet = [],
 }: Props) {
+  const kodu = (ad: string) => veriler.find((v) => v.ad === ad)?.kod
   const firmaId = company?.firkod ?? ""
   const selectedServices = services.filter((s) => selectedServiceIds.includes(s.id))
   const selectedBackups = backupFiles.filter((f) => f.selected)
@@ -119,6 +124,12 @@ export function StepSummary({
         { grup: "SQL", is: `${sqlDbCount} veritabanının sahibi ${sqlLogin} yapılacak` },
       ] : []),
     ] : []),
+    ...apiOzet.map((a) => ({
+      grup: "API",
+      is: a.dbler.length
+        ? `${a.ad}: Users.xml → ${a.kullanicilar.length ? a.kullanicilar.map((k) => k.username).join(", ") : "kullanıcısız"} · data ${a.dbler.join(", ")}`
+        : `${a.ad}: data yok — Users.xml ve Web.config şablonda kalır`,
+    })),
     ...(pars ? [
       { grup: "Pars", is: `Ayar.mdb'ye ${pars.users.length} kullanıcı yazılacak (${pars.reportCount} rapor açık, diğerleri yasaklı)` },
       { grup: "Pars", is: sqlDbCount > 0
@@ -210,6 +221,9 @@ export function StepSummary({
                   <span className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground" title={d.kaynak}>{d.kaynak}</span>
                   <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate text-right text-[13px] font-medium" title={d.hedef}>{d.hedef}</span>
+                  {kodu(d.hedef) !== undefined && (
+                    <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground" title="guvenlik.KOD">{kodu(d.hedef)}</span>
+                  )}
                   <span className={cn("inline-flex shrink-0 rounded-[5px] px-2 py-0.5 text-[11px] font-medium",
                     d.yedek ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-muted text-muted-foreground")}>
                     {d.yedek ? "Yedek" : "Yedeksiz"}
@@ -219,6 +233,20 @@ export function StepSummary({
             </>
           )}
         </Kart>
+
+        {/* API hizmetleri */}
+        {apiOzet.length > 0 && (
+          <Kart baslik="API hizmetleri" ikon={<Globe className="size-3" />} sayac={apiOzet.length} className="lg:col-span-2">
+            {apiOzet.map((a) => (
+              <Satir
+                key={a.ad}
+                etiket={a.ad}
+                deger={a.kullanicilar.length ? a.kullanicilar.map((k) => k.username).join(", ") : "Kullanıcısız"}
+                alt={a.dbler.length ? a.dbler.join(", ") : "Data yok"}
+              />
+            ))}
+          </Kart>
+        )}
 
         {/* Pars */}
         {pars && (

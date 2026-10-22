@@ -91,6 +91,8 @@ export interface BackupFile {
   /** Kullanıcı kutuyu elle değiştirdi mi — DB adı düzenlenince varsayılan
    *  yeniden hesaplanır, elle seçim korunur. Yalnız istemci tarafı. */
   yedekAlElle?: boolean
+  /** guvenlik.KOD — boş = firma numarası (lib/guvenlik-kod.ts) */
+  kod?: string
 }
 
 export interface DemoDatabase {

@@ -75,6 +75,9 @@ export interface InsertGuvenlikArgs {
    * gitmez. Çağıran taraf ikisini birlikte ayarlamalı.
    */
   yedekAl?:    boolean
+  /** `KOD` kolonu — verilmezse firma ID. Aynı firmanın datalarına farklı kod (4515, 45151…) için.
+   *  `PusulaFirmaId` bundan etkilenmez, daima firma ID'dir. Bkz. lib/guvenlik-kod.ts */
+  kod?:        number
 }
 
 /**
@@ -111,7 +114,7 @@ export async function insertGuvenlikRow(
   req.input("resim",           sql.NVarChar, resim)
   req.input("baslik1",         sql.NVarChar, baslik1)
   req.input("transfer",        sql.Bit,      0)
-  req.input("KOD",             sql.Int,      safeKod)
+  req.input("KOD",             sql.Int,      args.kod && Number.isInteger(args.kod) && args.kod > 0 ? args.kod : safeKod)
   req.input("ReyonYolu",       sql.NVarChar, "C:\\PUSULA\\")
   req.input("Akod",            sql.NVarChar, "B")
   req.input("YedekAl",         sql.Bit,      args.yedekAl === false ? 0 : 1)

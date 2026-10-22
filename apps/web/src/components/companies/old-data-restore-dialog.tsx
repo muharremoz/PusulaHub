@@ -12,10 +12,12 @@ import { HardDriveDownload, Loader2, Check, XCircle, FolderOpen, RefreshCw, Aler
 import { Checkbox } from "@/components/shared/form"
 import { cn } from "@/lib/utils"
 import type { OldDataScanResponse } from "@/app/api/companies/[firkod]/sql/old-data/scan/route"
+import { KodHucresi, KodSiralaDugmesi, useKodCakismalari } from "@/components/shared/guvenlik-kod"
+import { kodDegeri, kodSirala } from "@/lib/guvenlik-kod"
 
 type Source = "depo" | "sql"
 
-interface ProgramOpt { id: number; name: string; programCode: string }
+interface ProgramOpt { id: number; name: string; programCode: string; /** exe pusulax.exe — resim yolu yalnız bunlara yazılır */ pusulaX: boolean }
 interface FileRow {
   fileName:     string
   databaseName: string
@@ -37,6 +39,8 @@ interface FileRow {
    * `sirket.guvenlik.YedekAl` 0 yazılır hem SQL Backup Master görevine eklenmez.
    */
   yedekAl:      boolean
+  /** guvenlik.KOD — boş = firma numarası (lib/guvenlik-kod.ts) */
+  kod:          string
 }
 interface Step { stepId: string; label: string; status: "running" | "done" | "error"; error?: string }
 
@@ -88,8 +92,9 @@ export function OldDataRestoreDialog({
       ])
       const progs: ProgramOpt[] = (Array.isArray(svcRes) ? svcRes : [])
         .filter((s: { type?: string }) => s.type === "pusula-program")
-        .map((s: { id: number; name: string; config?: { programCode?: string | null } }) => ({
+        .map((s: { id: number; name: string; config?: { programCode?: string | null; exeName?: string | null } }) => ({
           id: s.id, name: s.name, programCode: s.config?.programCode ?? "",
+          pusulaX: (s.config?.exeName ?? "").trim().toLowerCase() === "pusulax.exe",
         }))
         .filter((p: ProgramOpt) => p.programCode)
       setPrograms(progs)
@@ -106,7 +111,7 @@ export function OldDataRestoreDialog({
       setFiles(data.files.map((f) => ({
         fileName: f.fileName, databaseName: f.databaseName, fileSizeMB: f.fileSizeMB, date: f.date,
         kind: f.kind ?? "bak", ldfFileName: f.ldfFileName,
-        selected: false, programCode: progs.length === 1 ? progs[0].programCode : "", programId: progs.length === 1 ? progs[0].id : undefined, firmaOneki: true, yedekAl: true,
+        selected: false, programCode: progs.length === 1 ? progs[0].programCode : "", programId: progs.length === 1 ? progs[0].id : undefined, firmaOneki: true, yedekAl: true, kod: "",
       })))
       setPhase("select")
     } catch (e) {
@@ -130,6 +135,7 @@ export function OldDataRestoreDialog({
   }, [open])
 
   const selectedFiles = files.filter((f) => f.selected)
+  const kodCakismalari = useKodCakismalari(firkod, selectedFiles.map((f) => f.kod))
   const canRun =
     selectedFiles.length > 0 &&
     selectedFiles.every((f) => f.databaseName.trim() && (programs.length === 0 || f.programCode))
@@ -157,7 +163,8 @@ export function OldDataRestoreDialog({
           path: pathInput.trim(),
           files: selectedFiles.map((f) => ({
             fileName: f.fileName, databaseName: f.databaseName.trim(), programCode: f.programCode,
-            kind: f.kind, ldfFileName: f.ldfFileName, firmaOneki: f.firmaOneki, yedekAl: f.yedekAl,
+            kind: f.kind, ldfFileName: f.ldfFileName, firmaOneki: f.firmaOneki, yedekAl: f.yedekAl, kod: kodDegeri(f.kod, firkod),
+            pusulaX: programs.find((p) => p.id === f.programId)?.pusulaX ?? false,
           })),
         }),
       })
@@ -205,7 +212,7 @@ export function OldDataRestoreDialog({
   return (
     <Dialog open={open} onOpenChange={(o) => { if (phase !== "running") onOpenChange(o) }}>
       {/* Üste sabit (ortalı değil): tarama sonucu yükseklik değişince pencere zıplamasın */}
-      <DialogContent className="top-[8vh] translate-y-0 grid-cols-1 gap-0 p-0 sm:max-w-[760px]">
+      <DialogContent className="top-[8vh] translate-y-0 grid-cols-1 gap-0 p-0 sm:max-w-[860px]">
         <DialogHeader className="flex-row items-center gap-3 space-y-0 border-b bg-[var(--section-bg)] px-5 py-4">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <HardDriveDownload className="size-[18px]" />
@@ -286,6 +293,14 @@ export function OldDataRestoreDialog({
                 <div>
                   <div className="text-muted-foreground mb-1.5 flex items-center justify-between gap-2">
                     <span className="text-[10px] font-medium tracking-wider uppercase">Yedek dosyaları · {files.length}</span>
+                    <span className="flex items-center gap-3">
+                    {selectedFiles.length >= 2 && (
+                      <KodSiralaDugmesi onClick={() => setFiles((p) => {
+                        const kodlar = kodSirala(firkod, p.filter((x) => x.selected).length)
+                        let i = 0
+                        return p.map((x) => x.selected ? { ...x, kod: kodlar[i++] } : x)
+                      })} />
+                    )}
                     <button
                       type="button"
                       onClick={() => {
@@ -296,6 +311,7 @@ export function OldDataRestoreDialog({
                     >
                       {files.every((f) => f.selected) ? "Seçimi kaldır" : "Tümünü seç"}
                     </button>
+                    </span>
                   </div>
                   <div className="bg-card divide-y rounded-[5px] border">
                     {files.map((f) => {
@@ -361,6 +377,8 @@ export function OldDataRestoreDialog({
                                   ))}
                                 </SelectContent>
                               </Select>
+                              {/* guvenlik.KOD — boş = firma numarası */}
+                              <KodHucresi value={f.kod} onChange={(v) => updateFile(f.fileName, { kod: v })} firmaId={firkod} cakismalar={kodCakismalari} />
                               {/* Yedek görevi — veritabanı başına (eski yıl datası kapatılır) */}
                               <Tooltip>
                                 <TooltipTrigger asChild>

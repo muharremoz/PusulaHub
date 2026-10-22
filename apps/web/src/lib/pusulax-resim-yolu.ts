@@ -39,6 +39,22 @@ export async function yazPusulaXResimYolu(masterPool: sql.ConnectionPool, dbName
   return r.recordset[0]?.n ?? 0
 }
 
+/**
+ * Resim hizmeti (IIS RESIM sitesi) varsa entegrasyon adresi: `EntegrasyonResimYolu = http://<IIS DNS>:<port>/`,
+ * `ImagePort = <port>`. Biçim mevcut datalarla aynı (778: http://iis.databag.net:20002/ · 20002).
+ * Sütunu olmayan alan atlanır. Dönen değer: yazılan sütun sayısı (0 → Pusula X datası değil).
+ */
+export async function yazPusulaXEntegrasyon(masterPool: sql.ConnectionPool, dbName: string, host: string, port: number): Promise<number> {
+  const db = dbName.replace(/]/g, "]]")
+  const r = await masterPool.request().input("url", `http://${host}:${port}/`).input("port", port).query<{ n: number }>(
+    `DECLARE @n int = 0
+     IF COL_LENGTH(N'[${db}].dbo.Sabitler', N'EntegrasyonResimYolu') IS NOT NULL BEGIN UPDATE [${db}].dbo.Sabitler SET EntegrasyonResimYolu = @url; SET @n += 1 END
+     IF COL_LENGTH(N'[${db}].dbo.Sabitler', N'ImagePort') IS NOT NULL BEGIN UPDATE [${db}].dbo.Sabitler SET ImagePort = @port; SET @n += 1 END
+     SELECT @n AS n`,
+  )
+  return r.recordset[0]?.n ?? 0
+}
+
 /** Önceki yol bu Depo'yu gösteriyorsa (alt klasörlü olabilir: `\6796\TOPTAN\`) korunacak yol; değilse `null`. */
 export function depodakiYol(onceki: string | null, depoIp: string): string | null {
   const y = (onceki ?? "").trim()

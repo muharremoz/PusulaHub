@@ -22,10 +22,14 @@ import { BlurFade } from "@/components/magicui/blur-fade"
 const StepFirma    = dynamic(() => import("./step-firma").then((m) => m.StepFirma),       { ssr: false })
 const StepServices = dynamic(() => import("./step-services").then((m) => m.StepServices), { ssr: false })
 const StepSql      = dynamic(() => import("./step-sql").then((m) => m.StepSql),           { ssr: false })
+const StepApi      = dynamic(() => import("./step-api").then((m) => m.StepApi),           { ssr: false })
 const StepSummary  = dynamic(() => import("./step-summary").then((m) => m.StepSummary),   { ssr: false })
 const StepRun      = dynamic(() => import("./step-run").then((m) => m.StepRun),           { ssr: false })
 const Confetti     = dynamic(() => import("@/components/magicui/confetti").then((m) => m.Confetti), { ssr: false })
-import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play } from "lucide-react"
+import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play, Globe } from "lucide-react"
+import { apiAyarHatasi, varsayilanDbler, type ApiHizmetAyari, type VeriSecenegi } from "./step-api"
+import { kapsamdaMi } from "./step-services"
+import { kodDegeri, kodSirala } from "@/lib/guvenlik-kod"
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
 import { adSoyadTuret, kopyaKullaniciAdlari } from "@/lib/kullanici-ad-soyad"
@@ -40,8 +44,9 @@ const STEPS = [
   { label: "Sunucu",       hint: "Active Directory sunucusunu seçin",                          icon: Server },
   { label: "Firma",        hint: "Kurulacak firmayı ve Windows sunucusunu belirleyin",         icon: Building2 },
   { label: "Kullanıcılar", hint: "AD'ye eklenecek kullanıcıları tanımlayın",                  icon: Users },
-  { label: "Hizmetler",   hint: "Firmaya atanacak hizmetleri seçin",                          icon: Layers },
-  { label: "SQL",          hint: "Veritabanı sunucusu ve veri kaynağı yapılandırın (opsiyonel)", icon: Database },
+  { label: "Programlar",  hint: "Pusula programları, resim ve Pars",                          icon: Layers },
+  { label: "SQL",          hint: "Datalar, programları ve kodları (opsiyonel)",               icon: Database },
+  { label: "API hizmetleri", hint: "Data gerektiren hizmetler: data ve kullanıcılar",         icon: Globe },
   { label: "Özet",         hint: "Ayarları gözden geçirin",                                   icon: ClipboardList },
   { label: "Çalıştır",    hint: "Kurulumu başlatın ve ilerlemeyi takip edin",                 icon: Play },
 ]
@@ -181,7 +186,7 @@ export function WizardShell() {
   const [servicesError, setServicesError]       = useState<string | null>(null)
 
   useEffect(() => {
-    if (step !== 3) return
+    if (step !== 3 && step !== 5) return
     if (apiServices.length > 0) return
     setServicesLoading(true)
     setServicesError(null)
@@ -201,7 +206,7 @@ export function WizardShell() {
   const [iisServersError, setIisServersError]     = useState<string | null>(null)
 
   useEffect(() => {
-    if (step !== 3) return
+    if (step !== 3 && step !== 5) return
     if (apiIisServers.length > 0) return
     setIisServersLoading(true)
     setIisServersError(null)
@@ -303,6 +308,8 @@ export function WizardShell() {
   const [addToSirketDb, setAddToSirketDb] = useState(true)
   const [isScanning, setIsScanning] = useState(false)
   const [setupDone, setSetupDone] = useState(false)
+  /** API hizmeti başına data + elle girilen uygulama kullanıcıları (adım 5) */
+  const [apiAyarlari, setApiAyarlari] = useState<Record<number, ApiHizmetAyari>>({})
   const [showConfetti, setShowConfetti] = useState(false)
 
   // Pars (step 3 — Pars hizmeti seçildiğinde)
@@ -414,6 +421,23 @@ export function WizardShell() {
   const hasIisSelected = apiServices.some((s) => (s.type === "iis-site" || s.type === "iis-resim") && selectedServiceIds.includes(s.id))
   const hasPusulaSelected = apiServices.some((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))
   const hasResimSelected  = apiServices.some((s) => s.type === "iis-resim" && selectedServiceIds.includes(s.id))
+  const seciliApiHizmetleri = apiServices.filter((s) => kapsamdaMi(s.type, "api") && selectedServiceIds.includes(s.id))
+
+  // SQL adımında seçilen datalar (hedef DB adı, güncel mi, guvenlik kodu) — API adımı ve Çalıştır kullanır
+  const veriPrefix = addFirmaPrefix && firmaId ? `${firmaId}_` : ""
+  const veriler: (VeriSecenegi & { kod: number })[] = !selectedSqlServerId ? [] : sqlMode === 0
+    ? backupFiles.filter((f) => f.selected && f.databaseName.trim()).map((f) => ({
+        ad: `${veriPrefix}${f.databaseName.trim()}`, guncel: yedekAlVarsayilan(f.databaseName.trim()), kod: kodDegeri(f.kod, firmaId),
+      }))
+    : demoDatabases.filter((d) => selectedDemoDbIds.includes(d.id) && (d.dataName ?? d.name).trim()).map((d) => ({
+        ad: `${veriPrefix}${(d.dataName ?? d.name).trim()}`, guncel: true, kod: kodDegeri(null, firmaId),
+      }))
+  /** Hizmetin ayarı — dokunulmadıysa varsayılan (güncel data, kullanıcısız); SQL'de kaldırılan data düşer */
+  const apiAyari = (id: number): ApiHizmetAyari => {
+    const a = apiAyarlari[id] ?? { dbler: varsayilanDbler(veriler), kullanicilar: [] }
+    return { ...a, dbler: a.dbler.filter((d) => veriler.some((v) => v.ad === d)) }
+  }
+  const apiAdimiTamam = seciliApiHizmetleri.every((s) => !apiAyarHatasi(apiAyari(s.id), veriler.length > 0))
 
   const canProceed =
     step === 0 ? selectedServerId !== null :
@@ -424,10 +448,11 @@ export function WizardShell() {
                 && apiExistingUsers.length < (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0)
                 && selectedWindowsServerId !== null :
     step === 2 ? users.every((u) => u.username.trim() && !adKullaniciAdiHatasi(`${firmaId}.${u.username.trim()}`) && u.password.trim() && meetsAdComplexity(u.password)) :
-    step === 3 ? (!hasIisSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) && parsReady :
+    step === 3 ? (!hasResimSelected || selectedIisServerId !== null) && (!(hasPusulaSelected || hasResimSelected) || selectedDepoServerId !== null) && parsReady :
     // SQL sunucusu seçildiyse veri seçimi zorunlu — eskiden sessizce atlanıyordu
     step === 4 ? selectedSqlServerId === null
                 || (sqlMode === 0 ? backupFiles.some((f) => f.selected && f.databaseName.trim()) : selectedDemoDbIds.length > 0) :
+    step === 5 ? (!hasIisSelected || selectedIisServerId !== null) && apiAdimiTamam :
     true
 
   const go = (to: number) => {
@@ -471,8 +496,8 @@ export function WizardShell() {
 
   const toggleService = useCallback((id: number) =>
     setSelectedServiceIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]), [])
-  const toggleAllInCategory = useCallback((cat: string, sel: boolean) => {
-    const ids = apiServices.filter((s) => s.category === cat).map((s) => s.id)
+  const toggleAllInCategory = useCallback((cat: string, sel: boolean, kapsam?: "program" | "api") => {
+    const ids = apiServices.filter((s) => s.category === cat && kapsamdaMi(s.type, kapsam)).map((s) => s.id)
     setSelectedServiceIds((p) => sel ? [...new Set([...p, ...ids])] : p.filter((id) => !ids.includes(id)))
   }, [apiServices])
 
@@ -503,6 +528,14 @@ export function WizardShell() {
       : f))
   const toggleBackupYedek = (id: number) =>
     setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, yedekAl: !f.yedekAl, yedekAlElle: true } : f))
+  const updateBackupKod = (id: number, kod: string) =>
+    setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, kod } : f))
+  /** Seçili yedeklere tablo sırasıyla 4515, 45151, 45152… */
+  const siralaBackupKodlari = () => setBackupFiles((p) => {
+    const kodlar = kodSirala(firmaId, p.filter((f) => f.selected).length)
+    let i = 0
+    return p.map((f) => f.selected ? { ...f, kod: kodlar[i++] } : f)
+  })
   const updateBackupProgramServiceId = (id: number, serviceId: number | null) =>
     setBackupFiles((p) => p.map((f) => f.id === id ? { ...f, programServiceId: serviceId } : f))
   const toggleDemoDb = (id: number) =>
@@ -579,6 +612,7 @@ export function WizardShell() {
     setApiExistingUsers([]); setExistingUsersKey(null)
     setParsUsers([]); setParsReportIds([])
     setParsKatalog(null); setParsKatalogFor(null); setParsKatalogError(null)
+    setApiAyarlari({})
   }
 
   return (
@@ -704,7 +738,8 @@ export function WizardShell() {
                   error={servicesError}
                   selectedIds={selectedServiceIds}
                   onToggle={toggleService}
-                  onToggleAll={toggleAllInCategory}
+                  onToggleAll={(cat, sel) => toggleAllInCategory(cat, sel, "program")}
+                  kapsam="program"
                   iisServers={apiIisServers}
                   iisServersLoading={iisServersLoading}
                   iisServersError={iisServersError}
@@ -749,6 +784,8 @@ export function WizardShell() {
                   onUpdateBackupDatabaseName={updateBackupDatabaseName}
                   onUpdateBackupProgramServiceId={updateBackupProgramServiceId}
                   onToggleBackupYedek={toggleBackupYedek}
+                  onUpdateBackupKod={updateBackupKod}
+                  onSiralaBackupKodlari={siralaBackupKodlari}
                   selectedPusulaServices={apiServices.filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))}
                   onToggleDemoDb={toggleDemoDb}
                   onUpdateDemoDbDataName={updateDemoDbDataName}
@@ -757,6 +794,24 @@ export function WizardShell() {
                 />
               )}
               {step === 5 && (
+                <StepApi
+                  services={apiServices}
+                  loading={servicesLoading}
+                  error={servicesError}
+                  selectedIds={selectedServiceIds}
+                  onToggle={toggleService}
+                  onToggleAll={(cat, sel) => toggleAllInCategory(cat, sel, "api")}
+                  iisServers={apiIisServers}
+                  iisServersLoading={iisServersLoading}
+                  iisServersError={iisServersError}
+                  selectedIisServerId={selectedIisServerId}
+                  onSelectIisServer={setSelectedIisServerId}
+                  veriler={veriler}
+                  ayarlar={Object.fromEntries(seciliApiHizmetleri.map((s) => [s.id, apiAyari(s.id)]))}
+                  onAyar={(id, ayar) => setApiAyarlari((p) => ({ ...p, [id]: ayar }))}
+                />
+              )}
+              {step === 6 && (
                 <StepSummary
                   adServer={adServer} windowsServer={windowsServer} company={selectedCompany}
                   users={users} services={apiServices} selectedServiceIds={selectedServiceIds}
@@ -764,9 +819,11 @@ export function WizardShell() {
                   selectedDemoDbIds={selectedDemoDbIds} demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                   pars={parsService ? { serviceName: parsService.name, users: parsUsers, reportCount: parsReportIds.length, totalReports: parsKatalog?.scripts.length ?? 0 } : null}
+                  veriler={veriler}
+                  apiOzet={seciliApiHizmetleri.map((s) => ({ ad: s.name, ...apiAyari(s.id) }))}
                 />
               )}
-              {step === 6 && (
+              {step === 7 && (
                 <StepRun
                   serverId={selectedServerId ?? ""}
                   windowsServerId={selectedWindowsServerId ?? ""}
@@ -791,6 +848,8 @@ export function WizardShell() {
                   addFirmaPrefix={addFirmaPrefix}
                   addToSirketDb={addToSirketDb}
                   pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: parsReportIds, baglanti: parsKatalog?.baglanti ?? null } : null}
+                  kodlar={Object.fromEntries(veriler.map((v) => [v.ad, v.kod]))}
+                  apiAyarlari={Object.fromEntries(seciliApiHizmetleri.map((s) => [s.id, apiAyari(s.id)]))}
                   onComplete={() => setSetupDone(true)}
                   onReset={reset}
                   onConfetti={() => { setShowConfetti(true); setTimeout(() => setShowConfetti(false), 4000) }}
@@ -800,7 +859,7 @@ export function WizardShell() {
           </div>
 
           {/* Footer nav */}
-          {step < 6 && (
+          {step < 7 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-border/50"
               style={{ backgroundColor: "var(--section-bg)" }}>
               <button
@@ -816,7 +875,7 @@ export function WizardShell() {
                 {STEPS[step]?.hint}
               </p>
 
-              {step < 5 ? (
+              {step < 6 ? (
                 <button
                   onClick={() => go(step + 1)}
                   disabled={!canProceed}
@@ -827,7 +886,7 @@ export function WizardShell() {
                 </button>
               ) : (
                 <button
-                  onClick={() => go(6)}
+                  onClick={() => go(7)}
                   className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-[5px] bg-primary text-primary-foreground hover:bg-foreground/90 transition-colors"
                 >
                   <Sparkles className="size-3.5" />

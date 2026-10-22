@@ -17,6 +17,7 @@ import { Checkbox } from "@/components/shared/form"
 import { Input } from "@/components/ui/input"
 import { ListeKarti, ListeThead } from "@/components/shared/liste-karti"
 import { cn } from "@/lib/utils"
+import { KodHucresi, KodSiralaDugmesi, useKodCakismalari } from "@/components/shared/guvenlik-kod"
 
 interface Props {
   sqlServers: SqlServerItem[]
@@ -44,6 +45,10 @@ interface Props {
   onUpdateBackupProgramServiceId: (id: number, serviceId: number | null) => void
   /** Otomatik yedekleme kutusu (guvenlik.YedekAl) — eski yıl datasında varsayılan kapalı. */
   onToggleBackupYedek: (id: number) => void
+  /** guvenlik.KOD — boş = firma numarası. Bkz. lib/guvenlik-kod.ts */
+  onUpdateBackupKod: (id: number, kod: string) => void
+  /** Seçili yedeklere 4515, 45151, 45152… verir */
+  onSiralaBackupKodlari: () => void
   /** Sihirbazda 3. adımda seçili pusula-program servisleri (1 ise auto-assign, 2+ ise dropdown çıkar). */
   selectedPusulaServices: WizardServiceDto[]
   onToggleDemoDb: (id: number) => void
@@ -72,7 +77,7 @@ export function StepSql({
   selectedSqlServerId,
   sqlMode,
   backupFiles, backupFolderPath, demoDatabases, demoDatabasesLoading, demoDatabasesError,
-  onToggleBackupYedek,
+  onToggleBackupYedek, onUpdateBackupKod, onSiralaBackupKodlari,
   selectedDemoDbIds, addFirmaPrefix, addToSirketDb, firmaId, isScanning,
   onSelectSqlServer, onSetSqlMode, onToggleBackup,
   onSetBackupFolder, onScanBackups, onUpdateBackupDatabaseName,
@@ -86,6 +91,8 @@ export function StepSql({
   const seciliOzet = seciliSunucu
     ? `${seciliSunucu.ip}:${seciliSunucu.port} · ${seciliAdet > 0 ? `${seciliAdet} ${sqlMode === 0 ? "yedek" : "demo veritabanı"} seçili` : sqlMode === 0 ? "yedek dosyası seçin" : "demo veritabanı seçin"}`
     : ""
+  const seciliYedekler = backupFiles.filter((f) => f.selected)
+  const kodCakismalari = useKodCakismalari(firmaId, seciliYedekler.map((f) => f.kod ?? ""), selectedSqlServerId)
   const hasSelection =
     (sqlMode === 0 && backupFiles.some((f) => f.selected)) ||
     (sqlMode === 1 && selectedDemoDbIds.length > 0)
@@ -399,10 +406,13 @@ export function StepSql({
                   toplam={backupFiles.length}
                   filtreli={backupFiles.filter((f) => f.selected).length}
                   aksiyon={
-                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
-                      <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
-                      Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
-                    </label>
+                    <div className="flex items-center gap-3">
+                      {addToSirketDb && seciliYedekler.length >= 2 && <KodSiralaDugmesi onClick={onSiralaBackupKodlari} />}
+                      <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
+                        <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
+                        Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
+                      </label>
+                    </div>
                   }
                 >
                   <div className="overflow-x-auto">
@@ -411,6 +421,7 @@ export function StepSql({
                         <th className="w-10 px-4 py-1.5 text-left font-medium" />
                         <th className="px-4 py-1.5 text-left font-medium">Dosya</th>
                         <th className="px-4 py-1.5 text-left font-medium">Hedef veritabanı</th>
+                        {addToSirketDb && <th className="px-4 py-1.5 text-left font-medium" title="sirket.dbo.guvenlik · KOD — boşsa firma numarası">Kod</th>}
                         {showProgramColumn && <th className="px-4 py-1.5 text-left font-medium">Program</th>}
                         <th className="px-4 py-1.5 text-left font-medium" title="Otomatik yedeklemeye dahil et (sirket.dbo.guvenlik · YedekAl)">Yedek</th>
                         <th className="px-4 py-1.5 text-right font-medium">Boyut</th>
@@ -459,6 +470,14 @@ export function StepSql({
                                   />
                                 </div>
                               </td>
+                              {/* guvenlik.KOD — yalnız seçili satırda düzenlenir */}
+                              {addToSirketDb && (
+                                <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                  {f.selected
+                                    ? <KodHucresi value={f.kod ?? ""} onChange={(v) => onUpdateBackupKod(f.id, v)} firmaId={firmaId} cakismalar={kodCakismalari} />
+                                    : <span className="text-muted-foreground text-[12px]">—</span>}
+                                </td>
+                              )}
                               {/* Program seçimi — yalnız 2+ Pusula programı seçildiyse */}
                               {showProgramColumn && (
                                 <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>

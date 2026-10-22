@@ -35,7 +35,15 @@ interface Props {
 
   /** Pars paneli — yalnız Pars hizmeti seçiliyken dolu */
   pars?: ComponentProps<typeof StepServicesPars> | null
+
+  /** Hangi hizmetler listelenir: "program" = Pusula programı, Resim, Pars · "api" = data gerektiren IIS siteleri.
+   *  Sihirbazda Programlar SQL'den önce (data hangi programın), API hizmetleri SQL'den sonra (hangi data, hangi kullanıcı). */
+  kapsam?: "program" | "api"
 }
+
+/** Kapsama giren hizmet türü — API hizmeti = iis-site (Pusula MOBIL, RFID, Kivi…) */
+export const kapsamdaMi = (tip: string, kapsam: "program" | "api" | undefined) =>
+  !kapsam ? true : kapsam === "api" ? tip === "iis-site" : tip !== "iis-site"
 
 function getSourcePath(svc: WizardServiceDto): string {
   if (svc.config && "sourceFolderPath" in svc.config) return svc.config.sourceFolderPath
@@ -55,8 +63,12 @@ export function StepServices({
   selectedIisServerId, onSelectIisServer,
   depoServers, depoServersLoading, depoServersError,
   selectedDepoServerId, onSelectDepoServer,
-  pars,
+  pars, kapsam,
 }: Props) {
+  // Sunucu seçimini temizleme kararı TÜM seçimlere bakar (Resim için seçilen IIS sunucusu API adımında kaybolmasın);
+  // liste, özet ve seçiciler yalnız bu adımın kapsamındaki hizmetlere.
+  const tumHizmetler = services
+  services = services.filter((s) => kapsamdaMi(s.type, kapsam))
   const categories = [...new Set(services.map((s) => s.category))]
   const [activeTab, setActiveTab] = useState<string | undefined>(categories[0])
 
@@ -67,21 +79,24 @@ export function StepServices({
 
   const catItems = services.filter((s) => s.category === activeTab)
   const allSelected = catItems.length > 0 && catItems.every((s) => selectedIds.includes(s.id))
+  const kapsamSecili = services.filter((s) => selectedIds.includes(s.id)).length
 
   // Seçili hizmetler arasında IIS'te kurulan (iis-site / iis-resim) var mı?
   const hasIisSelected = services.some((s) => isIisType(s.type) && selectedIds.includes(s.id))
   // IIS picker'ı yalnız IIS'te kurulan bir hizmet seçiliyken göster (sekmeye geçmek yetmez)
   const showIisPicker = hasIisSelected
+  const herhangiIis = tumHizmetler.some((s) => isIisType(s.type) && selectedIds.includes(s.id))
+  const herhangiDepo = tumHizmetler.some((s) => (s.type === "pusula-program" || s.type === "iis-resim") && selectedIds.includes(s.id))
 
   // Pusula programı ya da Resim seçili mi? Seçiliyse depo sunucusu istenir
   // (Resim: yayınlanan paylaşım Depo'da, Connect as kimliği de oradan).
   const hasPusulaSelected = services.some((s) => s.type === "pusula-program" && selectedIds.includes(s.id))
   const hasResimSelected  = services.some((s) => s.type === "iis-resim" && selectedIds.includes(s.id))
-  const showDepoPicker = hasPusulaSelected || hasResimSelected
+  const showDepoPicker = kapsam !== "api" && (hasPusulaSelected || hasResimSelected)
 
   // Seçici gizlenince (ilgili hizmet bırakıldı) seçili sunucu da bırakılır — kurulum ona iş göndermesin
-  useEffect(() => { if (!showIisPicker && selectedIisServerId) onSelectIisServer(null) }, [showIisPicker, selectedIisServerId, onSelectIisServer])
-  useEffect(() => { if (!showDepoPicker && selectedDepoServerId) onSelectDepoServer(null) }, [showDepoPicker, selectedDepoServerId, onSelectDepoServer])
+  useEffect(() => { if (!herhangiIis && selectedIisServerId) onSelectIisServer(null) }, [herhangiIis, selectedIisServerId, onSelectIisServer])
+  useEffect(() => { if (!herhangiDepo && selectedDepoServerId) onSelectDepoServer(null) }, [herhangiDepo, selectedDepoServerId, onSelectDepoServer])
 
   if (loading) {
     return (
@@ -122,6 +137,15 @@ export function StepServices({
     )
   }
 
+  if (services.length === 0 && kapsam === "api") {
+    return (
+      <div className="flex flex-col items-center justify-center py-10 text-center">
+        <p className="text-[12px] font-medium text-foreground">Tanımlı API hizmeti yok</p>
+        <p className="text-[11px] text-muted-foreground mt-1">Bu adımı atlayıp devam edebilirsiniz.</p>
+      </div>
+    )
+  }
+
   if (services.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -143,10 +167,10 @@ export function StepServices({
         </span>
         <div className="min-w-0">
           <p className="text-[13px] font-semibold">
-            {selectedIds.length > 0 ? `${selectedIds.length} hizmet seçildi` : "Firmaya atanacak hizmetleri seçin"}
+            {kapsamSecili > 0 ? `${kapsamSecili} ${kapsam === "api" ? "API hizmeti" : "hizmet"} seçildi` : kapsam === "api" ? "Data gerektiren API hizmetlerini seçin" : "Firmaya atanacak hizmetleri seçin"}
           </p>
           <p className="truncate text-[11px] text-muted-foreground">
-            {selectedIds.length > 0
+            {kapsamSecili > 0
               ? categories.map((cat) => {
                   const n = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
                   return n > 0 ? `${cat}: ${n}` : null

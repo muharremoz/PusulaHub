@@ -59,6 +59,10 @@ interface FileReq {
   ldfFileName?: string
   /** Bu veritabanı yedeklensin mi (guvenlik.YedekAl + SQL Backup Master). Yoksa gövdedeki yedekAl. */
   yedekAl?:     boolean
+  /** guvenlik.KOD — verilmezse firma numarası (lib/guvenlik-kod.ts) */
+  kod?:         number
+  /** Seçilen program Pusula X mi (exe pusulax.exe) — resim yolu yalnız bunlara yazılır; Perakende de 909 */
+  pusulaX?:     boolean
 }
 
 interface AgentInfo { ip: string; port: number; apiKey: string }
@@ -344,7 +348,7 @@ export async function POST(
                   await withSqlConnection(
                     sirketCfg,
                     async (sirketPool) => {
-                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl: f.yedekAl ?? yedekAl })
+                      await insertGuvenlikRow(sirketPool, { dbName: targetDb, srkAdi: f.databaseName, firmaId: firkod, programCode: f.programCode || "", yedekAl: f.yedekAl ?? yedekAl, kod: Number.isInteger(f.kod) && f.kod! > 0 ? f.kod : undefined })
                     },
                   )
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklendi: ${targetDb}`, "done")
@@ -355,8 +359,8 @@ export async function POST(
               }
 
               // 6) Pusula X resim yolu — yedekteki (şablon/eski sunucu) yol yerine firmanın Depo klasörü.
-              //    Pusula X datası değilse (Sabitler.ImagePath yok) sessizce atlanır.
-              try {
+              //    Yalnız Pusula X programı seçilen datada; Sabitler.ImagePath yoksa sessizce atlanır.
+              if (f.pusulaX) try {
                 if ((await okuPusulaXResimYolu(masterPool, targetDb)) !== null) {
                   if (!depo) {
                     step(`resimyolu_${targetDb}`, `Pusula X resim yolu yazılamadı: ${targetDb}`, "error", { error: "Firmaya tanımlı Depo sunucusu yok — ImagePath elle düzeltilmeli." })

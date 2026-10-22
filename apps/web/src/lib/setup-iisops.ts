@@ -134,6 +134,8 @@ export function buildPatchUsersXml(opts: {
   dbNames:    string[]
   /** true → <User> satırları korunur, yalnız her birinin ve <DB>'nin DB listesi yazılır (Kivi) */
   keepUsers?: boolean
+  /** true → kullanıcı listesi boşsa da yazılır: şablon kullanıcıları silinir, yalnız <DB> kalır (sihirbaz API adımı) */
+  bosKullaniciIzinli?: boolean
 }): string {
   const f = psQuote(opts.configPath)
   if (opts.keepUsers && opts.dbNames.length > 0) {
@@ -153,7 +155,7 @@ export function buildPatchUsersXml(opts: {
       `Write-Output ('UPDATED (kullanicilar korundu) users=' + @($root.SelectNodes('User')).Count + ' dbs=' + $dbs.Count)`,
     ].join("; ")
   }
-  if (opts.users.length === 0 || opts.dbNames.length === 0) {
+  if (opts.dbNames.length === 0 || (opts.users.length === 0 && !opts.bosKullaniciIzinli)) {
     return [
       `$f='${f}'`,
       `if(-not (Test-Path -LiteralPath $f)){Write-Output 'SKIP_NO_FILE'; return}`,
