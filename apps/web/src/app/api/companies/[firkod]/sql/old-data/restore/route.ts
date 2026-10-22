@@ -21,8 +21,8 @@
  * kopyalama adımı atlanır ve — önemlisi — kaynak dosya SİLİNMEZ (kullanıcının
  * kendi şablon/yedek dosyası olabilir).
  *
- * Firma SQL login'i zaten sihirbazda oluşturulmuş olmalı; burada yeniden
- * oluşturulmaz, sadece owner/erişim için kullanılır.
+ * Firma SQL login'i yoksa sihirbazdaki gibi 1. kullanıcıdan ({firma}.{kullanıcı},
+ * kullanıcının şifresiyle) oluşturulur; varsa yeniden oluşturulmaz, owner/erişim için kullanılır.
  */
 
 import { NextRequest } from "next/server"
@@ -34,8 +34,9 @@ import { execOnAgent } from "@/lib/agent-poller"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
 import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
-import { setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
-import { sqlLoginArama } from "@/lib/firma-adlandirma"
+import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
+import { sqlLoginAdi, sqlLoginArama } from "@/lib/firma-adlandirma"
+import { saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
 import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
@@ -122,6 +123,14 @@ export async function POST(
   // Hub'ın kendi DB'sinde değil firma SQL sunucusunda olmalı; aşağıda canlı bağlantıda
   // tekrar sorgulanır). loginRows fallback için tutuldu ama güvenilir kaynak canlı.
 
+  /*  Firma SQL girişi yoksa sihirbazdaki gibi 1. kullanıcıdan oluşturulur (22.10.2026, 4397).
+   *  1. kullanıcı = Hub'da şifresi kayıtlı en eski kimlik satırı (sihirbaz kullanıcıları sırayla yazar). */
+  const { data: kimlikRows } = await sb.schema("hub").from("company_user_credentials")
+    .select("username, password").eq("company_id", firkod).not("password", "is", null)
+    .order("created_at", { ascending: true }).order("username", { ascending: true }).limit(1)
+  const ilkKullanici = (kimlikRows as { username: string; password: string | null }[] | null)?.[0]
+  const ilkSifre = ilkKullanici?.password ? decrypt(ilkKullanici.password) : null
+
   const localDir = `${firmaDataDir(firkod)}\\_eskidata`
 
   const encoder = new TextEncoder()
@@ -149,12 +158,26 @@ export async function POST(
               .query<{ name: string }>(`SELECT TOP 1 name FROM sys.sql_logins WHERE name LIKE @p ORDER BY LEN(name)`)
             firmaLogin = lg.recordset[0]?.name ?? null
 
-            if (!firmaLogin) {
-              // Login yoksa restore'u İPTAL ETME — DB'ler yine yüklensin, sadece
-              // owner/sirket adımları atlanır (uyarı). Login sonradan oluşturulup
-              // owner manuel atanabilir. (Örn. sihirbazı SQL adımında yarıda kalan firma.)
-              step("login_check", `Firma SQL login'i (${firkod}.* / ${firkod}_*) bulunamadı — DB owner/sirket adımları atlanacak`, "error", {
-                error: "DB'ler restore edilecek ama owner firma login'ine devredilmeyecek. Login'i sihirbaz kullanıcı akışından veya manuel oluşturup owner'ı atayın.",
+            if (!firmaLogin && ilkKullanici && ilkSifre) {
+              // Sihirbazın SQL kullanıcı adımı: CREATE LOGIN {firma}.{kullanıcı} → Hub'a SQL şifresi → DENY VIEW ANY DATABASE
+              const yeniLogin = sqlLoginAdi(firkod, ilkKullanici.username)
+              step("login_check", `Firma SQL login'i oluşturuluyor: ${yeniLogin} (1. kullanıcı)`, "running")
+              try {
+                await ensureSqlLogin(masterPool, yeniLogin, ilkSifre)
+                await saveCompanyUserSqlPassword(firkod, ilkKullanici.username, ilkSifre, yeniLogin)
+                await denyViewAnyDatabase(masterPool, yeniLogin)
+                firmaLogin = yeniLogin
+                step("login_check", `Firma SQL login'i oluşturuldu: ${yeniLogin}`, "done")
+              } catch (err) {
+                step("login_check", `Firma SQL login'i oluşturulamadı: ${yeniLogin}`, "error", {
+                  error: `${err instanceof Error ? err.message : String(err)} — DB'ler yine yüklenecek, owner/sirket adımları atlanacak.`,
+                })
+              }
+            } else if (!firmaLogin) {
+              // Login yok ve oluşturulamıyor (şifresi kayıtlı kullanıcı yok) — restore'u İPTAL ETME, DB'ler yine yüklensin,
+              // sadece owner/sirket adımları atlanır.
+              step("login_check", `Firma SQL login'i (${firkod}.* / ${firkod}_*) yok ve oluşturulamadı — DB owner/sirket adımları atlanacak`, "error", {
+                error: "Hub'da şifresi kayıtlı kullanıcı yok. Firma kullanıcısını sihirbazdan oluşturun ya da SQL login'i elle açıp owner'ı atayın.",
               })
             } else {
               step("login_check", `Firma SQL login'i: ${firmaLogin}`, "done")
