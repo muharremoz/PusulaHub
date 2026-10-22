@@ -27,7 +27,7 @@
 
 import { NextRequest } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
-import { serverAgentById } from "@/lib/hub-servers"
+import { serverAgentById, serversWithRole } from "@/lib/hub-servers"
 import { decrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
 import { execOnAgent } from "@/lib/agent-poller"
@@ -38,7 +38,7 @@ import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } fr
 import { sqlLoginAdi, sqlLoginArama } from "@/lib/firma-adlandirma"
 import { saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
-import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
+import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu, yazPusulaXEntegrasyon } from "@/lib/pusulax-resim-yolu"
 import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import {
   buildPullBakFromDepo,
@@ -134,6 +134,16 @@ export async function POST(
     .order("created_at", { ascending: true }).order("username", { ascending: true }).limit(1)
   const ilkKullanici = (kimlikRows as { username: string; password: string | null }[] | null)?.[0]
   const ilkSifre = ilkKullanici?.password ? decrypt(ilkKullanici.password) : null
+
+  /*  Pusula X entegrasyon adresi — firmanın RESIM sitesi varsa (sihirbazdaki gibi):
+   *  EntegrasyonResimYolu = http://<IIS DNS>:<port>/, ImagePort = port. Port sihirbazın
+   *  port kaydından ({firma}_RESIM); site hangi IIS'te tutulmadığı için tek IIS sunucusu
+   *  varsa o kullanılır, birden fazlaysa adres belirsiz — yazılmaz, adım söyler. */
+  const { data: resimKayit } = await sb.schema("hub").from("wizard_port_assignments")
+    .select("port").eq("company_id", firkod).eq("site_name", `${firkod}_RESIM`).limit(1).maybeSingle()
+  const resimPortu = (resimKayit as { port: number | null } | null)?.port ?? null
+  const iisSunuculari = resimPortu ? (await serversWithRole("IIS", "ip, dns")) as { ip: string; dns: string | null }[] : []
+  const iisAdres = iisSunuculari.length === 1 ? (iisSunuculari[0].dns?.trim() || iisSunuculari[0].ip) : null
 
   const localDir = `${firmaDataDir(firkod)}\\_eskidata`
 
@@ -368,6 +378,14 @@ export async function POST(
                     const yol = pusulaXResimYolu(depo.ip, firkod)
                     await yazPusulaXResimYolu(masterPool, targetDb, yol)
                     step(`resimyolu_${targetDb}`, `Pusula X resim yolu: ${yol}`, "done")
+                  }
+                  if (resimPortu && iisAdres) {
+                    await yazPusulaXEntegrasyon(masterPool, targetDb, iisAdres, resimPortu)
+                    step(`resimentegrasyon_${targetDb}`, `Pusula X entegrasyon: http://${iisAdres}:${resimPortu}/ · ImagePort ${resimPortu}`, "done")
+                  } else if (resimPortu) {
+                    step(`resimentegrasyon_${targetDb}`, `Pusula X entegrasyon yazılamadı: ${targetDb}`, "error", {
+                      error: `RESIM sitesi portu ${resimPortu} ama IIS sunucusu belirsiz (${iisSunuculari.length} IIS sunucusu) — EntegrasyonResimYolu/ImagePort elle yazılmalı.`,
+                    })
                   }
                 }
               } catch (err) {
