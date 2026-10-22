@@ -4,6 +4,7 @@ import { serverAgentById, sqlServerById, serversWithRole } from "@/lib/hub-serve
 import { execOnAgent, pollSingleAgent, refreshCompanyStats } from "@/lib/agent-poller"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
+import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
 import { restoreBackupOnServer, attachDatabaseOnServer, firmaDataDir } from "@/lib/sql-restore"
 import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
@@ -1701,6 +1702,24 @@ export async function POST(req: NextRequest) {
         // (önce Pusula MOBIL) okunup yazılır. Kritik değil: kaynak yoksa adım
         // kırmızı kalır, elle düzeltilir.
         if (iisAgent) {
+          // Firmanın SQL'de {firmaId}_ önekli veritabanı var mı — yalnız kaynak bulunamazsa, bir kez sorulur.
+          // null → kontrol edilemedi (SQL hedefi yok / bağlantı hatası).
+          let dataVar: boolean | null | undefined
+          const firmaSqlDataVarMi = async (): Promise<boolean | null> => {
+            if (dataVar !== undefined) return dataVar
+            try {
+              const hedef = await resolveFirmaSqlTarget(payload.firmaId)
+              if (!hedef) return (dataVar = null)
+              const n = await withSqlConnection(
+                { server: hedef.ip, user: hedef.username, password: hedef.password, database: "master", requestTimeout: 30000 },
+                async (pool) => (await pool.request().input("p", `${payload.firmaId}[_]%`)
+                  .query<{ n: number }>("SELECT COUNT(*) AS n FROM sys.databases WHERE name LIKE @p")).recordset[0]?.n ?? 0,
+              )
+              return (dataVar = n > 0)
+            } catch {
+              return (dataVar = null)
+            }
+          }
           const kurulanYollar = installedIisServices.map((s) => s.destPath)
           for (const svc of installedIisServices) {
             if (svc.webSql && svc.usersXml) continue
@@ -1729,6 +1748,16 @@ export async function POST(req: NextRequest) {
             if (/WEB:NONE/.test(out)) eksik.push("Web.config bağlantı dizesi")
             if (/XML:NONE/.test(out)) eksik.push("Users.xml DB listesi")
             if (eksik.length) {
+              // Firmanın SQL'de hiç datası yoksa yazılacak değer de yok: hata değil uyarı (4397, 22.10.2026).
+              // Data varsa (ya da kontrol edilemediyse) değerler kopyalanamamış demektir — hata kalır.
+              if ((await firmaSqlDataVarMi()) === false) {
+                send("step", {
+                  stepId, label, status: "warning",
+                  error: `Firmanın SQL'de datası yok — Web.config ve Users.xml şablon değerinde kaldı. ` +
+                    `Firma detayından veritabanı ekleyip ayarları sonra yazın (${svc.destPath}).`,
+                })
+                continue
+              }
               send("step", {
                 stepId, label, status: "error",
                 error: `Kaynak hizmet bulunamadı — ${eksik.join(" ve ")} şablon değerinde kaldı, elle düzeltin ` +

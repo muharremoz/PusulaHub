@@ -11,7 +11,8 @@ import type { ServiceType, ServiceConfig } from "@/app/api/services/route"
  * ile kullanıcı listesi adımında kullanılır.
  */
 
-export type ProvisionStatus = "pending" | "running" | "done" | "error"
+/** warning: adım bitti ama elle bakılacak bir şey kaldı — kurulumu durdurmaz, ilerlemede tamam sayılır. */
+export type ProvisionStatus = "pending" | "running" | "done" | "warning" | "error"
 
 export interface ProvisionStep {
   stepId: string
@@ -147,7 +148,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
     desktopStepCount +
     sqlStepCount +
     parsStepCount
-  const doneCount = steps.filter((s) => s.status === "done").length
+  const doneCount = steps.filter((s) => s.status === "done" || s.status === "warning").length
   const errorStep = steps.find((s) => s.status === "error")
   const progress  = Math.min(100, Math.round((doneCount / totalEstimated) * 100))
   const isRunning = !completed && !fatalError && !errorStep
@@ -284,7 +285,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   }
   const gruplar = GRUPLAR.map((g) => {
     const adimlar = steps.filter((s) => grupBul(s.stepId) === g.key)
-    const bitti   = adimlar.filter((s) => s.status === "done").length
+    const bitti   = adimlar.filter((s) => s.status === "done" || s.status === "warning").length
     const durum: ProvisionStatus =
       adimlar.some((s) => s.status === "error")   ? "error"
       : adimlar.some((s) => s.status === "running") ? "running"
@@ -414,11 +415,15 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
                               step.status === "done"    && "text-muted-foreground",
                               step.status === "pending" && "text-muted-foreground/60",
                               step.status === "error"   && "font-medium text-red-700 dark:text-red-400",
+                              step.status === "warning" && "font-medium text-amber-700 dark:text-amber-400",
                             )}>
                               {step.label}
                             </p>
                             {step.error && (
-                              <p className="mt-1 whitespace-pre-wrap break-all rounded-[5px] bg-red-500/15 px-2 py-1.5 text-[12px] text-red-700 dark:text-red-400">
+                              <p className={cn(
+                                "mt-1 whitespace-pre-wrap break-all rounded-[5px] px-2 py-1.5 text-[12px]",
+                                step.status === "warning" ? "bg-amber-500/15 text-amber-800 dark:text-amber-400" : "bg-red-500/15 text-red-700 dark:text-red-400",
+                              )}>
                                 {step.error}
                               </p>
                             )}
@@ -472,5 +477,6 @@ function DurumIkon({ durum, kucuk }: { durum: ProvisionStatus; kucuk?: boolean }
   )
   if (durum === "running") return <Loader2 className={cn(boyut, "shrink-0 animate-spin text-foreground")} />
   if (durum === "error")   return <XCircle className={cn(boyut, "shrink-0 text-red-600 dark:text-red-400")} />
+  if (durum === "warning") return <AlertTriangle className={cn(boyut, "shrink-0 text-amber-600 dark:text-amber-400")} />
   return <span className={cn(boyut, "block shrink-0 rounded-full border-2 border-border")} />
 }
