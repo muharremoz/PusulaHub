@@ -242,6 +242,11 @@ const SURELER = [
 ] as const
 
 type HedefTur = "hepsi" | "firma" | "kullanici"
+const HEDEFLER: { tur: HedefTur; ad: string }[] = [
+  { tur: "hepsi", ad: "Tüm müşteriler" },
+  { tur: "firma", ad: "Bir firma" },
+  { tur: "kullanici", ad: "Bir kullanıcı" },
+]
 
 function YeniDuyuru({
   acik, cihazlar, onKapat, onYayinlandi,
@@ -321,11 +326,13 @@ function YeniDuyuru({
     }
   }
 
-  // MODAL (07.10.2026, kullanıcı kararı): cihaz detay modalıyla aynı kimlik — gri başlık şeridi + ikon kutusu,
-  // başlıklı bölümler (İçerik / Hedef), alt şeritte düğmeler.
+  const sure = SURELER.find((s) => s.gun === gun)?.ad ?? ""
+  const firmaAdi = firmalar.find((f) => f.id === firmaId)?.ad
+
+  // MODAL (22.10.2026, kullanıcı kararı): solda gönderim seçenekleri (tür, önem, kime, süre), sağda içerik.
   return (
     <Dialog open={acik} onOpenChange={(o) => !o && onKapat()}>
-      <DialogContent className="flex max-h-[88vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(980px,94vw)]">
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(980px,94vw)]">
         <div className="flex items-center gap-3 border-b bg-[var(--section-bg)] p-4 pr-12">
           <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
             <Megaphone className="size-[18px]" />
@@ -336,51 +343,51 @@ function YeniDuyuru({
           </div>
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <ModalBolumu baslik="İçerik">
-            <Field label="Başlık" required hint={`${baslik.length}/120`}>
-              <Input value={baslik} maxLength={120} placeholder="Ör. Bu gece 02:00–03:00 arası bakım" onChange={(e) => setBaslik(e.target.value)} />
-            </Field>
-            <Field label="Metin" required>
-              <Textarea rows={anketAcik ? 4 : 10} className="resize-none" value={metin} maxLength={4000} placeholder={anketAcik ? "Anketin amacını kısaca yazın." : "Müşterinin ne yapması gerektiğini de yazın."} onChange={(e) => setMetin(e.target.value)} />
-            </Field>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-foreground/80 text-[12px] font-medium">Anket</span>
-                <Button
-                  variant={anketAcik ? "outline" : "ghost"} size="sm"
-                  className="h-7 gap-1.5 rounded-[5px] px-2 text-[12px]"
-                  onClick={() => { if (anketAcik) { setAnketAcik(false); setSorular([]) } else { setAnketAcik(true); setSorular([yeniSoru(1)]) } }}
-                >
-                  <ClipboardList className="size-3.5" /> {anketAcik ? "Anketi kaldır" : "Anket ekle"}
-                </Button>
-              </div>
-              {anketAcik
-                ? <AnketOlusturucu sorular={sorular} onChange={setSorular} />
-                : <p className="text-muted-foreground text-[12px]">İsterseniz soru ekleyip yanıtları toplayabilirsiniz. Uygulamanın eski sürümünde anket düz duyuru olarak görünür.</p>}
-            </div>
-          </ModalBolumu>
-          <ModalBolumu baslik="Hedef ve süre">
-            <Field label="Önem" hint={onem === "bilgi" ? "Yenilik, hatırlatma." : onem === "uyari" ? "Planlı bakım, kısa kesinti." : "Kesinti ya da hemen yapılması gereken bir şey."}>
-              <ToggleGroup type="single" value={onem} onValueChange={(v) => v && setOnem(v as ConnectDuyuruOnem)} variant="outline" size="sm" className="justify-start">
-                {ONEMLER.map((o) => (
-                  <ToggleGroupItem key={o} value={o} className="h-8 gap-1.5 px-3 text-[12px]">{ONEM[o].ikon}{ONEM[o].ad}</ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            </Field>
-            <Field label="Kime" hint={hedefTamam ? `${hedefCihaz} kayıtlı cihaz` : undefined}>
+        <div className="grid min-h-0 flex-1 md:grid-cols-[280px_minmax(0,1fr)]">
+          {/* ── Sol: gönderim seçenekleri ── */}
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto border-b p-5 md:border-r md:border-b-0">
+            <BolumBasligi>Gönderim</BolumBasligi>
+            <Field label="Tür">
               <ToggleGroup
                 type="single"
-                value={hedefTur}
-                onValueChange={(v) => { if (!v) return; setHedefTur(v as HedefTur); if (v === "hepsi") { setFirmaId(""); setKullanici("") } }}
+                value={anketAcik ? "anket" : "mesaj"}
+                onValueChange={(v) => {
+                  if (!v) return
+                  if (v === "anket") { setAnketAcik(true); setSorular((q) => (q.length ? q : [yeniSoru(1)])) }
+                  else { setAnketAcik(false) }
+                }}
                 variant="outline"
-                size="sm"
-                className="justify-start"
+                className="w-full"
               >
-                <ToggleGroupItem value="hepsi" className="h-8 px-3 text-[12px]">Tüm müşteriler</ToggleGroupItem>
-                <ToggleGroupItem value="firma" className="h-8 px-3 text-[12px]">Bir firma</ToggleGroupItem>
-                <ToggleGroupItem value="kullanici" className="h-8 px-3 text-[12px]">Bir kullanıcı</ToggleGroupItem>
+                <ToggleGroupItem value="mesaj" className="h-8 flex-1 gap-1.5 text-[13px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                  <Megaphone className="size-3.5" />Mesaj
+                </ToggleGroupItem>
+                <ToggleGroupItem value="anket" className="h-8 flex-1 gap-1.5 text-[13px] data-[state=on]:bg-primary data-[state=on]:text-primary-foreground">
+                  <ClipboardList className="size-3.5" />Anket
+                </ToggleGroupItem>
               </ToggleGroup>
+            </Field>
+            <Field label="Önem">
+              <Combobox
+                items={ONEMLER}
+                getKey={(o) => o}
+                getLabel={(o) => ONEM[o].ad}
+                renderItem={(o) => <OnemSecenegi onem={o} />}
+                renderValue={(o) => <OnemSecenegi onem={o} />}
+                value={onem}
+                onChange={(v) => v && setOnem(v as ConnectDuyuruOnem)}
+                searchPlaceholder="Ara…"
+              />
+            </Field>
+            <Field label="Kime">
+              <Combobox
+                items={HEDEFLER}
+                getKey={(h) => h.tur}
+                getLabel={(h) => h.ad}
+                value={hedefTur}
+                onChange={(v) => { if (!v) return; setHedefTur(v as HedefTur); if (v === "hepsi") { setFirmaId(""); setKullanici("") } }}
+                searchPlaceholder="Ara…"
+              />
             </Field>
             {hedefTur !== "hepsi" && (
               <Field label="Firma" required>
@@ -425,23 +432,66 @@ function YeniDuyuru({
                 />
               </Field>
             )}
-            <Field label="Yayında kalma süresi" hint="Süre bitince uygulamalardan kendiliğinden kalkar.">
-              <ToggleGroup type="single" value={gun} onValueChange={(v) => v && setGun(v)} variant="outline" size="sm" className="justify-start">
-                {SURELER.map((s) => <ToggleGroupItem key={s.gun} value={s.gun} className="h-8 px-3 text-[12px]">{s.ad}</ToggleGroupItem>)}
-              </ToggleGroup>
+            <Field label="Yayında kalma süresi">
+              <Combobox
+                items={SURELER}
+                getKey={(s) => s.gun}
+                getLabel={(s) => s.ad}
+                value={gun}
+                onChange={(v) => v && setGun(v)}
+                searchPlaceholder="Ara…"
+              />
             </Field>
-          </ModalBolumu>
+          </div>
+
+          {/* ── Orta: içerik ── */}
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto p-5">
+            <BolumBasligi>{anketAcik ? "Anket" : "Mesaj"}</BolumBasligi>
+            <Field label="Başlık" required ek={<span className="text-muted-foreground text-[11px] tabular-nums">{baslik.length}/120</span>}>
+              <Input value={baslik} maxLength={120} placeholder="Ör. Bu gece 02:00–03:00 arası bakım" onChange={(e) => setBaslik(e.target.value)} />
+            </Field>
+            <Field label="Metin" required>
+              <Textarea rows={anketAcik ? 3 : 8} className={cn("resize-none", anketAcik ? "min-h-20" : "min-h-48")} value={metin} maxLength={4000} placeholder={anketAcik ? "Anketin amacını kısaca yazın." : "Müşterinin ne yapması gerektiğini de yazın."} onChange={(e) => setMetin(e.target.value)} />
+            </Field>
+            {anketAcik && (
+              <Field label="Sorular" required ek={<span className="text-muted-foreground text-[11px]">Eski sürümde düz mesaj olarak görünür</span>}>
+                <AnketOlusturucu sorular={sorular} onChange={setSorular} />
+              </Field>
+            )}
+          </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t bg-[var(--section-bg)] px-4 py-3">
+        <div className="flex items-center gap-3 border-t bg-[var(--section-bg)] px-4 py-3">
+          <div className="text-muted-foreground min-w-0 flex-1 truncate text-[12px]">
+            {hedefTamam ? (
+              <>
+                <span className="text-foreground font-medium tabular-nums">{hedefCihaz} cihaz</span>
+                {" · "}
+                {hedefTur === "hepsi" ? "Tüm müşteriler" : `${firmaId} ${firmaAdi ?? ""}`.trim() + (hedefTur === "kullanici" && kullanici ? ` · ${kullanici}` : "")}
+                {" · "}
+                {gun === "0" ? "Süresiz" : `${sure} yayında`}
+              </>
+            ) : hedefTur === "firma" ? "Firma seçin" : "Firma ve kullanıcı seçin"}
+          </div>
           <Button variant="outline" onClick={onKapat}>İptal</Button>
           <Button disabled={!gecerli || gonderiliyor} onClick={() => void yayinla()}>
-            <Megaphone className="size-4" />{gonderiliyor ? "Yayınlanıyor…" : "Yayınla"}
+            <Megaphone className="size-4" />{gonderiliyor ? "Yayınlanıyor…" : anketAcik ? "Anketi yayınla" : "Yayınla"}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Sütun başlığı — üç bölümde aynı. */
+function BolumBasligi({ children }: { children: React.ReactNode }) {
+  return <div className="text-muted-foreground inline-flex items-center gap-1.5 text-[10px] font-medium tracking-wider uppercase">{children}</div>
+}
+
+/** Önem seçeneği: ikon önemin renginde. */
+function OnemSecenegi({ onem }: { onem: ConnectDuyuruOnem }) {
+  const renk = { bilgi: "text-sky-600 dark:text-sky-400", uyari: "text-amber-600 dark:text-amber-400", kritik: "text-red-600 dark:text-red-400" }[onem]
+  return <span className="inline-flex items-center gap-1.5"><span className={cn("[&_svg]:size-3.5", renk)}>{ONEM[onem].ikon}</span>{ONEM[onem].ad}</span>
 }
 
 /** Modal bölümü — cihaz modalındaki "Bağlantı / Cihaz" bölümleriyle aynı görünüm. */
