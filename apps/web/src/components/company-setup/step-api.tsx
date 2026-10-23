@@ -97,47 +97,41 @@ export function StepApi({ veriler, ayarlar, onAyar, ...svc }: ServicesProps & {
                 />
               </Field>
 
-              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-foreground/80 text-[12px] font-medium">Uygulama kullanıcıları</span>
-                  <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 rounded-[5px] px-2 text-[12px]"
-                    onClick={() => set({ kullanicilar: [...a.kullanicilar, yeniApiKullanici()] })}>
-                    <Plus className="size-3.5" />Kullanıcı ekle
-                  </Button>
-                </div>
-                {a.kullanicilar.length === 0 ? (
-                  <p className="text-muted-foreground rounded-[5px] border border-dashed px-3 py-2.5 text-[12px]">
-                    Kullanıcı yok. Uygulamada giriş yapacak kişileri (ali, veli…) ekleyin; RDP kullanıcıları buraya gelmez.
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-1.5">
-                    {a.kullanicilar.map((k) => {
-                      const h = apiKimlikAlanHatalari(k.username, k.password)
-                      const guncelle = (p: Partial<ApiKullanici>) =>
-                        set({ kullanicilar: a.kullanicilar.map((x) => (x.id === k.id ? { ...x, ...p } : x)) })
-                      return (
-                        <div key={k.id} className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <UserRound className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-                            <Input value={k.username} placeholder="Kullanıcı adı" onChange={(e) => guncelle({ username: e.target.value })}
-                              className={cn("pl-7", k.username.trim() && h.kullanici && "border-amber-500/70")} />
-                          </div>
-                          <div className="relative w-[140px]">
-                            <KeyRound className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
-                            <Input value={k.password} inputMode="numeric" placeholder="6 rakam"
-                              onChange={(e) => guncelle({ password: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-                              className={cn("pl-7 tabular-nums", h.sifre && "border-amber-500/70")} />
-                          </div>
-                          <Button type="button" variant="ghost" size="icon" className="size-8 text-muted-foreground hover:text-rose-600" aria-label="Kullanıcıyı sil"
-                            onClick={() => set({ kullanicilar: a.kullanicilar.filter((x) => x.id !== k.id) })}>
-                            <Trash2 className="size-3.5" />
-                          </Button>
+              {/* Sol sütunla aynı Field düzeni: etiket satırları aynı yükseklikte, ilk satırlar hizalı.
+                  "Kullanıcı ekle" etiket satırında değil, listenin altında (etiket satırını uzatıp sütunu kaydırıyordu). */}
+              <Field label="Uygulama kullanıcıları" hint="Uygulamada giriş yapacak kişiler; RDP kullanıcıları buraya gelmez.">
+                <div className="flex flex-col gap-1.5">
+                  {a.kullanicilar.map((k) => {
+                    const h = apiKimlikAlanHatalari(k.username, k.password)
+                    const guncelle = (p: Partial<ApiKullanici>) =>
+                      set({ kullanicilar: a.kullanicilar.map((x) => (x.id === k.id ? { ...x, ...p } : x)) })
+                    return (
+                      <div key={k.id} className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <UserRound className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
+                          <Input value={k.username} placeholder="Kullanıcı adı" onChange={(e) => guncelle({ username: e.target.value })}
+                            className={cn("pl-7", k.username.trim() && h.kullanici && "border-amber-500/70")} />
                         </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
+                        <div className="relative w-[140px]">
+                          <KeyRound className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2" />
+                          <Input value={k.password} inputMode="numeric" placeholder="6 rakam"
+                            onChange={(e) => guncelle({ password: e.target.value.replace(/\D/g, "").slice(0, 6) })}
+                            className={cn("pl-7 tabular-nums", h.sifre && "border-amber-500/70")} />
+                        </div>
+                        <Button type="button" variant="ghost" size="icon" className="size-8 shrink-0 text-muted-foreground hover:text-rose-600" aria-label="Kullanıcıyı sil"
+                          onClick={() => set({ kullanicilar: a.kullanicilar.filter((x) => x.id !== k.id) })}>
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                  <button type="button"
+                    onClick={() => set({ kullanicilar: [...a.kullanicilar, yeniApiKullanici()] })}
+                    className="text-muted-foreground hover:text-foreground hover:bg-muted/40 flex h-8 items-center justify-center gap-1.5 rounded-[5px] border border-dashed text-[12px] font-medium transition-colors">
+                    <Plus className="size-3.5" />Kullanıcı ekle
+                  </button>
+                </div>
+              </Field>
             </div>
           </section>
         )
