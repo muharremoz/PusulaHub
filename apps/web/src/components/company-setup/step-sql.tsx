@@ -305,10 +305,11 @@ export function StepSql({
                     <span><span className="font-medium tabular-nums text-foreground">{srv.dbCount}</span> veritabanı</span>
                     <span><span className="font-medium tabular-nums text-foreground">{srv.totalSizeGB}</span> GB</span>
                   </div>
-                  <div className="mt-2.5 flex items-center justify-between gap-2">
-                    <span className="inline-flex rounded-[5px] bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">{srv.authType} Auth</span>
-                    {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
-                  </div>
+                  {kapali && (
+                    <div className="mt-2.5">
+                      <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>
+                    </div>
+                  )}
                 </button>
               )
             })}
