@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
 import type { DepoServerItem } from "@/app/api/setup/depo-servers/route"
-import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive, Smartphone, Layers, Image as ImageIcon } from "lucide-react"
+import { Check, AlertTriangle, Loader2, Server, Globe, WifiOff, ServerOff, HardDrive, Smartphone, Layers, Image as ImageIcon, Code } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
@@ -309,7 +309,7 @@ function turBilgisi(t: string): { ikon: typeof Server; renk: string; ad: string 
   if (t === "iis-site")  return { ikon: Globe,      renk: "bg-sky-500/15 text-sky-700 dark:text-sky-400",           ad: "IIS sitesi" }
   if (t === "iis-resim") return { ikon: ImageIcon,  renk: "bg-violet-500/15 text-violet-700 dark:text-violet-400",  ad: "Resim paylaşımı" }
   if (t === "pars")      return { ikon: Smartphone, renk: "bg-amber-500/15 text-amber-700 dark:text-amber-400",     ad: "Pars (mobil)" }
-  return { ikon: Server, renk: "bg-primary/10 text-primary", ad: "Program" }
+  return { ikon: Code, renk: "bg-primary/10 text-primary", ad: "Program" }
 }
 
 interface SeciciSunucu { id: string; name: string; ip: string; dns: string; isOnline: boolean; alt: string; yogunluk: number | null }
