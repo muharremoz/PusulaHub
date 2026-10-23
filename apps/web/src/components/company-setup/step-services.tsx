@@ -397,7 +397,7 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                       )}
                       <p className="truncate text-[13px] font-semibold">{srv.name}</p>
                     </div>
-                    <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{srv.dns || srv.ip}</p>
+                    <p className="mt-0.5 truncate text-[12px] tabular-nums text-muted-foreground">{srv.dns ? `${srv.dns} · ${srv.ip}` : srv.ip}</p>
                   </div>
                   <span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full border", sec ? "border-emerald-500 bg-emerald-500" : "border-border")}>
                     {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
@@ -410,15 +410,14 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                       <span className={cn("text-[11px] font-medium tabular-nums",
                         pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>%{pct}</span>
                     </div>
-                    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                      <div className={cn("h-full rounded-full", pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${pct}%` }} />
-                    </div>
                   </>
                 )}
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? srv.ip : srv.alt}</span>
-                  {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
-                </div>
+                {(pct === null || kapali) && (
+                  <div className="mt-2.5 flex items-center justify-between gap-2">
+                    <span className="truncate text-[11px] text-muted-foreground">{pct === null ? srv.alt : ""}</span>
+                    {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
+                  </div>
+                )}
               </button>
             )
           })}

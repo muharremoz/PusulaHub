@@ -402,7 +402,6 @@ export function StepFirma({
                   const kapali = !srv.isOnline
                   const oneri = !kapali && srv.id === onerilen && rdpServers.length > 1
                   const pct = yogunluk(srv)
-                  const bar = pct > 80 ? "bg-red-500" : pct > 60 ? "bg-amber-500" : "bg-emerald-500"
                   const yazi = pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
                   return (
                     <button
@@ -442,7 +441,7 @@ export function StepFirma({
                             )}
                             <p className="truncate text-[13px] font-semibold">{srv.name}</p>
                           </div>
-                          <p className="mt-0.5 truncate text-[12px] text-muted-foreground">{srv.dns || srv.ip}</p>
+                          <p className="mt-0.5 truncate text-[12px] tabular-nums text-muted-foreground">{srv.dns ? `${srv.dns} · ${srv.ip}` : srv.ip}</p>
                         </div>
                         <span className={cn(
                           "flex size-4 shrink-0 items-center justify-center rounded-full border",
@@ -459,13 +458,10 @@ export function StepFirma({
                         </p>
                         <span className={cn("text-[11px] font-medium tabular-nums", yazi)}>%{pct}</span>
                       </div>
-                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-muted">
-                        <div className={cn("h-full rounded-full", bar)} style={{ width: `${pct}%` }} />
-                      </div>
 
-                      {/* Alt: IP + rozet */}
+                      {/* Alt: tür + rozet (IP üstte, DNS'in yanında) */}
                       <div className="mt-2.5 flex items-center justify-between gap-2">
-                        <span className="truncate text-[11px] tabular-nums text-muted-foreground">{srv.dns ? srv.ip : srv.type}</span>
+                        <span className="truncate text-[11px] text-muted-foreground">{srv.type}</span>
                         {kapali ? (
                           <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>
                         ) : null}
