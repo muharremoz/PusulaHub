@@ -86,6 +86,11 @@ const TAM_SAAT     = 26   // günlük tam yedek bu kadar saatten eskiyse sorun
 const DIFF_DK      = 45   // 15 dk'da bir alınıyor; tur bu kadar süredir gelmediyse durmuş
 const TUR_GERI_DK  = 35   // bir DB son turdan bu kadar gerideyse (≈ iki tur kaçırmış) sorun
 const YUKLEME_PAYI = 30   // yeni biten yedek hâlâ yükleniyor olabilir
+/*  SpareBackup ≤1.6.12 sabah tam turunun TÜMÜNÜ alıp ancak sonra yüklüyor: tur 08:00'de başlıyor,
+ *  ilk yükleme ~10:26 (22.10, buluttaki dosya saatleri). Tur sürerken / yeni bitmişken o turun
+ *  buluta henüz çıkmamış tam yedekleri "eksik" değil "yükleme bekliyor" sayılır. 1.6.13+ yedek
+ *  alındıkça yüklediği için bu pencere kendiliğinden kısalır.                                   */
+const TAM_TUR_PAYI = 60   // son tam yedek bu kadar dk'dan yeni bittiyse tur sürüyor/yükleniyor sayılır
 const BULUT_SAAT   = 26
 
 /* ── Biçimlendirme ──────────────────────────────────────────────────── */
@@ -359,12 +364,21 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
       const gunler = [...new Set(yedekler.map((y) => bulutGunu(y.basla)))]
       const bulut  = await bulutListesi(hedef, gunler)
 
-      let tamam = 0, bekleyen = 0, bos = 0
+      // Sürmekte olan (ya da yeni biten) tam yedek turu: en yeni tam yedeğin günü + bitişinden geçen süre
+      const tamlar = yedekler.filter((y) => y.tur === "D")
+      const enYeniTam = tamlar.reduce<typeof tamlar[number] | null>((a, y) => (!a || y.dkOnce < a.dkOnce ? y : a), null)
+      const tamTurGunu = enYeniTam && enYeniTam.dkOnce < TAM_TUR_PAYI ? bulutGunu(enYeniTam.basla) : null
+
+      let tamam = 0, bekleyen = 0, bos = 0, turBekleyen = 0
       const eksik: string[] = []
       for (const y of yedekler) {
         const ad = (y.yol.split("\\").pop() ?? "").replace(/\.bak$/i, ".zip")
         const boyut = bulut.dosyalar.get(`${bulutGunu(y.basla)}/${ad}`)
-        if (boyut === undefined) { if (y.dkOnce < YUKLEME_PAYI) bekleyen++; else eksik.push(y.db) }
+        if (boyut === undefined) {
+          if (y.dkOnce < YUKLEME_PAYI) bekleyen++
+          else if (tamTurGunu && y.tur === "D" && bulutGunu(y.basla) === tamTurGunu) { bekleyen++; turBekleyen++ }
+          else eksik.push(y.db)
+        }
         else if (boyut === 0)    bos++
         else                     tamam++
       }
@@ -379,6 +393,7 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
           `Bulutta ${sayi(bulut.dosyalar.size)} dosya tarandı (${gunler.join(", ")})`,
           sorun > 0
             ? `Eksik: ${[...new Set(eksik)].slice(0, 3).join(", ")}`
+            : turBekleyen > 0 ? `Sabah tam yedek turu sürüyor — ${sayi(bekleyen)} yedek yükleme bekliyor`
             : bekleyen > 0 ? `${sayi(bekleyen)} yeni yedek şu an yükleniyor` : "Eksik ya da boş dosya yok",
         ],
       }
