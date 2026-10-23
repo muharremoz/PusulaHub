@@ -91,7 +91,12 @@ Etkinleştirme (Windows + Office MAK) ve Thinstuff lisansı **kullanıcı**.
 - **ESXi otomatik başlatma:** yeni VM listeye kendiliğinden girmez (T5–T7 23.10'a kadar yoktu) →
   `node --env-file=.env.local __esxi-autostart-ekle.mjs <moid>:<sıra>`; kontrol `__esxi-autostart.mjs`.
   Sıra: DC 1, SQL 2, Coolify 3 … terminaller sonda (T7 = 13), gecikme 120 sn.
-- Thinstuff bekçisi (push): Thinstuff kurulunca Kuma'da push izleyicisi (48'in kopyası) + `tN-kur.ps1 -KumaToken <token>`.
+- Thinstuff bekçisi (push): Thinstuff kurulunca `KU=… KP=… node __kuma-push-kopya.mjs 48 "TN Thinstuff (RDP oturum servisi)"`
+  (YENİ token üretir; `__kuma-kopya.mjs` push token'ı da kopyalar, kullanma) + `tN-kur.ps1 -KumaToken <token>`.
+  T5'te (53) görev elle kuruldu: T4'ün `thinstuff-bekci.ps1`'i + `Export-ScheduledTask` XML'i yeni token'la.
+  **Yollarda ters bölü kullanma** — `__ps-paylasim.mjs` aktarımında `\P`, `\t` yutuluyor; ileri bölü / `[char]92`.
+- **Bildirim kanalları:** her yeni izleyiciyi Kuma kanal **7 (SMS)** ve **8 (mobil push)**'a bağla:
+  `node __kuma-sms-bagla.mjs 7 <id>` ve `… 8 <id>` (ping izleyicisinde tekrar 2'yi de ayarlar).
 
 ## Yardımcılar (`apps/web`, untracked)
 
