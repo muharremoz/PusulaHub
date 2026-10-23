@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, ShieldCheck } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, Database, Server, Archive, ShieldCheck } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -573,138 +573,100 @@ export function StepSql({
             </div>
           )}
 
+          {/* Demo veritabanları — "Yedekten yükle"deki yedek tablosuyla aynı düzen */}
           {sqlMode === 1 && !demoDatabasesLoading && !demoDatabasesError && demoDatabases.length > 0 && (
-            <div className="rounded-[5px] border border-border/50 overflow-hidden">
-              <div className="flex items-center justify-between gap-3 px-3 py-2 bg-muted/20 border-b border-border">
-                <span className="text-[10px] font-medium text-muted-foreground tracking-wider uppercase">
-                  {demoDatabases.length} demo veritabanı
-                </span>
+            <ListeKarti
+              baslik="Demo veritabanları"
+              ikon={<Database className="size-3.5" />}
+              toplam={demoDatabases.length}
+              filtreli={selectedDemoDbIds.length}
+              aksiyon={
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
                     onClick={runPathCheck}
                     disabled={isCheckingPaths || !selectedSqlServerId}
                     title="Dosyaları yeniden kontrol et"
-                    className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="flex items-center gap-1.5 text-[12px] text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {isCheckingPaths
-                      ? <Loader2 className="size-3 animate-spin" />
-                      : <RefreshCw className="size-3" />}
+                    {isCheckingPaths ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                     Yenile
                   </button>
-                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
-                    <Checkbox
-                      checked={addFirmaPrefix}
-                      onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)}
-                    />
-                    Firma prefix ekle ({firmaId}_)
+                  <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
+                    <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
+                    Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
                   </label>
                 </div>
-              </div>
-              <div className="divide-y divide-border/40">
-                {demoDatabases.map((db) => {
-                  const isSelected = selectedDemoDbIds.includes(db.id)
-                  const showPrefix = addFirmaPrefix && !!firmaId
-                  const check = pathChecks.get(db.id) ?? { status: "idle" as PathStatus, sizeMB: 0 }
-                  const disabled = check.status === "missing" || check.status === "checking"
-                  return (
-                    <div
-                      key={db.id}
-                      onClick={() => { if (!disabled) onToggleDemoDb(db.id) }}
-                      className={cn(
-                        "w-full grid grid-cols-[20px_1fr_240px_120px_80px] gap-3 items-center px-3 py-2.5 text-left transition-colors",
-                        disabled
-                          ? "cursor-not-allowed opacity-60"
-                          : isSelected ? "bg-foreground/[0.03] cursor-pointer" : "hover:bg-muted/20 cursor-pointer"
-                      )}
-                    >
-                      <span className={cn(
-                        "size-4 rounded-[5px] border-2 flex items-center justify-center shrink-0",
-                        isSelected ? "bg-foreground border-foreground" : "border-border"
-                      )}>
-                        {isSelected && <Check className="size-2.5 text-background" strokeWidth={3} />}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-medium truncate">{db.name}</p>
-                        {db.locationPath && (
-                          <p className="text-[9px] text-muted-foreground/70 font-mono truncate" title={db.locationPath}>
-                            {db.locationPath}
-                          </p>
-                        )}
-                      </div>
-                      {/* Düzenlenebilir DB adı — sadece dosya bulunduğunda veya
-                          şablon gibi yol gerektirmeyen durumda göster. Dosya yoksa
-                          veya kontrol sürüyorsa kullanıcıya sessizce — göster. */}
-                      {(check.status === "found" || check.status === "no-path") ? (
-                        <div
-                          className="flex items-center gap-1 min-w-0"
-                          onClick={(e) => e.stopPropagation()}
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-[14px] font-medium leading-[20px]">
+                  <ListeThead>
+                    <th className="w-10 px-4 py-1.5 text-left font-medium" />
+                    <th className="px-4 py-1.5 text-left font-medium">Veritabanı</th>
+                    <th className="px-4 py-1.5 text-left font-medium">Hedef veritabanı</th>
+                    <th className="px-4 py-1.5 text-right font-medium">Boyut</th>
+                  </ListeThead>
+                  <tbody>
+                    {demoDatabases.map((db) => {
+                      const isSelected = selectedDemoDbIds.includes(db.id)
+                      const showPrefix = addFirmaPrefix && !!firmaId
+                      const check = pathChecks.get(db.id) ?? { status: "idle" as PathStatus, sizeMB: 0 }
+                      const disabled = check.status === "missing" || check.status === "checking"
+                      const duzenlenir = check.status === "found" || check.status === "no-path"
+                      return (
+                        <tr
+                          key={db.id}
+                          onClick={() => { if (!disabled) onToggleDemoDb(db.id) }}
+                          className={cn(
+                            "transition-colors",
+                            disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-muted/20",
+                            !isSelected && "text-muted-foreground",
+                          )}
                         >
-                          <span className="text-[11px] text-muted-foreground shrink-0">→</span>
-                          <div className="flex-1 flex items-center rounded-[5px] border border-border/60 bg-background px-1.5 py-1 focus-within:border-foreground/50 hover:border-border min-w-0">
-                            {showPrefix && (
-                              <span className="text-[11px] font-mono text-muted-foreground shrink-0">
-                                {firmaId}_
-                              </span>
+                          <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox checked={isSelected} disabled={disabled} onCheckedChange={() => { if (!disabled) onToggleDemoDb(db.id) }} />
+                          </td>
+                          <td className="max-w-[260px] px-4 py-1.5">
+                            <span className="flex min-w-0 items-center gap-2" title={db.locationPath ?? undefined}>
+                              <span className="inline-flex shrink-0 rounded-[5px] bg-violet-500/15 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:text-violet-400">Demo</span>
+                              <span className="truncate">{db.name}</span>
+                            </span>
+                          </td>
+                          <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                            {duzenlenir ? (
+                              <div className="flex h-7 min-w-[220px] items-center rounded-[5px] border bg-background px-2 transition-colors focus-within:border-foreground/40">
+                                {showPrefix && <span className="shrink-0 text-[13px] text-muted-foreground">{firmaId}_</span>}
+                                <input
+                                  type="text"
+                                  value={db.dataName}
+                                  onChange={(e) => onUpdateDemoDbDataName(db.id, e.target.value)}
+                                  className="min-w-0 flex-1 bg-transparent text-[13px] font-medium text-foreground outline-none"
+                                />
+                              </div>
+                            ) : (
+                              <span className="text-[12px] text-muted-foreground">—</span>
                             )}
-                            <input
-                              type="text"
-                              value={db.dataName}
-                              onChange={(e) => onUpdateDemoDbDataName(db.id, e.target.value)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 text-[11px] font-mono bg-transparent outline-none min-w-0"
-                            />
-                          </div>
-                        </div>
-                      ) : check.status === "checking" ? (
-                        <span className="text-[10px] text-muted-foreground/60 italic">kontrol ediliyor…</span>
-                      ) : (
-                        <span className="text-[11px] text-muted-foreground/30 text-center">—</span>
-                      )}
-                      {/* Path durum rozeti */}
-                      <div className="flex items-center justify-end">
-                        {check.status === "checking" && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-muted text-muted-foreground border-border">
-                            <Loader2 className="size-2.5 animate-spin" />
-                            Kontrol ediliyor
-                          </span>
-                        )}
-                        {check.status === "found" && (
-                          <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25"
-                            title={`${formatSize(check.sizeMB)} — ${db.locationPath}`}
-                          >
-                            <FileCheck2 className="size-2.5" />
-                            {formatSize(check.sizeMB)}
-                          </span>
-                        )}
-                        {check.status === "missing" && (
-                          <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/25"
-                            title="Dosya seçili SQL sunucusunda bulunamadı"
-                          >
-                            <FileWarning className="size-2.5" />
-                            Dosya yok
-                          </span>
-                        )}
-                        {check.status === "no-path" && (
-                          <span
-                            className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-[5px] border bg-muted/50 text-muted-foreground border-border"
-                            title="Bu demo DB için kaynak yol tanımlı değil"
-                          >
-                            <MinusCircle className="size-2.5" />
-                            Yol yok
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground text-right">{db.locationType}</span>
-                    </div>
-                  )
-                })}
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums text-muted-foreground">
+                            {check.status === "found" && formatSize(check.sizeMB)}
+                            {check.status === "checking" && (
+                              <span className="inline-flex items-center gap-1 text-[12px]"><Loader2 className="size-3 animate-spin" />kontrol ediliyor</span>
+                            )}
+                            {check.status === "missing" && (
+                              <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400" title="Dosya seçili SQL sunucusunda bulunamadı">Dosya yok</span>
+                            )}
+                            {check.status === "no-path" && <span className="text-[12px]" title="Kaynak yol tanımlı değil">Yol yok</span>}
+                            {check.status === "idle" && "—"}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </div>
+            </ListeKarti>
           )}
-
 
         </div>
       )}
