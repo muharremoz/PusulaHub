@@ -406,10 +406,9 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                     {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
                   </span>
                 </div>
-                {(pct === null || kapali) && (
-                  <div className="mt-2.5 flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] text-muted-foreground">{pct === null ? srv.alt : ""}</span>
-                    {kapali && <span className="inline-flex shrink-0 rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>}
+                {kapali && (
+                  <div className="mt-2.5">
+                    <span className="inline-flex rounded-[5px] bg-red-500/15 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:text-red-400">Çevrimdışı</span>
                   </div>
                 )}
               </button>
