@@ -374,7 +374,7 @@ export function StepSql({
                     className="pl-8"
                   />
                 </div>
-                <Button variant="outline" size="sm" className="h-8" onClick={onScanBackups} disabled={isScanning}>
+                <Button variant="outline" size="sm" className="h-8" onClick={onScanBackups} disabled={isScanning || !backupFolderPath.trim()}>
                   {isScanning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
                   Tara
                 </Button>

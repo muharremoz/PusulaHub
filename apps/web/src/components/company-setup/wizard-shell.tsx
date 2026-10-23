@@ -308,7 +308,8 @@ export function WizardShell() {
   const [selectedSqlServerId, setSelectedSqlServerId] = useState<string | null>(null)
   const [sqlMode, setSqlMode] = useState<0 | 1>(0)
   const [backupFiles, setBackupFiles] = useState<BackupFile[]>([])
-  const [backupFolderPath, setBackupFolderPath] = useState("D:\\Demo Data")
+  // Boş başlar: eskiden "D:\Demo Data" (demo veritabanlarının klasörü) geliyordu → müşteri yedeği yerine demo .bak'lar listeleniyordu
+  const [backupFolderPath, setBackupFolderPath] = useState("")
   const [demoDatabases, setDemoDatabases] = useState<DemoDatabaseDto[]>([])
   const [demoDbsLoading, setDemoDbsLoading] = useState(false)
   const [demoDbsError, setDemoDbsError] = useState<string | null>(null)
