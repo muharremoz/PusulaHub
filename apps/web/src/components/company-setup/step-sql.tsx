@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
-import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, Sparkles, ShieldCheck } from "lucide-react"
+import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, FileWarning, FileCheck2, MinusCircle, Database, Server, Archive, ShieldCheck } from "lucide-react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -311,7 +311,7 @@ export function StepSql({
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {([
                 { mode: 0 as const, ikon: Archive,  baslik: "Yedekten yükle",  alt: "Müşterinin .bak / mdf dosyalarını klasörden tara" },
-                { mode: 1 as const, ikon: Sparkles, baslik: "Demo veritabanı", alt: "Hazır demo datalarla boş kurulum" },
+                { mode: 1 as const, ikon: Database, baslik: "Demo veritabanı", alt: "Hazır demo datalarla boş kurulum" },
               ]).map(({ mode, ikon: Ikon, baslik, alt }) => {
                 const sec = sqlMode === mode
                 return (
