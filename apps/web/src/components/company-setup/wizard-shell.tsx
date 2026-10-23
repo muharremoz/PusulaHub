@@ -51,6 +51,15 @@ const STEPS = [
   { label: "Çalıştır",    hint: "Kurulumu başlatın ve ilerlemeyi takip edin",                 icon: Play },
 ]
 
+/**
+ * Geliştirmede (pnpm dev) adımlar serbest: zorunlu seçim yapmadan İleri'ye ve soldaki adımlara
+ * tıklanabilir — sihirbaz tasarımı üzerinde çalışırken her adıma doğrudan gidilsin diye.
+ * "Çalıştır" adımı HARİÇ: gerçek AD/SQL/IIS işlemlerini başlatır, yalnız normal akışla açılır.
+ * Canlı (production) derlemede false — davranış değişmez.
+ */
+const DEV_SERBEST = process.env.NODE_ENV === "development"
+const CALISTIR_ADIMI = 7
+
 let _uid = 2
 const generatePassword = () => generateSafePassword(12)
 function mkUser(): WizardUser {
@@ -439,7 +448,7 @@ export function WizardShell() {
   }
   const apiAdimiTamam = seciliApiHizmetleri.every((s) => !apiAyarHatasi(apiAyari(s.id), veriler.length > 0))
 
-  const canProceed =
+  const canProceed = (DEV_SERBEST && step + 1 < CALISTIR_ADIMI) || (
     step === 0 ? selectedServerId !== null :
     step === 1 ? selectedCompany !== null
                 && (selectedCompany.licenseCount ?? selectedCompany.userCount ?? 0) > 0
@@ -453,7 +462,7 @@ export function WizardShell() {
     step === 4 ? selectedSqlServerId === null
                 || (sqlMode === 0 ? backupFiles.some((f) => f.selected && f.databaseName.trim()) : selectedDemoDbIds.length > 0) :
     step === 5 ? (!hasIisSelected || selectedIisServerId !== null) && apiAdimiTamam :
-    true
+    true)
 
   const go = (to: number) => {
     setDir(to > step ? "right" : "left")
@@ -634,18 +643,19 @@ export function WizardShell() {
             const isDone = idx < step
             const isActive = idx === step
             const isFuture = idx > step
+            const serbest = DEV_SERBEST && idx < CALISTIR_ADIMI
             const Icon = s.icon
 
             return (
               <button
                 key={idx}
-                disabled={isFuture}
-                onClick={() => !isFuture && go(idx)}
+                disabled={isFuture && !serbest}
+                onClick={() => (!isFuture || serbest) && go(idx)}
                 className={cn(
                   "flex items-center gap-2.5 px-2 py-2 rounded-[5px] text-left transition-colors w-full",
                   isActive && "bg-primary text-primary-foreground",
                   isDone && "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/25",
-                  isFuture && "text-muted-foreground opacity-40 cursor-default"
+                  isFuture && (serbest ? "text-muted-foreground hover:bg-muted" : "text-muted-foreground opacity-40 cursor-default")
                 )}
               >
                 <span className={cn(
