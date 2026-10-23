@@ -77,6 +77,11 @@ export function StepServices({
     if (!activeTab && categories.length > 0) setActiveTab(categories[0])
   }, [activeTab, categories])
 
+  /** Görünen kategori adı. Programlar adımında DB'deki "API Hizmetleri" kategorisinde yalnız Resim kalıyor
+   *  (data gerektirenler API adımına taşındı) — sekme "API hizmetleri" yazmasın, "Resim" yazsın. */
+  const kategoriAdi = (cat: string) =>
+    kapsam === "program" && services.filter((s) => s.category === cat).every((s) => s.type === "iis-resim") ? "Resim" : cat
+
   const catItems = services.filter((s) => s.category === activeTab)
   const allSelected = catItems.length > 0 && catItems.every((s) => selectedIds.includes(s.id))
   const kapsamSecili = services.filter((s) => selectedIds.includes(s.id)).length
@@ -173,7 +178,7 @@ export function StepServices({
             {kapsamSecili > 0
               ? categories.map((cat) => {
                   const n = services.filter((s) => s.category === cat && selectedIds.includes(s.id)).length
-                  return n > 0 ? `${cat}: ${n}` : null
+                  return n > 0 ? `${kategoriAdi(cat)}: ${n}` : null
                 }).filter(Boolean).join(" · ")
               : `${services.length} hizmet, ${categories.length} kategori`}
           </p>
@@ -195,7 +200,7 @@ export function StepServices({
                   isActive ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                {cat}
+                {kategoriAdi(cat)}
                 {count > 0 && (
                   <span className="flex size-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">{count}</span>
                 )}
