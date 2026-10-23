@@ -13,7 +13,8 @@ import {
  * Body: { paths: string[] }
  *
  * Seçili SQL sunucusundaki PusulaAgent'a PowerShell komutu göndererek
- * verilen dosya yollarının her birinin varlığını ve boyutunu kontrol eder.
+ * verilen dosya yollarının her birinin varlığını, boyutunu ve son yazma
+ * tarihini kontrol eder.
  *
  * Firma kurulum sihirbazı 4. adım "Demo Veritabanı" modunda, demo DB'lerin
  * `locationPath`'i seçilen SQL sunucusunda gerçekten var mı diye
@@ -26,7 +27,17 @@ export interface CheckPathsResponse {
     path:   string
     exists: boolean
     sizeMB: number
+    /** Son yazma tarihi `YYYY-MM-DD` — yedek taramasındaki `date` ile aynı biçim. */
+    date:   string | null
   }>
+}
+
+/** PS ISO date → `YYYY-MM-DD` (scan-backups ile aynı biçim) */
+function toDateString(iso: string | undefined): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso.slice(0, 10) || null
+  return d.toISOString().slice(0, 10)
 }
 
 export async function POST(
@@ -78,6 +89,7 @@ export async function POST(
           path:   p,
           exists: !!item?.Exists,
           sizeMB: item ? (item.Length || 0) / (1024 * 1024) : 0,
+          date:   item?.Exists ? toDateString(item.LastWriteTime) : null,
         }
       }),
     }

@@ -59,8 +59,9 @@ export function parseBackupListOutput(stdout: string): RawBackupItem[] {
 /**
  * Verilen yol listesinin her biri için dosyanın varlığını/boyutunu döner.
  *
- * Çıktı: JSON array, her eleman `{ Path, Exists, Length }`.
- * Dosya yoksa Exists=false, Length=0.
+ * Çıktı: JSON array, her eleman `{ Path, Exists, Length, LastWriteTime }`.
+ * Dosya yoksa Exists=false, Length=0, LastWriteTime=''. LastWriteTime yedek
+ * taramasındaki gibi ISO ('o') biçimindedir.
  *
  * Agent JSON parser'ı çift tırnakları bozduğu için yalnızca tek tırnak ile
  * yazılır. `$pathsN` değişkenleri üzerinden scriptblock kullanılır.
@@ -70,7 +71,7 @@ export function buildCheckFilesExist(paths: string[]): string {
   return [
     `$ErrorActionPreference = 'SilentlyContinue'`,
     `$paths = @(${quoted})`,
-    `$result = @($paths | ForEach-Object { $p = $_; if (Test-Path -LiteralPath $p -PathType Leaf) { $i = Get-Item -LiteralPath $p -Force; [PSCustomObject]@{ Path = $p; Exists = $true; Length = $i.Length } } else { [PSCustomObject]@{ Path = $p; Exists = $false; Length = 0 } } })`,
+    `$result = @($paths | ForEach-Object { $p = $_; if (Test-Path -LiteralPath $p -PathType Leaf) { $i = Get-Item -LiteralPath $p -Force; [PSCustomObject]@{ Path = $p; Exists = $true; Length = $i.Length; LastWriteTime = $i.LastWriteTime.ToString('o') } } else { [PSCustomObject]@{ Path = $p; Exists = $false; Length = 0; LastWriteTime = '' } } })`,
     `if ($result.Count -eq 0) { Write-Output '[]' } else { $result | ConvertTo-Json -Compress }`,
   ].join("; ")
 }
@@ -285,6 +286,8 @@ export interface RawCheckPathItem {
   Path:   string
   Exists: boolean
   Length: number
+  /** ISO tarih — eski agent çıktısında olmayabilir (undefined), dosya yoksa ''. */
+  LastWriteTime?: string
 }
 
 export function parseCheckPathsOutput(stdout: string): RawCheckPathItem[] {

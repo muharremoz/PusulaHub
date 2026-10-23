@@ -1,10 +1,9 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { WizardUser, BackupFile } from "@/lib/setup-mock-data"
+import { WizardUser, BackupFile, type WizardDemoDb } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
-import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { CompanyServiceDto } from "@/app/api/companies/[firkod]/services/route"
 import { Check, RotateCcw, Shield, MessageSquare, Copy, CheckCheck, KeyRound, Eye, EyeOff, AlertTriangle, Database, ListChecks, PartyPopper } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -135,7 +134,7 @@ interface Props {
   backupFiles?:        BackupFile[]
   selectedDemoDbIds?:  number[]
   /** Mod 1 için demo veritabanı listesi (mesajda DB adı çözümlemek için). */
-  demoDatabases?:      DemoDatabaseDto[]
+  demoDatabases?:      WizardDemoDb[]
   addFirmaPrefix?:     boolean
   addToSirketDb?:      boolean
   /** Pars hizmeti seçildiyse — kullanıcılar Ayar.mdb'ye yazılır, mesajda gösterilir */
@@ -264,11 +263,11 @@ export function StepRun({
         .filter((f) => f.selected && f.databaseName?.trim())
         .map((f) => ({ ad: `${prefix}${f.databaseName.trim()}`, yedekAl: f.yedekAl !== false }))
     }
-    // Mod 1: demo DB → dataName (demo güncel data, yedeğe girer — backend ile aynı)
+    // Mod 1: demo DB → düzenlenen dataName + yedek tercihi (backend demoAyarlari ile aynı)
     const ids = new Set(selectedDemoDbIds ?? [])
     return (demoDatabases ?? [])
       .filter((d) => ids.has(d.id))
-      .map((d) => ({ ad: `${prefix}${(d.dataName ?? d.name).trim()}`, yedekAl: true }))
+      .map((d) => ({ ad: `${prefix}${(d.dataName ?? d.name).trim()}`, yedekAl: d.yedekAl !== false }))
       .filter((d) => d.ad.length > prefix.length)
   })()
   const restoredDbNames = restoredDbs.map((d) => d.ad)
@@ -409,6 +408,10 @@ export function StepRun({
               yedekAl:          f.yedekAl !== false,
             })),
           selectedDemoDbIds,
+          // Demo DB başına hedef ad (firma öneki YOK — backupFiles.databaseName gibi) + yedek
+          demoAyarlari: (demoDatabases ?? [])
+            .filter((d) => (selectedDemoDbIds ?? []).includes(d.id))
+            .map((d) => ({ id: d.id, dataName: (d.dataName ?? d.name).trim(), yedekAl: d.yedekAl !== false })),
           addFirmaPrefix,
           addToSirketDb,
           pars: pars && pars.users.length > 0 ? {

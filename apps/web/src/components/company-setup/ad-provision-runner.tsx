@@ -68,6 +68,8 @@ export interface AdProvisionPayload {
   backupFolderPath?:  string
   backupFiles?:       AdProvisionBackupFile[]
   selectedDemoDbIds?: number[]
+  /** Mod 1: demo DB başına hedef ad (firma öneki yok) + yedek tercihi */
+  demoAyarlari?:      Array<{ id: number; dataName: string; yedekAl: boolean }>
   addFirmaPrefix?:    boolean
   addToSirketDb?:     boolean
   /** true → depo (resim klasörü / NTFS / desktop.ini) adımları atlanır */

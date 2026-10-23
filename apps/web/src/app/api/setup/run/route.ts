@@ -243,6 +243,10 @@ interface RunPayload {
   backupFiles?:      RunBackupFile[]
   /** Mode 1 için: seçili demo DB id'leri (DemoDatabases tablosundan okunacak) */
   selectedDemoDbIds?: number[]
+  /** Mode 1 için: sihirbazda düzenlenen hedef DB adı (firma öneki YOK) ve
+   *  yedek kutusu. Yol/kaynak yine sunucudaki katalogdan okunur; buradan
+   *  yalnız ad + YedekAl alınır. Eski client'larda yok → katalog adı + true. */
+  demoAyarlari?:     Array<{ id: number; dataName: string; yedekAl: boolean }>
   /** Her iki mod için: firma ID prefix ekle (`{firmaId}_{dbName}`) */
   addFirmaPrefix?:   boolean
   /** sirket.dbo.guvenlik tablosuna kayıt eklensin mi */
@@ -484,6 +488,21 @@ export async function POST(req: NextRequest) {
   const runBackupFiles = Array.isArray(payload.backupFiles) ? payload.backupFiles : []
   const runBackupFolder = (payload.backupFolderPath ?? "").trim().replace(/[\\/]+$/, "")
   const runDemoDbIds   = Array.isArray(payload.selectedDemoDbIds) ? payload.selectedDemoDbIds : []
+  // Demo DB başına istemci ayarı (hedef ad + YedekAl). Ad SQL-güvenli değilse
+  // yok sayılır → katalog adına düşülür.
+  const runDemoAyarlari = new Map<number, { dataName: string | null; yedekAl: boolean }>()
+  if (Array.isArray(payload.demoAyarlari)) {
+    for (const a of payload.demoAyarlari as unknown[]) {
+      if (!a || typeof a !== "object") continue
+      const { id, dataName, yedekAl } = a as { id?: unknown; dataName?: unknown; yedekAl?: unknown }
+      if (typeof id !== "number" || !Number.isFinite(id)) continue
+      const ad = typeof dataName === "string" ? dataName.trim() : ""
+      runDemoAyarlari.set(id, {
+        dataName: /^[A-Za-z0-9_]+$/.test(ad) ? ad : null,
+        yedekAl:  typeof yedekAl === "boolean" ? yedekAl : true,
+      })
+    }
+  }
 
   const hasSqlWork =
     !!payload.sqlServerId &&
@@ -1347,7 +1366,11 @@ export async function POST(req: NextRequest) {
                   const code = codeById.get(sid) ?? null
                   if (code) { programCode = code; break }
                 }
-                const rawName = deriveDataName(demo.Name) || demo.DataName || demo.Name
+                // Hedef ad: sihirbazda görünen/düzenlenen ad — veriler/kodlar ve API
+                // Users.xml anahtarlarıyla (`${prefix}${dataName}`) birebir aynı olmalı.
+                // Eski client (ayar yok / geçersiz ad) → katalog adından türetilir.
+                const ayar = runDemoAyarlari.get(demo.Id)
+                const rawName = ayar?.dataName || deriveDataName(demo.Name) || demo.DataName || demo.Name
                 tasks.push({
                   kind:        "bak",
                   bakPath,
@@ -1356,7 +1379,7 @@ export async function POST(req: NextRequest) {
                   dbName:      `${prefix}${rawName}`,
                   srkAdi:      rawName,
                   programCode,
-                  yedekAl:     true,   // demo DB güncel data, yedeğe girer
+                  yedekAl:     ayar ? ayar.yedekAl : true,   // demo DB güncel data, varsayılan yedeğe girer
                   pusulaX:     linkedServiceIds.some((sid) => ((pusulaServices.find((x) => x.id === sid)?.config as PusulaProgramConfig | null)?.exeName ?? "").trim().toLowerCase() === "pusulax.exe"),
                 })
               }

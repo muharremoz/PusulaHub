@@ -1,9 +1,8 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import { BackupFile } from "@/lib/setup-mock-data"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import type { BackupFile, WizardDemoDb } from "@/lib/setup-mock-data"
 import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
-import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import type { WizardServiceDto, PusulaProgramConfig } from "@/app/api/services/route"
 import type { CheckPathsResponse } from "@/app/api/setup/sql-servers/[id]/check-paths/route"
 import { Check, FolderOpen, RefreshCw, Loader2, WifiOff, AlertTriangle, ServerOff, Database, Server, Archive, ShieldCheck } from "lucide-react"
@@ -26,7 +25,7 @@ interface Props {
   sqlMode: 0 | 1
   backupFiles: BackupFile[]
   backupFolderPath: string
-  demoDatabases: DemoDatabaseDto[]
+  demoDatabases: WizardDemoDb[]
   demoDatabasesLoading?: boolean
   demoDatabasesError?:   string | null
   selectedDemoDbIds: number[]
@@ -52,6 +51,12 @@ interface Props {
   selectedPusulaServices: WizardServiceDto[]
   onToggleDemoDb: (id: number) => void
   onUpdateDemoDbDataName: (id: number, dataName: string) => void
+  /** Demo DB yedek kutusu (guvenlik.YedekAl) — demo güncel data, varsayılan açık. */
+  onToggleDemoDbYedek: (id: number) => void
+  /** Demo DB guvenlik.KOD — boş = firma numarası */
+  onUpdateDemoDbKod: (id: number, kod: string) => void
+  /** Seçili demo DB'lere 4515, 45151, 45152… verir */
+  onSiralaDemoDbKodlari: () => void
   onSetAddFirmaPrefix: (v: boolean) => void
 }
 
@@ -68,6 +73,8 @@ type PathStatus = "idle" | "checking" | "found" | "missing" | "no-path"
 interface PathCheckState {
   status: PathStatus
   sizeMB: number
+  /** Dosyanın son yazma tarihi `YYYY-MM-DD` — yedek satırlarındaki `date` gibi. */
+  date:   string | null
 }
 
 export function StepSql({
@@ -81,6 +88,7 @@ export function StepSql({
   onSetBackupFolder, onScanBackups, onUpdateBackupDatabaseName,
   onUpdateBackupProgramServiceId, selectedPusulaServices,
   onToggleDemoDb, onUpdateDemoDbDataName,
+  onToggleDemoDbYedek, onUpdateDemoDbKod, onSiralaDemoDbKodlari,
   onSetAddFirmaPrefix,
 }: Props) {
   const showProgramColumn = selectedPusulaServices.length >= 2
@@ -90,7 +98,13 @@ export function StepSql({
     ? `${seciliSunucu.ip}:${seciliSunucu.port} · ${seciliAdet > 0 ? `${seciliAdet} ${sqlMode === 0 ? "yedek" : "demo veritabanı"} seçili` : sqlMode === 0 ? "yedek dosyası seçin" : "demo veritabanı seçin"}`
     : ""
   const seciliYedekler = backupFiles.filter((f) => f.selected)
-  const kodCakismalari = useKodCakismalari(firmaId, seciliYedekler.map((f) => f.kod ?? ""), selectedSqlServerId)
+  const seciliDemolar = demoDatabases.filter((d) => selectedDemoDbIds.includes(d.id))
+  // Çakışma kontrolü yalnız aktif modun seçili satırlarının kodlarıyla
+  const kodCakismalari = useKodCakismalari(
+    firmaId,
+    sqlMode === 0 ? seciliYedekler.map((f) => f.kod ?? "") : seciliDemolar.map((d) => d.kod ?? ""),
+    selectedSqlServerId,
+  )
 
   /* ── Demo DB path check (Mode 1) ──────────────────────────
    * Seçili SQL sunucusunda her demo DB'nin locationPath'i var mı diye
@@ -102,26 +116,30 @@ export function StepSql({
   // Eski fetch'leri iptal etmek için son çağrı id'si
   const checkTokenRef = useRef(0)
 
+  // Kontrol yalnız id + yol değişince yeniden çalışsın — hedef ad / kod / yedek
+  // düzenlemesi (her tuş vuruşu) agent'a yeni istek atmasın.
+  const demoYolAnahtari = JSON.stringify(demoDatabases.map((d) => [d.id, (d.locationPath ?? "").trim()]))
+  const demoYollari = useMemo(
+    () => (JSON.parse(demoYolAnahtari) as [number, string][]).map(([id, locationPath]) => ({ id, locationPath })),
+    [demoYolAnahtari],
+  )
+
   const runPathCheck = useCallback(() => {
     if (sqlMode !== 1) return
     if (!selectedSqlServerId) return
-    if (demoDatabases.length === 0) return
+    if (demoYollari.length === 0) return
 
     const token = ++checkTokenRef.current
 
     // Path'i olan demo DB'ler + yolsuz olanlar
-    const withPath = demoDatabases.filter(
-      (d) => typeof d.locationPath === "string" && d.locationPath.trim().length > 0,
-    )
-    const pathless = demoDatabases.filter(
-      (d) => !d.locationPath || d.locationPath.trim().length === 0,
-    )
+    const withPath = demoYollari.filter((d) => d.locationPath.length > 0)
+    const pathless = demoYollari.filter((d) => d.locationPath.length === 0)
 
     // İlk olarak: path'i olanlar "checking", olmayanlar "no-path"
     setPathChecks(() => {
       const m = new Map<number, PathCheckState>()
-      for (const d of withPath)  m.set(d.id, { status: "checking", sizeMB: 0 })
-      for (const d of pathless)  m.set(d.id, { status: "no-path",  sizeMB: 0 })
+      for (const d of withPath)  m.set(d.id, { status: "checking", sizeMB: 0, date: null })
+      for (const d of pathless)  m.set(d.id, { status: "no-path",  sizeMB: 0, date: null })
       return m
     })
 
@@ -129,10 +147,10 @@ export function StepSql({
 
     setIsCheckingPaths(true)
 
-    const paths = withPath.map((d) => d.locationPath!.trim())
+    const paths = withPath.map((d) => d.locationPath)
     const pathToIds = new Map<string, number[]>()
     for (const d of withPath) {
-      const p = d.locationPath!.trim()
+      const p = d.locationPath
       const list = pathToIds.get(p) ?? []
       list.push(d.id)
       pathToIds.set(p, list)
@@ -149,7 +167,7 @@ export function StepSql({
         if ("error" in data) {
           setPathChecks((prev) => {
             const m = new Map(prev)
-            for (const d of withPath) m.set(d.id, { status: "missing", sizeMB: 0 })
+            for (const d of withPath) m.set(d.id, { status: "missing", sizeMB: 0, date: null })
             return m
           })
           return
@@ -162,6 +180,7 @@ export function StepSql({
               m.set(id, {
                 status: r.exists ? "found" : "missing",
                 sizeMB: r.sizeMB,
+                date:   r.date ?? null,
               })
             }
           }
@@ -172,14 +191,14 @@ export function StepSql({
         if (token !== checkTokenRef.current) return
         setPathChecks((prev) => {
           const m = new Map(prev)
-          for (const d of withPath) m.set(d.id, { status: "missing", sizeMB: 0 })
+          for (const d of withPath) m.set(d.id, { status: "missing", sizeMB: 0, date: null })
           return m
         })
       })
       .finally(() => {
         if (token === checkTokenRef.current) setIsCheckingPaths(false)
       })
-  }, [sqlMode, selectedSqlServerId, demoDatabases])
+  }, [sqlMode, selectedSqlServerId, demoYollari])
 
   useEffect(() => { runPathCheck() }, [runPathCheck])
 
@@ -495,6 +514,7 @@ export function StepSql({
                                    yılsız ve güncel yıl açık. */}
                               {/* Yedek görevi — firma detayı "Yeni Veritabanı" penceresiyle aynı düğme */}
                               <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                                {!f.selected ? <span className="text-muted-foreground text-[12px]">—</span> : (
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <span className="inline-flex">
@@ -522,6 +542,7 @@ export function StepSql({
                                         : "Yedeği alınmayacak · güvenlik kaydı YedekAl = false"}
                                   </TooltipContent>
                                 </Tooltip>
+                                )}
                               </td>
                               <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums text-muted-foreground">{formatSize(f.fileSizeMB)}</td>
                               <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">{f.date || "—"}</td>
@@ -582,6 +603,7 @@ export function StepSql({
               filtreli={selectedDemoDbIds.length}
               aksiyon={
                 <div className="flex items-center gap-3">
+                  {addToSirketDb && seciliDemolar.length >= 2 && <KodSiralaDugmesi onClick={onSiralaDemoDbKodlari} />}
                   <button
                     type="button"
                     onClick={runPathCheck}
@@ -605,15 +627,26 @@ export function StepSql({
                     <th className="w-10 px-4 py-1.5 text-left font-medium" />
                     <th className="px-4 py-1.5 text-left font-medium">Veritabanı</th>
                     <th className="px-4 py-1.5 text-left font-medium">Hedef veritabanı</th>
+                    {addToSirketDb && <th className="px-4 py-1.5 text-left font-medium" title="sirket.dbo.guvenlik · KOD — boşsa firma numarası">Kod</th>}
+                    {showProgramColumn && <th className="px-4 py-1.5 text-left font-medium">Program</th>}
+                    <th className="px-4 py-1.5 text-left font-medium" title="Otomatik yedeklemeye dahil et (sirket.dbo.guvenlik · YedekAl)">Yedek</th>
                     <th className="px-4 py-1.5 text-right font-medium">Boyut</th>
+                    <th className="px-4 py-1.5 text-right font-medium">Tarih</th>
                   </ListeThead>
                   <tbody>
                     {demoDatabases.map((db) => {
                       const isSelected = selectedDemoDbIds.includes(db.id)
                       const showPrefix = addFirmaPrefix && !!firmaId
-                      const check = pathChecks.get(db.id) ?? { status: "idle" as PathStatus, sizeMB: 0 }
+                      const check: PathCheckState = pathChecks.get(db.id) ?? { status: "idle", sizeMB: 0, date: null }
                       const disabled = check.status === "missing" || check.status === "checking"
                       const duzenlenir = check.status === "found" || check.status === "no-path"
+                      // Program katalogda sabit (demo_database_services) — salt okunur gösterilir
+                      const programAdlari = selectedPusulaServices
+                        .filter((s) => db.serviceIds.includes(s.id))
+                        .map((s) => {
+                          const code = (s.config as PusulaProgramConfig | null)?.programCode ?? null
+                          return `${s.name}${code ? ` (${code})` : ""}`
+                        })
                       return (
                         <tr
                           key={db.id}
@@ -648,6 +681,54 @@ export function StepSql({
                               <span className="text-[12px] text-muted-foreground">—</span>
                             )}
                           </td>
+                          {/* guvenlik.KOD — yalnız seçili satırda düzenlenir */}
+                          {addToSirketDb && (
+                            <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                              {isSelected
+                                ? <KodHucresi value={db.kod ?? ""} onChange={(v) => onUpdateDemoDbKod(db.id, v)} firmaId={firmaId} cakismalar={kodCakismalari} />
+                                : <span className="text-muted-foreground text-[12px]">—</span>}
+                            </td>
+                          )}
+                          {/* Program — demo kataloğunda bağlı program (değiştirilemez) */}
+                          {showProgramColumn && (
+                            <td className="whitespace-nowrap px-4 py-1.5 text-[13px]">
+                              {programAdlari.length > 0
+                                ? programAdlari.join(", ")
+                                : <span className="text-muted-foreground text-[12px]">—</span>}
+                            </td>
+                          )}
+                          {/* Yedek görevi — yedek satırlarındaki düğmenin aynısı */}
+                          <td className="px-4 py-1.5" onClick={(e) => e.stopPropagation()}>
+                            {!isSelected ? <span className="text-muted-foreground text-[12px]">—</span> : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-flex">
+                                  <button
+                                    type="button"
+                                    aria-pressed={db.yedekAl !== false}
+                                    disabled={!addToSirketDb}
+                                    onClick={() => onToggleDemoDbYedek(db.id)}
+                                    className={cn(
+                                      "flex h-7 shrink-0 items-center gap-1.5 rounded-[5px] border px-2 text-[12px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                                      db.yedekAl !== false && addToSirketDb
+                                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                                        : "text-muted-foreground line-through hover:text-foreground",
+                                    )}
+                                  >
+                                    <ShieldCheck className="size-3.5" /> Yedek
+                                  </button>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {!addToSirketDb
+                                  ? "Şirket veritabanına ekle kapalı — yedek kaydı yazılmaz"
+                                  : db.yedekAl !== false
+                                    ? "Yedek görevine eklenir — kapatmak için tıklayın"
+                                    : "Yedeği alınmayacak · güvenlik kaydı YedekAl = false"}
+                              </TooltipContent>
+                            </Tooltip>
+                            )}
+                          </td>
                           <td className="whitespace-nowrap px-4 py-1.5 text-right tabular-nums text-muted-foreground">
                             {check.status === "found" && formatSize(check.sizeMB)}
                             {check.status === "checking" && (
@@ -659,6 +740,7 @@ export function StepSql({
                             {check.status === "no-path" && <span className="text-[12px]" title="Kaynak yol tanımlı değil">Yol yok</span>}
                             {check.status === "idle" && "—"}
                           </td>
+                          <td className="whitespace-nowrap px-4 py-1.5 text-right text-[12px] tabular-nums text-muted-foreground">{check.date || "—"}</td>
                         </tr>
                       )
                     })}

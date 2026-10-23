@@ -1,3 +1,5 @@
+import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
+
 export interface AdServer {
   id: number
   name: string
@@ -93,6 +95,15 @@ export interface BackupFile {
   yedekAlElle?: boolean
   /** guvenlik.KOD — boş = firma numarası (lib/guvenlik-kod.ts) */
   kod?: string
+}
+
+/** Sihirbazdaki demo veritabanı satırı — katalog DTO'su + yedek satırlarındaki
+ *  gibi kullanıcı ayarları (hedef ad `dataName` üzerinde düzenlenir). */
+export type WizardDemoDb = DemoDatabaseDto & {
+  /** guvenlik.KOD — null/boş = firma numarası (lib/guvenlik-kod.ts) */
+  kod: string | null
+  /** Otomatik yedeklemeye girsin mi (`guvenlik.YedekAl`) — demo güncel data, varsayılan açık. */
+  yedekAl: boolean
 }
 
 export interface DemoDatabase {

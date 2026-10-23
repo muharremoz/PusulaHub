@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react"
 import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
 import dynamic from "next/dynamic"
 import {
-  WizardUser, BackupFile, Company, ExistingAdUser,
+  WizardUser, BackupFile, Company, ExistingAdUser, type WizardDemoDb,
 } from "@/lib/setup-mock-data"
 import type { WizardServiceDto } from "@/app/api/services/route"
 import type { IisServerItem } from "@/app/api/setup/iis-servers/route"
@@ -310,7 +310,7 @@ export function WizardShell() {
   const [backupFiles, setBackupFiles] = useState<BackupFile[]>([])
   // Boş başlar: eskiden "D:\Demo Data" (demo veritabanlarının klasörü) geliyordu → müşteri yedeği yerine demo .bak'lar listeleniyordu
   const [backupFolderPath, setBackupFolderPath] = useState("")
-  const [demoDatabases, setDemoDatabases] = useState<DemoDatabaseDto[]>([])
+  const [demoDatabases, setDemoDatabases] = useState<WizardDemoDb[]>([])
   const [demoDbsLoading, setDemoDbsLoading] = useState(false)
   const [demoDbsError, setDemoDbsError] = useState<string | null>(null)
   const [selectedDemoDbIds, setSelectedDemoDbIds] = useState<number[]>([])
@@ -383,7 +383,8 @@ export function WizardShell() {
     fetch("/api/demo-databases?onlyActive=true")
       .then((r) => r.json())
       .then((data) => {
-        if (Array.isArray(data)) setDemoDatabases(data as DemoDatabaseDto[])
+        // Yedek satırlarıyla aynı varsayılanlar: KOD boş (= firma no), yedek açık (demo güncel data)
+        if (Array.isArray(data)) setDemoDatabases((data as DemoDatabaseDto[]).map((d) => ({ ...d, kod: null, yedekAl: true })))
         else setDemoDbsError(data.error ?? "Demo veritabanları alınamadı")
       })
       .catch(() => setDemoDbsError("Demo DB API bağlantı hatası"))
@@ -440,7 +441,7 @@ export function WizardShell() {
         ad: `${veriPrefix}${f.databaseName.trim()}`, guncel: yedekAlVarsayilan(f.databaseName.trim()), kod: kodDegeri(f.kod, firmaId),
       }))
     : demoDatabases.filter((d) => selectedDemoDbIds.includes(d.id) && (d.dataName ?? d.name).trim()).map((d) => ({
-        ad: `${veriPrefix}${(d.dataName ?? d.name).trim()}`, guncel: true, kod: kodDegeri(null, firmaId),
+        ad: `${veriPrefix}${(d.dataName ?? d.name).trim()}`, guncel: d.yedekAl !== false, kod: kodDegeri(d.kod, firmaId),
       }))
   /** Hizmetin ayarı — dokunulmadıysa varsayılan (güncel data, kullanıcısız); SQL'de kaldırılan data düşer */
   const apiAyari = (id: number): ApiHizmetAyari => {
@@ -552,6 +553,16 @@ export function WizardShell() {
     setSelectedDemoDbIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id])
   const updateDemoDbDataName = (id: number, dataName: string) =>
     setDemoDatabases((p) => p.map((db) => db.id === id ? { ...db, dataName } : db))
+  const toggleDemoDbYedek = (id: number) =>
+    setDemoDatabases((p) => p.map((db) => db.id === id ? { ...db, yedekAl: !db.yedekAl } : db))
+  const updateDemoDbKod = (id: number, kod: string) =>
+    setDemoDatabases((p) => p.map((db) => db.id === id ? { ...db, kod } : db))
+  /** Seçili demo DB'lere tablo sırasıyla 4515, 45151, 45152… (yedeklerdeki gibi) */
+  const siralaDemoDbKodlari = () => setDemoDatabases((p) => {
+    const kodlar = kodSirala(firmaId, p.filter((db) => selectedDemoDbIds.includes(db.id)).length)
+    let i = 0
+    return p.map((db) => selectedDemoDbIds.includes(db.id) ? { ...db, kod: kodlar[i++] } : db)
+  })
   const scanBackups = useCallback(
     async (opts?: { silent?: boolean }) => {
       if (!selectedSqlServerId) {
@@ -800,6 +811,9 @@ export function WizardShell() {
                   selectedPusulaServices={apiServices.filter((s) => s.type === "pusula-program" && selectedServiceIds.includes(s.id))}
                   onToggleDemoDb={toggleDemoDb}
                   onUpdateDemoDbDataName={updateDemoDbDataName}
+                  onToggleDemoDbYedek={toggleDemoDbYedek}
+                  onUpdateDemoDbKod={updateDemoDbKod}
+                  onSiralaDemoDbKodlari={siralaDemoDbKodlari}
                   onSetAddFirmaPrefix={setAddFirmaPrefix}
                   addToSirketDb={addToSirketDb}
                 />
