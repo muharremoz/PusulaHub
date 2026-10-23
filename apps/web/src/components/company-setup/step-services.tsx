@@ -77,10 +77,17 @@ export function StepServices({
     if (!activeTab && categories.length > 0) setActiveTab(categories[0])
   }, [activeTab, categories])
 
-  /** Görünen kategori adı. Programlar adımında DB'deki "API Hizmetleri" kategorisinde yalnız Resim kalıyor
-   *  (data gerektirenler API adımına taşındı) — sekme "API hizmetleri" yazmasın, "Resim" yazsın. */
-  const kategoriAdi = (cat: string) =>
-    kapsam === "program" && services.filter((s) => s.category === cat).every((s) => s.type === "iis-resim") ? "Resim" : cat
+  /** Görünen kategori adı. Programlar adımında DB'deki "API Hizmetleri" kategorisinde yalnız Resim, "Mobil"
+   *  kategorisinde yalnız Pars kalıyor (data gerektiren IIS siteleri API adımına taşındı) — sekme içindekini
+   *  söylesin: "Resim" / "Pars". Kategoride başka türde hizmet varsa DB'deki ad gösterilir. */
+  const kategoriAdi = (cat: string) => {
+    if (kapsam !== "program") return cat
+    const turler = new Set(services.filter((s) => s.category === cat).map((s) => s.type))
+    if (turler.size !== 1) return cat
+    if (turler.has("iis-resim")) return "Resim"
+    if (turler.has("pars")) return "Pars"
+    return cat
+  }
 
   const catItems = services.filter((s) => s.category === activeTab)
   const allSelected = catItems.length > 0 && catItems.every((s) => selectedIds.includes(s.id))
