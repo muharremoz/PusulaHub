@@ -15,7 +15,7 @@ import { FlickeringGrid } from "@/components/ui/flickering-grid";
 import { YedekYanKarti } from "./yedekler";
 import { SayimYanKarti } from "./sayim-karti";
 import { AyarlarIcerik } from "./ayarlar";
-import { DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
+import { AnketModali, DuyuruSeritleri, DuyurularIcerik, okunmamislar } from "./duyurular";
 import { GuncellemePenceresi } from "./guncelleme";
 import { IkiAcPenceresi, KodPenceresi } from "./iki-adim";
 import { SifreAcPenceresi, SifreDegistirPenceresi, SifrePenceresi } from "./uygulama-sifresi";
@@ -631,6 +631,7 @@ export function AnaEkran({ durum, setDurum }: P) {
       )}
 
       <GuncellemePenceresi durum={durum} setDurum={setDurum} />
+      <AnketModali durum={durum} setDurum={setDurum} gizle={orta === "duyurular" || kurulumModu} />
       <SifreAcPenceresi acik={uygAc} onKapat={() => setUygAc(false)} setDurum={setDurum} />
       <SifreDegistirPenceresi acik={uygDegistir} onKapat={() => setUygDegistir(false)} setDurum={setDurum} />
       <SifrePenceresi

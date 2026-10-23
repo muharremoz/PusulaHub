@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, ClipboardList, Info, Loader2, Megaphone, OctagonAlert } from "lucide-react";
 import { api, type Duyuru, type Durum } from "@/api";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AnketFormu, AnketYanitlandi } from "./anket";
 
 /** Servis zamanı UTC "YYYY-MM-DD HH:MM:SS". */
@@ -147,5 +148,52 @@ export function DuyurularIcerik({ durum, setDurum }: { durum: Durum; setDurum: (
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Yanıtlanmamış anket — doğrudan MODAL (23.10.2026).
+ *
+ * Neden: anket önce yalnız şerit + tepsi balonu olarak duruyordu; ilk ankette
+ * 121 cihaza ulaştı, 4 kişi açtı, 2 kişi yanıtladı. Bildirim gibi göründüğü için
+ * geçilip gidiliyordu. Artık uygulama penceresi açıkken form ortada açılır.
+ *
+ * "Sonra" bu oturum için kapatır (uygulama yeniden açılınca tekrar sorar);
+ * "Yanıtlamak istemiyorum" duyuruyu okundu sayar, bir daha sormaz.
+ * Duyurular paneli açıkken gösterilmez — aynı form iki yerde olmasın.
+ */
+export function AnketModali({ durum, setDurum, gizle }: { durum: Durum; setDurum: (d: Durum) => void; gizle?: boolean }) {
+  const { bekle, okundu } = useOkundu(setDurum);
+  const [ertelenen, setErtelenen] = useState<string[]>([]);
+  const d = (durum.duyurular ?? []).find((x) => x.anket && !x.cevaplandi && !x.okundu && !ertelenen.includes(x.id));
+  if (!d || !d.anket || gizle) return null;
+  const sonra = () => setErtelenen((l) => [...l, d.id]);
+  return (
+    <Dialog open onOpenChange={(acik) => { if (!acik) sonra(); }}>
+      <DialogContent className="flex max-h-[85svh] flex-col gap-0 p-0 sm:max-w-lg">
+        <DialogHeader className="border-b p-5">
+          <div className="flex items-center gap-3">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-primary/20">
+              <ClipboardList className="size-5" />
+            </span>
+            <div className="min-w-0">
+              <DialogTitle className="text-[15px] leading-snug font-semibold">{d.baslik}</DialogTitle>
+              {d.metin && <DialogDescription className="mt-1 whitespace-pre-line">{d.metin}</DialogDescription>}
+            </div>
+          </div>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+          <AnketFormu duyuruId={d.id} anket={d.anket} setDurum={setDurum} />
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t bg-muted/50 px-5 py-3">
+          <Button size="sm" variant="ghost" className="text-muted-foreground" disabled={bekle === d.id} onClick={() => void okundu(d.id)}>
+            {bekle === d.id && <Loader2 className="animate-spin" />} Yanıtlamak istemiyorum
+          </Button>
+          <Button size="sm" variant="outline" onClick={sonra}>
+            Sonra
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
