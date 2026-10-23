@@ -88,6 +88,9 @@ Etkinleştirme (Windows + Office MAK) ve Thinstuff lisansı **kullanıcı**.
 ## 7. İzleme
 
 - Kuma ping: `KU=… KP=… node __kuma-kopya.mjs 41 "Terminal N" 10.15.2.x` (41 = Terminal 3 ping). T6 = id 50, T7 = id 51.
+- **ESXi otomatik başlatma:** yeni VM listeye kendiliğinden girmez (T5–T7 23.10'a kadar yoktu) →
+  `node --env-file=.env.local __esxi-autostart-ekle.mjs <moid>:<sıra>`; kontrol `__esxi-autostart.mjs`.
+  Sıra: DC 1, SQL 2, Coolify 3 … terminaller sonda (T7 = 13), gecikme 120 sn.
 - Thinstuff bekçisi (push): Thinstuff kurulunca Kuma'da push izleyicisi (48'in kopyası) + `tN-kur.ps1 -KumaToken <token>`.
 
 ## Yardımcılar (`apps/web`, untracked)

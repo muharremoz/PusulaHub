@@ -92,10 +92,10 @@ function Bar({ percent, color }: { percent: number; color: string }) {
 }
 
 /** Ad + değer + altında çubuk */
-function Meter({ name, value, percent }: { name: string; value: string; percent: number }) {
+function Meter({ name, value, percent, compact = false }: { name: string; value: string; percent: number; compact?: boolean }) {
   const color = pctColor(percent)
   return (
-    <div className="py-[3px]">
+    <div className={compact ? "py-[1px]" : "py-[3px]"}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: TXT }}>{name}</span>
         <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums" style={{ color }}>
@@ -247,12 +247,10 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
    Disk doluluğu — veri deposu + sunucular
 ══════════════════════════════════════════════════════════ */
 
-/** Kaç sunucu satırı gösterilir — en dolular önce */
-const MAX_DISK_ROWS = 6
-
 export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
-  /*  Her diski ayrı satır yapıp en dolulara göre sıralıyoruz: ekranda yer
-   *  sınırlı, dolmak üzere olan disk her zaman görünsün.                 */
+  /*  Her diski ayrı satır yapıp en dolulara göre sıralıyoruz: dolmak üzere
+   *  olan disk her zaman üstte. Eskiden ilk 6 satırla sınırlıydı; sunucu
+   *  sayısı arttıkça (T5–T7) diskler listeden düşüyordu — artık hepsi.   */
   const rows = servers
     .flatMap((s) =>
       (s.disks?.length
@@ -268,14 +266,13 @@ export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
           : []),
     )
     .sort((a, b) => b.percent - a.percent)
-    .slice(0, MAX_DISK_ROWS)
 
   return (
     <Card>
       <Title>Disk Doluluğu</Title>
 
       {rows.length > 0 ? (
-        rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} />)
+        rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} compact={rows.length > 10} />)
       ) : (
         <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
           veri yok
