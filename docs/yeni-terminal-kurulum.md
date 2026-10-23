@@ -100,7 +100,11 @@ popup **27E01418 (943 KB)**, klasör `C:\pusula-agent-windows`.
 
 ## 5. Yazılımlar (Claude, agent; dosyalar T5 `C:\Kurulum`'dan)
 
-Office LTSC ProPlus 2024 (`Office2024\`), VC++ 2008 x86+x64, 7-Zip, SumatraPDF (`Yazilim\`), WebView2 (`WebView2\`).
+`node __ps-paylasim.mjs "Terminal N" scripts/yeni-terminal/yazilim-kur.ps1 280 "Terminal 5"` — dosyaları T5'ten kopyalar
+(SHA), kurulumları arka planda yapar: VC++ 2008 x86+x64, 7-Zip, SumatraPDF, WebView2, Office LTSC ProPlus 2024. Günlük
+`C:\ProgramData\Pusula\yazilim-kur.log` (son satır BITTI). Ardından Windows Update:
+`node __ps.mjs "Terminal N" scripts/yeni-terminal/wu-kur.ps1` (görev `PusulaWindowsUpdate`, günlük `wu.log`),
+bitince yeniden başlat + ikinci tur.
 Etkinleştirme (Windows + Office MAK) ve Thinstuff lisansı **kullanıcı**.
 
 ## Yardımcılar (`apps/web`, untracked)
