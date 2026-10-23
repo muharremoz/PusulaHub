@@ -6,7 +6,7 @@ import type { SqlServerItem } from "@/app/api/setup/sql-servers/route"
 import type { DemoDatabaseDto } from "@/app/api/demo-databases/route"
 import { type AdServerItem } from "./step-server"
 import { type RdpServerItem } from "./step-firma"
-import { Building2, ClipboardList, Database, Layers, Server, Smartphone, Users, ArrowRight, Globe } from "lucide-react"
+import { ClipboardList, Database, Layers, Server, Smartphone, Users, ArrowRight, Globe } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { sqlLoginAdi } from "@/lib/firma-adlandirma"
 import type { ParsWizardUser } from "@/lib/pars-katalog"
@@ -148,24 +148,19 @@ export function StepSummary({
   return (
     <div className="space-y-4">
 
-      {/* Firma şeridi + sayılar */}
-      <div className="rounded-[8px] bg-[var(--section-bg)] p-2">
-        <div className="flex items-center gap-3 px-2 py-1.5">
-          <span className="bg-primary/10 text-primary ring-primary/20 flex size-9 shrink-0 items-center justify-center rounded-[5px] ring-1">
-            <Building2 className="size-[18px]" />
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-[15px] font-semibold">{firmaId}{company?.firma ? ` · ${company.firma}` : ""}</p>
-            <p className="truncate text-[12px] text-muted-foreground">
-              {[company?.city, adServer?.domain, windowsServer?.name].filter(Boolean).join(" · ") || "Kurulum özeti"}
-            </p>
-          </div>
+      {/* Firma şeridi + sayılar — tek satır */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-[8px] border px-4 py-3">
+        <div className="min-w-0">
+          <p className="truncate text-[15px] font-semibold">{firmaId}{company?.firma ? ` · ${company.firma}` : ""}</p>
+          <p className="truncate text-[12px] text-muted-foreground">
+            {[company?.city, adServer?.domain, windowsServer?.name].filter(Boolean).join(" · ") || "Kurulum özeti"}
+          </p>
         </div>
-        <div className={cn("mt-2 grid gap-2", kpiler.length === 4 ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3")}>
+        <div className="flex shrink-0 items-center gap-5">
           {kpiler.map((k) => (
-            <div key={k.ad} className="rounded-[5px] bg-card px-3 py-2" style={{ boxShadow: "var(--card-shadow)" }}>
-              <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground"><k.ikon className="size-3" />{k.ad}</p>
-              <p className="text-2xl font-bold tabular-nums">{k.deger}</p>
+            <div key={k.ad} className="text-right">
+              <p className="text-[18px] font-semibold leading-tight tabular-nums">{k.deger}</p>
+              <p className="text-[11px] text-muted-foreground">{k.ad}</p>
             </div>
           ))}
         </div>
