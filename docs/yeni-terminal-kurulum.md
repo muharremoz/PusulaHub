@@ -97,6 +97,9 @@ popup **27E01418 (943 KB)**, klasör `C:\pusula-agent-windows`.
 - **T6 sonucu (23.10, 16:15–16:23, 8 dk):** 20/20 TAMAM, ThinstuffBekci bilerek atlandı; FSRM tuzakları (T5) betikte
   olduğu için sorun çıkmadı. Sonda "sistem yereli için yeniden başlatma" — yazılım + WU bitince tek seferde.
 - Saat dilimi Pasifik gelir → betik Turkey yapar.
+- **Ardından `node __ps.mjs "Terminal N" scripts/yeni-terminal/bolge-tr.ps1`** — betikteki `Set-Culture tr-TR` yalnız
+  SYSTEM'e uygulanır. Windows kurulumunda "Türkçe (Kıbrıs)" **tr-CY** seçilirse saat **12 saatlik (ÖS/ÖÖ)** gelir ve varsayılan
+  profil üzerinden HER YENİ KULLANICIYA geçer (T6'da oldu). Betik tr-TR'yi varsayılan profile + yüklü kullanıcı kovanlarına kopyalar.
 
 ## 5. Yazılımlar (Claude, agent; dosyalar T5 `C:\Kurulum`'dan)
 
