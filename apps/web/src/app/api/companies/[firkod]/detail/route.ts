@@ -63,6 +63,12 @@ export interface CompanyDetail {
   }
   weeklyUsage:  WeeklyUsagePoint[]
   history30d?:  CompanyUsageHistory
+  /** Firmaya atanmış sunucular (companies.*_server_id → servers). Atanmamışsa null. */
+  sunucular?: {
+    terminal: FirmaSunucu | null
+    sql:      FirmaSunucu | null
+    depo:     FirmaSunucu | null
+  }
   /** Firmaya ELLE atanmış kotalar (default'tan farklı). null = manuel kota yok
    *  → bar paylaşımlı-sunucu oranı/varsayılan kotaya göre gösterilir. Manuel
    *  değer varsa bar o kotaya göre dolar ve "kullanım / kota" gösterilir.
@@ -74,6 +80,8 @@ export interface CompanyDetail {
     dbGB:   number | null
   }
 }
+
+export interface FirmaSunucu { id: string; name: string; ip: string | null }
 
 export interface CompanyUsageHistory {
   avgCpu:       number        // 30g ortalama CPU %
@@ -351,6 +359,21 @@ export async function GET(
         }
       }
     } catch { /* tablo yoksa sorun değil */ }
+
+    // Atanmış sunucuların adları (tek sorgu)
+    try {
+      const idler = [c.windows_server_id, c.sql_server_id, c.file_server_id].filter((x): x is string => !!x)
+      if (idler.length) {
+        const { data: sv } = await sb.schema("hub").from("servers").select("id, name, ip").in("id", idler)
+        const bul = (id: string | null): FirmaSunucu | null => {
+          const r = (sv ?? []).find((x) => x.id === id) as { id: string; name: string; ip: string | null } | undefined
+          return r ? { id: r.id, name: r.name, ip: r.ip ?? null } : null
+        }
+        detail.sunucular = { terminal: bul(c.windows_server_id), sql: bul(c.sql_server_id), depo: bul(c.file_server_id) }
+      } else {
+        detail.sunucular = { terminal: null, sql: null, depo: null }
+      }
+    } catch { /* sunucu adı gösterilmez */ }
 
     return NextResponse.json(detail)
   } catch (err) {

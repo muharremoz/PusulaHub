@@ -2352,6 +2352,26 @@ tr:nth-child(even) td{background:#fafafa}
                           {lisansGoster(selectedFirma.lisansBitis)}
                         </span>
                       )}
+                      {/* Firmanın sunucuları — terminal · SQL · depo (detay API'sinden) */}
+                      {(() => {
+                        const s = companyDetail?.sunucular
+                        if (detailLoading) return <Skeleton className="h-4 w-40 rounded-[5px]" />
+                        const ogeler = s
+                          ? ([["Terminal", s.terminal], ["SQL", s.sql], ["Depo", s.depo]] as const).filter(([, v]) => v)
+                          : []
+                        if (ogeler.length === 0) return null
+                        return (
+                          <span className="inline-flex shrink-0 items-center gap-1.5" title="Firmaya atanmış sunucular">
+                            <Server className="size-3.5 shrink-0" />
+                            {ogeler.map(([tur, v], i) => (
+                              <span key={tur} title={`${tur}: ${v!.name}${v!.ip ? ` (${v!.ip})` : ""}`}>
+                                {i > 0 && <span className="mx-1 text-muted-foreground/50">·</span>}
+                                <span className="text-foreground/80">{v!.name}</span>
+                              </span>
+                            ))}
+                          </span>
+                        )
+                      })()}
                       {/* Müşteri temsilcisi — CRM'den; pasifse firma devredilmemiş olabilir */}
                       {selectedFirma.temsilci && (
                         <span
