@@ -410,10 +410,10 @@ export function StepSql({
                   filtreli={backupFiles.filter((f) => f.selected).length}
                   aksiyon={
                     <div className="flex items-center gap-3">
-                      {addToSirketDb && seciliYedekler.length >= 2 && <KodSiralaDugmesi onClick={onSiralaBackupKodlari} />}
+                      {addToSirketDb && seciliYedekler.length >= 2 && <KodSiralaDugmesi onClick={onSiralaBackupKodlari} disabled={!firmaId} />}
                       <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
                         <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
-                        Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
+                        Firma öneki ekle {firmaId ? <span className="font-medium text-foreground">({firmaId}_)</span> : <span className="text-amber-700 dark:text-amber-400">(firma seçilmedi)</span>}
                       </label>
                     </div>
                   }
@@ -603,7 +603,7 @@ export function StepSql({
               filtreli={selectedDemoDbIds.length}
               aksiyon={
                 <div className="flex items-center gap-3">
-                  {addToSirketDb && seciliDemolar.length >= 2 && <KodSiralaDugmesi onClick={onSiralaDemoDbKodlari} />}
+                  {addToSirketDb && seciliDemolar.length >= 2 && <KodSiralaDugmesi onClick={onSiralaDemoDbKodlari} disabled={!firmaId} />}
                   <button
                     type="button"
                     onClick={runPathCheck}
@@ -616,7 +616,7 @@ export function StepSql({
                   </button>
                   <label className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] text-muted-foreground">
                     <Checkbox checked={addFirmaPrefix} onCheckedChange={(v) => onSetAddFirmaPrefix(!!v)} />
-                    Firma öneki ekle <span className="font-medium text-foreground">({firmaId}_)</span>
+                    Firma öneki ekle {firmaId ? <span className="font-medium text-foreground">({firmaId}_)</span> : <span className="text-amber-700 dark:text-amber-400">(firma seçilmedi)</span>}
                   </label>
                 </div>
               }
