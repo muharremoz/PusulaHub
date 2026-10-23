@@ -396,6 +396,9 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                         <WifiOff className="size-3 shrink-0 text-red-500" />
                       )}
                       <p className="truncate text-[13px] font-semibold">{srv.name}</p>
+                      {pct !== null && (
+                        <span className="inline-flex shrink-0 rounded-[5px] bg-muted px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">{srv.alt}</span>
+                      )}
                     </div>
                     <p className="mt-0.5 truncate text-[12px] tabular-nums text-muted-foreground">{srv.dns ? `${srv.dns} · ${srv.ip}` : srv.ip}</p>
                   </div>
@@ -403,15 +406,6 @@ function SunucuSecici({ baslik, ikon, aciklama, sunucular, yukleniyor, hata, sec
                     {sec && <Check className="size-2.5 text-white" strokeWidth={3} />}
                   </span>
                 </div>
-                {pct !== null && (
-                  <>
-                    <div className="mt-3 flex items-end justify-between">
-                      <span className="text-[12px] text-muted-foreground">{srv.alt}</span>
-                      <span className={cn("text-[11px] font-medium tabular-nums",
-                        pct > 80 ? "text-red-600 dark:text-red-400" : pct > 60 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400")}>%{pct}</span>
-                    </div>
-                  </>
-                )}
                 {(pct === null || kapali) && (
                   <div className="mt-2.5 flex items-center justify-between gap-2">
                     <span className="truncate text-[11px] text-muted-foreground">{pct === null ? srv.alt : ""}</span>
