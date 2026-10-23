@@ -801,7 +801,7 @@ export function WizardShell() {
                   onToggleDemoDb={toggleDemoDb}
                   onUpdateDemoDbDataName={updateDemoDbDataName}
                   onSetAddFirmaPrefix={setAddFirmaPrefix}
-                  addToSirketDb={addToSirketDb} onSetAddToSirketDb={setAddToSirketDb}
+                  addToSirketDb={addToSirketDb}
                 />
               )}
               {step === 5 && (

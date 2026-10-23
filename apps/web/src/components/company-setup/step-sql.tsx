@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@muharremoz/pusula-ui"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/combobox-select"
 import { Checkbox } from "@/components/shared/form"
 import { Input } from "@/components/ui/input"
@@ -54,7 +53,6 @@ interface Props {
   onToggleDemoDb: (id: number) => void
   onUpdateDemoDbDataName: (id: number, dataName: string) => void
   onSetAddFirmaPrefix: (v: boolean) => void
-  onSetAddToSirketDb: (v: boolean) => void
 }
 
 /** Byte cinsinden (MB float) alınır, en uygun birimle formatlanır. */
@@ -83,7 +81,7 @@ export function StepSql({
   onSetBackupFolder, onScanBackups, onUpdateBackupDatabaseName,
   onUpdateBackupProgramServiceId, selectedPusulaServices,
   onToggleDemoDb, onUpdateDemoDbDataName,
-  onSetAddFirmaPrefix, onSetAddToSirketDb,
+  onSetAddFirmaPrefix,
 }: Props) {
   const showProgramColumn = selectedPusulaServices.length >= 2
   const seciliSunucu = sqlServers.find((s) => s.id === selectedSqlServerId) ?? null
@@ -93,9 +91,6 @@ export function StepSql({
     : ""
   const seciliYedekler = backupFiles.filter((f) => f.selected)
   const kodCakismalari = useKodCakismalari(firmaId, seciliYedekler.map((f) => f.kod ?? ""), selectedSqlServerId)
-  const hasSelection =
-    (sqlMode === 0 && backupFiles.some((f) => f.selected)) ||
-    (sqlMode === 1 && selectedDemoDbIds.length > 0)
 
   /* ── Demo DB path check (Mode 1) ──────────────────────────
    * Seçili SQL sunucusunda her demo DB'nin locationPath'i var mı diye
@@ -208,18 +203,6 @@ export function StepSql({
               : "Veritabanı kurulmayacaksa sunucu seçmeden devam edebilirsiniz."}
           </p>
         </div>
-        {seciliSunucu && (
-          <label
-            className={cn("flex shrink-0 cursor-pointer items-center gap-2 transition-opacity", !hasSelection && "cursor-not-allowed opacity-50")}
-            title={hasSelection ? "sirket.dbo.guvenlik tablosuna program kaydı oluşturulur" : "Önce bir veritabanı seçmelisiniz"}
-          >
-            <span className="text-right">
-              <span className="block text-[12px] font-medium leading-tight">Şirket veritabanına ekle</span>
-              <span className="block text-[10px] leading-tight text-muted-foreground">sirket.dbo.guvenlik kaydı</span>
-            </span>
-            <Switch checked={addToSirketDb} disabled={!hasSelection} onCheckedChange={onSetAddToSirketDb} />
-          </label>
-        )}
       </div>
 
       {/* SQL sunucusu — kartlar; seçili karta tekrar tıklayınca seçim kalkar */}
