@@ -28,7 +28,7 @@ const StepRun      = dynamic(() => import("./step-run").then((m) => m.StepRun), 
 const Confetti     = dynamic(() => import("@/components/magicui/confetti").then((m) => m.Confetti), { ssr: false })
 import { ChevronLeft, ChevronRight, Sparkles, Check, Server, Building2, Users, Layers, Database, ClipboardList, Play, Globe } from "lucide-react"
 import { apiAyarHatasi, varsayilanDbler, type ApiHizmetAyari, type VeriSecenegi } from "./step-api"
-import { kapsamdaMi } from "./step-services"
+import { kapsamdaMi, sihirbazKategorisi } from "./step-services"
 import { kodDegeri, kodSirala } from "@/lib/guvenlik-kod"
 import { cn } from "@/lib/utils"
 import { generateSafePassword } from "@/lib/password-gen"
@@ -507,7 +507,7 @@ export function WizardShell() {
   const toggleService = useCallback((id: number) =>
     setSelectedServiceIds((p) => p.includes(id) ? p.filter((x) => x !== id) : [...p, id]), [])
   const toggleAllInCategory = useCallback((cat: string, sel: boolean, kapsam?: "program" | "api") => {
-    const ids = apiServices.filter((s) => s.category === cat && kapsamdaMi(s.type, kapsam)).map((s) => s.id)
+    const ids = apiServices.filter((s) => kapsamdaMi(s.type, kapsam) && sihirbazKategorisi(s, kapsam) === cat).map((s) => s.id)
     setSelectedServiceIds((p) => sel ? [...new Set([...p, ...ids])] : p.filter((id) => !ids.includes(id)))
   }, [apiServices])
 

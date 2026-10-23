@@ -45,6 +45,22 @@ interface Props {
 export const kapsamdaMi = (tip: string, kapsam: "program" | "api" | undefined) =>
   !kapsam ? true : kapsam === "api" ? tip === "iis-site" : tip !== "iis-site"
 
+/** API hizmetleri adımındaki sekme sırası */
+const API_SEKMELERI = ["Pusula", "Entegrasyon", "Mobil"]
+
+/**
+ * Sihirbazda görünen kategori. DB'de tüm API hizmetleri tek kategoride ("API Hizmeti") — API adımında
+ * sekmelere ayrılır: Mobil (Pusula MOBIL, Pusula RFID), Pusula (Pusula API, Pusula X Transfer),
+ * Entegrasyon (E-Ticaret API, SarrafPro, Kivi ve diğerleri). DB'deki kategoriye dokunulmaz
+ * (firma ekranı "Mobil"i Pars olarak gösteriyor). Diğer adımlarda DB kategorisi aynen kalır.
+ */
+export function sihirbazKategorisi(s: { name: string; category: string; type: string }, kapsam: "program" | "api" | undefined): string {
+  if (kapsam !== "api" || s.type !== "iis-site") return s.category
+  if (/mobil|rfid/i.test(s.name)) return "Mobil"
+  if (/^pusula/i.test(s.name.trim())) return "Pusula"
+  return "Entegrasyon"
+}
+
 function getSourcePath(svc: WizardServiceDto): string {
   if (svc.config && "sourceFolderPath" in svc.config) return svc.config.sourceFolderPath
   if (svc.config && "subFolder" in svc.config) {
@@ -68,8 +84,10 @@ export function StepServices({
   // Sunucu seçimini temizleme kararı TÜM seçimlere bakar (Resim için seçilen IIS sunucusu API adımında kaybolmasın);
   // liste, özet ve seçiciler yalnız bu adımın kapsamındaki hizmetlere.
   const tumHizmetler = services
-  services = services.filter((s) => kapsamdaMi(s.type, kapsam))
+  services = services.filter((s) => kapsamdaMi(s.type, kapsam)).map((s) => ({ ...s, category: sihirbazKategorisi(s, kapsam) }))
   const categories = [...new Set(services.map((s) => s.category))]
+  const sira = (c: string) => { const i = API_SEKMELERI.indexOf(c); return i < 0 ? API_SEKMELERI.length : i }
+  if (kapsam === "api") categories.sort((a, b) => sira(a) - sira(b))
   const [activeTab, setActiveTab] = useState<string | undefined>(categories[0])
 
   // Veri sonradan geldiğinde ilk kategoriyi otomatik aktif et
