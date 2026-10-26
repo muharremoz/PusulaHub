@@ -145,7 +145,7 @@ export function StepServicesPars({
   const kullaniciHatasi = (u: ParsWizardUser): string | null => {
     const ad = u.username.trim()
     if (!ad) return null
-    if (!parsKullaniciAdiGecerliMi(ad)) return "Boşluk ve tırnak olmadan 2–40 karakter"
+    if (!parsKullaniciAdiGecerliMi(ad)) return "Tırnak olmadan 2–40 karakter"
     const k = ad.toLocaleLowerCase("tr-TR")
     if ((adSayisi.get(k) ?? 0) > 1) return "Listede iki kez yazılmış"
     if (mevcutAdlar.has(k)) return "Bu kullanıcı Pars'ta zaten var"

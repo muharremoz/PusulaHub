@@ -151,10 +151,15 @@ export function parsSifreGecerliMi(sifre: string): boolean {
   return /^[A-Za-z0-9]{6}$/.test(sifre)
 }
 
-/** Kullanıcı adı: boşluk ve tırnak yok, 2-40 karakter. Datadaki kullanıcıyla aynı yazılır. */
+/**
+ * Kullanıcı adı: 2-40 karakter, tırnak yok. Datadaki kullanıcıyla aynı yazılır.
+ * Kelime arası BOŞLUK serbest (26.10.2026 — 2406'da "ARAC BATIKENT" gibi
+ * datadaki adlar boşluklu); baş/son boşluk kırpılır, sekme/satır sonu yasak.
+ * Ayar.mdb'ye parametreli sorguyla yazıldığı için boşluk güvenli.
+ */
 export function parsKullaniciAdiGecerliMi(adi: string): boolean {
   const s = adi.trim()
-  return s.length >= 2 && s.length <= 40 && !/[\s'"]/.test(s)
+  return s.length >= 2 && s.length <= 40 && !/['"\t\r\n]/.test(s)
 }
 
 /**
