@@ -416,7 +416,7 @@ export function StepRun({
           addToSirketDb,
           pars: pars && pars.users.length > 0 ? {
             serviceId:        pars.serviceId,
-            users:            pars.users.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin })),
+            users:            pars.users.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin, allowedReportIds: u.reportIds })),
             allowedReportIds: pars.allowedReportIds,
           } : undefined,
         }}

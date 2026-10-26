@@ -72,8 +72,11 @@ $c.Close()
 export interface ParsYazmaGirdisi {
   /** Firmanın Pars'a bağlanacak veritabanları (SQL DB adı) + program tipi. */
   datalar: { data: string; tipId: number }[]
-  users:   { adi: string; tipi: 0 | 1; sifre: string }[]
-  /** İzinli rapor ID'leri — bunların DIŞINDAKİ her Scripts kaydı yasaklanır. */
+  /** izinli: bu kullanıcının izinli rapor ID'leri (Pars'ta yetki kullanıcı başına);
+   *  verilmezse `izinliRaporlar` kullanılır. */
+  users:   { adi: string; tipi: 0 | 1; sifre: string; izinli?: number[] }[]
+  /** Ortak izinli rapor listesi — kullanıcıya özel liste yoksa geçerli.
+   *  İzinli olmayan her Scripts kaydı o kullanıcıya yasaklanır. */
   izinliRaporlar: number[]
   /**
    * Firmanın Ayar.mdb'de ZATEN olan Pars kullanıcı ID'leri (Users.ID).
@@ -182,14 +185,17 @@ try {
   $tumScriptler = @(foreach ($x in $scriptHam) { [int]$x })
 
   $olusan = @()
+  $yasakRaporToplam = 0
   foreach ($u in $users) {
     Calistir 'INSERT INTO Users (Adi, Tipi, sifre) VALUES (?, ?, ?)' @([string]$u.adi, [int]$u.tipi, [string]$u.sifre)
     $uid = [int](Skalar 'SELECT @@IDENTITY' @())
     foreach ($ad in $tumDatalar) {
       if ($izinliDatalar -notcontains [string]$ad) { Calistir 'INSERT INTO YasakliDatalar (UID, DATAAD) VALUES (?, ?)' @($uid, [string]$ad) }
     }
+    # Kullaniciya ozel liste varsa o (yetki kullanici basina), yoksa ortak liste
+    $uIzinli = if ($null -ne $u.izinli) { @($u.izinli | ForEach-Object { [int]$_ }) } else { $izinli }
     foreach ($sid in $tumScriptler) {
-      if ($izinli -notcontains $sid) { Calistir 'INSERT INTO YasakliRapor (UID, RAPOR) VALUES (?, ?)' @($uid, $sid) }
+      if ($uIzinli -notcontains $sid) { Calistir 'INSERT INTO YasakliRapor (UID, RAPOR) VALUES (?, ?)' @($uid, $sid); $yasakRaporToplam++ }
     }
     $tipVerildi = @{}
     foreach ($fd in $firmaDatalar) {
@@ -201,7 +207,7 @@ try {
   }
 
   $tx.Commit()
-  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = ($tumScriptler.Count - $izinli.Count); eskiyeYasak = $eskiyeYasak; eskidenAcilan = $eskidenAcilan } -Compress -Depth 4)
+  'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $true; users = $olusan; datalar = $firmaDatalar; yasakliData = ($tumDatalar.Count - $izinliDatalar.Count); yasakliRapor = [int][math]::Round($yasakRaporToplam / [math]::Max(1, $users.Count)); eskiyeYasak = $eskiyeYasak; eskidenAcilan = $eskidenAcilan } -Compress -Depth 4)
 } catch {
   try { $tx.Rollback() } catch { }
   'PARSJSON:' + (ConvertTo-Json -InputObject @{ ok = $false; error = $_.Exception.Message } -Compress)

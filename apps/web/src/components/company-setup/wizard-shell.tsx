@@ -67,7 +67,7 @@ function mkUser(): WizardUser {
 }
 let _parsUid = 1
 function mkParsUser(): ParsWizardUser {
-  return { id: _parsUid++, username: "", password: parsSifreUret(), admin: false }
+  return { id: _parsUid++, username: "", password: parsSifreUret(), admin: false, reportIds: [] }
 }
 
 export function WizardShell() {
@@ -324,7 +324,6 @@ export function WizardShell() {
 
   // Pars (step 3 — Pars hizmeti seçildiğinde)
   const [parsUsers, setParsUsers]           = useState<ParsWizardUser[]>([])
-  const [parsReportIds, setParsReportIds]   = useState<number[]>([])
   /** Kullanıcı rapor listesine elle dokundu mu — dokunmadıysa program seçimi değişince varsayılan yenilenir */
   const [parsKatalog, setParsKatalog]       = useState<ParsKatalog | null>(null)
   const [parsKatalogFor, setParsKatalogFor] = useState<number | null>(null)
@@ -372,7 +371,7 @@ export function WizardShell() {
     parsKullaniciAdiGecerliMi(u.username) && parsSifreGecerliMi(u.password),
   ) && new Set(parsUsers.map((u) => u.username.trim().toLocaleLowerCase("tr-TR"))).size === parsUsers.length
     && !parsUsers.some((u) => (parsKatalog?.users ?? []).some((k) => k.adi.trim().toLocaleLowerCase("tr-TR") === u.username.trim().toLocaleLowerCase("tr-TR")))
-  const parsReady = !parsService || (parsUsersValid && !!parsKatalog && !parsKatalogError && parsReportIds.length > 0)
+  const parsReady = !parsService || (parsUsersValid && !!parsKatalog && !parsKatalogError && parsUsers.every((u) => u.reportIds.length > 0))
 
   // Step 4: Demo veritabanları kataloğunu fetch et (aktif olanlar)
   useEffect(() => {
@@ -518,7 +517,6 @@ export function WizardShell() {
     setParsUsers((p) => p.map((u) => u.id === id ? { ...u, ...patch } : u)), [])
   const regenParsUser  = useCallback((id: number) =>
     setParsUsers((p) => p.map((u) => u.id === id ? { ...u, password: parsSifreUret() } : u)), [])
-  const setParsReports = useCallback((ids: number[]) => setParsReportIds(ids), [])
 
   const toggleBackup = (id: number) =>
     setBackupFiles((p) => p.map((f) => {
@@ -631,7 +629,7 @@ export function WizardShell() {
     // demoDatabases tekrar fetch edilsin diye boşalt — step 4'e girince useEffect yeniden doldurur
     setDemoDatabases([])
     setApiExistingUsers([]); setExistingUsersKey(null)
-    setParsUsers([]); setParsReportIds([])
+    setParsUsers([])
     setParsKatalog(null); setParsKatalogFor(null); setParsKatalogError(null)
     setApiAyarlari({})
   }
@@ -783,8 +781,6 @@ export function WizardShell() {
                     onUpdateUser: updateParsUser,
                     onRegenerate: regenParsUser,
                     programTipleri: parsProgramTipleri,
-                    selectedReportIds: parsReportIds,
-                    onSetReportIds: setParsReports,
                   } : null}
                 />
               )}
@@ -843,7 +839,7 @@ export function WizardShell() {
                   sqlServer={sqlServer} selectedSqlServerId={selectedSqlServerId} sqlMode={sqlMode} backupFiles={backupFiles}
                   selectedDemoDbIds={selectedDemoDbIds} demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
-                  pars={parsService ? { serviceName: parsService.name, users: parsUsers, reportCount: parsReportIds.length, totalReports: parsKatalog?.scripts.length ?? 0 } : null}
+                  pars={parsService ? { serviceName: parsService.name, users: parsUsers, reportCount: new Set(parsUsers.flatMap((u) => u.reportIds)).size, totalReports: parsKatalog?.scripts.length ?? 0 } : null}
                   veriler={veriler}
                   apiOzet={seciliApiHizmetleri.map((s) => ({ ad: s.name, ...apiAyari(s.id) }))}
                 />
@@ -872,7 +868,7 @@ export function WizardShell() {
                   demoDatabases={demoDatabases}
                   addFirmaPrefix={addFirmaPrefix}
                   addToSirketDb={addToSirketDb}
-                  pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: parsReportIds, baglanti: parsKatalog?.baglanti ?? null } : null}
+                  pars={parsService ? { serviceId: parsService.id, users: parsUsers, allowedReportIds: [...new Set(parsUsers.flatMap((u) => u.reportIds))], baglanti: parsKatalog?.baglanti ?? null } : null}
                   kodlar={Object.fromEntries(veriler.map((v) => [v.ad, v.kod]))}
                   apiAyarlari={Object.fromEntries(seciliApiHizmetleri.map((s) => [s.id, apiAyari(s.id)]))}
                   onComplete={() => setSetupDone(true)}

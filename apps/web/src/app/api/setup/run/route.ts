@@ -265,7 +265,9 @@ interface RunPayload {
    */
   pars?: {
     serviceId:        number
-    users:            { username: string; password: string; admin: boolean }[]
+    /** allowedReportIds: kullanıcı başına izinli raporlar (Pars'ta yetki kullanıcı başına);
+     *  verilmezse üstteki ortak liste geçerli (eski istemciler). */
+    users:            { username: string; password: string; admin: boolean; allowedReportIds?: number[] }[]
     allowedReportIds: number[]
     /** SQL adımı çalışmadığında (firma detayından ekleme) bağlanacak mevcut DB'ler.
      *  Restore edilenlerle birleştirilir. */
@@ -1962,7 +1964,12 @@ export async function POST(req: NextRequest) {
 
                 const cmd = buildParsKullaniciYaz(hedef.dbPath, hedef.password, {
                   datalar,
-                  users: p.users.map((u) => ({ adi: u.username.trim(), tipi: u.admin ? 1 : 0, sifre: u.password })),
+                  users: p.users.map((u) => ({
+                    adi: u.username.trim(), tipi: u.admin ? 1 : 0, sifre: u.password,
+                    ...(Array.isArray(u.allowedReportIds)
+                      ? { izinli: u.allowedReportIds.map(Number).filter((id) => gecerliRapor.has(id)) }
+                      : {}),
+                  })),
                   izinliRaporlar: izinli,
                   mevcutFirmaKullanicilari,
                 })
@@ -1993,7 +2000,7 @@ export async function POST(req: NextRequest) {
                     output: [
                       `${parsUsersCreated} kullanıcı: ${(sonuc.users ?? []).map((u) => `${u.adi} (ID ${u.id})`).join(", ")}`,
                       yeniData.length ? `Datalar'a eklendi: ${yeniData.join(", ")}` : (datalar.length ? "Datalar zaten kayıtlıydı" : "Data bağlanmadı"),
-                      `kullanıcı başına ${sonuc.yasakliData ?? "?"} data ve ${sonuc.yasakliRapor ?? "?"} rapor yasaklandı`,
+                      `kullanıcı başına ${sonuc.yasakliData ?? "?"} data ve ortalama ${sonuc.yasakliRapor ?? "?"} rapor yasaklandı`,
                       ...(sonuc.eskiyeYasak ? [`yeni data firma dışı ${sonuc.eskiyeYasak} kullanıcıya yasaklandı`] : []),
                       ...(sonuc.eskidenAcilan ? [`firmanın eski kullanıcılarına ${sonuc.eskidenAcilan} data açıldı`] : []),
                     ].join(" · "),

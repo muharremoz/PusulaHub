@@ -226,4 +226,7 @@ export interface ParsWizardUser {
   password: string
   /** true → Users.Tipi = 1 (admin), false → 0 (kullanıcı) */
   admin:    boolean
+  /** Bu kullanıcının izinli rapor/görev ID'leri — Pars'ta yetki kullanıcı başına
+   *  (YasakliRapor.UID). Geri kalan her script bu kullanıcıya yasaklanır. */
+  reportIds: number[]
 }

@@ -80,8 +80,9 @@ export interface AdProvisionPayload {
   /* ── Pars (mobil raporlama) — Hizmetler adımında Pars hizmeti seçildiyse ── */
   pars?: {
     serviceId:        number
-    users:            { username: string; password: string; admin: boolean }[]
-    /** İzinli rapor ID'leri; sunucu geri kalan her şeyi yasaklı yazar */
+    /** allowedReportIds: kullanıcı başına izinli raporlar (verilmezse üstteki ortak liste) */
+    users:            { username: string; password: string; admin: boolean; allowedReportIds?: number[] }[]
+    /** İzinli rapor ID'leri (tüm kullanıcıların birleşimi); sunucu geri kalan her şeyi yasaklı yazar */
     allowedReportIds: number[]
     /** SQL adımı çalışmadığında (firma detayından ekleme) bağlanacak mevcut DB'ler */
     datalar?:         { data: string; tipId: number }[]

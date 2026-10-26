@@ -841,7 +841,6 @@ export default function CompaniesPage() {
   const [newSvcError, setNewSvcError]                 = useState<string | null>(null);
   // Pars (mobil) — dialogda Pars hizmeti seçilince: kullanıcılar + raporlar + bağlanacak DB'ler
   const [newSvcParsUsers, setNewSvcParsUsers]         = useState<ParsWizardUser[]>([]);
-  const [newSvcParsReportIds, setNewSvcParsReportIds] = useState<number[]>([]);
   const [newSvcParsKatalog, setNewSvcParsKatalog]     = useState<ParsKatalog | null>(null);
   const [newSvcParsKatalogFor, setNewSvcParsKatalogFor] = useState<number | null>(null);
   const [newSvcParsLoading, setNewSvcParsLoading]     = useState(false);
@@ -858,7 +857,7 @@ export default function CompaniesPage() {
   /** Hizmet ekle kutusunun kategori filtresi; "" = tümü */
   const [newSvcFiltre, setNewSvcFiltre]               = useState("");
   let _parsRowId = 1
-  const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false })
+  const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false, reportIds: [] })
 
   // Şifre üretici — connection string / XML uyumlu karakter seti.
   const generatePassword = () => generateSafePassword(10)
@@ -922,7 +921,7 @@ export default function CompaniesPage() {
     setNewSvcStarted(false); setNewSvcDone(false); setNewSvcError(null)
     setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId(""); setNewSvcApiKimlik({}); setNewSvcFiltre("")
     setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
-    setNewSvcParsUsers([mkParsRow()]); setNewSvcParsReportIds([]); setNewSvcParsError(null)
+    setNewSvcParsUsers([mkParsRow()]); setNewSvcParsError(null)
     setNewSvcParsKatalog(null); setNewSvcParsKatalogFor(null)
     setNewSvcParsDurum("yok"); setNewSvcMsgCopied(false)
     // Firmanın mevcut DB'leri program koduna göre tipiyle hazır gelsin
@@ -977,7 +976,7 @@ export default function CompaniesPage() {
     && new Set(newSvcParsUsers.map((u) => u.username.trim().toLocaleLowerCase("tr-TR"))).size === newSvcParsUsers.length
     && !newSvcParsUsers.some((u) => (newSvcParsKatalog?.users ?? []).some((k) => k.adi.trim().toLocaleLowerCase("tr-TR") === u.username.trim().toLocaleLowerCase("tr-TR")))
   const newSvcParsValid = !newSvcParsService
-    || (newSvcParsUsersValid && !!newSvcParsKatalog && !newSvcParsError && newSvcParsReportIds.length > 0 && newSvcParsDatalar.length > 0)
+    || (newSvcParsUsersValid && !!newSvcParsKatalog && !newSvcParsError && newSvcParsUsers.every((u) => u.reportIds.length > 0) && newSvcParsDatalar.length > 0)
 
   // Elle girilen API kullanıcılarından biri hatalıysa (yarım / yasak karakter) Oluştur kapalı
   const newSvcApiKimlikHatali = newSvcSelected.some((s) => {
@@ -4298,8 +4297,6 @@ tr:nth-child(even) td{background:#fafafa}
                                 onUpdateUser={(id, patch) => setNewSvcParsUsers((p) => p.map((u) => u.id === id ? { ...u, ...patch } : u))}
                                 onRegenerate={(id) => setNewSvcParsUsers((p) => p.map((u) => u.id === id ? { ...u, password: parsSifreUret() } : u))}
                                 programTipleri={newSvcParsTipleri}
-                                selectedReportIds={newSvcParsReportIds}
-                                onSetReportIds={setNewSvcParsReportIds}
                               />
                             </>
                           )}
@@ -4336,8 +4333,8 @@ tr:nth-child(even) td{background:#fafafa}
                           skipDepo:         !newSvcHasPusula,
                           pars: newSvcParsService ? {
                             serviceId:        newSvcParsService.id,
-                            users:            newSvcParsUsers.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin })),
-                            allowedReportIds: newSvcParsReportIds,
+                            users:            newSvcParsUsers.map((u) => ({ username: u.username.trim(), password: u.password, admin: u.admin, allowedReportIds: u.reportIds })),
+                            allowedReportIds: [...new Set(newSvcParsUsers.flatMap((u) => u.reportIds))],
                             datalar:          newSvcParsDatalar,
                           } : undefined,
                         }}
