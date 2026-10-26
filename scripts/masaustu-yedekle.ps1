@@ -2,6 +2,12 @@
   Kullanıcı masaüstlerini yedekler — her profilin Desktop klasörü ayrı bir zip olur:
       C:\KullaniciYedekleri\<kullanıcı>.zip   (+ masaustu-yedek-<tarih>.log, ozet.csv)
 
+  Ayrıca C:\Pusula altındaki her müşteri klasöründen exe, txt ve görsel dosyaları
+  (alt klasörler dahil, klasör yapısı korunarak) toplar:
+      C:\KullaniciYedekleri\Pusula\<müşteri klasörü>.zip
+  Program exe'leri, parametre txt'leri ve logo/resimler yeni sunucuya taşınırken
+  gerekiyor; veritabanı ve diğer dosyalar ALINMAZ. XXX klasörü varsayılan hariç.
+
   Eski sunucu taşımasında kullanılır. Yönetici olarak çalıştırın (diğer kullanıcıların
   profillerini okuyabilmek için). PowerShell 3+ ve .NET 4.5 yeterli (Compress-Archive gerekmez).
 
@@ -15,14 +21,26 @@
     .\masaustu-yedekle.ps1 -Haric administrator        # bunlar hariç
     .\masaustu-yedekle.ps1 -Uzerine                    # var olan zip'leri yeniden oluştur
     .\masaustu-yedekle.ps1 -ProfilKoku D:\Users        # profiller başka sürücüdeyse
+    .\masaustu-yedekle.ps1 -PusulaAtla                 # C:\Pusula toplanmasın
+    .\masaustu-yedekle.ps1 -MasaustuAtla               # yalnız C:\Pusula
+    .\masaustu-yedekle.ps1 -PusulaKoku D:\Pusula -PusulaHaric XXX,Yedek
 #>
 param(
     [string]  $Hedef     = 'C:\KullaniciYedekleri',
     [string]  $ProfilKoku = 'C:\Users',
     [string[]]$Kullanici = @(),
     [string[]]$Haric     = @(),
-    [switch]  $Uzerine
+    [switch]  $Uzerine,
+    [string]  $PusulaKoku   = 'C:\Pusula',
+    [string[]]$PusulaHaric  = @('XXX'),
+    [switch]  $PusulaAtla,
+    [switch]  $MasaustuAtla
 )
+
+# C:\Pusula müşteri klasörlerinden alınan türler: program, parametre, görsel
+$PusulaUzantilar = @('.exe', '.txt',
+    '.jpg', '.jpeg', '.jfif', '.png', '.bmp', '.gif', '.tif', '.tiff', '.ico',
+    '.webp', '.heic', '.heif', '.emf', '.wmf', '.svg', '.psd', '.raw', '.dib')
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.IO.Compression
@@ -50,11 +68,11 @@ function Log([string]$m) { Add-Content -Path $log -Value ((Get-Date).ToString('H
 
 # --- profiller (sistem profilleri hariç)
 $sistem = @('Default', 'Default User', 'Public', 'All Users', 'defaultuser0')
-$profiller = Get-ChildItem -LiteralPath $ProfilKoku -Directory -Force -ErrorAction SilentlyContinue |
+$profiller = if ($MasaustuAtla) { @() } else { Get-ChildItem -LiteralPath $ProfilKoku -Directory -Force -ErrorAction SilentlyContinue |
     Where-Object { $sistem -notcontains $_.Name -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
     Where-Object { $Kullanici.Count -eq 0 -or $Kullanici -contains $_.Name } |
     Where-Object { $Haric -notcontains $_.Name } |
-    Sort-Object Name
+    Sort-Object Name }
 
 Write-Host ''
 Write-Host '=== Masaustu yedegi ===' -ForegroundColor Cyan
@@ -75,38 +93,62 @@ foreach ($p in $profiller) {
     $dosyalar = @(Get-ChildItem -LiteralPath $masaustu -Recurse -File -Force -ErrorAction SilentlyContinue)
     $toplam = ($dosyalar | Measure-Object Length -Sum).Sum
     if ($null -eq $toplam) { $toplam = 0 }
-    $plan += [pscustomobject]@{ Ad = $p.Name; Yol = $masaustu; Dosyalar = $dosyalar; Boyut = [double]$toplam }
+    $plan += [pscustomobject]@{ Tur = 'Masaustu'; Ad = $p.Name; Yol = $masaustu; Zip = (Join-Path $Hedef ($p.Name + '.zip')); Dosyalar = $dosyalar; Boyut = [double]$toplam }
 }
 Write-Progress -Activity 'On tarama' -Completed
+
+# --- C:\Pusula müşteri klasörleri: yalnız exe / txt / görsel
+if (-not $PusulaAtla -and (Test-Path -LiteralPath $PusulaKoku)) {
+    Write-Host ($PusulaKoku + ' taraniyor (exe, txt, gorsel)...') -ForegroundColor Gray
+    $pusulaHedef = Join-Path $Hedef 'Pusula'
+    New-Item -ItemType Directory -Path $pusulaHedef -Force | Out-Null
+    $musteriler = @(Get-ChildItem -LiteralPath $PusulaKoku -Directory -Force -ErrorAction SilentlyContinue |
+        Where-Object { $PusulaHaric -notcontains $_.Name -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
+        Sort-Object Name)
+    $i = 0
+    foreach ($m in $musteriler) {
+        $i++
+        Write-Progress -Activity ('On tarama ' + $PusulaKoku) -Status $m.Name -PercentComplete ([int](100 * $i / [Math]::Max(1, $musteriler.Count)))
+        $dosyalar = @(Get-ChildItem -LiteralPath $m.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
+            Where-Object { $PusulaUzantilar -contains $_.Extension.ToLowerInvariant() })
+        $toplam = ($dosyalar | Measure-Object Length -Sum).Sum
+        if ($null -eq $toplam) { $toplam = 0 }
+        $plan += [pscustomobject]@{ Tur = 'Pusula'; Ad = $m.Name; Yol = $m.FullName; Zip = (Join-Path $pusulaHedef ($m.Name + '.zip')); Dosyalar = $dosyalar; Boyut = [double]$toplam }
+    }
+    Write-Progress -Activity ('On tarama ' + $PusulaKoku) -Completed
+    Write-Host ('Pusula musteri klasoru: ' + $musteriler.Count + $(if ($PusulaHaric.Count) { '  (haric: ' + ($PusulaHaric -join ', ') + ')' } else { '' }))
+} elseif (-not $PusulaAtla) {
+    Write-Host ($PusulaKoku + ' yok, atlandi.') -ForegroundColor DarkGray
+}
 
 $gerekli = ($plan | Measure-Object Boyut -Sum).Sum
 if ($null -eq $gerekli) { $gerekli = 0 }
 $surucu = Get-PSDrive -Name ($Hedef.Substring(0, 1))
-Write-Host ('Masaustu olan profil: ' + $plan.Count + '   toplam: ' + (Boyut $gerekli) + '   ' + $surucu.Name + ': bos alan: ' + (Boyut $surucu.Free))
+Write-Host ('Masaustu: ' + @($plan | Where-Object Tur -eq 'Masaustu').Count + '   Pusula klasoru: ' + @($plan | Where-Object Tur -eq 'Pusula').Count + '   toplam: ' + (Boyut $gerekli) + '   ' + $surucu.Name + ': bos alan: ' + (Boyut $surucu.Free))
 if ($surucu.Free -lt $gerekli * 1.05) {
     Write-Host 'UYARI: Bos alan, sikistirilmamis toplamdan az. Zip genelde kucuk olur ama dolabilir.' -ForegroundColor Yellow
     $cevap = Read-Host 'Devam edilsin mi? (E/H)'
     if ($cevap -notmatch '^[eE]') { Write-Host 'Iptal edildi.'; exit 2 }
 }
 Write-Host ''
-Log ('Basladi. Profil: ' + $plan.Count + ', toplam ' + (Boyut $gerekli))
+Log ('Basladi. Masaustu: ' + @($plan | Where-Object Tur -eq 'Masaustu').Count + ', Pusula klasoru: ' + @($plan | Where-Object Tur -eq 'Pusula').Count + ', toplam ' + (Boyut $gerekli))
 
 # --- sıkıştırma
 $ozet = @()
 $sira = 0
 foreach ($k in $plan) {
     $sira++
-    $zip = Join-Path $Hedef ($k.Ad + '.zip')
-    $etiket = '[' + $sira + '/' + $plan.Count + '] ' + $k.Ad
+    $zip = $k.Zip
+    $etiket = '[' + $sira + '/' + $plan.Count + '] ' + $(if ($k.Tur -eq 'Pusula') { 'Pusula\' } else { '' }) + $k.Ad
 
     if ((Test-Path -LiteralPath $zip) -and -not $Uzerine) {
         Write-Host ($etiket + '  zip zaten var, atlandi (-Uzerine ile yeniden olusturulur)') -ForegroundColor DarkGray
-        $ozet += [pscustomobject]@{ Kullanici = $k.Ad; Durum = 'Atlandi (var)'; Dosya = $k.Dosyalar.Count; Kaynak = Boyut $k.Boyut; Zip = Boyut (Get-Item -LiteralPath $zip).Length; Atlanan = 0; Sure = '' }
+        $ozet += [pscustomobject]@{ Tur = $k.Tur; Kullanici = $k.Ad; Durum = 'Atlandi (var)'; Dosya = $k.Dosyalar.Count; Kaynak = Boyut $k.Boyut; Zip = Boyut (Get-Item -LiteralPath $zip).Length; Atlanan = 0; Sure = '' }
         continue
     }
     if ($k.Dosyalar.Count -eq 0) {
-        Write-Host ($etiket + '  masaustu bos') -ForegroundColor DarkGray
-        $ozet += [pscustomobject]@{ Kullanici = $k.Ad; Durum = 'Bos'; Dosya = 0; Kaynak = '0 B'; Zip = ''; Atlanan = 0; Sure = '' }
+        Write-Host ($etiket + $(if ($k.Tur -eq 'Pusula') { '  exe/txt/gorsel yok' } else { '  masaustu bos' })) -ForegroundColor DarkGray
+        $ozet += [pscustomobject]@{ Tur = $k.Tur; Kullanici = $k.Ad; Durum = 'Bos'; Dosya = 0; Kaynak = '0 B'; Zip = ''; Atlanan = 0; Sure = '' }
         continue
     }
 
@@ -157,7 +199,7 @@ foreach ($k in $plan) {
     $renk = if ($atlanan -gt 0) { 'Yellow' } else { 'Green' }
     Write-Host ('      -> ' + (Boyut $zipBoyut) + ', ' + ('{0:mm\:ss}' -f $sure) + $(if ($atlanan -gt 0) { ', ' + $atlanan + ' dosya ATLANDI (gunluge bakin)' } else { '' })) -ForegroundColor $renk
     Log ($k.Ad + ': ' + $k.Dosyalar.Count + ' dosya, ' + (Boyut $k.Boyut) + ' -> ' + (Boyut $zipBoyut) + ', atlanan ' + $atlanan)
-    $ozet += [pscustomobject]@{ Kullanici = $k.Ad; Durum = $(if ($atlanan -gt 0) { 'Eksik' } else { 'Tamam' }); Dosya = $k.Dosyalar.Count; Kaynak = Boyut $k.Boyut; Zip = Boyut $zipBoyut; Atlanan = $atlanan; Sure = ('{0:mm\:ss}' -f $sure) }
+    $ozet += [pscustomobject]@{ Tur = $k.Tur; Kullanici = $k.Ad; Durum = $(if ($atlanan -gt 0) { 'Eksik' } else { 'Tamam' }); Dosya = $k.Dosyalar.Count; Kaynak = Boyut $k.Boyut; Zip = Boyut $zipBoyut; Atlanan = $atlanan; Sure = ('{0:mm\:ss}' -f $sure) }
 }
 
 # --- özet
