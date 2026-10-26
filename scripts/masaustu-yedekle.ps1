@@ -6,7 +6,9 @@
   (alt klasörler dahil, klasör yapısı korunarak) toplar:
       C:\KullaniciYedekleri\Pusula\<müşteri klasörü>.zip
   Program exe'leri, parametre txt'leri ve logo/resimler yeni sunucuya taşınırken
-  gerekiyor; veritabanı ve diğer dosyalar ALINMAZ. XXX klasörü varsayılan hariç.
+  gerekiyor; veritabanı ve diğer dosyalar ALINMAZ.
+  XXX bir KAPSAYICI: içindeki her müşteri klasörü ayrı zip olur
+      C:\KullaniciYedekleri\Pusula\XXX\<müşteri klasörü>.zip
 
   Eski sunucu taşımasında kullanılır. Yönetici olarak çalıştırın (diğer kullanıcıların
   profillerini okuyabilmek için). PowerShell 3+ ve .NET 4.5 yeterli (Compress-Archive gerekmez).
@@ -23,7 +25,7 @@
     .\masaustu-yedekle.ps1 -ProfilKoku D:\Users        # profiller başka sürücüdeyse
     .\masaustu-yedekle.ps1 -PusulaAtla                 # C:\Pusula toplanmasın
     .\masaustu-yedekle.ps1 -MasaustuAtla               # yalnız C:\Pusula
-    .\masaustu-yedekle.ps1 -PusulaKoku D:\Pusula -PusulaHaric XXX,Yedek
+    .\masaustu-yedekle.ps1 -PusulaKoku D:\Pusula -PusulaHaric Yedek -PusulaKapsayici XXX,ESKI
 #>
 param(
     [string]  $Hedef     = 'C:\KullaniciYedekleri',
@@ -32,7 +34,9 @@ param(
     [string[]]$Haric     = @(),
     [switch]  $Uzerine,
     [string]  $PusulaKoku   = 'C:\Pusula',
-    [string[]]$PusulaHaric  = @('XXX'),
+    [string[]]$PusulaHaric  = @(),
+    # Alt klasörleri müşteri klasörü olan kapsayıcılar (her alt klasör ayrı zip)
+    [string[]]$PusulaKapsayici = @('XXX'),
     [switch]  $PusulaAtla,
     [switch]  $MasaustuAtla
 )
@@ -102,21 +106,36 @@ if (-not $PusulaAtla -and (Test-Path -LiteralPath $PusulaKoku)) {
     Write-Host ($PusulaKoku + ' taraniyor (exe, txt, gorsel)...') -ForegroundColor Gray
     $pusulaHedef = Join-Path $Hedef 'Pusula'
     New-Item -ItemType Directory -Path $pusulaHedef -Force | Out-Null
-    $musteriler = @(Get-ChildItem -LiteralPath $PusulaKoku -Directory -Force -ErrorAction SilentlyContinue |
+    $klasorler = { param($yol) @(Get-ChildItem -LiteralPath $yol -Directory -Force -ErrorAction SilentlyContinue |
         Where-Object { $PusulaHaric -notcontains $_.Name -and -not ($_.Attributes -band [IO.FileAttributes]::ReparsePoint) } |
-        Sort-Object Name)
+        Sort-Object Name) }
+    # Müşteri listesi: kök klasörler + kapsayıcıların (XXX) alt klasörleri.
+    # Ad: kapsayıcıdakiler "XXX\ANGEL" — zip Pusula\XXX\ANGEL.zip olur.
+    $musteriler = @()
+    foreach ($k in (& $klasorler $PusulaKoku)) {
+        if ($PusulaKapsayici -contains $k.Name) {
+            New-Item -ItemType Directory -Path (Join-Path $pusulaHedef $k.Name) -Force | Out-Null
+            foreach ($a in (& $klasorler $k.FullName)) { $musteriler += [pscustomobject]@{ Ad = ($k.Name + '\' + $a.Name); Yol = $a.FullName; Ozyinelemeli = $true } }
+            # Kapsayıcının kök dosyaları (alt klasörsüz) varsa: Pusula\XXX.zip
+            $musteriler += [pscustomobject]@{ Ad = $k.Name; Yol = $k.FullName; Ozyinelemeli = $false }
+        } else {
+            $musteriler += [pscustomobject]@{ Ad = $k.Name; Yol = $k.FullName; Ozyinelemeli = $true }
+        }
+    }
     $i = 0
     foreach ($m in $musteriler) {
         $i++
-        Write-Progress -Activity ('On tarama ' + $PusulaKoku) -Status $m.Name -PercentComplete ([int](100 * $i / [Math]::Max(1, $musteriler.Count)))
-        $dosyalar = @(Get-ChildItem -LiteralPath $m.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
+        Write-Progress -Activity ('On tarama ' + $PusulaKoku) -Status $m.Ad -PercentComplete ([int](100 * $i / [Math]::Max(1, $musteriler.Count)))
+        $dosyalar = @(Get-ChildItem -LiteralPath $m.Yol -Recurse:$m.Ozyinelemeli -File -Force -ErrorAction SilentlyContinue |
             Where-Object { $PusulaUzantilar -contains $_.Extension.ToLowerInvariant() })
+        # Kapsayıcının kendi kökünde dosya yoksa satır açma (yalnız alt klasörleri var)
+        if (-not $m.Ozyinelemeli -and $dosyalar.Count -eq 0) { continue }
         $toplam = ($dosyalar | Measure-Object Length -Sum).Sum
         if ($null -eq $toplam) { $toplam = 0 }
-        $plan += [pscustomobject]@{ Tur = 'Pusula'; Ad = $m.Name; Yol = $m.FullName; Zip = (Join-Path $pusulaHedef ($m.Name + '.zip')); Dosyalar = $dosyalar; Boyut = [double]$toplam }
+        $plan += [pscustomobject]@{ Tur = 'Pusula'; Ad = $m.Ad; Yol = $m.Yol; Zip = (Join-Path $pusulaHedef ($m.Ad + '.zip')); Dosyalar = $dosyalar; Boyut = [double]$toplam }
     }
     Write-Progress -Activity ('On tarama ' + $PusulaKoku) -Completed
-    Write-Host ('Pusula musteri klasoru: ' + $musteriler.Count + $(if ($PusulaHaric.Count) { '  (haric: ' + ($PusulaHaric -join ', ') + ')' } else { '' }))
+    Write-Host ('Pusula musteri klasoru: ' + @($plan | Where-Object Tur -eq 'Pusula').Count + $(if ($PusulaKapsayici.Count) { '  (kapsayici: ' + ($PusulaKapsayici -join ', ') + ')' } else { '' }) + $(if ($PusulaHaric.Count) { '  (haric: ' + ($PusulaHaric -join ', ') + ')' } else { '' }))
 } elseif (-not $PusulaAtla) {
     Write-Host ($PusulaKoku + ' yok, atlandi.') -ForegroundColor DarkGray
 }
