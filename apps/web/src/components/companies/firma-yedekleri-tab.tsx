@@ -1,9 +1,10 @@
 "use client"
 
 /**
- * Firma detayı → Yedekler sekmesi. Firmanın veritabanlarının Spare Cloud (FTP) ve Cloudflare R2'deki
- * full/diff yedekleri gün gün listelenir, iki yerden de indirilebilir. Veri sekme ilk açıldığında bir kez
- * çekilir (FTP'de tek `find`, R2'de veritabanı başına önekli liste — bkz. lib/firma-yedekleri.ts).
+ * Firma detayı → Yedekler sekmesi. Firmanın veritabanlarının full/diff yedekleri gün gün listelenir.
+ * Liste tek kaynak gösterir: Spare Cloud (FTP) ya da Cloudflare R2 — üstteki seçiciden değiştirilir.
+ * Veri sekme ilk açıldığında iki kaynaktan bir kez çekilir (FTP'de tek `find`, R2'de veritabanı başına
+ * önekli liste — bkz. lib/firma-yedekleri.ts); kaynak değiştirmek yeni istek atmaz.
  */
 
 import { useEffect, useMemo, useState } from "react"
@@ -11,8 +12,12 @@ import { Download, RefreshCw, ListFilter, CloudOff } from "lucide-react"
 import { Table, InlineSelectFilter, type TableColumn, type SortState } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
 import { Combobox } from "@/components/ui/combobox"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { FirmaYedekleriDto } from "@/app/api/companies/[firkod]/yedekler/route"
 import type { YedekDosyasi, KaynakDurumu } from "@/lib/firma-yedekleri"
+
+type Kaynak = "ftp" | "r2"
+const KAYNAK_ADI: Record<Kaynak, string> = { ftp: "Spare Cloud (FTP)", r2: "Cloudflare R2" }
 
 const boyutYaz = (b: number) =>
   b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(2)} GB` : b >= 1024 ** 2 ? `${(b / 1024 ** 2).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
@@ -32,25 +37,11 @@ function KaynakUyarisi({ ad, d }: { ad: string; d: KaynakDurumu }) {
   )
 }
 
-function IndirDugmesi({ firkod, d, kaynak }: { firkod: string; d: YedekDosyasi; kaynak: "ftp" | "r2" }) {
-  const var_ = kaynak === "ftp" ? d.ftp : d.r2
-  if (!var_) return <span className="inline-flex h-6 w-10 items-center justify-center text-[11px] text-muted-foreground/50">—</span>
-  const href = `/api/companies/${firkod}/yedekler/indir?kaynak=${kaynak}&gun=${encodeURIComponent(d.gun)}&dosya=${encodeURIComponent(d.dosya)}`
-  return (
-    <a
-      href={href}
-      title={`${kaynak === "ftp" ? "Spare Cloud" : "Cloudflare R2"}'den indir`}
-      className="inline-flex h-6 items-center gap-1 rounded-[5px] border bg-card px-2 text-[11px] font-medium transition-colors hover:bg-muted"
-    >
-      <Download className="size-3" /> {kaynak === "ftp" ? "FTP" : "R2"}
-    </a>
-  )
-}
-
 export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
   const [veri, setVeri] = useState<FirmaYedekleriDto | null>(null)
   const [yukleniyor, setYukleniyor] = useState(true)
   const [hata, setHata] = useState<string | null>(null)
+  const [kaynak, setKaynak] = useState<Kaynak>("ftp")
   const [gun, setGun] = useState("")
   const [dbFiltre, setDbFiltre] = useState<string[]>([])
   const [turFiltre, setTurFiltre] = useState<("full" | "diff")[]>([])
@@ -74,28 +65,35 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
 
   useEffect(() => { setVeri(null); setGun(""); setDbFiltre([]); setTurFiltre([]); void yukle() }, [firkod]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  /** Seçili kaynaktaki dosyalar */
+  const kaynakDosyalari = useMemo(() => (veri?.dosyalar ?? []).filter((d) => d[kaynak]), [veri, kaynak])
+  const gunSayisi = (k: Kaynak) => new Set((veri?.dosyalar ?? []).filter((d) => d[k]).map((d) => d.gun)).size
+
   /** Gün listesi: en yeniden eskiye, dosya sayısıyla */
   const gunler = useMemo(() => {
-    const m = new Map<string, { gun: string; full: number; diff: number; ftp: boolean; r2: boolean }>()
-    for (const d of veri?.dosyalar ?? []) {
-      const g = m.get(d.gun) ?? { gun: d.gun, full: 0, diff: 0, ftp: false, r2: false }
-      g[d.tur]++; g.ftp ||= d.ftp; g.r2 ||= d.r2
+    const m = new Map<string, { gun: string; full: number; diff: number }>()
+    for (const d of kaynakDosyalari) {
+      const g = m.get(d.gun) ?? { gun: d.gun, full: 0, diff: 0 }
+      g[d.tur]++
       m.set(d.gun, g)
     }
     return [...m.values()].sort((a, b) => gunAnahtar(b.gun).localeCompare(gunAnahtar(a.gun)))
-  }, [veri])
+  }, [kaynakDosyalari])
 
-  // Varsayılan gün: en yeni
-  useEffect(() => { if (!gun && gunler.length) setGun(gunler[0].gun) }, [gunler, gun])
+  // Varsayılan gün: en yeni. Kaynak değişince seçili gün orada yoksa en yeniye döner.
+  useEffect(() => {
+    if (gunler.length && !gunler.some((g) => g.gun === gun)) setGun(gunler[0].gun)
+  }, [gunler, gun])
 
-  const liste = useMemo(() => (veri?.dosyalar ?? []).filter((d) => {
+  const liste = useMemo(() => kaynakDosyalari.filter((d) => {
     if (gun && d.gun !== gun) return false
     if (dbFiltre.length && !dbFiltre.includes(d.db)) return false
     if (turFiltre.length && !turFiltre.includes(d.tur)) return false
     return true
-  }), [veri, gun, dbFiltre, turFiltre])
+  }), [kaynakDosyalari, gun, dbFiltre, turFiltre])
 
   const filtreSayisi = (dbFiltre.length ? 1 : 0) + (turFiltre.length ? 1 : 0)
+  const durum = veri ? veri[kaynak] : null
 
   const sutunlar: TableColumn<YedekDosyasi>[] = [
     {
@@ -122,26 +120,41 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
       cell: (d) => <span className="tabular-nums">{boyutYaz(d.boyut)}</span>,
     },
     {
-      key: "indir", header: "İndir", align: "center", width: "150px",
+      key: "indir", header: "", align: "center", width: "90px",
       cell: (d) => (
-        <span className="inline-flex items-center gap-1.5">
-          <IndirDugmesi firkod={firkod} d={d} kaynak="ftp" />
-          <IndirDugmesi firkod={firkod} d={d} kaynak="r2" />
-        </span>
+        <a
+          href={`/api/companies/${firkod}/yedekler/indir?kaynak=${kaynak}&gun=${encodeURIComponent(d.gun)}&dosya=${encodeURIComponent(d.dosya)}`}
+          title={`${KAYNAK_ADI[kaynak]}'dan indir`}
+          className="inline-flex h-6 items-center gap-1 rounded-[5px] border bg-card px-2 text-[11px] font-medium transition-colors hover:bg-muted"
+        >
+          <Download className="size-3" /> İndir
+        </a>
       ),
     },
   ]
 
-  const secili = gunler.find((g) => g.gun === gun)
-  const toplamFtp = new Set((veri?.dosyalar ?? []).filter((d) => d.ftp).map((d) => d.gun)).size
-  const toplamR2 = new Set((veri?.dosyalar ?? []).filter((d) => d.r2).map((d) => d.gun)).size
-
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="text-[12px] text-muted-foreground tabular-nums">
-          {yukleniyor ? "" : veri ? `${veri.veritabanlari.length} veritabanı · FTP ${toplamFtp} gün · R2 ${toplamR2} gün` : ""}
-        </span>
+        <div className="flex items-center gap-3">
+          <ToggleGroup
+            type="single"
+            value={kaynak}
+            onValueChange={(v) => v && setKaynak(v as Kaynak)}
+            variant="outline"
+            size="sm"
+          >
+            {(["ftp", "r2"] as const).map((k) => (
+              <ToggleGroupItem key={k} value={k} className="h-8 gap-1.5 px-3 text-[12px]">
+                {KAYNAK_ADI[k]}
+                {veri && <span className="text-[11px] text-muted-foreground tabular-nums">{gunSayisi(k)} gün</span>}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+          <span className="text-[12px] text-muted-foreground tabular-nums">
+            {yukleniyor || !veri ? "" : `${veri.veritabanlari.length} veritabanı`}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <Combobox
             items={gunler}
@@ -155,9 +168,7 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
             renderItem={(g) => (
               <span className="flex w-full items-center justify-between gap-2">
                 <span className="tabular-nums">{gunYaz(g.gun)}</span>
-                <span className="text-[11px] text-muted-foreground">
-                  {g.full} full · {g.diff} diff{g.r2 ? " · R2" : ""}
-                </span>
+                <span className="text-[11px] text-muted-foreground">{g.full} full · {g.diff} diff</span>
               </span>
             )}
             renderValue={(g) => <span className="tabular-nums">{gunYaz(g.gun)} · {g.full} full, {g.diff} diff</span>}
@@ -184,8 +195,7 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
         </div>
       </div>
 
-      {veri && <KaynakUyarisi ad="Spare Cloud (FTP)" d={veri.ftp} />}
-      {veri && <KaynakUyarisi ad="Cloudflare R2" d={veri.r2} />}
+      {durum && <KaynakUyarisi ad={KAYNAK_ADI[kaynak]} d={durum} />}
       {hata && <p className="rounded-[5px] bg-red-500/15 px-2.5 py-1.5 text-[12px] text-red-700 dark:text-red-400">Yedekler okunamadı: {hata}</p>}
 
       <Table<YedekDosyasi>
@@ -203,19 +213,19 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
         loading={yukleniyor}
         className="rounded-[8px] text-[13px]"
         emptyState={
-          (veri?.dosyalar.length ?? 0) === 0 ? (
+          kaynakDosyalari.length === 0 ? (
             <div className="flex flex-col items-center gap-1 py-4 text-center text-muted-foreground">
               <p className="text-[13px]">
                 {veri && veri.veritabanlari.length === 0
                   ? "Bu firmanın kayıtlı veritabanı yok."
-                  : "Bu firmanın veritabanları için Spare Cloud ve R2'de yedek bulunamadı."}
+                  : `Bu firmanın veritabanları için ${KAYNAK_ADI[kaynak]}'da yedek bulunamadı.`}
               </p>
               <p className="text-[12px]">Yedeklenmesi için veritabanının Veritabanları sekmesinde "Yedek al" işaretli olması gerekir.</p>
             </div>
           ) : "Filtreye uyan yedek yok."
         }
       />
-      {secili && !yukleniyor && (
+      {gunler.length > 0 && !yukleniyor && (
         <p className="text-[11px] text-muted-foreground">
           Bir anı geri yüklemek için o günün full yedeği ile istenen saatteki diff birlikte gerekir.
         </p>
