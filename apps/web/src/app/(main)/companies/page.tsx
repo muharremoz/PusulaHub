@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import type { CompanyDetail } from "@/app/api/companies/[firkod]/detail/route";
+import type { SonHareket } from "@/app/api/companies/[firkod]/sql/son-hareket/route";
 const GirisSirasiSheet = dynamic(() => import("@/components/companies/giris-sirasi-sheet").then((m) => m.GirisSirasiSheet), { ssr: false });
 const OldDataRestoreDialog = dynamic(() => import("@/components/companies/old-data-restore-dialog").then((m) => m.OldDataRestoreDialog), { ssr: false });
 
@@ -558,6 +559,9 @@ export default function CompaniesPage() {
     tabUsers.length > 0 && tabUsers.every((u) => !u.enabled);
   const [tabIIS, setTabIIS] = useState<TabIISSite[]>([]);
   const [tabSQL, setTabSQL] = useState<TabSQLDatabase[]>([]);
+  /** Veritabanı adı (küçük harf) → carhrk son kaydı. null: henüz yüklenmedi. Sekme açılınca ayrı uçtan gelir. */
+  const [sonHareket, setSonHareket] = useState<Record<string, SonHareket> | null>(null);
+  const [sonHareketFirma, setSonHareketFirma] = useState<string | null>(null);
   // Erişim Bilgileri modal'ı
   const [accessLoading, setAccessLoading]   = useState(false);
   const [accessError, setAccessError]       = useState<string | null>(null);
@@ -1407,6 +1411,7 @@ tr:nth-child(even) td{background:#fafafa}
     setTabUsers([]); setTabIIS([]); setTabSQL([]); setTabServices([])
     // Firma değişti — Erişim sekmesi verisi bayat, sekmeyi de başa al.
     setDetailTab("users"); setAccessInfo(null); setAccessError(null); setWebUsers([]); setWebUsersFirma(null); setParsSifreler([]); setParsSifreFirma(null)
+    setSonHareket(null); setSonHareketFirma(null)
     setKulAdFiltre(""); setKulIsimFiltre(""); setKulDurumFiltre([]); setKulOfficeFiltre([]); setDbAdFiltre(""); setDbYedekFiltre([]); setDbDurumFiltre([]); setSvcAdFiltre(""); setSvcKatFiltre([]); setSvcDurumFiltre([])
     setAccessSel("servers")
     setCompanyDetail(null)
@@ -1501,6 +1506,19 @@ tr:nth-child(even) td{background:#fafafa}
     const match = apiCompanies.find((c) => c.firkod === urlFirkod)
     if (match) setSelectedFirma((prev) => (prev?.firkod === urlFirkod ? prev : match))
   }, [urlFirkod, apiCompanies, canViewCompanyDetail, router])
+
+  /** Veritabanları sekmesi "Son cari hareket" sütunu — carhrk son kaydı (ayrı uç, birkaç sn sürebilir) */
+  async function loadSonHareket(firkod: string, yenile = false) {
+    setSonHareketFirma(firkod)
+    setSonHareket(null)
+    try {
+      const r = await fetch(`/api/companies/${firkod}/sql/son-hareket${yenile ? "?refresh=1" : ""}`)
+      const data = r.ok ? ((await r.json()) as SonHareket[]) : []
+      setSonHareket(Object.fromEntries((Array.isArray(data) ? data : []).map((x) => [x.db.toLowerCase(), x])))
+    } catch {
+      setSonHareket({})
+    }
+  }
 
   /** guvenlik.YedekAl'ı değiştirir — SpareBackup kapsamı (her turda bu kolonu okur) */
   async function yedekAlDegistir(db: TabSQLDatabase, yedekAl: boolean) {
@@ -2583,6 +2601,7 @@ tr:nth-child(even) td{background:#fafafa}
 
                 // Sekmeye geçilene kadar hiç istek atmıyoruz, sonra bir kez.
                 if (v === "services" && selectedFirma) void loadServiceCreds(selectedFirma.firkod)
+                if (v === "databases" && selectedFirma && sonHareketFirma !== selectedFirma.firkod) void loadSonHareket(selectedFirma.firkod)
               }}
             >
               <TabsList className="mb-3 h-8">
@@ -3062,12 +3081,20 @@ tr:nth-child(even) td{background:#fafafa}
                       const r = await fetch(`/api/companies/${selectedFirma.firkod}/sql?refresh=1`)
                       const data = r.ok ? await r.json() : []
                       setTabSQL(Array.isArray(data) ? data : [])
+                      void loadSonHareket(selectedFirma.firkod, true)
                       toast.success("Veritabanı listesi güncellendi")
                     } catch {
                       toast.error("Yenileme başarısız")
                     } finally {
                       setSqlRefreshing(false)
                     }
+                  }
+                  /** carhrk son kaydı: "27.10.2026 14:06 · bugün" — saatsiz (belge tarihi) kaynakta yalnız gün */
+                  const hareket = (db: TabSQLDatabase) => sonHareket?.[db.Name.toLowerCase()]
+                  const hareketGun = (son: string) => {
+                    const [y, a, g] = son.slice(0, 10).split("-").map(Number)
+                    const bugun = new Date(); bugun.setHours(0, 0, 0, 0)
+                    return Math.round((bugun.getTime() - new Date(y, a - 1, g).getTime()) / 86_400_000)
                   }
                   const sutunlar: TableColumn<TabSQLDatabase>[] = [
                     {
@@ -3128,6 +3155,25 @@ tr:nth-child(even) td{background:#fafafa}
                           {db.LastDiffBackup ?? "—"}
                         </span>
                       ),
+                    },
+                    {
+                      key: "SonHareket", header: "Son cari hareket", sortable: true, width: "190px",
+                      sortValue: (db) => hareket(db)?.son ?? "",
+                      cell: (db) => {
+                        if (sonHareket === null) return <Skeleton className="h-3.5 w-28 rounded-[5px]" />
+                        const h = hareket(db)
+                        if (!h?.son) return <span className="text-muted-foreground" title={h ? "carhrk tablosu boş" : "carhrk tablosu yok"}>—</span>
+                        const gun = hareketGun(h.son)
+                        const tarih = `${h.son.slice(8, 10)}.${h.son.slice(5, 7)}.${h.son.slice(0, 4)}${h.saatsiz ? "" : ` ${h.son.slice(11, 16)}`}`
+                        return (
+                          <span className="tabular-nums" title={h.saatsiz ? "Belge tarihi (CariTrh) — bu sürümde kayıt saati tutulmuyor" : "Kaydın girildiği zaman (STarih)"}>
+                            {tarih}{" "}
+                            <span className={gun <= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-muted-foreground"}>
+                              · {gun <= 0 ? "bugün" : `${gun} gün önce`}
+                            </span>
+                          </span>
+                        )
+                      },
                     },
                     {
                       // Yedek — sihirbaz ve Yeni Veritabanı penceresiyle aynı düğme; kapatmak onay ister
