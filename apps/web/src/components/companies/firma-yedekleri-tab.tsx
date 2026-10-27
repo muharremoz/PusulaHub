@@ -122,7 +122,7 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
       cell: (d) => <span className="tabular-nums">{boyutYaz(d.boyut)}</span>,
     },
     {
-      key: "indir", header: "İndir", align: "center", width: "130px",
+      key: "indir", header: "İndir", align: "center", width: "150px",
       cell: (d) => (
         <span className="inline-flex items-center gap-1.5">
           <IndirDugmesi firkod={firkod} d={d} kaynak="ftp" />
