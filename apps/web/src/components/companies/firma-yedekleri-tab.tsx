@@ -8,10 +8,11 @@
  */
 
 import { useEffect, useMemo, useState } from "react"
-import { Download, RefreshCw, ListFilter, CloudOff } from "lucide-react"
-import { Table, InlineSelectFilter, type TableColumn, type SortState } from "@muharremoz/pusula-ui"
+import { Download, RefreshCw, ListFilter, CloudOff, CalendarDays, ChevronDown } from "lucide-react"
+import { tr } from "date-fns/locale"
+import { Table, InlineSelectFilter, Popover, PopoverContent, PopoverTrigger, type TableColumn, type SortState } from "@muharremoz/pusula-ui"
 import { Button } from "@/components/ui/button"
-import { Combobox } from "@/components/ui/combobox"
+import { Calendar } from "@/components/ui/calendar"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { FirmaYedekleriDto } from "@/app/api/companies/[firkod]/yedekler/route"
 import type { YedekDosyasi, KaynakDurumu } from "@/lib/firma-yedekleri"
@@ -26,6 +27,54 @@ const boyutYaz = (b: number) =>
 const gunYaz = (g: string) => g.replace(/-/g, ".")
 /** GG-AA-YYYY sıralama anahtarı */
 const gunAnahtar = (g: string) => g.split("-").reverse().join("")
+/** "27-10-2026" ↔ Date (yerel gece yarısı) */
+const gunTarih = (g: string) => { const [d, m, y] = g.split("-").map(Number); return new Date(y, m - 1, d) }
+const tarihGun = (t: Date) => `${String(t.getDate()).padStart(2, "0")}-${String(t.getMonth() + 1).padStart(2, "0")}-${t.getFullYear()}`
+
+type GunOzeti = { gun: string; full: number; diff: number }
+
+/** Takvimli gün seçici — yalnız yedeği olan günler seçilebilir (CLAUDE.md: tarih seçimi Calendar + Popover) */
+function GunSecici({ gunler, gun, onChange, disabled }: { gunler: GunOzeti[]; gun: string; onChange: (g: string) => void; disabled?: boolean }) {
+  const [acik, setAcik] = useState(false)
+  const secili = gunler.find((g) => g.gun === gun)
+  const yedekli = useMemo(() => new Set(gunler.map((g) => g.gun)), [gunler])
+  const tarihler = useMemo(() => gunler.map((g) => gunTarih(g.gun)), [gunler])
+  const enEski = tarihler.at(-1), enYeni = tarihler[0]
+  return (
+    <Popover open={acik} onOpenChange={setAcik}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          disabled={disabled}
+          className="inline-flex h-8 w-[240px] items-center gap-2 rounded-[5px] border bg-card px-2.5 text-[12px] transition-colors hover:bg-muted disabled:opacity-50"
+        >
+          <CalendarDays className="size-3.5 text-muted-foreground" />
+          <span className="flex-1 truncate text-left tabular-nums">
+            {secili ? <>{gunYaz(secili.gun)} <span className="text-muted-foreground">· {secili.full} full, {secili.diff} diff</span></> : "Gün seçin"}
+          </span>
+          <ChevronDown className="size-3.5 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto p-2">
+        <Calendar
+          mode="single"
+          selected={secili ? gunTarih(secili.gun) : undefined}
+          onSelect={(t) => { if (t) { onChange(tarihGun(t)); setAcik(false) } }}
+          disabled={(t) => !yedekli.has(tarihGun(t))}
+          modifiers={{ yedekli: tarihler }}
+          modifiersClassNames={{ yedekli: "font-semibold" }}
+          defaultMonth={secili ? gunTarih(secili.gun) : enYeni}
+          startMonth={enEski}
+          endMonth={enYeni}
+          locale={tr}
+        />
+        <p className="border-t px-1 pt-2 text-[11px] text-muted-foreground">
+          {gunler.length} günde yedek var{enEski && enYeni ? ` · ${gunYaz(tarihGun(enEski))} – ${gunYaz(tarihGun(enYeni))}` : ""}
+        </p>
+      </PopoverContent>
+    </Popover>
+  )
+}
 
 function KaynakUyarisi({ ad, d }: { ad: string; d: KaynakDurumu }) {
   if (d.durum === "ok") return null
@@ -71,7 +120,7 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
 
   /** Gün listesi: en yeniden eskiye, dosya sayısıyla */
   const gunler = useMemo(() => {
-    const m = new Map<string, { gun: string; full: number; diff: number }>()
+    const m = new Map<string, GunOzeti>()
     for (const d of kaynakDosyalari) {
       const g = m.get(d.gun) ?? { gun: d.gun, full: 0, diff: 0 }
       g[d.tur]++
@@ -156,23 +205,7 @@ export function FirmaYedekleriTab({ firkod }: { firkod: string }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Combobox
-            items={gunler}
-            getKey={(g) => g.gun}
-            getLabel={(g) => gunYaz(g.gun)}
-            value={gun}
-            onChange={setGun}
-            disabled={yukleniyor || gunler.length === 0}
-            placeholder="Gün seçin"
-            className="h-8 w-[230px] text-[12px]"
-            renderItem={(g) => (
-              <span className="flex w-full items-center justify-between gap-2">
-                <span className="tabular-nums">{gunYaz(g.gun)}</span>
-                <span className="text-[11px] text-muted-foreground">{g.full} full · {g.diff} diff</span>
-              </span>
-            )}
-            renderValue={(g) => <span className="tabular-nums">{gunYaz(g.gun)} · {g.full} full, {g.diff} diff</span>}
-          />
+          <GunSecici gunler={gunler} gun={gun} onChange={setGun} disabled={yukleniyor || gunler.length === 0} />
           {filtreSayisi > 0 && (
             <button type="button" onClick={() => { setDbFiltre([]); setTurFiltre([]) }} className="rounded-[5px] px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
               Temizle
