@@ -70,9 +70,8 @@ export interface InsertGuvenlikArgs {
    * `false` yalnız ESKİ YIL datası eklenirken kullanılıyor; o kayıtların
    * yedeklenmesi hem gereksiz hem yedek boyutunu şişiriyor.
    *
-   * Bu alan SQL Backup Master'ın görev listesiyle aynı anlama gelmeli —
-   * ikisi ayrışırsa `guvenlik` "yedekleniyor" der ama dosya hiçbir yere
-   * gitmez. Çağıran taraf ikisini birlikte ayarlamalı.
+   * SpareBackup her turda bu kolonu okur: 1 olan veritabanı yedeklenir,
+   * 0 olan yedeklenmez. Başka bir listeyi ayrıca güncellemeye gerek yok.
    */
   yedekAl?:    boolean
   /** `KOD` kolonu — verilmezse firma ID. Aynı firmanın datalarına farklı kod (4515, 45151…) için.

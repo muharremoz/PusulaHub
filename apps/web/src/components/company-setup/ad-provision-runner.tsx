@@ -103,7 +103,7 @@ interface Props {
    * HER adım güncellemesinde çağrılır (running/done/error farketmez).
    * `onStepError` yalnız hatayı veriyor; kritik olmayan bir adımın
    * BAŞARILI olup olmadığını bilmek gerektiğinde bu kullanılıyor
-   * (ör. SQL Backup Master eklemesi — sonuca göre modal değişiyor).
+   * (ör. güvenlik kaydı yazıldı mı — sonuca göre modal değişiyor).
    */
   onStep?:        (step: ProvisionStep) => void
 }
@@ -470,7 +470,7 @@ const GRUPLAR: { key: GrupKey; ad: string; ikon: LucideIcon; renk: string }[] = 
 function grupBul(stepId: string): GrupKey {
   if (/^(ou_|group$|user_|member_|office_|bilkar_member_)/.test(stepId)) return "ad"
   if (/^(iis_|resim_site_)/.test(stepId)) return "iis"
-  if (/^(sql_|sbm_|bm_)/.test(stepId)) return "sql"
+  if (/^sql_/.test(stepId)) return "sql"
   if (/^pars_/.test(stepId)) return "pars"
   if (/^depo_/.test(stepId)) return "depo"
   if (/^(firma_root|ntfs$|svc_|desktop_|shortcut_|bilkar_desktop_)/.test(stepId)) return "dosya"

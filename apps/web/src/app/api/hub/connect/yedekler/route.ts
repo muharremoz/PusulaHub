@@ -9,8 +9,8 @@
  *
  * YEDEK DIŞI datalar listeden çıkar (08.10.2026): eski yıl dataları guvenlik.YedekAl=0 ile bilerek yedeğe
  * girmiyor (3082'de CANAKKALE24/CANTA24/ISTANBUL24); hiç yedeği olmadığı için Connect kartı kırmızı
- * görünüyor, müşteri "yedeklemede sorun var" diyordu. Kaynak SpareBackup'ın da okuduğu guvenlik.YedekAl
- * (bkz. lib/backup-master.ts). SQL'e ulaşılamazsa liste eskisi gibi süzülmeden döner.
+ * görünüyor, müşteri "yedeklemede sorun var" diyordu. Kaynak SpareBackup'ın da okuduğu guvenlik.YedekAl.
+ * SQL'e ulaşılamazsa liste eskisi gibi süzülmeden döner.
  */
 import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"

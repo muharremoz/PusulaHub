@@ -39,7 +39,6 @@ import { sqlLoginAdi, sqlLoginArama } from "@/lib/firma-adlandirma"
 import { saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu, yazPusulaXEntegrasyon } from "@/lib/pusulax-resim-yolu"
-import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import {
   buildPullBakFromDepo,
   buildPullAttachFilesFromDepo,
@@ -57,7 +56,7 @@ interface FileReq {
   kind?:        "bak" | "mdf"
   /** kind="mdf" ise eşlik eden log dosyasının adı; yoksa log yeniden üretilir. */
   ldfFileName?: string
-  /** Bu veritabanı yedeklensin mi (guvenlik.YedekAl + SQL Backup Master). Yoksa gövdedeki yedekAl. */
+  /** Bu veritabanı yedeklensin mi (guvenlik.YedekAl → SpareBackup). Yoksa gövdedeki yedekAl. */
   yedekAl?:     boolean
   /** guvenlik.KOD — verilmezse firma numarası (lib/guvenlik-kod.ts) */
   kod?:         number
@@ -200,10 +199,6 @@ export async function POST(
             const hasSirket = await masterPool.request()
               .query<{ c: number }>(`SELECT COUNT(*) c FROM sys.databases WHERE name = 'sirket'`)
             const sirketExists = (hasSirket.recordset[0]?.c ?? 0) > 0
-
-            /*  Yedek görevine eklenecek adlar; guvenlik kaydı başarılı
-             *  olanlar buraya giriyor.                                  */
-            const eklenecek: string[] = []
 
             /*  `sonrakiAdimlar` bir fonksiyon bildirimi (hoisted) olduğu için
              *  TS yukarıdaki `if (!sqlTarget) return` daralmasını içeride
@@ -362,7 +357,6 @@ export async function POST(
                     },
                   )
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklendi: ${targetDb}`, "done")
-                  if (f.yedekAl ?? yedekAl) eklenecek.push(targetDb)
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
@@ -390,39 +384,6 @@ export async function POST(
                 }
               } catch (err) {
                 step(`resimyolu_${targetDb}`, `Pusula X resim yolu yazılamadı: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
-              }
-            }
-
-            /*
-             * SQL Backup Master — yedek görevine ekle.
-             *
-             * KRİTİK DEĞİL: hata restore'u geçersiz kılmıyor, yalnız adım
-             * kırmızı görünüyor ve elle eklenmesi gerektiği anlaşılıyor.
-             * Üçüncü parti ürünün veri dosyasını düzenliyoruz (bkz.
-             * lib/sql-backup-master.ts) ve bu yol kırılgan.
-             *
-             * Dosyanın `yedekAl`ı kapalıysa listeye girmiyor: `guvenlik.YedekAl`
-             * de 0 yazıldı, iki taraf tutarlı kalıyor.
-             */
-            if (eklenecek.length > 0) {
-              const etiket = `SQL Backup Master yedek görevine ekleniyor (${eklenecek.length} veritabanı)`
-              step("sbm_add", etiket, "running")
-              try {
-                const r = await execOnAgent(
-                  sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey,
-                  buildAddDatabasesToBackupJobs(eklenecek), 90,
-                )
-                const hata = (r.stderr ?? "").trim()
-                if (r.exitCode !== 0 || hata) {
-                  step("sbm_add", "Yedek görevine eklenemedi — elle eklenmeli", "error", { error: hata || `exit ${r.exitCode}` })
-                } else if ((r.stdout ?? "").trim().startsWith(SBM_ATLANDI)) {
-                  // Yedek işi sürüyordu — servise dokunulmadı; saatlik eşitleme ekler (lib/bm-zamanli.ts)
-                  step("sbm_add", "Backup Master yedek işi sürüyor — liste saatlik eşitlemede güncellenecek", "done")
-                } else {
-                  step("sbm_add", `Yedek görevine eklendi: ${eklenecek.length} veritabanı`, "done")
-                }
-              } catch (err) {
-                step("sbm_add", "Yedek görevine eklenemedi — elle eklenmeli", "error", { error: err instanceof Error ? err.message : String(err) })
               }
             }
           },

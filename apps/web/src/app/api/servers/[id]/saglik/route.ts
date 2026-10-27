@@ -35,7 +35,7 @@ const TTL = 10 * 60_000
 /** Rol → izlenen servis adları (Name ya da DisplayName). PusulaAgent her yerde. */
 const ROL_SERVIS: Record<string, string[]> = {
   RDP: ["ThinRDPSrv", "TermService"],
-  SQL: ["MSSQLSERVER", "SQLSERVERAGENT", "SQL Backup Master"],
+  SQL: ["MSSQLSERVER", "SQLSERVERAGENT", "SpareBackup"],
   IIS: ["W3SVC"],
   AD: ["NTDS", "DNS"],
   File: ["LanmanServer"],

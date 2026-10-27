@@ -35,8 +35,8 @@ interface FileRow {
   firmaOneki:   boolean
   /**
    * Yedek görevine eklensin mi — veritabanı başına. Varsayılan AÇIK: yedeği unutmak,
-   * gereksiz yedek almaktan pahalı. Eski yıl datasında kapatılır; kapalıysa hem
-   * `sirket.guvenlik.YedekAl` 0 yazılır hem SQL Backup Master görevine eklenmez.
+   * gereksiz yedek almaktan pahalı. Eski yıl datasında kapatılır; kapalıysa
+   * `sirket.guvenlik.YedekAl` 0 yazılır ve SpareBackup bu veritabanını yedeklemez.
    */
   yedekAl:      boolean
   /** guvenlik.KOD — boş = firma numarası (lib/guvenlik-kod.ts) */

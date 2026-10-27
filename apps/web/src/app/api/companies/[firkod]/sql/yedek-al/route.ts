@@ -5,15 +5,13 @@ import { sqlServerById } from "@/lib/hub-servers"
 import { withSqlConnection } from "@/lib/sql-external"
 import { decrypt } from "@/lib/crypto"
 import { requirePermission } from "@/lib/require-permission"
-import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 
 /**
  * PATCH /api/companies/[firkod]/sql/yedek-al
  * Body: { dbName: string, yedekAl: boolean }
  *
  * Firmanın SQL sunucusunda `sirket.dbo.guvenlik.YedekAl`'ı günceller.
- * SpareBackup bu kolonu doğrudan okur; Backup Master'ın listesi ise elle
- * tutulduğu için ardından eşitlenir (kritik değil — hata güncellemeyi geri almaz).
+ * SpareBackup bu kolonu her turda doğrudan okur — başka bir listeyi eşitlemeye gerek yok.
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ firkod: string }> }) {
   const gate = await requirePermission("companies", "write")
@@ -61,21 +59,5 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ fi
   }
   if (etkilenen === 0) return NextResponse.json({ error: "Bu veritabanının guvenlik kaydı yok" }, { status: 404 })
 
-  // Backup Master — ikinci arşiv listesi
-  let bm: { ok: boolean; ozet: string }
-  if (!srv.agent_port || !srv.api_key) {
-    bm = { ok: false, ozet: `${srv.name}: agent bilgisi eksik, Backup Master eşitlenmedi` }
-  } else {
-    try {
-      const sonuc = await esitleBackupMaster({
-        ip: srv.ip, username: srv.sql_username, password: sifre,
-        agentPort: srv.agent_port, apiKey: decrypt(srv.api_key)!,
-      })
-      bm = { ok: !sonuc.atlandi, ozet: bmOzet(sonuc) }
-    } catch (err) {
-      bm = { ok: false, ozet: `Backup Master eşitlenemedi: ${err instanceof Error ? err.message : String(err)}` }
-    }
-  }
-
-  return NextResponse.json({ ok: true, yedekAl, etkilenen, backupMaster: bm })
+  return NextResponse.json({ ok: true, yedekAl, etkilenen })
 }

@@ -2,8 +2,8 @@ import "server-only"
 import zlib from "node:zlib"
 import { execOnAgent } from "@/lib/agent-poller"
 import { withSqlConnection } from "@/lib/sql-external"
-import { esitleBackupMaster } from "@/lib/backup-master"
 import { SC_GOREV, SC_LISTE_KAYNAK } from "@/lib/spare-cloud"
+import { r2GunDosyalari, r2Tanimli } from "@/lib/firma-yedekleri"
 
 /**
  * Yedek doğrulama testi — /tv ekranındaki düğmenin arkasındaki iş.
@@ -14,12 +14,12 @@ import { SC_GOREV, SC_LISTE_KAYNAK } from "@/lib/spare-cloud"
  *   1-2. `sirket.dbo.guvenlik` → yedeklenmesi gereken veritabanları
  *   3-5. `msdb` → SQL Server'ın kendi yedek kayıtları (tam / fark / zincir)
  *   6.   Spare Cloud (SFTP) → dosyalar gerçekten buluta çıkmış mı
- *   7.   SQL Backup Master → ikinci arşivin listesi kapsamla aynı mı
+ *   7.   Cloudflare R2 → aynı dosyaların ikinci kopyası R2'de duruyor mu
  * Her adım gerçek iş yapıyor; hiçbir adım süslemek için beklemiyor.
+ * (7. adım eskiden SQL Backup Master'ın listesine bakıyordu; Backup Master 27.10.2026'da emekli edildi.)
  *
  * ── Kesinlikle salt okuma ─────────────────────────────────────────────
- * Ekran ofiste müşteriye de açık. Test hiçbir şey yazmıyor: yedek almıyor,
- * Jobs.xml'e dokunmuyor (Backup Master adımı `kuruGosteri`), dosya silmiyor.
+ * Ekran ofiste müşteriye de açık. Test hiçbir şey yazmıyor: yedek almıyor, dosya silmiyor.
  * En pahalı işi 26 saatlik dosya listesini SFTP'den çekmek.
  *
  * Adımlar bir async generator ile akıyor: SSE ucu her `yield`i olduğu gibi
@@ -69,7 +69,7 @@ export const TEST_PLANI: PlanAdimi[] = [
   { id: "diff",     baslik: "15 Dakikalık Fark Yedeği",  aciklama: "Gün içinde 15 dakikada bir alınan değişiklik yedekleri güncel mi" },
   { id: "zincir",   baslik: "Geri Yükleme Zinciri",      aciklama: "Her fark yedeği kendi tam yedeğinin üstüne oturuyor mu" },
   { id: "bulut",    baslik: "Bulut Teslimi",             aciklama: "Alınan her yedek dosyası bulut sunucusunda gerçekten duruyor mu" },
-  { id: "arsiv",    baslik: "İkinci Arşiv",              aciklama: "Google Drive ve FTP'ye giden ikinci kopya aynı listeyi kapsıyor mu" },
+  { id: "r2",       baslik: "İkinci Bulut (R2)",         aciklama: "Her yedeğin ikinci kopyası Cloudflare R2'de gerçekten duruyor mu" },
 ]
 
 export interface YedekTestiHedef {
@@ -158,6 +158,33 @@ const KAPSAM_SQL = `
 interface KapsamSatir { db: string; sunucuda: string | null; durum: string | null }
 interface SonSatir    { db: string; son: Date | null }
 interface ZincirSatir { db: string; uyumlu: number; yabanci: number }
+/** SpareBackup'ın son BULUT_SAAT saatte aldığı yedek — bulut ve R2 adımları aynı listeyi eşleştirir */
+interface TeslimYedegi { db: string; tur: string; basla: string; yol: string; dkOnce: number }
+
+/**
+ * Yedek listesini bir hedefteki dosyalarla eşleştirir (gün klasörü + zip adı → boyut).
+ * Yeni biten (YUKLEME_PAYI) ya da süren sabah tam turundaki yedek "bekliyor" sayılır, eksik değil.
+ */
+function teslimEslestir(yedekler: TeslimYedegi[], dosyalar: Map<string, number>) {
+  const tamlar = yedekler.filter((y) => y.tur === "D")
+  const enYeniTam = tamlar.reduce<TeslimYedegi | null>((a, y) => (!a || y.dkOnce < a.dkOnce ? y : a), null)
+  const tamTurGunu = enYeniTam && enYeniTam.dkOnce < TAM_TUR_PAYI ? bulutGunu(enYeniTam.basla) : null
+
+  let tamam = 0, bekleyen = 0, bos = 0, turBekleyen = 0
+  const eksik: string[] = []
+  for (const y of yedekler) {
+    const ad = (y.yol.split("\\").pop() ?? "").replace(/\.bak$/i, ".zip")
+    const boyut = dosyalar.get(`${bulutGunu(y.basla)}/${ad}`)
+    if (boyut === undefined) {
+      if (y.dkOnce < YUKLEME_PAYI) bekleyen++
+      else if (tamTurGunu && y.tur === "D" && bulutGunu(y.basla) === tamTurGunu) { bekleyen++; turBekleyen++ }
+      else eksik.push(y.db)
+    }
+    else if (boyut === 0)    bos++
+    else                     tamam++
+  }
+  return { tamam, bekleyen, bos, turBekleyen, eksik, tam: tamlar.length, fark: yedekler.length - tamlar.length }
+}
 
 /* ══════════════════════════════════════════════════════════════════════
    Test
@@ -173,6 +200,19 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
   }
   const sorgu = <T>(q: string) =>
     withSqlConnection(sqlCfg, async (pool) => (await pool.request().query<T>(q)).recordset)
+
+  /** Bulut ve R2 adımlarının ortak listesi — msdb'ye bir kez sorulur */
+  let teslimSoz: Promise<TeslimYedegi[]> | null = null
+  const teslimYedekleri = () => (teslimSoz ??= withSqlConnection({ ...sqlCfg, database: "msdb" }, async (pool) =>
+    (await pool.request().query<TeslimYedegi>(`
+      SELECT b.database_name AS db, b.type AS tur,
+             CONVERT(varchar(19), b.backup_start_date, 120) AS basla,
+             mf.physical_device_name AS yol,
+             DATEDIFF(minute, b.backup_finish_date, GETDATE()) AS dkOnce
+      FROM msdb.dbo.backupset b
+      JOIN msdb.dbo.backupmediafamily mf ON mf.media_set_id = b.media_set_id
+      WHERE mf.physical_device_name LIKE 'C:\\ProgramData\\SpareBackup\\%'
+        AND b.backup_finish_date > DATEADD(hour, -${BULUT_SAAT}, GETDATE())`)).recordset))
 
   /** Adımlar arasında taşınan veri */
   let simdi  = new Date()
@@ -346,16 +386,7 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
 
   /* 6 ── Bulut teslimi --------------------------------------------------- */
   yield* adim("bulut", async () => {
-      const yedekler = await withSqlConnection({ ...sqlCfg, database: "msdb" }, async (pool) =>
-        (await pool.request().query<{ db: string; tur: string; basla: string; yol: string; dkOnce: number }>(`
-          SELECT b.database_name AS db, b.type AS tur,
-                 CONVERT(varchar(19), b.backup_start_date, 120) AS basla,
-                 mf.physical_device_name AS yol,
-                 DATEDIFF(minute, b.backup_finish_date, GETDATE()) AS dkOnce
-          FROM msdb.dbo.backupset b
-          JOIN msdb.dbo.backupmediafamily mf ON mf.media_set_id = b.media_set_id
-          WHERE mf.physical_device_name LIKE 'C:\\ProgramData\\SpareBackup\\%'
-            AND b.backup_finish_date > DATEADD(hour, -${BULUT_SAAT}, GETDATE())`)).recordset)
+      const yedekler = await teslimYedekleri()
 
       if (yedekler.length === 0) {
         return { durum: "hata", deger: "Yedek kaydı yok", detay: [`Son ${BULUT_SAAT} saatte hiç yedek alınmamış`] }
@@ -363,27 +394,7 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
 
       const gunler = [...new Set(yedekler.map((y) => bulutGunu(y.basla)))]
       const bulut  = await bulutListesi(hedef, gunler)
-
-      // Sürmekte olan (ya da yeni biten) tam yedek turu: en yeni tam yedeğin günü + bitişinden geçen süre
-      const tamlar = yedekler.filter((y) => y.tur === "D")
-      const enYeniTam = tamlar.reduce<typeof tamlar[number] | null>((a, y) => (!a || y.dkOnce < a.dkOnce ? y : a), null)
-      const tamTurGunu = enYeniTam && enYeniTam.dkOnce < TAM_TUR_PAYI ? bulutGunu(enYeniTam.basla) : null
-
-      let tamam = 0, bekleyen = 0, bos = 0, turBekleyen = 0
-      const eksik: string[] = []
-      for (const y of yedekler) {
-        const ad = (y.yol.split("\\").pop() ?? "").replace(/\.bak$/i, ".zip")
-        const boyut = bulut.dosyalar.get(`${bulutGunu(y.basla)}/${ad}`)
-        if (boyut === undefined) {
-          if (y.dkOnce < YUKLEME_PAYI) bekleyen++
-          else if (tamTurGunu && y.tur === "D" && bulutGunu(y.basla) === tamTurGunu) { bekleyen++; turBekleyen++ }
-          else eksik.push(y.db)
-        }
-        else if (boyut === 0)    bos++
-        else                     tamam++
-      }
-      const tam   = yedekler.filter((y) => y.tur === "D").length
-      const fark  = yedekler.filter((y) => y.tur === "I").length
+      const { tamam, bekleyen, bos, turBekleyen, eksik, tam, fark } = teslimEslestir(yedekler, bulut.dosyalar)
       const sorun = eksik.length + bos
       return {
         durum: sorun > 0 ? "hata" : "ok",
@@ -400,32 +411,35 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
     },
   )
 
-  /* 7 ── İkinci arşiv ----------------------------------------------------- */
-  yield* adim("arsiv", async () => {
-      const [co] = await sorgu<{ guncel: number; toplam: number; son: Date | null }>(`${SON_YEDEKLER}
-        SELECT SUM(CASE WHEN c.backup_finish_date > DATEADD(hour, -${TAM_SAAT}, GETDATE()) THEN 1 ELSE 0 END) AS guncel,
-               COUNT(*) AS toplam, MAX(c.backup_finish_date) AS son
-        FROM k LEFT JOIN b c ON c.db = k.db AND c.type = 'D' AND c.is_copy_only = 1 AND c.rn = 1`)
-
-      const bm = await esitleBackupMaster(
-        {
-          ip: hedef.ip, username: hedef.username, password: hedef.password,
-          agentPort: hedef.agentPort, apiKey: hedef.apiKey,
-        },
-        { kuruGosteri: true },
-      )
-      const sapma  = bm.isler.reduce((t, i) => t + i.cikan.length + i.eklenen.length, 0)
-      const eskiCo = (co?.toplam ?? 0) - (co?.guncel ?? 0)
-      const son    = co?.son ? new Date(co.son) : null
+  /* 7 ── İkinci bulut (Cloudflare R2) ------------------------------------- */
+  /*
+   * SpareBackup her dosyayı ana hedefe yükledikten sonra R2'ye de gönderiyor (ek hedef, 23.10.2026).
+   * Aynı yedek listesi R2'nin gün klasörleriyle eşleşir. Hub'da salt-okuma token yoksa (R2_* env)
+   * adım uyarı verir — testin geri kalanı yine çalışır.
+   */
+  yield* adim("r2", async () => {
+      if (!r2Tanimli()) {
+        return { durum: "uyari", deger: "Bağlantı tanımlı değil", detay: ["Hub'da R2 salt-okuma token'ı (R2_*) yok", "İkinci kopya doğrulanamadı"] }
+      }
+      const yedekler = await teslimYedekleri()
+      if (yedekler.length === 0) {
+        return { durum: "hata", deger: "Yedek kaydı yok", detay: [`Son ${BULUT_SAAT} saatte hiç yedek alınmamış`] }
+      }
+      const gunler = [...new Set(yedekler.map((y) => bulutGunu(y.basla)))]
+      const dosyalar = new Map<string, number>()
+      for (const gun of gunler) for (const [ad, boyut] of await r2GunDosyalari(gun)) dosyalar.set(`${gun}/${ad}`, boyut)
+      const { tamam, bekleyen, bos, turBekleyen, eksik, tam, fark } = teslimEslestir(yedekler, dosyalar)
+      const sorun = eksik.length + bos
       return {
-        durum: sapma > 0 || eskiCo > 0 ? "uyari" : "ok",
-        deger: sapma > 0 ? `${sayi(sapma)} liste sapması` : `${sayi(bm.beklenen.length)} veritabanı listede`,
+        durum: sorun > 0 ? "hata" : "ok",
+        deger: sorun > 0 ? `${sayi(sorun)} dosya eksik` : `${sayi(tamam)} dosyanın tamamı R2'de`,
         detay: [
-          `Hedefler: ${bm.isler.map((i) => i.ad).join(" · ") || "—"}`,
-          son ? `Son kopya ${saat(son)} (${gecen(son, simdi)})` : "Kopya kaydı bulunamadı",
-          eskiCo > 0
-            ? `${sayi(eskiCo)} veritabanının kopyası 26 saatten eski`
-            : "Ana yedeğin zincirine dokunmayan bağımsız kopya",
+          `Son ${BULUT_SAAT} saat: ${sayi(tam)} tam + ${sayi(fark)} fark yedeği`,
+          `R2'de ${sayi(dosyalar.size)} dosya tarandı (${gunler.join(", ")})`,
+          sorun > 0
+            ? `Eksik: ${[...new Set(eksik)].slice(0, 3).join(", ")}`
+            : turBekleyen > 0 ? `Sabah tam yedek turu sürüyor — ${sayi(bekleyen)} yedek yükleme bekliyor`
+            : bekleyen > 0 ? `${sayi(bekleyen)} yeni yedek şu an yükleniyor` : "Ayrı sağlayıcıda ikinci kopya tam",
         ],
       }
     },

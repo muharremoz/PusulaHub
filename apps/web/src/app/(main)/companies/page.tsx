@@ -1502,7 +1502,7 @@ tr:nth-child(even) td{background:#fafafa}
     if (match) setSelectedFirma((prev) => (prev?.firkod === urlFirkod ? prev : match))
   }, [urlFirkod, apiCompanies, canViewCompanyDetail, router])
 
-  /** guvenlik.YedekAl'ı değiştirir — SpareBackup + Backup Master kapsamı */
+  /** guvenlik.YedekAl'ı değiştirir — SpareBackup kapsamı (her turda bu kolonu okur) */
   async function yedekAlDegistir(db: TabSQLDatabase, yedekAl: boolean) {
     if (!selectedFirma || yedekAlKaydediliyor) return
     setYedekAlKaydediliyor(db.Id)
@@ -1515,9 +1515,7 @@ tr:nth-child(even) td{background:#fafafa}
       const data = await r.json().catch(() => ({}))
       if (!r.ok) { toast.error(data.error ?? "Yedek ayarı kaydedilemedi"); return }
       setTabSQL((prev) => prev.map((d) => (d.Id === db.Id ? { ...d, YedekAl: yedekAl } : d)))
-      const bm = data.backupMaster as { ok: boolean; ozet: string } | undefined
-      if (bm && !bm.ok) toast.warning(`${db.Name}: yedek ${yedekAl ? "açıldı" : "kapatıldı"}`, { description: bm.ozet })
-      else toast.success(`${db.Name}: yedek ${yedekAl ? "açıldı" : "kapatıldı"}`, { description: bm?.ozet })
+      toast.success(`${db.Name}: yedek ${yedekAl ? "açıldı" : "kapatıldı"}`, { description: "SpareBackup bir sonraki turda uygular" })
     } catch {
       toast.error("Yedek ayarı kaydedilemedi")
     } finally {
@@ -3246,7 +3244,7 @@ tr:nth-child(even) td{background:#fafafa}
                       <AlertDialogTitle>Yedek kapatılsın mı?</AlertDialogTitle>
                       <AlertDialogDescription>
                         <span className="font-medium text-foreground">{yedekKapatOnay?.Name}</span> veritabanı
-                        SpareBackup ve Backup Master yedeklerinden çıkarılacak. Bu veritabanının bundan sonra yedeği alınmaz.
+                        SpareBackup yedeklerinden çıkarılacak. Bu veritabanının bundan sonra yedeği alınmaz.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

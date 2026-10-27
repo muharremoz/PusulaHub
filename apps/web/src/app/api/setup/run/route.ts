@@ -10,9 +10,7 @@ import { buildCopyAttachFiles } from "@/lib/sql-backup-powershell"
 import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } from "@/lib/sql-firma-login"
 import { apiKullaniciAdi, sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
-import { buildAddDatabasesToBackupJobs, SBM_ATLANDI } from "@/lib/sql-backup-master"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
-import { esitleBackupMaster, bmOzet } from "@/lib/backup-master"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
 import { BILKAR_KULLANICILARI, bilkarFirmasiMi, bilkarMasaustu } from "@/lib/bilkar"
@@ -1619,40 +1617,6 @@ export async function POST(req: NextRequest) {
                       svc.usersXml = ok && (apiAkisi || svc.keepUsers || xmlUsers.length > 0)
                     }
                   }
-
-                  /*
-                   * SQL Backup Master — yeni veritabanlarini yedek gorevine ekle.
-                   *
-                   * KRITIK DEGIL: `runStep` sonucu bilerek kontrol edilmiyor.
-                   * Ucuncu parti urunun veri dosyasini duzenliyoruz (bkz.
-                   * lib/sql-backup-master.ts) ve bu yol kirilgan — urun
-                   * guncellemesi semayi degistirebilir, masaustu arayuzu acik
-                   * olabilir. Basarisiz olursa kurulum DURMAZ; adim ekranda
-                   * kirmizi kalir ve "Elle Yapilacak Adimlar" modali eski elle
-                   * akisi gostermeye devam eder.
-                   */
-                  if (sqlTarget?.agent && restoredDbNames.length > 0) {
-                    /*  runStep çıktıya bakmıyor; yedek işi sürerken komut dokunmadan
-                     *  "ATLANDI" der (servisi durdurmak işi yarıda keser) — bunu
-                     *  "eklendi" diye göstermemek için çıktı burada okunuyor.      */
-                    const etiket = `SQL Backup Master yedek görevine ekleniyor (${restoredDbNames.length} veritabanı)`
-                    send("step", { stepId: "sbm_add", label: etiket, status: "running" })
-                    try {
-                      const r = await execOnAgent(sqlTarget.agent.ip, sqlTarget.agent.port, sqlTarget.agent.apiKey,
-                        buildAddDatabasesToBackupJobs(restoredDbNames), 90)
-                      const cikti = (r.stdout ?? "").trim()
-                      const hata = (r.stderr ?? "").trim()
-                      if (r.exitCode !== 0 || hata) {
-                        send("step", { stepId: "sbm_add", label: etiket, status: "error", error: hata || cikti || `exit ${r.exitCode}` })
-                      } else if (cikti.startsWith(SBM_ATLANDI)) {
-                        send("step", { stepId: "sbm_add", label: "Backup Master yedek işi sürüyor — liste saatlik eşitlemede güncellenecek", status: "done", output: cikti })
-                      } else {
-                        send("step", { stepId: "sbm_add", label: etiket, status: "done", output: cikti })
-                      }
-                    } catch (err) {
-                      send("step", { stepId: "sbm_add", label: etiket, status: "error", error: err instanceof Error ? err.message : String(err) })
-                    }
-                  }
                 },
               )
             } catch (err) {
@@ -1739,31 +1703,6 @@ export async function POST(req: NextRequest) {
                     status: "error",
                     error:  msg,
                   })
-                }
-
-                /*  Backup Master listesini guvenlik ile eşitle — yeni firmanın
-                 *  YedekAl=1 veritabanları ikinci arşive (Drive + FTP) de girsin.
-                 *  Liste elle tutulduğu için ayrışıyordu; artık kurulum sonunda
-                 *  otomatik. Kritik değil: hata kurulumu durdurmaz.             */
-                if (sqlGuvenlik > 0 && sqlTarget.agent) {
-                  send("step", { stepId: "bm_esitle", label: "Backup Master listesi eşitleniyor", status: "running" })
-                  try {
-                    const bm = await esitleBackupMaster({
-                      ip:        sqlTarget.ip,
-                      username:  sqlTarget.username,
-                      password:  sqlTarget.password,
-                      agentPort: sqlTarget.agent.port,
-                      apiKey:    sqlTarget.agent.apiKey,
-                    })
-                    send("step", { stepId: "bm_esitle", label: bmOzet(bm), status: "done" })
-                  } catch (err) {
-                    send("step", {
-                      stepId: "bm_esitle",
-                      label:  "Backup Master listesi eşitlenemedi — elle kontrol edin",
-                      status: "error",
-                      error:  err instanceof Error ? err.message : String(err),
-                    })
-                  }
                 }
               }
             }

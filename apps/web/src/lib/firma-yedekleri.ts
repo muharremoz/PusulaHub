@@ -200,6 +200,12 @@ async function r2Liste(prefix: string, delimiter?: string): Promise<{ anahtarlar
   return { anahtarlar, onekler }
 }
 
+/** Bir gün klasörünün bütün dosyaları: ad → boyut (yedek testi, R2 teslimi — ~20 bin dosya, sayfalı) */
+export async function r2GunDosyalari(gun: string): Promise<Map<string, number>> {
+  const { anahtarlar } = await r2Liste(`${SC_GOREV}/${gun}/`)
+  return new Map(anahtarlar.map((a) => [a.anahtar.split("/").pop() ?? "", a.boyut]))
+}
+
 /** Firmanın veritabanlarının R2'deki dosyaları — gün klasörleri × veritabanı öneki, en fazla 8 istek aynı anda */
 export async function r2Listele(dbler: string[]): Promise<{ gun: string; dosya: string; boyut: number }[]> {
   if (dbler.length === 0) return []

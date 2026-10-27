@@ -166,9 +166,6 @@ export function StepRun({
    *  burada. Banner'daki düğmeyle tekrar açılabiliyor — kapatıp sonra
    *  "neydi o" diye aranmasın.                                          */
   const [showManual, setShowManual] = useState(false)
-  /*  SQL Backup Master eklemesi kritik olmayan bir adim: basarisiz olsa
-   *  da kurulum devam ediyor. Sonucu modalda gostermek icin izleniyor.  */
-  const [sbmDurum, setSbmDurum] = useState<"yok" | "tamam" | "sonra" | "hata">("yok")
   /*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor — guvenlik kaydı yazılan
    *  DB otomatik yedeğe girer. Kayıt yazılamayan DB'yi ayrıca göstermek için. */
   const [guvenlikDurum, setGuvenlikDurum] = useState<Record<string, "tamam" | "hata">>({})
@@ -274,7 +271,7 @@ export function StepRun({
   /*  Yedeği istenip guvenlik kaydı yazılmayan DB → Spare Backup görmez
    *  (adım hata verdi ya da "Şirket veritabanına ekle" kapalıydı).        */
   const guvenlikHatali = restoredDbs.filter((d) => d.yedekAl && guvenlikDurum[d.ad] !== "tamam").map((d) => d.ad)
-  const yedekSorunu = restoredDbs.length > 0 && (guvenlikHatali.length > 0 || sbmDurum === "hata")
+  const yedekSorunu = restoredDbs.length > 0 && guvenlikHatali.length > 0
   const elleSayisi = 1 + (pars && parsDurum === "hata" ? 1 : 0) + (yedekSorunu ? 1 : 0)
 
   const customerMessage = (() => {
@@ -429,12 +426,6 @@ export function StepRun({
         onError={() => setHasError(true)}
         onStepError={handleStepError}
         onStep={(st) => {
-          // sbm_add: eski "listeye ekle" adımı; bm_esitle: guvenlik ile eşitleme (sonra gelir, son sözü o söyler)
-          if (st.stepId === "sbm_add" || st.stepId === "bm_esitle") {
-            // Yedek işi sürüyorsa servise dokunulmaz, saatlik eşitleme ekler (lib/bm-zamanli.ts)
-            if (st.status === "done")  setSbmDurum(/sürüyor|atlandı/i.test(st.label) ? "sonra" : "tamam")
-            if (st.status === "error") setSbmDurum("hata")
-          }
           if (st.stepId.startsWith("sql_guvenlik_") && !st.stepId.startsWith("sql_guvenlik_skip")) {
             const db = st.stepId.slice("sql_guvenlik_".length)
             if (st.status === "done")  setGuvenlikDurum((g) => ({ ...g, [db]: "tamam" }))
@@ -577,9 +568,7 @@ export function StepRun({
           {/* Otomatik yedek adımı başarısızsa buraya düşer — sessizce "tamam" denmez */}
           {yedekSorunu && (
             <ElleKart ikon={<Database className="size-3.5" />} renk="bg-red-500/15 text-red-700 dark:text-red-400" baslik="Yedek kapsamı kontrol edilmeli">
-              {guvenlikHatali.length > 0
-                ? `${guvenlikHatali.join(", ")} için güvenlik kaydı yazılamadı; Spare Backup bu veritabanını görmez.`
-                : "Backup Master listesi eşitlenemedi."}{" "}
+              {`${guvenlikHatali.join(", ")} için güvenlik kaydı yazılamadı; Spare Backup bu veritabanını görmez.`}{" "}
               Firma detayı → Veritabanları&apos;ndan kontrol edin.
             </ElleKart>
           )}
@@ -590,10 +579,8 @@ export function StepRun({
           <Bolum baslik="Yedekleme" sag={sqlServer?.name ?? "SQL sunucusu"}>
             <Kart>
               <div className="flex flex-wrap gap-x-4 gap-y-1 border-b bg-muted/20 px-3 py-2">
-                {/*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor; Backup Master
-                     listesini sihirbaz eşitliyor. İkisi de otomatik.          */}
+                {/*  Spare Backup guvenlik.YedekAl'ı kendisi okuyor — kayıt yazılan DB otomatik yedeğe girer */}
                 <YedekDurum ad="Spare Backup" durum={guvenlikHatali.length > 0 ? "hata" : "tamam"} />
-                <YedekDurum ad="SQL Backup Master" durum={sbmDurum} />
               </div>
               <ul className="divide-y">
                 {restoredDbs.map((db) => (
@@ -785,12 +772,8 @@ function ElleKart({ ikon, renk, baslik, children }: { ikon: React.ReactNode; ren
 }
 
 /** Yedek yazılımının bu kurulumdaki durumu — tek satır, nokta + ad + sonuç */
-function YedekDurum({ ad, durum }: { ad: string; durum: "yok" | "tamam" | "sonra" | "hata" }) {
-  const [renk, metin] =
-    durum === "tamam" ? ["bg-emerald-500", "otomatik eklendi"]
-    : durum === "sonra" ? ["bg-amber-500", "yedek işi sürüyordu — saatlik eşitlemede eklenecek"]
-    : durum === "hata" ? ["bg-red-500", "eklenemedi"]
-    : ["bg-muted-foreground/40", "çalışmadı"]
+function YedekDurum({ ad, durum }: { ad: string; durum: "tamam" | "hata" }) {
+  const [renk, metin] = durum === "tamam" ? ["bg-emerald-500", "otomatik eklendi"] : ["bg-red-500", "eklenemedi"]
   return (
     <span className="inline-flex items-center gap-1.5 text-[12px]">
       <span className={cn("size-1.5 rounded-full", renk)} />
