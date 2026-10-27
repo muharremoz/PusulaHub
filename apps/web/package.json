@@ -27,6 +27,7 @@
     "@tiptap/pm": "^3.22.3",
     "@tiptap/react": "^3.22.3",
     "@tiptap/starter-kit": "^3.22.3",
+    "aws4fetch": "1.0.20",
     "bcryptjs": "^3.0.3",
     "border-beam": "^1.0.1",
     "class-variance-authority": "^0.7.1",

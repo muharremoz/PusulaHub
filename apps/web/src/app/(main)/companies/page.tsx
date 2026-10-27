@@ -138,7 +138,7 @@ function tagColor(tag: string): string {
   for (let i = 0; i < tag.length; i++) h = (h * 31 + tag.charCodeAt(i)) >>> 0
   return TAG_PALETTE[h % TAG_PALETTE.length]
 }
-import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter, ArrowRight, Pencil, Network } from "lucide-react"
+import { Building2, Users, Server, Mail, Phone, User, Calendar, Cpu, MemoryStick, HardDrive, CheckCircle2, XCircle, Briefcase, StickyNote, Activity, Database, MoreVertical, LogOut, KeyRound, Laptop, Ban, Globe, Info, Play, Square, RotateCw, Trash2, Download, Upload, Terminal, Settings2, ToggleLeft, ToggleRight, Copy, CheckCheck, X, Bookmark, Trash, Save, Bug, Plus, Check, Eye, EyeOff, RefreshCw, UserPlus, Tag as TagIcon, FileText, ListOrdered, ShieldCheck, ListFilter, ArrowRight, Pencil, Network, Archive } from "lucide-react"
 import type { AdProvisionService } from "@/components/company-setup/ad-provision-runner";
 import { StepServicesPars } from "@/components/company-setup/step-services-pars";
 import { ConnectKoduDialog } from "@/components/companies/connect-kodu-dialog";
@@ -146,6 +146,7 @@ import { hizmetGorunum, HizmetIkonu } from "@/components/companies/hizmet-gorunu
 import { Combobox } from "@/components/ui/combobox";
 import { ConnectCihazlarDialog } from "@/components/companies/connect-cihazlar-dialog";
 import { TerminalDegistirSheet } from "@/components/companies/terminal-degistir-sheet";
+import { FirmaYedekleriTab } from "@/components/companies/firma-yedekleri-tab";
 const ParsYonetimSheet = dynamic(() => import("@/components/companies/pars-yonetim-sheet").then((m) => m.ParsYonetimSheet), { ssr: false });
 import { PARS_TIPLER, parsSifreUret, parsSifreGecerliMi, parsKullaniciAdiGecerliMi, parsTipFromProgramCode, parsMesajSatirlari, type ParsKatalog, type ParsWizardUser } from "@/lib/pars-katalog";
 import type { PusulaProgramConfig } from "@/app/api/services/route";
@@ -2606,7 +2607,16 @@ tr:nth-child(even) td{background:#fafafa}
                   <Activity className="h-3.5 w-3.5" />
                   Analiz
                 </TabsTrigger>
+                <TabsTrigger value="yedekler" className="text-[11px] h-7 gap-1.5">
+                  <Archive className="h-3.5 w-3.5" />
+                  Yedekler
+                </TabsTrigger>
               </TabsList>
+
+              {/* Yedekler — sekme açılınca yüklenir (Spare Cloud + R2) */}
+              <TabsContent layout={false} value="yedekler" className="mt-0">
+                {detailTab === "yedekler" && selectedFirma && <FirmaYedekleriTab firkod={selectedFirma.firkod} />}
+              </TabsContent>
 
               {/* Kullanıcılar */}
               <TabsContent layout={false} value="users" className="mt-0">
