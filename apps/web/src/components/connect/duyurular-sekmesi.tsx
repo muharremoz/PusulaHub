@@ -554,7 +554,9 @@ function DuyuruDetay({ duyuru: d, onKapat, onKaldir }: { duyuru: ConnectDuyuru |
               </div>
             </div>
 
-            <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            {/* auto-rows-max: overflow-hidden bölümlerin min yüksekliği 0 sayılır, satır modal boyuna
+                sıkışıp anket sonuçlarını kesiyordu — satır içerik kadar uzasın, kap kaydırsın. */}
+            <div className="grid min-h-0 flex-1 auto-rows-max gap-4 overflow-y-auto p-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
             <ModalBolumu baslik="Duyuru">
               <div className="flex flex-wrap items-center gap-2">
                 <OnemRozeti onem={d.onem} />
