@@ -373,7 +373,6 @@ fastify.get("/api/info/:token", async (req, reply) => {
 })
 
 const ALLOWED_DATA_EXT  = /\.(bak|rar|zip|ldf|mdf)$/i
-const ALLOWED_IMAGE_EXT = /\.(jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif)$/i
 const PROGRAM_KIND_EXT = { exe: /\.exe$/i, param: /\.txt$/i, extra: /^.+$/ }   // extra: ek dosyalar, tüm türler
 const PROGRAM_NULL = { programFilesTotal: null, programFilesReceived: null, programBytesTotal: null, programBytesReceived: null }
 const OLD_NULL     = { oldFilesTotal: null, oldFilesReceived: null, oldBytesTotal: null, oldBytesReceived: null }
@@ -418,10 +417,7 @@ fastify.post("/api/upload/:token/image", async (req, reply) => {
   const safeRel = sanitizeRelPath(String(relPath))
   if (!safeRel) return reply.code(400).send({ error: "Geçersiz dosya yolu" })
 
-  if (!ALLOWED_IMAGE_EXT.test(safeRel)) {
-    await data.toBuffer().catch(() => {})
-    return reply.code(400).send({ error: "Geçersiz dosya tipi. Sadece resim dosyaları kabul edilir." })
-  }
+  // Resim klasöründeki resim olmayan dosyalar da alınır (2026-10-28 kullanıcı isteği) — uzantı süzgeci yok.
 
   const targetPath = join(STAGING_ROOT, req.params.token, "images", safeRel)
   await mkdir(dirname(targetPath), { recursive: true })
@@ -1124,10 +1120,10 @@ function renderHtml(token) {
           </div>
 
           <label class="drop" id="imgDrop">
-            <input type="file" id="imgInput" webkitdirectory multiple accept="image/*">
+            <input type="file" id="imgInput" webkitdirectory multiple>
             <span class="drop-icon">${ICON_UPLOAD}</span>
             <strong>Klasörü buraya sürükleyin</strong>
-            <span>veya tıklayıp seçin · sadece resimler kabul edilir</span>
+            <span>veya tıklayıp seçin · klasördeki tüm dosyalar alınır</span>
             <span class="hint">${ICON_WARN} Tarayıcı izin sorduğunda "Yükle"yi seçin</span>
           </label>
 
@@ -1557,24 +1553,20 @@ function renderFlatSummary(pfx) {
 }
 
 // ── Resim klasörü seçimi ──────────────
-let imgSkippedCount = 0;   // resim olmayan, atlanan dosya sayısı
 setupDrop($("imgDrop"), $("imgInput"));
 $("imgInput").addEventListener("change", (e) => {
   if (uploading) return;
+  // Klasördeki tüm dosyalar alınır; 500 KB sıkıştırma önerisi yalnız resimleri sayar.
   const all = Array.from(e.target.files);
-  const images = all.filter((f) => IMAGE_EXT.test(f.name));
-  imgSkippedCount = all.length - images.length;
-  selectedImages = images;
-  imgTotalBytes = images.reduce((s,f) => s+f.size, 0);
-  imgLargeCount = images.filter((f) => f.size > LARGE_THRESHOLD).length;
-  imgLargeBytes = images.filter((f) => f.size > LARGE_THRESHOLD).reduce((s,f) => s+f.size, 0);
-  if (images.length === 0 && all.length > 0) {
-    showToast("Seçilen klasörde resim dosyası bulunamadı.");
+  const buyukResim = all.filter((f) => IMAGE_EXT.test(f.name) && f.size > LARGE_THRESHOLD);
+  selectedImages = all;
+  imgTotalBytes = all.reduce((s,f) => s+f.size, 0);
+  imgLargeCount = buyukResim.length;
+  imgLargeBytes = buyukResim.reduce((s,f) => s+f.size, 0);
+  if (all.length === 0) {
+    showToast("Seçilen klasörde dosya bulunamadı.");
     $("imgInput").value = "";
     return;
-  }
-  if (imgSkippedCount > 0) {
-    showToast(imgSkippedCount.toLocaleString("tr") + " resim olmayan dosya atlandı.", "info");
   }
   renderImgSummary();
   refreshStart();
@@ -1603,12 +1595,9 @@ function renderImgSummary() {
   const dirs = Array.from(dirMap.entries()).sort((a, b) => a[0].localeCompare(b[0], "tr"));
 
   let html = '' +
-    '<div class="summary-row"><span class="l">Resim sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
+    '<div class="summary-row"><span class="l">Dosya sayısı</span><span class="v">' + selectedImages.length.toLocaleString("tr") + '</span></div>' +
     '<div class="summary-row"><span class="l">Toplam boyut</span><span class="v">' + fmtBytes(imgTotalBytes) + '</span></div>' +
     '<div class="summary-row"><span class="l">Klasör sayısı</span><span class="v">' + dirs.length.toLocaleString("tr") + '</span></div>';
-  if (imgSkippedCount > 0) {
-    html += '<div class="summary-row"><span class="l" style="color:var(--warn)">Atlanan (resim değil)</span><span class="v" style="color:var(--warn)">' + imgSkippedCount.toLocaleString("tr") + ' dosya</span></div>';
-  }
   if (imgLargeCount > 0) {
     html += '<div class="summary-row danger"><span class="l">500 KB üzeri</span><span class="v">' + imgLargeCount.toLocaleString("tr") + ' dosya · ' + fmtBytes(imgLargeBytes) + '</span></div>';
   }
