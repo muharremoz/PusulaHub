@@ -404,8 +404,9 @@ async function pollAgent(server: ServerRow, force = false): Promise<boolean> {
     const controller = new AbortController()
     /*  force=1'de agent AD/IIS/SQL'i bastan topluyor — AD sunucusunda ~20 sn
      *  olculdu. 10 sn'lik poll suresi bunu keser ve sihirbazin senkron
-     *  adimi "ulasilamadi" der (abort loglanmadigi icin sessizce). */
-    const timeout = setTimeout(() => controller.abort(), force ? 60_000 : 10_000)
+     *  adimi "ulasilamadi" der (abort loglanmadigi icin sessizce).
+     *  2026-10-28: AD force 61-68 sn'ye cikti (195 firma), 60 sn yetmedi. */
+    const timeout = setTimeout(() => controller.abort(), force ? 180_000 : 10_000)
     const resp = await fetch(url, { headers: { "X-Api-Key": server.ApiKey ?? "" }, signal: controller.signal })
     clearTimeout(timeout)
 
