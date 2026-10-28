@@ -110,3 +110,9 @@ Etkinleştirme (Windows + Office MAK) ve Thinstuff lisansı **kullanıcı**.
 
 > Not: belgeyi `node -e` ile `String.replace` kullanarak düzenleme — `$'` / `` $` `` yer değiştirme kalıbı olarak
 > yorumlanıp metni çoğaltır (bu belge 23.10'da böyle bozuldu). Edit/Write aracını kullan.
+
+## TIP deposu + standart görevler (28.10.2026 sonrası zorunlu)
+Her yeni terminalde (bkz. [terminal-explorer-tip-dongusu.md](terminal-explorer-tip-dongusu.md)):
+1. `PusulaTipTemizle` görevi — 00:45 SYSTEM, `C:\Scripts\TipTemizle.ps1` (SHA 41C081E6), log `C:\Scripts\TipTemizle.log`.
+2. `HKLM\SYSTEM\Software\Microsoft\TIP\TestResults` ACL: kalıtımı kopyalayarak kapat, `BUILTIN\Users` → yalnız `ReadKey` (ContainerInherit); SYSTEM/Administrators FullControl kalır. Önce SDDL'yi `C:\Scripts\TipYedek\` altına yedekle. Betik: oturum scratchpad `t-tip-uygula.ps1` + `t-tip-acl2.ps1` (kalıtım için).
+3. Görev seti 7 terminalde **aynı** olmalı (28.10 eşitlendi): BaglantiTestiKisayol, GeceRestart 01:00, MasaustuKota, OfficeFTA (**conhost --headless**), OfficeTurkce, OpenOfficeMasaustu, SumatraAyar, ThinstuffBekci (Kuma push izleyicisi `__kuma-push-kopya.mjs 53 "TN Thinstuff (RDP oturum servisi)"` → token), TipTemizle, YaziciTemizleGece 03:00 (`C:\Scripts\YaziciTemizle.ps1` SHA B9A2FC2B). Envanter: scratchpad `t-gorevler.ps1`.

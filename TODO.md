@@ -25,6 +25,11 @@ Biriken iş listesi. Tamamlananlar `✅` ile işaretlenir ve üstte kalır, iler
 - [ ] ⚪ **Terminal 3 giriş kilitlenmesi (zombi RDP oturumu)** — 14 ve 17 Eylül'de yaşandı, ESXi reset
   ile geçti, KB5129237 elle kuruldu; çözüldü mü belli değil. **Askıda, tekrar olmadıkça açılmaz.**
   Kayıt: [docs/terminal3-kilitlenme.md](docs/terminal3-kilitlenme.md). (2026-09-18)
+- [ ] 🔴 **Explorer %100 döngüsü = Windows TIP deposu (Ekim 2026 KB)** — T5'te kök neden ölçüldü, depo
+  temizlendi (anında düzeldi). Kalıcı: gece temizlik görevi + PusulaX config `DisableImplicitTouchKeyboardInvocation`
+  pilotu (2246); T6/T7 açılmadan uygula. T5 izleme görevi/ProcDump/dökümler iş bitince silinecek.
+  28.10 akşam: TIP görevi+ACL 7 terminalde, görev seti 7/7 eşitlendi.
+  Kayıt: [docs/terminal-explorer-tip-dongusu.md](docs/terminal-explorer-tip-dongusu.md). (2026-10-28)
 
 ---
 

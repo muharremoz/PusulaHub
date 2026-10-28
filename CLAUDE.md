@@ -267,6 +267,20 @@ okunabilir olmalı.
 
 ## Bilinen Sorunlar ve Çözümler
 
+### Terminal explorer.exe %100 — Windows TIP Deposu Döngüsü
+Terminal sunucusunda birkaç kullanıcının `explorer.exe`'si birer çekirdeği aralıksız yiyor,
+sunucu %80+ (SQL değil). Sebep: Ekim 2026 Windows güncellemesi (KB5126655) ile gelen dokunmatik
+klavye testi, her "klavye göster" isteğinde `HKLM\SYSTEM\Software\Microsoft\TIP\TestResults`
+altına kayıt yazıp **tüm depoyu tarıyor**; depo hiç temizlenmediği için şişiyor (46 bin kayıt),
+döngü kendini besliyor. İsteği WPF uygulamaları (PusulaX) üretiyor.
+
+**Çözüm (7 terminalde kurulu, 28.10.2026):** depo alt anahtarlarını silmek anında düzeltir;
+kalıcı olarak `PusulaTipTemizle` görevi (00:45) + `TestResults` ACL'inde `Users` → yalnız
+`ReadKey`. Yeni terminalde zorunlu adım. Teşhis/ölçüm kaydı:
+[docs/terminal-explorer-tip-dongusu.md](docs/terminal-explorer-tip-dongusu.md).
+
+---
+
 ### Sunucu Slug Routing — 404 Sorunu
 Sunucu adında boşluk veya özel karakter varsa (örn. "Active Directory", "Terminal 1"), URL slug `active-directory` olur ama `LOWER(Name) = 'active directory'` ≠ `'active-directory'` → 404.
 
