@@ -24,6 +24,7 @@
 
 import { Fragment, useState } from "react"
 import type { BackupSlot, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
+import type { SqlGirisVeri } from "./sql-giris"
 
 /**
  * Disk kartının ihtiyaç duyduğu asgari sunucu şekli. `@/types`'taki tam
@@ -584,6 +585,45 @@ export function BackupImageCard({
       {yedeksiz.map((b) => (
         <Row key={b.vmName} name={kisaAd(b.vmName)} value="yedek yok" color={RED} />
       ))}
+    </Card>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════
+   SQL hatalı giriş (29.10.2026)
+══════════════════════════════════════════════════════════ */
+
+/*  Son 24 saatin seviye sayıları + son üç parola/kullanıcı hatası.
+ *  "Veritabanı açılamadı" son denemeler listesine girmez: yanlış ayarlı
+ *  müşteri programı dakikada bir deniyor, liste hep onunla dolardı;
+ *  müdahale sayısında görünüyor. Yeni denemede alt ortada ayrıca uyarı
+ *  çıkıyor (sql-giris.tsx).                                            */
+export function SqlGirisCard({ data }: { data: SqlGirisVeri }) {
+  const okumaEski = !data.okuma || Date.now() - Date.parse(data.okuma) > 5 * 60_000
+  const son = data.satirlar
+    .filter((x) => x.neden !== "veritabani_acilamadi")
+    .sort((a, b) => Date.parse(b.son) - Date.parse(a.son))
+    .slice(0, 3)
+  const renk = (s: string) => (s === "guvenlik" ? RED : s === "destek" ? AMBER : TXT)
+  const saat = (iso: string) => new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+
+  return (
+    <Card>
+      <Title accent={data.ozet.guvenlik > 0 ? RED : okumaEski ? AMBER : undefined}>SQL Hatalı Giriş · 24 sa</Title>
+      <div className="mt-2">
+        <Row name="Güvenlik" value={String(data.ozet.guvenlik)} color={data.ozet.guvenlik > 0 ? RED : TXT} />
+        <Row name="Müdahale" value={String(data.ozet.destek)} color={data.ozet.destek > 0 ? AMBER : TXT} />
+        <Row name="Tek seferlik" value={String(data.ozet.bilgi)} />
+        {okumaEski && <Row name="İzleme" value="okuma yok" color={AMBER} />}
+      </div>
+      {son.length > 0 && (
+        <>
+          <Divider />
+          {son.map((x) => (
+            <Row key={`${x.ip}|${x.kullanici}|${x.neden}`} name={x.kullanici} value={saat(x.son)} color={renk(x.seviye)} />
+          ))}
+        </>
+      )}
     </Card>
   )
 }

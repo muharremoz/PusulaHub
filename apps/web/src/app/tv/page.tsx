@@ -37,7 +37,8 @@ import { AlarmControls } from "./_components/alarm-controls"
 import { useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_components/mock-data"
 import { useServerMetrics, useServerList } from "./_components/use-server-metrics"
 import { useBackupStorage, useEsxi } from "./_components/use-esxi"
-import { PhysicalHostCard, DiskCard, BackupImageCard, RdpUsersCard } from "./_components/infra-cards"
+import { PhysicalHostCard, DiskCard, BackupImageCard, RdpUsersCard, SqlGirisCard } from "./_components/infra-cards"
+import { SqlGirisUyarilari, useSqlGiris } from "./_components/sql-giris"
 
 const PAGE   = "#0B0B0D"
 const PANEL  = "#141417"
@@ -80,6 +81,8 @@ export default function TvAgacPage() {
   const esxi        = useEsxi()
   const serverList  = useServerList()
   const backupDisk  = useBackupStorage()
+  /*  SQL hatalı giriş: kart sol sütunda, yeni denemede alt ortada uyarı */
+  const sqlGiris    = useSqlGiris()
   const mockMetrics = useMockServerMetrics(mock)
   const metrics     = mock ? mockMetrics : realMetrics
 
@@ -214,7 +217,10 @@ export default function TvAgacPage() {
         {esxi && <PhysicalHostCard host={esxi.host} />}
         {serverList.length > 0 && <RdpUsersCard servers={serverList} />}
         {serverList.length > 0 && <DiskCard servers={serverList} />}
+        {sqlGiris.veri && <SqlGirisCard data={sqlGiris.veri} />}
       </div>
+
+      <SqlGirisUyarilari uyarilar={sqlGiris.uyarilar} />
     </div>
   )
 }
