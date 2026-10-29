@@ -22,6 +22,7 @@ import next from "next"
 import { startPolling } from "./src/lib/agent-poller"
 import { startFirmaSync } from "./src/lib/firma-sync"
 import { debugTemizle } from "./src/lib/firma-debug"
+import { startSqlGirisIzleme } from "./src/lib/sql-giris-izleme"
 
 const dev  = process.env.NODE_ENV !== "production"
 const port = 4242
@@ -74,6 +75,8 @@ app.prepare().then(() => {
     if (pollerEnabled) {
       startPolling()
       startFirmaSync()
+      // SQL hatalı giriş izleme (dakikada bir hata günlüğü) — bkz. lib/sql-giris-izleme.ts
+      startSqlGirisIzleme()
       // Sahipsiz debugsql.txt (sekme kapandı / konsol çöktü) — bkz. lib/firma-debug.ts
       setInterval(() => { debugTemizle().catch(() => {}) }, 60_000)
     } else {
