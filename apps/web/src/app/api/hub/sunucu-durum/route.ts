@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { getAllAgents } from "@/lib/agent-store"
 import { fetchKumaMonitors, type KumaMonitor } from "@/lib/kuma"
-import { esxiConfigured, fetchEsxiHost, type EsxiHost } from "@/lib/esxi"
+import { esxiConfigured, fetchEsxiHost, fetchEsxiVmGuc, type EsxiHost } from "@/lib/esxi"
 import { kurApiSaglik, type KurApiSaglik } from "@/lib/kur-api"
 import { fetchKumaDuraklatilmis } from "@/lib/kuma-client"
 import { icAnahtarKapisi } from "@/lib/hub-ic-anahtar"
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
   if (kapi) return kapi
 
   const sb = getSupabaseAdmin()
-  const [{ data: srv, error }, { data: roller }, { data: firmalar }, { data: adKullanicilari }, kuma, esxi, kur, durak] = await Promise.all([
+  const [{ data: srv, error }, { data: roller }, { data: firmalar }, { data: adKullanicilari }, kuma, esxi, kur, durak, vmGuc] = await Promise.all([
     sb.schema("hub").from("servers").select("id, name, ip").order("name"),
     sb.schema("hub").from("server_roles").select("server_id, role"),
     // Kayıtlı kullanıcı: firma → sunucu ataması × firmanın AD OU'sundaki kullanıcılar.
@@ -51,6 +51,8 @@ export async function GET(req: NextRequest) {
     Promise.race([kurApiSaglik(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]).catch(() => null),
     // Duraklatılmış izleyici = bilerek kapatılmış (ör. T7). Kuma admin'e ulaşılamazsa boş küme.
     Promise.race([fetchKumaDuraklatilmis(), new Promise<null>((r) => setTimeout(() => r(null), 4000))]).catch(() => null),
+    // ESXi'de kapalı makine = bilerek kapatıldı (Kuma admin bilgisi yoksa da çalışır).
+    esxiConfigured() ? Promise.race([fetchEsxiVmGuc(), new Promise<null>((r) => setTimeout(() => r(null), 5000))]).catch(() => null) : Promise.resolve(null),
   ])
   if (error) return NextResponse.json({ error: "Sunucular alınamadı" }, { status: 500 })
 
@@ -73,6 +75,7 @@ export async function GET(req: NextRequest) {
   const pingByIp = new Map(kuma.m.filter((m) => m.type === "ping" && m.hostname).map((m) => [m.hostname!, m]))
   const kullanilan = new Set<KumaMonitor>()
   const agents = getAllAgents()
+  const kapaliVmIp = new Set((vmGuc ?? []).filter((v) => v.powerState === "poweredOff" && v.ip).map((v) => v.ip!))
 
   const sunucular = ((srv ?? []) as SrvRow[]).map((r) => {
     const k = pingByIp.get(r.ip)
@@ -90,8 +93,8 @@ export async function GET(req: NextRequest) {
       roller: rolMap.get(r.id) ?? [],
       /** Kuma ping: up | down | pending | maintenance | unknown; izleyici yoksa null */
       izleme: k ? k.status : null,
-      /** Kuma'da izleyicisi duraklatılmış — bilerek kapatıldı, arıza sayılmaz */
-      duraklatildi: !k && !!durak?.hostlar.has(r.ip),
+      /** Bilerek kapatıldı (ESXi'de kapalı ya da Kuma izleyicisi duraklatılmış) — arıza sayılmaz */
+      duraklatildi: kapaliVmIp.has(r.ip) || (!k && !!durak?.hostlar.has(r.ip)),
       yanitMs: yanit(k),
       /** Agent son 2 dk içinde rapor verdiyse online */
       agent: agent ? agent.status : null,

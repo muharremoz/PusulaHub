@@ -841,3 +841,41 @@ export function invalidateEsxiCache(): void {
   hostCache = null
   backupCache = null
 }
+
+/* ══════════════════════════════════════════════════════════
+   Sanal makine güç durumu (CRM mobil Sunucular, 29.10.2026)
+══════════════════════════════════════════════════════════ */
+
+export interface EsxiVmGuc {
+  name: string
+  /** poweredOn | poweredOff | suspended */
+  powerState: string
+  /** Ad ya da klasörden çıkarılan IP — "RDP (10.15.2.5)" → "10.15.2.5" */
+  ip: string | null
+}
+
+let gucCache: { at: number; data: EsxiVmGuc[] } | null = null
+
+/**
+ * Makinelerin açık/kapalı durumu. "ESXi'de kapalı" = bilerek kapatıldı (çöken
+ * makine poweredOn kalır); mobil ekran bunu arıza saymıyor. 60 sn önbellek.
+ */
+export async function fetchEsxiVmGuc(force = false): Promise<EsxiVmGuc[] | null> {
+  if (!esxiConfigured()) return null
+  if (!force && gucCache && Date.now() - gucCache.at < HOST_TTL_MS) return gucCache.data
+  const data = await withSession(async (cookie, pc) => {
+    const xml = await retrieve(cookie, pc, "HostSystem", "ha-host", ["vm"])
+    const ids = [...(propMap(xml).get("vm") ?? "").matchAll(/<ManagedObjectReference[^>]*>(.*?)<\/ManagedObjectReference>/g)]
+      .map((m) => m[1])
+    const out: EsxiVmGuc[] = []
+    for (const id of ids) {
+      const v = propMap(await retrieve(cookie, pc, "VirtualMachine", id, ["name", "runtime.powerState", "config.files.vmPathName"]))
+      const ad = v.get("name") ?? "—"
+      const ip = /(\d{1,3}(?:\.\d{1,3}){3})/.exec(`${ad} ${v.get("config.files.vmPathName") ?? ""}`)?.[1] ?? null
+      out.push({ name: ad, powerState: v.get("runtime.powerState") ?? "unknown", ip })
+    }
+    return out
+  })
+  gucCache = { at: Date.now(), data }
+  return data
+}
