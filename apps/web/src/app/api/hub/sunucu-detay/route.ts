@@ -17,13 +17,15 @@ import { icAnahtarKapisi } from "@/lib/hub-ic-anahtar"
  */
 
 /*  EncodedCommand ile gider: exec ucunun tırnak/`^`/satır sonu tuzakları (CLAUDE.md) devre dışı. CPU
- *  yüzdesi tüm çekirdeklere göre — Görev Yöneticisi'nin gösterdiği gibi.       */
+ *  yüzdesi tüm çekirdeklere göre — Görev Yöneticisi'nin gösterdiği gibi.
+ *  Ölçümü yapan powershell'in kendisi ($PID) listeden çıkarılır: açılış maliyetiyle %25–30
+ *  görünüp "SYSTEM powershell kaynak yiyor" yanılgısı yaratıyordu (T4, 29.10).       */
 const SUREC_KOMUTU = [
   "$a=@{}",
   "Get-Process -ErrorAction SilentlyContinue | ForEach-Object { $a[$_.Id]=$_.TotalProcessorTime.TotalSeconds }",
   "Start-Sleep -Seconds 2",
   "$n=[Environment]::ProcessorCount",
-  "Get-Process -IncludeUserName -ErrorAction SilentlyContinue | ForEach-Object { $o=$a[$_.Id]; if ($o -ne $null) { New-Object PSObject -Property @{ ad=$_.ProcessName; no=$_.Id; kul=$_.UserName; cpu=[math]::Round(($_.TotalProcessorTime.TotalSeconds-$o)/2/$n*100,1); ramMB=[math]::Round($_.WorkingSet64/1MB) } } } | Sort-Object cpu -Descending | Select-Object -First 10 ad,no,kul,cpu,ramMB | ConvertTo-Json -Compress",
+  "Get-Process -IncludeUserName -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne $PID } | ForEach-Object { $o=$a[$_.Id]; if ($o -ne $null) { New-Object PSObject -Property @{ ad=$_.ProcessName; no=$_.Id; kul=$_.UserName; cpu=[math]::Round(($_.TotalProcessorTime.TotalSeconds-$o)/2/$n*100,1); ramMB=[math]::Round($_.WorkingSet64/1MB) } } } | Sort-Object cpu -Descending | Select-Object -First 10 ad,no,kul,cpu,ramMB | ConvertTo-Json -Compress",
 ].join("; ")
 
 interface Surec { ad: string; no: number; kul: string | null; cpu: number; ramMB: number }
