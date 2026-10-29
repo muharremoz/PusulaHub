@@ -305,7 +305,7 @@ async function bildir(u: Uyari): Promise<void> {
 }
 
 /** Susturma kapsamı: "hepsi" | "destek" | "k:<kullanıcı küçük harf>" (mobil Güvenlik sekmesinden) */
-export const SUSTUR_KAPSAM = /^(hepsi|destek|k:S{1,128})$/
+export const SUSTUR_KAPSAM = /^(hepsi|destek|k:\S{1,128})$/
 
 /** Susturulmuş mu — kullanıcı bazında, uyarının ilgilendiği kullanıcıların hepsi susturulmuşsa */
 export function susturuldu(u: Pick<Uyari, "seviye" | "kullanicilar">, kapsamlar: Set<string>): boolean {
