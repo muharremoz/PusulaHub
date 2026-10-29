@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { timingSafeEqual } from "node:crypto"
 import { getSupabaseAdmin } from "@/lib/supabase/admin"
 import { getAllAgents } from "@/lib/agent-store"
 import { fetchKumaMonitors, type KumaMonitor } from "@/lib/kuma"
 import { esxiConfigured, fetchEsxiHost, type EsxiHost } from "@/lib/esxi"
 import { kurApiSaglik, type KurApiSaglik } from "@/lib/kur-api"
+import { fetchKumaDuraklatilmis } from "@/lib/kuma-client"
+import { icAnahtarKapisi } from "@/lib/hub-ic-anahtar"
 
 /**
  * Sunucu durumu — AYRINTILI. CRM mobil uygulamasının "Sunucular" ekranı için
@@ -28,25 +29,15 @@ import { kurApiSaglik, type KurApiSaglik } from "@/lib/kur-api"
 
 interface SrvRow { id: string; name: string; ip: string }
 
-function anahtarGecerli(req: NextRequest): boolean {
-  const beklenen = process.env.INTERNAL_APP_KEY ?? ""
-  const gelen = req.headers.get("x-internal-key") ?? ""
-  if (!beklenen) return false
-  const a = Buffer.from(gelen), b = Buffer.from(beklenen)
-  return a.length === b.length && timingSafeEqual(a, b)
-}
-
 const yanit = (m: KumaMonitor | undefined) =>
   m?.responseMs != null && m.responseMs >= 0 ? Math.round(m.responseMs) : null
 
 export async function GET(req: NextRequest) {
-  if (!process.env.INTERNAL_APP_KEY) {
-    return NextResponse.json({ error: "INTERNAL_APP_KEY Hub'da tanımlı değil." }, { status: 500 })
-  }
-  if (!anahtarGecerli(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
+  const kapi = icAnahtarKapisi(req)
+  if (kapi) return kapi
 
   const sb = getSupabaseAdmin()
-  const [{ data: srv, error }, { data: roller }, { data: firmalar }, { data: adKullanicilari }, kuma, esxi, kur] = await Promise.all([
+  const [{ data: srv, error }, { data: roller }, { data: firmalar }, { data: adKullanicilari }, kuma, esxi, kur, durak] = await Promise.all([
     sb.schema("hub").from("servers").select("id, name, ip").order("name"),
     sb.schema("hub").from("server_roles").select("server_id, role"),
     // Kayıtlı kullanıcı: firma → sunucu ataması × firmanın AD OU'sundaki kullanıcılar.
@@ -58,6 +49,8 @@ export async function GET(req: NextRequest) {
     esxiConfigured() ? fetchEsxiHost().catch(() => null) : Promise.resolve(null),
     // CRM bu ucu 8 sn'de keser; kur-api geç kalırsa yalnız kur bölümü boş gelsin.
     Promise.race([kurApiSaglik(), new Promise<null>((r) => setTimeout(() => r(null), 3000))]).catch(() => null),
+    // Duraklatılmış izleyici = bilerek kapatılmış (ör. T7). Kuma admin'e ulaşılamazsa boş küme.
+    Promise.race([fetchKumaDuraklatilmis(), new Promise<null>((r) => setTimeout(() => r(null), 4000))]).catch(() => null),
   ])
   if (error) return NextResponse.json({ error: "Sunucular alınamadı" }, { status: 500 })
 
@@ -97,6 +90,8 @@ export async function GET(req: NextRequest) {
       roller: rolMap.get(r.id) ?? [],
       /** Kuma ping: up | down | pending | maintenance | unknown; izleyici yoksa null */
       izleme: k ? k.status : null,
+      /** Kuma'da izleyicisi duraklatılmış — bilerek kapatıldı, arıza sayılmaz */
+      duraklatildi: !k && !!durak?.hostlar.has(r.ip),
       yanitMs: yanit(k),
       /** Agent son 2 dk içinde rapor verdiyse online */
       agent: agent ? agent.status : null,
@@ -112,7 +107,7 @@ export async function GET(req: NextRequest) {
 
   // Sunucuya bağlanmayan izleyiciler (Thinstuff bekçileri, web siteleri, portlar…).
   const servisler = kuma.m
-    .filter((m) => !kullanilan.has(m) && !m.name.startsWith("Döviz - "))
+    .filter((m) => !kullanilan.has(m) && !m.name.startsWith("Döviz - ") && !durak?.adlar.has(m.name))
     .map((m) => ({ ad: m.name, tip: m.type, izleme: m.status, yanitMs: yanit(m) }))
     .sort((a, b) => a.ad.localeCompare(b.ad, "tr", { numeric: true }))
 

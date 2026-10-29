@@ -169,3 +169,43 @@ export function kumaSafeCall<T>(label: string, fn: () => Promise<T>): Promise<T 
     return null
   })
 }
+
+/* ── Duraklatılmış izleyiciler (CRM mobil Sunucular, 29.10.2026) ──────── */
+
+/**
+ * Prometheus /metrics duraklatılmış izleyicileri HİÇ yazmıyor; "izleyici yok"
+ * ile "bilerek kapatıldı" ayırt edilemiyordu (T7 kapalıyken ekranda arıza gibi
+ * duruyordu). Liste login sonrası sunucunun kendiliğinden yaydığı `monitorList`
+ * olayından okunur — `getMonitorList` ack'i listeyi taşımıyor.
+ * 5 dk önbellek: her istekte socket açıp login olmaya değmez.
+ */
+let duraklatilmisOnbellek: { at: number; veri: { adlar: Set<string>; hostlar: Set<string> } } | null = null
+
+export async function fetchKumaDuraklatilmis(): Promise<{ adlar: Set<string>; hostlar: Set<string> }> {
+  if (duraklatilmisOnbellek && Date.now() - duraklatilmisOnbellek.at < 5 * 60_000) return duraklatilmisOnbellek.veri
+  const url = process.env.UPTIME_KUMA_URL, user = process.env.KUMA_ADMIN_USER, pass = process.env.KUMA_ADMIN_PASSWORD
+  if (!url || !user || !pass) throw new Error("Kuma admin env eksik")
+  const socket = io(url, { transports: ["websocket", "polling"], timeout: 10_000, reconnection: false, forceNew: true })
+  try {
+    const liste = new Promise<Record<string, KumaMonitorDb>>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("Kuma monitorList timeout")), 10_000)
+      socket.once("monitorList", (m: Record<string, KumaMonitorDb>) => { clearTimeout(t); resolve(m) })
+    })
+    await new Promise<void>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("Kuma connect timeout")), 10_000)
+      socket.once("connect", () => { clearTimeout(t); resolve() })
+      socket.once("connect_error", (e) => { clearTimeout(t); reject(e) })
+    })
+    const ack = await emitWithAck<KumaAck>(socket, "login", { username: user, password: pass, token: "" })
+    if (!ack.ok) throw new Error(ack.msg ?? "Kuma login başarısız")
+    const pasif = Object.values(await liste).filter((m) => !m.active)
+    const veri = {
+      adlar: new Set(pasif.map((m) => m.name)),
+      hostlar: new Set(pasif.map((m) => m.hostname).filter((h): h is string => !!h)),
+    }
+    duraklatilmisOnbellek = { at: Date.now(), veri }
+    return veri
+  } finally {
+    socket.disconnect()
+  }
+}
