@@ -109,6 +109,8 @@ export interface Uyari {
   baslik: string
   govde: string
   sms: boolean
+  /** Uyarının ilgilendiği kullanıcılar — kullanıcı bazlı susturma için */
+  kullanicilar: string[]
 }
 
 const SAAT = 3600_000
@@ -137,7 +139,7 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
   // G1 — sa için yanlış parola (her kaynaktan)
   for (const [ip, l] of grupla((o) => (o.kullanici.toLowerCase() === "sa" && o.neden === "parola_yanlis" ? o.ip : null))) {
     out.push({
-      anahtar: `G|sa|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: false,
+      anahtar: `G|sa|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: false, kullanicilar: ["sa"],
       baslik: "🔴 SQL: sa için yanlış parola",
       govde: `${kaynakAdi(ip, sunucular)} · ${l.length} deneme · ${saatYaz(l.at(-1)!.t)}`,
     })
@@ -148,13 +150,13 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
     const adlar = new Set(l.map((o) => o.kullanici))
     if (adlar.size >= 3) {
       out.push({
-        anahtar: `G|tarama|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: true,
+        anahtar: `G|tarama|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: true, kullanicilar: [...adlar],
         baslik: "🔴 SQL: kullanıcı adı taraması",
         govde: `${kaynakAdi(ip, sunucular)} 10 dk'da ${adlar.size} farklı kullanıcı adı denedi (${[...adlar].slice(0, 4).join(", ")})`,
       })
     } else if (l.length >= 20) {
       out.push({
-        anahtar: `G|yogun|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: true,
+        anahtar: `G|yogun|${ip}`, seviye: "guvenlik", bekleMs: SAAT, sms: true, kullanicilar: [...adlar],
         baslik: "🔴 SQL: yoğun parola denemesi",
         govde: `${kaynakAdi(ip, sunucular)} 10 dk'da ${l.length} hatalı giriş · ${[...adlar].join(", ")}`,
       })
@@ -167,7 +169,7 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
   )) {
     const [ip, kul] = k.split("|")
     out.push({
-      anahtar: `G|dis|${k}`, seviye: "guvenlik", bekleMs: SAAT, sms: false,
+      anahtar: `G|dis|${k}`, seviye: "guvenlik", bekleMs: SAAT, sms: false, kullanicilar: [kul],
       baslik: "🔴 SQL: dış adresten hatalı giriş",
       govde: `${ip} · ${kul} · ${NEDEN_AD[l[0].neden]} · ${l.length} deneme`,
     })
@@ -179,7 +181,7 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
     const [kul, db] = k.split("|")
     const ip = l.at(-1)!.ip
     out.push({
-      anahtar: `D|db|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false,
+      anahtar: `D|db|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false, kullanicilar: [kul],
       baslik: "🟡 SQL: veritabanı açılamıyor",
       govde: `${kul} → ${db || "?"} · ${kaynakAdi(ip, sunucular)} — programın veritabanı ayarı kontrol edilmeli`,
     })
@@ -190,7 +192,7 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
     if (l.length < 5) continue
     const [ip, kul] = k.split("|")
     out.push({
-      anahtar: `D|parola|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false,
+      anahtar: `D|parola|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false, kullanicilar: [kul],
       baslik: "🟡 SQL: tekrarlayan yanlış parola",
       govde: `${kul} · ${kaynakAdi(ip, sunucular)} · 10 dk'da ${l.length} deneme — parola değişmiş ya da program ayarı bozuk olabilir`,
     })
@@ -200,7 +202,7 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
   for (const [k, l] of grupla((o) => (o.neden === "giris_kapali" || o.neden === "parola_suresi" ? `${o.ip}|${o.kullanici}|${o.neden}` : null))) {
     const [ip, kul] = k.split("|")
     out.push({
-      anahtar: `D|hesap|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false,
+      anahtar: `D|hesap|${k}`, seviye: "destek", bekleMs: 24 * SAAT, sms: false, kullanicilar: [kul],
       baslik: `🟡 SQL: ${NEDEN_AD[l[0].neden]}`,
       govde: `${kul} · ${kaynakAdi(ip, sunucular)} · ${l.length} deneme`,
     })
@@ -302,14 +304,30 @@ async function bildir(u: Uyari): Promise<void> {
   }
 }
 
+/** Susturma kapsamı: "hepsi" | "destek" | "k:<kullanıcı küçük harf>" (mobil Güvenlik sekmesinden) */
+export const SUSTUR_KAPSAM = /^(hepsi|destek|k:S{1,128})$/
+
+/** Susturulmuş mu — kullanıcı bazında, uyarının ilgilendiği kullanıcıların hepsi susturulmuşsa */
+export function susturuldu(u: Pick<Uyari, "seviye" | "kullanicilar">, kapsamlar: Set<string>): boolean {
+  if (kapsamlar.has("hepsi")) return true
+  if (u.seviye === "destek" && kapsamlar.has("destek")) return true
+  return u.kullanicilar.length > 0 && u.kullanicilar.every((k) => kapsamlar.has(`k:${k.toLowerCase()}`))
+}
+
 async function uyarilariGonder(uyarilar: Uyari[]): Promise<void> {
   if (!uyarilar.length) return
   const sb = getSupabaseAdmin().schema("hub")
-  const { data } = await sb.from("sql_giris_bildirim").select("anahtar, son_bildirim").in("anahtar", uyarilar.map((u) => u.anahtar))
+  const [{ data }, { data: sus }] = await Promise.all([
+    sb.from("sql_giris_bildirim").select("anahtar, son_bildirim").in("anahtar", uyarilar.map((u) => u.anahtar)),
+    sb.from("sql_giris_sustur").select("kapsam").gt("bitis", new Date().toISOString()),
+  ])
   const son = new Map(((data ?? []) as { anahtar: string; son_bildirim: string }[]).map((x) => [x.anahtar, Date.parse(x.son_bildirim)]))
+  const kapsamlar = new Set(((sus ?? []) as { kapsam: string }[]).map((x) => x.kapsam))
   for (const u of uyarilar) {
     const once = son.get(u.anahtar)
     if (once && Date.now() - once < u.bekleMs) continue
+    // Susturulmuşsa son_bildirim yazılmaz — susturma bitince sorun sürüyorsa uyarı gelir.
+    if (susturuldu(u, kapsamlar)) continue
     try {
       await bildir(u)
       await sb.from("sql_giris_bildirim").upsert({ anahtar: u.anahtar, son_bildirim: new Date().toISOString() })
@@ -363,6 +381,7 @@ export async function sqlGirisTur(): Promise<void> {
     if (simdi - sonTemizlik > 6 * SAAT) {
       sonTemizlik = simdi
       await sb.from("sql_giris_hatalari").delete().lt("son", new Date(simdi - SAKLAMA_GUN * 24 * SAAT).toISOString())
+      await sb.from("sql_giris_sustur").delete().lt("bitis", new Date(simdi).toISOString())
     }
   } catch (e) {
     console.log(`[SqlGiris] Hata: ${e instanceof Error ? e.message : e}`)

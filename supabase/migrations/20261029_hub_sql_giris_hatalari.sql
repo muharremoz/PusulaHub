@@ -69,3 +69,17 @@ language sql stable as $$
   group by 1, ip, kullanici, neden, veritabani;
 $$;
 grant execute on function hub.sql_giris_ozet(timestamptz, boolean) to service_role;
+
+-- Uyarı susturma (mobil Güvenlik sekmesinden). Kayıt yine tutulur, yalnız push gitmez.
+-- kapsam: 'hepsi' | 'destek' (yalnız müdahale uyarıları) | 'k:<kullanıcı, küçük harf>'
+create table if not exists hub.sql_giris_sustur (
+  kapsam     text primary key,
+  bitis      timestamptz not null,
+  kim        text,
+  olusturma  timestamptz not null default now()
+);
+alter table hub.sql_giris_sustur enable row level security;
+drop policy if exists "hub authed full" on hub.sql_giris_sustur;
+create policy "hub authed full" on hub.sql_giris_sustur
+  for all to authenticated using (true) with check (true);
+grant select, insert, update, delete on hub.sql_giris_sustur to service_role, authenticated;

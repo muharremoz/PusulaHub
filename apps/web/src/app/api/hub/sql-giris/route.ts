@@ -20,11 +20,12 @@ export async function GET(req: NextRequest) {
 
   const sb = getSupabaseAdmin().schema("hub")
   const simdi = Date.now()
-  const [son24, gunluk, okuma, sunucular] = await Promise.all([
+  const [son24, gunluk, okuma, sunucular, sustur] = await Promise.all([
     sb.rpc("sql_giris_ozet", { p_since: new Date(simdi - 24 * 3600_000).toISOString(), p_gun_basi: false }),
     sb.rpc("sql_giris_ozet", { p_since: new Date(simdi - 7 * 24 * 3600_000).toISOString(), p_gun_basi: true }),
     sb.from("sql_giris_bildirim").select("son_bildirim").eq("anahtar", "__okuma").maybeSingle(),
     sunucuAdlari(),
+    sb.from("sql_giris_sustur").select("kapsam, bitis, kim").gt("bitis", new Date(simdi).toISOString()).order("bitis"),
   ])
   if (son24.error) return NextResponse.json({ error: son24.error.message }, { status: 500 })
 
@@ -72,6 +73,8 @@ export async function GET(req: NextRequest) {
       okuma: (okuma.data as { son_bildirim: string } | null)?.son_bildirim ?? null,
       ozet,
       satirlar: satirlar.slice(0, 60),
+      /** Etkin susturmalar — push gitmez, kayıt sürer */
+      susturmalar: (sustur.data ?? []) as { kapsam: string; bitis: string; kim: string | null }[],
       gunluk: [...gunMap.values()].sort((a, b) => a.gun.localeCompare(b.gun)),
       zaman: new Date().toISOString(),
     },
