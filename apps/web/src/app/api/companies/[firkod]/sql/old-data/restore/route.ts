@@ -39,6 +39,7 @@ import { sqlLoginAdi, sqlLoginArama } from "@/lib/firma-adlandirma"
 import { saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
 import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu, yazPusulaXEntegrasyon } from "@/lib/pusulax-resim-yolu"
+import { buildWriteDesktopIni } from "@/lib/setup-fileops"
 import {
   buildPullBakFromDepo,
   buildPullAttachFilesFromDepo,
@@ -94,8 +95,9 @@ export async function POST(
   // Firma SQL login'i Hub DB'sinden DEĞİL, aşağıda canlı firma SQL sunucusundan
   // (sys.sql_logins) çekilir — doğru sunucu odur.
   const sb = await getSupabaseServer()
-  const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id").eq("company_id", firkod).maybeSingle()
+  const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id, name").eq("company_id", firkod).maybeSingle()
   const fsid = (comp as { file_server_id: string | null } | null)?.file_server_id
+  const firmaAdi = ((comp as { name: string | null } | null)?.name ?? "").trim()
   const [sqlAgentRow, depoRow] = await Promise.all([
     serverAgentById(sqlTarget.serverId),
     fsid
@@ -208,6 +210,7 @@ export async function POST(
               database: "sirket", requestTimeout: 120000,
             }
 
+            let yuklenen = 0
             for (const f of files) {
               const oneksiz  = f.firmaOneki === false
               const targetDb = oneksiz ? f.databaseName : `${firkod}_${f.databaseName}`
@@ -325,10 +328,25 @@ export async function POST(
               }
             }
 
+            /*  SQLData klasörü görünen adı — sihirbazdaki "sql_data_tooltip" adımı (30.10.2026).
+             *  Klasörü ilk kez bu uç açtıysa (4397, 6070, 6518…) desktop.ini yoktu, Gezgin'de
+             *  yalnız numara görünüyordu. Klasör adı değişmez; hata işlemi durdurmaz.        */
+            if (yuklenen > 0 && firmaAdi) {
+              const gorunen = `${firkod} - ${firmaAdi}`
+              try {
+                const r = await execOnAgent(sqlAgent.ip, sqlAgent.port, sqlAgent.apiKey, buildWriteDesktopIni(firmaDataDir(firkod), firmaAdi, gorunen), 60)
+                if (r.exitCode !== 0) throw new Error(r.stderr?.trim() || `exit ${r.exitCode}`)
+                step("sql_data_tooltip", `SQL veri klasörü adı: ${gorunen}`, "done")
+              } catch (err) {
+                step("sql_data_tooltip", "SQL veri klasörü adı yazılamadı", "error", { error: err instanceof Error ? err.message : String(err) })
+              }
+            }
+
             /*  RESTORE ve ATTACH sonrası ortak adımlar (3-5): DB owner,
              *  sirket erişimi ve guvenlik kaydı. İki dal da aynı sırayı
              *  uyguluyor, tek yerde tutuluyor.                            */
             async function sonrakiAdimlar(f: FileReq, targetDb: string) {
+              yuklenen++
               // 3) DB owner = firma login (login varsa)
               if (firmaLogin) {
                 step(`owner_${targetDb}`, `DB owner ayarlanıyor: [${targetDb}] → ${firmaLogin}`, "running")

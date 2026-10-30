@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
-import { restoreBackupOnServer } from "@/lib/sql-restore"
+import { restoreBackupOnServer, firmaDataDir } from "@/lib/sql-restore"
+import { serverAgentById } from "@/lib/hub-servers"
+import { execOnAgent } from "@/lib/agent-poller"
+import { buildWriteDesktopIni } from "@/lib/setup-fileops"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { depodakiYol, okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu } from "@/lib/pusulax-resim-yolu"
 
@@ -15,6 +18,9 @@ import { depodakiYol, okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu
  * Pusula X datasıysa resim yolu (Sabitler.ImagePath) yedekteki değerle gelmesin:
  * geri yüklemeden önceki yol firmanın Depo'sunu gösteriyorsa o korunur (alt
  * klasörlü olabilir, ör. \6796\TOPTAN\), göstermiyorsa \\<Depo>\Resimler\{firmaId}\ yazılır.
+ *
+ * D:\SQLData\{firmaId} klasörü ilk kez burada açılmış olabilir — Gezgin'de "<firmaNo> - <firma adı>"
+ * görünsün diye desktop.ini yazılır (sihirbazdaki adımla aynı). Hata geri yüklemeyi bozmaz.
  */
 export async function POST(
   req: NextRequest,
@@ -31,8 +37,9 @@ export async function POST(
     if (!target) return NextResponse.json({ error: "SQL sunucusu bulunamadı" }, { status: 404 })
 
     const sb = await getSupabaseServer()
-    const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id").eq("company_id", firkod).maybeSingle()
+    const { data: comp } = await sb.schema("hub").from("companies").select("file_server_id, name").eq("company_id", firkod).maybeSingle()
     const fsid = (comp as { file_server_id: string | null } | null)?.file_server_id
+    const firmaAdi = ((comp as { name: string | null } | null)?.name ?? "").trim()
     const depoIp = fsid
       ? ((await sb.schema("hub").from("servers").select("ip").eq("id", fsid).maybeSingle()).data as { ip: string } | null)?.ip ?? null
       : null
@@ -55,6 +62,18 @@ export async function POST(
         }
       },
     )
+
+    if (firmaAdi) {
+      try {
+        const ag = await serverAgentById(target.serverId)
+        if (ag?.api_key && ag.agent_port) {
+          const r = await execOnAgent(target.ip, ag.agent_port, ag.api_key, buildWriteDesktopIni(firmaDataDir(firkod), firmaAdi, `${firkod} - ${firmaAdi}`), 60)
+          if (r.exitCode !== 0) console.error("[POST /sql/restore] desktop.ini", r.stderr?.trim())
+        }
+      } catch (err) {
+        console.error("[POST /sql/restore] desktop.ini", err instanceof Error ? err.message : err)
+      }
+    }
 
     return NextResponse.json({ ok: true, resimYolu })
   } catch (err) {
