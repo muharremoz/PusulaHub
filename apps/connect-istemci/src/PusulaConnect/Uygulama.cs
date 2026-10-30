@@ -498,10 +498,11 @@ namespace PusulaConnect
 
         private async Task<bool> SecimFirmadaMi(JObject secim)
         {
-            var vt = secim?.Value<string>("veritabani");
-            if (string.IsNullOrEmpty(vt)) return false;
+            // Pusula X çoklu seçimde virgülle ayrılmış liste — hepsi yeni firmanın listesinde olmalı
+            var vtler = (secim?.Value<string>("veritabani") ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).ToList();
+            if (vtler.Count == 0) return false;
             var liste = (await _servis.SayimVeritabanlari())["liste"] as JArray;
-            return liste != null && liste.Any(x => string.Equals(x.Value<string>("veritabani"), vt, StringComparison.OrdinalIgnoreCase));
+            return liste != null && vtler.All(vt => liste.Any(x => string.Equals(x.Value<string>("veritabani"), vt, StringComparison.OrdinalIgnoreCase)));
         }
 
         public object KayitSil()

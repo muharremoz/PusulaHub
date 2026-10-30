@@ -6,6 +6,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -162,12 +163,29 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     }
   };
 
+  /*  Pusula X: ÇOKLU seçim (30.10.2026) — firma bazen birden çok şubenin datasını görmeli.
+   *  `vt` virgülle ayrılmış veritabanı listesi; giriş kodları da virgülle DataCode'a yazılır
+   *  ("6572,65721"). Eski program tek veritabanıyla açılır, orada `vt` tek ad.            */
+  const vtSecili = eski ? (vt ? [vt] : []) : vt.split(",").map((x) => x.trim()).filter(Boolean);
+  const vtDegistir = (ad: string, acik: boolean) => {
+    const yeni = acik ? [...vtSecili.filter((x) => x !== ad), ad] : vtSecili.filter((x) => x !== ad);
+    // Liste sırasını koru (ekranda ve DataCode'da aynı sıra)
+    const sira = (vtListe ?? []).map((x) => x.veritabani);
+    yeni.sort((a, b) => sira.indexOf(a) - sira.indexOf(b));
+    setVt(yeni.join(","));
+  };
+
   const secimNesnesi = (): SayimSecim | null => {
-    const v = vtListe?.find((x) => x.veritabani === vt);
-    if (eski) return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, formId: form };
-    if (!vt) return null;
-    const kod = v?.kod != null ? String(v.kod) : vt === s?.secim?.veritabani ? s?.secim?.kod : undefined;
-    return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, kod };
+    if (eski) {
+      const v = vtListe?.find((x) => x.veritabani === vt);
+      return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, formId: form };
+    }
+    if (vtSecili.length === 0) return null;
+    // Liste yüklenmeden kaydedilirse (aynı seçim) kayıtlı kodlar kullanılır
+    if (!vtListe && vt === s?.secim?.veritabani) return s.secim;
+    const secilen = vtSecili.map((ad) => vtListe?.find((x) => x.veritabani === ad)).filter((x): x is SayimVeritabani => !!x);
+    const kodlar = [...new Set(secilen.map((x) => x.kod).filter((k) => k != null).map(String))];
+    return { veritabani: secilen.map((x) => x.veritabani).join(","), ad: secilen.map((x) => x.ad).join(", "), kod: kodlar.join(",") || undefined };
   };
 
   const calistir = async (ne: "kur" | "guncelle", k?: string) => {
@@ -260,12 +278,29 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     setSecimAcik(true);
   };
 
-  const secimTam = eski ? !!vt && !!form : !!vt;
+  const secimTam = eski ? !!vt && !!form : vtSecili.length > 0;
   const secimAlani = (
           <div className="flex flex-col gap-3">
             <div className={eski ? "grid grid-cols-[1fr_160px] gap-3" : "grid grid-cols-1 gap-3"}>
               <div className="flex flex-col gap-1">
-                <Label className="text-xs">Veritabanı</Label>
+                <Label className="text-xs">{eski ? "Veritabanı" : "Veritabanları"}</Label>
+                {!eski ? (
+                  <div className="flex flex-col divide-y rounded-md border bg-background">
+                    {!vtListe ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">{bekle === "liste" ? "Yükleniyor…" : "Liste alınamadı"}</div>
+                    ) : vtListe.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">Veritabanı bulunamadı</div>
+                    ) : (
+                      vtListe.map((v) => (
+                        <label key={v.veritabani} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/40">
+                          <Checkbox checked={vtSecili.includes(v.veritabani)} onCheckedChange={(c) => vtDegistir(v.veritabani, c === true)} />
+                          <span className="flex-1">{v.ad}</span>
+                          <span className="text-xs text-muted-foreground">{v.veritabani}{v.kod != null ? ` · kod ${v.kod}` : ""}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                ) : (
                 <Select value={vt} onValueChange={setVt} disabled={!vtListe}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder={bekle === "liste" ? "Yükleniyor…" : vtListe?.length === 0 ? "Veritabanı bulunamadı" : "Seçin"} />
@@ -281,6 +316,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                     ))}
                   </SelectContent>
                 </Select>
+                )}
               </div>
               {eski && (
                 <div className="flex flex-col gap-1">
@@ -294,7 +330,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                 </div>
               )}
             </div>
-            {!eski && <div className="text-xs text-muted-foreground">Sayım programının giriş ekranında yalnız bu veritabanı (ve aynı şube kodundakiler) görünür.</div>}
+            {!eski && <div className="text-xs text-muted-foreground">Sayım programının giriş ekranında yalnız seçilen veritabanları (ve aynı şube kodundakiler) görünür; birden çok seçilebilir.</div>}
             <div className="flex flex-wrap items-center gap-2">
               {s?.kurulu ? (
                 <Button size="sm" disabled={!secimTam || bekle !== null} onClick={() => void calistir("guncelle")}>
@@ -404,7 +440,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                 <>
                   <span className="self-center text-muted-foreground">Veritabanı</span>
                   <span className="flex items-center gap-2">
-                    <span className="truncate">{s.secim ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : eski ? "—" : "Firma kodundakiler (giriş ekranından seçilir)"}</span>
+                    <span className="truncate" title={s.secim?.veritabani}>{s.secim ? (eski ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : s.secim.ad) : eski ? "—" : "Firma kodundakiler (giriş ekranından seçilir)"}</span>
                     {!secimAcik && (
                       <SatirDugmesi onClick={() => { setSecimAcik(true); if (!vtListe) void listeyiGetir(); }} disabled={bekle !== null}>
                         <Database /> Değiştir

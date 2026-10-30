@@ -203,16 +203,19 @@ namespace PusulaConnect
         /// <summary>
         /// Pusula X seçimi (30.10.2026): şubeleri ayrı guvenlik.KOD taşıyan firmada (6572: 6572 / 65721 / 65722)
         /// giriş ekranı yalnız DataCode'daki kodun veritabanlarını gösteriyordu — sayım hep ilk şubeye düşüyordu.
-        /// Seçim isteğe bağlı: null → firma kodu (eski davranış). Kod yalnız rakam.
+        /// Seçim isteğe bağlı: null → firma kodu (eski davranış).
+        /// ÇOKLU (30.10.2026): firma birden çok şubenin datasını görebilsin — veritabani ve kod virgülle
+        /// ayrılmış liste ("6572_ALTCADDE,6572_ALTSIPAHI" / "6572,65721"); DataCode'a kodlar virgülle yazılır.
         /// </summary>
         private static JObject PusulaXSecimDenetle(JObject secim)
         {
             if (secim == null) return null;
-            var vt = secim.Value<string>("veritabani")?.Trim();
-            var kod = secim.Value<string>("kod")?.Trim();
-            if (string.IsNullOrEmpty(vt)) throw new KullaniciHatasi("Sayım yapılacak veritabanını seçin.");
-            if (string.IsNullOrEmpty(kod) || !kod.All(char.IsDigit)) throw new KullaniciHatasi("Seçilen veritabanının giriş kodu Pusula'da yok; listeyi yenileyip tekrar seçin.");
-            return new JObject { ["veritabani"] = vt, ["ad"] = secim.Value<string>("ad")?.Trim() ?? vt, ["kod"] = kod };
+            var vtler = (secim.Value<string>("veritabani") ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            var kodlar = (secim.Value<string>("kod") ?? "").Split(',').Select(x => x.Trim()).Where(x => x.Length > 0).Distinct().ToArray();
+            if (vtler.Length == 0) throw new KullaniciHatasi("Sayım yapılacak veritabanını seçin.");
+            if (kodlar.Length == 0 || kodlar.Any(k => !k.All(char.IsDigit))) throw new KullaniciHatasi("Seçilen veritabanının giriş kodu Pusula'da yok; listeyi yenileyip tekrar seçin.");
+            var vt = string.Join(",", vtler);
+            return new JObject { ["veritabani"] = vt, ["ad"] = secim.Value<string>("ad")?.Trim() ?? vt, ["kod"] = string.Join(",", kodlar) };
         }
 
         private JObject SecimHazirla(JObject secim) => EskiMi ? SecimDenetle(secim) : PusulaXSecimDenetle(secim);
