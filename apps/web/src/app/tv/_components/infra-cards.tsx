@@ -852,52 +852,92 @@ export function SqlGirisCard({ data }: { data: SqlGirisVeri }) {
         </span>
       </div>
 
-      {/* Toplam deneme — kartın kahramanı */}
-      <div
-        className="mt-1 text-[34px] font-extralight leading-none tracking-[-0.04em] tabular-nums"
-        style={{ color: guvenlik > 0 ? RED : "#F4F4F5" }}
-      >
-        {toplam}
-      </div>
-
-      {/* Seviyelerin dağılımı — tek şerit */}
-      <div className="mt-2.5 flex h-[5px] w-full gap-[2px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
-        {toplam > 0 && seviyeler.filter((x) => x.n > 0).map((x) => (
-          <span
-            key={x.ad}
-            className="h-full rounded-full"
-            style={{
-              width: hazir ? `${(x.n / toplam) * 100}%` : "0%",
-              background: x.renk,
-              boxShadow: `0 0 8px ${x.renk}88`,
-              transition: "width 1.2s cubic-bezier(.2,.8,.2,1)",
-            }}
-          />
-        ))}
-      </div>
-
-      <div className="mt-2 grid grid-cols-3 gap-2">
-        {seviyeler.map((x) => (
-          <div key={x.ad} className="min-w-0">
-            <div className="text-[16px] font-light leading-none tabular-nums" style={{ color: x.n > 0 ? x.renk : TXT_DIM }}>{x.n}</div>
-            <div className="mt-1 truncate text-[8px] font-medium uppercase" style={{ color: TXT_DIM, letterSpacing: "0.16em" }}>{x.ad}</div>
+      {toplam === 0 ? (
+        /*  Boş hâl: son 24 saatte hatalı giriş yok. İzleme okuması bayatsa
+            "temiz" DEMİYORUZ — veri gelmiyor olabilir; o zaman kehribar uyarı. */
+        <div className="flex flex-1 items-center gap-4 py-2">
+          <div className="relative flex size-[52px] shrink-0 items-center justify-center">
+            <span
+              className="tv-sql-temiz absolute inset-0 rounded-full"
+              style={{ boxShadow: `inset 0 0 0 2px ${okumaEski ? AMBER : GREEN}`, opacity: 0.35 }}
+            />
+            <span
+              className="absolute inset-[7px] rounded-full"
+              style={{ background: okumaEski ? "rgba(251,191,36,0.10)" : "rgba(52,211,153,0.10)" }}
+            />
+            <svg width={22} height={22} viewBox="0 0 24 24" fill="none" className="relative"
+              stroke={okumaEski ? AMBER : GREEN} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              {okumaEski
+                ? <><path d="M12 8v5" /><path d="M12 16.5v.5" /></>
+                : <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z M9 12l2 2 4-4" />}
+            </svg>
           </div>
-        ))}
-      </div>
+          <div className="min-w-0">
+            <div className="text-[34px] font-extralight leading-none tracking-[-0.04em] tabular-nums" style={{ color: "#F4F4F5" }}>
+              0
+            </div>
+            <div className="mt-1.5 text-[11px] font-medium" style={{ color: okumaEski ? AMBER : GREEN }}>
+              {okumaEski ? "İzleme verisi gelmiyor" : "Hatalı giriş yok"}
+            </div>
+            <div className="mt-0.5 text-[9px] uppercase tabular-nums" style={{ color: TXT_DIM, letterSpacing: "0.16em" }}>
+              {data.okuma ? `son okuma ${saat(data.okuma)}` : "okuma yok"}
+            </div>
+          </div>
+          <style>{`
+            @keyframes tv-sql-temiz { 0%,100% { transform: scale(1); opacity: .35 } 50% { transform: scale(1.08); opacity: .7 } }
+            .tv-sql-temiz { animation: tv-sql-temiz 3.2s ease-in-out infinite }
+          `}</style>
+        </div>
+      ) : (
+        <>
+        {/* Toplam deneme — kartın kahramanı */}
+        <div
+          className="mt-1 text-[34px] font-extralight leading-none tracking-[-0.04em] tabular-nums"
+          style={{ color: guvenlik > 0 ? RED : "#F4F4F5" }}
+        >
+          {toplam}
+        </div>
 
-      {son.length > 0 && (
-        <div className="mt-2.5 space-y-1 border-t pt-2" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          {son.map((x) => (
-            <div key={`${x.ip}|${x.kullanici}|${x.neden}`} className="flex items-center gap-2">
-              <span className="size-[6px] shrink-0 rounded-full" style={{ background: renk(x.seviye), boxShadow: `0 0 6px ${renk(x.seviye)}` }} />
-              <div className="min-w-0 flex-1 truncate text-[11px]">
-                <span className="font-semibold" style={{ color: TXT }}>{x.kullanici}</span>
-                {x.nedenAd && <span style={{ color: TXT_DIM }}> · {x.nedenAd}</span>}
-              </div>
-              <span className="shrink-0 text-[11px] font-medium tabular-nums" style={{ color: TXT }}>{saat(x.son)}</span>
+        {/* Seviyelerin dağılımı — tek şerit */}
+        <div className="mt-2.5 flex h-[5px] w-full gap-[2px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+          {toplam > 0 && seviyeler.filter((x) => x.n > 0).map((x) => (
+            <span
+              key={x.ad}
+              className="h-full rounded-full"
+              style={{
+                width: hazir ? `${(x.n / toplam) * 100}%` : "0%",
+                background: x.renk,
+                boxShadow: `0 0 8px ${x.renk}88`,
+                transition: "width 1.2s cubic-bezier(.2,.8,.2,1)",
+              }}
+            />
+          ))}
+        </div>
+
+        <div className="mt-2 grid grid-cols-3 gap-2">
+          {seviyeler.map((x) => (
+            <div key={x.ad} className="min-w-0">
+              <div className="text-[16px] font-light leading-none tabular-nums" style={{ color: x.n > 0 ? x.renk : TXT_DIM }}>{x.n}</div>
+              <div className="mt-1 truncate text-[8px] font-medium uppercase" style={{ color: TXT_DIM, letterSpacing: "0.16em" }}>{x.ad}</div>
             </div>
           ))}
         </div>
+
+        {son.length > 0 && (
+          <div className="mt-2.5 space-y-1 border-t pt-2" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+            {son.map((x) => (
+              <div key={`${x.ip}|${x.kullanici}|${x.neden}`} className="flex items-center gap-2">
+                <span className="size-[6px] shrink-0 rounded-full" style={{ background: renk(x.seviye), boxShadow: `0 0 6px ${renk(x.seviye)}` }} />
+                <div className="min-w-0 flex-1 truncate text-[11px]">
+                  <span className="font-semibold" style={{ color: TXT }}>{x.kullanici}</span>
+                  {x.nedenAd && <span style={{ color: TXT_DIM }}> · {x.nedenAd}</span>}
+                </div>
+                <span className="shrink-0 text-[11px] font-medium tabular-nums" style={{ color: TXT }}>{saat(x.son)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        </>
       )}
     </Card>
   )
