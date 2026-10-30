@@ -34,7 +34,6 @@ import {
 } from "../_shared/types"
 import { useClock } from "../_shared/use-tv-data"
 import { type MetricsMap, metricsFor } from "./use-server-metrics"
-import { causesFor } from "./causes"
 import { type TreeGroup, type TreeKey, SUBGROUPS, subGroupOf } from "../_shared/monitor-groups"
 import { SPHERE_R_FACTOR } from "./core-sphere"
 import { Shdr07 } from "@/components/ui/shdr-07"
@@ -80,7 +79,9 @@ const TRUNK_DIST_FACTOR = 0.373
 
 /** Detay kutusu — yapragin sagindaki bosluga oturuyor */
 const DETAIL_W = 250
-const DETAIL_H = 122
+/** Sağdaki kart ızgarasının kapladığı genişlik (page.tsx: 810 px + 24 px kenar + pay) */
+const KART_IZGARASI_W = 860
+const DETAIL_H = 114
 /** Yaprak etiketinin bitiminden kutuya kalan mesafe */
 const DETAIL_GAP = 214
 
@@ -297,7 +298,8 @@ export function Nexus({
    * kürenin nokta bulutunun üstüne biniyordu. Küre sola alınıp bütün
    * dallar sağa çıkarılınca bu çakışma yapısal olarak imkânsız oluyor. */
   const geo = useMemo(() => {
-    const cx = w * 0.22
+    // Küre ekranın sol kenarının biraz dışında — yarısından azı görünür
+    const cx = -Math.min(w, h) * 0.03
     const cy = h / 2
     const S  = Math.min(w, h) * 0.52          // küre kutusunun kenarı
     const R  = S * SPHERE_R_FACTOR            // kürenin görsel yarıçapı
@@ -440,7 +442,6 @@ export function Nexus({
      */
     const hero     = down ? (since ?? "—") : m.responseMs === null ? "—" : String(m.responseMs)
     const heroUnit = down ? "çevrimdışı" : "ms"
-    const meta     = down ? "yanıt yok" : since ? since + " bu durumda" : ""
     /*
      * Yapraktan cikip kutuyu SARAN tek yol. Kutunun kenarligi ayri bir
      * stroke degil, bu yolun kendisi — akan isik da ayni yolu izliyor,
@@ -460,7 +461,9 @@ export function Nexus({
      * sey konuyor: neden dusmus olabilir.
      */
     const mt = down ? null : metrics ? metricsFor(m, metrics) : null
-    const causes = down ? causesFor(m, allMonitors, focused.g.monitors) : []
+    /*  Olası sebepler kutuda gösterilmiyor (30.10.2026, kullanıcı isteği):
+     *  kutu sade kalsın, arıza bandı ve kırmızı yaprak zaten haber veriyor. */
+    const causes: string[] = []
 
     /*
      * Döviz kaynaklarında ayrı bir soru var: kur ne zaman tazelendi?
@@ -487,7 +490,7 @@ export function Nexus({
     /*  Metrik seridi, sunucu aktif kullanici bildiriyorsa bir satir
      *  uzuyor. Sabit 44 birakip satiri icine sikistirmak cubuklarla
      *  cakisiyordu.                                                   */
-    const mtH = mt ? 44 + (mt.aktifKullanici != null ? 40 : 0) : 0
+    const mtH = mt && mt.aktifKullanici != null ? 40 : 0
     const cardH = DETAIL_H + mtH + (fx ? 44 : 0) + causesH
 
     /*
@@ -570,7 +573,7 @@ export function Nexus({
       statusText, statusColor: DOT[leaf.ui],
       type: m.type.toUpperCase(),
       addr: clip(addr, 30),
-      hero, heroUnit, meta, fx, bandFx, bandMt, causes, bandCa,
+      hero, heroUnit, fx, bandFx, bandMt, causes, bandCa,
     }
   }, [focused, leaves, selectedName, selectedSince, now, metrics, exchangeHealth, allMonitors])
 
@@ -593,6 +596,15 @@ export function Nexus({
       targetS = 1.22
       targetX = w * 0.20 - focused.x * targetS
       targetY = h * 0.5 - focused.y * targetS
+      /*  Detay kutusu sağdaki kart ızgarasının ALTINA girmesin: kutunun
+       *  sağ kenarı ızgaranın solunda kalacak kadar kamerayı sola kaydır.
+       *  Gövde yine de ekranın içinde kalsın (en az 40 px).           */
+      if (leaves.length) {
+        const kutuSag = Math.max(...leaves.map((l) => l.x)) + DETAIL_GAP + DETAIL_W
+        const sinir   = w - KART_IZGARASI_W
+        const tasma   = targetX + kutuSag * targetS - sinir
+        if (tasma > 0) targetX = Math.max(40 - focused.x * targetS, targetX - tasma)
+      }
     }
 
     // Mevcut değerleri DOM'dan değil ref'ten sürdür — sıçrama olmasın
@@ -643,7 +655,7 @@ export function Nexus({
     apply()
     raf = requestAnimationFrame(step)
     return () => { running = false; if (raf) cancelAnimationFrame(raf) }
-  }, [focused, w, h, skyRefs])
+  }, [focused, leaves, w, h, skyRefs])
 
   const anyDown = groups.some((g) => g.monitors.some((m) => m.status === "down"))
   const coreUi: UiStatus = anyDown ? "offline" : "online"
@@ -1032,21 +1044,28 @@ export function Nexus({
                   const by = detail.leaf.y - detail.h / 2
                   return (
                     <>
-                      {/* Üst satır: solda durum, sağda tür */}
-                      <circle cx={bx + 18} cy={by + 20} r={3.5} fill={detail.statusColor} />
+                      {/* Üst satır: solda durum hapı, sağda tür */}
+                      <rect
+                        x={bx + 12} y={by + 11} width={detail.statusText.length * 7.2 + 26} height={18} rx={4}
+                        fill={detail.statusColor} fillOpacity={0.12}
+                      />
+                      <rect x={bx + 12} y={by + 11} width={2} height={18} rx={1} fill={detail.statusColor} />
+                      <circle cx={bx + 22} cy={by + 20} r={2.6} fill={detail.statusColor}>
+                        <animate attributeName="opacity" values="1;0.35;1" dur={detail.down ? "0.9s" : "2.4s"} repeatCount="indefinite" />
+                      </circle>
                       <text
-                        x={bx + 28} y={by + 20} dominantBaseline="middle"
+                        x={bx + 29} y={by + 20.5} dominantBaseline="middle"
                         fontSize={9} fontWeight={700} fill={detail.statusColor}
-                        style={{ letterSpacing: "0.22em" }}
+                        style={{ letterSpacing: "0.16em" }}
                       >
-                        {detail.statusText.toUpperCase()}
+                        {detail.statusText.toLocaleUpperCase("tr-TR")}
                       </text>
                       <text
-                        x={bx + DETAIL_W - 14} y={by + 20} textAnchor="end" dominantBaseline="middle"
-                        fontSize={9} fill={TXT_DIM} className="font-mono"
-                        style={{ letterSpacing: "0.12em" }}
+                        x={bx + DETAIL_W - 14} y={by + 20.5} textAnchor="end" dominantBaseline="middle"
+                        fontSize={9} fontWeight={500} fill={TXT_DIM}
+                        style={{ letterSpacing: "0.16em" }}
                       >
-                        {detail.type}
+                        {detail.type.toLocaleUpperCase("tr-TR")}
                       </text>
 
                       <line
@@ -1056,33 +1075,23 @@ export function Nexus({
 
                       {/* Kahraman değer */}
                       <text
-                        x={bx + 16} y={by + 62} dominantBaseline="middle"
-                        fontSize={26} fontWeight={700} className="font-mono"
-                        fill={detail.down ? DOT.offline : FLOW}
+                        x={bx + 15} y={by + 63} dominantBaseline="middle"
+                        fontSize={38} fontWeight={200}
+                        fill={detail.down ? DOT.offline : "#F4F4F5"}
+                        style={{ letterSpacing: "-0.03em", fontVariantNumeric: "tabular-nums" }}
                       >
                         {detail.hero}
-                      </text>
-                      <text
-                        x={bx + 16 + detail.hero.length * 16 + 8} y={by + 66} dominantBaseline="middle"
-                        fontSize={9} fill={TXT_DIM}
-                        style={{ letterSpacing: "0.14em" }}
-                      >
-                        {detail.heroUnit.toUpperCase()}
+                        <tspan dx={6} fontSize={11} fontWeight={400} fill={TXT_DIM} style={{ letterSpacing: "0.06em" }}>
+                          {detail.heroUnit}
+                        </tspan>
                       </text>
 
                       {/* Meta */}
                       <text
-                        x={bx + 16} y={by + 90} dominantBaseline="middle"
-                        fontSize={10} fill={TXT} className="font-mono"
+                        x={bx + 16} y={by + 98} dominantBaseline="middle"
+                        fontSize={12} fontWeight={500} fill={TXT}
                       >
                         {detail.addr}
-                      </text>
-                      <text
-                        x={bx + 16} y={by + 107} dominantBaseline="middle"
-                        fontSize={9} fill={TXT_DIM}
-                        style={{ letterSpacing: "0.10em" }}
-                      >
-                        {detail.meta}
                       </text>
 
                       {/* Olası sebepler — yalnız arızada.
@@ -1139,7 +1148,7 @@ export function Nexus({
                           <text
                             x={bx + DETAIL_W - 16} y={by + detail.bandFx + 18} textAnchor="end"
                             dominantBaseline="middle" fontSize={11}
-                            fontWeight={700} className="font-mono" fill={detail.fx.color}
+                            fontWeight={500} fill={detail.fx.color}
                           >
                             {detail.fx.ago}
                           </text>
@@ -1147,8 +1156,7 @@ export function Nexus({
                               saat hangi ana ait oldugunu sabitler */}
                           <text
                             x={bx + 16} y={by + detail.bandFx + 32} dominantBaseline="middle"
-                            fontSize={9} fill={TXT_DIM} className="font-mono"
-                            style={{ letterSpacing: "0.08em" }}
+                            fontSize={9} fill={TXT_DIM}
                           >
                             {detail.fx.at}
                           </text>
@@ -1156,7 +1164,7 @@ export function Nexus({
                             <text
                               x={bx + DETAIL_W - 16} y={by + detail.bandFx + 32} textAnchor="end"
                               dominantBaseline="middle" fontSize={9}
-                              className="font-mono" fill={DOT.offline}
+                              fill={DOT.offline}
                             >
                               {detail.fx.err.length > 22
                                 ? detail.fx.err.slice(0, 21) + "…"
@@ -1169,46 +1177,40 @@ export function Nexus({
                       {/* Sunucu metrikleri — yalnız karşılığı olan monitörde */}
                       {detail.mt && (
                         <>
-                          <line
-                            x1={bx + 14} y1={by + detail.bandMt}
-                            x2={bx + DETAIL_W - 14} y2={by + detail.bandMt}
-                            stroke="rgba(255,255,255,0.08)" strokeWidth={1}
-                          />
                           {([
                             ["CPU",  detail.mt.cpu],
                             ["RAM",  detail.mt.ram],
                             ["DİSK", detail.mt.disk],
                           ] as [string, number][]).map(([lbl, v], i) => {
-                            const colW = (DETAIL_W - 32) / 3
-                            const cx0  = bx + 16 + i * colW
-                            const barW = colW - 12
+                            /*  Halka: Fiziksel Sunucu kartındaki halkalarla aynı dil.
+                                Normal değer mor, eşik aşılınca durum rengi. */
                             const col  = loadColor(v)
+                            const hc   = col === TXT ? "#A78BFA" : col
+                            const R = 16, C = 2 * Math.PI * R
+                            const rcx = bx + DETAIL_W - 16 - R - (2 - i) * 40
+                            const rcy = by + 67   // ms ile adres satırlarının dikey ortası
                             return (
                               <g key={lbl}>
+                                <circle cx={rcx} cy={rcy} r={R} fill="none" stroke="rgba(255,255,255,0.09)" strokeWidth={3} />
+                                <circle
+                                  cx={rcx} cy={rcy} r={R} fill="none" stroke={hc} strokeWidth={3} strokeLinecap="round"
+                                  strokeDasharray={`${(Math.min(100, v) / 100) * C} ${C}`}
+                                  transform={`rotate(-90 ${rcx} ${rcy})`}
+                                  style={{ filter: `drop-shadow(0 0 3px ${hc})` }}
+                                />
                                 <text
-                                  x={cx0} y={by + detail.bandMt + 18} dominantBaseline="middle"
-                                  fontSize={8} fill={TXT_DIM} style={{ letterSpacing: "0.16em" }}
+                                  x={rcx} y={rcy + 0.5} textAnchor="middle" dominantBaseline="middle"
+                                  fontSize={11} fontWeight={400} fill={col === TXT ? "#F4F4F5" : col}
+                                  style={{ fontVariantNumeric: "tabular-nums" }}
+                                >
+                                  {v}
+                                </text>
+                                <text
+                                  x={rcx} y={rcy + R + 10} textAnchor="middle" dominantBaseline="middle"
+                                  fontSize={9} fontWeight={700} fill={TXT} style={{ letterSpacing: "0.12em" }}
                                 >
                                   {lbl}
                                 </text>
-                                <text
-                                  x={cx0 + barW} y={by + detail.bandMt + 18} textAnchor="end"
-                                  dominantBaseline="middle" fontSize={10}
-                                  className="font-mono" fill={col}
-                                >
-                                  {v}%
-                                </text>
-                                {/* Doluluk çubuğu — rakam tek başına "çok mu az mı"
-                                    sorusuna cevap vermiyor, çubuk veriyor */}
-                                <rect
-                                  x={cx0} y={by + detail.bandMt + 28} width={barW} height={3} rx={1.5}
-                                  fill="rgba(255,255,255,0.09)"
-                                />
-                                <rect
-                                  x={cx0} y={by + detail.bandMt + 28}
-                                  width={Math.max(1, (barW * Math.min(100, v)) / 100)}
-                                  height={3} rx={1.5} fill={col}
-                                />
                               </g>
                             )
                           })}
@@ -1225,27 +1227,27 @@ export function Nexus({
                           {detail.mt.aktifKullanici != null && (
                             <>
                               <line
-                                x1={bx + 16} y1={by + detail.bandMt + 40}
-                                x2={bx + DETAIL_W - 16} y2={by + detail.bandMt + 40}
+                                x1={bx + 16} y1={by + detail.bandMt}
+                                x2={bx + DETAIL_W - 16} y2={by + detail.bandMt}
                                 stroke="rgba(255,255,255,0.06)" strokeWidth={1}
                               />
                               <text
-                                x={bx + 16} y={by + detail.bandMt + 60} dominantBaseline="middle"
+                                x={bx + 16} y={by + detail.bandMt + 20} dominantBaseline="middle"
                                 fontSize={8} fill={TXT_DIM} style={{ letterSpacing: "0.16em" }}
                               >
                                 AKTİF KULLANICI
                               </text>
                               <text
-                                x={bx + DETAIL_W - 16} y={by + detail.bandMt + 62} textAnchor="end"
+                                x={bx + DETAIL_W - 16} y={by + detail.bandMt + 22} textAnchor="end"
                                 dominantBaseline="middle" fontSize={8}
                                 fill={TXT_DIM} style={{ letterSpacing: "0.14em" }}
                               >
                                 KİŞİ
                               </text>
                               <text
-                                x={bx + DETAIL_W - 44} y={by + detail.bandMt + 60} textAnchor="end"
-                                dominantBaseline="middle" fontSize={22} fontWeight={700}
-                                className="font-mono" fill={FLOW}
+                                x={bx + DETAIL_W - 44} y={by + detail.bandMt + 20} textAnchor="end"
+                                dominantBaseline="middle" fontSize={26} fontWeight={200}
+                                fill="#F4F4F5" style={{ fontVariantNumeric: "tabular-nums" }}
                               >
                                 {detail.mt.aktifKullanici}
                               </text>

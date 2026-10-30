@@ -22,7 +22,7 @@
  * tıklayınca genel görünüme dönmeyi engellemesinler.
  */
 
-import { Fragment, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import type { BackupSlot, EsxiHost, EsxiVmBackup, SensorHealth } from "./use-esxi"
 import type { SqlGirisVeri } from "./sql-giris"
 
@@ -56,10 +56,10 @@ const CRIT_PCT = 90
 function Card({ children }: { children: React.ReactNode }) {
   return (
     <div
-      className="rounded-[12px]"
+      className="h-full rounded-[12px]"
       style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}
     >
-      <div className="px-5 py-3.5">{children}</div>
+      <div className="flex h-full flex-col px-5 py-3.5">{children}</div>
     </div>
   )
 }
@@ -170,76 +170,157 @@ function formatGB(gb: number): string {
    Fiziksel sunucu
 ══════════════════════════════════════════════════════════ */
 
+/**
+ * Halka gösterge — saatin saniye halkasıyla aynı dil.
+ *
+ * Animasyon (hepsi CSS, kare başına JS yok):
+ *   · açılışta halka 0'dan değerine dolarak çizilir
+ *   · ışıma yavaşça nefes alır
+ *   · yayın ucunda nabız atan bir nokta — değerin "canlı" olduğunu söyler
+ */
+function Halka({ percent, label, sub }: { percent: number; label: string; sub: string }) {
+  const R = 25
+  const C = 2 * Math.PI * R
+  const p = Math.max(0, Math.min(100, percent))
+  const color = pctColor(p)
+  /* Normal değerde halka mor; eşik aşılınca kehribar/kırmızı */
+  const stroke = color === TXT ? "#A78BFA" : color
+
+  /* İlk karede 0, sonra gerçek değer → transition çizerek doldurur */
+  const [gosterilen, setGosterilen] = useState(0)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setGosterilen(p))
+    return () => cancelAnimationFrame(t)
+  }, [p])
+
+  /* Yay ucu: nokta sağda (svg -90° döndürülmüş → tepe) duruyor, grup
+     değer kadar döndürülüyor; böylece uç yayla birlikte akarak ilerliyor. */
+  const ucDerece = (gosterilen / 100) * 360
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative size-[60px] shrink-0">
+        <svg width={60} height={60} viewBox="0 0 60 60" className="-rotate-90 overflow-visible">
+          <circle cx={30} cy={30} r={R} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth={3} />
+          <circle
+            cx={30} cy={30} r={R} fill="none" stroke={stroke} strokeWidth={3} strokeLinecap="round"
+            strokeDasharray={`${(gosterilen / 100) * C} ${C}`}
+            className="tv-halka-nefes"
+            style={{
+              ["--halka" as string]: stroke,
+              transition: "stroke-dasharray 1.4s cubic-bezier(.2,.8,.2,1)",
+            }}
+          />
+          {p > 0 && (
+            <g style={{
+              transform: `rotate(${ucDerece}deg)`,
+              transformOrigin: "30px 30px",
+              transition: "transform 1.4s cubic-bezier(.2,.8,.2,1)",
+            }}>
+              <circle cx={30 + R} cy={30} r={2.6} fill={stroke} className="tv-halka-uc" />
+              <circle cx={30 + R} cy={30} r={1.6} fill="#fff" />
+            </g>
+          )}
+        </svg>
+        <div className="absolute inset-0 flex items-baseline justify-center pt-[19px] tabular-nums" style={{ color }}>
+          <span className="text-[19px] font-light leading-none">{p}</span>
+          <span className="text-[9px]" style={{ color: TXT_DIM }}>%</span>
+        </div>
+      </div>
+      <div className="mt-1.5 max-w-full text-center">
+        <div className="text-[9px] font-medium uppercase" style={{ color: TXT_DIM, letterSpacing: "0.22em" }}>{label}</div>
+        <div className="mt-0.5 whitespace-nowrap text-[10px] tracking-[-0.01em] tabular-nums" style={{ color: TXT }}>{sub}</div>
+      </div>
+      <style>{`
+        @keyframes tv-halka-nefes {
+          0%,100% { filter: drop-shadow(0 0 2px var(--halka)) }
+          50%     { filter: drop-shadow(0 0 7px var(--halka)) }
+        }
+        @keyframes tv-halka-uc { 0%,100% { r: 2.6; opacity: .9 } 50% { r: 4.2; opacity: .35 } }
+        .tv-halka-nefes { animation: tv-halka-nefes 3.2s ease-in-out infinite }
+        .tv-halka-uc    { animation: tv-halka-uc 1.6s ease-in-out infinite }
+      `}</style>
+    </div>
+  )
+}
+
+/** Alt şeritteki bilgi hücresi — kutu yok, ince ayraçlarla bölünmüş tek şerit */
+function Kutucuk({ label, value, color = TXT, nokta }: { label: string; value: string; color?: string; nokta?: string }) {
+  return (
+    <div className="min-w-0 flex-1 border-l px-2 text-center first:border-l-0" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+      <div className="text-[15px] font-light leading-none tabular-nums whitespace-nowrap" style={{ color }}>{value}</div>
+      <div className="mt-1.5 flex items-center justify-center gap-1">
+        {nokta && <span className="size-[5px] rounded-full" style={{ background: nokta }} />}
+        <span className="truncate text-[8px] font-medium uppercase" style={{ color: TXT_DIM, letterSpacing: "0.2em" }}>{label}</span>
+      </div>
+    </div>
+  )
+}
+
 export function PhysicalHostCard({ host }: { host: EsxiHost }) {
   const cpuPct = host.cpuTotalMhz ? Math.round((host.cpuUsedMhz / host.cpuTotalMhz) * 100) : 0
   const ramPct = host.ramTotalGB  ? Math.round((host.ramUsedGB / host.ramTotalGB) * 100)   : 0
   const datastores = host.datastores.filter((d) => d.capacityGB > 50)
 
+  const saglik = host.overallHealth
+  const saglikRenk = saglik === "red" ? RED : saglik === "yellow" ? AMBER : saglik === "green" ? GREEN : TXT_DIM
+  const saglikYazi = saglik === "red" ? "Kritik" : saglik === "yellow" ? "Uyarı" : saglik === "green" ? "Sağlıklı" : "Bilinmiyor"
+
+  /*  ESXi'nin API'si arıza SEBEBİNİ vermiyor, yalnız "kritik" diyor. Sebep
+   *  watt değerinden çıkarılıyor: giriş 0 ise kaynağa şehir elektriği
+   *  gelmiyor demektir (kablo, priz ya da ölü kaynak).                  */
+  const psuDeger = (ps: EsxiHost["powerSupplies"][number]) =>
+    ps.health === "red" || ps.health === "yellow"
+      ? (ps.inputWatts === 0 ? "AC yok" : "arıza")
+      : ps.inputWatts !== null ? `${Math.round(ps.inputWatts)} W` : "normal"
+
   return (
     <Card>
-      <Title accent={host.overallHealth !== "green" ? healthColor(host.overallHealth) : undefined}>
-        Fiziksel Sunucu
-      </Title>
-
-      <div className="mt-2 truncate text-[12px] font-semibold" style={{ color: TXT }}>
-        {host.model}
+      <div className="flex items-center justify-between gap-3">
+        <Title accent={saglik !== "green" ? saglikRenk : undefined}>Fiziksel Sunucu</Title>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <span className="size-[6px] rounded-full" style={{ background: saglikRenk, boxShadow: `0 0 8px ${saglikRenk}` }} />
+          <span className="text-[9px] font-medium uppercase" style={{ color: saglikRenk, letterSpacing: "0.18em" }}>
+            {saglikYazi}
+          </span>
+        </span>
       </div>
-      <div className="truncate text-[10px]" style={{ color: TXT_DIM }}>
+
+      <div className="mt-1.5 truncate text-[10px]" style={{ color: TXT_DIM }}>
         {host.cpuCores} çekirdek · {host.cpuThreads} iş parçacığı · {formatGB(host.ramTotalGB)}
       </div>
 
-      <Divider />
-
-      <Meter
-        name="İşlemci"
-        value={`${cpuPct}%`}
-        percent={cpuPct}
-      />
-      <Meter
-        name="Bellek"
-        value={`${host.ramUsedGB.toFixed(0)} / ${host.ramTotalGB.toFixed(0)} GB`}
-        percent={ramPct}
-      />
-
-      {/*  Host'un kendi veri depolari islemci/bellekle ayni yerde: ucu de
-           bu makinenin kapasitesi. Disk Dolulugu karti kayitli sunuculara
-           (isletim sistemi icinden okunan diskler) ayrildi — o baska bir
-           katman ve karisitiriliyordu.
-           50 GB alti elenir: ESXi'nin onyukleme bankalari ve scratch
-           bolumleri gercek depolama degil, satir israfi.                */}
-      {datastores.map((d) => (
-        <Meter
-          key={d.name}
-          name={d.name}
-          value={`${formatGB(d.freeGB)} boş`}
-          percent={d.percent}
-        />
-      ))}
-
-      <Divider />
-
-      {host.powerSupplies.length > 0 ? (
-        host.powerSupplies.map((ps) => (
-          <Row
-            key={ps.index}
-            name={`Güç kaynağı ${ps.index}`}
-            /*  ESXi'nin API'si arıza SEBEBİNİ vermiyor, yalnız "kritik"
-             *  diyor. Sebep watt değerinden çıkarılıyor: giriş 0 ise
-             *  kaynağa şehir elektriği gelmiyor demektir (kablo, priz ya
-             *  da ölü kaynak) — "arıza" demekten çok daha yol gösterici. */
-            value={
-              ps.health === "red" || ps.health === "yellow"
-                ? (ps.inputWatts === 0 ? "AC girişi yok" : "arıza")
-                : ps.inputWatts !== null ? `${Math.round(ps.inputWatts)} W` : "normal"
-            }
-            color={healthColor(ps.health)}
+      {/*  Veri depoları da halka. 50 GB altı elenir: ESXi'nin önyükleme
+           bankaları ve scratch bölümleri gerçek depolama değil.          */}
+      <div className="mt-3.5 grid grid-cols-3 gap-1">
+        <Halka percent={cpuPct} label="İşlemci" sub={`${(host.cpuUsedMhz / 1000).toFixed(0)} / ${(host.cpuTotalMhz / 1000).toFixed(0)} GHz`} />
+        <Halka percent={ramPct} label="Bellek" sub={`${host.ramUsedGB.toFixed(0)} / ${Math.round(host.ramTotalGB)} GB`} />
+        {datastores.map((d) => (
+          <Halka
+            key={d.name}
+            percent={Math.round(d.percent)}
+            label={datastores.length > 1 ? d.name : "Disk"}
+            sub={`${formatGB(d.freeGB)} boş`}
           />
-        ))
-      ) : (
-        <Row name="Güç kaynağı" value="veri yok" color={TXT_DIM} />
-      )}
+        ))}
+      </div>
 
-      <Row name="Çalışma süresi" value={formatUptime(host.uptimeSeconds)} color={TXT_DIM} />
+      <div className="mt-3.5 flex border-t pt-3" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+        {host.powerSupplies.length > 0 ? (
+          host.powerSupplies.map((ps) => (
+            <Kutucuk
+              key={ps.index}
+              label={`Güç ${ps.index}`}
+              value={psuDeger(ps)}
+              color={healthColor(ps.health)}
+              nokta={ps.health === "green" ? GREEN : ps.health === "unknown" ? TXT_DIM : healthColor(ps.health)}
+            />
+          ))
+        ) : (
+          <Kutucuk label="Güç" value="veri yok" color={TXT_DIM} />
+        )}
+        <Kutucuk label="Çalışma" value={formatUptime(host.uptimeSeconds)} />
+      </div>
     </Card>
   )
 }
@@ -248,34 +329,105 @@ export function PhysicalHostCard({ host }: { host: EsxiHost }) {
    Disk doluluğu — veri deposu + sunucular
 ══════════════════════════════════════════════════════════ */
 
+const DISK_SEGMENT = 20
+
 export function DiskCard({ servers }: { servers: DiskCardServer[] }) {
-  /*  Her diski ayrı satır yapıp en dolulara göre sıralıyoruz: dolmak üzere
-   *  olan disk her zaman üstte. Eskiden ilk 6 satırla sınırlıydı; sunucu
-   *  sayısı arttıkça (T5–T7) diskler listeden düşüyordu — artık hepsi.   */
-  const rows = servers
+  /*  Her disk ayrı satır, ama aynı sunucunun diskleri alt alta: sunucular
+   *  en dolu disklerine göre sıralı (dolmak üzere olan üstte), sunucu
+   *  içinde sürücü sırası. Eskiden ilk 6 satırla sınırlıydı; sunucu sayısı
+   *  arttıkça (T5–T7) diskler listeden düşüyordu — artık hepsi.          */
+  const ham = servers
     .flatMap((s) =>
       (s.disks?.length
         ? s.disks.map((d) => ({
             key:     `${s.id}-${d.drive}`,
+            sunucu:  s.id,
+            ad:      kisaAd(s.name),
             /*  Tek diskli sunucuda sürücü harfi gürültü; iki diskliyse şart. */
-            name:    (s.disks?.length ?? 0) > 1 ? `${s.name} ${d.drive.replace(/[:\\]/g, "")}` : s.name,
+            surucu:  (s.disks?.length ?? 0) > 1 ? d.drive.replace(/[:\\]/g, "") : "",
             percent: d.percent,
-            value:   `${Math.round(d.usedGB)} / ${Math.round(d.totalGB)} GB`,
+            bos:     Math.max(0, d.totalGB - d.usedGB),
           }))
         : s.disk > 0
-          ? [{ key: s.id, name: s.name, percent: s.disk, value: `%${s.disk}` }]
+          ? [{ key: s.id, sunucu: s.id, ad: kisaAd(s.name), surucu: "", percent: s.disk, bos: null as number | null }]
           : []),
     )
-    .sort((a, b) => b.percent - a.percent)
+  const enDolu = new Map<string, number>()
+  for (const r of ham) enDolu.set(r.sunucu, Math.max(enDolu.get(r.sunucu) ?? 0, r.percent))
+  const rows = ham.sort((a, b) =>
+    (enDolu.get(b.sunucu)! - enDolu.get(a.sunucu)!) ||
+    a.sunucu.localeCompare(b.sunucu) ||
+    a.surucu.localeCompare(b.surucu),
+  )
+
+  const dikkat = rows.filter((r) => r.percent >= WARN_PCT).length
+
+
+  /* Segmentler açılışta soldan sağa sırayla yansın */
+  const [hazir, setHazir] = useState(false)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setHazir(true))
+    return () => cancelAnimationFrame(t)
+  }, [])
 
   return (
     <Card>
-      <Title>Disk Doluluğu</Title>
+      <div className="flex items-center justify-between gap-2">
+        <Title accent={dikkat > 0 ? AMBER : undefined}>Disk Doluluğu</Title>
+        {rows.length > 0 && (
+          <span
+            className="shrink-0 rounded-[4px] px-1.5 py-[2px] text-[9px] font-semibold uppercase tabular-nums"
+            style={{
+              color: dikkat > 0 ? AMBER : TXT_DIM,
+              background: dikkat > 0 ? "rgba(251,191,36,0.12)" : "rgba(255,255,255,0.05)",
+              letterSpacing: "0.14em",
+            }}
+          >
+            {dikkat > 0 ? `${dikkat} dolu` : `${rows.length} disk`}
+          </span>
+        )}
+      </div>
 
       {rows.length > 0 ? (
-        rows.map((r) => <Meter key={r.key} name={r.name} value={r.value} percent={r.percent} compact={rows.length > 10} />)
+        <div className={rows.length > 10 ? "mt-2 space-y-[4px]" : "mt-2.5 space-y-[6px]"}>
+          {rows.map((r, ri) => {
+            const renk = pctColor(r.percent)
+            const dolu = renk === TXT ? "#A78BFA" : renk
+            const yanan = Math.round((r.percent / 100) * DISK_SEGMENT)
+            return (
+              <div key={r.key} className="flex items-center gap-2.5">
+                {/* Grubun ilk satırında sunucu adı, sonrakilerde yalnız sürücü harfi */}
+                <span className="w-[42px] shrink-0 truncate text-[11px] font-semibold" style={{ color: TXT }}>
+                  <span style={{ visibility: ri > 0 && rows[ri - 1].sunucu === r.sunucu ? "hidden" : "visible" }}>{r.ad}</span>
+                  {r.surucu && <span className="ml-1 font-normal" style={{ color: TXT_DIM }}>{r.surucu}</span>}
+                </span>
+                <div className="flex flex-1 gap-[2px]">
+                  {Array.from({ length: DISK_SEGMENT }, (_, i) => {
+                    const acik = i < yanan
+                    return (
+                      <span
+                        key={i}
+                        className="h-[9px] flex-1 rounded-[1px]"
+                        style={{
+                          background: acik && hazir ? dolu : "rgba(255,255,255,0.07)",
+                          boxShadow: acik && hazir && i === yanan - 1 ? `0 0 6px ${dolu}` : undefined,
+                          opacity: acik && hazir ? 0.45 + (0.55 * (i + 1)) / Math.max(1, yanan) : 1,
+                          transition: "background 300ms, opacity 300ms",
+                          transitionDelay: `${ri * 40 + i * 25}ms`,
+                        }}
+                      />
+                    )
+                  })}
+                </div>
+                <span className="w-[30px] shrink-0 text-right text-[11px] font-medium tabular-nums" style={{ color: renk }}>
+                  {Math.round(r.percent)}%
+                </span>
+              </div>
+            )
+          })}
+        </div>
       ) : (
-        <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+        <div className="py-1 text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
           veri yok
         </div>
       )}
@@ -310,6 +462,13 @@ export interface RdpCardServer {
  */
 const RDP_KAPASITE = 80
 
+/** "Terminal 3 - Bilkar" → "T3", "Active Directory" → "AD"; diğerlerinde ilk kelime */
+function kisaAd(ad: string): string {
+  if (/active\s*directory/i.test(ad)) return "AD"
+  const m = ad.match(/terminal\s*(\d+)/i)
+  return m ? `T${m[1]}` : ad.split(/\s+/)[0].slice(0, 5)
+}
+
 export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
   const rdp = servers
     .filter((s) => (s.roles ?? []).some((r) => r.toUpperCase() === "RDP"))
@@ -317,49 +476,114 @@ export function RdpUsersCard({ servers }: { servers: RdpCardServer[] }) {
 
   const bilinen = rdp.filter((s) => s.status !== "offline" && typeof s.activeSessions === "number")
   const toplam  = bilinen.reduce((t, s) => t + (s.activeSessions ?? 0), 0)
-  const cevrimdisi = rdp.some((s) => s.status === "offline")
   /*  Kayıtlı kullanıcı: sunucuya atanmış firmaların AD kullanıcıları.
-   *  "83 / 350" — o an çalışan / toplam. Hiçbir sunucuda bilinmiyorsa
+   *  "293 / 890" — o an bağlı / toplam. Hiçbir sunucuda bilinmiyorsa
    *  yalnız bağlı sayı gösterilir.                                      */
   const kayitli = rdp.reduce((t, s) => t + (s.assignedUsers ?? 0), 0)
 
+  /* Sütunlar açılışta 0'dan büyüyerek gelsin */
+  const [hazir, setHazir] = useState(false)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setHazir(true))
+    return () => cancelAnimationFrame(t)
+  }, [])
+
+  const SUTUN_H = 46
+
   return (
     <Card>
-      <div className="flex items-baseline justify-between gap-2">
-        <Title accent={cevrimdisi ? RED : undefined}>Bağlı Kullanıcı</Title>
-        <span className="shrink-0 font-mono text-[18px] font-semibold leading-none tabular-nums" style={{ color: TXT }}>
+      {/*  Toplam kartın kahramanı: yalnız büyük rakam. Başlık yok — rakamın ne
+           olduğunu altındaki terminal sütunları anlatıyor.              */}
+      <Title>Bağlı Kullanıcı</Title>
+      <div className="mt-1.5 flex items-baseline gap-2">
+        <span
+          className="text-[56px] font-extralight leading-[0.9] tracking-[-0.045em] tabular-nums"
+          style={{ color: "#F4F4F5", textShadow: "0 0 24px rgba(167,139,250,0.35)" }}
+        >
           {bilinen.length > 0 ? toplam : "—"}
-          {kayitli > 0 && (
-            <span className="text-[11px] font-medium" style={{ color: TXT_DIM }}> / {kayitli}</span>
-          )}
         </span>
-      </div>
-
-      <div className="mt-2">
-        {rdp.length === 0 ? (
-          <div className="py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
-            rdp sunucusu yok
-          </div>
-        ) : (
-          rdp.map((s) => {
-            if (s.status === "offline") {
-              return <Row key={s.id} name={s.name} value="çevrimdışı" color={RED} />
-            }
-            if (typeof s.activeSessions !== "number") {
-              return <Row key={s.id} name={s.name} value="—" color={TXT_DIM} />
-            }
-            const n = s.activeSessions
-            return (
-              <Meter
-                key={s.id}
-                name={s.name}
-                value={typeof s.assignedUsers === "number" ? `${n} / ${s.assignedUsers}` : `${n} kişi`}
-                percent={Math.round((n / RDP_KAPASITE) * 100)}
-              />
-            )
-          })
+        {kayitli > 0 && (
+          <span className="text-[26px] font-light leading-none tabular-nums" style={{ color: TXT }}>
+            <span style={{ color: TXT_DIM }}>/ </span>{kayitli}
+          </span>
         )}
       </div>
+
+      {rdp.length === 0 ? (
+        <div className="mt-2 py-1 text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+          rdp sunucusu yok
+        </div>
+      ) : (
+        <div className="mt-3 flex min-h-0 flex-1 items-stretch gap-1.5">
+          {rdp.map((s, i) => {
+            const kapali  = s.status === "offline"
+            const bilinmez = !kapali && typeof s.activeSessions !== "number"
+            const n = s.activeSessions ?? 0
+            const pct = Math.min(100, (n / RDP_KAPASITE) * 100)
+            const renk = kapali ? RED : pctColor(pct) === TXT ? "#A78BFA" : pctColor(pct)
+            const deger = kapali ? "×" : bilinmez ? "—" : String(n)
+            return (
+              <div key={s.id} className="flex min-w-0 flex-1 flex-col items-center">
+                <span className="text-[11px] font-medium tabular-nums" style={{ color: kapali ? RED : bilinmez ? TXT_DIM : TXT }}>
+                  {deger}
+                </span>
+                <div
+                  className="relative mt-1 w-full flex-1 overflow-hidden rounded-[3px]"
+                  style={{
+                    minHeight: SUTUN_H,
+                    background: "rgba(255,255,255,0.05)",
+                    outline: kapali ? `1px dashed ${RED}99` : undefined,
+                  }}
+                >
+                  {kapali && (
+                    <span
+                      className="absolute inset-0 flex items-center justify-center text-[8px] font-semibold uppercase"
+                      style={{ color: RED, writingMode: "vertical-rl", transform: "rotate(180deg)", letterSpacing: "0.25em" }}
+                    >
+                      Kapalı
+                    </span>
+                  )}
+                  {!kapali && !bilinmez && (
+                    <div
+                      className="absolute inset-x-0 bottom-0 rounded-[3px]"
+                      style={{
+                        height: hazir ? `${Math.max(4, pct)}%` : "0%",
+                        background: `linear-gradient(180deg, ${renk}, ${renk}55)`,
+                        boxShadow: `0 0 10px ${renk}66`,
+                        transition: "height 1.2s cubic-bezier(.2,.8,.2,1)",
+                        transitionDelay: `${i * 70}ms`,
+                      }}
+                    >
+                      {/* Tepe çizgisi — nefes alan parlak kenar */}
+                      <div className="tv-sutun-tepe absolute inset-x-0 top-0 h-[2px] rounded-full" style={{ background: "#fff", animationDelay: `${i * 0.3}s` }} />
+                      {/* Yukarı akan ışık süpürmesi — sütunlar sırayla, birlikte değil */}
+                      <div className="absolute inset-0 overflow-hidden rounded-[3px]">
+                        <div
+                          className="tv-sutun-akis absolute inset-x-0 h-1/2"
+                          style={{
+                            background: "linear-gradient(0deg, transparent, rgba(255,255,255,0.28), transparent)",
+                            animationDelay: `${i * 0.35}s`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <span className="mt-1.5 text-[11px] font-semibold uppercase" style={{ color: kapali ? RED : TXT, letterSpacing: "0.06em" }}>
+                  {kisaAd(s.name)}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes tv-sutun-akis { 0% { top: 100% } 60%,100% { top: -50% } }
+        @keyframes tv-sutun-tepe { 0%,100% { opacity: .35 } 50% { opacity: .95 } }
+        .tv-sutun-akis { animation: tv-sutun-akis 2.8s ease-in-out infinite }
+        .tv-sutun-tepe { animation: tv-sutun-tepe 2.4s ease-in-out infinite }
+      `}</style>
     </Card>
   )
 }
@@ -385,28 +609,26 @@ type TurDurumu = "var" | "yok" | "bekliyor" | "aliniyor"
  * `aliniyor` : şu an alınıyor — yanıp sönüyor.
  */
 function TurKutusu({ durum }: { durum: TurDurumu }) {
-  const renk =
-    durum === "var"        ? GREEN
-    : durum === "yok"      ? RED
-    : durum === "aliniyor" ? FLOW
-    :                        TXT_DIM
-  const zemin =
-    durum === "var"        ? "rgba(52,211,153,0.12)"
-    : durum === "yok"      ? "rgba(248,113,113,0.14)"
-    : durum === "aliniyor" ? "rgba(125,211,252,0.16)"
-    :                        "rgba(255,255,255,0.04)"
-  /*  Isaret ve saat YOK — saat sutun basliginda, durumu rengin kendisi
-   *  anlatiyor. Ince bir cerceve + yumusak zemin: bos (bekliyor) hucre
-   *  de seciliyor ama dolu olanla karismiyor.                          */
+  /*  Hücre bir nokta: alındı → dolu yeşil, alınmadı → kırmızı + nabız,
+   *  sürüyor → mavi halka yanıp söner, bekliyor → boş ince halka.
+   *  Saat sütun başlığında, durumu rengin kendisi anlatıyor.          */
+  if (durum === "bekliyor") {
+    return <span className="mx-auto block size-[9px] rounded-full" style={{ boxShadow: "inset 0 0 0 1px rgba(255,255,255,0.16)" }} />
+  }
+  const renk = durum === "var" ? GREEN : durum === "yok" ? RED : FLOW
   return (
-    <span
-      className={`block h-[10px] rounded-[3px]${durum === "aliniyor" ? " animate-pulse" : ""}`}
-      style={{
-        background: durum === "bekliyor" ? zemin : renk,
-        opacity: durum === "bekliyor" ? 1 : 0.85,
-        boxShadow: durum === "bekliyor" ? "inset 0 0 0 1px rgba(255,255,255,0.06)" : undefined,
-      }}
-    />
+    <span className="relative mx-auto flex size-[9px]">
+      {durum !== "var" && (
+        <span className="absolute inset-0 animate-ping rounded-full opacity-60" style={{ background: renk }} />
+      )}
+      <span
+        className="relative size-[9px] rounded-full"
+        style={{
+          background: durum === "aliniyor" ? "transparent" : renk,
+          boxShadow: durum === "aliniyor" ? `inset 0 0 0 2px ${renk}` : `0 0 6px ${renk}99`,
+        }}
+      />
+    </span>
   )
 }
 
@@ -449,7 +671,7 @@ function GunSecici({ gun, onChange }: { gun: "bugun" | "dun"; onChange: (g: "bug
  * olarak duruyorlar.
  */
 export function BackupImageCard({
-  backups, slots, nextAt,
+  backups, slots,
 }: {
   backups: EsxiVmBackup[]
   slots: BackupSlot[] | null
@@ -464,7 +686,6 @@ export function BackupImageCard({
   const kisaAd   = (x: string) => x.replace(/\s*\(.*?\)\s*$/, "")
   const isinde   = backups.filter((b) => b.times.length > 0)
   const yedeksiz = backups.filter((b) => b.times.length === 0)
-  const running  = backups.find((b) => b.running)
 
   /*  Sunucu iki günlük pencere gönderiyor; gün seçimi burada.          */
   const bugunKey = now.toDateString()
@@ -474,6 +695,11 @@ export function BackupImageCard({
   )
 
   const eksik = list.some((x) => x.status === "missed" || x.status === "partial")
+
+  /*  Kahraman sayı: seçili günün son SONUÇLANMIŞ turunda kaç makine alındı */
+  const sonTur = [...list].reverse().find((x) => x.status !== "pending") ?? null
+  const sonTurAlinan = sonTur ? isinde.filter((b) => sonTur.vms.includes(b.vmName)).length : 0
+  const sonTurTam = sonTur ? sonTurAlinan === isinde.length : true
 
   /**
    * Süren yedeğin AİT OLDUĞU tur — makinenin son izine en yakın tur.
@@ -520,18 +746,26 @@ export function BackupImageCard({
     <Card>
       <div className="flex items-center justify-between gap-2">
         <div
-          className="min-w-0 truncate text-[9px] font-medium uppercase"
-          style={{ color: eksik || yedeksiz.length > 0 ? RED : TXT_DIM, letterSpacing: "0.26em" }}
+          className="shrink-0 whitespace-nowrap text-[9px] font-medium uppercase"
+          style={{ color: eksik || yedeksiz.length > 0 ? RED : TXT_DIM, letterSpacing: "0.2em" }}
         >
           İmaj Yedekleri
         </div>
+        {/*  Son sonuçlanmış turda alınan / işteki makine — başlık satırında,
+             kart yüksekliği artmasın (sağ şerit ekrana tam sığıyor).    */}
+        {sonTur && (
+          <span className="ml-auto shrink-0 text-[13px] font-light tabular-nums" style={{ color: sonTurTam ? TXT : RED }}>
+            {sonTurAlinan}<span style={{ color: TXT_DIM }}> / {isinde.length}</span>
+          </span>
+        )}
         <GunSecici gun={gun} onChange={setGun} />
       </div>
+
 
       {list.length === 0 ? (
         /*  Program çıkarılamadı ya da o gün hiç tur yok. Sayı uydurmak
          *  yerine bunu söylüyoruz.                                      */
-        <div className="mt-2 py-1 font-mono text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
+        <div className="mt-2 py-1 text-[10px] uppercase" style={{ color: TXT_DIM, letterSpacing: "0.14em" }}>
           {slots && slots.length ? "o gün tur yok" : "program çıkarılamadı"}
         </div>
       ) : (
@@ -547,7 +781,7 @@ export function BackupImageCard({
           {list.map((x) => (
             <span
               key={x.at}
-              className="text-center font-mono text-[9px] tabular-nums"
+              className="text-center text-[9px] font-medium tabular-nums"
               style={{ color: TXT_DIM }}
             >
               {new Date(x.at).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}
@@ -565,19 +799,6 @@ export function BackupImageCard({
           ))}
         </div>
       )}
-
-      <Divider />
-
-      <Row
-        name={running ? "Şu an" : "Sıradaki"}
-        value={
-          running        ? "alınıyor…"
-          : nextAt       ? new Date(nextAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
-          :                "—"
-        }
-        color={running ? FLOW : TXT_DIM}
-        yanipSon={Boolean(running)}
-      />
 
       {/*  Yedek işine hiç girmemiş makineler — tur sorunu değil, eksik
            yapılandırma. Adlarıyla gösteriliyor ki hangisi olduğu
@@ -603,26 +824,80 @@ export function SqlGirisCard({ data }: { data: SqlGirisVeri }) {
   const son = data.satirlar
     .filter((x) => x.neden !== "veritabani_acilamadi")
     .sort((a, b) => Date.parse(b.son) - Date.parse(a.son))
-    .slice(0, 3)
-  const renk = (s: string) => (s === "guvenlik" ? RED : s === "destek" ? AMBER : TXT)
+    .slice(0, 2)
+  const renk = (s: string) => (s === "guvenlik" ? RED : s === "destek" ? AMBER : "#A78BFA")
   const saat = (iso: string) => new Date(iso).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
+
+  const { guvenlik, destek, bilgi } = data.ozet
+  const toplam = guvenlik + destek + bilgi
+  const seviyeler = [
+    { ad: "Güvenlik",     n: guvenlik, renk: RED },
+    { ad: "Müdahale",     n: destek,   renk: AMBER },
+    { ad: "Tek seferlik", n: bilgi,    renk: "#A78BFA" },
+  ]
+
+  /* Dağılım şeridi açılışta soldan dolsun */
+  const [hazir, setHazir] = useState(false)
+  useEffect(() => {
+    const t = requestAnimationFrame(() => setHazir(true))
+    return () => cancelAnimationFrame(t)
+  }, [])
 
   return (
     <Card>
-      <Title accent={data.ozet.guvenlik > 0 ? RED : okumaEski ? AMBER : undefined}>SQL Hatalı Giriş · 24 sa</Title>
-      <div className="mt-2">
-        <Row name="Güvenlik" value={String(data.ozet.guvenlik)} color={data.ozet.guvenlik > 0 ? RED : TXT} />
-        <Row name="Müdahale" value={String(data.ozet.destek)} color={data.ozet.destek > 0 ? AMBER : TXT} />
-        <Row name="Tek seferlik" value={String(data.ozet.bilgi)} />
-        {okumaEski && <Row name="İzleme" value="okuma yok" color={AMBER} />}
+      <div className="flex items-center justify-between gap-2">
+        <Title accent={guvenlik > 0 ? RED : okumaEski ? AMBER : undefined}>SQL Hatalı Giriş</Title>
+        <span className="shrink-0 text-[9px] font-medium uppercase" style={{ color: okumaEski ? AMBER : TXT_DIM, letterSpacing: "0.18em" }}>
+          {okumaEski ? "okuma yok" : "son 24 saat"}
+        </span>
       </div>
+
+      {/* Toplam deneme — kartın kahramanı */}
+      <div
+        className="mt-1 text-[34px] font-extralight leading-none tracking-[-0.04em] tabular-nums"
+        style={{ color: guvenlik > 0 ? RED : "#F4F4F5" }}
+      >
+        {toplam}
+      </div>
+
+      {/* Seviyelerin dağılımı — tek şerit */}
+      <div className="mt-2.5 flex h-[5px] w-full gap-[2px] overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+        {toplam > 0 && seviyeler.filter((x) => x.n > 0).map((x) => (
+          <span
+            key={x.ad}
+            className="h-full rounded-full"
+            style={{
+              width: hazir ? `${(x.n / toplam) * 100}%` : "0%",
+              background: x.renk,
+              boxShadow: `0 0 8px ${x.renk}88`,
+              transition: "width 1.2s cubic-bezier(.2,.8,.2,1)",
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {seviyeler.map((x) => (
+          <div key={x.ad} className="min-w-0">
+            <div className="text-[16px] font-light leading-none tabular-nums" style={{ color: x.n > 0 ? x.renk : TXT_DIM }}>{x.n}</div>
+            <div className="mt-1 truncate text-[8px] font-medium uppercase" style={{ color: TXT_DIM, letterSpacing: "0.16em" }}>{x.ad}</div>
+          </div>
+        ))}
+      </div>
+
       {son.length > 0 && (
-        <>
-          <Divider />
+        <div className="mt-2.5 space-y-1 border-t pt-2" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
           {son.map((x) => (
-            <Row key={`${x.ip}|${x.kullanici}|${x.neden}`} name={x.kullanici} value={saat(x.son)} color={renk(x.seviye)} />
+            <div key={`${x.ip}|${x.kullanici}|${x.neden}`} className="flex items-center gap-2">
+              <span className="size-[6px] shrink-0 rounded-full" style={{ background: renk(x.seviye), boxShadow: `0 0 6px ${renk(x.seviye)}` }} />
+              <div className="min-w-0 flex-1 truncate text-[11px]">
+                <span className="font-semibold" style={{ color: TXT }}>{x.kullanici}</span>
+                {x.nedenAd && <span style={{ color: TXT_DIM }}> · {x.nedenAd}</span>}
+              </div>
+              <span className="shrink-0 text-[11px] font-medium tabular-nums" style={{ color: TXT }}>{saat(x.son)}</span>
+            </div>
           ))}
-        </>
+        </div>
       )}
     </Card>
   )

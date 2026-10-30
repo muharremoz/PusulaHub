@@ -22,7 +22,6 @@
  */
 
 import type { KumaMonitor } from "../_shared/types"
-import { formatDuration } from "../_shared/types"
 
 const DOWN     = "#EF4444"
 const DOWN_DIM = "rgba(239,68,68,0.16)"
@@ -34,62 +33,68 @@ interface Props {
   now:    Date | null
 }
 
-export function AlarmBanner({ monitors, since, now }: Props) {
+/** Sağdaki kart ızgarasının kapladığı genişlik — bant onun solundaki alanda ortalanır */
+const KART_IZGARASI_W = 860
+/** Saat + durum bloğunun bittiği yer (clock.tsx + status-line.tsx) */
+const BANT_SOL = 560
+
+export function AlarmBanner({ monitors }: Props) {
   if (monitors.length === 0) return null
 
   const first = monitors[0]
   const rest  = monitors.length - 1
-  const dur   = since && now ? formatDuration(now.getTime() - since) : null
 
   return (
-    <div className="pointer-events-none absolute left-1/2 top-7 z-30 -translate-x-1/2 select-none">
+    <>
+      {/*  Ekran kenarında atan kırmızı ışıma — arıza, ekranın neresine
+           bakılırsa bakılsın göz ucuyla fark edilsin.                  */}
       <div
-        className="tv-alarm flex items-center gap-4 rounded-[5px] px-5 py-3"
-        style={{
-          background: "rgba(24,10,12,0.86)",
-          border: `1px solid ${DOWN}`,
-          boxShadow: `0 0 34px ${DOWN_DIM}`,
-        }}
+        className="tv-alarm-kenar pointer-events-none absolute inset-0 z-30"
+        style={{ boxShadow: "inset 0 0 160px rgba(239,68,68,0.32)" }}
+      />
+
+      {/*  Bant: saat satırında, uptime'ın sağı ile kart ızgarasının solu
+           arasında. Önce saatin altındaydı; dar ekranda ağacın başlığına ve
+           detay kutusuna biniyordu. Bu satırda ağaç da kutu da yok.       */}
+      <div
+        className="pointer-events-none absolute top-6 z-30 select-none"
+        style={{ left: BANT_SOL, maxWidth: `calc(100% - ${KART_IZGARASI_W}px - ${BANT_SOL}px)` }}
       >
-        {/* Nabız atan nokta — bandın kendisi de nefes alıyor */}
-        <span className="relative flex size-[9px] shrink-0">
-          <span
-            className="tv-alarm-ring absolute inline-flex size-full rounded-full"
-            style={{ background: DOWN }}
-          />
-          <span
-            className="relative inline-flex size-full rounded-full"
-            style={{ background: DOWN, boxShadow: `0 0 12px ${DOWN}` }}
-          />
-        </span>
-
-        <span
-          className="text-[10px] font-bold uppercase"
-          style={{ color: DOWN, letterSpacing: "0.28em" }}
+        <div
+          className="tv-alarm flex min-w-0 items-center gap-6 rounded-[10px] py-3.5 pr-6 pl-5"
+          style={{
+            background: "rgba(24,10,12,0.88)",
+            border: `1px solid ${DOWN}`,
+            boxShadow: `0 0 34px ${DOWN_DIM}`,
+          }}
         >
-          Müdahale gerekiyor
-        </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5">
+              {/* Nabız atan nokta */}
+              <span className="relative flex size-[8px] shrink-0">
+                <span className="tv-alarm-ring absolute inline-flex size-full rounded-full" style={{ background: DOWN }} />
+                <span className="relative inline-flex size-full rounded-full" style={{ background: DOWN, boxShadow: `0 0 12px ${DOWN}` }} />
+              </span>
+              <span className="text-[10px] font-bold uppercase" style={{ color: DOWN, letterSpacing: "0.28em" }}>
+                Müdahale gerekiyor
+              </span>
+            </div>
 
-        <span className="h-4 w-px" style={{ background: "rgba(239,68,68,0.34)" }} />
+            {/* Arızalı monitör — saatle aynı ince büyük yazı */}
+            <div className="mt-2 flex items-baseline gap-3">
+              <span className="min-w-0 truncate text-[34px] font-extralight leading-none tracking-[-0.02em] text-zinc-50">
+                {first.name}
+              </span>
+              {rest > 0 && (
+                <span className="shrink-0 text-[20px] font-light" style={{ color: DOWN }}>+{rest}</span>
+              )}
+            </div>
+            <div className="mt-1.5 text-[11px] uppercase" style={{ color: "#FCA5A5", letterSpacing: "0.18em" }}>
+              Çevrimdışı{rest > 0 ? ` · ${rest} arıza daha` : ""}
+            </div>
+          </div>
 
-        <span className="text-[14px] font-semibold text-zinc-100">
-          {first.name}
-          {rest > 0 && (
-            <span className="ml-2 font-mono text-[12px]" style={{ color: DOWN }}>
-              +{rest}
-            </span>
-          )}
-        </span>
-
-        <span className="text-[11px]" style={{ color: "#FCA5A5" }}>
-          çevrimdışı
-        </span>
-
-        {dur && (
-          <span className="font-mono text-[13px] font-bold tabular-nums" style={{ color: DOWN }}>
-            {dur}
-          </span>
-        )}
+        </div>
       </div>
 
       <style jsx>{`
@@ -99,13 +104,25 @@ export function AlarmBanner({ monitors, since, now }: Props) {
         .tv-alarm-ring {
           animation: tv-alarm-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
         }
+        .tv-alarm-kenar {
+          animation: tv-alarm-kenar 1.6s ease-in-out infinite;
+        }
         @keyframes tv-alarm-breathe {
           0%,
           100% {
             box-shadow: 0 0 24px rgba(239, 68, 68, 0.12);
           }
           50% {
-            box-shadow: 0 0 44px rgba(239, 68, 68, 0.34);
+            box-shadow: 0 0 52px rgba(239, 68, 68, 0.4);
+          }
+        }
+        @keyframes tv-alarm-kenar {
+          0%,
+          100% {
+            opacity: 0.35;
+          }
+          50% {
+            opacity: 1;
           }
         }
         @keyframes tv-alarm-ping {
@@ -122,11 +139,12 @@ export function AlarmBanner({ monitors, since, now }: Props) {
         /* Hareketi azalt tercihine saygı — bant yine görünür, yalnız atmaz */
         @media (prefers-reduced-motion: reduce) {
           .tv-alarm,
-          .tv-alarm-ring {
+          .tv-alarm-ring,
+          .tv-alarm-kenar {
             animation: none;
           }
         }
       `}</style>
-    </div>
+    </>
   )
 }

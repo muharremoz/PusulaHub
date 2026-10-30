@@ -175,3 +175,14 @@ export function useMockServerMetrics(enabled: boolean): MetricsMap {
   }
   return map
 }
+
+/** ?mock=1 — Bağlı Kullanıcı kartı için örnek RDP sunucuları (yerelde /api/servers oturum ister) */
+export const MOCK_RDP_SERVERS = [
+  { id: "m1", disks: [{ drive: "C:", totalGB: 500, usedGB: 312, percent: 62 }, { drive: "D:", totalGB: 2000, usedGB: 1700, percent: 85 }], name: "Terminal 1", status: "online", roles: ["RDP"], disk: 0, activeSessions: 62, assignedUsers: 180 },
+  { id: "m2", disks: [{ drive: "C:", totalGB: 500, usedGB: 260, percent: 52 }], name: "Terminal 2", status: "online", roles: ["RDP"], disk: 0, activeSessions: 71, assignedUsers: 210 },
+  { id: "m3", disks: [{ drive: "C:", totalGB: 500, usedGB: 455, percent: 91 }], name: "Terminal 3 - Bilkar", status: "online", roles: ["RDP"], disk: 0, activeSessions: 48, assignedUsers: 150 },
+  { id: "m4", disks: [{ drive: "C:", totalGB: 500, usedGB: 190, percent: 38 }], name: "Terminal 4", status: "online", roles: ["RDP"], disk: 0, activeSessions: 55, assignedUsers: 160 },
+  { id: "m5", disks: [{ drive: "C:", totalGB: 500, usedGB: 140, percent: 28 }], name: "Terminal 5", status: "online", roles: ["RDP"], disk: 0, activeSessions: 39, assignedUsers: 120 },
+  { id: "m6", disks: [{ drive: "C:", totalGB: 500, usedGB: 95, percent: 19 }], name: "Terminal 6", status: "online", roles: ["RDP"], disk: 0, activeSessions: 18, assignedUsers: 70 },
+  { id: "m7", name: "Terminal 7", status: "offline", roles: ["RDP"], disk: 0 },
+]

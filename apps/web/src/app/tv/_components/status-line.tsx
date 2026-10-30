@@ -1,7 +1,7 @@
 "use client"
 
 /**
- * Sol alt genel durum göstergesi.
+ * Genel durum göstergesi — sol üstte, saatin yanında (eskiden sol alttaydı).
  *
  * Kimlik bloğunun (sol üst) içinde tek satır olarak duruyordu; oradan
  * ayrılıp kendi alanına alındı. Böylece hem kimlik sadeleşti hem de bu
@@ -15,22 +15,20 @@
 
 const TXT     = "#D4D4D8"
 const TXT_DIM = "#8B8B93"
-const UP      = "#34D399"
 const DOWN    = "#EF4444"
 
-/** Büyük değer + altında küçük başlık */
-function Stat({ value, label, color }: { value: string; label: string; color: string }) {
+/** Büyük, ince değer + yanında küçük birim/başlık — saatle aynı dil */
+function Stat({ value, unit, unitColor, label, color }: { value: string; unit?: string; unitColor?: string; label: string; color: string }) {
   return (
     <div>
-      <div
-        className="font-mono text-[21px] font-bold leading-none tabular-nums"
-        style={{ color }}
-      >
-        {value}
+      <div className="flex items-baseline gap-1 leading-none tabular-nums" style={{ color }}>
+        {unit && <span className="text-[24px] font-light" style={{ color: unitColor ?? TXT_DIM }}>{unit}</span>}
+        {/* Saatle aynı boy ve kalınlık (clock.tsx: 60px extralight) */}
+        <span className="text-[60px] font-extralight tracking-[-0.04em]">{value}</span>
       </div>
       <div
-        className="mt-1.5 text-[8px] font-medium uppercase"
-        style={{ color: TXT_DIM, letterSpacing: "0.22em" }}
+        className="mt-3 text-[10px] font-medium uppercase leading-[17px]"
+        style={{ color: TXT_DIM, letterSpacing: "0.20em" }}
       >
         {label}
       </div>
@@ -48,35 +46,25 @@ export function StatusLine({ total, down, uptimePct }: Props) {
   const healthy = down === 0
 
   return (
-    <div className="pointer-events-none absolute bottom-8 left-9 select-none">
-      <div className="flex items-center gap-2.5">
-        <span
-          className="inline-block size-[7px] rounded-full"
-          style={{
-            background: healthy ? UP : DOWN,
-            boxShadow: `0 0 10px ${healthy ? UP : DOWN}80`,
-          }}
-        />
-        <span
-          className="text-[9px] font-medium uppercase"
-          style={{ color: healthy ? TXT_DIM : DOWN, letterSpacing: "0.26em" }}
-        >
-          {healthy ? "Tüm sistemler çalışıyor" : "Müdahale gerekiyor"}
-        </span>
-      </div>
-
-      <div className="mt-3.5 flex items-start gap-8">
+    <div
+      className="pointer-events-none absolute left-[268px] top-7 select-none border-l pl-8"
+      style={{ borderColor: "rgba(255,255,255,0.10)" }}
+    >
+      <div className="flex items-start gap-10">
         <Stat
           value={healthy ? `${total}` : `${down}/${total}`}
-          label={healthy ? "Sistem çevrimiçi" : "Sistem çevrimdışı"}
+          label={healthy ? "Çevrimiçi" : "Çevrimdışı"}
           color={healthy ? TXT : DOWN}
         />
         <Stat
-          value={`%${uptimePct.toFixed(1)}`}
+          unit="%"
+          unitColor={healthy ? "#A78BFA" : DOWN}
+          value={String(Math.floor(uptimePct))}
           label="Uptime"
           color={healthy ? TXT : DOWN}
         />
       </div>
+
     </div>
   )
 }

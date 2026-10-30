@@ -96,6 +96,16 @@ export function useSqlGiris(): { veri: SqlGirisVeri | null; uyarilar: SqlGirisUy
     }
     void yukle()
     const t = setInterval(() => void yukle(), POLL_MS)
+
+    /*  ?mock=1 (tasarım görünümü): uyarının görünüşüne bakılabilsin diye
+     *  iki örnek uyarı. Gerçek ekranda bu blok çalışmaz.                */
+    if (new URLSearchParams(window.location.search).get("mock") === "1") {
+      const simdi = Date.now()
+      setUyarilar([
+        { id: "ornek-1", seviye: "guvenlik", kullanici: "sa", firma: null, nedenAd: "parola yanlış", kaynak: "185.220.101.4 · dış adres", yeni: 12, son: new Date(simdi).toISOString(), bitis: simdi + GUVENLIK_SURE_MS },
+        { id: "ornek-2", seviye: "destek", kullanici: "1963.ela1", firma: "ELA KUYUMCULUK", nedenAd: "parola yanlış", kaynak: "Terminal 2", yeni: 3, son: new Date(simdi - 60_000).toISOString(), bitis: simdi + GUVENLIK_SURE_MS },
+      ])
+    }
     // Süresi dolan uyarıları veri beklemeden kaldır
     const s = setInterval(() => setUyarilar((l) => (l.some((u) => u.bitis <= Date.now()) ? l.filter((u) => u.bitis > Date.now()) : l)), 5_000)
     return () => {
@@ -108,44 +118,70 @@ export function useSqlGiris(): { veri: SqlGirisVeri | null; uyarilar: SqlGirisUy
   return { veri, uyarilar }
 }
 
+/** Sağdaki kart ızgarasının genişliği — uyarılar onun solundaki alanda ortalanır */
+const KART_IZGARASI_W = 860
+
 /**
- * Ekranın alt ortasında hatalı giriş uyarıları. Arıza bandıyla (üst orta)
- * aynı dil: koyu zemin, ince renkli çerçeve; güvenlik uyarısı nabız atar.
+ * Hatalı giriş uyarıları — kart ızgarasının solundaki alanın ALT ortasında.
+ * Arıza bandıyla aynı dil: koyu zemin, renkli ince çerçeve, ince büyük yazı;
+ * güvenlik uyarısı nabız atar. (Önce ekranın tam alt ortasındaydı ve
+ * kartlar sağa genişleyince PUSULA yazısının üstüne biniyordu.)
  */
 export function SqlGirisUyarilari({ uyarilar }: { uyarilar: SqlGirisUyarisi[] }) {
   if (uyarilar.length === 0) return null
   return (
-    <div className="pointer-events-none absolute bottom-8 left-1/2 z-30 flex -translate-x-1/2 select-none flex-col items-center gap-2">
+    <div
+      className="pointer-events-none absolute bottom-8 z-30 flex -translate-x-1/2 select-none flex-col items-stretch gap-2.5"
+      style={{ left: `calc((100% - ${KART_IZGARASI_W}px) / 2)`, width: "min(620px, calc(100% - 900px))" }}
+    >
       {uyarilar.map((u) => {
-        const renk = u.seviye === "guvenlik" ? RED : u.seviye === "destek" ? AMBER : TXT_DIM
+        const guvenlik = u.seviye === "guvenlik"
+        const renk = guvenlik ? RED : u.seviye === "destek" ? AMBER : TXT_DIM
         const saat = new Date(u.son).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })
         return (
           <div
             key={u.id}
-            className={`flex items-center gap-4 rounded-[5px] px-5 py-3${u.seviye === "guvenlik" ? " tv-alarm" : ""}`}
+            className={`flex items-center gap-5 rounded-[10px] py-3 pr-5 pl-4${guvenlik ? " tv-sql-uyari" : ""}`}
             style={{
               background: "rgba(14,14,18,0.92)",
               border: `1px solid ${renk}`,
-              boxShadow: u.seviye === "guvenlik" ? "0 0 34px rgba(239,68,68,0.16)" : undefined,
+              borderLeftWidth: 3,
+              boxShadow: guvenlik ? "0 0 34px rgba(239,68,68,0.16)" : undefined,
             }}
           >
-            <span className="text-[10px] font-bold uppercase" style={{ color: renk, letterSpacing: "0.28em" }}>
-              {u.seviye === "guvenlik" ? "SQL güvenlik" : "SQL hatalı giriş"}
-            </span>
-            <span className="h-4 w-px" style={{ background: "rgba(255,255,255,0.14)" }} />
-            <span className="text-[14px] font-semibold" style={{ color: TXT }}>
-              {u.kullanici}
-              {u.firma && <span className="font-normal" style={{ color: TXT_DIM }}> · {u.firma}</span>}
-            </span>
-            <span className="text-[12px]" style={{ color: TXT_DIM }}>
-              {u.nedenAd} · {u.kaynak}
-            </span>
-            <span className="text-[12px] font-semibold tabular-nums" style={{ color: renk }}>
-              {u.yeni > 1 ? `${u.yeni} deneme · ` : ""}{saat}
-            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="relative flex size-[7px] shrink-0">
+                  {guvenlik && <span className="absolute inset-0 animate-ping rounded-full opacity-70" style={{ background: renk }} />}
+                  <span className="relative size-[7px] rounded-full" style={{ background: renk, boxShadow: `0 0 8px ${renk}` }} />
+                </span>
+                <span className="text-[9px] font-bold uppercase" style={{ color: renk, letterSpacing: "0.26em" }}>
+                  {guvenlik ? "SQL güvenlik" : "SQL hatalı giriş"}
+                </span>
+              </div>
+              <div className="mt-1.5 flex min-w-0 items-baseline gap-2">
+                <span className="truncate text-[24px] font-extralight leading-none tracking-[-0.01em] text-zinc-50">{u.kullanici}</span>
+                {u.firma && <span className="truncate text-[12px]" style={{ color: TXT_DIM }}>{u.firma}</span>}
+              </div>
+              <div className="mt-1 truncate text-[11px]" style={{ color: TXT }}>
+                {u.nedenAd}<span style={{ color: TXT_DIM }}> · {u.kaynak}</span>
+              </div>
+            </div>
+
+            <div className="shrink-0 border-l pl-5 text-right" style={{ borderColor: "rgba(255,255,255,0.10)" }}>
+              <div className="text-[28px] font-extralight leading-none tabular-nums" style={{ color: renk }}>{u.yeni}</div>
+              <div className="mt-1.5 text-[9px] uppercase tabular-nums" style={{ color: TXT_DIM, letterSpacing: "0.18em" }}>
+                deneme · {saat}
+              </div>
+            </div>
           </div>
         )
       })}
+      <style>{`
+        @keyframes tv-sql-uyari { 0%,100% { box-shadow: 0 0 20px rgba(239,68,68,0.12) } 50% { box-shadow: 0 0 44px rgba(239,68,68,0.38) } }
+        .tv-sql-uyari { animation: tv-sql-uyari 1.6s ease-in-out infinite }
+        @media (prefers-reduced-motion: reduce) { .tv-sql-uyari { animation: none } }
+      `}</style>
     </div>
   )
 }

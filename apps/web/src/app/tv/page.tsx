@@ -31,10 +31,10 @@ import { Nexus } from "./_components/nexus"
 import { BrandMark } from "./_components/brand-mark"
 import { StatusLine } from "./_components/status-line"
 import { Clock } from "./_components/clock"
-import { RightRail } from "./_components/right-rail"
+import { BackupsCard, DomainsCard, KurYazicilarCard, RightRail, TrafficCard } from "./_components/right-rail"
 import { AlarmBanner } from "./_components/alarm-banner"
 import { AlarmControls } from "./_components/alarm-controls"
-import { useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_components/mock-data"
+import { MOCK_RDP_SERVERS, useMockBandwidth, useMockOfflineFirms, useMockServerMetrics } from "./_components/mock-data"
 import { useServerMetrics, useServerList } from "./_components/use-server-metrics"
 import { useBackupStorage, useEsxi } from "./_components/use-esxi"
 import { PhysicalHostCard, DiskCard, BackupImageCard, RdpUsersCard, SqlGirisCard } from "./_components/infra-cards"
@@ -79,7 +79,8 @@ export default function TvAgacPage() {
    *  Mock modda da gercek veri gosteriliyor — bunlarin sahtesi yok
    *  ve ekranin bu kosesi her zaman dogru olmali.                   */
   const esxi        = useEsxi()
-  const serverList  = useServerList()
+  const realServerList = useServerList()
+  const serverList  = mock && realServerList.length === 0 ? MOCK_RDP_SERVERS : realServerList
   const backupDisk  = useBackupStorage()
   /*  SQL hatalı giriş: kart sol sütunda, yeni denemede alt ortada uyarı */
   const sqlGiris    = useSqlGiris()
@@ -185,39 +186,35 @@ export default function TvAgacPage() {
         testDown={testDown}
         onTest={triggerTestDown}
       />
-      <RightRail
-        bandwidth={mockBandwidth ?? bandwidth}
-        offlineFirms={mockFirms ?? offlineFirms}
-        domains={domains}
-        backupStorage={backupDisk}
-        kurYazicilar={data?.kurYazicilar}
-      >
-        {/*  İmaj yedekleri sağ şeritte: sol sütun dört kartla TV'ye
-             sığmıyordu (alt kısmı kesiliyordu), sağ şeridin altı boştu. */}
-        {esxi?.backups && esxi.backups.length > 0 && (
-          <BackupImageCard
-            backups={esxi.backups}
-            slots={esxi.slots}
-            nextAt={esxi.nextAt}
-            vmsInJob={esxi.vmsInJob}
-          />
-        )}
-      </RightRail>
+      <RightRail />
 
-      {/* Altyapi sutunu — izleme kartlarinin SOLUNDA, ayri bir sutun.
-          Alti kart tek sutunda 1124px tutuyordu ve 1080px ekrana
-          sigmiyordu; uretimde disk karti sunucu satirlariyla daha da
-          buyuyecek. Ikinci sutun kartlari sikistirmadan cozuyor.
-          Kure ekranin solunda kaliyor, cakisma yok.
-          Hepsi sessizce bozulan seyleri gosteriyor (guc kaynagi, dolan
-          disk) — hicbiri alarm uretmedigi icin surekli goz onunde.
-          Imaj yedekleri karti sag seride tasindi (RightRail children):
-          bu sutun dort kartla TV'de alttan kesiliyordu. */}
-      <div className="pointer-events-none absolute right-[306px] top-6 flex w-[262px] select-none flex-col gap-4">
-        {esxi && <PhysicalHostCard host={esxi.host} />}
-        {serverList.length > 0 && <RdpUsersCard servers={serverList} />}
-        {serverList.length > 0 && <DiskCard servers={serverList} />}
-        {sqlGiris.veri && <SqlGirisCard data={sqlGiris.veri} />}
+      {/*  Kart ızgarası — 3 sütun × 3 satır, satırlar HİZALI. Önce üç ayrı
+           sütundu; kart boyları farklı olduğundan masonry gibi duruyordu.
+           Aynı satırdaki kartlar satırın boyuna uzar (Card h-full).
+           Her hücre sabit yerinde: bir kart veri yokken çizilmese bile
+           diğerleri kaymasın.
+           z-20: imaj yedekleri kartındaki gün seçicisi tıklanabilir olsun
+           (Nexus'un SVG katmanı z-10). Izgara pointer-events-none, yalnız
+           seçici kendi için geri açıyor.                                */}
+      <div className="pointer-events-none absolute right-6 top-6 z-20 grid w-[810px] select-none grid-cols-3 gap-3">
+        {/* 1. satır */}
+        <div>{sqlGiris.veri && <SqlGirisCard data={sqlGiris.veri} />}</div>
+        <div>{esxi && <PhysicalHostCard host={esxi.host} />}</div>
+        <div><TrafficCard data={mockBandwidth ?? bandwidth} /></div>
+
+        {/* 2. satır */}
+        <div>{serverList.length > 0 && <RdpUsersCard servers={serverList} />}</div>
+        <div><KurYazicilarCard data={data?.kurYazicilar} /></div>
+        <div><DomainsCard data={domains} /></div>
+
+        {/* 3. satır */}
+        <div>
+          {esxi?.backups && esxi.backups.length > 0 && (
+            <BackupImageCard backups={esxi.backups} slots={esxi.slots} nextAt={esxi.nextAt} vmsInJob={esxi.vmsInJob} />
+          )}
+        </div>
+        <div>{serverList.length > 0 && <DiskCard servers={serverList} />}</div>
+        <div><BackupsCard data={mockFirms ?? offlineFirms} storage={backupDisk} /></div>
       </div>
 
       <SqlGirisUyarilari uyarilar={sqlGiris.uyarilar} />
