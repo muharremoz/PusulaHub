@@ -158,6 +158,7 @@ import type { WizardServiceDto } from "@/app/api/services/route";
 import { Checkbox, Field } from "@/components/shared/form"
 import { FirmaAnaliz } from "@/components/companies/firma-analiz";
 import { sqlLoginAdi } from "@/lib/firma-adlandirma";
+import { OLAY_BITTI } from "@/components/hub-senkron-widget";
 
 function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
@@ -918,6 +919,19 @@ export default function CompaniesPage() {
       }
     } catch {}
   }
+
+  /*  Arka plan Hub senkronu (HubSenkronWidget) bu firma için bitince
+   *  kullanıcı/hizmet listesini tazele — kurulum ekranı artık senkronu beklemiyor. */
+  useEffect(() => {
+    const bitti = (e: Event) => {
+      if ((e as CustomEvent<{ firmaId: string }>).detail?.firmaId !== selectedFirma?.firkod) return
+      void refreshTabUsers()
+      void refreshTabServices()
+    }
+    window.addEventListener(OLAY_BITTI, bitti)
+    return () => window.removeEventListener(OLAY_BITTI, bitti)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFirma?.firkod])
 
   /** @param onlyPars true → var olan Pars hizmetine kullanıcı ekleme: Pars seçili ve sekme Mobil açılır */
   async function openNewSvcDialog(onlyPars = false) {

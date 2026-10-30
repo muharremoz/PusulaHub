@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Check, Loader2, XCircle, AlertTriangle, ChevronDown, Users, FolderOpen, HardDrive, Globe, Database, Smartphone, RefreshCw, type LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { hubSenkronIzle } from "@/components/hub-senkron-widget"
 import type { ServiceType, ServiceConfig } from "@/app/api/services/route"
 
 /**
@@ -186,7 +187,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
 
     const handleEvent = (
       event: string,
-      data: { stepId?: string; label?: string; status?: ProvisionStatus; error?: string; message?: string },
+      data: { stepId?: string; label?: string; status?: ProvisionStatus; error?: string; message?: string; senkronId?: string | null },
     ) => {
       if (event === "step" && data.stepId && data.label && data.status) {
         upsertStep({
@@ -206,6 +207,8 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
           onStepError?.({ stepId: data.stepId!, label: data.label!, status: "error", error: data.error })
         }
       } else if (event === "done") {
+        // Hub senkronu arka planda sürüyor — sağ alttaki kart izler (kendiliğinden kapanmaz)
+        if (data.senkronId) hubSenkronIzle({ id: data.senkronId, firmaId: payload.firmaId, firmaAdi: payload.firmaName })
         setCompleted(true)
         onComplete?.()
       } else if (event === "error") {

@@ -1,6 +1,7 @@
 import { PusulaAppShell }  from "@/components/pusula-app-shell"
 import { SessionProvider } from "next-auth/react"
 import { auth }            from "@/auth"
+import { HubSenkronWidget } from "@/components/hub-senkron-widget"
 
 export default async function MainLayout({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -13,6 +14,8 @@ export default async function MainLayout({ children }: { children: React.ReactNo
   return (
     <SessionProvider session={nextAuthSession as unknown as Parameters<typeof SessionProvider>[0]["session"]}>
       <PusulaAppShell>{children}</PusulaAppShell>
+      {/* Kurulum sonrası arka planda süren Hub senkronu — sayfa değişse de görünür */}
+      <HubSenkronWidget />
     </SessionProvider>
   )
 }

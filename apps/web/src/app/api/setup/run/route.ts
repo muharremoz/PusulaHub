@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server"
 import { getSupabaseServer } from "@/lib/supabase/server"
 import { serverAgentById, sqlServerById, serversWithRole } from "@/lib/hub-servers"
-import { execOnAgent, pollSingleAgent, refreshCompanyStats } from "@/lib/agent-poller"
+import { execOnAgent } from "@/lib/agent-poller"
+import { hubSenkronuBaslat } from "@/lib/hub-senkron-isi"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
@@ -1973,48 +1974,33 @@ export async function POST(req: NextRequest) {
         // ── Senkron: agent onbellegini zorla yenile + hub'a hemen yaz ──
         // Agent AD/IIS/SQL listelerini 5 dk cache'ler, poller SQL'i ayrica
         // 5 dk ritimle yazar; sihirbaz bitince kullanici/DB en kotu 10 dk
-        // sonra gorunuyordu. Burada ilgili sunucular force ile yoklanir,
-        // ardindan firma sayaclari yeniden hesaplanir. Hata kurulumu bozmaz.
+        // sonra gorunuyordu. Ilgili sunucular force ile yoklanir, ardindan
+        // firma sayaclari yeniden hesaplanir.
+        // 30.10.2026: ~30 sn+ suruyordu ve kurulum ekranini bekletiyordu —
+        // artik arka plan isi (lib/hub-senkron-isi.ts); kurulum hemen biter,
+        // ekrandaki HubSenkronWidget durumu gosterir. Hata kurulumu bozmaz.
         const senkronHedefleri: { id: string | null | undefined; etiket: string }[] = parsOnly ? [] : [
           { id: payload.serverId,        etiket: "Active Directory" },
           { id: payload.sqlServerId,     etiket: "SQL" },
           { id: payload.windowsServerId, etiket: "IIS / Terminal" },
         ]
-        /*  Sunucular PARALEL yoklanir: force'ta agent her seyi bastan topluyor
-         *  (olculen 2026-09-29: AD 30 sn, Terminal 21 sn, SQL 8 sn). Sirayla
-         *  ~1 dk suruyordu; paralelde en yavasi kadar (~30 sn).             */
         const senkronlanan = new Set<string>()
         const hedefler = senkronHedefleri.filter((h): h is { id: string; etiket: string } => {
           if (!h.id || senkronlanan.has(h.id)) return false
           senkronlanan.add(h.id)
           return true
         })
-        for (const h of hedefler) send("step", { stepId: `sync_${h.id}`, label: `Hub senkronu: ${h.etiket}`, status: "running" })
-        await Promise.all(hedefler.map(async (h) => {
-          const stepId = `sync_${h.id}`
-          try {
-            const ok = await pollSingleAgent(h.id, true)
-            send("step", {
-              stepId, label: `Hub senkronu: ${h.etiket}`,
-              status: ok ? "done" : "error",
-              ...(ok ? { output: "Agent yenilendi, veriler hub'a yazıldı" } : { error: "Agent'a ulaşılamadı — poller 10 dk içinde yakalar" }),
-            })
-          } catch (err) {
-            send("step", { stepId, label: `Hub senkronu: ${h.etiket}`, status: "error", error: err instanceof Error ? err.message : String(err) })
-          }
-        }))
-        if (senkronlanan.size) {
-          send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "running" })
-          try {
-            await refreshCompanyStats({ dosyaBoyutu: false })
-            send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "done", output: "Kullanıcı sayısı ve kullanım güncellendi" })
-          } catch (err) {
-            send("step", { stepId: "sync_stats", label: "Firma istatistikleri yenileniyor", status: "error", error: err instanceof Error ? err.message : String(err) })
-          }
+        const senkronId = hubSenkronuBaslat(payload.firmaId, payload.firmaName, hedefler)
+        if (senkronId) {
+          send("step", {
+            stepId: "sync_arka_plan", label: "Hub senkronu arka planda başladı",
+            status: "done", output: "Durumu sağ alttaki karttan izlenir",
+          })
         }
 
         send("done", {
           ok: true,
+          senkronId,
           summary: {
             firmaId:           payload.firmaId,
             usersCreated:      createdCount,
