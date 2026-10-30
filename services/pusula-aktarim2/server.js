@@ -588,7 +588,11 @@ async function aktar(id) {
     const a = yapilacak[i]
     sql.aktarimDurumu.run({ id, durum: "aktariliyor", asama: a.tur, ilerleme: Math.round((i / yapilacak.length) * 100), hata: null })
     const kaynak = join(kok, a.tur)
-    if (a.tur === "program") await parametreleriGuncelle(o)
+    if (a.tur === "program") {
+      await parametreleriGuncelle(o)
+      try { await yedekSormaYaz(kaynak) }
+      catch (err) { fastify.log.warn({ err: String(err?.message ?? err), oturum: id }, "yedeksorma.txt yazilamadi (tasima surer)") }
+    }
     await withCifsMount(a.hedef.ip, a.pay, a.hedef.kullanici, a.hedef.sifre, async (mnt) => {
       const dst = a.yol(mnt)
       await mkdir(dst, { recursive: true })
@@ -616,7 +620,29 @@ function openOfficeSil(metin) {
     .replace(/^[ \t]*\[OPEN ?OFFICE\][^\r\n]*(\r?\n|$)/gim, "")
 }
 
-function parametreMetni(metin, firmaId, perakende) {
+/* Programın kendi yedeği kapalı (30.10.2026, Hub lib/program-yedek ve eski servisle aynı kural):
+ * COPY_ONLY'siz tam yedek alıp SpareBackup zincirini bozuyordu. Toptan/Üretim/StokCari parametresine
+ * [AKSAM YEDEKLEME YAPMA] 1; Perakende exe'sinin (Aurum_SQL.exe) yanına boş yedeksorma.txt. */
+const AKSAM_YEDEK_SATIRI = "[AKSAM YEDEKLEME YAPMA] 1"
+function aksamYedekProgrami(programCode, program) {
+  if (["011", "016", "111"].includes(String(programCode ?? "").trim())) return true
+  return /^(toptan|üretim|uretim|stokcari)/.test(String(program ?? "").toLocaleLowerCase("tr"))
+}
+
+async function yedekSormaYaz(kok) {
+  for (const ad of await safeReadDir(kok)) {
+    const yol = join(kok, ad)
+    let st
+    try { st = await stat(yol) } catch { continue }
+    if (st.isDirectory()) await yedekSormaYaz(yol)
+    else if (ad.toLowerCase() === "aurum_sql.exe") {
+      const hedef = join(kok, "yedeksorma.txt")
+      try { await stat(hedef) } catch { await writeFile(hedef, "") }
+    }
+  }
+}
+
+function parametreMetni(metin, firmaId, perakende, aksamYedek = false) {
   const nl = metin.includes("\r\n") ? "\r\n" : "\n"
   metin = openOfficeSil(metin)
   if (perakende) {
@@ -627,9 +653,14 @@ function parametreMetni(metin, firmaId, perakende) {
   const sonNl = metin.endsWith(nl)
   let satirlar = metin.split(nl)
   if (sonNl) satirlar.pop()
-  let var_ = false
-  satirlar = satirlar.map((l) => (/^\[DATA KODU\]/.test(l) ? ((var_ = true), "[DATA KODU] " + firmaId) : l))
+  let var_ = false, ay = false
+  satirlar = satirlar.map((l) => {
+    if (/^\[DATA KODU\]/.test(l)) { var_ = true; return "[DATA KODU] " + firmaId }
+    if (aksamYedek && l.trimStart().toUpperCase().startsWith("[AKSAM YEDEKLEME YAPMA]")) { ay = true; return AKSAM_YEDEK_SATIRI }
+    return l
+  })
   if (!var_) satirlar.push("[DATA KODU] " + firmaId)
+  if (aksamYedek && !ay) satirlar.push(AKSAM_YEDEK_SATIRI)
   return satirlar.join(nl) + nl
 }
 
@@ -646,7 +677,7 @@ async function parametreleriGuncelle(o) {
     const yol = stagingYolu(o.id, "program", d.yol)
     try {
       const eski = await readFile(yol, "latin1")
-      await writeFile(yol, parametreMetni(eski, o.firmaId, perakende), "latin1")
+      await writeFile(yol, parametreMetni(eski, o.firmaId, perakende, aksamYedekProgrami(secenek?.programCode, program)), "latin1")
     } catch (err) {
       fastify.log.warn({ err: String(err?.message ?? err), dosya: d.yol }, "parametre guncellenemedi (tasima surer)")
     }

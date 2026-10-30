@@ -13,6 +13,7 @@ import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } fr
 import { apiKullaniciAdi, sqlLoginAdi } from "@/lib/firma-adlandirma"
 import { saveCompanyUserPassword, saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
+import { AKSAM_YEDEK_PROGRAMLARI, YEDEK_MENU_ID, yedekMenusunuGizle, yedekMenusuMesaji } from "@/lib/program-yedek"
 import { deriveDataName } from "@/lib/demo-database-naming"
 import { adKullaniciAdiHatasi } from "@/lib/ad-kullanici-adi"
 import { BILKAR_KULLANICILARI, bilkarFirmasiMi, bilkarMasaustu } from "@/lib/bilkar"
@@ -32,6 +33,7 @@ import {
   buildUpdateParamTxt,
   buildUpdateDataKoduXml,
   buildWriteDesktopIni,
+  buildYedekSormaTxt,
   buildWriteFirmanoBak,
   buildPusulaXFileXml,
   buildCopyDesktopFolderToUser,
@@ -856,16 +858,29 @@ export async function POST(req: NextRequest) {
               // Perakende (programCode 909) istisnası: data kodu [DATA KODU]
               // satırı yerine <DATAKODU> bloğuyla yazılır. Değer yine firmaId.
               const isPerakende = (cfg.programCode ?? "").trim() === "909"
+              // Toptan/Üretim/StokCari: programın akşam yedeği kapalı (lib/program-yedek)
+              const aksamYedekKapat = AKSAM_YEDEK_PROGRAMLARI.has((cfg.programCode ?? "").trim())
               // Parametre TXT adımı kritik değil — hata devam ettirir
               await runStep(
                 winAgent,
                 `svc_param_${s.id}`,
                 isPerakende
                   ? `Parametre güncelleniyor (Perakende · DATAKODU): ${cfg.paramFileName}`
-                  : `Parametre güncelleniyor (DATA KODU): ${cfg.paramFileName}`,
+                  : `Parametre güncelleniyor (DATA KODU${aksamYedekKapat ? " · akşam yedeği kapalı" : ""}): ${cfg.paramFileName}`,
                 isPerakende
                   ? buildUpdateDataKoduXml(paramFile, payload.firmaId)
-                  : buildUpdateParamTxt(paramFile, payload.firmaId),
+                  : buildUpdateParamTxt(paramFile, payload.firmaId, aksamYedekKapat),
+              )
+            }
+
+            // Perakende: exe'nin yanına boş yedeksorma.txt → program yedek sormaz (lib/program-yedek).
+            // Yalnız Aurum_SQL.exe olan klasöre yazılır; Pusula X aynı kodu taşısa da exe'si farklı.
+            if ((cfg.programCode ?? "").trim() === "909") {
+              await runStep(
+                winAgent,
+                `svc_yedeksorma_${s.id}`,
+                `yedeksorma.txt (Perakende): ${s.name}`,
+                buildYedekSormaTxt(hizmetPath),
               )
             }
 
@@ -1493,6 +1508,18 @@ export async function POST(req: NextRequest) {
                       "sql_data_tooltip",
                       `SQL veri klasörü açıklaması (desktop.ini): ${payload.firmaId} - ${payload.firmaName}`,
                       buildWriteDesktopIni(firmaDataDir(payload.firmaId), payload.firmaName, `${payload.firmaId} - ${payload.firmaName}`),
+                    )
+                  }
+
+                  // ── Programın kendi yedek menüsü gizlenir (30.10.2026, lib/program-yedek) ──
+                  // Program COPY_ONLY'siz tam yedek alıp SpareBackup zincirini bozuyordu.
+                  // Pusula X datalarında YanM yok → atlanır. Kritik değil, kurulumu durdurmaz.
+                  for (const d of parsDatalar) {
+                    if (!d.programCode || !YEDEK_MENU_ID[d.programCode.trim()] || pusulaXDbler.includes(d.data)) continue
+                    await runSqlStep(
+                      `sql_yedekmenu_${d.data}`,
+                      `Program yedek menüsü gizleniyor: [${d.data}]`,
+                      async () => yedekMenusuMesaji(await yedekMenusunuGizle(masterPool, d.data, d.programCode)),
                     )
                   }
 

@@ -38,6 +38,7 @@ import { ensureSqlLogin, denyViewAnyDatabase, setDbOwner, grantSirketAccess } fr
 import { sqlLoginAdi, sqlLoginArama } from "@/lib/firma-adlandirma"
 import { saveCompanyUserSqlPassword } from "@/lib/firma-credentials"
 import { insertGuvenlikRow } from "@/lib/sirket-guvenlik"
+import { YEDEK_MENU_ID, yedekMenusunuGizle, yedekMenusuMesaji } from "@/lib/program-yedek"
 import { okuPusulaXResimYolu, pusulaXResimYolu, yazPusulaXResimYolu, yazPusulaXEntegrasyon } from "@/lib/pusulax-resim-yolu"
 import { buildWriteDesktopIni } from "@/lib/setup-fileops"
 import {
@@ -377,6 +378,16 @@ export async function POST(
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklendi: ${targetDb}`, "done")
                 } catch (err) {
                   step(`guvenlik_${targetDb}`, `Güvenlik kaydı eklenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
+                }
+              }
+
+              // 5b) Programın kendi yedek menüsü gizlenir (lib/program-yedek) — Pusula X datasında YanM yok.
+              if (!f.pusulaX && YEDEK_MENU_ID[(f.programCode ?? "").trim()]) {
+                try {
+                  const sonuc = await yedekMenusunuGizle(masterPool, targetDb, f.programCode)
+                  step(`yedekmenu_${targetDb}`, `Program yedek menüsü: ${targetDb} — ${yedekMenusuMesaji(sonuc)}`, "done")
+                } catch (err) {
+                  step(`yedekmenu_${targetDb}`, `Program yedek menüsü gizlenemedi: ${targetDb}`, "error", { error: err instanceof Error ? err.message : String(err) })
                 }
               }
 

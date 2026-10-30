@@ -13,6 +13,8 @@
  * stdout'a `OK` / `COPIED` / `UPDATED` / `SKIPPED` yazılır.
  */
 
+import { AKSAM_YEDEK_SATIRI } from "@/lib/program-yedek"
+
 /** PowerShell single-quoted string için ' karakterini '' yapar. */
 function psQuote(s: string): string {
   return (s ?? "").replace(/'/g, "''")
@@ -192,6 +194,19 @@ export function buildPusulaXFileXml(folderPath: string): string {
   ].join("; ")
 }
 
+/* ── Perakende: exe yanına boş yedeksorma.txt (30.10.2026, lib/program-yedek) ── */
+/** Program yedek sormasın diye. Yalnız Aurum_SQL.exe olan klasöre; varsa dokunulmaz. */
+export function buildYedekSormaTxt(folderPath: string): string {
+  const p = psQuote(folderPath)
+  return [
+    `$p='${p}'`,
+    `$f = Join-Path -Path $p -ChildPath 'yedeksorma.txt'`,
+    `if(-not (Test-Path -LiteralPath (Join-Path -Path $p -ChildPath 'Aurum_SQL.exe'))){Write-Output 'SKIPPED'}` +
+      ` elseif(Test-Path -LiteralPath $f){Write-Output 'OK (zaten var)'}` +
+      ` else {[System.IO.File]::WriteAllBytes($f, [byte[]]@()); Write-Output 'OK'}`,
+  ].join("; ")
+}
+
 /**
  * Hizmet ayarındaki parametre dosya adı uzantısız girilmişse
  * (örn. StokCari: "StokCariParametre" — dosya "StokCariParametre.txt")
@@ -213,8 +228,11 @@ const PARAM_TXT_FALLBACK =
  * Office kuruldu. Dosyada zaten olan [OPEN OFFICE] satırı da silinir (2026-10-16):
  * şablon/eski dosyalar ayarı geri getiriyordu. Agent exec `^`'yi yiyor → satır başı
  * kontrolü regex yerine TrimStart().StartsWith ile.
+ *
+ * `aksamYedekKapat` (Toptan/Üretim/StokCari, 30.10.2026): `[AKSAM YEDEKLEME YAPMA] 1`
+ * satırı yazılır (varsa değeri 1'e çekilir) — programın kendi yedeği zinciri bozuyordu.
  */
-export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): string {
+export function buildUpdateParamTxt(paramFilePath: string, firmaId: string, aksamYedekKapat = false): string {
   const f = psQuote(paramFilePath)
   const id = psQuote(firmaId)
   return [
@@ -222,14 +240,17 @@ export function buildUpdateParamTxt(paramFilePath: string, firmaId: string): str
     PARAM_TXT_FALLBACK,
     `if(-not (Test-Path -LiteralPath $f)){Write-Error ('Parametre dosyasi bulunamadi: ' + $f)} else {` +
       `$dk = '[DATA KODU] ${id}'; ` +
+      `$ay = '${AKSAM_YEDEK_SATIRI}'; $ayIste = $${aksamYedekKapat ? "true" : "false"}; ` +
       `$lines = Get-Content -LiteralPath $f -Encoding UTF8; ` +
-      `$dkVar = $false; ` +
+      `$dkVar = $false; $ayVar = $false; ` +
       `$out = foreach($line in $lines){` +
         `$bas = $line.TrimStart().ToUpperInvariant(); ` +
         `if($bas.StartsWith('[OPEN OFFICE]') -or $bas.StartsWith('[OPENOFFICE]')){} ` +
         `elseif($line -match '^\\[DATA KODU\\]'){$dkVar = $true; $dk} ` +
+        `elseif($ayIste -and $bas.StartsWith('[AKSAM YEDEKLEME YAPMA]')){$ayVar = $true; $ay} ` +
         `else {$line}}; ` +
       `if(-not $dkVar){$out = @($out) + @($dk)}; ` +
+      `if($ayIste -and -not $ayVar){$out = @($out) + @($ay)}; ` +
       `Set-Content -LiteralPath $f -Value $out -Encoding UTF8; ` +
       `Write-Output 'UPDATED'` +
     `}`,
