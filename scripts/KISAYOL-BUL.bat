@@ -21,18 +21,9 @@ if not exist "%BETIK%" (
   exit /b 1
 )
 
-:sor
-echo.
-echo Aranacak exe'nin tam yolu (ornek: C:\Pusula\FIRMA\KLASOR\PROGRAM.exe)
-set "HEDEF="
-set /p HEDEF=Exe yolu:
-if not defined HEDEF goto sor
-REM Yapistirilan yolun basindaki/sonundaki tirnaklari at
-set HEDEF=%HEDEF:"=%
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%BETIK%" -Hedef "%HEDEF%"
+REM Kisayollar bir kez okunur; birden cok exe ayni pencerede art arda aranir
+REM (bos Enter: cikis). Tekrar taramak gerekmez, aramalar aninda cevaplanir.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%BETIK%"
 
 echo.
-set "TEKRAR="
-set /p TEKRAR=Baska bir exe aransin mi? (E/H):
-if /i "%TEKRAR%"=="E" goto sor
+pause
