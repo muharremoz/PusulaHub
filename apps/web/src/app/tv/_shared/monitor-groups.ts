@@ -63,6 +63,9 @@ const MAP: Record<string, TreeKey> = {
   "Terminal 2":       "servers",   // 10.15.2.9
   "Terminal 3 - Bilkar": "servers", // 10.15.2.12
   "Terminal 4":       "servers",   // 10.15.2.13
+  "Terminal 5":       "servers",   // 10.15.2.14
+  "Terminal 6":       "servers",   // 10.15.2.15
+  "Terminal 7":       "servers",   // 10.15.2.16
   "Depo":             "servers",   // 10.15.2.200
   "Mobil":            "servers",   // 10.15.2.3
 
