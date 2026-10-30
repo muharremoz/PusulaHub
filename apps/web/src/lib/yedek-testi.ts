@@ -12,11 +12,11 @@ import { r2GunDosyalari, r2Tanimli } from "@/lib/firma-yedekleri"
  * "Yedek alındı" demek yetmiyor; soru "yedek GERÇEKTEN var mı". Test bunu
  * üç ayrı kaynaktan sorup birbirine tutturuyor:
  *   1-2. `sirket.dbo.guvenlik` → yedeklenmesi gereken veritabanları
- *   3-5. `msdb` → SQL Server'ın kendi yedek kayıtları (tam / fark / zincir)
- *   6.   Spare Cloud (SFTP) → dosyalar gerçekten buluta çıkmış mı
- *   7.   Cloudflare R2 → aynı dosyaların ikinci kopyası R2'de duruyor mu
+ *   3-6. `msdb` → SQL Server'ın kendi yedek kayıtları (tam / fark / zincir / zinciri bozan yedek)
+ *   7.   Spare Cloud (SFTP) → dosyalar gerçekten buluta çıkmış mı
+ *   8.   Cloudflare R2 → aynı dosyaların ikinci kopyası R2'de duruyor mu
  * Her adım gerçek iş yapıyor; hiçbir adım süslemek için beklemiyor.
- * (7. adım eskiden SQL Backup Master'ın listesine bakıyordu; Backup Master 27.10.2026'da emekli edildi.)
+ * (8. adım eskiden SQL Backup Master'ın listesine bakıyordu; Backup Master 27.10.2026'da emekli edildi.)
  *
  * ── Kesinlikle salt okuma ─────────────────────────────────────────────
  * Ekran ofiste müşteriye de açık. Test hiçbir şey yazmıyor: yedek almıyor, dosya silmiyor.
@@ -68,6 +68,7 @@ export const TEST_PLANI: PlanAdimi[] = [
   { id: "tam",      baslik: "Günlük Tam Yedek",          aciklama: "Her veritabanının son tam yedeği 26 saatten yeni mi" },
   { id: "diff",     baslik: "15 Dakikalık Fark Yedeği",  aciklama: "Gün içinde 15 dakikada bir alınan değişiklik yedekleri güncel mi" },
   { id: "zincir",   baslik: "Geri Yükleme Zinciri",      aciklama: "Her fark yedeği kendi tam yedeğinin üstüne oturuyor mu" },
+  { id: "kirilma",  baslik: "Zinciri Bozan Yedek",       aciklama: "Son 24 saatte başka bir programın aldığı tam yedek zinciri bozdu mu, onarıldı mı" },
   { id: "bulut",    baslik: "Bulut Teslimi",             aciklama: "Alınan her yedek dosyası bulut sunucusunda gerçekten duruyor mu" },
   { id: "r2",       baslik: "İkinci Bulut (R2)",         aciklama: "Her yedeğin ikinci kopyası Cloudflare R2'de gerçekten duruyor mu" },
 ]
@@ -158,6 +159,8 @@ const KAPSAM_SQL = `
 interface KapsamSatir { db: string; sunucuda: string | null; durum: string | null }
 interface SonSatir    { db: string; son: Date | null }
 interface ZincirSatir { db: string; uyumlu: number; yabanci: number }
+/** SpareBackup dışından, COPY_ONLY olmadan alınmış tam yedek — diferansiyel tabanı kendine çeker */
+interface KirilmaSatir { db: string; bitis: Date; kim: string; onarim: Date | null; yetim: number }
 /** SpareBackup'ın son BULUT_SAAT saatte aldığı yedek — bulut ve R2 adımları aynı listeyi eşleştirir */
 interface TeslimYedegi { db: string; tur: string; basla: string; yol: string; dkOnce: number }
 
@@ -384,7 +387,81 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
     },
   )
 
-  /* 6 ── Bulut teslimi --------------------------------------------------- */
+  /* 6 ── Zinciri bozan yedek --------------------------------------------- */
+  /*
+   * Önceki adım yalnız ŞU ANKİ zinciri soruyor; SpareBackup kırılmayı birkaç dakikada
+   * kendi tam yedeğiyle onardığı için gün içindeki kırılmalar orada hiç görünmüyordu.
+   * 30.10.2026'da Pusula programının kendi yedeği (`C:\pslYedek`, COPY_ONLY değil)
+   * `sirket`'i 4, `4206_MERKEZ`'i 1 kez kırdı — biri ancak elle msdb'ye bakınca bulundu.
+   *
+   * Her kırılma için üç şey ölçülüyor:
+   *   - onarım: sonrasında SpareBackup kendi tam yedeğini almış mı (yoksa zincir hâlâ açık)
+   *   - yetim:  tabanı bu yabancı yedek olan fark yedeği var mı → bulutta tabanı olmadığı
+   *             için geri yüklenemez, gerçek kayıp penceresi budur
+   *   - kim:    SQL girişi — programdan mı, elle mi alındığını buradan anlıyoruz
+   * Yetim fark varsa hata; kırılma onarılmış ya da henüz fark almamış olsa da uyarı —
+   * kaynağı kapatılmadıkça her gün tekrar eder, görünür kalmalı.
+   * Yalnız SpareBackup'ın yedeklediği veritabanlarına bakılır (restore edilen müşteri
+   * yedekleri `server_name` süzgeciyle elenir).
+   */
+  yield* adim("kirilma", async () => {
+      const r = await sorgu<KirilmaSatir>(`
+        SELECT d.database_name AS db, d.backup_finish_date AS bitis, d.user_name AS kim,
+               (SELECT MIN(x.backup_finish_date) FROM msdb.dbo.backupset x
+                JOIN msdb.dbo.backupmediafamily xm ON xm.media_set_id = x.media_set_id
+                WHERE x.database_name = d.database_name AND x.type = 'D' AND x.is_copy_only = 0
+                  AND x.backup_finish_date > d.backup_finish_date
+                  AND xm.physical_device_name LIKE 'C:\\ProgramData\\SpareBackup\\%') AS onarim,
+               (SELECT COUNT(*) FROM msdb.dbo.backupset i
+                WHERE i.database_name = d.database_name AND i.type = 'I'
+                  AND i.differential_base_guid = d.backup_set_uuid) AS yetim
+        FROM msdb.dbo.backupset d
+        JOIN msdb.dbo.backupmediafamily dm ON dm.media_set_id = d.media_set_id
+        WHERE d.type = 'D' AND d.is_copy_only = 0 AND d.server_name = @@SERVERNAME
+          AND d.backup_finish_date > DATEADD(hour, -24, GETDATE())
+          AND dm.physical_device_name NOT LIKE 'C:\\ProgramData\\SpareBackup\\%'
+          AND EXISTS (SELECT 1 FROM msdb.dbo.backupset s
+                      JOIN msdb.dbo.backupmediafamily sm ON sm.media_set_id = s.media_set_id
+                      WHERE s.database_name = d.database_name
+                        AND s.backup_finish_date > DATEADD(day, -3, GETDATE())
+                        AND sm.physical_device_name LIKE 'C:\\ProgramData\\SpareBackup\\%')
+        ORDER BY d.backup_finish_date`)
+
+      if (r.length === 0) {
+        return { durum: "ok", deger: "Zinciri bozan yedek yok", detay: ["Son 24 saatte tam yedekleri yalnız yedekleme sistemi aldı"] }
+      }
+
+      // Veritabanı başına tek satır: kaç kez, kim, son kırılma onarıldı mı
+      const gruplar = new Map<string, KirilmaSatir[]>()
+      for (const x of r) gruplar.set(x.db.toLowerCase(), [...(gruplar.get(x.db.toLowerCase()) ?? []), x])
+      const yetim = r.reduce((t, x) => t + x.yetim, 0)
+      const acik  = [...gruplar.values()].filter((g) => !g[g.length - 1].onarim)
+
+      const satirlar = [...gruplar.values()].map((g) => {
+        const son = g[g.length - 1]
+        const kimler = [...new Set(g.map((x) => x.kim))].join(", ")
+        const durum = son.onarim
+          ? `${Math.max(1, Math.round((new Date(son.onarim).getTime() - new Date(son.bitis).getTime()) / 60_000))} dk'da onarıldı`
+          : "henüz onarılmadı"
+        return `${son.db}${g.length > 1 ? ` ${g.length}×` : ""} (${kimler}) · son ${saat(son.bitis)} · ${durum}`
+      })
+
+      return {
+        durum: yetim > 0 ? "hata" : "uyari",
+        deger: `${sayi(r.length)} kırılma · ${sayi(gruplar.size)} veritabanı`,
+        detay: [
+          yetim > 0
+            ? `${sayi(yetim)} fark yedeği tabansız kaldı — geri yüklenemez`
+            : acik.length > 0
+              ? "Açık kırılma: bir sonraki tam yedekte kendiliğinden kapanır"
+              : "Hepsi onarıldı, tabansız fark yedeği yok",
+          ...satirlar.slice(0, 2),
+        ],
+      }
+    },
+  )
+
+  /* 7 ── Bulut teslimi --------------------------------------------------- */
   yield* adim("bulut", async () => {
       const yedekler = await teslimYedekleri()
 
@@ -411,7 +488,7 @@ export async function* yedekTestiCalistir(hedef: YedekTestiHedef): AsyncGenerato
     },
   )
 
-  /* 7 ── İkinci bulut (Cloudflare R2) ------------------------------------- */
+  /* 8 ── İkinci bulut (Cloudflare R2) ------------------------------------- */
   /*
    * SpareBackup her dosyayı ana hedefe yükledikten sonra R2'ye de gönderiyor (ek hedef, 23.10.2026).
    * Aynı yedek listesi R2'nin gün klasörleriyle eşleşir. Hub'da salt-okuma token yoksa (R2_* env)
