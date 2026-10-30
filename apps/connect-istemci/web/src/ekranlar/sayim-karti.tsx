@@ -54,7 +54,7 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
 
   const test = sayim.s.test;
   const renk: Renk = vpnYok ? "uyari" : olciliyor || !test ? "bekliyor" : test.ok ? "iyi" : "hata";
-  const secim = sayim.tur === "eski" ? sayim.s.secim : null;
+  const secim = sayim.s.secim ?? null;
 
   return (
     <YanKart
@@ -69,7 +69,7 @@ export function SayimYanKarti({ durum, setDurum }: { durum: Durum; setDurum: (d:
       }
     >
       <div className="truncate text-xs text-muted-foreground" title={[secim?.veritabani, test?.ok ? `SQL yanıtı ${test.sureMs} ms` : null].filter(Boolean).join(" · ") || undefined}>
-        {secim && <>{secim.ad} · {secim.formId === "146" ? "Toptan" : "Perakende"} · </>}
+        {secim && <>{secim.ad} · {sayim.tur === "eski" ? `${secim.formId === "146" ? "Toptan" : "Perakende"} · ` : ""}</>}
         {vpnYok
           ? <span className="text-amber-700 dark:text-amber-400">VPN bağlantısı gerekli</span>
           : olciliyor

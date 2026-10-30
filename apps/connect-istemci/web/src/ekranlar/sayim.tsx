@@ -115,7 +115,8 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
   const [degistirOnay, setDegistirOnay] = useState(false);
   const [test, setTest] = useState<SayimTest | null>(s?.test ?? null);
 
-  // Eski program: veritabanı + program seçimi
+  // Veritabanı seçimi — eski program: veritabanı + program; Pusula X: çok veritabanlı firmada veritabanı
+  // (şubeler ayrı giriş kodu taşır, seçilenin kodu DataCode olur — 30.10.2026)
   const [secimAcik, setSecimAcik] = useState(false);   // kurulum öncesi ya da "Değiştir" ile açılan seçim alanı
   const [vtListe, setVtListe] = useState<SayimVeritabani[] | null>(null);
   const [vt, setVt] = useState<string>(s?.secim?.veritabani ?? "");
@@ -127,7 +128,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
   useEffect(() => {
     if (s?.secim) {
       setVt(s.secim.veritabani);
-      setForm(s.secim.formId);
+      setForm(s.secim.formId ?? "");
     }
   }, [s?.secim?.veritabani, s?.secim?.formId]);
 
@@ -141,7 +142,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s?.kuruluyor]);
 
-  const listeyiGetir = async () => {
+  const listeyiGetir = async (): Promise<SayimVeritabani[] | null> => {
     setBekle("liste");
     setHata(null);
     try {
@@ -150,19 +151,23 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
       // Tek veritabanıysa ve seçim yoksa otomatik seç; Toptan kayıtlıysa program da ona göre önerilir
       if (r.liste.length === 1 && !vt) {
         setVt(r.liste[0].veritabani);
-        if (!form) setForm(r.liste[0].prgTur === "011" ? "146" : "612");
+        if (eski && !form) setForm(r.liste[0].prgTur === "011" ? "146" : "612");
       }
+      return r.liste;
     } catch (e) {
       setHata((e as Error).message);
+      return null;
     } finally {
       setBekle(null);
     }
   };
 
   const secimNesnesi = (): SayimSecim | null => {
-    if (!eski) return null;
     const v = vtListe?.find((x) => x.veritabani === vt);
-    return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, formId: form };
+    if (eski) return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, formId: form };
+    if (!vt) return null;
+    const kod = v?.kod != null ? String(v.kod) : vt === s?.secim?.veritabani ? s?.secim?.kod : undefined;
+    return { veritabani: vt, ad: v?.ad ?? s?.secim?.ad ?? vt, kod };
   };
 
   const calistir = async (ne: "kur" | "guncelle", k?: string) => {
@@ -240,18 +245,25 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
     }
   };
 
-  // Anahtar: Pusula X hemen kurar; eski program önce veritabanı/program seçimini açar
-  const anahtar = (v: boolean) => {
+  // Anahtar: eski program önce veritabanı/program seçimini açar. Pusula X: firmanın tek giriş kodu varsa
+  // hemen kurar (eski davranış), şubeleri ayrı kodluysa önce veritabanı seçtirir.
+  const anahtar = async (v: boolean) => {
     if (!v) return setKaldirOnay(true);
-    if (!eski) return void calistir("kur");
+    if (eski) {
+      setSecimAcik(true);
+      if (!vtListe) void listeyiGetir();
+      return;
+    }
+    const liste = vtListe ?? (await listeyiGetir());
+    const kodlar = new Set((liste ?? []).map((x) => x.kod).filter((k) => k != null));
+    if (!liste || kodlar.size <= 1) return void calistir("kur");
     setSecimAcik(true);
-    if (!vtListe) void listeyiGetir();
   };
 
-  const secimTam = !!vt && !!form;
+  const secimTam = eski ? !!vt && !!form : !!vt;
   const secimAlani = (
           <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-[1fr_160px] gap-3">
+            <div className={eski ? "grid grid-cols-[1fr_160px] gap-3" : "grid grid-cols-1 gap-3"}>
               <div className="flex flex-col gap-1">
                 <Label className="text-xs">Veritabanı</Label>
                 <Select value={vt} onValueChange={setVt} disabled={!vtListe}>
@@ -270,16 +282,19 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs">Program</Label>
-                <Select value={form} onValueChange={setForm}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Seçin" /></SelectTrigger>
-                  <SelectContent>
-                    {FORMLAR.map((f) => <SelectItem key={f.id} value={f.id}>{f.ad}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {eski && (
+                <div className="flex flex-col gap-1">
+                  <Label className="text-xs">Program</Label>
+                  <Select value={form} onValueChange={setForm}>
+                    <SelectTrigger className="w-full"><SelectValue placeholder="Seçin" /></SelectTrigger>
+                    <SelectContent>
+                      {FORMLAR.map((f) => <SelectItem key={f.id} value={f.id}>{f.ad}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
+            {!eski && <div className="text-xs text-muted-foreground">Sayım programının giriş ekranında yalnız bu veritabanı (ve aynı şube kodundakiler) görünür.</div>}
             <div className="flex flex-wrap items-center gap-2">
               {s?.kurulu ? (
                 <Button size="sm" disabled={!secimTam || bekle !== null} onClick={() => void calistir("guncelle")}>
@@ -331,7 +346,7 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
         )}
 
         {/* Pusula: veritabanı + program seçimi — kurulum öncesi burada; kuruluyken tablo içinde (Değiştir) */}
-        {eski && secimAcik && !s?.kurulu && !s?.kuruluyor && <div className="px-4 py-3">{secimAlani}</div>}
+        {secimAcik && !s?.kurulu && !s?.kuruluyor && <div className="px-4 py-3">{secimAlani}</div>}
 
         {s?.guncellemeBekliyor && !kodIcin && (
           <div className="px-4 py-3">
@@ -385,19 +400,23 @@ function SayimKarti({ tur, s, durum, setDurum, secici, onProgramDegistir }: {
                   <ArrowLeftRight /> Değiştir
                 </SatirDugmesi>
               </span>
-              {eski && (
+              {(
                 <>
                   <span className="self-center text-muted-foreground">Veritabanı</span>
                   <span className="flex items-center gap-2">
-                    <span className="truncate">{s.secim ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : "—"}</span>
+                    <span className="truncate">{s.secim ? `${s.secim.ad}${s.secim.ad !== s.secim.veritabani ? ` (${s.secim.veritabani})` : ""}` : eski ? "—" : "Firma kodundakiler (giriş ekranından seçilir)"}</span>
                     {!secimAcik && (
                       <SatirDugmesi onClick={() => { setSecimAcik(true); if (!vtListe) void listeyiGetir(); }} disabled={bekle !== null}>
                         <Database /> Değiştir
                       </SatirDugmesi>
                     )}
                   </span>
-                  <span className="text-muted-foreground">Program</span>
-                  <span>{formAd(s.secim?.formId)}</span>
+                  {eski && (
+                    <>
+                      <span className="text-muted-foreground">Program</span>
+                      <span>{formAd(s.secim?.formId)}</span>
+                    </>
+                  )}
                   {/* Değiştir: satırın altında açılır (yükseklik + saydamlık geçişi) */}
                   <div
                     className="col-span-2 grid transition-[grid-template-rows,opacity] duration-300 ease-out"

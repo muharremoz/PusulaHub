@@ -105,15 +105,16 @@ export type SayimTest = {
 };
 
 /** Eski program sayımı: kullanıcının seçtiği veritabanı ve program (FORMID 612 Perakende / 146 Toptan) */
-export type SayimSecim = { veritabani: string; ad: string; formId: string };
+/** Eski program: veritabanı + formId. Pusula X (çok veritabanlı firma): veritabanı + kod (guvenlik.KOD → DataCode). */
+export type SayimSecim = { veritabani: string; ad: string; formId?: string; kod?: string };
 
-/** Eski program sayımı için firmanın veritabanları (Hub, sirket.guvenlik) */
-export type SayimVeritabani = { veritabani: string; ad: string; prgTur: string | null; program: string | null };
+/** Sayım için firmanın veritabanları (Hub, sirket.guvenlik); kod = giriş kodu (guvenlik.KOD) */
+export type SayimVeritabani = { veritabani: string; ad: string; prgTur: string | null; program: string | null; kod?: number | null };
 
 export type SayimDurum = {
   /** "pusulax" | "eski" */
   tur?: string;
-  /** Yalnız eski program */
+  /** Seçilen veritabanı — eski program her zaman, Pusula X çok veritabanlı firmada */
   secim?: SayimSecim | null;
   kurulu: boolean;
   klasor: string;

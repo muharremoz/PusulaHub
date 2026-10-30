@@ -473,7 +473,8 @@ namespace PusulaConnect
                 {
                     try
                     {
-                        if (s.Tur == "eski" && !await SecimFirmadaMi(s.Secim))
+                        // Eski program her zaman, Pusula X yalnız veritabanı seçilmişse (şube kodu yeni firmada olmayabilir)
+                        if ((s.Tur == "eski" || s.Secim != null) && !await SecimFirmadaMi(s.Secim))
                         {
                             s.Kaldir(false);
                             Gunluk.Yaz("Yeni kayıt: sayım veritabanı bu firmaya ait değil, bağlantı kapatıldı (" + s.Tur + ")");
@@ -571,17 +572,24 @@ namespace PusulaConnect
         {
             var onceki = Fortinet.SslVpnBagli();
             _vpnBagli = onceki;
+            var degisim = DateTime.Now;   // VPN'in son durum değiştirdiği an — bağlı/kopuk kalma süresi
+            var tur = 0;
             for (;;)
             {
                 await Task.Delay(1500);
+                // Sayım programı açık mı — 15 sn'de bir (süreç listesi; ucuz ama her 1,5 sn'de gereksiz)
+                if (++tur % 10 == 0) SayimSureciniIzle();
                 bool bagli;
                 try { bagli = Fortinet.SslVpnBagli(); } catch { continue; }
                 if (bagli == onceki) continue;
                 onceki = bagli;
                 _vpnBagli = bagli;
+                var sure = DateTime.Now - degisim;
+                degisim = DateTime.Now;
                 bool kayitli; lock (_kilit) kayitli = _kayit != null;
                 if (!kayitli) continue;
                 Gunluk.Yaz("VPN " + (bagli ? "bağlandı" : "koptu") + " — erişim hemen denetleniyor");
+                VpnDegisimiBildir(bagli, sure);
                 await Kontrol();
                 if (!bagli) continue;
                 foreach (var bekle in new[] { 1000, 2000, 3000, 4000 })
@@ -592,6 +600,55 @@ namespace PusulaConnect
                     await Kontrol();
                 }
             }
+        }
+
+        /*  Sayım + VPN kopma kaydı (30.10.2026). Şikâyet: "sayımı başlattıktan bir süre sonra VPN kopuyor".
+         *  Günlükte yalnız "VPN koptu" vardı; sayımın açık olup olmadığı (Connect dışından açılan dahil),
+         *  ne kadar süredir açık olduğu ve VPN'in ne kadar bağlı kaldığı yoktu, sunucuya da gitmiyordu.
+         *  Artık her kopma/bağlanma ve sayımın açılıp kapanması günlüğe ve Pusula'ya (olay) yazılır.     */
+        private DateTime? _sayimBaslangic;
+        private int _sayimdaVpnKopma;
+
+        private void SayimSureciniIzle()
+        {
+            DateTime? bas = null;
+            foreach (var s in Sayim.Hepsi)
+            {
+                var b = s.CalisiyorBaslangic();
+                if (b != null && (bas == null || b < bas)) bas = b;
+            }
+            if (bas == _sayimBaslangic) return;
+            bool kayitli; lock (_kilit) kayitli = _kayit != null;
+            if (bas != null && _sayimBaslangic == null)
+            {
+                _sayimdaVpnKopma = 0;
+                Gunluk.Yaz("Sayım programı açık (başlangıç " + bas.Value.ToString("HH:mm:ss") + ", VPN " + (_vpnBagli ? "bağlı" : "KOPUK") + ")");
+                if (kayitli) _ = _servis.Olay("sayim_acik", new { baslangic = bas.Value.ToString("s"), vpn = _vpnBagli });
+            }
+            else if (bas == null && _sayimBaslangic != null)
+            {
+                var dk = Math.Round((DateTime.Now - _sayimBaslangic.Value).TotalMinutes, 1);
+                Gunluk.Yaz("Sayım programı kapandı: " + dk + " dk açık kaldı, bu sürede VPN " + _sayimdaVpnKopma + " kez koptu");
+                if (kayitli) _ = _servis.Olay("sayim_kapandi", new { dk, vpnKopma = _sayimdaVpnKopma });
+            }
+            _sayimBaslangic = bas;
+        }
+
+        private void VpnDegisimiBildir(bool bagli, TimeSpan oncekiSure)
+        {
+            SayimSureciniIzle();   // kopma anındaki sayım durumu taze olsun
+            var sayimDk = _sayimBaslangic == null ? (double?)null : Math.Round((DateTime.Now - _sayimBaslangic.Value).TotalMinutes, 1);
+            bool oturum; try { oturum = OturumAcikMi?.Invoke() == true; } catch { oturum = false; }
+            if (bagli)
+            {
+                Gunluk.Yaz("  VPN " + Math.Round(oncekiSure.TotalSeconds) + " sn kopuk kaldı");
+                _ = _servis.Olay("vpn_baglandi", new { kopukSn = Math.Round(oncekiSure.TotalSeconds), sayimAcik = sayimDk != null });
+                return;
+            }
+            if (sayimDk != null) _sayimdaVpnKopma++;
+            Gunluk.Yaz("  VPN " + Math.Round(oncekiSure.TotalMinutes, 1) + " dk bağlı kalmıştı; sayım " +
+                (sayimDk != null ? sayimDk + " dk'dır açık" : "kapalı") + ", uzak masaüstü " + (oturum ? "açık" : "kapalı"));
+            _ = _servis.Olay("vpn_koptu", new { bagliDk = Math.Round(oncekiSure.TotalMinutes, 1), sayimAcik = sayimDk != null, sayimDk, oturum });
         }
 
         public async Task<object> KontrolEt()
@@ -841,7 +898,7 @@ namespace PusulaConnect
             return Durum();
         }
 
-        /// <summary>Eski program sayımı: firmanın veritabanları (Hub, sirket.guvenlik). Şifre içermez, kod istemez.</summary>
+        /// <summary>Sayım veritabanı seçimi (eski program; çok veritabanlı firmada Pusula X): firmanın veritabanları ve giriş kodları (Hub, sirket.guvenlik). Şifre içermez, kod istemez.</summary>
         public Task<JObject> SayimVeritabanlari() => _servis.SayimVeritabanlari();
 
         private async Task<JObject> SayimBilgisi(string kod, string tur)

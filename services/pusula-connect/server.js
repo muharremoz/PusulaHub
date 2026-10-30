@@ -1102,7 +1102,10 @@ fastify.post("/api/gunluk", { bodyLimit: 600 * 1024 }, async (req, reply) => {
 
 /** İstemcinin bildirdiği olaylar (yalnız bilinen türler). */
 const ISTEMCI_OLAYLARI = new Set(["sayim_baslatildi", "ilk_kurulum_tamam", "pencere_acilamadi", "pencere_acildi_tekrar", "sayim_kurulum_baslatildi", "sayim_bilgisi_guncellendi", "vpn_baglan_tetiklendi", "dns_cozulemedi", "oturum_acildi", "oturum_bitti", "oturum_hatasi", "guncellendi", "guncelleme_hatasi", "vpn_kuruldu", "vpn_kurulum_hatasi",
-  "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi"])
+  "sifre_kaydedildi", "sifre_silindi", "sifre_gecersiz", "sifre_guncellendi", "sifre_gosterildi", "kayit_kaldirildi", "ayar_degisti", "uygulama_acildi",
+  // 30.10.2026 (0.7.9): VPN kopması/bağlanması ve sayım programının açık kaldığı süre — "sayımdan sonra VPN
+  // kopuyor" şikâyeti için (ayrinti: { bagliDk, sayimAcik, sayimDk, oturum } / { kopukSn } / { dk, vpnKopma })
+  "vpn_koptu", "vpn_baglandi", "sayim_acik", "sayim_kapandi"])
 fastify.post("/api/olay", async (req, reply) => {
   const c = cihaz(req, reply); if (!c) return
   const tur = String(req.body?.tur ?? "")

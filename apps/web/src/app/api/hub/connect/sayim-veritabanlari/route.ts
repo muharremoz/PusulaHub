@@ -2,7 +2,8 @@
  * GET /api/hub/connect/sayim-veritabanlari?firma=
  *
  * Eski program sayımı (Pusula.exe) tek bir veritabanıyla açılır (Server.xml DATA). Connect, kullanıcıya
- * firmanın veritabanlarını bu listeden seçtirir. Kaynak: sirket.dbo.guvenlik (Pusula giriş ekranının da
+ * firmanın veritabanlarını bu listeden seçtirir. Pusula X sayımında da (birden çok veritabanlı firmada)
+ * buradan seçilir; seçilen satırın `kod`u server.xml DataCode olur. Kaynak: sirket.dbo.guvenlik (Pusula giriş ekranının da
  * kaynağı) — Giriş Sırası ekranıyla aynı okuma (lib/giris-sirasi.ts girisSatirlari).
  * Şifre DÖNMEZ. Auth: X-Service-Key = CONNECT_SERVICE_KEY.
  */
@@ -36,7 +37,10 @@ export async function GET(req: NextRequest) {
     )
     const liste = satirlar
       .filter((x) => x.dataYolu)
-      .map((x) => ({ veritabani: x.dataYolu, ad: x.srkadi || x.dataYolu, prgTur: x.prgTur || null, program: PROGRAM[x.prgTur] ?? (x.prgTur || null) }))
+      // kod: guvenlik.KOD — Pusula X giriş ekranı veritabanlarını bununla süzer; şubeler ayrı kod taşır
+      // (6572: ALTCADDE 6572, ALTSIPAHI 65721, ALTTIYATRO 65722). Connect seçilen veritabanının kodunu
+      // sayımın server.xml DataCode'una yazar (30.10.2026).
+      .map((x) => ({ veritabani: x.dataYolu, ad: x.srkadi || x.dataYolu, prgTur: x.prgTur || null, program: PROGRAM[x.prgTur] ?? (x.prgTur || null), kod: x.kod ?? null }))
     return NextResponse.json({ liste }, { headers: { "Cache-Control": "no-store" } })
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 })

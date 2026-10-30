@@ -89,7 +89,11 @@ namespace PusulaConnect
             try { return File.Exists(DurumDosyasi) ? JObject.Parse(File.ReadAllText(DurumDosyasi, Encoding.UTF8)) : null; } catch { return null; }
         }
 
-        /// <summary>Eski program: kullanıcının seçtiği veritabanı ve FORMID (yoksa null).</summary>
+        /// <summary>
+        /// Kullanıcının seçtiği veritabanı (yoksa null). Eski program: { veritabani, ad, formId }.
+        /// Pusula X (30.10.2026): { veritabani, ad, kod } — kod = guvenlik.KOD, server.xml DataCode'a yazılır;
+        /// seçim yoksa firma kodu yazılır (tek veritabanlı firma, eski davranış).
+        /// </summary>
         public JObject Secim => DurumOku()?["secim"] as JObject;
 
         /// <summary>Durum() içine giren özet; ayrıca Ayarlar > Sayım kartı.</summary>
@@ -140,8 +144,8 @@ namespace PusulaConnect
                 kurulum = Tarih(d?["kurulum"]),
                 kisayol = File.Exists(_kisayolYolu),
                 guncellemeBekliyor = GuncellemeBekliyor,
-                // Eski program: hangi veritabanı / program (FORMID) — veritabanı adı hassas değil
-                veritabani = EskiMi ? Secim?.Value<string>("veritabani") : null,
+                // Seçilen veritabanı (eski program + FORMID; Pusula X'te çok veritabanlı firmada) — ad hassas değil
+                veritabani = Secim?.Value<string>("veritabani"),
                 formId = EskiMi ? Secim?.Value<string>("formId") : null,
                 test = t == null ? null : new
                 {
@@ -196,6 +200,23 @@ namespace PusulaConnect
             return new JObject { ["veritabani"] = vt, ["ad"] = secim.Value<string>("ad")?.Trim() ?? vt, ["formId"] = form };
         }
 
+        /// <summary>
+        /// Pusula X seçimi (30.10.2026): şubeleri ayrı guvenlik.KOD taşıyan firmada (6572: 6572 / 65721 / 65722)
+        /// giriş ekranı yalnız DataCode'daki kodun veritabanlarını gösteriyordu — sayım hep ilk şubeye düşüyordu.
+        /// Seçim isteğe bağlı: null → firma kodu (eski davranış). Kod yalnız rakam.
+        /// </summary>
+        private static JObject PusulaXSecimDenetle(JObject secim)
+        {
+            if (secim == null) return null;
+            var vt = secim.Value<string>("veritabani")?.Trim();
+            var kod = secim.Value<string>("kod")?.Trim();
+            if (string.IsNullOrEmpty(vt)) throw new KullaniciHatasi("Sayım yapılacak veritabanını seçin.");
+            if (string.IsNullOrEmpty(kod) || !kod.All(char.IsDigit)) throw new KullaniciHatasi("Seçilen veritabanının giriş kodu Pusula'da yok; listeyi yenileyip tekrar seçin.");
+            return new JObject { ["veritabani"] = vt, ["ad"] = secim.Value<string>("ad")?.Trim() ?? vt, ["kod"] = kod };
+        }
+
+        private JObject SecimHazirla(JObject secim) => EskiMi ? SecimDenetle(secim) : PusulaXSecimDenetle(secim);
+
         // ------------------------------------------------------------ kur
 
         /// <summary>
@@ -204,7 +225,7 @@ namespace PusulaConnect
         /// </summary>
         public void KurBaslat(JObject bilgi, JObject paket, string servisAdresi, string token, JObject secim)
         {
-            if (EskiMi) secim = SecimDenetle(secim);
+            secim = SecimHazirla(secim);
             lock (_kilit)
             {
                 if (_kuruluyor) throw new KullaniciHatasi("Sayım kurulumu zaten sürüyor.", 409);
@@ -281,7 +302,8 @@ namespace PusulaConnect
         public object Guncelle(JObject bilgi, JObject secim = null)
         {
             if (!Kurulu) throw new KullaniciHatasi("Sayım kurulu değil.", 409);
-            if (EskiMi) secim = SecimDenetle(secim ?? Secim);
+            // Seçim verilmezse kayıtlı seçim korunur (otomatik bilgi yenilemede veritabanı değişmesin)
+            secim = SecimHazirla(secim ?? Secim);
             DosyalariYaz(bilgi, secim);
             DurumYaz(d =>
             {
@@ -399,11 +421,14 @@ namespace PusulaConnect
 
             if (EskiMi) { EskiServerXml(sunucu, kullanici, sifre, resim, secim); return; }
 
+            // Giriş ekranı veritabanlarını DataCode = guvenlik.KOD ile süzer: seçilen veritabanının kodu (yoksa firma kodu).
+            // lic.xml CompanyId firma kodu kalır (lisans firmaya).
+            var girisKodu = secim?.Value<string>("kod");
             var server = new XElement("Server",
                 new XElement("Name", PusulaSifrele(sunucu)),
                 new XElement("UserName", PusulaSifrele(kullanici)),
                 new XElement("Password", PusulaSifrele(sifre ?? "")),
-                new XElement("DataCode", PusulaSifrele(dataCode)));
+                new XElement("DataCode", PusulaSifrele(string.IsNullOrWhiteSpace(girisKodu) ? dataCode : girisKodu)));
             if (!string.IsNullOrWhiteSpace(resim)) server.Add(new XElement("ImgPath", resim));   // düz metin (Pusula X böyle okur)
             XmlYaz(ServerXml, "Pusula", server);
 
@@ -616,6 +641,32 @@ namespace PusulaConnect
             DurumYaz(d => d["test"] = sonuc);
             Gunluk.Yaz("Sayım SQL testi (" + Tur + ", " + sunucu + "): " + (sonuc.Value<bool?>("ok") == true ? "bağlandı, " + ((JArray)sonuc["veritabanlari"]).Count + " veritabanı" : "hata: " + sonuc.Value<string>("hata")));
             return sonuc;
+        }
+
+        /// <summary>
+        /// Sayım programı çalışıyorsa en erken başlangıç anı, çalışmıyorsa null (30.10.2026). Connect dışından
+        /// (exe'ye çift tıklayarak) açılanı da görür. Yol okunamazsa (yetki) aynı adlı süreç sayılır.
+        /// </summary>
+        public DateTime? CalisiyorBaslangic()
+        {
+            if (!File.Exists(Exe)) return null;
+            DateTime? en = null;
+            Process[] liste;
+            try { liste = Process.GetProcessesByName(Path.GetFileNameWithoutExtension(Exe)); } catch { return null; }
+            foreach (var p in liste)
+            {
+                try
+                {
+                    string yol = null;
+                    try { yol = p.MainModule.FileName; } catch { }
+                    if (yol != null && !string.Equals(Path.GetFullPath(yol), Path.GetFullPath(Exe), StringComparison.OrdinalIgnoreCase)) continue;
+                    var b = p.StartTime;
+                    if (en == null || b < en) en = b;
+                }
+                catch { }
+                finally { p.Dispose(); }
+            }
+            return en;
         }
 
         /// <summary>Sayım programını başlatır (Pusula X: PusulaX.exe, eski: Pusula.exe); çalışma klasörü program klasörü.</summary>
