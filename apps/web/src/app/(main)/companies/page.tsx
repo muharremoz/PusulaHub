@@ -159,6 +159,7 @@ import { Checkbox, Field } from "@/components/shared/form"
 import { FirmaAnaliz } from "@/components/companies/firma-analiz";
 import { sqlLoginAdi } from "@/lib/firma-adlandirma";
 import { OLAY_BITTI } from "@/components/hub-senkron-widget";
+import { resimSiteAdi } from "@/lib/resim-site";
 
 function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: string; onSaved: () => void }) {
   // MB tabanlı hassas yüzde; küçük değerler yuvarlamada sıfıra düşmesin
@@ -504,6 +505,9 @@ function YoğunlukKart({ d, firkod, onSaved }: { d: CompanyDetail; firkod: strin
     </>
   );
 }
+
+/** Hizmet ekle → Resim: "firmanın kök resim klasörü" seçeneğinin anahtarı (gerçek klasör adı olamaz) */
+const RESIM_KOK = "__kok__"
 
 const statusConfig = {
   active:    { label: "Aktif",          variant: "online"  as const, color: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/25/60" },
@@ -862,6 +866,9 @@ export default function CompaniesPage() {
   const [newSvcApiKimlik, setNewSvcApiKimlik]         = useState<Record<number, { username: string; password: string }>>({});
   /** Hizmet ekle kutusunun kategori filtresi; "" = tümü */
   const [newSvcFiltre, setNewSvcFiltre]               = useState("");
+  /** Resim hizmeti: yayınlanacak klasör (Depo D:\Resimler\<firkod> altı); RESIM_KOK = firmanın kök klasörü */
+  const [newSvcResimKlasor, setNewSvcResimKlasor]     = useState<string>(RESIM_KOK);
+  const [newSvcResimKlasorler, setNewSvcResimKlasorler] = useState<{ yukleniyor: boolean; liste: string[]; hata: string | null }>({ yukleniyor: false, liste: [], hata: null });
   let _parsRowId = 1
   const mkParsRow = (): ParsWizardUser => ({ id: Date.now() + (_parsRowId++), username: "", password: parsSifreUret(), admin: false, reportIds: [] })
 
@@ -939,6 +946,7 @@ export default function CompaniesPage() {
     setNewSvcOpen(true)
     setNewSvcStarted(false); setNewSvcDone(false); setNewSvcError(null)
     setNewSvcSelectedIds([]); setNewSvcIisServerId(""); setNewSvcDepoServerId(""); setNewSvcApiKimlik({}); setNewSvcFiltre("")
+    setNewSvcResimKlasor(RESIM_KOK)
     setNewSvcAdServerId(""); setNewSvcWindowsServerId(""); setNewSvcWindowsLocked(false)
     setNewSvcParsUsers([mkParsRow()]); setNewSvcParsError(null)
     setNewSvcParsKatalog(null); setNewSvcParsKatalogFor(null)
@@ -981,6 +989,25 @@ export default function CompaniesPage() {
   const newSvcHasIis           = newSvcSelected.some((s) => s.type === "iis-site")
   // Resim: IIS'te site kurar (IIS sunucusu) + Depo'daki paylaşımı yayınlar (Depo sunucusu)
   const newSvcHasResim         = newSvcSelected.some((s) => s.type === "iis-resim")
+
+  /*  Resim hizmeti seçilince Depo'daki firma resim klasörleri okunur — bir firmanın
+   *  birden çok klasörü olabilir (ör. 6572: ALTINOVA, CADDE, CIGLI); her biri ayrı site. */
+  useEffect(() => {
+    if (!newSvcOpen || !newSvcHasResim || !selectedFirma) return
+    let iptal = false
+    setNewSvcResimKlasorler({ yukleniyor: true, liste: [], hata: null })
+    const q = newSvcDepoServerId ? `?depoServerId=${encodeURIComponent(newSvcDepoServerId)}` : ""
+    fetch(`/api/companies/${selectedFirma.firkod}/resim-klasorleri${q}`, { cache: "no-store" })
+      .then(async (r) => {
+        const j = await r.json().catch(() => ({}))
+        if (iptal) return
+        if (!r.ok) { setNewSvcResimKlasorler({ yukleniyor: false, liste: [], hata: j.error ?? `HTTP ${r.status}` }); return }
+        setNewSvcResimKlasorler({ yukleniyor: false, liste: Array.isArray(j.klasorler) ? j.klasorler : [], hata: j.kokVar === false ? "Depo'da firmanın resim klasörü yok" : null })
+      })
+      .catch((e) => { if (!iptal) setNewSvcResimKlasorler({ yukleniyor: false, liste: [], hata: e instanceof Error ? e.message : String(e) }) })
+    return () => { iptal = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newSvcOpen, newSvcHasResim, newSvcDepoServerId, selectedFirma?.firkod])
   const newSvcParsService      = newSvcSelected.find((s) => s.type === "pars") ?? null
   // Rapor gruplaması için firmanın program tipleri: mevcut DB'lerin program kodları + seçilen Pusula programları
   const newSvcParsTipleri = [...new Set([
@@ -4225,6 +4252,26 @@ tr:nth-child(even) td{background:#fafafa}
                                       <div className="truncate text-[13px] font-medium leading-[18px]">{svc.name}</div>
                                       <div className="text-muted-foreground truncate text-[11px] leading-[16px]">{svc.category === "Mobil" ? "Pars" : svc.category}</div>
                                     </div>
+                                    {svc.type === "iis-resim" && (
+                                      <div className="w-[230px] shrink-0">
+                                        <Combobox
+                                          items={[RESIM_KOK, ...newSvcResimKlasorler.liste]}
+                                          getKey={(k) => k}
+                                          getLabel={(k) => (k === RESIM_KOK ? `${selectedFirma?.firkod ?? ""} (firma klasörü)` : k)}
+                                          value={newSvcResimKlasor}
+                                          onChange={(k) => setNewSvcResimKlasor(k || RESIM_KOK)}
+                                          loading={newSvcResimKlasorler.yukleniyor}
+                                          placeholder="Resim klasörü"
+                                          searchPlaceholder="Klasör ara…"
+                                          emptyText="Klasör yok"
+                                          className="h-8 text-[12px]"
+                                        />
+                                        <p className={`mt-0.5 truncate text-[10px] ${newSvcResimKlasorler.hata ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}>
+                                          {newSvcResimKlasorler.hata
+                                            ?? `Site: ${resimSiteAdi(selectedFirma?.firkod ?? "", newSvcResimKlasor === RESIM_KOK ? null : newSvcResimKlasor)}`}
+                                        </p>
+                                      </div>
+                                    )}
                                     {apiKullanicili && (
                                       <>
                                         <Input
@@ -4396,6 +4443,8 @@ tr:nth-child(even) td{background:#fafafa}
                               config: s.config,
                               // Boş bırakılırsa gönderilmez → kullanıcılar kardeş hizmetten kopyalanır
                               appUser: k && k.username.trim() && k.password ? { username: k.username.trim(), password: k.password } : undefined,
+                              // Resim: seçilen klasör ayrı site olur (<firkod>_RESIM_<KLASOR>); kök = eski davranış
+                              resimKlasor: s.type === "iis-resim" && newSvcResimKlasor !== RESIM_KOK ? newSvcResimKlasor : undefined,
                             }
                           }),
                           skipDepo:         !newSvcHasPusula,

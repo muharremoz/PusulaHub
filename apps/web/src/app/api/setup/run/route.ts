@@ -3,6 +3,7 @@ import { getSupabaseServer } from "@/lib/supabase/server"
 import { serverAgentById, sqlServerById, serversWithRole } from "@/lib/hub-servers"
 import { execOnAgent } from "@/lib/agent-poller"
 import { hubSenkronuBaslat } from "@/lib/hub-senkron-isi"
+import { resimKlasorGecerli, resimSiteAdi } from "@/lib/resim-site"
 import { decrypt } from "@/lib/crypto"
 import { withSqlConnection } from "@/lib/sql-external"
 import { resolveFirmaSqlTarget } from "@/lib/sql-company-target"
@@ -101,6 +102,10 @@ interface RunService {
   apiUsers?: { username: string; password: string }[]
   /** Sihirbaz API adımı: Users.xml <DB> ve kullanıcı Data listesi (varsayılan güncel data) */
   apiDbler?: string[]
+  /** Resim hizmeti (iis-resim): Depo'da D:\Resimler\<firmaId> altındaki klasör adı (firma detayından
+   *  eklenirken seçilir). Verilirse site o klasörü yayınlar ve adı <firmaId>_RESIM_<KLASOR> olur —
+   *  bir firmada birden çok resim sitesi açılabilsin. Verilmezse eski davranış: <firmaId>_RESIM. */
+  resimKlasor?: string
 }
 
 /** Pattern içindeki {firmaKod} / {port} placeholder'larını değiştirir. */
@@ -340,6 +345,17 @@ export async function POST(req: NextRequest) {
     (payload.services ?? []).length > 0 &&
     (payload.services ?? []).every((s) => s.type === "pars") &&
     !payload.sqlServerId
+
+  /* AD adımları (Firmalar OU / firma OU / güvenlik grubu / kullanıcılar) yalnız
+   * gerektiğinde: kullanıcı açılıyorsa, program klasörü kuruluyorsa (NTFS yetkisi
+   * firma grubuna verilir) ya da SQL işi varsa (sihirbaz). Firma detayından yalnız
+   * API / Resim hizmeti eklerken grup zaten var, bu adımlar gereksizdi (30.10.2026).
+   * AD sunucusu yine istenir: Resim sitesinin "Connect as" kimliği onun kaydından. */
+  const adAdimlari =
+    !parsOnly &&
+    (payload.users.length > 0 ||
+      (payload.services ?? []).some((s) => s.type === "pusula-program") ||
+      !!payload.sqlServerId)
 
   if (!payload.serverId && !parsOnly) {
     return new Response(JSON.stringify({ error: "serverId zorunlu" }), {
@@ -663,8 +679,8 @@ export async function POST(req: NextRequest) {
         let createdCount = 0
         // Bilkar (alt bayi) müşterisi mi — CRM temsilci/ek temsilci. Bilkar
         // kullanıcısı firma grubuna ve masaüstüne eklenir (aşağıda).
-        const bilkar = !parsOnly && (await bilkarFirmasiMi(payload.firmaId).catch(() => false))
-        if (adAgent && !parsOnly) {
+        const bilkar = adAdimlari && (await bilkarFirmasiMi(payload.firmaId).catch(() => false))
+        if (adAgent && adAdimlari) {
         // 1) Firmalar root OU
         if (!(await runStep(
           adAgent,
@@ -756,7 +772,7 @@ export async function POST(req: NextRequest) {
             )
           }
         }
-        } // adAgent && !parsOnly
+        } // adAgent && adAdimlari
 
         // ── 4b) Depo sunucusu — resim klasörü (opsiyonel, non-critical) ──
         if (depoAgent) {
@@ -1170,8 +1186,17 @@ export async function POST(req: NextRequest) {
               return
             }
 
-            const siteName = `${payload.firmaId}_RESIM`
-            const sub      = cfg.subFolder?.trim() ?? ""
+            /*  30.10.2026: firma detayından eklenirken klasör seçilebiliyor (6572: ALTINOVA/CADDE/CIGLI…).
+             *  Seçilen klasör ayrı bir site olur; site adı sabit kalsaydı ikinci ekleme mevcut
+             *  <firmaId>_RESIM'i bulup "zaten var" deyip geçiyordu.                               */
+            const klasor = s.resimKlasor?.trim() ?? ""
+            if (klasor && !resimKlasorGecerli(klasor)) {
+              send("step", { stepId: `svc_skip_${s.id}`, label: `Resim klasörü geçersiz: ${klasor}`, status: "error", error: "Klasör adı yol ayırıcı veya özel karakter içeremez" })
+              controller.close()
+              return
+            }
+            const siteName = resimSiteAdi(payload.firmaId, klasor)
+            const sub      = klasor || (cfg.subFolder?.trim() ?? "")
             const uncPath  = `\\\\${resimDepo.ip}\\Resimler\\${payload.firmaId}${sub ? `\\${sub}` : ""}`
             const portStep = `resim_port_${s.id}`
 
@@ -1193,7 +1218,7 @@ export async function POST(req: NextRequest) {
             const existingPort = Number((probe.stdout ?? "").match(/EXISTS:(\d+)/)?.[1] ?? NaN)
             const sbRes = await getSupabaseServer()
             const { data: prev } = await sbRes.schema("hub").from("wizard_port_assignments")
-              .select("id, port").eq("company_id", payload.firmaId).eq("service_id", s.id).limit(1).maybeSingle()
+              .select("id, port").eq("company_id", payload.firmaId).eq("service_id", s.id).eq("site_name", siteName).limit(1).maybeSingle()
             const prevRow = prev as { id: number; port: number | null } | null
 
             let alloc: { ok: true; port: number } | { ok: false; error: string }
@@ -1980,7 +2005,8 @@ export async function POST(req: NextRequest) {
         // artik arka plan isi (lib/hub-senkron-isi.ts); kurulum hemen biter,
         // ekrandaki HubSenkronWidget durumu gosterir. Hata kurulumu bozmaz.
         const senkronHedefleri: { id: string | null | undefined; etiket: string }[] = parsOnly ? [] : [
-          { id: payload.serverId,        etiket: "Active Directory" },
+          // AD'ye dokunulmadıysa AD yoklaması da gereksiz
+          { id: adAdimlari ? payload.serverId : null, etiket: "Active Directory" },
           { id: payload.sqlServerId,     etiket: "SQL" },
           { id: payload.windowsServerId, etiket: "IIS / Terminal" },
         ]

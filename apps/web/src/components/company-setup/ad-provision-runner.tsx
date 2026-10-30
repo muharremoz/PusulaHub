@@ -41,6 +41,8 @@ export interface AdProvisionService {
   apiUsers?: { username: string; password: string }[]
   /** Sihirbaz API adımı: Users.xml <DB> / kullanıcı Data listesi (varsayılan güncel data) */
   apiDbler?: string[]
+  /** Resim hizmeti: Depo D:\Resimler\<firmaId> altındaki klasör — ayrı <firmaId>_RESIM_<KLASOR> sitesi */
+  resimKlasor?: string
 }
 
 export interface AdProvisionBackupFile {
@@ -150,8 +152,10 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
   const parsStepCount = payload.pars ? 2 : 0
   // Yalnız Pars: AD adımları (OU/grup) ve senkron yok
   const parsOnly = payload.users.length === 0 && serviceCount > 0 && services.every((s) => s.type === "pars") && !payload.sqlServerId
+  // /api/setup/run ile aynı kural: AD adımları yalnız kullanıcı / program / SQL işi varsa
+  const adAdimlari = !parsOnly && (payload.users.length > 0 || pusulaCount > 0 || !!payload.sqlServerId)
   const totalEstimated =
-    (parsOnly ? 0 : 3) +
+    (adAdimlari ? 3 : 0) +
     payload.users.length * 2 +
     depoStepCount +
     (serviceCount > 0 ? 1 + Math.round(pusulaCount * 3.5) + iisCount * 5 + resimCount * 2 + 1 : 0) +
@@ -287,7 +291,7 @@ export function AdProvisionRunner({ payload, autoStart = true, onComplete, onErr
 
   /* Adımları gruplara topla — grup tahmini toplamı, henüz başlamamış grupları da göstermek için */
   const tahmin: Record<GrupKey, number> = {
-    ad:    (parsOnly ? 0 : 3) + payload.users.length * 2,
+    ad:    (adAdimlari ? 3 : 0) + payload.users.length * 2,
     dosya: (serviceCount > 0 ? 2 : 0) + Math.round(pusulaCount * 3.5) + desktopStepCount,
     depo:  depoStepCount,
     iis:   iisCount * 5 + resimCount * 2,
