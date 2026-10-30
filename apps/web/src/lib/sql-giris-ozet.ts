@@ -5,7 +5,7 @@
  */
 
 import { getSupabaseAdmin } from "./supabase/admin"
-import { kaynakAdi, kaynakTuru, NEDEN_AD, seviyeBul, sunucuAdlari, type Neden, type Seviye } from "./sql-giris-izleme"
+import { kaynakAdi, kaynakTuru, NEDEN_AD, seviyeBul, sunucuAdlari, yoksayilir, type Neden, type Seviye } from "./sql-giris-izleme"
 
 interface OzetSatir { gun: string | null; ip: string; kullanici: string; neden: Neden; veritabani: string; adet: number; son: string }
 
@@ -24,7 +24,9 @@ export async function sqlGirisOzetiHazirla(sinir = 60) {
   ])
   if (son24.error) throw new Error(son24.error.message)
 
-  const satirlar0 = (son24.data ?? []) as OzetSatir[]
+  /*  Toplayıcı bunları artık kaydetmiyor; bu filtre yalnız 30.10.2026
+   *  öncesinden kalan kayıtlar için (7 günlük pencere dolunca gereksiz). */
+  const satirlar0 = ((son24.data ?? []) as OzetSatir[]).filter((x) => !yoksayilir(x))
 
   // Kullanıcı adının firma öneki ("3284.altinsaray1") → firma adı
   const kodlar = [...new Set(satirlar0.map((x) => x.kullanici.match(/^(\d+)\./)?.[1]).filter((x): x is string => !!x))]
@@ -56,7 +58,7 @@ export async function sqlGirisOzetiHazirla(sinir = 60) {
   for (const x of satirlar) { ozet[x.seviye] += x.adet; ozet.toplam += x.adet }
 
   const gunMap = new Map<string, { gun: string; guvenlik: number; destek: number; bilgi: number }>()
-  for (const x of (gunluk.data ?? []) as OzetSatir[]) {
+  for (const x of ((gunluk.data ?? []) as OzetSatir[]).filter((x) => !yoksayilir(x))) {
     const g = String(x.gun)
     const v = gunMap.get(g) ?? { gun: g, guvenlik: 0, destek: 0, bilgi: 0 }
     v[seviyeBul({ ...x, adet: Number(x.adet) }, sunucular)] += Number(x.adet)

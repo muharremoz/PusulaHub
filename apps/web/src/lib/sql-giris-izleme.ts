@@ -47,6 +47,17 @@ export interface GirisOlayi {
   veritabani: string
 }
 
+/**
+ * Sayılmayan denemeler (30.10.2026). Pars uygulaması (PUSULA GOREV) kendi
+ * RDP koruma modülü için `BruteForceAttackMonitor`'a bağlanmayı dener;
+ * müşteride kurulu kopyası müşterinin SQL bilgileriyle 30 sn'de bir
+ * dener ve yetkisi olmadığı için "veritabanı açılamadı" alır. Normal bir
+ * davranış — sayımı ve uyarıları şişirmesin diye hiç kaydedilmez.
+ */
+export function yoksayilir(x: { neden: string; veritabani: string | null }): boolean {
+  return x.neden === "veritabani_acilamadi" && (x.veritabani ?? "").replace(/^\[|\]$/g, "") === "BruteForceAttackMonitor"
+}
+
 /** "Login failed for user 'x'. Reason: …. [CLIENT: ip]" → olay */
 export function satirCoz(utc: string, metin: string): GirisOlayi | null {
   const kullanici = metin.match(/user '([^']*)'/)?.[1]
@@ -57,13 +68,14 @@ export function satirCoz(utc: string, metin: string): GirisOlayi | null {
     /explicitly specified database/i.test(metin) ? "veritabani_acilamadi" :
     /disabled/i.test(metin) ? "giris_kapali" :
     /expired|must be changed/i.test(metin) ? "parola_suresi" : "diger"
-  return {
+  const olay: GirisOlayi = {
     t: Date.parse(utc.endsWith("Z") ? utc : utc + "Z"),
     ip: metin.match(/CLIENT: ([^\]]+)\]/)?.[1]?.trim() ?? "?",
     kullanici,
     neden,
     veritabani: neden === "veritabani_acilamadi" ? (metin.match(/database '([^']*)'/)?.[1] ?? "") : "",
   }
+  return yoksayilir(olay) ? null : olay
 }
 
 export type KaynakTuru = "sunucu" | "ofis" | "dahili" | "dis"
