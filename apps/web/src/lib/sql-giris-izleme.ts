@@ -34,6 +34,8 @@ const PENCERE_MS = 10 * 60_000
 /** Bundan eski olaylar için uyarı üretilmez (ilk içe alma, uzun kesinti sonrası) */
 const TAZE_MS = 15 * 60_000
 const IMLEC = "__imlec"
+/** SQL açıldıktan sonra bu süre "veritabanı açılamıyor" uyarısı yok (aşağıda D1) */
+const ACILIS_MS = 15 * 60_000
 const OFIS_IP = "95.3.34.130"
 
 export type Neden = "parola_yanlis" | "kullanici_yok" | "veritabani_acilamadi" | "giris_kapali" | "parola_suresi" | "diger"
@@ -133,7 +135,7 @@ const saatYaz = (t: number) =>
  * Son PENCERE_MS içindeki olaylardan uyarılar. `simdi`den TAZE_MS'den eski
  * olaylar hesaba katılmaz (ilk içe almada geçmiş için push yağmasın).
  */
-export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, string>, simdi: number): Uyari[] {
+export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, string>, simdi: number, sqlAcilis?: number): Uyari[] {
   const taze = olaylar.filter((o) => simdi - o.t <= Math.min(PENCERE_MS, TAZE_MS))
   const out: Uyari[] = []
   const grupla = <K>(f: (o: GirisOlayi) => K | null) => {
@@ -189,7 +191,11 @@ export function uyarilariBul(olaylar: GirisOlayi[], sunucular: Map<string, strin
 
   // D1 — veritabanı açılamıyor (müşteri programı yanlış ayarlı). Anahtar kaynaksız:
   // aynı müşteri birden çok PC'den (Altınsaray .118/.119) gelince tek uyarı.
-  for (const [k, l] of grupla((o) => (o.neden === "veritabani_acilamadi" ? `${o.kullanici}|${o.veritabani}` : null))) {
+  // SQL açılışından sonraki ACILIS_MS sayılmaz: 03:00 gece restartında servis
+  // bağlantı kabul ettiği anda veritabanları henüz açılmamış oluyor, ilk gelen
+  // program reddediliyor (31.10.2026: sirket/PUS2026X, DB'ler 1 sn sonra açıldı).
+  const acilista = (o: GirisOlayi) => sqlAcilis != null && o.t >= sqlAcilis && o.t - sqlAcilis < ACILIS_MS
+  for (const [k, l] of grupla((o) => (o.neden === "veritabani_acilamadi" && !acilista(o) ? `${o.kullanici}|${o.veritabani}` : null))) {
     const [kul, db] = k.split("|")
     const ip = l.at(-1)!.ip
     out.push({
@@ -254,7 +260,8 @@ WHILE @@FETCH_STATUS = 0 BEGIN
   FETCH NEXT FROM c INTO @a;
 END
 CLOSE c; DEALLOCATE c;
-SELECT CONVERT(varchar(23), DATEADD(minute, -@fark, LogDate), 126) AS utc, Text AS metin FROM @t ORDER BY LogDate;`
+SELECT CONVERT(varchar(23), DATEADD(minute, -@fark, LogDate), 126) AS utc, Text AS metin FROM @t ORDER BY LogDate;
+SELECT CONVERT(varchar(23), DATEADD(minute, -@fark, sqlserver_start_time), 126) AS acilis FROM sys.dm_os_sys_info;`
 
 interface SqlHedef { ip: string; username: string; password: string }
 
@@ -359,10 +366,15 @@ export async function sqlGirisTur(): Promise<void> {
     if (imlec == null) imlec = await imlecOku()
     const bas = new Date(imlec).toISOString().slice(0, 19).replace("T", " ")
 
-    const satirlar = await withSqlConnection(
+    const [satirlar, acilisSatir] = await withSqlConnection(
       { server: hedef.ip, user: hedef.username, password: hedef.password, database: "master", requestTimeout: 60_000 },
-      async (pool) => (await pool.request().input("bas", sql.VarChar(30), bas).query<{ utc: string; metin: string }>(OKUMA_SQL)).recordset,
+      async (pool) => {
+        const r = await pool.request().input("bas", sql.VarChar(30), bas).query(OKUMA_SQL)
+        const rs = r.recordsets as unknown as [{ utc: string; metin: string }[], { acilis: string }[]]
+        return [rs[0], rs[1]] as const
+      },
     )
+    const sqlAcilis = acilisSatir?.[0]?.acilis ? Date.parse(acilisSatir[0].acilis + "Z") : undefined
     const sinir = imlec
     // Başlangıç saniyeye yuvarlandığı için sınırdaki satırlar tekrar gelir — ms ile ele.
     const yeni = satirlar.map((x) => satirCoz(x.utc, x.metin)).filter((o): o is GirisOlayi => !!o && o.t > sinir)
@@ -388,7 +400,7 @@ export async function sqlGirisTur(): Promise<void> {
 
     const simdi = Date.now()
     pencere = [...pencere, ...yeni].filter((o) => simdi - o.t <= PENCERE_MS)
-    await uyarilariGonder(uyarilariBul(pencere, sunucular, simdi))
+    await uyarilariGonder(uyarilariBul(pencere, sunucular, simdi, sqlAcilis))
 
     if (simdi - sonTemizlik > 6 * SAAT) {
       sonTemizlik = simdi
