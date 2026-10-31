@@ -315,6 +315,11 @@ async function bildir(u: Uyari): Promise<void> {
     })
   const r = await istek("/api/internal/sql-giris-uyari", { baslik: u.baslik, govde: u.govde, seviye: u.seviye })
   if (!r.ok) throw new Error(`CRM push ${r.status}`)
+  // CRM 200 dönse de kimseye gitmemiş olabilir (31.10.2026: iPhone'lara APNs
+  // zaman aşımı, Hub "gönderildi" sanıp 24 saat susmuştu). Kimseye gitmediyse
+  // hata → son_bildirim yazılmaz, bir sonraki turda yeniden denenir.
+  const sonuc = (await r.json().catch(() => null)) as { kisi?: number; gonderilen?: number } | null
+  if (sonuc && (sonuc.kisi ?? 0) > 0 && sonuc.gonderilen === 0) throw new Error(`CRM push kimseye gitmedi (${sonuc.kisi} kişi)`)
   // SMS yalnız güvenlik taraması/yoğun denemede ve numara tanımlıysa (Coolify env)
   const numaralar = (process.env.SQL_GUVENLIK_SMS ?? "").split(",").map((x) => x.trim()).filter(Boolean)
   if (u.sms && numaralar.length) {
